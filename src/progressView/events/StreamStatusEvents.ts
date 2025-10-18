@@ -22,6 +22,14 @@ import type {
 } from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
 
+function computeInstructionMetadata(text: string) {
+  const lineCount = text.split(/\r?\n/).length;
+  if (lineCount > 6 || text.length > 600) {
+    return { showToggle: true };
+  }
+  return undefined;
+}
+
 export interface StreamStatusEventShared {
   logger: AgentLogger;
   streamStatus: Map<string, StreamStatusType>;
@@ -93,7 +101,7 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    const { streamTabId, executionId, taskState } = data;
+    const { streamTabId, executionId, taskState, taskGroupId } = data;
 
     state.setTaskState(streamTabId, taskState);
     state.clearSessionKindHint(streamTabId);
@@ -124,6 +132,29 @@ export function createStreamStatusEvents(
 
     if (executionId) {
       state.setExecutionId(streamTabId, executionId);
+    }
+
+    const trimmedInstruction = taskState.agentConfig?.instruction?.trim() ?? '';
+    const candidateGroupId =
+      taskGroupId ?? state.getLatestTaskGroupId(streamTabId);
+
+    if (taskGroupId) {
+      state.setLatestTaskGroupId(streamTabId, taskGroupId);
+    }
+
+    if (candidateGroupId) {
+      const instructionMetadata = trimmedInstruction
+        ? {
+            text: trimmedInstruction,
+            executionId,
+            updatedAt: Date.now(),
+            metadata: computeInstructionMetadata(trimmedInstruction),
+          }
+        : undefined;
+
+      state.taskGroups.updateGroup(streamTabId, candidateGroupId, {
+        instruction: instructionMetadata,
+      });
     }
 
     if (state.activeStream === streamTabId) {

@@ -482,6 +482,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                   streamTabId: activeStreamId,
                   executionId,
                   taskState: agentConfigToTaskState(config, metadata),
+                  taskGroupId: mainTaskGroupId,
                 });
                 logger.debug(
                   `Task state stored for stream: ${activeStreamId}`,

@@ -92,6 +92,7 @@ export class WebviewUpdater {
     stream: StreamTabId,
     messages: LogMessageData[],
     groups?: any[],
+    taskGroupId?: string,
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -101,6 +102,7 @@ export class WebviewUpdater {
       stream,
       messages,
       groups: groups || [],
+      taskGroupId,
     });
   }
 
@@ -182,7 +184,12 @@ export class WebviewUpdater {
   /**
    * Update instruction panel content
    */
-  updateInstruction(stream: StreamTabId, instruction: InstructionUpdate): void {
+  updateInstruction(
+    stream: StreamTabId,
+    instruction: InstructionUpdate,
+    groups?: any[],
+    taskGroupId?: string,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -190,13 +197,19 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
+      groups: groups || [],
+      taskGroupId,
     });
   }
 
   /**
    * Clear instruction panel content
    */
-  clearInstruction(stream: StreamTabId | ''): void {
+  clearInstruction(
+    stream: StreamTabId | '',
+    groups?: any[],
+    taskGroupId?: string,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -204,6 +217,8 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction: null,
+      groups: groups || [],
+      taskGroupId,
     });
   }
 

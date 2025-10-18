@@ -207,12 +207,35 @@ export class ProgressViewState {
     this.activeStream = '';
     this.agentFilter = 'all';
     this.currentGroupId = null;
+    this.selectedGroups = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
     this.executionAvailability = new ExecutionAvailability();
+  }
+
+  setSelectedGroup(stream, groupId) {
+    if (!stream) {
+      return;
+    }
+    if (groupId) {
+      this.selectedGroups.set(stream, groupId);
+      this.currentGroupId = groupId;
+    } else {
+      this.selectedGroups.delete(stream);
+      if (this.activeStream === stream) {
+        this.currentGroupId = null;
+      }
+    }
+  }
+
+  getSelectedGroup(stream) {
+    if (!stream) {
+      return null;
+    }
+    return this.selectedGroups.get(stream) || null;
   }
 
   setExecutionAvailability(stream, available) {

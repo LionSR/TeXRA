@@ -13,6 +13,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
+import type { TaskGroup } from '@logger/LogTypes';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -46,6 +47,8 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private readonly latestTaskGroupIds: Map<StreamTabId, TaskGroup['id']> =
+    new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
    *
@@ -249,6 +252,21 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
+  setLatestTaskGroupId(
+    streamTabId: StreamTabId,
+    groupId: TaskGroup['id'],
+  ): void {
+    this.latestTaskGroupIds.set(streamTabId, groupId);
+  }
+
+  getLatestTaskGroupId(streamTabId: StreamTabId): TaskGroup['id'] | undefined {
+    return this.latestTaskGroupIds.get(streamTabId);
+  }
+
+  clearLatestTaskGroupId(streamTabId: StreamTabId): void {
+    this.latestTaskGroupIds.delete(streamTabId);
+  }
+
   // Stream cleanup operations
   clearStream(stream: StreamTabId): void {
     this._streamTabs.delete(stream);
@@ -258,6 +276,7 @@ export class ProgressViewState {
     this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
+    this.clearLatestTaskGroupId(stream);
     this.clearSessionKindHint(stream);
     this.cleanupToolUseAgentRegistry();
 

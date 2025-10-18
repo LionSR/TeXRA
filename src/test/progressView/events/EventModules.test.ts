@@ -8,10 +8,13 @@ import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { agentConfigToTaskState } from '@utils/config';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -223,5 +226,80 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
+  });
+
+  it('attaches instruction metadata to task groups on setTaskState', () => {
+    const bus = new FakeBus();
+    const streamStatusEvents = createStreamStatusEvents({
+      logger: loggerStub,
+      streamStatus: new Map(),
+      setStreamStatus: () => {},
+      sendInstructionUpdate: () => {},
+      updateLogContentForStream: () => {},
+    });
+
+    const persistence = {
+      load: async (_key: string, defaultValue: unknown) => defaultValue,
+      save: async () => {},
+      delete: async () => {},
+      loadWithMigration: async (
+        _newKey: string,
+        _legacyKey: string,
+        defaultValue: unknown,
+      ) => defaultValue,
+    } as any;
+
+    const state = new ProgressViewState(persistence);
+
+    const updater = {
+      isAvailable: () => false,
+      updateStreams: () => {},
+    } as unknown as WebviewUpdater;
+
+    const disposables = streamStatusEvents.register(bus as any, state, updater);
+
+    const stream = 'workflow-stream';
+    const groupId = 'group-1';
+
+    state.taskGroups.addGroup(stream, groupId, {
+      id: groupId,
+      name: 'Task: example',
+      startTime: Date.now(),
+      status: 'running',
+    });
+
+    const instruction = Array.from({ length: 8 }, (_, index) => `Line ${index}`)
+      .join('\n')
+      .trim();
+
+    const config = AgentConfigSchema.parse({
+      model: 'test-model',
+      agent: 'test-agent',
+      instruction,
+      session: {
+        agentCategory: AgentCategory.Workflow,
+        agentType: AgentType.Direct,
+      },
+      inputFile: 'main.tex',
+    });
+
+    const taskState = agentConfigToTaskState(config, config.session);
+
+    bus.trigger('setTaskState', {
+      streamTabId: stream,
+      executionId: 'exec-42' as any,
+      taskState,
+      taskGroupId: groupId,
+    });
+
+    const stored = state.taskGroups.getGroup(stream, groupId);
+    assert.ok(stored?.instruction, 'instruction metadata should be stored');
+    assert.equal(stored?.instruction?.text, instruction);
+    assert.equal(stored?.instruction?.executionId, 'exec-42');
+    assert.equal(state.getLatestTaskGroupId(stream), groupId);
+    assert.equal(stored?.instruction?.metadata?.showToggle, true);
+    assert.equal(typeof stored?.instruction?.updatedAt, 'number');
+
+    disposables.forEach((disposable) => disposable.dispose());
   });
 });

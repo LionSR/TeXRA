@@ -53,6 +53,7 @@ interface SetTaskStatePayload {
   streamTabId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
+  taskGroupId?: TaskGroup['id'];
 }
 
 export interface ProgressEventPayloads {

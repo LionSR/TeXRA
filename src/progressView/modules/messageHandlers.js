@@ -24,6 +24,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ...createThemeHandlers(),
       ...this._createHandlers(),
     };
+    dom.sessionSelector.setOnChange((groupId) =>
+      this._handleSessionSelection(groupId),
+    );
   }
 
   /**
@@ -36,6 +39,52 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       dom.placeholder.hide();
     }
+  }
+
+  _getCurrentGroups() {
+    return Array.from(state.taskGroups.getAll().values());
+  }
+
+  _syncSessionSelector(groups, preferredGroupId) {
+    const selectedId = dom.sessionSelector.update(groups, preferredGroupId);
+    const activeStream = state.activeStream;
+    if (activeStream) {
+      state.setSelectedGroup(activeStream, selectedId || null);
+    }
+    dom.taskGroups.setRootGroupVisibility(selectedId);
+    return selectedId;
+  }
+
+  _applyInstructionForSelection(groupId, instructionPayload) {
+    if (!groupId) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const group = state.taskGroups.get(groupId);
+    const text = instructionPayload?.text || group?.instruction?.text || '';
+
+    if (!text.trim()) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const metadata =
+      instructionPayload?.metadata || group?.instruction?.metadata || {};
+    dom.instructionPanel.show(text, metadata);
+  }
+
+  _handleSessionSelection(groupId) {
+    const activeStream = state.activeStream;
+    if (!activeStream) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const selectedId = groupId || dom.sessionSelector.getValue();
+    state.setSelectedGroup(activeStream, selectedId || null);
+    dom.taskGroups.setRootGroupVisibility(selectedId);
+    this._applyInstructionForSelection(selectedId);
   }
 
   _createHandlers() {
@@ -106,10 +155,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const hasExecution = state.getExecutionAvailability(message.activeStream);
     dom.status.setExecutionAvailability(Boolean(hasExecution));
 
+    const activeSelection = state.getSelectedGroup(message.activeStream);
+    state.currentGroupId = activeSelection;
+
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);
       dom.instructionPanel.hide();
+      dom.sessionSelector.update([], null);
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STATUS.STOPPED);
@@ -132,6 +185,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.add(g));
       }
+      const groups = this._getCurrentGroups();
+      const preferredGroupId =
+        message.taskGroupId || state.getSelectedGroup(message.stream);
+      const selectedGroupId = this._syncSessionSelector(
+        groups,
+        preferredGroupId,
+      );
+      this._applyInstructionForSelection(selectedGroupId);
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
       );
@@ -278,22 +339,52 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const payload = message.instruction;
-    const text = payload?.text ?? '';
-
-    if (!text.trim()) {
-      dom.instructionPanel.hide();
-      return;
+    if (Array.isArray(message.groups)) {
+      message.groups.forEach((group) => {
+        if (group?.id) {
+          state.taskGroups.set(group.id, group);
+        }
+      });
     }
 
-    const metadata = payload?.metadata ?? {};
-    dom.instructionPanel.show(text, metadata);
+    if (message.taskGroupId) {
+      const existing = state.taskGroups.get(message.taskGroupId);
+      if (existing) {
+        const updated = { ...existing };
+        if (message.instruction) {
+          updated.instruction = {
+            ...(existing.instruction || {}),
+            text: message.instruction.text,
+            metadata: message.instruction.metadata,
+          };
+        } else {
+          updated.instruction = undefined;
+        }
+        state.taskGroups.set(message.taskGroupId, updated);
+      }
+    }
+
+    const groups = this._getCurrentGroups();
+    const preferredGroupId =
+      message.taskGroupId || state.getSelectedGroup(activeStream);
+    const selectedGroupId = this._syncSessionSelector(groups, preferredGroupId);
+
+    if (
+      message.taskGroupId &&
+      message.instruction &&
+      selectedGroupId === message.taskGroupId
+    ) {
+      this._applyInstructionForSelection(selectedGroupId, message.instruction);
+    } else {
+      this._applyInstructionForSelection(selectedGroupId);
+    }
   }
 
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionAvailability(message.stream);
+      state.setSelectedGroup(message.stream, null);
       if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
@@ -311,7 +402,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteAll() {
     state.toggleStates.clearAll();
     state.resetExecutionAvailability();
+    state.selectedGroups.clear();
+    state.currentGroupId = null;
     dom.instructionPanel.hide();
+    dom.sessionSelector.update([], null);
   }
 }
 

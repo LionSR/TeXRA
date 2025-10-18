@@ -44,6 +44,7 @@
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
+          "./modules/uiManagers/SessionSelector.js": "${sessionSelectorUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -85,6 +86,20 @@
             <span id="runSummary" class="run-summary"></span>
           </div>
           <div id="toolbarContainer" class="header-actions button-group"></div>
+        </div>
+        <div
+          id="sessionSelectorContainer"
+          class="session-selector is-hidden"
+          aria-hidden="true"
+        >
+          <label for="sessionSelector" class="session-selector__label">
+            Session
+          </label>
+          <select
+            id="sessionSelector"
+            class="session-selector__dropdown"
+            aria-label="Select workflow session"
+          ></select>
         </div>
         <div
           id="instructionContainer"

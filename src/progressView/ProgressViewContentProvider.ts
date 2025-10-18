@@ -36,6 +36,10 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       key: 'instructionPanelUri',
       path: 'modules/uiManagers/InstructionPanel.js',
     },
+    {
+      key: 'sessionSelectorUri',
+      path: 'modules/uiManagers/SessionSelector.js',
+    },
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {

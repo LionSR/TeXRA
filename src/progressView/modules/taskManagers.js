@@ -87,7 +87,9 @@ export class TaskGroupManager {
 
     // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
-      progressViewState.currentGroupId = group.id;
+      if (!progressViewState.currentGroupId) {
+        progressViewState.currentGroupId = group.id;
+      }
       this.collapsePreviousActiveGroup();
     }
   }
@@ -148,6 +150,20 @@ export class TaskGroupManager {
           this.playSystemSound();
         }
       }
+    }
+  }
+
+  setRootGroupVisibility(selectedGroupId) {
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
+        continue;
+      }
+      const group = progressViewState.taskGroups.get(id);
+      if (!group || group.parentGroupId) {
+        continue;
+      }
+      const shouldHide = Boolean(selectedGroupId) && id !== selectedGroupId;
+      element.classList.toggle('is-hidden', shouldHide);
     }
   }
 

@@ -148,6 +148,15 @@ export class TaskGroupManager extends PersistentMapManager<
               ? new Date(group.endTime).getTime()
               : group.endTime
             : undefined,
+        instruction: group.instruction
+          ? {
+              ...group.instruction,
+              updatedAt:
+                typeof group.instruction.updatedAt === 'string'
+                  ? new Date(group.instruction.updatedAt).getTime()
+                  : group.instruction.updatedAt,
+            }
+          : undefined,
       };
       map.set(id, normalized);
     }

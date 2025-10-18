@@ -4,6 +4,14 @@
  */
 
 /* Log Group Styles */
+.log-group {
+  margin: var(--spacing-tiny) 0;
+}
+
+.log-group.is-hidden {
+  display: none;
+}
+
 .log-group-header {
   padding: var(--spacing-tiny) var(--spacing-medium);
   margin: var(--spacing-tiny) 0;
