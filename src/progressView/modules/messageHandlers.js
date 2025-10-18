@@ -90,21 +90,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     const selectedId = groupId || dom.sessionSelector.getValue();
-    console.log(
-      '[Session Selection] Switching to session:',
-      selectedId,
-      'in stream:',
-      activeStream,
-    );
     state.setSelectedGroup(activeStream, selectedId || null);
     dom.taskGroups.setRootGroupVisibility(activeStream, selectedId);
     this._applyInstructionForSelection(selectedId, undefined, activeStream);
 
     // Notify extension to update files/usage for the selected session
     if (selectedId) {
-      console.log(
-        '[Session Selection] Sending SELECT_SESSION message to extension',
-      );
       vscode.postMessage({
         command: COMMANDS.SELECT_SESSION,
         stream: activeStream,
