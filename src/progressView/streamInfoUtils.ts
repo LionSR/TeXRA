@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports - progress view
 import type { ProgressViewState } from './state/ProgressViewState';
-import type { AgentFilter, StreamTabInfo } from './types';
+import type { AgentFilter, StreamTabInfo, WorkflowRunInfo } from './types';
 // Local imports - agent types
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
@@ -75,6 +75,19 @@ export function buildStreamInfos(
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
+    let workflowRuns: WorkflowRunInfo[] | undefined;
+    let activeWorkflowRunId: string | undefined;
+
+    if (sessionCategory === AgentCategory.Workflow) {
+      workflowRuns = state.taskGroups.getRootGroups(id).map((group) => ({
+        id: group.id,
+        name: group.name,
+        startTime: group.startTime ?? 0,
+        endTime: group.endTime,
+        status: group.status,
+      }));
+      activeWorkflowRunId = state.getActiveWorkflowGroup(id);
+    }
     acc.push({
       name: id,
       label,
@@ -92,6 +105,8 @@ export function buildStreamInfos(
       creationTimestamp,
       status: statuses?.get(id),
       executionId,
+      workflowRuns,
+      activeWorkflowRunId,
     });
     return acc;
   }, []);

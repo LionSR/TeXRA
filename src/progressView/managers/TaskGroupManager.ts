@@ -83,6 +83,27 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
+   * Return the list of root-level task groups ordered by newest first.
+   */
+  getRootGroups(stream: StreamTabId): TaskGroup[] {
+    const groups = this.getStreamGroups(stream);
+    const rootGroups = Array.from(groups.values()).filter(
+      (group) => !group.parentGroupId,
+    );
+
+    return rootGroups.sort((a, b) => (b.startTime ?? 0) - (a.startTime ?? 0));
+  }
+
+  /**
+   * Find the most recent root group that is still considered active.
+   */
+  findLatestActiveRootGroup(stream: StreamTabId): TaskGroup | undefined {
+    return this.getRootGroups(stream).find(
+      (group) => group.status === 'running' || group.endTime === undefined,
+    );
+  }
+
+  /**
    * Check if a stream has groups
    */
   hasStream(stream: StreamTabId): boolean {

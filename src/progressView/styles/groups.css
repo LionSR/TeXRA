@@ -39,6 +39,31 @@
     var(--vscode-editorGroupHeader-tabsBorder);
 }
 
+.log-group--flattened {
+  margin: var(--spacing-small) 0;
+  padding: var(--spacing-small) var(--spacing-medium);
+  border-radius: var(--border-radius-small);
+  border: var(--border-thin) solid transparent;
+}
+
+.log-group--flattened .log-group-content {
+  border-left: none;
+  padding-left: 0;
+}
+
+.log-group--active-run {
+  outline: var(--border-thin) solid var(--vscode-focusBorder);
+  outline-offset: var(--spacing-tiny);
+}
+
+.log-group--flattened.log-group--active-run {
+  background-color: color-mix(
+    in srgb,
+    var(--vscode-focusBorder) 12%,
+    transparent
+  );
+}
+
 .group-status-icon {
   margin-right: var(--spacing-small);
 }

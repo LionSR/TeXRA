@@ -27,8 +27,10 @@ export class UsageSummary {
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
-    // Clear the summary - we're showing total usage in the files section now
-    this._summaryElem.textContent = '';
+    if (!progressViewState.isWorkflowSelectorActive()) {
+      // Clear the summary - we're showing total usage in the files section now
+      this._summaryElem.textContent = '';
+    }
   }
 
   /**

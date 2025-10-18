@@ -10,6 +10,14 @@ export interface StreamUITraits {
   isToolAgent: boolean;
 }
 
+export interface WorkflowRunInfo {
+  id: string;
+  name: string;
+  startTime: number;
+  endTime?: number;
+  status?: string;
+}
+
 export interface StreamTabInfo {
   name: string;
   /** Short label displayed in the tab UI */
@@ -25,6 +33,10 @@ export interface StreamTabInfo {
   creationTimestamp?: number;
   status?: string;
   executionId?: ExecutionId;
+  /** List of top-level workflow runs associated with this stream. */
+  workflowRuns?: WorkflowRunInfo[];
+  /** Identifier of the active workflow run when available. */
+  activeWorkflowRunId?: string;
 }
 
 export type AgentFilter = AgentTypeFilter;

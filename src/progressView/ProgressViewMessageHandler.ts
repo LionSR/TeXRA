@@ -117,7 +117,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.provider.setActiveStream(message.stream);
+    this.provider.setActiveStream(message.stream, message.workflowRunId);
   }
 
   private async handleDeleteStream(

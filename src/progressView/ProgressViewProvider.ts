@@ -325,8 +325,14 @@ export class ProgressViewProvider
   /**
    * Set active stream (used by message handler)
    */
-  public setActiveStream(stream: string): void {
+  public setActiveStream(stream: string, workflowRunId?: string): void {
     this.state.activeStream = stream;
+    if (workflowRunId !== undefined) {
+      this.state.setActiveWorkflowGroup(
+        stream,
+        workflowRunId ? workflowRunId : undefined,
+      );
+    }
     this.updateWebview();
   }
 }

@@ -171,6 +171,7 @@ describe('Progress event modules', () => {
     const module = createTaskGroupEvents({
       logger: loggerStub,
       initializeStreamForTaskGroup: () => {},
+      getStreamStatuses: () => new Map(),
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
@@ -188,6 +189,7 @@ describe('Progress event modules', () => {
       initializeStreamForTaskGroup: (stream) => {
         initialized.push(stream);
       },
+      getStreamStatuses: () => new Map(),
     });
 
     const state = {
@@ -201,8 +203,12 @@ describe('Progress event modules', () => {
       taskGroups: {
         addGroup: () => {},
         updateGroup: () => {},
+        getGroup: () => undefined,
+        findLatestActiveRootGroup: () => undefined,
       },
       setSessionKindHint: () => {},
+      setActiveWorkflowGroup: () => {},
+      getActiveWorkflowGroup: () => undefined,
       agentTypeFilter: 'all',
       activeStream: '',
     } as unknown as ProgressViewState;

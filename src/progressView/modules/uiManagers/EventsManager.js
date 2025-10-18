@@ -54,6 +54,34 @@ export class EventsManager {
       }
     });
 
+    addEventListenerSafely(ELEMENT_IDS.WORKFLOW_SELECTOR, 'change', (e) => {
+      const select = e.target;
+      if (!(select instanceof HTMLSelectElement)) {
+        return;
+      }
+
+      const option = select.selectedOptions[0];
+      if (!option) {
+        return;
+      }
+
+      const stream = option.dataset.stream;
+      if (!stream) {
+        return;
+      }
+
+      const runId = option.dataset.runId || '';
+
+      progressViewState.activeStream = stream;
+      progressViewState.setActiveWorkflowRunId(stream, runId || null);
+
+      vscode.postMessage({
+        command: COMMANDS.SWITCH_STREAM,
+        stream,
+        workflowRunId: runId || undefined,
+      });
+    });
+
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
       const button = e.target.closest('button[data-command]');

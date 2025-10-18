@@ -83,6 +83,12 @@ export function insertChronologically(
  */
 function defaultChildTimestamp(child) {
   if (child.classList.contains('log-group')) {
+    if (child.dataset.start) {
+      const parsed = parseInt(child.dataset.start, DECIMAL_RADIX);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
     const startElem = child.querySelector('.group-start-time');
     const start = startElem?.dataset.start;
     return start ? parseInt(start, DECIMAL_RADIX) : null;

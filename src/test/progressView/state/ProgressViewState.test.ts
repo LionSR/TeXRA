@@ -5,6 +5,7 @@ import { strict as assert } from 'assert';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { StatePersistenceManager } from '@progressView/persistence/StatePersistenceManager';
 import { WorkspaceStateKey } from '@common/state/stateManager';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
@@ -135,5 +136,67 @@ describe('ProgressViewState.clearOutputState', () => {
     const didUpdate = state.clearOutputState(streamId);
     assert.equal(didUpdate, false);
     assert.deepStrictEqual(persistence.saved, []);
+  });
+});
+
+describe('ProgressViewState workflow run tracking', () => {
+  it('tracks and clears active workflow group identifiers', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    const streamId = 'stream-99';
+    state.setActiveWorkflowGroup(streamId, 'run-1');
+    assert.equal(state.getActiveWorkflowGroup(streamId), 'run-1');
+
+    state.setActiveWorkflowGroup(streamId, undefined);
+    assert.equal(state.getActiveWorkflowGroup(streamId), undefined);
+
+    state.streamTabs.ensureStream(streamId);
+    state.setActiveWorkflowGroup(streamId, 'run-2');
+    state.clearStream(streamId);
+    assert.equal(state.getActiveWorkflowGroup(streamId), undefined);
+  });
+});
+
+describe('buildStreamInfos workflow metadata', () => {
+  it('includes workflow run details and active identifiers', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    const config = AgentConfigSchema.parse({
+      model: 'test-model',
+      agent: 'test-agent',
+      instruction: 'Test instruction',
+      session: {
+        agentCategory: AgentCategory.Workflow,
+        agentType: AgentType.Direct,
+      },
+      inputFile: 'main.tex',
+    });
+
+    const streamId = 'stream-workflow';
+    state.streamTabs.ensureStream(streamId);
+    const workflowState = agentConfigToTaskState(config, config.session);
+    state.setTaskState(streamId, workflowState);
+
+    const group = {
+      id: 'run-123',
+      name: 'Run: test',
+      startTime: 1000,
+      status: 'running',
+    } as any;
+    state.taskGroups.addGroup(streamId, group.id, group);
+    state.setActiveWorkflowGroup(streamId, group.id);
+
+    const infos = buildStreamInfos(state, undefined, 'all');
+    const info = infos.find((entry) => entry.name === streamId);
+    assert.ok(info);
+    assert.equal(info?.activeWorkflowRunId, 'run-123');
+    assert.ok(Array.isArray(info?.workflowRuns));
+    assert.equal(info?.workflowRuns?.[0]?.id, 'run-123');
   });
 });

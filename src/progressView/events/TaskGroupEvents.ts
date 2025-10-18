@@ -4,11 +4,12 @@ import * as vscode from 'vscode';
 // Local imports - progress view
 import type { WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
+import { buildStreamInfos } from '../streamInfoUtils';
 
 // Local imports - events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
-import type { ProgressEventBusLike } from './types';
+import type { ProgressEventBusLike, StreamStatusType } from './types';
 
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
@@ -16,6 +17,7 @@ import type { TaskGroup } from '@logger/LogTypes';
 interface TaskGroupEventsShared {
   logger: AgentLogger;
   initializeStreamForTaskGroup(stream: string): void;
+  getStreamStatuses(): Map<string, StreamStatusType>;
 }
 
 export interface TaskGroupEventsModule {
@@ -66,9 +68,22 @@ export function createTaskGroupEvents(
       };
 
       state.taskGroups.addGroup(stream, groupId, group);
+      if (!parentGroupId) {
+        state.setActiveWorkflowGroup(stream, groupId);
+      }
 
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.addTaskGroup(stream, group);
+      }
+
+      if (updater.isAvailable()) {
+        const statuses = shared.getStreamStatuses();
+        const infos = buildStreamInfos(
+          state,
+          statuses,
+          state.agentTypeFilter,
+        );
+        updater.updateStreams(infos, state.activeStream, state.agentTypeFilter);
       }
     });
   };
@@ -86,8 +101,29 @@ export function createTaskGroupEvents(
         endTime,
       });
 
+      const group = state.taskGroups.getGroup(stream, groupId);
+      if (group && !group.parentGroupId) {
+        if (status === 'running' || endTime === undefined) {
+          state.setActiveWorkflowGroup(stream, groupId);
+        } else if (state.getActiveWorkflowGroup(stream) === groupId) {
+          const latestActive =
+            state.taskGroups.findLatestActiveRootGroup(stream);
+          state.setActiveWorkflowGroup(stream, latestActive?.id);
+        }
+      }
+
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.updateTaskGroup(stream, groupId, status, endTime);
+      }
+
+      if (updater.isAvailable()) {
+        const statuses = shared.getStreamStatuses();
+        const infos = buildStreamInfos(
+          state,
+          statuses,
+          state.agentTypeFilter,
+        );
+        updater.updateStreams(infos, state.activeStream, state.agentTypeFilter);
       }
     });
   };

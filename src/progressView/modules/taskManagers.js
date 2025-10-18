@@ -6,6 +6,8 @@ import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
+const ACTIVE_RUN_CLASS = 'log-group--active-run';
+
 /**
  * Manages task group DOM operations.
  */
@@ -13,7 +15,8 @@ export class TaskGroupManager {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
-    this.groupElements = new Map();
+    this.groupNodes = new Map();
+    this.activeRunId = null;
   }
 
   /**
@@ -21,14 +24,14 @@ export class TaskGroupManager {
    * @param {Object} group - Group data
    */
   add(group) {
-    const existingGroup = this.groupElements.get(group.id);
-    if (existingGroup) {
+    const existingNode = this.groupNodes.get(group.id);
+    if (existingNode) {
       if (!progressViewState.taskGroups.get(group.id)) {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
-        existingGroup.remove();
-        this.groupElements.delete(group.id);
+        existingNode.wrapper?.remove();
+        this.groupNodes.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
         this.update(group.id, group.status, group.endTime);
@@ -36,27 +39,72 @@ export class TaskGroupManager {
       }
     }
 
+    const isRoot = !group.parentGroupId;
+    const shouldFlattenRoot =
+      isRoot && progressViewState.isWorkflowSelectorActive();
+
+    const node = shouldFlattenRoot
+      ? this._createFlattenedGroupNode(group)
+      : this._createStandardGroupNode(group);
+
+    if (!node) {
+      return;
+    }
+
+    progressViewState.taskGroups.set(group.id, group);
+    this.groupNodes.set(group.id, {
+      ...node,
+      isRoot,
+      isFlattened: shouldFlattenRoot,
+    });
+
+    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!container) {
+      console.error('TaskGroupManager.add: log container not found');
+      return;
+    }
+
+    if (group.parentGroupId) {
+      const parentNode = this.groupNodes.get(group.parentGroupId);
+      const parentContent = parentNode?.content;
+      if (parentContent) {
+        insertChronologically(parentContent, node.wrapper, group.startTime);
+        return;
+      }
+    }
+
+    insertChronologically(container, node.wrapper, group.startTime);
+
+    if (isRoot) {
+      progressViewState.currentGroupId = group.id;
+      if (!shouldFlattenRoot) {
+        this.collapsePreviousActiveGroup();
+      }
+      this._applyActiveRunClass(group.id);
+    }
+  }
+
+  _createStandardGroupNode(group) {
     const detailsElem = createFromTemplate('groupDetailsTemplate');
     if (!detailsElem) {
       console.error('TaskGroupManager.add: groupDetailsTemplate not found');
-      return;
+      return null;
     }
     detailsElem.id = `group-${group.id}`;
+    detailsElem.dataset.start = `${group.startTime ?? Date.now()}`;
 
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
       console.error('TaskGroupManager.add: failed to create group header');
-      return;
+      return null;
     }
 
     const groupContainer = detailsElem.querySelector('.log-group-content');
     if (!groupContainer) {
       console.error('TaskGroupManager.add: missing group content container');
-      return;
+      return null;
     }
     groupContainer.id = `group-content-${group.id}`;
-
-    progressViewState.taskGroups.set(group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id);
     detailsElem.open = isCollapsed !== true;
@@ -67,29 +115,21 @@ export class TaskGroupManager {
       progressViewState.toggleStates.set(group.id, !detailsElem.open);
     });
 
-    this.groupElements.set(group.id, detailsElem);
+    return { wrapper: detailsElem, content: groupContainer };
+  }
 
-    // Insert the group at the right position in the parent
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+  _createFlattenedGroupNode(group) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'log-group log-group--flattened';
+    wrapper.id = `group-${group.id}`;
+    wrapper.dataset.start = `${group.startTime ?? Date.now()}`;
 
-    if (group.parentGroupId) {
-      const parentDetails = this.groupElements.get(group.parentGroupId);
-      const parentGroupContent =
-        parentDetails?.querySelector('.log-group-content');
-      if (parentGroupContent) {
-        insertChronologically(parentGroupContent, detailsElem, group.startTime);
-        return;
-      }
-    }
+    const content = document.createElement('div');
+    content.className = 'log-group-content';
+    content.id = `group-content-${group.id}`;
+    wrapper.appendChild(content);
 
-    // For top-level groups, insert in chronological order
-    insertChronologically(container, detailsElem, group.startTime);
-
-    // For top-level groups, update current group and collapse the previous active group
-    if (!group.parentGroupId) {
-      progressViewState.currentGroupId = group.id;
-      this.collapsePreviousActiveGroup();
-    }
+    return { wrapper, content };
   }
 
   /**
@@ -107,23 +147,22 @@ export class TaskGroupManager {
       group.endTime = endTime;
     }
 
-    const detailsElem = this.groupElements.get(groupId);
-    if (!detailsElem) {
+    const node = this.groupNodes.get(groupId);
+    const wrapper = node?.wrapper;
+    if (!(wrapper instanceof HTMLDetailsElement)) {
       return;
     }
 
-    const header = detailsElem.querySelector('.log-group-header');
+    const header = wrapper.querySelector('.log-group-header');
     if (header) {
       const level = this.headerFormatter._getGroupLevel(group);
       header.className = this.headerFormatter._getHeaderClass(group, level);
 
-      // Update the status icon
       const statusIconElem = header.querySelector('.group-status-icon');
       if (statusIconElem) {
         statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(status);
       }
 
-      // Update or add the duration display when the group finishes
       const timeContainer = header.querySelector('.group-time');
 
       if (endTime) {
@@ -131,7 +170,6 @@ export class TaskGroupManager {
         const startDate = group.startTime;
         const durationMs = endDate - startDate;
 
-        // Update or create duration element
         const durationElem = header.querySelector('.group-duration');
         if (durationElem) {
           durationElem.textContent = `${this.headerFormatter._formatDuration(durationMs)}`;
@@ -151,23 +189,59 @@ export class TaskGroupManager {
     }
   }
 
+  setActiveRunId(runId) {
+    this.activeRunId = runId || null;
+    for (const [groupId, node] of this.groupNodes.entries()) {
+      if (!node.isRoot) {
+        continue;
+      }
+      this._toggleActiveRunClass(node, groupId === this.activeRunId);
+    }
+  }
+
+  _applyActiveRunClass(groupId) {
+    const node = this.groupNodes.get(groupId);
+    if (!node || !node.isRoot) {
+      return;
+    }
+    this._toggleActiveRunClass(node, groupId === this.activeRunId);
+  }
+
+  _toggleActiveRunClass(node, isActive) {
+    const { wrapper, isFlattened } = node;
+    if (!wrapper) {
+      return;
+    }
+    if (isActive) {
+      wrapper.classList.add(ACTIVE_RUN_CLASS);
+      if (!isFlattened && wrapper instanceof HTMLDetailsElement) {
+        wrapper.open = true;
+        progressViewState.toggleStates.set(
+          wrapper.id.replace('group-', ''),
+          false,
+        );
+      }
+    } else {
+      wrapper.classList.remove(ACTIVE_RUN_CLASS);
+    }
+  }
+
   /**
    * Collapse a group and all of its child groups recursively
    * @private
    * @param {string} groupId - ID of the group to collapse
    */
   collapseGroupAndChildren(groupId) {
-    // Find all child groups
     for (const [childId, group] of progressViewState.taskGroups.getAll()) {
       if (group.parentGroupId === groupId) {
         this.collapseGroupAndChildren(childId);
       }
     }
 
-    // Collapse this group
-    const detailsElem = this.groupElements.get(groupId);
-    if (detailsElem) {
-      detailsElem.open = false;
+    const node = this.groupNodes.get(groupId);
+    const wrapper = node?.wrapper;
+    if (wrapper instanceof HTMLDetailsElement) {
+      wrapper.open = false;
       progressViewState.toggleStates.set(groupId, true);
     }
   }
@@ -186,8 +260,9 @@ export class TaskGroupManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, detailsElem] of this.groupElements.entries()) {
-      if (!detailsElem || !detailsElem.open) {
+    for (const [id, node] of this.groupNodes.entries()) {
+      const wrapper = node.wrapper;
+      if (!(wrapper instanceof HTMLDetailsElement) || !wrapper.open) {
         continue;
       }
 
@@ -212,7 +287,6 @@ export class TaskGroupManager {
   collapsePreviousActiveGroup() {
     const currentId = this.findCurrentActiveGroup();
 
-    // Collapse the previous group if it's different from current
     if (
       this.previousActiveGroupId &&
       this.previousActiveGroupId !== currentId
@@ -220,7 +294,6 @@ export class TaskGroupManager {
       this.collapseGroupAndChildren(this.previousActiveGroupId);
     }
 
-    // Update the previous ID to current for next time
     this.previousActiveGroupId = currentId;
   }
 
@@ -250,8 +323,9 @@ export class TaskGroupManager {
    * Clear cached group references.
    */
   clear() {
-    this.groupElements.clear();
+    this.groupNodes.clear();
     this.previousActiveGroupId = null;
+    this.activeRunId = null;
   }
 }
 

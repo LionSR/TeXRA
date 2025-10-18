@@ -63,6 +63,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.activeStream = message.activeStream;
     state.agentFilter = message.agentFilter || 'all';
     state.resetExecutionAvailability();
+    state.clearAllWorkflowRuns();
     message.streams.forEach((s) => {
       if (s.status) {
         state.streamStatuses.set(s.name, s.status);
@@ -70,8 +71,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         state.streamStatuses.delete(s.name);
       }
       state.setExecutionAvailability(s.name, Boolean(s.executionId));
+      if (s.agentSessionKind === 'workflow') {
+        state.setWorkflowRuns(s.name, s.workflowRuns || []);
+        state.setActiveWorkflowRunId(s.name, s.activeWorkflowRunId || null);
+      }
     });
+    const hasWorkflowStreams = message.streams.some(
+      (stream) => stream.agentSessionKind === 'workflow',
+    );
+    state.setWorkflowSelectorActive(hasWorkflowStreams);
+
     dom.streamTabs.update(message.streams, message.activeStream);
+    dom.taskGroups.setActiveRunId(
+      state.getActiveWorkflowRunId(message.activeStream),
+    );
 
     const filterContainer = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
@@ -222,17 +235,52 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleAddTaskGroup(message) {
-    if (message.stream === state.activeStream) {
+    const { stream, group } = message;
+    if (!group) {
+      return;
+    }
+
+    if (!group.parentGroupId) {
+      state.upsertWorkflowRun(stream, group);
+      if (group.status === 'running' || group.endTime === undefined) {
+        state.setActiveWorkflowRunId(stream, group.id);
+      }
+    }
+
+    if (stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      dom.taskGroups.add(message.group);
+      dom.taskGroups.add(group);
+      dom.taskGroups.setActiveRunId(
+        state.getActiveWorkflowRunId(state.activeStream),
+      );
       logContent.scrollTop = logContent.scrollHeight;
     }
   }
 
   handleUpdateTaskGroup(message) {
-    if (message.stream === state.activeStream) {
-      state.taskGroups.update(message.groupId, message.status, message.endTime);
-      dom.taskGroups.update(message.groupId, message.status, message.endTime);
+    const { stream, groupId, status, endTime } = message;
+
+    state.taskGroups.update(groupId, status, endTime);
+    const group = state.taskGroups.get(groupId);
+
+    if (group && !group.parentGroupId) {
+      state.upsertWorkflowRun(stream, {
+        id: group.id,
+        name: group.name,
+        startTime: group.startTime,
+        endTime: endTime ?? group.endTime,
+        status: status ?? group.status,
+      });
+      if (status === 'running' || endTime === undefined) {
+        state.setActiveWorkflowRunId(stream, group.id);
+      }
+    }
+
+    if (stream === state.activeStream) {
+      dom.taskGroups.update(groupId, status, endTime);
+      dom.taskGroups.setActiveRunId(
+        state.getActiveWorkflowRunId(state.activeStream),
+      );
     }
   }
 
@@ -294,6 +342,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionAvailability(message.stream);
+      state.clearWorkflowRuns(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
@@ -311,6 +360,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteAll() {
     state.toggleStates.clearAll();
     state.resetExecutionAvailability();
+    state.clearAllWorkflowRuns();
+    dom.taskGroups.setActiveRunId(null);
     dom.instructionPanel.hide();
   }
 }

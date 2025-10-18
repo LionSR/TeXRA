@@ -76,6 +76,7 @@ export class ProgressEventHandler {
       logger: this.logger,
       initializeStreamForTaskGroup: (stream) =>
         this.initializeStreamForTaskGroup(stream),
+      getStreamStatuses: () => new Map(this._streamStatus),
     });
   }
 

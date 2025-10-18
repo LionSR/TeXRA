@@ -207,12 +207,134 @@ export class ProgressViewState {
     this.activeStream = '';
     this.agentFilter = 'all';
     this.currentGroupId = null;
+    this.workflowRuns = new Map();
+    this.activeWorkflowRunIds = new Map();
+    this.workflowSelectorActive = false;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
     this.toggleStates = new ToggleStates(() => this.save());
     this.streamStatuses = new StreamStatuses();
     this.executionAvailability = new ExecutionAvailability();
+  }
+
+  setWorkflowRuns(stream, runs) {
+    if (!stream) {
+      return;
+    }
+    if (!Array.isArray(runs)) {
+      this.workflowRuns.set(stream, []);
+      return;
+    }
+    const normalized = runs
+      .map((run) => this._normalizeWorkflowRun(run))
+      .filter(Boolean);
+    this.workflowRuns.set(stream, normalized);
+  }
+
+  getWorkflowRuns(stream) {
+    return this.workflowRuns.get(stream) || [];
+  }
+
+  upsertWorkflowRun(stream, run) {
+    if (!stream || !run || !run.id) {
+      return;
+    }
+
+    const existing = this.getWorkflowRuns(stream);
+    const normalized = this._normalizeWorkflowRun(run);
+    if (!normalized) {
+      return;
+    }
+
+    const updated = [...existing];
+    const index = updated.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) {
+      updated[index] = { ...updated[index], ...normalized };
+    } else {
+      updated.push(normalized);
+    }
+
+    updated.sort(
+      (a, b) => (b.startTime ?? 0) - (a.startTime ?? 0),
+    );
+
+    this.workflowRuns.set(stream, updated);
+  }
+
+  clearWorkflowRuns(stream) {
+    if (!stream) {
+      return;
+    }
+    this.workflowRuns.delete(stream);
+    this.activeWorkflowRunIds.delete(stream);
+  }
+
+  clearAllWorkflowRuns() {
+    this.workflowRuns.clear();
+    this.activeWorkflowRunIds.clear();
+  }
+
+  setActiveWorkflowRunId(stream, runId) {
+    if (!stream) {
+      return;
+    }
+    if (runId) {
+      this.activeWorkflowRunIds.set(stream, runId);
+    } else {
+      this.activeWorkflowRunIds.delete(stream);
+    }
+  }
+
+  getActiveWorkflowRunId(stream) {
+    return this.activeWorkflowRunIds.get(stream) || null;
+  }
+
+  setWorkflowSelectorActive(isActive) {
+    this.workflowSelectorActive = Boolean(isActive);
+  }
+
+  isWorkflowSelectorActive() {
+    return this.workflowSelectorActive;
+  }
+
+  _normalizeWorkflowRun(run) {
+    if (!run || typeof run !== 'object') {
+      return null;
+    }
+
+    const { id } = run;
+    if (!id) {
+      return null;
+    }
+
+    let startTime = run.startTime;
+    if (startTime instanceof Date) {
+      startTime = startTime.getTime();
+    }
+
+    if (typeof startTime === 'string') {
+      const parsed = Date.parse(startTime);
+      startTime = Number.isNaN(parsed) ? undefined : parsed;
+    }
+
+    let endTime = run.endTime;
+    if (endTime instanceof Date) {
+      endTime = endTime.getTime();
+    }
+
+    if (typeof endTime === 'string') {
+      const parsed = Date.parse(endTime);
+      endTime = Number.isNaN(parsed) ? undefined : parsed;
+    }
+
+    return {
+      id,
+      name: run.name ?? '',
+      startTime: typeof startTime === 'number' ? startTime : undefined,
+      endTime: typeof endTime === 'number' ? endTime : undefined,
+      status: run.status,
+    };
   }
 
   setExecutionAvailability(stream, available) {

@@ -46,6 +46,8 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private readonly _activeWorkflowGroupIds: Map<StreamTabId, string> =
+    new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
    *
@@ -135,6 +137,25 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  setActiveWorkflowGroup(
+    streamTabId: StreamTabId,
+    groupId: string | undefined,
+  ): void {
+    if (!groupId) {
+      this._activeWorkflowGroupIds.delete(streamTabId);
+      return;
+    }
+    this._activeWorkflowGroupIds.set(streamTabId, groupId);
+  }
+
+  getActiveWorkflowGroup(streamTabId: StreamTabId): string | undefined {
+    return this._activeWorkflowGroupIds.get(streamTabId);
+  }
+
+  clearActiveWorkflowGroup(streamTabId: StreamTabId): void {
+    this._activeWorkflowGroupIds.delete(streamTabId);
   }
 
   /**
@@ -259,6 +280,7 @@ export class ProgressViewState {
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveWorkflowGroup(stream);
     this.cleanupToolUseAgentRegistry();
 
     // Update active stream if necessary
@@ -281,6 +303,7 @@ export class ProgressViewState {
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveWorkflowGroup(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
     // NOTE: Preserve usageStats - these were not cleared in original implementation
@@ -296,6 +319,7 @@ export class ProgressViewState {
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this._activeWorkflowGroupIds.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
