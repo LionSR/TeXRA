@@ -88,12 +88,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     const selectedId = groupId || dom.sessionSelector.getValue();
+    console.log('[Session Selection] Switching to session:', selectedId, 'in stream:', activeStream);
     state.setSelectedGroup(activeStream, selectedId || null);
     dom.taskGroups.setRootGroupVisibility(activeStream, selectedId);
     this._applyInstructionForSelection(selectedId, undefined, activeStream);
 
     // Notify extension to update files/usage for the selected session
     if (selectedId) {
+      console.log('[Session Selection] Sending SELECT_SESSION message to extension');
       vscode.postMessage({
         command: COMMANDS.SELECT_SESSION,
         stream: activeStream,
@@ -368,8 +370,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateFiles(message) {
+    console.log('[UPDATE_FILES] Received:', {
+      stream: message.stream,
+      activeStream: state.activeStream,
+      fileRounds: Object.keys(message.files || {}).length,
+    });
     if (message.stream === state.activeStream) {
+      console.log('[UPDATE_FILES] Updating file list with', message.files);
       dom.fileList.update(message.files);
+    } else {
+      console.log('[UPDATE_FILES] Skipping update - stream mismatch');
     }
   }
 

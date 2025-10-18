@@ -25,8 +25,7 @@ export function registerMergeCommands(context: vscode.ExtensionContext) {
         baseFile: string,
         editedFile: string,
         executionId?: string,
-      ) =>
-        handleMerge(context, inputFile, baseFile, editedFile, executionId),
+      ) => handleMerge(context, inputFile, baseFile, editedFile, executionId),
     ),
   );
 }

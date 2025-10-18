@@ -131,12 +131,27 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const sessionId = message.sessionId as string;
 
     if (!stream || !sessionId) {
+      this.logger.warn(
+        this.channel,
+        'handleSelectSession: missing stream or sessionId',
+        undefined,
+        undefined,
+        undefined,
+        { stream, sessionId },
+      );
       return;
     }
+
+    this.logger.debug(
+      `Switching to session ${sessionId} in stream ${stream}`,
+    );
 
     // Update files for the selected session
     const files =
       this.provider.state.outputFiles.getFiles(stream, sessionId) || {};
+    this.logger.debug(
+      `Files for session ${sessionId}: ${Object.keys(files).length} rounds`,
+    );
     this.provider.webviewUpdater.updateFiles(stream, files);
 
     // Update missing outputs for the selected session
@@ -149,6 +164,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const usage = this.provider.state.usageStats.getSessionUsage(
       stream,
       sessionId,
+    );
+    this.logger.debug(
+      `Usage for session ${sessionId}: ${usage ? `${usage.inputTokens}/${usage.outputTokens}` : 'none'}`,
     );
     this.provider.webviewUpdater.updateUsage(usage);
   }
