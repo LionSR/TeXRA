@@ -1,6 +1,10 @@
 /**
  * Log Group styles for ProgressView
  * Styling for grouped log entries and hierarchy
+ *
+ * Note: State modifiers (is-hidden, is-visible, is-expanded) follow a common
+ * CSS pattern for state classes. BEM notation (element__subelement) is used
+ * for structural elements, while is-* classes denote dynamic states.
  */
 
 /* Log Group Styles */

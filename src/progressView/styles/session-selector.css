@@ -1,3 +1,10 @@
+/**
+ * Session Selector styles for ProgressView
+ *
+ * Follows BEM notation for structural elements (session-selector__dropdown)
+ * and common state pattern for visibility (is-hidden).
+ */
+
 .session-selector {
   display: flex;
   align-items: center;

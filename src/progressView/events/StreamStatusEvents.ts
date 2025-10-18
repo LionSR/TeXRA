@@ -26,7 +26,13 @@ import type { AgentLogger } from '@logger/AgentLogger';
 const INSTRUCTION_TOGGLE_LINE_THRESHOLD = 6;
 const INSTRUCTION_TOGGLE_CHAR_THRESHOLD = 600;
 
-function computeInstructionMetadata(text: string) {
+/**
+ * Compute instruction metadata based on content length.
+ * Determines whether to show a toggle for long instructions.
+ * @param text - The instruction text to analyze
+ * @returns Metadata object with showToggle hint, or undefined if no metadata needed
+ */
+export function computeInstructionMetadata(text: string): { showToggle: true } | undefined {
   const lineCount = text.split(/\r?\n/).length;
   if (lineCount > INSTRUCTION_TOGGLE_LINE_THRESHOLD || text.length > INSTRUCTION_TOGGLE_CHAR_THRESHOLD) {
     return { showToggle: true };

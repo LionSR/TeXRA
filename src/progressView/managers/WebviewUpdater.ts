@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - progress view
 
 import { COMMANDS, STATUS } from '../modules/constants.js';
+import { computeInstructionMetadata } from '../events/StreamStatusEvents';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
@@ -47,23 +48,12 @@ export class WebviewUpdater {
       return undefined;
     }
 
-    const metadata = WebviewUpdater.computeInstructionMetadata(normalized);
+    const metadata = computeInstructionMetadata(normalized);
     const payload: InstructionUpdate = { text: normalized };
     if (metadata) {
       payload.metadata = metadata;
     }
     return payload;
-  }
-
-  private static computeInstructionMetadata(
-    text: string,
-  ): InstructionUpdate['metadata'] | undefined {
-    const lineCount = text.split(/\r?\n/).length;
-    const shouldShowToggle = lineCount > 6 || text.length > 600;
-    if (!shouldShowToggle) {
-      return undefined;
-    }
-    return { showToggle: true };
   }
 
   /**

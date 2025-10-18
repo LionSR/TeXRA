@@ -293,7 +293,29 @@ export class ProgressViewState {
 
   // Delete a specific task group (session) within a stream
   deleteTaskGroup(stream: StreamTabId, groupId: string): void {
+    // Get all child group IDs before deletion
+    const allGroupIds = this._collectGroupAndChildren(stream, groupId);
+
+    // Delete the task group and its children
     this._taskGroups.deleteGroup(stream, groupId);
+
+    // Clean up session-specific logs
+    const messages = this._streamTabs.get(stream);
+    if (messages) {
+      // Filter out messages belonging to this session (groupId) and its children
+      const filtered = messages.filter(
+        msg => !msg.groupId || !allGroupIds.has(msg.groupId)
+      );
+      // Only update if we actually removed messages
+      if (filtered.length !== messages.length) {
+        this._streamTabs.items.set(stream, filtered);
+        this._streamTabs.save();
+      }
+    }
+
+    // NOTE: outputFiles and usageStats are not currently filtered per-session
+    // because they don't have groupId associations. This matches the behavior
+    // where these are stream-level resources that persist across sessions.
 
     // If this was the latest group, update to the most recent remaining group
     const latestGroup = this.getLatestTaskGroupId(stream);
@@ -310,6 +332,27 @@ export class ProgressViewState {
         this.clearLatestTaskGroupId(stream);
       }
     }
+  }
+
+  /**
+   * Collect the group ID and all its descendant group IDs recursively
+   */
+  private _collectGroupAndChildren(stream: StreamTabId, groupId: string): Set<string> {
+    const result = new Set<string>();
+    result.add(groupId);
+
+    const streamGroups = this._taskGroups.getGroupsForStream(stream);
+    const collectChildren = (parentId: string) => {
+      for (const group of streamGroups) {
+        if (group.parentGroupId === parentId) {
+          result.add(group.id);
+          collectChildren(group.id);
+        }
+      }
+    };
+
+    collectChildren(groupId);
+    return result;
   }
 
   // Stream content erasure (clear content but keep the stream tab and re-run capability)
