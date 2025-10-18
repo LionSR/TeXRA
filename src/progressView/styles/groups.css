@@ -21,6 +21,19 @@
   border-right: var(--border-thin) solid var(--vscode-panel-border);
 }
 
+.log-group.is-active-run > .log-group-header {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  border-left-color: var(--vscode-focusBorder);
+}
+
+.log-group.is-active-run > .log-group-header .group-time {
+  opacity: var(--opacity-full);
+}
+
+.log-group.is-active-run .log-group-content {
+  border-color: var(--vscode-focusBorder);
+}
+
 .log-group-header.running {
   border-left-color: var(--vscode-statusBarItem-warningBackground);
 }

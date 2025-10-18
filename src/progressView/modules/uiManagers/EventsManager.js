@@ -54,6 +54,25 @@ export class EventsManager {
       }
     });
 
+    addEventListenerSafely(
+      ELEMENT_IDS.WORKFLOW_STREAM_SELECT,
+      'change',
+      (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLSelectElement)) {
+          return;
+        }
+        const stream = target.value;
+        if (!stream) {
+          return;
+        }
+        vscode.postMessage({
+          command: COMMANDS.SWITCH_STREAM,
+          stream,
+        });
+      },
+    );
+
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
       const button = e.target.closest('button[data-command]');

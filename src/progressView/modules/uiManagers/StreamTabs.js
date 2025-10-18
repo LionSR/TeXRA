@@ -33,11 +33,25 @@ export class StreamTabs {
     }
     tabsContainer.innerHTML = '';
     let activeInfo = null;
+    const workflowStreams = [];
+    const toolStreams = [];
+
     streams.forEach((info) => {
       if (!info || typeof info !== 'object') {
         console.warn('StreamTabs.update: invalid stream value:', info);
         return;
       }
+      if (info.agentSessionKind === 'workflow') {
+        workflowStreams.push(info);
+      } else {
+        toolStreams.push(info);
+      }
+      if (info.name === activeStream) {
+        activeInfo = info;
+      }
+    });
+
+    toolStreams.forEach((info) => {
       const tooltip = this._buildTooltip(info);
       const tabEl = createFromTemplate('streamTabTemplate', {
         text: {
@@ -82,10 +96,50 @@ export class StreamTabs {
       }
       if (info.name === activeStream) {
         tabEl.classList.add('active');
-        activeInfo = info;
       }
       tabsContainer.appendChild(tabEl);
     });
+
+    const selectorContainer = document.getElementById(
+      ELEMENT_IDS.WORKFLOW_SELECTOR,
+    );
+    const selector = document.getElementById(
+      ELEMENT_IDS.WORKFLOW_STREAM_SELECT,
+    );
+    if (selectorContainer && selector instanceof HTMLSelectElement) {
+      if (workflowStreams.length > 0) {
+        const sorted = [...workflowStreams].sort((a, b) => {
+          const aTime = a.lastTimestamp ?? a.creationTimestamp ?? 0;
+          const bTime = b.lastTimestamp ?? b.creationTimestamp ?? 0;
+          return bTime - aTime;
+        });
+        const previousValue = selector.value;
+        selector.innerHTML = '';
+        sorted.forEach((info) => {
+          const option = document.createElement('option');
+          option.value = info.name;
+          option.textContent = info.label || info.name;
+          option.dataset.status = info.status || 'stopped';
+          selector.appendChild(option);
+        });
+        const workflowIds = new Set(sorted.map((info) => info.name));
+        if (workflowIds.has(activeStream)) {
+          selector.value = activeStream;
+        } else if (previousValue && workflowIds.has(previousValue)) {
+          selector.value = previousValue;
+        } else if (selector.options.length > 0) {
+          selector.selectedIndex = 0;
+        }
+        selectorContainer.classList.remove('is-hidden');
+        selector.dataset.selected = selector.value;
+        selector.disabled = selector.options.length === 0;
+      } else {
+        selector.innerHTML = '';
+        selector.value = '';
+        selector.dataset.selected = '';
+        selectorContainer.classList.add('is-hidden');
+      }
+    }
 
     // Update active stream name
     const streamNameElem = document.getElementById(

@@ -7,6 +7,7 @@ import { createOutputEvents } from '@progressView/events/OutputEvents';
 import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -223,5 +224,91 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
+  });
+
+  it('marks workflow root groups active when added', () => {
+    const bus = new FakeBus();
+    const module = createTaskGroupEvents({
+      logger: loggerStub,
+      initializeStreamForTaskGroup: () => {},
+    });
+
+    const activeCalls: Array<[string, string | undefined]> = [];
+    const state = {
+      streamTabs: {
+        has: () => true,
+      },
+      taskGroups: {
+        addGroup: () => {},
+      },
+      getTaskState: () => ({
+        session: { agentCategory: AgentCategory.Workflow },
+      }),
+      getSessionKindHint: () => AgentCategory.Workflow,
+      setActiveWorkflowGroup: (...args: [string, string | undefined]) => {
+        activeCalls.push(args);
+      },
+      activeStream: '',
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+    bus.trigger('addTaskGroup', {
+      stream: 'stream-1',
+      groupId: 'group-1',
+      groupName: 'Run: Agent',
+      startTime: 0,
+      status: 'running',
+    });
+
+    assert.deepStrictEqual(activeCalls, [['stream-1', 'group-1']]);
+  });
+
+  it('reassigns the active workflow run when a root group stops', () => {
+    const bus = new FakeBus();
+    const module = createTaskGroupEvents({
+      logger: loggerStub,
+      initializeStreamForTaskGroup: () => {},
+    });
+
+    const activeCalls: Array<[string, string | undefined]> = [];
+    const state = {
+      streamTabs: {
+        has: () => true,
+      },
+      taskGroups: {
+        updateGroup: () => {},
+        findGroup: () => ({
+          id: 'group-1',
+          parentGroupId: undefined,
+        }),
+        getOrderedRootGroups: () => [
+          { id: 'group-2', status: 'running' },
+        ],
+      },
+      getTaskState: () => ({
+        session: { agentCategory: AgentCategory.Workflow },
+      }),
+      getSessionKindHint: () => AgentCategory.Workflow,
+      setActiveWorkflowGroup: (...args: [string, string | undefined]) => {
+        activeCalls.push(args);
+      },
+      activeStream: '',
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+      updateTaskGroup: () => {},
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+    bus.trigger('updateTaskGroup', {
+      stream: 'stream-1',
+      groupId: 'group-1',
+      status: 'stopped',
+    });
+
+    assert.deepStrictEqual(activeCalls, [['stream-1', 'group-2']]);
   });
 });

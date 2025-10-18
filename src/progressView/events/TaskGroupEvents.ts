@@ -12,6 +12,15 @@ import type { ProgressEventBusLike } from './types';
 
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
+// Local imports - agent types
+import { AgentCategory } from '@agent/core/AgentDataclass';
+
+function isWorkflowStream(state: ProgressViewState, stream: string): boolean {
+  const taskState = state.getTaskState(stream);
+  const sessionKind =
+    taskState?.session?.agentCategory || state.getSessionKindHint(stream);
+  return sessionKind === AgentCategory.Workflow;
+}
 
 interface TaskGroupEventsShared {
   logger: AgentLogger;
@@ -67,6 +76,10 @@ export function createTaskGroupEvents(
 
       state.taskGroups.addGroup(stream, groupId, group);
 
+      if (!parentGroupId && isWorkflowStream(state, stream)) {
+        state.setActiveWorkflowGroup(stream, groupId);
+      }
+
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.addTaskGroup(stream, group);
       }
@@ -85,6 +98,21 @@ export function createTaskGroupEvents(
         status,
         endTime,
       });
+
+      if (isWorkflowStream(state, stream)) {
+        const updatedGroup = state.taskGroups.findGroup(stream, groupId);
+        if (updatedGroup && !updatedGroup.parentGroupId) {
+          if (status === 'running') {
+            state.setActiveWorkflowGroup(stream, groupId);
+          } else if (status) {
+            const nextActive = state
+              .taskGroups
+              .getOrderedRootGroups(stream)
+              .find((group) => group.status === 'running');
+            state.setActiveWorkflowGroup(stream, nextActive?.id);
+          }
+        }
+      }
 
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.updateTaskGroup(stream, groupId, status, endTime);

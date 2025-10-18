@@ -207,6 +207,9 @@ export class ProgressViewState {
     this.activeStream = '';
     this.agentFilter = 'all';
     this.currentGroupId = null;
+    this.activeWorkflowRunId = null;
+    this.workflowDropdownVisible = false;
+    this.shouldFlattenRootGroups = false;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();

@@ -83,6 +83,25 @@ export class TaskGroupManager extends PersistentMapManager<
   }
 
   /**
+   * Get root-level task groups for a stream sorted by start time (latest first).
+   */
+  getOrderedRootGroups(stream: StreamTabId): TaskGroup[] {
+    const groups = this.getStreamGroups(stream);
+    const rootGroups = Array.from(groups.values()).filter(
+      (group) => !group.parentGroupId,
+    );
+    rootGroups.sort((a, b) => b.startTime - a.startTime);
+    return rootGroups;
+  }
+
+  /**
+   * Find a specific group within a stream, returning undefined when missing.
+   */
+  findGroup(stream: StreamTabId, groupId: string): TaskGroup | undefined {
+    return this.get(stream)?.get(groupId);
+  }
+
+  /**
    * Check if a stream has groups
    */
   hasStream(stream: StreamTabId): boolean {

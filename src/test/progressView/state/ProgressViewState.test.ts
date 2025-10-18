@@ -137,3 +137,44 @@ describe('ProgressViewState.clearOutputState', () => {
     assert.deepStrictEqual(persistence.saved, []);
   });
 });
+
+describe('ProgressViewState workflow run tracking', () => {
+  it('records the active workflow group per stream', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    state.setActiveWorkflowGroup('stream-1', 'group-1');
+    assert.equal(state.getActiveWorkflowGroup('stream-1'), 'group-1');
+
+    state.setActiveWorkflowGroup('stream-1');
+    assert.equal(state.getActiveWorkflowGroup('stream-1'), undefined);
+  });
+
+  it('clears active workflow groups when streams are removed', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    state.setActiveWorkflowGroup('stream-1', 'group-1');
+    state.clearStream('stream-1');
+
+    assert.equal(state.getActiveWorkflowGroup('stream-1'), undefined);
+  });
+
+  it('clears all workflow group hints during reset', () => {
+    const persistence = new FakePersistence();
+    const state = new ProgressViewState(
+      persistence as unknown as StatePersistenceManager,
+    );
+
+    state.setActiveWorkflowGroup('stream-1', 'group-1');
+    state.setActiveWorkflowGroup('stream-2', 'group-2');
+    state.clearAll();
+
+    assert.equal(state.getActiveWorkflowGroup('stream-1'), undefined);
+    assert.equal(state.getActiveWorkflowGroup('stream-2'), undefined);
+  });
+});

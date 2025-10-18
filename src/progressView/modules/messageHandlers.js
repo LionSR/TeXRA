@@ -73,6 +73,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
+    const workflowStreams = message.streams.filter(
+      (stream) => stream.agentSessionKind === 'workflow',
+    );
+    state.workflowDropdownVisible = workflowStreams.length > 0;
+
+    const activeStreamInfo = message.streams.find(
+      (s) => s.name === message.activeStream,
+    );
+    const activeWorkflowRunId = activeStreamInfo?.activeWorkflowRunId
+      ? activeStreamInfo.activeWorkflowRunId
+      : activeStreamInfo?.workflowRuns?.[0]?.id;
+    state.activeWorkflowRunId = activeWorkflowRunId ?? null;
+    state.shouldFlattenRootGroups = Boolean(
+      state.workflowDropdownVisible &&
+        activeStreamInfo?.agentSessionKind === 'workflow',
+    );
+    dom.taskGroups.setActiveWorkflowRun(state.activeWorkflowRunId);
+
     const filterContainer = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
@@ -86,9 +104,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
-    const activeStreamInfo = message.streams.find(
-      (s) => s.name === message.activeStream,
-    );
     const sessionKind =
       activeStreamInfo?.agentSessionKind ||
       activeStreamInfo?.uiTraits?.sessionKind ||

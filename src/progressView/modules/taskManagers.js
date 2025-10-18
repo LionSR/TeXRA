@@ -14,6 +14,7 @@ export class TaskGroupManager {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
+    this.activeWorkflowRunId = null;
   }
 
   /**
@@ -36,6 +37,15 @@ export class TaskGroupManager {
       }
     }
 
+    progressViewState.taskGroups.set(group.id, group);
+
+    const shouldFlattenRoot = this._shouldFlattenRootGroup(group);
+    if (shouldFlattenRoot) {
+      this.groupElements.set(group.id, null);
+      this._refreshActiveWorkflowClasses();
+      return;
+    }
+
     const detailsElem = createFromTemplate('groupDetailsTemplate');
     if (!detailsElem) {
       console.error('TaskGroupManager.add: groupDetailsTemplate not found');
@@ -55,8 +65,6 @@ export class TaskGroupManager {
       return;
     }
     groupContainer.id = `group-content-${group.id}`;
-
-    progressViewState.taskGroups.set(group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id);
     detailsElem.open = isCollapsed !== true;
@@ -90,6 +98,8 @@ export class TaskGroupManager {
       progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
     }
+
+    this._refreshActiveWorkflowClasses();
   }
 
   /**
@@ -149,6 +159,8 @@ export class TaskGroupManager {
         }
       }
     }
+
+    this._refreshActiveWorkflowClasses();
   }
 
   /**
@@ -252,6 +264,54 @@ export class TaskGroupManager {
   clear() {
     this.groupElements.clear();
     this.previousActiveGroupId = null;
+    this.activeWorkflowRunId = null;
+  }
+
+  setActiveWorkflowRun(runId) {
+    this.activeWorkflowRunId = runId || null;
+    this._refreshActiveWorkflowClasses();
+  }
+
+  _shouldFlattenRootGroup(group) {
+    if (group.parentGroupId) {
+      return false;
+    }
+    if (!progressViewState.shouldFlattenRootGroups) {
+      return false;
+    }
+    return typeof group.name === 'string' && /^Run:/i.test(group.name);
+  }
+
+  _refreshActiveWorkflowClasses() {
+    const runId = this.activeWorkflowRunId;
+    for (const [groupId, element] of this.groupElements.entries()) {
+      if (!element) {
+        continue;
+      }
+      const isActive = this._belongsToRun(groupId, runId);
+      element.classList.toggle('is-active-run', isActive);
+      if (isActive && !element.open) {
+        element.open = true;
+        progressViewState.toggleStates.set(groupId, false);
+      }
+    }
+  }
+
+  _belongsToRun(groupId, runId) {
+    if (!runId) {
+      return false;
+    }
+    if (groupId === runId) {
+      return true;
+    }
+    const group = progressViewState.taskGroups.get(groupId);
+    if (!group || !group.parentGroupId) {
+      return false;
+    }
+    if (group.parentGroupId === runId) {
+      return true;
+    }
+    return this._belongsToRun(group.parentGroupId, runId);
   }
 }
 

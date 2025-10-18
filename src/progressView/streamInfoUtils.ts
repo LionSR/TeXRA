@@ -75,6 +75,21 @@ export function buildStreamInfos(
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
+    const workflowRuns = isToolAgent
+      ? undefined
+      : state
+          .taskGroups
+          .getOrderedRootGroups(id)
+          .map((group) => ({
+            id: group.id,
+            name: group.name,
+            startTime: group.startTime,
+            endTime: group.endTime,
+            status: group.status,
+          }));
+    const activeWorkflowRunId = isToolAgent
+      ? undefined
+      : state.getActiveWorkflowGroup(id);
     acc.push({
       name: id,
       label,
@@ -92,6 +107,8 @@ export function buildStreamInfos(
       creationTimestamp,
       status: statuses?.get(id),
       executionId,
+      activeWorkflowRunId,
+      workflowRuns,
     });
     return acc;
   }, []);

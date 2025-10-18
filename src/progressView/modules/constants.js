@@ -25,6 +25,8 @@ export const ELEMENT_IDS = {
   LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
+  WORKFLOW_SELECTOR: 'workflowSelector',
+  WORKFLOW_STREAM_SELECT: 'workflowStreamSelect',
   ACTIVE_STREAM_NAME: 'activeStreamName',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',

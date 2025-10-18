@@ -55,6 +55,7 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
+  private readonly activeWorkflowGroups: Map<StreamTabId, string> = new Map();
   private readonly toolUseTaskStates: ToolUseTaskStateManager;
   private readonly persistence: StatePersistenceManager;
   private readonly logger: AgentLogger;
@@ -135,6 +136,22 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  setActiveWorkflowGroup(streamTabId: StreamTabId, groupId?: string): void {
+    if (groupId) {
+      this.activeWorkflowGroups.set(streamTabId, groupId);
+    } else {
+      this.activeWorkflowGroups.delete(streamTabId);
+    }
+  }
+
+  getActiveWorkflowGroup(streamTabId: StreamTabId): string | undefined {
+    return this.activeWorkflowGroups.get(streamTabId);
+  }
+
+  clearActiveWorkflowGroup(streamTabId: StreamTabId): void {
+    this.activeWorkflowGroups.delete(streamTabId);
   }
 
   /**
@@ -259,6 +276,7 @@ export class ProgressViewState {
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveWorkflowGroup(stream);
     this.cleanupToolUseAgentRegistry();
 
     // Update active stream if necessary
@@ -281,6 +299,7 @@ export class ProgressViewState {
     this._taskGroups.deleteStream(stream);
     this._outputFiles.deleteStream(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveWorkflowGroup(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
     // NOTE: Preserve usageStats - these were not cleared in original implementation
@@ -296,6 +315,7 @@ export class ProgressViewState {
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this.activeWorkflowGroups.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
