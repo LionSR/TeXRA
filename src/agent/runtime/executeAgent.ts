@@ -481,6 +481,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 bus.emit('setTaskState', {
                   streamTabId: activeStreamId,
                   executionId,
+                  taskGroupId: mainTaskGroupId,
                   taskState: agentConfigToTaskState(config, metadata),
                 });
                 logger.debug(

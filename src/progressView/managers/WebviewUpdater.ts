@@ -16,7 +16,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
+import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
@@ -91,7 +91,8 @@ export class WebviewUpdater {
   updateLogContent(
     stream: StreamTabId,
     messages: LogMessageData[],
-    groups?: any[],
+    groups: TaskGroup[] = [],
+    taskGroupId?: string,
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -100,7 +101,8 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_LOGS,
       stream,
       messages,
-      groups: groups || [],
+      groups,
+      taskGroupId,
     });
   }
 
@@ -182,7 +184,12 @@ export class WebviewUpdater {
   /**
    * Update instruction panel content
    */
-  updateInstruction(stream: StreamTabId, instruction: InstructionUpdate): void {
+  updateInstruction(
+    stream: StreamTabId,
+    instruction: InstructionUpdate,
+    taskGroupId?: string,
+    groups: TaskGroup[] = [],
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -190,13 +197,19 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
+      taskGroupId,
+      groups,
     });
   }
 
   /**
    * Clear instruction panel content
    */
-  clearInstruction(stream: StreamTabId | ''): void {
+  clearInstruction(
+    stream: StreamTabId | '',
+    taskGroupId?: string,
+    groups: TaskGroup[] = [],
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -204,6 +217,8 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction: null,
+      taskGroupId,
+      groups,
     });
   }
 

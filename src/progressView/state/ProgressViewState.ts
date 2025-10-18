@@ -46,6 +46,7 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly workflowTaskStates: WorkflowTaskStateManager;
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private latestSessionGroupByStream: Map<StreamTabId, string> = new Map();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
    *
@@ -249,6 +250,18 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
+  setLatestSessionGroup(stream: StreamTabId, groupId: string): void {
+    this.latestSessionGroupByStream.set(stream, groupId);
+  }
+
+  getLatestSessionGroup(stream: StreamTabId): string | undefined {
+    return this.latestSessionGroupByStream.get(stream);
+  }
+
+  clearLatestSessionGroup(stream: StreamTabId): void {
+    this.latestSessionGroupByStream.delete(stream);
+  }
+
   // Stream cleanup operations
   clearStream(stream: StreamTabId): void {
     this._streamTabs.delete(stream);
@@ -258,6 +271,7 @@ export class ProgressViewState {
     this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
+    this.clearLatestSessionGroup(stream);
     this.clearSessionKindHint(stream);
     this.cleanupToolUseAgentRegistry();
 

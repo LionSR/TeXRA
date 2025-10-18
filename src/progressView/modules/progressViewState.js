@@ -207,6 +207,7 @@ export class ProgressViewState {
     this.activeStream = '';
     this.agentFilter = 'all';
     this.currentGroupId = null;
+    this.selectedRootGroups = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -229,6 +230,35 @@ export class ProgressViewState {
 
   resetExecutionAvailability() {
     this.executionAvailability.clear();
+  }
+
+  setSelectedRootGroup(stream, groupId) {
+    if (!stream) {
+      return;
+    }
+
+    if (!groupId) {
+      this.selectedRootGroups.delete(stream);
+      return;
+    }
+
+    this.selectedRootGroups.set(stream, groupId);
+  }
+
+  getSelectedRootGroup(stream) {
+    if (!stream) {
+      return null;
+    }
+
+    return this.selectedRootGroups.get(stream) ?? null;
+  }
+
+  clearSelectedRootGroup(stream) {
+    if (!stream) {
+      return;
+    }
+
+    this.selectedRootGroups.delete(stream);
   }
 
   /** Load saved state from VS Code storage. */

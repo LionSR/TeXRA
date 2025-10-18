@@ -12,6 +12,7 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -223,5 +224,126 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
+  });
+
+  it('records the latest session group when adding a root task group', () => {
+    const bus = new FakeBus();
+    const recorded: { stream: string; groupId: string }[] = [];
+    const module = createTaskGroupEvents({
+      logger: loggerStub,
+      initializeStreamForTaskGroup: () => {},
+    });
+
+    const state = {
+      streamTabs: {
+        has: () => true,
+        ensureStream: () => {},
+      },
+      taskGroups: {
+        addGroup: () => {},
+      },
+      setLatestSessionGroup: (stream: string, groupId: string) => {
+        recorded.push({ stream, groupId });
+      },
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+
+    bus.trigger('addTaskGroup', {
+      stream: 'stream-xyz',
+      groupId: 'group-123',
+      groupName: 'Task',
+      startTime: 123,
+      status: 'running',
+      parentGroupId: undefined,
+    });
+
+    assert.deepStrictEqual(recorded, [
+      { stream: 'stream-xyz', groupId: 'group-123' },
+    ]);
+  });
+
+  it('attaches instruction metadata to the matching task group', () => {
+    const bus = new FakeBus();
+    const shared = {
+      logger: loggerStub,
+      streamStatus: new Map(),
+      setStreamStatus: () => {},
+      sendInstructionUpdate: () => {},
+      updateLogContentForStream: () => {},
+    };
+    const module = createStreamStatusEvents(shared);
+
+    const updates: Array<{
+      stream: string;
+      groupId: string;
+      update: Record<string, unknown>;
+    }> = [];
+    const latestSessions: Array<{ stream: string; groupId: string }> = [];
+    let agentFilter = 'all';
+
+    const state = {
+      setTaskState: () => {},
+      clearSessionKindHint: () => {},
+      getTaskState: () => ({
+        session: { agentCategory: AgentCategory.Workflow },
+        agentConfig: { instruction: 'Focus on the main file' },
+      }),
+      get activeStream() {
+        return 'stream-42';
+      },
+      get agentTypeFilter() {
+        return agentFilter;
+      },
+      set agentTypeFilter(value) {
+        agentFilter = value;
+      },
+      setExecutionId: () => {},
+      setLatestSessionGroup: (stream: string, groupId: string) => {
+        latestSessions.push({ stream, groupId });
+      },
+      getLatestSessionGroup: () => undefined,
+      taskGroups: {
+        updateGroup: (
+          stream: string,
+          groupId: string,
+          update: Record<string, unknown>,
+        ) => {
+          updates.push({ stream, groupId, update });
+        },
+      },
+    } as unknown as ProgressViewState;
+    const updater = {
+      isAvailable: () => false,
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+
+    bus.trigger('setTaskState', {
+      streamTabId: 'stream-42',
+      executionId: undefined,
+      taskState: {
+        agentConfig: { instruction: 'Focus on the main file' },
+        session: { agentCategory: AgentCategory.Workflow },
+      } as any,
+      taskGroupId: 'group-alpha',
+    });
+
+    assert.deepStrictEqual(latestSessions, [
+      { stream: 'stream-42', groupId: 'group-alpha' },
+    ]);
+    assert.equal(updates.length, 1);
+    assert.deepStrictEqual(updates[0], {
+      stream: 'stream-42',
+      groupId: 'group-alpha',
+      update: {
+        instruction: {
+          text: 'Focus on the main file',
+        },
+      },
+    });
   });
 });

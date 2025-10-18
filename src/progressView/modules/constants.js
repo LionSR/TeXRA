@@ -28,6 +28,8 @@ export const ELEMENT_IDS = {
   ACTIVE_STREAM_NAME: 'activeStreamName',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
+  SESSION_SELECTOR_CONTAINER: 'sessionSelectorContainer',
+  SESSION_SELECTOR: 'sessionSelector',
   INSTRUCTION_CONTAINER: 'instructionContainer',
   INSTRUCTION_TEXT: 'instructionText',
   INSTRUCTION_TOGGLE_BTN: 'instructionToggleBtn',

@@ -149,6 +149,29 @@ export class TaskGroupManager extends PersistentMapManager<
               : group.endTime
             : undefined,
       };
+
+      if (group.instruction && typeof group.instruction.text === 'string') {
+        const metadata = group.instruction.metadata;
+        const normalizedMetadata =
+          metadata && typeof metadata === 'object'
+            ? {
+                ...(typeof metadata.showToggle === 'boolean'
+                  ? { showToggle: metadata.showToggle }
+                  : {}),
+                ...(typeof metadata.expanded === 'boolean'
+                  ? { expanded: metadata.expanded }
+                  : {}),
+              }
+            : undefined;
+
+        normalized.instruction = {
+          text: group.instruction.text,
+          ...(normalizedMetadata && Object.keys(normalizedMetadata).length > 0
+            ? { metadata: normalizedMetadata }
+            : {}),
+        };
+      }
+
       map.set(id, normalized);
     }
     return map;

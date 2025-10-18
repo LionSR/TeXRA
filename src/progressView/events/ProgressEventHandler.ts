@@ -117,11 +117,20 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
+    const taskGroupId = this.state.getLatestSessionGroup(stream);
+    const groups = Array.from(
+      this.state.taskGroups.getStreamGroups(stream).values(),
+    );
 
     if (instructionUpdate) {
-      this.webviewUpdater.updateInstruction(stream, instructionUpdate);
+      this.webviewUpdater.updateInstruction(
+        stream,
+        instructionUpdate,
+        taskGroupId,
+        groups,
+      );
     } else {
-      this.webviewUpdater.clearInstruction(stream);
+      this.webviewUpdater.clearInstruction(stream, taskGroupId, groups);
     }
   }
 
@@ -140,7 +149,13 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    this.webviewUpdater.updateLogContent(stream, messages, groups);
+    const latestGroupId = this.state.getLatestSessionGroup(stream);
+    this.webviewUpdater.updateLogContent(
+      stream,
+      messages,
+      groups,
+      latestGroupId,
+    );
 
     // Send output files for current stream
     const files = this.state.outputFiles.getFiles(stream) || {};

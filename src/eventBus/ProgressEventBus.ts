@@ -14,6 +14,7 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+import type { TaskGroupId } from '@logger/types/EntityTypes';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -53,6 +54,7 @@ interface SetTaskStatePayload {
   streamTabId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
+  taskGroupId?: TaskGroupId;
 }
 
 export interface ProgressEventPayloads {

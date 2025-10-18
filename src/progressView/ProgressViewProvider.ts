@@ -319,7 +319,13 @@ export class ProgressViewProvider
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    this.webviewUpdater.updateLogContent(stream, messages, groups);
+    const latestGroupId = this.state.getLatestSessionGroup(stream);
+    this.webviewUpdater.updateLogContent(
+      stream,
+      messages,
+      groups,
+      latestGroupId,
+    );
   }
 
   /**

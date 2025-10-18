@@ -253,6 +253,25 @@ export class TaskGroupManager {
     this.groupElements.clear();
     this.previousActiveGroupId = null;
   }
+
+  setVisibleRootGroup(groupId) {
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
+        continue;
+      }
+
+      const group = progressViewState.taskGroups.get(id);
+      if (!group || group.parentGroupId) {
+        continue;
+      }
+
+      if (!groupId || groupId === id) {
+        element.style.removeProperty('display');
+      } else {
+        element.style.display = 'none';
+      }
+    }
+  }
 }
 
 /**
