@@ -192,30 +192,16 @@ export function hasEndTag(
 }
 
 /** Zod schema for AgentPrompt validation */
-export const AgentPromptSchema = z
-  .strictObject({
-    systemPrompt: z.string().prefault(''),
-    userPrefix: z.string().prefault(''),
-    userRequest: z
-      .union([
-        z.string().min(1, 'userRequest cannot be empty'),
-        z.array(z.string().min(1, 'userRequest entries cannot be empty')),
-      ])
-      .prefault(''),
-  })
-  .passthrough()
-  .superRefine((data, ctx) => {
-    // Check for legacy userReflect field
-    if ('userReflect' in data) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['userReflect'],
-        message:
-          'The "userReflect" field is no longer supported. Please migrate to array-based "userRequest" format. ' +
-          'See documentation: https://github.com/LionSR/TeXRA/blob/main/docs/guide/custom-agents.md#reflection-tips',
-      });
-    }
-  });
+export const AgentPromptSchema = z.object({
+  systemPrompt: z.string().prefault(''),
+  userPrefix: z.string().prefault(''),
+  userRequest: z
+    .union([
+      z.string().min(1, 'userRequest cannot be empty'),
+      z.array(z.string().min(1, 'userRequest entries cannot be empty')),
+    ])
+    .prefault(''),
+});
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
 
