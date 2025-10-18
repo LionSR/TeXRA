@@ -1,6 +1,9 @@
 // Standard library imports
 import { randomUUID } from 'crypto';
 
+// Third-party imports
+import { decode as decodeHtml } from 'he';
+
 // Local imports - persistence
 import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
@@ -10,7 +13,14 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-import { parseLegacyLogData } from '@logger/logUtils';
+
+const LEGACY_MESSAGE_TYPES: ReadonlySet<LogMessageData['messageType']> =
+  new Set([
+    'fileList',
+    'missingOutputs',
+    'latexdiff',
+    'statistics',
+  ]);
 
 /**
  * Manages stream tabs collection with persistence.
@@ -135,7 +145,21 @@ export class StreamTabsManager extends PersistentMapManager<
         msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
       }
       const log = msg as LogMessageData;
-      parseLegacyLogData(log, this.logger);
+      if (log.data === undefined && typeof log.text === 'string') {
+        if (log.messageType && LEGACY_MESSAGE_TYPES.has(log.messageType)) {
+          try {
+            const decoded = decodeHtml(log.text);
+            const parsed = JSON.parse(decoded);
+            if (typeof parsed === 'object' && parsed !== null) {
+              log.data = parsed;
+            }
+          } catch (error) {
+            const reason =
+              error instanceof Error ? error.message : String(error);
+            this.logger.warn(`Failed to parse legacy log data: ${reason}`);
+          }
+        }
+      }
       if (!log.messageType) {
         log.messageType = 'default';
       }
