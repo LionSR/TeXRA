@@ -16,7 +16,6 @@ import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-import { calculateTotalRounds } from '@agent/utils/roundUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - latex utilities
@@ -48,7 +47,7 @@ export interface RoundOutputOptions {
 }
 
 /**
- * Abstract base class for agents that support multi-turn reflection and refinement.
+ * Abstract base class for agents that support multi-turn reflection.
  * Provides core functionality for processing inputs, managing state, and handling outputs
  * across multiple conversation rounds.
  */
@@ -87,7 +86,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
-    const numRounds = this.getNumberOfRounds();
+    const numRounds = this.getTotalRounds();
     this.outputFile = new Array(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
@@ -135,19 +134,22 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
+   * Calculates the total number of rounds to execute.
+   * Returns the maximum of configured rounds and userRequest array length.
+   */
+  private getTotalRounds(): number {
+    const requestArray = Array.isArray(this.agentPrompt.userRequest)
+      ? this.agentPrompt.userRequest
+      : this.agentPrompt.userRequest
+        ? [this.agentPrompt.userRequest]
+        : [];
+    return Math.max(this.agentSetting.rounds ?? 2, requestArray.length);
+  }
+
+  /**
    * Generates output file path for specified conversation round.
    */
   protected abstract getOutputFile(currRound: number): string;
-
-  /**
-   * Returns the configured number of conversation rounds.
-   */
-  protected getNumberOfRounds(): number {
-    return calculateTotalRounds(
-      this.agentSetting.rounds,
-      this.agentPrompt.userReflect,
-    );
-  }
 
   /**
    * Processes completion of conversation round.
@@ -470,9 +472,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       // Prepare round message
       const promptBuilder = this.getPromptBuilder();
-      const userRequestReflect =
-        await promptBuilder.buildReflectPrompt(currRound);
-      let userMessage = userRequestReflect ? `${userRequestReflect}\n` : '';
+      const userRequest = await promptBuilder.buildUserRequest(currRound);
+      let userMessage = userRequest ? `${userRequest}\n` : '';
       if (toolState.texcountStats) {
         userMessage = `${toolState.texcountStats}${userMessage}`;
       }
@@ -532,7 +533,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       let messages: any[] = [];
       let continueRounds = true;
 
-      const totalRounds = this.getNumberOfRounds();
+      const totalRounds = this.getTotalRounds();
       for (let currRound = 0; currRound < totalRounds; currRound++) {
         if (this.isInterrupted) {
           break;

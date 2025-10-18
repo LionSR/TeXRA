@@ -12,18 +12,18 @@ import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
 
 /**
- * Centralises prompt construction logic for reflection-capable agents.
+ * Centralises prompt construction logic for multi-round agents.
  *
  * @remarks
  * The builder renders all prompts lazily so callers can defer work until the
- * relevant conversation stage. Reflection rounds are 1-indexed while process
- * rounds begin at 0.
+ * relevant conversation stage. Rounds use zero-based indexing where round 0
+ * is the initial prompt and subsequent rounds continue from the array.
  *
  * @example
  * ```ts
  * const builder = new PromptBuilder(prompt, setting, vars, logger);
  * const initial = await builder.buildInitialPrompts();
- * const firstReflect = await builder.buildReflectPrompt(1);
+ * const firstRoundRequest = await builder.buildUserRequest(1);
  * const prefill = await builder.buildPrefill(0);
  * ```
  */
@@ -45,7 +45,7 @@ export class PromptBuilder {
   }> {
     const [systemPrompt, userRequest, userPrefix] = await Promise.all([
       getSystemPromptWithRules(this.agentPrompt.systemPrompt, this.userVars),
-      renderPrompt(this.agentPrompt.userRequest, this.userVars),
+      this.buildUserRequest(0),
       renderPrompt(this.agentPrompt.userPrefix, this.userVars),
     ]);
 
@@ -53,53 +53,31 @@ export class PromptBuilder {
   }
 
   /**
-   * Render the reflection prompt for the supplied round.
+   * Render the user request for the supplied round.
    *
-   * @param currRound The reflection round (1-indexed for reflection rounds)
-   * @remarks Falls back to the first reflection template when a later round is undefined.
+   * @param currRound Zero-based round number (round 0 selects the initial template)
+   * @remarks Rounds beyond the configured templates fall back to the second template (index 1).
    */
-  public async buildReflectPrompt(currRound: number): Promise<string> {
+  public async buildUserRequest(currRound: number): Promise<string> {
     const groupId = this.logger?.getActiveGroupId();
-    const { userReflect } = this.agentPrompt;
-    const normalizedRound = Math.max(1, currRound);
+    const template = this.getRoundTemplate(currRound);
 
-    let reflectTemplate: string | undefined;
-
-    if (Array.isArray(userReflect)) {
-      const index = normalizedRound - 1;
-      reflectTemplate = userReflect[index];
-
-      if (reflectTemplate === undefined) {
-        const fallback = userReflect[0];
-
-        if (fallback) {
-          this.logger?.debug(
-            `No reflection prompt configured for round ${currRound}. Falling back to first template.`,
-            groupId,
-          );
-        }
-
-        reflectTemplate = fallback;
-      }
-    } else {
-      reflectTemplate = userReflect;
-    }
-
-    if (!reflectTemplate) {
-      this.logger?.warn(
-        `No reflection prompt configured for round ${currRound}. Returning empty prompt.`,
-        groupId,
-      );
+    if (!template) {
+      const message =
+        currRound === 0
+          ? 'No initial user request configured. Returning empty prompt.'
+          : `No prompt configured for round ${currRound}. Returning empty prompt.`;
+      this.logger?.warn(message, groupId);
       return '';
     }
 
-    return renderPrompt(reflectTemplate, this.userVars);
+    return renderPrompt(template, this.userVars);
   }
 
   /**
    * Return the prefill value that should seed the assistant response.
    *
-   * @param currRound The current round number (0-based for process, 1+ for reflection)
+   * @param currRound Zero-based conversation round index
    * @remarks Reuses the first configured prefill when subsequent rounds omit a value.
    */
   public async buildPrefill(currRound: number): Promise<string> {
@@ -120,6 +98,31 @@ export class PromptBuilder {
     );
 
     return prefills[0] ?? '';
+  }
+
+  private getRoundTemplate(currRound: number): string | undefined {
+    const normalizedRound = Math.max(0, currRound);
+    const requestArray = Array.isArray(this.agentPrompt.userRequest)
+      ? this.agentPrompt.userRequest
+      : this.agentPrompt.userRequest
+        ? [this.agentPrompt.userRequest]
+        : [];
+
+    const template = requestArray[normalizedRound];
+    if (template !== undefined) {
+      return template;
+    }
+
+    // For rounds beyond configured templates, fall back to the second template
+    if (normalizedRound > 0 && requestArray.length > 1) {
+      this.logger?.debug(
+        `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
+        this.logger.getActiveGroupId(),
+      );
+      return requestArray[1];
+    }
+
+    return undefined;
   }
 }
 

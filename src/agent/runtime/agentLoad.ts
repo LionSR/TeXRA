@@ -247,6 +247,38 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
+    // Normalize legacy userReflect field by merging into userRequest
+    if ('userReflect' in prompts && prompts.userReflect) {
+      const userRequest = Array.isArray(prompts.userRequest)
+        ? prompts.userRequest
+        : prompts.userRequest
+          ? [prompts.userRequest]
+          : [];
+      const userReflect = Array.isArray(prompts.userReflect)
+        ? prompts.userReflect
+        : [prompts.userReflect];
+
+      prompts.userRequest = [...userRequest, ...userReflect].filter(Boolean);
+      delete (prompts as any).userReflect;
+
+      // Show warning for legacy userReflect field
+      const migrationGuide = 'View Migration Guide';
+      void vscode.window
+        .showWarningMessage(
+          `Agent "${agentNameFromFile}" uses deprecated "userReflect" field. Please migrate to array-based "userRequest" format for better compatibility.`,
+          migrationGuide,
+        )
+        .then((selection) => {
+          if (selection === migrationGuide) {
+            void vscode.env.openExternal(
+              vscode.Uri.parse(
+                'https://texra.ai/docs/guide/custom-agents#reflection-tips',
+              ),
+            );
+          }
+        });
+    }
+
     // Apply defaults and validate the final settings and prompts
     const validatedSettings = parseAgentSetting(settings);
     const validatedPrompts = AgentPromptSchema.parse(prompts);
