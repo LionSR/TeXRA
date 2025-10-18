@@ -6,12 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Add Claude Haiku 4.5 (`haiku45T`, `haiku45`) to the Anthropic model catalog with pricing, reasoning capability metadata, and documentation in the model guide.
+- Add an interactive VS Code walkthrough that guides first-time users through model setup, file selection, and the progress board.
+- Expand the Anthropic catalog with Claude Haiku 4.5 (`haiku45T`, `haiku45`), including pricing, capability metadata, and updated documentation.
 
 ### Improvements
 
-- Simplify agent prompt handling by unifying initial and reflection prompts into a single `userRequest` field
-- Automatically migrate legacy `userReflect` configurations with user-friendly warnings
+- Streamline custom agent prompts by keeping all rounds in the `userRequest` list while automatically migrating older `userReflect` entries and highlighting anything that still needs attention.
+- Ensure the model picker waits for its options to load so newly enabled models reliably appear, even on slower machines.
+
+### Bug Fixes
+
+- Restore scratchpad exports to reopen the named document you selected when agents generate multiple files.
+- Repair tool-use session migration so previously saved runs load and resume without errors.
+- Improve OpenAI "thinking" summaries with clearer spacing, making reasoning traces easier to scan in the progress view.
+- Keep workflow outputs visible in the progress board when no new files were written, avoiding unnecessary refreshes.
+- Show progress board timestamps in your local timezone instead of UTC.
 
 ## [0.33.10] - 2025-10-10
 
