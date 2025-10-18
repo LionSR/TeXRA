@@ -310,7 +310,6 @@ describe('ResponseCycle background reasoning logs', () => {
       systemPrompt: '',
       userPrefix: '',
       userRequest: 'Explain the process',
-      userReflect: '',
     };
 
     const agentConfig: AgentConfig = {

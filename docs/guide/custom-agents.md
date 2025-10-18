@@ -86,15 +86,21 @@ prompts:
     # Variables like `{{ INPUT_CONTENT }}`, `{{ INSTRUCTION }}`, `{{ BIBLIOGRAPHY_CONTENT }}` (from filePatternsContain) are substituted here.
     [Define context, instructions, and input variables like `{{ INPUT_CONTENT }}`]
 
-  userRequest: |
-    # The prompt for the AI's first round of work (Round 0).
-    # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
-    [Define the initial task prompt, potentially including scratchpad guidance]
-
-  # userReflect: | # Optional: Add when you want automatic reflection rounds
-  #   The prompt for the AI's second round (Round 1) asking it to critique and improve its Round 0 output.
-  #   [Define the reflection prompt]
+  userRequest:
+    - |
+      # The prompt for the AI's first round of work (Round 0).
+      # Often includes guidance for thinking (<scratchpad>) and output structure (<documentTag>).
+      [Define the initial task prompt, potentially including scratchpad guidance]
+    - |
+      # Optional follow-up prompt for reflection rounds (Round 1+).
+      # Duplicate or remove items to control how many reflections TeXRA schedules automatically.
+      [Define how the model should critique or iterate on its previous output]
 ```
+
+> **Reflection Tips:** When `userRequest` is an array, TeXRA takes the first
+> entry as the initial request and treats the remaining entries as reflection
+> prompts. If a run requests more reflections than the list provides, the first
+> reflection template is reused.
 
 #### Using Variables in Prompts (Jinja2 Templating)
 

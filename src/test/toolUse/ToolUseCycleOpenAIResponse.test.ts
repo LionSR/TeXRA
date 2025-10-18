@@ -125,7 +125,6 @@ describe('runToolUseCycle OpenAIResponse', () => {
       systemPrompt: '',
       userPrefix: '',
       userRequest: '',
-      userReflect: '',
     };
     const toolState = new ToolState();
     const options: ToolUseCycleOptions<OpenAI> = {

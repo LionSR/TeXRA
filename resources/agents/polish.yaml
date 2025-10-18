@@ -43,70 +43,70 @@ prompts:
     </instruction>
     Important: Focus solely on the given instruction. If asked to revise section A, do not modify section B unless absolutely necessary for consistency.
 
-  userRequest: |
-    In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document.
-    <scratchpad>
-    \begin{enumerate}
-        \item [Specific improvement 1 addressing the instruction]
-            \begin{itemize}
-                \item Rationale: [explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-        \item [Specific improvement 2 addressing the instruction]
-            \begin{itemize}
-                \item Rationale: [explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-        \item [Specific improvement 3 addressing the instruction]
-            \begin{itemize}
-                \item Rationale: [explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-    \end{enumerate}
-    </scratchpad>
+  userRequest:
+    - |
+      In the scratchpad below, brainstorm concrete ways to significantly improve the quality of the paper that are directly relevant to the instruction above. Do not consider any other aspects of the paper. Be as concrete as to change what in which section in what ways. Use the scratchpad as an opportunity to formulate a as detailed as possible action plans so that a graduate student can also perform the revisions. In the scratchpad, list the planned changes, the rationale for each change and the concrete steps to be taken to implement the changes starting from the beginning of the document.
+      <scratchpad>
+      \begin{enumerate}
+          \item [Specific improvement 1 addressing the instruction]
+              \begin{itemize}
+                  \item Rationale: [explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Specific improvement 2 addressing the instruction]
+              \begin{itemize}
+                  \item Rationale: [explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Specific improvement 3 addressing the instruction]
+              \begin{itemize}
+                  \item Rationale: [explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+      \end{enumerate}
+      </scratchpad>
 
-    Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
-    <latex_document>
-    % 1ST_UPDATED_LATEX_DOCUMENT HERE
-    </latex_document>
+      Then, following your plan in the scratchpad, please output an updated version of the \LaTeX document with targeted corrections and enhancements that laser-focus on addressing the specific instruction provided. Refrain from making any changes that are not directly related to the instruction. Use the following format:
+      <latex_document>
+      % 1ST_UPDATED_LATEX_DOCUMENT HERE
+      </latex_document>
+    - |
+      Let's critically reflect on the changes made according to the given instructions.
+      Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
 
-  userReflect: |
-    Let's critically reflect on the changes made according to the given instructions. 
-    Now it is time to be brutally honest with yourself. For example, if I asked you to add equations, but you did not add any equations, you should absolutely criticize yourself for not following the instruction.
+      Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.
+      <scratchpad>
+      <reflection>
+      \begin{enumerate}
+          \item How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
+          \item Are the enhancements clear, condensed, and effective in improving the quality of the \LaTeX document? If not, how could they be further refined?
+          \item Do the changes maintain the overall structure and coherence of the original \LaTeX document? If not, what adjustments could be made to ensure a smooth flow?
+          \item Have the added parts been coherently and logically incorporated, rather than just appended, into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
+          \item Are there any mathematical reasonings or equations from the original version that are now missing in the new version?
+          \item Are there any notations or quantities used before being defined?
+          \item In the added parts, are there any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems.'' that can be densed using the ``show not tell'' technique?
+      \end{enumerate}
+      </reflection>
+      <idea>
+      \begin{enumerate}
+          \item [Additional improvement 1]
+              \begin{itemize}
+                  \item Rationale: [Brief explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Additional improvement 2]
+              \begin{itemize}
+                  \item Rationale: [Brief explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item [Additional improvement 3]
+              \begin{itemize}
+                  \item Rationale: [Brief explanation]
+                  \item Implementation: [Concrete steps]
+              \end{itemize}
+          \item[\ldots]
+      \end{enumerate}
+      </idea>
+      </scratchpad>
 
-    Consider these points and brainstorm additional targeted improvements in the scratchpad below. In the scratchpad, list the planned changes and the rationale for each change starting from the beginning of the document. Be specific and point to the specific locations in your reflection.
-    <scratchpad>
-    <reflection>
-    \begin{enumerate}
-        \item How well do the modifications address the specific instruction provided? Are there any areas where the changes could be better aligned with the instruction?
-        \item Are the enhancements clear, condensed, and effective in improving the quality of the \LaTeX document? If not, how could they be further refined?
-        \item Do the changes maintain the overall structure and coherence of the original \LaTeX document? If not, what adjustments could be made to ensure a smooth flow?
-        \item Have the added parts been coherently and logically incorporated, rather than just appended, into the existing contents? Are there any ways to improve the global and paragraph coherence and cohesion, and to improve the flow?
-        \item Are there any mathematical reasonings or equations from the original version that are now missing in the new version?
-        \item Are there any notations or quantities used before being defined?
-        \item In the added parts, are there any fluffy statements like ``XXX provides crucial insights into the structure and behavior of these systems.'' that can be densed using the ``show not tell'' technique?
-    \end{enumerate}
-    </reflection>
-    <idea>
-    \begin{enumerate}
-        \item [Additional improvement 1]
-            \begin{itemize}
-                \item Rationale: [Brief explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-        \item [Additional improvement 2]
-            \begin{itemize}
-                \item Rationale: [Brief explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-        \item [Additional improvement 3]
-            \begin{itemize}
-                \item Rationale: [Brief explanation]
-                \item Implementation: [Concrete steps]
-            \end{itemize}
-        \item[\ldots]
-    \end{enumerate}
-    </idea>
-    </scratchpad>
-
-    Then, output a further enhanced version of the \LaTeX document based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
+      Then, output a further enhanced version of the \LaTeX document based on the previous version you just revised, incorporating the reflections and additional improvements discussed in the scratchpad. Include all the changes you added in the previous step. Remember to stay laser-focused on the specific instruction provided or the additional plan in the scratchpad. For example, in the instruction, if I ask you to revise section A, you do not need to revise section B, unless changes (such as notations or symbols) in section A directly demands a change in section B. If I did not ask you to add a conclusion section, please refrain from adding one.
