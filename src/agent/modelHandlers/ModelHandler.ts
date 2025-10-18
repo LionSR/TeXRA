@@ -625,120 +625,153 @@ export abstract class ModelHandler<
   protected async buildMediaEntries(
     mediaFiles: string[],
   ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
-    const mediaMessage: MediaEntry[] = [];
-    const mediaFileResults: MediaFileResult[] = [];
+    const settledResults = await Promise.allSettled(
+      mediaFiles.map((mediaFile) => this.loadMediaEntry(mediaFile)),
+    );
 
-    for (const mediaFile of mediaFiles) {
-      const isAbsolutePath = path.isAbsolute(mediaFile);
-      const absolutePath = isAbsolutePath
-        ? mediaFile
-        : WorkspaceFS.fullPath(mediaFile);
-      const fileExistsResult = await AbsoluteFS.exists(absolutePath);
+    const entries: MediaEntry[] = [];
+    const results: MediaFileResult[] = [];
 
-      if (!fileExistsResult) {
-        this.logger.error(`File not found: ${mediaFile}`);
-        mediaFileResults.push({ path: mediaFile, ok: false });
-        continue;
-      }
+    settledResults.forEach((settledResult, index) => {
+      if (settledResult.status === 'fulfilled') {
+        const { entry, result } = settledResult.value;
+        results.push(result);
 
-      let fileSize: number | null = null;
-      try {
-        const stats = await AbsoluteFS.stat(absolutePath);
-        fileSize = stats.size;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.error(
-          `Unable to read file info for ${mediaFile}: ${message}`,
-        );
-        mediaFileResults.push({ path: mediaFile, ok: false });
-        continue;
-      }
-
-      if (fileSize === 0) {
-        this.logger.warn(`Skipping empty media file: ${mediaFile}`);
-        mediaFileResults.push({ path: mediaFile, ok: false });
-        continue;
-      }
-
-      const fileExtension = path.extname(mediaFile).toLowerCase();
-
-      try {
-        const [mediaData, mediaType, mediaCategory] = await this.processMedia(
-          mediaFile,
-          fileExtension,
-        );
-        this.logger.debug(
-          `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
-        );
-
-        const isDerivedFromConversion =
-          fileExtension === '.pdf' && mediaType !== 'application/pdf';
-
-        const createEntry = (
-          fileName: string,
-          data: string,
-          matchesSource: boolean = !isDerivedFromConversion,
-        ): MediaEntry => {
-          const entry: MediaEntry = {
-            file_name: fileName,
-            data,
-            media_type: mediaType,
-            media_category: mediaCategory,
-            binary_data: Buffer.from(data, 'base64'),
-            bytes_match_source: matchesSource,
-          };
-
-          if (matchesSource) {
-            entry.source_path = absolutePath;
-          }
-
-          return entry;
-        };
-
-        if (
-          this.isOpenai &&
-          this.capabilities.supportsVision &&
-          this.capabilities.supportsNativePdf &&
-          mediaType === 'application/pdf'
-        ) {
-          const pdfEntry = createEntry(
-            path.basename(mediaFile),
-            Array.isArray(mediaData) ? mediaData[0] : mediaData,
-          );
-          mediaMessage.push(pdfEntry);
-          mediaFileResults.push({ path: mediaFile, ok: true });
-          this.logger.debug(`Added native PDF: ${mediaFile}`);
-          continue;
+        if (result.ok && entry) {
+          const entryList = Array.isArray(entry) ? entry : [entry];
+          entries.push(...entryList);
         }
-
-        if (Array.isArray(mediaData)) {
-          this.logger.debug(
-            `Adding ${mediaData.length} pages/parts to the media contents`,
-          );
-          for (let i = 0; i < mediaData.length; i++) {
-            const fileName = `${path.basename(mediaFile)}_page_${i + 1}`;
-            mediaMessage.push(createEntry(fileName, mediaData[i], false));
-          }
-          mediaFileResults.push({ path: mediaFile, ok: true });
-        } else {
-          this.logger.debug(
-            `Adding single part to the media contents: ${mediaFile}`,
-          );
-          mediaMessage.push(createEntry(path.basename(mediaFile), mediaData));
-          mediaFileResults.push({ path: mediaFile, ok: true });
-        }
-      } catch (err) {
+      } else {
+        const reason = settledResult.reason;
+        const mediaFile = mediaFiles[index];
         this.logger.error(
-          `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
+          `Failed to load media entry for ${mediaFile}: ${getSdkErrorMessage(reason)}`,
           undefined,
           undefined,
-          err,
+          reason,
         );
-        mediaFileResults.push({ path: mediaFile, ok: false });
+        results.push({ path: mediaFile, ok: false });
       }
+    });
+
+    return { entries, results };
+  }
+
+  protected async loadMediaEntry(
+    mediaFile: string,
+  ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
+    const absolutePath = path.isAbsolute(mediaFile)
+      ? mediaFile
+      : WorkspaceFS.fullPath(mediaFile);
+    const fileExistsResult = await AbsoluteFS.exists(absolutePath);
+
+    if (!fileExistsResult) {
+      this.logger.error(`File not found: ${mediaFile}`);
+      return { result: { path: mediaFile, ok: false } };
     }
 
-    return { entries: mediaMessage, results: mediaFileResults };
+    let fileSize: number | null = null;
+    try {
+      const stats = await AbsoluteFS.stat(absolutePath);
+      fileSize = stats.size;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Unable to read file info for ${mediaFile}: ${message}`,
+      );
+      return { result: { path: mediaFile, ok: false } };
+    }
+
+    if (fileSize === 0) {
+      this.logger.warn(`Skipping empty media file: ${mediaFile}`);
+      return { result: { path: mediaFile, ok: false } };
+    }
+
+    const fileExtension = path.extname(mediaFile).toLowerCase();
+
+    try {
+      const [mediaData, mediaType, mediaCategory] = await this.processMedia(
+        mediaFile,
+        fileExtension,
+      );
+      this.logger.debug(
+        `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
+      );
+
+      const isDerivedFromConversion =
+        fileExtension === '.pdf' && mediaType !== 'application/pdf';
+
+      const createEntry = (
+        fileName: string,
+        data: string,
+        matchesSource: boolean = !isDerivedFromConversion,
+      ): MediaEntry => {
+        const entry: MediaEntry = {
+          file_name: fileName,
+          data,
+          media_type: mediaType,
+          media_category: mediaCategory,
+          binary_data: Buffer.from(data, 'base64'),
+          bytes_match_source: matchesSource,
+        };
+
+        if (matchesSource) {
+          entry.source_path = absolutePath;
+        }
+
+        return entry;
+      };
+
+      if (
+        this.isOpenai &&
+        this.capabilities.supportsVision &&
+        this.capabilities.supportsNativePdf &&
+        mediaType === 'application/pdf'
+      ) {
+        const pdfEntry = createEntry(
+          path.basename(mediaFile),
+          Array.isArray(mediaData) ? mediaData[0] : mediaData,
+        );
+        this.logger.debug(`Added native PDF: ${mediaFile}`);
+        return {
+          entry: pdfEntry,
+          result: { path: mediaFile, ok: true },
+        };
+      }
+
+      if (!Array.isArray(mediaData)) {
+        this.logger.debug(
+          `Adding single part to the media contents: ${mediaFile}`,
+        );
+        return {
+          entry: createEntry(path.basename(mediaFile), mediaData),
+          result: { path: mediaFile, ok: true },
+        };
+      }
+
+      this.logger.debug(
+        `Adding ${mediaData.length} pages/parts to the media contents`,
+      );
+      const entryList = mediaData.map((data, index) =>
+        createEntry(
+          `${path.basename(mediaFile)}_page_${index + 1}`,
+          data,
+          false,
+        ),
+      );
+      return {
+        entry: entryList,
+        result: { path: mediaFile, ok: true },
+      };
+    } catch (err) {
+      this.logger.error(
+        `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
+        undefined,
+        undefined,
+        err,
+      );
+      return { result: { path: mediaFile, ok: false } };
+    }
   }
 
   /** Calculates token-based stop flags. */
