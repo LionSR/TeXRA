@@ -10,19 +10,14 @@ import type { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
-import {
-  NormalizedAgentPrompts,
-  normalizeAgentPrompts,
-} from './promptNormalization';
 
 /**
- * Centralises prompt construction logic for reflection-capable agents.
+ * Centralises prompt construction logic for multi-round agents.
  *
  * @remarks
  * The builder renders all prompts lazily so callers can defer work until the
- * relevant conversation stage. Reflection rounds pass a 1-indexed counter so
- * round 1 maps to the first reflection template, while process rounds use a
- * zero-based index.
+ * relevant conversation stage. Rounds use zero-based indexing where round 0
+ * is the initial prompt and subsequent rounds continue from the array.
  *
  * @example
  * ```ts
@@ -33,8 +28,6 @@ import {
  * ```
  */
 export class PromptBuilder {
-  private normalizedPrompts?: NormalizedAgentPrompts;
-
   constructor(
     private readonly agentPrompt: AgentPrompt,
     private readonly agentSetting: AgentWorkflowSetting,
@@ -63,8 +56,7 @@ export class PromptBuilder {
    * Render the user request for the supplied round.
    *
    * @param currRound Zero-based round number (round 0 selects the initial template)
-   * @remarks Reflection rounds (1+) fall back to the first reflection template when a later
-   *          round is undefined.
+   * @remarks Rounds beyond the configured templates fall back to the second template (index 1).
    */
   public async buildUserRequest(currRound: number): Promise<string> {
     const groupId = this.logger?.getActiveGroupId();
@@ -74,7 +66,7 @@ export class PromptBuilder {
       const message =
         currRound === 0
           ? 'No initial user request configured. Returning empty prompt.'
-          : `No reflection prompt configured for round ${currRound}. Returning empty prompt.`;
+          : `No prompt configured for round ${currRound}. Returning empty prompt.`;
       this.logger?.warn(message, groupId);
       return '';
     }
@@ -85,7 +77,7 @@ export class PromptBuilder {
   /**
    * Return the prefill value that should seed the assistant response.
    *
-   * @param currRound Zero-based conversation round index (0 for process rounds, 1+ for reflections)
+   * @param currRound Zero-based conversation round index
    * @remarks Reuses the first configured prefill when subsequent rounds omit a value.
    */
   public async buildPrefill(currRound: number): Promise<string> {
@@ -110,41 +102,25 @@ export class PromptBuilder {
 
   private getRoundTemplate(currRound: number): string | undefined {
     const normalizedRound = Math.max(0, currRound);
-    const groupId = this.logger?.getActiveGroupId();
-    const { initialRequest, reflectionPrompts } = this.getNormalizedPrompts();
+    const requestArray = Array.isArray(this.agentPrompt.userRequest)
+      ? this.agentPrompt.userRequest
+      : [this.agentPrompt.userRequest];
 
-    if (normalizedRound === 0) {
-      return initialRequest;
-    }
-
-    if (reflectionPrompts.length === 0) {
-      return undefined;
-    }
-
-    const reflectionIndex = normalizedRound - 1;
-    const template = reflectionPrompts[reflectionIndex];
-
+    const template = requestArray[normalizedRound];
     if (template !== undefined) {
       return template;
     }
 
-    const fallback = reflectionPrompts[0];
-    if (fallback) {
+    // For rounds beyond configured templates, fall back to the second template
+    if (normalizedRound > 0 && requestArray.length > 1) {
       this.logger?.debug(
-        `No reflection prompt configured for round ${currRound}. Falling back to first template.`,
-        groupId,
+        `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
+        this.logger.getActiveGroupId(),
       );
+      return requestArray[1];
     }
 
-    return fallback;
-  }
-
-  private getNormalizedPrompts(): NormalizedAgentPrompts {
-    if (!this.normalizedPrompts) {
-      this.normalizedPrompts = normalizeAgentPrompts(this.agentPrompt);
-    }
-
-    return this.normalizedPrompts;
+    return undefined;
   }
 }
 

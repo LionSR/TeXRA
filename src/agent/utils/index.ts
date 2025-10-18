@@ -9,5 +9,4 @@ export * from './priceUtils';
 export * from './text';
 export * from './UsageMonitor';
 export * from './debugMessageSaver';
-export * from './roundUtils';
 export * from './continuationMessage';
