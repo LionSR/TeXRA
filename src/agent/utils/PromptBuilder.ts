@@ -104,7 +104,9 @@ export class PromptBuilder {
     const normalizedRound = Math.max(0, currRound);
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
-      : [this.agentPrompt.userRequest];
+      : this.agentPrompt.userRequest
+        ? [this.agentPrompt.userRequest]
+        : [];
 
     const template = requestArray[normalizedRound];
     if (template !== undefined) {

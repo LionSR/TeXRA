@@ -326,7 +326,9 @@ export function getToolFlags(
   if (agentSetting.agentType !== AgentType.ToolUse) {
     const requestArray = Array.isArray(agentPrompt.userRequest)
       ? agentPrompt.userRequest
-      : [agentPrompt.userRequest];
+      : agentPrompt.userRequest
+        ? [agentPrompt.userRequest]
+        : [];
     const configuredRounds =
       'rounds' in agentSetting ? agentSetting.rounds : undefined;
     flags.ROUNDS = Math.max(configuredRounds ?? 2, requestArray.length);
