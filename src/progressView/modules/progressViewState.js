@@ -43,7 +43,8 @@ class TaskGroups {
   get(streamOrId, maybeId) {
     let stream = streamOrId;
     let id = maybeId;
-    if (maybeId === undefined) {
+    // If only one argument provided, treat it as id (old signature)
+    if (arguments.length === 1) {
       id = streamOrId;
       stream = undefined;
     }
@@ -59,7 +60,8 @@ class TaskGroups {
     let stream = streamOrId;
     let id = maybeId;
     let group = maybeGroup;
-    if (maybeGroup === undefined && typeof maybeId === 'object') {
+    // If only two arguments provided, treat as (id, group) - old signature
+    if (arguments.length === 2) {
       group = maybeId;
       id = streamOrId;
       stream = undefined;
@@ -101,26 +103,27 @@ class TaskGroups {
 
   /**
    * Update an existing log group with new status or end time.
-   * @param {string} streamId - Stream identifier for the group
-   * @param {string} groupId - ID of the group to update
-   * @param {string} status - New status
+   * Supports two signatures:
+   * - update(streamId, groupId, status, endTime) - new signature with stream
+   * - update(groupId, status, endTime) - old signature without stream
+   * @param {string} streamId - Stream identifier for the group (or groupId if 3 args)
+   * @param {string} groupId - ID of the group to update (or status if 3 args)
+   * @param {string} status - New status (or endTime if 3 args)
    * @param {number} [endTime] - Optional end time
    */
   update(streamOrGroupId, maybeGroupId, status, endTime) {
     let streamId = streamOrGroupId;
     let groupId = maybeGroupId;
-    if (
-      typeof maybeGroupId === 'string' ||
-      typeof maybeGroupId === 'number' ||
-      maybeGroupId === null
-    ) {
-      // stream provided explicitly - nothing to do
-    } else {
+    // Use argument count to distinguish between signatures
+    if (arguments.length === 3 || arguments.length === 2) {
+      // Old signature: update(groupId, status, endTime)
       endTime = status;
       status = maybeGroupId;
       groupId = streamOrGroupId;
       streamId = undefined;
     }
+    // Otherwise: new signature update(streamId, groupId, status, endTime)
+
     if (!groupId) {
       console.error('TaskGroups.update: groupId is required');
       return;
