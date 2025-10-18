@@ -131,6 +131,7 @@ const baseConfig = {
               text: 'Agent Architecture',
               link: '/guide/agent-architecture.md',
             },
+            { text: 'Ask & Chat Agents', link: '/guide/ask-chat.md' },
             { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
             { text: 'Models', link: '/guide/models' },
             { text: 'File Management', link: '/guide/file-management' },

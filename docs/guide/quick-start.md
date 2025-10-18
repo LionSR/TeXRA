@@ -10,8 +10,11 @@ TeXRA integrates powerful AI capabilities directly into your writing workflow. H
 - Improve writing style and clarity
 - Create or enhance technical figures
 - Transform papers into different formats (lecture notes, slides, posters)
+- Pair the read-only `ask` scout with the tool-savvy `chat` tactician for conversational research loops
 
 > 💡 **Tip:** Inside VS Code you can open the **Run your first TeXRA workflow** walkthrough from the Get Started page (or by running `TeXRA: Open Getting Started Walkthrough`). It mirrors this guide step-by-step and links directly to the relevant commands.
+
+Curious about that ask/chat duet? The [Ask & Chat Guide](./ask-chat.md) shows tool access, sample prompts, and derivation etiquette.
 
 ## Set Up API Keys
 

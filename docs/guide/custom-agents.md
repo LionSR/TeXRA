@@ -259,4 +259,69 @@ TeXRA's `XmlOutputManager` parses the `<latex_document>` or `<latex_documents>` 
 It requires properly closed tags and, for multiple outputs, each `<document>` must include a `name` attribute that matches a filename from the UI.
 If tags are mismatched or a filename is wrong, extraction fails and no files are saved.
 
+## Derivation-focused agents
+
+Theorists often ask for more than polished prose—they want defensible algebra. You can build a derivation specialist by inheriting from `derive` or `chat` and layering in the right prompts.
+
+### YAML skeleton
+
+```yaml
+inherits: derive
+settings:
+  agentType: CoT
+  temperature: 0.0
+  documentTag: derivation
+  endTag: </derivation>
+  defaultOutputFiles:
+    - "{{ INPUT_FILE | replace('.tex', '_derivation.tex') }}"
+
+prompts:
+  systemPrompt: |
+    You are a meticulous theorist. Expand every step that is not algebraically obvious.
+    Render math inside aligned environments and explain any index relabeling.
+
+  userRequest:
+    - |
+      <scratchpad>
+      - Summarize the assumptions and symbols needed from {{ INPUT_FILE }}.
+      - Plan the derivation before writing equations.
+      </scratchpad>
+
+      <derivation>
+      \begin{aligned}
+      % Replace this comment with the step-by-step derivation.
+      \end{aligned}
+      </derivation>
+
+    - |
+      Critique the previous derivation. If any steps look hand-wavy, restate them explicitly.
+```
+
+This template keeps the response deterministic, enforces aligned math, and schedules a reflection round to double-check the work. Swap `inherits: derive` for `inherits: chat` if you need tool calls (for example, to `read_file` snippets or run `bash` during the derivation).
+
+### Invoke tools sparingly
+
+Tool-use derivation agents should expose only the helpers they truly need. A safe toolkit might look like this:
+
+```yaml
+settings:
+  tools:
+    - read_file
+    - glob
+    - grep
+    - ls
+```
+
+This keeps the agent focused on mathematics while still allowing it to pull supporting equations from related files. If you require numerical validation, add `bash` and specify the expected script entry points in your prompt so the agent does not improvise.
+
+### Cross-pollinate with `ask`/`chat`
+
+Custom derivation agents pair nicely with the conversational duo:
+
+1. Use `ask` to collect the relevant assumptions and earlier results.
+2. Switch to your derivation agent for the heavy math.
+3. Review with `chat` if you need to apply the result to other files or run additional checks.
+
+Because all three share the same logging infrastructure, you can trace the entire reasoning chain when drafting appendices or responding to reviewer questions.
+
 For more complex examples and advanced configuration options like `requiredFiles` and `filePatternsContain`, examine the source `.yaml` files of the [Built-in Agents](./built-in-agents.md).

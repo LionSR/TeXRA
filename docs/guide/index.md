@@ -1,105 +1,52 @@
 # Introduction to TeXRA
 
-Welcome to TeXRA, your intelligent academic research assistant integrated directly into VS Code. This guide will help you understand what TeXRA is, how it works, and how it can enhance your academic research workflow.
+Welcome to TeXRA, the TeX Research Assistant that thrives on dense notes, runaway proofs, and ambitious AI scientists. This guide walks you through the extension's worldview so you can put it to work inside VS Code without sacrificing rigor or your sense of humor.
 
 <a href="https://marketplace.visualstudio.com/items?itemName=texra-ai.texra" target="_blank" style="display: inline-block; background-color: #007ACC; color: white; padding: 10px 15px; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 10px 0;">Install from VS Code Marketplace</a>
 
 ## What is TeXRA?
 
-TeXRA is a VS Code extension designed to harness the power of large language models (LLMs) for academic research and writing. It provides a seamless interface to work with these advanced AI models directly within your writing environment, enabling you to focus on your brilliant ideas while the AI helps wrangle the LaTeX and refine the prose.
+TeXRA turns VS Code into a co-working space for theorists. Instead of a general-purpose chatbot, you get a disciplined AI scientist who understands LaTeX structure, keeps track of every tool call, and produces artifacts you can submit, cite, or critique. You orchestrate the context—inputs, references, figures, auxiliary files—while TeXRA's agents execute the heavy lifting with reproducible prompts and outputs.
 
-Unlike general-purpose AI interfaces like ChatGPT or Claude, TeXRA is specifically optimized for academic workflows, with special attention to LaTeX documents, mathematical notation, technical figures, and the rigorous requirements of scholarly writing.
+## Operating principles
 
-## The Philosophy Behind TeXRA
+TeXRA is built around three research habits:
 
-TeXRA was developed based on the observation that current large language models possess remarkable capabilities for scientific research and academic research that are often underutilized. The extension implements an approach inspired by key AI design patterns:
+1. **Reflection** – Agents critique and revise their own drafts, catching loose indices and sloppy prose before you do.
+2. **Tool use** – Runs can trigger utilities such as `latexdiff`, `texcount`, compilation checks, or even shell commands (inside the sandbox) to ground conclusions in actual data.
+3. **Planning** – Chain-of-thought prompts keep derivations structured, so intermediate lemmas and aligned math blocks survive intact.
 
-1. **Reflection**: The LLM examines its own work to identify improvements
-2. **Tool use**: The LLM leverages external tools to gather information or process data
-3. **Planning**: The LLM develops and executes multi-step plans to achieve complex goals
+## Capabilities tuned for theorists
 
-Through these patterns, TeXRA creates an iterative process that mimics expert academic research - analyzing documents, planning improvements, executing changes, and refining output through self-reflection.
+- **Conversational scouting** – Use the `ask` agent for read-only reconnaissance, then escalate to `chat` when you need edits, derivations, or code execution. The duo shares state but respects your safety rails. Dive deeper in the [Ask & Chat Guide](/guide/ask-chat).
+- **Document surgery** – Agents such as `correct`, `polish`, `paper2slide`, and `draw` are tuned for LaTeX-heavy material, respecting citations, environments, and the signature chaos of collaborative manuscripts.
+- **Derivation muscle** – The `derive` lineage outputs math in `\begin{aligned}` environments, making it painless to drop results back into your paper or notebook.
+- **Reproducible trails** – Every run leaves prompts, tool logs, diffs, and outputs in the ProgressBoard, which doubles as your lab notebook for peer review (minus the lab coats).
 
-## Key Features
+## Conversational tooling, explained
 
-TeXRA offers a comprehensive set of features designed for academic workflows:
+The `ask` and `chat` agents are your default entry point. `ask` reads, searches, and reports; `chat` edits, executes tools, and writes files. They both obey workspace sandboxes and make their actions auditable in the run log. A typical workflow: scout a derivation with `ask`, promote the plan to `chat` for execution, then return to an editing agent like `polish` for stylistic cleanup.
 
-### Specialized AI Agents
+## Who should use TeXRA?
 
-- **Correction**: Fix errors and improve formatting
-- **Enhancement**: Polish writing style and clarity
-- **Creation**: Generate figures, tables, and new content
-- **Transformation**: Convert between different document formats
+TeXRA is happiest in the hands of:
 
-### LaTeX Integration
+- **AI scientists** prototyping new workflows while keeping detailed logs.
+- **Theoretical physicists and mathematicians** who need derivations to land exactly where they left them.
+- **Research engineers** wrangling multi-file LaTeX projects, auxiliary data, and figure generation in one place.
+- **Methodologists and reviewers** who want to audit runs without reverse engineering an opaque prompt history.
 
-- Seamless processing of LaTeX documents
-- TikZ figure extraction and creation
-- LaTeX diff functionality for version comparison
-- Intelligent merging of document versions
+## Getting started
 
-### Multi-modal Support
+Ready to put TeXRA to work? Continue with these next steps:
 
-- Process text, images, and PDFs in a unified interface
-- Create and modify visual elements within documents
-- Handle mathematical notation with precision
+- [Installation](/guide/installation) – Configure the extension and API keys.
+- [Quick Start](/guide/quick-start) – Run your first workflow, including the ask/chat duet.
+- [Built-in Agents](/guide/built-in-agents.md) – Meet the roster you can run immediately.
+- [Custom Agents](/guide/custom-agents.md) – Craft derivation-specific workflows tailored to your project.
 
-### Workflow Tools
+## Data privacy & security
 
-- Version management and comparison
-- File organization and batch processing
-- Integration with external academic tools
+TeXRA keeps your manuscripts local. All API calls route directly from VS Code to the model provider you configure (Anthropic, OpenAI, Google, OpenRouter, and friends). No TeXRA-operated servers ever see your files or keys. Secrets live in VS Code's secure storage, and only the models you authorize receive your content. Always review each provider's policy, but rest assured: the extension itself isn't siphoning your notes.
 
-## How TeXRA Works
-
-At its core, TeXRA follows an iterative process inspired by expert workflows:
-
-```mermaid
-graph LR
-    A[Start: User Input & Agent Config] --> B{Analyze Document & Instructions};
-    B --> C[Plan Changes];
-    C --> D["Execute Plan (LLM Call - Round 0)"];
-    D --> E["Process Output (Save *_r0_* File)"];
-    E --> F{"Reflect on Output? (Optional)"};
-    F -- Yes --> G[Refine Plan];
-    G --> H["Execute Refined Plan (LLM Call - Round 1)"];
-    H --> I["Process Output (Save *_r1_* File)"];
-    I --> J[End];
-    F -- No --> J[End];
-```
-
-This process leverages the strengths of language models while addressing their limitations through structured workflows, optional self-reflection, and specialized tools.
-
-## Who Should Use TeXRA?
-
-TeXRA is designed for:
-
-- **Researchers** writing academic papers, grants, or reports
-- **Professors** creating lecture notes, slides, or educational materials
-- **Students** working on theses, dissertations, or complex assignments
-- **Technical writers** producing documentation with mathematical content
-- **Anyone** working with complex scholarly documents, especially in LaTeX
-
-## Getting Started
-
-Ready to enhance your academic research with TeXRA? The next sections will guide you through:
-
-- [Installation](/guide/installation): Setting up TeXRA and its dependencies
-- [Quick Start](/guide/quick-start): Your first steps with TeXRA
-- [Core Concepts](/guide/built-in-agents.md): Understanding the fundamental components
-- [Advanced Usage](/guide/latex-diff): Leveraging powerful features
-- [Customization](/guide/configuration): Tailoring TeXRA to your needs
-
-## Data Privacy & Security
-
-TeXRA prioritizes your privacy. All API calls to language models (like Anthropic Claude, OpenAI GPT, Google Gemini) are made **directly from your local VS Code instance** to the respective provider's API endpoint (or OpenRouter, if configured).
-
-**Your document content and API keys are NOT sent to or stored on any TeXRA servers.**
-
-API keys are stored securely using VS Code's built-in Secret Storage.
-
-While TeXRA itself doesn't store your data, be aware of the data usage and privacy policies of the specific AI model providers you choose to use.
-
-Let's begin your journey toward more efficient and effective academic research!
-
-If you spot a bug, feel free to email us at [contact@texra.ai](mailto:contact@texra.ai).
+Questions? Spot a bug? Email [contact@texra.ai](mailto:contact@texra.ai) and we'll investigate with appropriately stern eyebrows.

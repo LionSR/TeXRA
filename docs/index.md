@@ -2,14 +2,14 @@
 layout: home
 hero:
   name: TeXRA
-  text: Reliable AI Workflows for Scientific Discovery
-  tagline: Agentic research assistant for AI scientists, physicists, and research engineers
+  text: TeX Research Assistant for restless theorists
+  tagline: Dense, tool-savvy AI scientist who keeps derivations and drafts on-leash
   image:
     src: /logo-1024x1024.svg
     alt: TeXRA Logo
   actions:
     - theme: brand
-      text: Get Started
+      text: Meet the Guidebook
       link: /guide/
     - theme: alt
       text: Install from Marketplace
@@ -23,30 +23,37 @@ hero:
 ---
 
 <div class="workflow-container">
+  <div class="workflow-intro">
+    <h2>Conversation-first research loops</h2>
+    <p>
+      TeXRA pairs a read-only <strong>ask</strong> scout with a tool-savvy <strong>chat</strong> tactician.
+      Bounce between them to question, calculate, tweak, and verify without losing your train of thought (or your files).
+    </p>
+  </div>
   <div class="workflow-steps">
     <div class="workflow-step">
       <div class="step-number">1</div>
       <div class="step-content">
-        <h3>Select Content</h3>
-        <p>Choose your input files, references, figures, and specify output</p>
-        <div class="step-icon">📄</div>
+        <h3>Prime the Ask scout</h3>
+        <p>Interrogate your workspace, surface lemmas, and gather citations without touching a single byte.</p>
+        <div class="step-icon">🕵️</div>
       </div>
     </div>
     <div class="workflow-arrow">→</div>
     <div class="workflow-step">
       <div class="step-number">2</div>
       <div class="step-content">
-        <h3>Choose Agent/Model</h3>
-        <p>Select a specialized agent and model</p>
-        <div class="step-icon">🤖</div>
+        <h3>Summon the Chat tactician</h3>
+        <p>Promote the plan, unleash derivations, and edit files with auditable tool calls.</p>
+        <div class="step-icon">🛠️</div>
       </div>
     </div>
     <div class="workflow-arrow">→</div>
     <div class="workflow-step">
       <div class="step-number">3</div>
       <div class="step-content">
-        <h3>Execute</h3>
-        <p>TeXRA handles the rest with powerful language models</p>
+        <h3>Run the experiment</h3>
+        <p>TeXRA executes agents, records logs, and leaves breadcrumbs for every intermediate artifact.</p>
         <div class="step-icon">⚡</div>
       </div>
     </div>
@@ -54,7 +61,7 @@ hero:
     <div class="workflow-step">
       <div class="step-number">4</div>
       <div class="step-content">
-        <h3>Review Changes</h3>
+        <h3>Audit like a referee</h3>
         <div class="step-image">
           <a href="/examples/draft_polish_r1_gemini25p_diff.pdf" target="_blank">
             <img src="/images/latexdff-v1.png" alt="LaTeX Diff visualization" class="workflow-diff-image">
@@ -66,22 +73,40 @@ hero:
   </div>
 </div>
 
-## Why TeXRA?
+## Why theorists pick TeXRA first
 
-AI scientists need more than a chat window. TeXRA keeps research grounded in reproducible workflows and transparent reasoning:
+AI scientists need more than a cheerful chatbot. TeXRA stays grounded in reproducible, math-literate workflows:
 
-- **Reliable scientific loops** – capture every run with logs, diffs, and audit trails so collaborators can verify changes.
-- **Specialized agent roster** – summon correction, polishing, figure generation, and document transformation agents tuned for LaTeX-heavy projects.
-- **Integrated verification tools** – trigger `latexdiff`, `texcount`, compilation checks, and custom scripts directly from the agent run.
-- **Context you control** – work across multi-file projects, reference libraries, and datasets without losing track of provenance.
+- **Ask + Chat duet** – interrogate projects safely with `ask`, then escalate to `chat` when you need derivations, file edits, or shell commands.
+- **Dense derivation muscle** – math steps land in LaTeX-friendly `\begin{aligned}` blocks, so you can drop them straight into drafts or notebooks.
+- **Audit-ready trails** – every run captures prompts, tool calls, diffs, and outputs so collaborators can replay the reasoning without guesswork.
+- **Context you actually steer** – select inputs, references, figures, and auxiliary files with precision while TeXRA tracks provenance across multi-file projects.
+
+Curious how the duet works? Jump into the [Ask & Chat Guide](/guide/ask-chat) for transcripts, tool access notes, and derivation etiquette.
 
 ## Key Capabilities
 
 <div class="features-grid">
 
   <div class="feature-item">
+    <h3>🎙️ Ask + Chat Duet</h3>
+    <p>The `ask` scout reads and cites; the `chat` tactician plans, edits, and runs tools. Swap between them mid-investigation without losing context.</p>
+    <div class="feature-example">
+      <code>ask:</code> "Locate the Gauss constraint proof."<br/>
+      <code>chat:</code> "Refactor Section 3 using that lemma."</div>
+  </div>
+
+  <div class="feature-item">
+    <h3>🧠 Derivation-Friendly Reasoning</h3>
+    <p>Agents like `derive` unpack intermediate steps, keep indices aligned, and surface aligned math blocks ready for your TeX editor.</p>
+    <div class="feature-example">
+      <code>Given H(k), derive dE/dk</code> → <code>\begin{aligned} ... \end{aligned}</code>
+    </div>
+  </div>
+
+  <div class="feature-item">
     <h3>📝 Smart Editing & Polishing</h3>
-    <p>Go beyond simple grammar checks. Improve clarity, flow, and style while preserving technical accuracy. Fix subtle LaTeX errors and ensure consistency.</p>
+    <p>Improve clarity, flow, and notation while preserving technical intent. Perfect for tuning drafts before your advisor sees them.</p>
     <div class="feature-example">
       <span style="color: var(--vp-c-red); text-decoration: line-through;">The results shows significant increase.</span><br/>
       <span style="color: var(--vp-c-brand);">The results show a significant increase.</span>
@@ -90,55 +115,38 @@ AI scientists need more than a chat window. TeXRA keeps research grounded in rep
 
   <div class="feature-item">
     <h3>🎨 TikZ Figure Generation</h3>
-    <p>Create complex TikZ diagrams from natural language descriptions or enhance existing figures. TeXRA handles the code generation and compilation.</p>
+    <p>Describe the topology; TeXRA sketches the TikZ. Iterate with chat to tweak labels, colors, and geometry until it matches your mental diagram.</p>
     <div class="feature-example">
-      <!-- Placeholder for a small TikZ example graphic or code snippet -->
-      <code>"Draw a flowchart for..."</code> &#8594; `\begin{tikzpicture}...`
+      <code>"Draw a flowchart for..."</code> → `\begin{tikzpicture}...`
     </div>
   </div>
 
   <div class="feature-item">
     <h3>🔄 Document Transformation</h3>
-    <p>Effortlessly convert papers into slides (`paper2slide`), lecture notes (`paper2note`), posters (`paper2poster`), or even draft cover letters (`paper2cover`).</p>
+    <p>Spin manuscripts into slides, posters, or lecture notes using purpose-built agents that respect citations, math, and sectioning.</p>
     <div class="feature-example">
-      <code>Paper Abstract</code> &#8594; `Beamer Slides Outline`
+      <code>Paper Abstract</code> → `Beamer Slides Outline`
     </div>
   </div>
 
   <div class="feature-item">
     <h3>📊 LaTeX-Aware Processing</h3>
-    <p>Understands LaTeX structure, math, citations, and environments. Includes integrated `latexdiff` for visualizing changes and `texcount` for analysis.</p>
+    <p>Trigger `latexdiff`, `texcount`, compilation checks, and diagnostics directly from the run so reviews stay rooted in actual outputs.</p>
     <div class="feature-example">
       <span style="color: var(--vp-c-red); text-decoration: line-through;">E = mc</span><br/>
-      <span style="color: var(--vp-c-brand);">E = mc^2 \label{eq:einstein}</span> (via `correct` agent)
-    </div>
-  </div>
-
-  <div class="feature-item">
-    <h3>🧩 Multi-File Projects</h3>
-    <p>Handle books, theses, or papers split across multiple files. Apply changes consistently or target specific sections.</p>
-    <div class="feature-example">
-      <code>[ch1.tex, ch2.tex]</code> &#8594; <code>[ch1_polished.tex, ch2_polished.tex]</code>
-    </div>
-  </div>
-
-  <div class="feature-item">
-    <h3>🖼️ Multimodal Understanding</h3>
-    <p>Leverage vision-capable models to analyze images, figures, and PDFs directly within your workflow.</p>
-    <div class="feature-example">
-      <code>&lt;figure.png&gt; + "Write caption"</code> &#8594; <code>\caption{...}</code>
+      <span style="color: var(--vp-c-brand);">E = mc^2 \label{eq:einstein}</span> (courtesy of `correct`)
     </div>
   </div>
 
 </div>
 
-## Get Started Today
+## Get started today
 
 Installing TeXRA is simple. Follow our [Installation Guide](/guide/installation) to get set up in minutes.
 
 <div class="cta-container">
   <a href="/guide/" class="cta-button">Explore the Documentation</a>
-  <a href="/guide/quick-start" class="cta-button cta-button-alt">Quick Start Guide</a>
+  <a href="/guide/quick-start" class="cta-button cta-button-alt">Launch the Quick Start</a>
 </div>
 
 If you run into a bug, drop us a line at [contact@texra.ai](mailto:contact@texra.ai).

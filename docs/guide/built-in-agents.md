@@ -1,12 +1,14 @@
 # Built-in Agent Reference
 
-TeXRA provides a variety of built-in AI agents, each like a specialized research assistant ready for a specific task. Choosing the right one from the dropdown menu in the TeXRA UI is the first step to AI-powered productivity (or at least, less painful editing).
+TeXRA ships with a crew of agents tuned for theorists who expect receipts. Pick the right persona from the dropdown and you get dense reasoning, tidy LaTeX, and logs you can cite in reviewer responses. When in doubt, start with the conversational duo, then call in a specialist for polishing, derivations, or transformations.
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.
 :::
 
 For details on the underlying structure and execution flow common to all agents, see the [Agent Architecture & Execution Flow](./agent-architecture.md) guide.
+
+> Looking for transcripts and tool loadouts for the conversational duo? Head to the [Ask & Chat Guide](./ask-chat.md) for a dedicated walkthrough.
 
 ## Conversational Agents
 
