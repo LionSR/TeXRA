@@ -2,15 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.34.0] - 2025-10-15
+## [0.34.0] - [Unreleased]
 
 ### Features
 
 - Add Claude Haiku 4.5 (`haiku45T`, `haiku45`) to the Anthropic model catalog with pricing, reasoning capability metadata, and documentation in the model guide.
 
-### Bug Fixes
+### Improvements
 
-- Allow agents with deprecated `userReflect` field to load with a migration warning instead of blocking with validation errors
+- Simplify agent prompt handling by unifying initial and reflection prompts into a single `userRequest` field
+- Automatically migrate legacy `userReflect` configurations with user-friendly warnings
 
 ## [0.33.10] - 2025-10-10
 
