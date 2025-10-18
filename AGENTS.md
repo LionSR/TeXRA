@@ -56,14 +56,11 @@ When updating CHANGELOG.md:
 
 ### Refactoring for simplicity
 
-When refactoring existing code, apply these principles to reduce complexity:
+When refactoring, aim for code that looks like it was designed correctly from the start:
 
-- **Eliminate abstraction layers that don't add value**: If a helper function is just a thin wrapper or only normalizes data without adding meaningful logic, inline it and operate on data directly. Example: removing `normalizeAgentPrompts()` in favor of direct array operations.
-- **Stop distinguishing between concepts when the distinction isn't needed**: If your code treats two things differently but they're fundamentally the same, unify them. Example: treating "initial request" and "reflection prompts" as just a simple array of prompts.
-- **Use direct data structure operations over intermediate transformations**: Prefer `array[index]` over `normalize(data).getItem(index)` when the normalization is trivial.
-- **Handle backward compatibility at entry points, not throughout the codebase**: Normalize legacy formats early (e.g., in load/parse functions), then delete the legacy fields. The rest of your codebase should only see the current format.
-- **Extract helpers only when logic is truly duplicated**: If the same calculation appears in multiple places, extract it to a method. But don't extract prematurely "for cleanliness" - wait until the duplication actually appears.
-- **Validate edge cases properly**: When normalizing data types (e.g., string to array), handle empty values correctly. `''` should normalize to `[]`, not `['']`.
+- **Prefer native methods over normalization helpers**: Use `Array.isArray()`, optional chaining, and built-in JavaScript methods instead of writing custom normalization functions.
+- **Handle legacy formats at entry points**: Use Zod schemas or load-time transformations to convert old formats to current ones, then delete legacy fields immediately. The rest of the codebase should only work with the current format.
+- **Remove all traces of old design**: After refactoring, there should be no leftover wrapper functions, intermediate variables, or "compatibility" abstractions in core logic. Extract helpers only when the same logic truly appears in multiple places.
 
 ### Patterns across the codebase
 
