@@ -310,7 +310,10 @@ export class ProgressViewState {
       return;
     }
 
-    const migratedFiles = this._outputFiles.migratePlaceholders(stream, groupId);
+    const migratedFiles = this._outputFiles.migratePlaceholders(
+      stream,
+      groupId,
+    );
     const migratedUsage = this._usageStats.migratePlaceholders(stream, groupId);
 
     if (migratedFiles || migratedUsage) {

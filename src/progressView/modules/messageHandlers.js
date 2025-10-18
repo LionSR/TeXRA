@@ -65,7 +65,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     stream = state.activeStream,
   ) {
     if (!groupId) {
-      dom.instructionPanel.hide();
+      const text = instructionPayload?.text?.trim();
+      if (text) {
+        dom.instructionPanel.show(text, instructionPayload.metadata || {});
+      } else {
+        dom.instructionPanel.hide();
+      }
       return;
     }
 
@@ -374,16 +379,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateFiles(message) {
-    console.log('[UPDATE_FILES] Received:', {
-      stream: message.stream,
-      activeStream: state.activeStream,
-      fileRounds: Object.keys(message.files || {}).length,
-    });
     if (message.stream === state.activeStream) {
-      console.log('[UPDATE_FILES] Updating file list with', message.files);
       dom.fileList.update(message.files);
-    } else {
-      console.log('[UPDATE_FILES] Skipping update - stream mismatch');
     }
   }
 
@@ -418,9 +415,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     let instructionGroupId = message.taskGroupId || null;
 
     if (instructionGroupId) {
-      const existing =
-        state.taskGroups.get(message.stream, instructionGroupId) ||
-        { id: instructionGroupId };
+      const existing = state.taskGroups.get(
+        message.stream,
+        instructionGroupId,
+      ) || { id: instructionGroupId };
       const updated = { ...existing };
       if (message.instruction) {
         updated.instruction = {
@@ -437,9 +435,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       );
       if (fallbackGroupId) {
         instructionGroupId = fallbackGroupId;
-        const existing =
-          state.taskGroups.get(message.stream, fallbackGroupId) ||
-          { id: fallbackGroupId };
+        const existing = state.taskGroups.get(
+          message.stream,
+          fallbackGroupId,
+        ) || { id: fallbackGroupId };
         const updated = { ...existing };
         updated.instruction = {
           text: message.instruction.text,
@@ -458,11 +457,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       message.stream,
     );
 
-    const shouldApplyInstruction =
-      !!message.instruction && selectedGroupId === instructionGroupId;
+    const instructionForSelection =
+      message.instruction &&
+      (!instructionGroupId || selectedGroupId === instructionGroupId)
+        ? message.instruction
+        : undefined;
     this._applyInstructionForSelection(
       selectedGroupId,
-      shouldApplyInstruction ? message.instruction : undefined,
+      instructionForSelection,
       message.stream,
     );
   }

@@ -230,11 +230,7 @@ export class UsageStatsManager extends PersistentMapManager<
     sourceGroupId: string,
     targetGroupId: string,
   ): boolean {
-    if (
-      !sourceGroupId ||
-      !targetGroupId ||
-      sourceGroupId === targetGroupId
-    ) {
+    if (!sourceGroupId || !targetGroupId || sourceGroupId === targetGroupId) {
       return false;
     }
 

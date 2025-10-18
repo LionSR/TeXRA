@@ -70,10 +70,16 @@ export class TaskGroupManager extends PersistentMapManager<
         status: updates.status ?? 'running',
         parentGroupId: updates.parentGroupId,
         usage: updates.usage,
-        instruction: updates.instruction,
       };
+      if (updates.instruction !== undefined) {
+        group.instruction = updates.instruction;
+      }
     } else {
-      Object.assign(group, updates);
+      const { instruction, ...rest } = updates;
+      Object.assign(group, rest);
+      if (instruction !== undefined) {
+        group.instruction = instruction;
+      }
     }
 
     streamGroups.set(groupId, group);

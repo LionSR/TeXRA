@@ -51,13 +51,25 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, groupId, usage }) => {
           withErrorBoundary('failed to handle updateStreamUsage', () => {
-            state.usageStats.updateSessionUsage(stream, groupId, usage);
+            const targetGroupId =
+              groupId ??
+              state.getSelectedTaskGroupId(stream) ??
+              state.getLatestTaskGroupId(stream);
+
+            if (!targetGroupId) {
+              return;
+            }
+
+            state.usageStats.updateSessionUsage(stream, targetGroupId, usage);
+
             if (state.activeStream === stream && updater.isAvailable()) {
               const selectedGroupId =
-                state.getSelectedTaskGroupId(stream) ||
-                state.getLatestTaskGroupId(stream);
-              if (selectedGroupId === groupId) {
-                updater.updateUsage(usage);
+                state.getSelectedTaskGroupId(stream) ?? targetGroupId;
+              if (selectedGroupId === targetGroupId) {
+                const latestUsage =
+                  state.usageStats.getSessionUsage(stream, targetGroupId) ||
+                  usage;
+                updater.updateUsage(latestUsage);
               }
             }
           });

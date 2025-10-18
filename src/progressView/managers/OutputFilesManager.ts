@@ -287,9 +287,10 @@ export class OutputFilesManager extends PersistentMapManager<
     streamId: StreamTabId,
   ): Promise<{ [groupId: string]: { [key: number]: OutputFileInfo[] } }> {
     // Check if this is old format or new format
-    const obj = data as any;
+    const obj = data as Record<string, any>;
     const firstKey = Object.keys(obj)[0];
-    const isOldFormat = firstKey && !isNaN(Number(firstKey));
+    const firstValue = firstKey ? obj[firstKey] : undefined;
+    const isOldFormat = Array.isArray(firstValue);
 
     if (isOldFormat) {
       // Old format: { [round: number]: OutputFileInfo[] }
@@ -380,11 +381,7 @@ export class OutputFilesManager extends PersistentMapManager<
     sourceGroupId: string,
     targetGroupId: string,
   ): boolean {
-    if (
-      !sourceGroupId ||
-      !targetGroupId ||
-      sourceGroupId === targetGroupId
-    ) {
+    if (!sourceGroupId || !targetGroupId || sourceGroupId === targetGroupId) {
       return false;
     }
 
@@ -422,26 +419,13 @@ export class OutputFilesManager extends PersistentMapManager<
       this.saveMissingOutputs();
     }
 
-    // Remove empty placeholder entries if they had no data
-    if (streamData && streamData[sourceGroupId]) {
-      delete streamData[sourceGroupId];
-      this.add(stream, streamData);
-    }
-    if (streamMissing && streamMissing[sourceGroupId]) {
-      delete streamMissing[sourceGroupId];
-      this.saveMissingOutputs();
-    }
-
     return hasFileData || Boolean(sourceMissing);
   }
 
   /**
    * Convenience helper to migrate all known placeholder sessions to a target.
    */
-  migratePlaceholders(
-    stream: StreamTabId,
-    targetGroupId: string,
-  ): boolean {
+  migratePlaceholders(stream: StreamTabId, targetGroupId: string): boolean {
     let migrated = false;
     for (const placeholder of SESSION_PLACEHOLDER_IDS) {
       migrated =

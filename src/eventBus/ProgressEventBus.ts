@@ -82,8 +82,8 @@ export interface ProgressEventPayloads {
   clearTaskOutput: StreamTabId;
   updateStreamUsage: {
     stream: StreamTabId;
-    groupId: string;
     usage: TokenUsageStats;
+    groupId?: string;
   };
 }
 

@@ -144,6 +144,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     this.logger.debug(`Switching to session ${sessionId} in stream ${stream}`);
 
+    const existingGroup = this.provider.state.taskGroups.getGroup(
+      stream,
+      sessionId,
+    );
+    if (!existingGroup) {
+      this.logger.warn(
+        this.channel,
+        `handleSelectSession: group ${sessionId} not found in stream ${stream}`,
+        undefined,
+        undefined,
+        undefined,
+        { stream, sessionId },
+      );
+    }
+
     const migratedFiles = this.provider.state.outputFiles.migratePlaceholders(
       stream,
       sessionId,
