@@ -140,7 +140,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private getTotalRounds(): number {
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
-      : [this.agentPrompt.userRequest];
+      : this.agentPrompt.userRequest
+        ? [this.agentPrompt.userRequest]
+        : [];
     return Math.max(this.agentSetting.rounds ?? 2, requestArray.length);
   }
 
