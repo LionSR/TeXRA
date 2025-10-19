@@ -507,6 +507,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         return [stateRound, stateGlobal, messages, true, toolState];
       }
 
+      const outputPath = this.outputFile[currRound] ?? this.getOutputFile(currRound);
+      this.outputFile[currRound] = outputPath;
+
       return this.runRoundPipeline(
         currRound,
         stateRound,
@@ -514,7 +517,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         toolState,
         preparedMessages,
         prefill,
-        this.outputFile[currRound],
+        outputPath,
         roundGroupId,
       );
     });
