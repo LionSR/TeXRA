@@ -159,6 +159,11 @@ export abstract class BaseViewContentProvider {
         webview,
         'modules/iconButtonInitializer.js',
       ),
+      recordingButtonManagerUri: this.getCommonUri(
+        webview,
+        'modules/RecordingButtonManager.js',
+      ),
+      textareaUtilsUri: this.getCommonUri(webview, 'modules/textareaUtils.js'),
       htmlEncodingUri: this.getCommonUri(webview, 'modules/htmlEncoding.js'),
       iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
       baseWebviewMessageHandlerUri: this.getCommonUri(

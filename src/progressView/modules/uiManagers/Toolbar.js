@@ -27,7 +27,14 @@ export class Toolbar {
           disabled: def.disabled,
           dataset,
         });
-        container.appendChild(btn);
+        if (btn) {
+          container.appendChild(btn);
+        } else {
+          console.error(
+            'Toolbar.render: button creation returned null:',
+            def.id,
+          );
+        }
       } catch (error) {
         console.error('Toolbar.render: error creating button:', def.id, error);
       }

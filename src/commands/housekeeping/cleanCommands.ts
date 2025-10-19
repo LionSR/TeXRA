@@ -142,7 +142,7 @@ export async function handleClean(config: {
     ? config.outputFiles
     : [];
   const useMultipleOutputs =
-    config.useMultipleOutputs ?? (declaredOutputFiles.length > 1);
+    config.useMultipleOutputs ?? declaredOutputFiles.length > 1;
 
   const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
 

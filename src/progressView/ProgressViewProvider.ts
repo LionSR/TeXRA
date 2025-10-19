@@ -83,7 +83,7 @@ export class ProgressViewProvider
 
     // Initialize existing components
     this.contentProvider = new ProgressViewContentProvider(context);
-    this.messageHandler = new ProgressViewMessageHandler(this);
+    this.messageHandler = new ProgressViewMessageHandler(this, context);
 
     // Set instance
     ProgressViewProvider._instance = this;
