@@ -73,7 +73,7 @@ export function buildFileContextFromTaskState(
     key: keyof FileContext,
   ) => {
     if (typeof value === 'string' && value.trim().length > 0) {
-      context[key] = value;
+      (context[key] as string) = value;
     }
   };
 
@@ -82,7 +82,7 @@ export function buildFileContextFromTaskState(
     key: keyof FileContext,
   ) => {
     if (Array.isArray(value) && value.length > 0) {
-      context[key] = value;
+      (context[key] as string[]) = value;
     }
   };
 
