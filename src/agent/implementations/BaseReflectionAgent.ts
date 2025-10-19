@@ -494,14 +494,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return this.withRoundGroup(`r${currRound}`, async (roundGroupId) => {
       await this.prepareToolState(currRound, toolState, roundGroupId);
 
-      const { stateRound, preparedMessages, prefill, skip } =
-        await this.prepareRoundContext(
-          currRound,
-          stateGlobal,
-          messages,
-          toolState,
-          roundGroupId,
-        );
+      const {
+        stateRound,
+        preparedMessages,
+        prefill = '',
+        skip,
+      } = await this.prepareRoundContext(
+        currRound,
+        stateGlobal,
+        messages,
+        toolState,
+        roundGroupId,
+      );
 
       if (skip) {
         return [stateRound, stateGlobal, messages, true, toolState];
