@@ -276,10 +276,7 @@ export class LogEntryFormatter {
           'tool use',
         ),
       modelResponse: (params) =>
-        this._safeFormat(
-          () => this._formatModelResponse(params),
-          'Assistant',
-        ),
+        this._safeFormat(() => this._formatModelResponse(params), 'Assistant'),
       fileList: (text, data, id) =>
         this._safeFormat(
           () => this._formatFileList(text, data, id),
