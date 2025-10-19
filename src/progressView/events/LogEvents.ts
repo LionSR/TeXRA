@@ -11,8 +11,7 @@ import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
 
 // Local imports - logger
-import { parseLegacyLogData } from '@logger/logUtils';
-import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
+import type { LogMessageUpdate } from '@logger/LogTypes';
 import { getConfig } from '@utils/config';
 
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -32,15 +31,6 @@ export interface LogEventsModule {
 export function createLogEvents(shared: LogEventsShared): LogEventsModule {
   const withErrorBoundary = createErrorBoundary(shared.logger, 'LogEvents');
 
-  const safelyParseLegacyLogData = (
-    data: LogMessageData,
-    isUpdate = false,
-  ): void => {
-    withErrorBoundary('failed to parse legacy log data', () => {
-      parseLegacyLogData(data, shared.logger, isUpdate);
-    });
-  };
-
   const handleAddLogMessage = (
     data: ProgressEventPayloads['addLogMessage'],
     state: ProgressViewState,
@@ -48,8 +38,6 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
   ): void => {
     withErrorBoundary('failed to handle addLogMessage', () => {
       const { stream, logMessage } = data;
-
-      safelyParseLegacyLogData(logMessage);
 
       if (
         logMessage.level === 'debug' &&
@@ -97,8 +85,6 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
       }
       if (logMessage.data !== undefined) {
         existing.data = logMessage.data;
-      } else {
-        safelyParseLegacyLogData(existing, true);
       }
 
       state.streamTabs.save();

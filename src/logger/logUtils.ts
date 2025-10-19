@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import * as winston from 'winston';
 import Transport from 'winston-transport';
-import { encode as encodeHtml, decode as decodeHtml } from 'he';
+import { encode as encodeHtml } from 'he';
 import { randomUUID } from 'crypto';
 
 // Local imports - progressView
@@ -415,49 +415,6 @@ export const error = (
 ): void => {
   logWithGroup(channel, 'error', message, groupId, messageType, isAgent, data);
 };
-
-/**
- * Parse legacy JSON content from the log message text when structured data is
- * missing. Parsed results are stored back into the log object so that future
- * lookups don't require re-parsing.
- */
-export function parseLegacyLogData(
-  logMessage: LogMessageData,
-  logger?: AgentLogger,
-  forceParse = false,
-): unknown | undefined {
-  if (!forceParse && logMessage.data !== undefined) {
-    return logMessage.data;
-  }
-
-  const type = logMessage.messageType;
-  const legacyTypes = new Set<string>([
-    MESSAGE_TYPES.FILE_LIST,
-    MESSAGE_TYPES.MISSING_OUTPUTS,
-    MESSAGE_TYPES.LATEXDIFF,
-    MESSAGE_TYPES.STATISTICS,
-  ]);
-
-  if (type && legacyTypes.has(type) && logMessage.text) {
-    try {
-      const decoded = decodeHtml(logMessage.text);
-      const parsed = JSON.parse(decoded);
-
-      if (typeof parsed === 'object' && parsed !== null) {
-        logMessage.data = parsed;
-        return parsed;
-      }
-    } catch (err) {
-      logger?.warn(
-        `Failed to parse legacy log data: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-
-  return undefined;
-}
 
 function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {
   if (!channelLoggers.has(channel)) {
