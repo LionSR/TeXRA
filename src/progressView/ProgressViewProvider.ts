@@ -115,6 +115,10 @@ export class ProgressViewProvider
     return this._instance;
   }
 
+  public get extensionContext(): vscode.ExtensionContext {
+    return this.context;
+  }
+
   protected override cleanupView(): void {
     super.cleanupView();
     this._webviewReady = false;

@@ -513,7 +513,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         stateGlobal,
         toolState,
         preparedMessages,
-        prefill,
+        prefill ?? '',
         this.outputFile[currRound],
         roundGroupId,
       );

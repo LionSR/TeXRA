@@ -56,6 +56,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (m) =>
+        this.handleFollowUpTextPolished(m),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
+        this.handleFollowUpTextTranscribed(m),
+      [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingState(true),
+      [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
     };
   }
 
@@ -99,6 +105,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (container) {
       container.classList.toggle('is-visible', isToolAgent);
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
+    }
+
+    if (!isToolAgent) {
+      dom.followUpInput?.setRecording(false);
     }
 
     dom.toolbar.render(sessionKind);
@@ -256,6 +266,28 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       dom.fileList.update(message.files);
     }
+  }
+
+  handleFollowUpTextPolished(message) {
+    if (!message?.text || !dom.followUpInput) {
+      return;
+    }
+    dom.followUpInput.applyPolishedText(message.text);
+  }
+
+  handleFollowUpTextTranscribed(message) {
+    if (!message?.text || !dom.followUpInput) {
+      return;
+    }
+    dom.followUpInput.appendTranscription(message.text);
+  }
+
+  handleRecordingState(recording) {
+    dom.followUpInput?.setRecording(recording);
+  }
+
+  handleRecordingError() {
+    dom.followUpInput?.handleRecordingError();
   }
 
   handleUpdateMissingOutputs(message) {

@@ -19,14 +19,43 @@
 /* Style the textarea for multi-line input */
 #followUpInput {
   min-height: 36px;
-  max-height: 200px;
+  max-height: 400px;
   resize: none;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   line-height: 1.4;
 }
 
-/* Align send button to bottom */
-#sendFollowUpBtn {
-  margin-bottom: var(--spacing-tiny);
+.follow-up-actions {
+  display: flex;
+  gap: var(--spacing-small);
+}
+
+.follow-up-actions .vscode-button {
+  align-self: flex-end;
+}
+
+#recordFollowUpBtn.recording {
+  background-color: var(--vscode-statusBarItem-errorBackground, #d32f2f);
+  color: var(--vscode-statusBarItem-errorForeground, #ffffff);
+}
+
+#recordFollowUpBtn.recording:hover {
+  background-color: var(--vscode-statusBarItem-errorBackground, #b71c1c);
+}
+
+#recordFollowUpBtn.recording .codicon-stop-circle {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
 }

@@ -172,6 +172,11 @@ export abstract class BaseViewContentProvider {
       ),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
+      textareaUtilsUri: this.getCommonUri(webview, 'modules/textareaUtils.js'),
+      recordingButtonManagerUri: this.getCommonUri(
+        webview,
+        'modules/recordingButtonManager.js',
+      ),
       codiconUri: this.getNodeModulesUri(
         webview,
         '@vscode/codicons/dist/codicon.css',

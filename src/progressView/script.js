@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeIconButtons();
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
+  progressViewDomHandler.followUpInput.setup();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
 

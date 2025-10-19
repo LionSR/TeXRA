@@ -44,6 +44,7 @@
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
+          "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -57,6 +58,8 @@
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
           "@common/stringUtils.js": "${stringUtilsUri}",
           "@common/pathUtils.js": "${pathUtilsUri}",
+          "@common/textareaUtils.js": "${textareaUtilsUri}",
+          "@common/recordingButtonManager.js": "${recordingButtonManagerUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "he": "https://esm.sh/he@1.2.0",
@@ -126,18 +129,36 @@
         </div>
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
-        <div id="followUpContainer" class="follow-up-container">
+        <div
+          id="followUpContainer"
+          class="follow-up-container"
+          aria-hidden="true"
+        >
           <textarea
             id="followUpInput"
             class="vscode-textarea"
             placeholder="Send follow-up message"
           ></textarea>
-          <button
-            id="sendFollowUpBtn"
-            class="vscode-button"
-            title="Send"
-            data-icon="send"
-          ></button>
+          <div class="follow-up-actions button-group">
+            <button
+              id="polishFollowUpBtn"
+              class="vscode-button"
+              title="Polish follow-up with AI"
+              data-icon="sparkle"
+            ></button>
+            <button
+              id="recordFollowUpBtn"
+              class="vscode-button"
+              title="Record follow-up with microphone"
+              data-icon="mic"
+            ></button>
+            <button
+              id="sendFollowUpBtn"
+              class="vscode-button"
+              title="Send"
+              data-icon="send"
+            ></button>
+          </div>
         </div>
         <template id="fileItemTemplate">
           <div class="file-item">

@@ -10,8 +10,10 @@ import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
+import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
+import { vscode } from '@common/webviewContext.js';
 
 /**
  * Manages all DOM operations for the progress view.
@@ -31,6 +33,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       events: new EventsManager(),
       placeholder: new Placeholder(),
       instructionPanel: new InstructionPanel(),
+      followUpInput: new FollowUpInputManager(vscode),
     });
   }
 }

@@ -12,12 +12,21 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
+import {
+  isWorkflowTaskState,
+  type WorkflowTaskState,
+  type TaskState,
+} from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - storage
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { RecordingManager } from '@webview/managers/RecordingManager';
+import {
+  polishTextWithAI,
+  type FileContext,
+} from '@utils/text/textEnhancementUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -35,8 +44,11 @@ interface CompareMessage extends BaseFileCommandMessage {
 }
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
+  private readonly recordingManager: RecordingManager;
+
   constructor(private readonly provider: ProgressViewProvider) {
     super('ProgressView');
+    this.recordingManager = new RecordingManager(provider.extensionContext);
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
@@ -81,6 +93,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
         this.handleSendFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]:
+        this.handlePolishFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.START_RECORDING]:
+        this.handleStartRecording.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]:
+        this.handleStopRecording.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
+        this.handleShowInformationMessage.bind(this),
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
         this.handleOpenTaskStorage.bind(this),
 
@@ -244,6 +264,78 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       stream: message.stream,
       text: message.text,
     });
+  }
+
+  private async handlePolishFollowUp(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const stream = message.stream as StreamTabId | undefined;
+    const text = typeof message.text === 'string' ? message.text.trim() : '';
+    if (!stream || !text) {
+      return;
+    }
+
+    const taskState = this.provider.state.getTaskState(stream);
+    const fileContext = this.buildFileContext(taskState);
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Polishing follow-up message',
+          cancellable: false,
+        },
+        async (progress) => {
+          progress.report({ message: 'Sending to AI for polishing...' });
+          const result = await polishTextWithAI(text, fileContext);
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              text: result.text,
+            });
+          } else {
+            const fallbackError =
+              result.error || 'Error polishing follow-up text';
+            await vscode.window.showErrorMessage(fallbackError);
+          }
+        },
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        this.channel,
+        `Error polishing follow-up text: ${errorMessage}`,
+      );
+      await vscode.window.showErrorMessage(
+        `Error polishing follow-up text: ${errorMessage}`,
+      );
+    }
+  }
+
+  private async handleStartRecording(
+    _message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.recordingManager.start(webviewView);
+  }
+
+  private async handleStopRecording(
+    _message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.recordingManager.stop(webviewView);
+  }
+
+  private async handleShowInformationMessage(
+    message: any,
+    _webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const text = typeof message?.text === 'string' ? message.text.trim() : '';
+    if (text) {
+      await vscode.window.showInformationMessage(text);
+    }
   }
 
   private async handleOpenTaskStorage(
@@ -479,5 +571,47 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     await action(taskState);
+  }
+
+  private buildFileContext(taskState?: TaskState): FileContext | undefined {
+    if (!taskState) {
+      return undefined;
+    }
+
+    const context: FileContext = {};
+    const { agentConfig } = taskState;
+
+    const setString = (key: keyof FileContext, value?: string | null): void => {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        (context as Record<string, unknown>)[key] = value;
+      }
+    };
+
+    const setArray = (
+      key: keyof FileContext,
+      value?: string[] | null,
+    ): void => {
+      if (Array.isArray(value)) {
+        const filtered = value.filter(
+          (item) => typeof item === 'string' && item.trim().length > 0,
+        );
+        if (filtered.length > 0) {
+          (context as Record<string, unknown>)[key] = filtered;
+        }
+      }
+    };
+
+    setString('agent', agentConfig.agent);
+    setString('inputFile', agentConfig.inputFile);
+    setArray('inputFiles', agentConfig.inputFiles);
+    setString('referenceFile', agentConfig.referenceFile);
+    setArray('referenceFiles', agentConfig.referenceFiles);
+    setString('auxiliaryFile', agentConfig.auxiliaryFile);
+    setArray('auxiliaryFiles', agentConfig.auxiliaryFiles);
+    setString('mediaFile', agentConfig.mediaFile);
+    setArray('mediaFiles', agentConfig.mediaFiles);
+    setArray('outputFiles', agentConfig.outputFiles);
+
+    return context;
   }
 }
