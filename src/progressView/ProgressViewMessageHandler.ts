@@ -12,12 +12,22 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
+import {
+  isWorkflowTaskState,
+  type WorkflowTaskState,
+  type TaskState,
+} from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - storage
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { sleep } from '@utils/helpers';
+import { RecordingManager } from '@webview/managers/RecordingManager';
+import {
+  buildFileContextFromTaskState,
+  polishTextWithAI,
+} from '@utils/text/textEnhancementUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -35,8 +45,19 @@ interface CompareMessage extends BaseFileCommandMessage {
 }
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
-  constructor(private readonly provider: ProgressViewProvider) {
+  private readonly recordingManager: RecordingManager;
+
+  constructor(
+    private readonly provider: ProgressViewProvider,
+    context: vscode.ExtensionContext,
+  ) {
     super('ProgressView');
+    this.recordingManager = new RecordingManager(context, {
+      recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
+      transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
+      progressTitle: 'Transcribing follow-up message',
+    });
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
@@ -83,6 +104,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleSendFollowUp.bind(this),
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
         this.handleOpenTaskStorage.bind(this),
+      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]:
+        this.handlePolishFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async (_m, w) =>
+        this.recordingManager.start(w),
+      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]: async (_m, w) =>
+        this.recordingManager.stop(w),
+      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
+        this.handleShowInformationMessage.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -244,6 +273,75 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       stream: message.stream,
       text: message.text,
     });
+  }
+
+  private async handlePolishFollowUp(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const stream = message.stream as StreamTabId | undefined;
+    const text = typeof message.text === 'string' ? message.text.trim() : '';
+    if (!stream || !text) {
+      return;
+    }
+
+    const taskState = this.provider.state.getTaskState(stream) as
+      | TaskState
+      | undefined;
+    if (!taskState) {
+      return;
+    }
+
+    const fileContext = buildFileContextFromTaskState(taskState);
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Polishing follow-up message',
+        cancellable: false,
+      },
+      async (progress) => {
+        try {
+          progress.report({ message: 'Preparing text and context...' });
+          await sleep(300);
+          progress.report({
+            message: 'Sending to AI for polishing...',
+            increment: 30,
+          });
+          const result = await polishTextWithAI(text, fileContext);
+          progress.report({ message: 'Applying changes...', increment: 60 });
+          await sleep(200);
+
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              text: result.text,
+            });
+          } else if (result.error) {
+            await vscode.window.showErrorMessage(result.error);
+          }
+        } catch (error) {
+          const messageText =
+            error instanceof Error ? error.message : 'Unknown error';
+          await vscode.window.showErrorMessage(
+            `Error polishing follow-up: ${messageText}`,
+          );
+          this.logger.error(
+            this.channel,
+            `Error polishing follow-up: ${messageText}`,
+            error instanceof Error ? error : undefined,
+          );
+        }
+      },
+    );
+  }
+
+  private async handleShowInformationMessage(message: any): Promise<void> {
+    const text = typeof message?.text === 'string' ? message.text.trim() : '';
+    if (!text) {
+      return;
+    }
+    await vscode.window.showInformationMessage(text);
   }
 
   private async handleOpenTaskStorage(

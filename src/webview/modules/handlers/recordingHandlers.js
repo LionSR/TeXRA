@@ -1,5 +1,5 @@
 // Local imports - webview
-import { webviewEventBus } from '../eventBus.js';
+import { recordingManager } from '../domHandlers.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 
 /**
@@ -9,16 +9,12 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
  */
 export function createRecordingHandlers({ postHandle }) {
   function handleRecordingStarted() {
-    webviewEventBus.dispatchEvent(
-      new CustomEvent('recordingUIUpdate', { detail: { recording: true } }),
-    );
+    recordingManager.setRecording(true);
     postHandle();
   }
 
   function handleRecordingError() {
-    webviewEventBus.dispatchEvent(
-      new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
-    );
+    recordingManager.setRecording(false);
     postHandle();
   }
 
