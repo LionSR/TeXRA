@@ -82,6 +82,9 @@ export function insertChronologically(
  * @returns {number|null} The timestamp in ms or null if not applicable
  */
 function defaultChildTimestamp(child) {
+  if (!child || !child.classList) {
+    return null;
+  }
   if (child.classList.contains('log-group')) {
     const startElem = child.querySelector('.group-start-time');
     const start = startElem?.dataset.start;
