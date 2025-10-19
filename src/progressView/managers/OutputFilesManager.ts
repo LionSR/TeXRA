@@ -168,16 +168,43 @@ export class OutputFilesManager extends PersistentMapManager<
     data: unknown,
     streamId: StreamTabId,
   ): Promise<{ [key: number]: OutputFileInfo[] }> {
-    const rounds = data as { [key: number]: OutputFileInfo[] };
+    if (!data || typeof data !== 'object') {
+      this.logger.warn(
+        `Invalid output files payload for stream ${streamId}; resetting entry`,
+      );
+      return {};
+    }
+
+    const rounds = data as Record<string, unknown>;
     const roundMap: { [key: number]: OutputFileInfo[] } = {};
-    const streamFilesProcessed = Object.values(rounds).reduce(
-      (sum, files) => sum + files.length,
+    const streamFilesProcessed = Object.values(rounds).reduce<number>(
+      (sum, value) => {
+        if (Array.isArray(value)) {
+          return sum + value.length;
+        }
+        return sum;
+      },
       0,
     );
     this.totalFilesProcessed += streamFilesProcessed;
 
-    for (const [roundStr, infos] of Object.entries(rounds)) {
+    for (const [roundStr, value] of Object.entries(rounds)) {
       const roundNum = parseInt(roundStr, 10);
+      if (Number.isNaN(roundNum)) {
+        this.logger.warn(
+          `Skipping non-numeric round key "${roundStr}" for stream ${streamId}`,
+        );
+        continue;
+      }
+
+      if (!Array.isArray(value)) {
+        this.logger.warn(
+          `Skipping invalid output metadata for stream ${streamId}, round ${roundNum}`,
+        );
+        continue;
+      }
+
+      const infos = value as OutputFileInfo[];
       this.logger.debug(
         `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
       );
