@@ -278,7 +278,7 @@ export class LogEntryFormatter {
       modelResponse: (params) =>
         this._safeFormat(
           () => this._formatModelResponse(params),
-          'model response',
+          'Assistant',
         ),
       fileList: (text, data, id) =>
         this._safeFormat(
@@ -730,7 +730,7 @@ export class LogEntryFormatter {
       groupId,
       timestamp: fullTimestamp,
       iconClass: 'codicon-sparkle',
-      labelText: 'Model response',
+      labelText: 'Assistant',
       copyTitle: 'Copy model output',
       contentClass: 'banner-content--model',
       open: true,
