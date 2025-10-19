@@ -22,7 +22,6 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
-import { sleep } from '@utils/helpers';
 import { RecordingManager } from '@webview/managers/RecordingManager';
 import {
   buildFileContextFromTaskState,
@@ -302,15 +301,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       },
       async (progress) => {
         try {
-          progress.report({ message: 'Preparing text and context...' });
-          await sleep(300);
           progress.report({
             message: 'Sending to AI for polishing...',
             increment: 30,
           });
           const result = await polishTextWithAI(text, fileContext);
           progress.report({ message: 'Applying changes...', increment: 60 });
-          await sleep(200);
 
           if (result.success) {
             webviewView.webview.postMessage({

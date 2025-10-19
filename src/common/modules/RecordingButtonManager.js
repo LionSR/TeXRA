@@ -37,7 +37,7 @@ export class RecordingButtonManager {
       this.vscode.postMessage({
         command: nextState ? this.startCommand : this.stopCommand,
       });
-      this.setRecording(nextState);
+      // Don't update state optimistically - wait for backend confirmation
     });
   }
 
@@ -47,18 +47,23 @@ export class RecordingButtonManager {
   }
 
   _updateButton() {
-    const button = this.button || safeGetElementById(this.buttonId);
-    if (!button) {
+    if (!this.button) {
       return;
     }
 
-    button.innerHTML = '';
+    this.button.innerHTML = '';
     const iconName = this.isRecording ? this.stopIcon : this.startIcon;
     const icon = createCodicon(iconName);
     if (icon) {
-      button.appendChild(icon);
+      this.button.appendChild(icon);
     }
-    button.title = this.isRecording ? this.stopTitle : this.startTitle;
-    button.classList.toggle(this.recordingClass, this.isRecording);
+    this.button.title = this.isRecording ? this.stopTitle : this.startTitle;
+    this.button.classList.toggle(this.recordingClass, this.isRecording);
+  }
+
+  dispose() {
+    // Event listeners added via addEventListenerSafely are automatically managed
+    // Just clear the button reference
+    this.button = null;
   }
 }
