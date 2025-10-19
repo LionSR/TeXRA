@@ -18,7 +18,7 @@
 
 /* Style the textarea for multi-line input */
 #followUpInput {
-  min-height: 80px;
+  min-height: 106px;
   max-height: 400px;
   resize: vertical;
   flex: 1;
