@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
+  progressViewDomHandler.followUpInput.setup();
 
   // Apply saved group toggle states to any groups already in the DOM
   progressViewDomHandler.events.applyToggleStates();

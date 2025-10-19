@@ -112,32 +112,6 @@ export class EventsManager {
       }
     });
 
-    // Follow-up input handler
-    const sendFollowUp = () => {
-      const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
-      if (!followInput) return;
-      const text = followInput.value.trim();
-      if (!text) return;
-      vscode.postMessage({
-        command: COMMANDS.SEND_FOLLOW_UP,
-        stream: progressViewState.activeStream,
-        text,
-      });
-      followInput.value = '';
-    };
-    addEventListenerSafely(
-      ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
-      'click',
-      sendFollowUp,
-    );
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (e) => {
-      // Enter sends, Shift+Enter adds new line
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendFollowUp();
-      }
-    });
-
     // Initialize split view
     Split(['.content-area', '.tabs'], {
       sizes: [SPLIT_SIZES.CONTENT, SPLIT_SIZES.TABS],

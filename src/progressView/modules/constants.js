@@ -48,6 +48,8 @@ export const ELEMENT_IDS = {
   ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
+  RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
+  POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
   AGENT_FILTER_CONTAINER: 'agentFilterButtons',
   FILTER_ALL_BTN: 'filterAllBtn',

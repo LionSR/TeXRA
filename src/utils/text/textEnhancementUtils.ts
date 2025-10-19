@@ -17,6 +17,7 @@ import { getConfig } from '../config';
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
@@ -52,6 +53,50 @@ export interface FileContext {
   mediaFile?: string;
   mediaFiles?: string[];
   outputFiles?: string[];
+}
+
+/**
+ * Derive a FileContext from a stored task state.
+ */
+export function buildFileContextFromTaskState(
+  taskState: TaskState,
+): FileContext {
+  const context: FileContext = {};
+  const { agentConfig } = taskState;
+
+  if (agentConfig.agent) {
+    context.agent = agentConfig.agent;
+  }
+
+  const assignString = (
+    value: string | null | undefined,
+    key: keyof FileContext,
+  ) => {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      context[key] = value;
+    }
+  };
+
+  const assignArray = (
+    value: string[] | null | undefined,
+    key: keyof FileContext,
+  ) => {
+    if (Array.isArray(value) && value.length > 0) {
+      context[key] = value;
+    }
+  };
+
+  assignString(agentConfig.inputFile, 'inputFile');
+  assignArray(agentConfig.inputFiles ?? undefined, 'inputFiles');
+  assignString(agentConfig.referenceFile, 'referenceFile');
+  assignArray(agentConfig.referenceFiles ?? undefined, 'referenceFiles');
+  assignString(agentConfig.auxiliaryFile, 'auxiliaryFile');
+  assignArray(agentConfig.auxiliaryFiles ?? undefined, 'auxiliaryFiles');
+  assignString(agentConfig.mediaFile, 'mediaFile');
+  assignArray(agentConfig.mediaFiles ?? undefined, 'mediaFiles');
+  assignArray(agentConfig.outputFiles ?? undefined, 'outputFiles');
+
+  return context;
 }
 
 /**
