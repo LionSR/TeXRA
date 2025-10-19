@@ -54,6 +54,10 @@ export class FollowUpInputManager {
       this._polishFollowUp();
     });
 
+    addEventListenerSafely(ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN, 'click', () => {
+      this._clearFollowUp();
+    });
+
     this.recordingButton.setup();
   }
 
@@ -91,6 +95,15 @@ export class FollowUpInputManager {
       stream,
       text,
     });
+  }
+
+  _clearFollowUp() {
+    if (!this.textarea) return;
+
+    this.textarea.value = '';
+    resetTextareaHeight(this.textarea);
+    autoResizeTextarea(this.textarea);
+    this.textarea.focus();
   }
 
   setRecording(recording) {
