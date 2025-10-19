@@ -6,7 +6,7 @@ import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 
 const AGENT_ICONS = {
-  CoT: 'terminal',
+  CoT: 'list-tree',
   direct: 'lightbulb',
   toolUse: 'tools',
   unknown: 'question',
