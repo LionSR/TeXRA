@@ -15,12 +15,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
 const LEGACY_MESSAGE_TYPES: ReadonlySet<LogMessageData['messageType']> =
-  new Set([
-    'fileList',
-    'missingOutputs',
-    'latexdiff',
-    'statistics',
-  ]);
+  new Set(['fileList', 'missingOutputs', 'latexdiff', 'statistics']);
 
 /**
  * Manages stream tabs collection with persistence.

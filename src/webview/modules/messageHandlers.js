@@ -16,6 +16,7 @@ import {
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
 import { createRecordingHandlers } from './handlers/recordingHandlers.js';
+import { recordingManager } from './domHandlers.js';
 
 // Handler submodules
 import { createThemeHandlers } from './handlers/themeHandlers.js';
@@ -585,9 +586,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       });
       mainViewState.save();
     }
-    webviewEventBus.dispatchEvent(
-      new CustomEvent('recordingUIUpdate', { detail: { recording: false } }),
-    );
+    recordingManager.setRecording(false);
     this._postHandle();
   }
 }
