@@ -19,14 +19,19 @@
 /* Style the textarea for multi-line input */
 #followUpInput {
   min-height: 36px;
-  max-height: 200px;
+  max-height: 400px;
   resize: none;
   flex: 1;
-  overflow-y: auto;
+  overflow-y: hidden;
   line-height: 1.4;
 }
 
-/* Align send button to bottom */
-#sendFollowUpBtn {
+.follow-up-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-small);
+}
+
+.follow-up-actions .vscode-button {
   margin-bottom: var(--spacing-tiny);
 }

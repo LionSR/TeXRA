@@ -42,7 +42,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   constructor(private readonly context: vscode.ExtensionContext) {
     super('MainView');
     this.settingsManager = new SettingsManager();
-    this.recordingManager = new RecordingManager(context);
+    this.recordingManager = new RecordingManager(context, {
+      recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+      transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+      progressTitle: 'Transcribing instruction',
+    });
     this.fileManager = new FileManager(context);
     this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();

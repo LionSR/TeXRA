@@ -36,6 +36,10 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       key: 'instructionPanelUri',
       path: 'modules/uiManagers/InstructionPanel.js',
     },
+    {
+      key: 'followUpInputManagerUri',
+      path: 'modules/uiManagers/FollowUpInputManager.js',
+    },
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {

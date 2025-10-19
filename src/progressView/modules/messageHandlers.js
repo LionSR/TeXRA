@@ -6,6 +6,7 @@ import { appendFormatted } from './utils.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
+import { vscode } from '@common/webviewContext.js';
 
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
@@ -56,6 +57,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (m) =>
+        this.handleFollowUpTextPolished(m),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
+        this.handleFollowUpTextTranscribed(m),
+      [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
+      [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
     };
   }
 
@@ -312,6 +319,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.toggleStates.clearAll();
     state.resetExecutionAvailability();
     dom.instructionPanel.hide();
+  }
+
+  handleFollowUpTextPolished(message) {
+    if (typeof message.text !== 'string') {
+      return;
+    }
+    dom.followUpInput.applyPolishedText(message.text);
+    vscode.postMessage({
+      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: 'Follow-up text has been polished!',
+    });
+  }
+
+  handleFollowUpTextTranscribed(message) {
+    if (typeof message.text !== 'string') {
+      dom.followUpInput.setRecording(false);
+      return;
+    }
+    dom.followUpInput.insertTranscription(message.text);
+    dom.followUpInput.setRecording(false);
+    vscode.postMessage({
+      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: 'Follow-up text transcribed!',
+    });
+  }
+
+  handleRecordingStarted() {
+    dom.followUpInput.setRecording(true);
+  }
+
+  handleRecordingError() {
+    dom.followUpInput.setRecording(false);
   }
 }
 
