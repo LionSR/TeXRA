@@ -141,23 +141,8 @@ export async function handleClean(config: {
   const declaredOutputFiles = Array.isArray(config.outputFiles)
     ? config.outputFiles
     : [];
-  const legacyActiveFlag =
-    typeof config.activeFiles?.output === 'boolean'
-      ? config.activeFiles.output
-      : undefined;
   const useMultipleOutputs =
-    typeof config.useMultipleOutputs === 'boolean'
-      ? config.useMultipleOutputs
-      : typeof legacyActiveFlag === 'boolean'
-        ? legacyActiveFlag
-        : declaredOutputFiles.length > 1;
-
-  if (declaredOutputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(
-      CHANNEL,
-      'Clean command received multiple output files but multi-output mode is disabled. Verify stored task state.',
-    );
-  }
+    config.useMultipleOutputs ?? (declaredOutputFiles.length > 1);
 
   const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
 
