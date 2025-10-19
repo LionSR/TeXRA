@@ -185,6 +185,14 @@ export const PROGRESS_VIEW_COMMANDS = {
   FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',
   SEND_FOLLOW_UP: 'sendFollowUp',
+  POLISH_FOLLOW_UP: 'polishFollowUp',
+  FOLLOW_UP_TEXT_POLISHED: 'followUpTextPolished',
+  START_RECORDING: 'startRecording',
+  STOP_RECORDING: 'stopRecording',
+  RECORDING_STARTED: 'recordingStarted',
+  RECORDING_ERROR: 'recordingError',
+  FOLLOW_UP_TEXT_TRANSCRIBED: 'followUpTextTranscribed',
+  SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
 
   // File operations

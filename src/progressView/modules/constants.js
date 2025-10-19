@@ -49,6 +49,8 @@ export const ELEMENT_IDS = {
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
+  POLISH_FOLLOW_UP_BUTTON: 'polishFollowUpBtn',
+  RECORD_FOLLOW_UP_BUTTON: 'recordFollowUpBtn',
   AGENT_FILTER_CONTAINER: 'agentFilterButtons',
   FILTER_ALL_BTN: 'filterAllBtn',
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',

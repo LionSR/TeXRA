@@ -507,6 +507,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         return [stateRound, stateGlobal, messages, true, toolState];
       }
 
+      const outputPath = this.outputFile[currRound];
+      if (outputPath === undefined) {
+        throw new Error(`Missing output file path for round ${currRound}`);
+      }
+      if (typeof prefill !== 'string') {
+        throw new Error(`Missing prefill text for round ${currRound}`);
+      }
+
       return this.runRoundPipeline(
         currRound,
         stateRound,
@@ -514,7 +522,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         toolState,
         preparedMessages,
         prefill,
-        this.outputFile[currRound],
+        outputPath,
         roundGroupId,
       );
     });

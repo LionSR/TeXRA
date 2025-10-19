@@ -9,6 +9,7 @@ import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
+import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
 import { UsageSummary, UsageGroup } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
@@ -19,6 +20,7 @@ import { BaseDomHandler } from '@common/BaseDomHandler.js';
 class ProgressViewDomHandler extends BaseDomHandler {
   constructor() {
     const usageSummary = new UsageSummary();
+    const followUpInput = new FollowUpInputManager();
     super({
       streamTabs: new StreamTabs(),
       toolbar: new Toolbar(),
@@ -31,6 +33,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       events: new EventsManager(),
       placeholder: new Placeholder(),
       instructionPanel: new InstructionPanel(),
+      followUpInput,
     });
   }
 }

@@ -12,12 +12,21 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
-import { isWorkflowTaskState, type WorkflowTaskState } from '@logger/TaskState';
+import {
+  isWorkflowTaskState,
+  type WorkflowTaskState,
+  type TaskState,
+} from '@logger/TaskState';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - storage
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { RecordingManager } from '@webview/managers/RecordingManager';
+import {
+  polishTextWithAI,
+  type FileContext,
+} from '@utils/text/textEnhancementUtils';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -35,8 +44,20 @@ interface CompareMessage extends BaseFileCommandMessage {
 }
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
-  constructor(private readonly provider: ProgressViewProvider) {
+  private readonly recordingManager: RecordingManager;
+
+  constructor(
+    private readonly provider: ProgressViewProvider,
+    private readonly extensionContext: vscode.ExtensionContext,
+  ) {
     super('ProgressView');
+    this.recordingManager = new RecordingManager(extensionContext, {
+      startRecording: PROGRESS_VIEW_COMMANDS.START_RECORDING,
+      stopRecording: PROGRESS_VIEW_COMMANDS.STOP_RECORDING,
+      recordingStarted: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingError: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
+      transcription: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
+    });
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
@@ -81,6 +102,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
         this.handleSendFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]:
+        this.handlePolishFollowUp.bind(this),
+      [PROGRESS_VIEW_COMMANDS.START_RECORDING]:
+        this.handleStartRecording.bind(this),
+      [PROGRESS_VIEW_COMMANDS.STOP_RECORDING]:
+        this.handleStopRecording.bind(this),
+      [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]:
+        this.handleShowInformationMessage.bind(this),
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]:
         this.handleOpenTaskStorage.bind(this),
 
@@ -244,6 +273,77 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       stream: message.stream,
       text: message.text,
     });
+  }
+
+  private async handlePolishFollowUp(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    const text = typeof message?.text === 'string' ? message.text.trim() : '';
+    if (!text) {
+      return;
+    }
+
+    const stream = message.stream as StreamTabId | undefined;
+    const taskState = stream
+      ? this.provider.state.getTaskState(stream)
+      : undefined;
+    const fileContext = this.buildFileContext(taskState);
+
+    try {
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Polishing follow-up text',
+          cancellable: false,
+        },
+        async () => {
+          const result = await polishTextWithAI(text, fileContext);
+          if (result.success) {
+            webviewView.webview.postMessage({
+              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+              text: result.text,
+            });
+            await vscode.window.showInformationMessage(
+              'Follow-up text polished!',
+            );
+          } else if (result.error) {
+            await vscode.window.showErrorMessage(result.error);
+          }
+        },
+      );
+    } catch (error) {
+      const messageText =
+        error instanceof Error ? error.message : String(error);
+      await vscode.window.showErrorMessage(
+        `Error polishing follow-up: ${messageText}`,
+      );
+      this.logger.error(
+        this.channel,
+        `Error polishing follow-up: ${messageText}`,
+      );
+    }
+  }
+
+  private async handleStartRecording(
+    _message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.recordingManager.start(webviewView);
+  }
+
+  private async handleStopRecording(
+    _message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    await this.recordingManager.stop(webviewView);
+  }
+
+  private async handleShowInformationMessage(message: any): Promise<void> {
+    const text = typeof message?.text === 'string' ? message.text.trim() : '';
+    if (text) {
+      await vscode.window.showInformationMessage(text);
+    }
   }
 
   private async handleOpenTaskStorage(
@@ -479,5 +579,60 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     await action(taskState);
+  }
+
+  private buildFileContext(
+    taskState?: TaskState | null,
+  ): FileContext | undefined {
+    if (!taskState) {
+      return undefined;
+    }
+
+    const context: FileContext = {};
+    const { agentConfig } = taskState;
+
+    type SingleFileContextKey =
+      | 'agent'
+      | 'inputFile'
+      | 'referenceFile'
+      | 'auxiliaryFile'
+      | 'mediaFile';
+    type ArrayFileContextKey =
+      | 'inputFiles'
+      | 'referenceFiles'
+      | 'auxiliaryFiles'
+      | 'mediaFiles'
+      | 'outputFiles';
+
+    const assignSingle = (
+      value: string | null | undefined,
+      key: SingleFileContextKey,
+    ) => {
+      if (value && value !== 'None') {
+        context[key] = value;
+      }
+    };
+
+    const assignArray = (
+      value: string[] | null | undefined,
+      key: ArrayFileContextKey,
+    ) => {
+      if (Array.isArray(value) && value.length > 0) {
+        context[key] = value;
+      }
+    };
+
+    assignSingle(agentConfig.agent, 'agent');
+    assignSingle(agentConfig.inputFile, 'inputFile');
+    assignArray(agentConfig.inputFiles ?? undefined, 'inputFiles');
+    assignSingle(agentConfig.referenceFile ?? undefined, 'referenceFile');
+    assignArray(agentConfig.referenceFiles ?? undefined, 'referenceFiles');
+    assignSingle(agentConfig.auxiliaryFile ?? undefined, 'auxiliaryFile');
+    assignArray(agentConfig.auxiliaryFiles ?? undefined, 'auxiliaryFiles');
+    assignSingle(agentConfig.mediaFile ?? undefined, 'mediaFile');
+    assignArray(agentConfig.mediaFiles ?? undefined, 'mediaFiles');
+    assignArray(agentConfig.outputFiles ?? undefined, 'outputFiles');
+
+    return context;
   }
 }

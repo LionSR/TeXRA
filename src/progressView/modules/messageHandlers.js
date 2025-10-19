@@ -6,6 +6,7 @@ import { appendFormatted } from './utils.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
+import { vscode } from '@common/webviewContext.js';
 
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
@@ -56,6 +57,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
+        this.handleFollowUpTextTranscribed(m),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (m) =>
+        this.handleFollowUpTextPolished(m),
+      [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
+      [COMMANDS.RECORDING_ERROR]: (m) => this.handleRecordingError(m),
     };
   }
 
@@ -100,6 +107,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       container.classList.toggle('is-visible', isToolAgent);
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
+
+    dom.followUpInput.setEnabled(isToolAgent && Boolean(message.activeStream));
 
     dom.toolbar.render(sessionKind);
 
@@ -250,6 +259,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       dom.usageGroup.update(message.groupId, message.usage);
     }
+  }
+
+  handleFollowUpTextTranscribed(message) {
+    if (message?.text) {
+      dom.followUpInput.insertTranscription(message.text);
+      vscode.postMessage({
+        command: COMMANDS.SHOW_INFORMATION_MESSAGE,
+        text: 'Follow-up text transcribed!',
+      });
+    }
+    dom.followUpInput.setRecording(false);
+  }
+
+  handleFollowUpTextPolished(message) {
+    if (message?.text) {
+      dom.followUpInput.applyPolishedText(message.text);
+    }
+  }
+
+  handleRecordingStarted() {
+    dom.followUpInput.setRecording(true);
+  }
+
+  handleRecordingError() {
+    dom.followUpInput.setRecording(false);
   }
 
   handleUpdateFiles(message) {

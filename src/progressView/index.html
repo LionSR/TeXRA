@@ -44,6 +44,7 @@
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
+          "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -52,6 +53,8 @@
           "@common/webviewState.js": "${webviewStateUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
+          "@common/modules/RecordingButtonManager.js": "${recordingButtonManagerUri}",
+          "@common/modules/textareaUtils.js": "${textareaUtilsUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
@@ -132,12 +135,26 @@
             class="vscode-textarea"
             placeholder="Send follow-up message"
           ></textarea>
-          <button
-            id="sendFollowUpBtn"
-            class="vscode-button"
-            title="Send"
-            data-icon="send"
-          ></button>
+          <div class="follow-up-actions button-group">
+            <button
+              id="polishFollowUpBtn"
+              class="vscode-button"
+              title="Polish follow-up text"
+              data-icon="sparkle"
+            ></button>
+            <button
+              id="recordFollowUpBtn"
+              class="vscode-button"
+              title="Record follow-up with microphone"
+              data-icon="mic"
+            ></button>
+            <button
+              id="sendFollowUpBtn"
+              class="vscode-button"
+              title="Send"
+              data-icon="send"
+            ></button>
+          </div>
         </div>
         <template id="fileItemTemplate">
           <div class="file-item">

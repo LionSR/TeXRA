@@ -16,20 +16,47 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'RecordingManager';
 logger.initialize(CHANNEL);
 
+interface RecordingCommandOverrides {
+  startRecording?: string;
+  stopRecording?: string;
+  recordingStarted?: string;
+  recordingError?: string;
+  transcription?: string;
+}
+
 export class RecordingManager {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private readonly commands: Required<RecordingCommandOverrides>;
+
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    overrides: RecordingCommandOverrides = {},
+  ) {
+    this.commands = {
+      startRecording:
+        overrides.startRecording ?? MAIN_VIEW_COMMANDS.START_RECORDING,
+      stopRecording:
+        overrides.stopRecording ?? MAIN_VIEW_COMMANDS.STOP_RECORDING,
+      recordingStarted:
+        overrides.recordingStarted ?? MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingError:
+        overrides.recordingError ?? MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+      transcription:
+        overrides.transcription ??
+        MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+    };
+  }
 
   async start(webviewView: vscode.WebviewView): Promise<void> {
     try {
       const result = await startRecording(this.context);
       if (result.success) {
         webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+          command: this.commands.recordingStarted,
         });
       } else if (result.error) {
         vscode.window.showErrorMessage(result.error);
         webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+          command: this.commands.recordingError,
           error: result.error,
         });
       }
@@ -42,7 +69,7 @@ export class RecordingManager {
         `Error in start: ${error instanceof Error ? error.message : String(error)}`,
       );
       webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+        command: this.commands.recordingError,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
@@ -60,13 +87,13 @@ export class RecordingManager {
           const result = await stopRecordingAndTranscribe(this.context);
           if (result.success) {
             webviewView.webview.postMessage({
-              command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+              command: this.commands.transcription,
               text: result.text,
             });
           } else if (result.error) {
             vscode.window.showErrorMessage(result.error);
             webviewView.webview.postMessage({
-              command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+              command: this.commands.recordingError,
               error: result.error,
             });
           }
@@ -81,7 +108,7 @@ export class RecordingManager {
         `Error in stop: ${error instanceof Error ? error.message : String(error)}`,
       );
       webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+        command: this.commands.recordingError,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }

@@ -1,6 +1,10 @@
 // Local imports - webview
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
+import {
+  autoResizeTextarea as resizeTextarea,
+  insertTextAtCursor as insertAtCursor,
+} from '@common/modules/textareaUtils.js';
 
 export class InstructionManager {
   constructor(textareaId, vscode, state) {
@@ -10,20 +14,11 @@ export class InstructionManager {
   }
 
   autoResizeTextarea(textarea) {
-    textarea.style.height = 'auto';
-    const maxHeight = 400;
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
-    textarea.style.overflowY =
-      textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    resizeTextarea(textarea);
   }
 
   insertTextAtCursor(textarea, text) {
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const original = textarea.value;
-    textarea.value = original.slice(0, start) + text + original.slice(end);
-    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    insertAtCursor(textarea, text);
   }
 
   setup() {
