@@ -71,16 +71,7 @@
   flex-shrink: 0;
 }
 
-/* Recording button states */
-#recordInstructionButton.recording {
-  background-color: var(--vscode-statusBarItem-errorBackground, #d32f2f);
-  color: var(--vscode-statusBarItem-errorForeground, #ffffff);
-}
-
-#recordInstructionButton.recording:hover {
-  background-color: var(--vscode-statusBarItem-errorBackground, #b71c1c);
-}
-
+/* Recording button states - icon change is enough, no red background needed */
 #recordInstructionButton.recording .codicon-stop-circle {
   animation: pulse 1.5s ease-in-out infinite;
 }
