@@ -50,6 +50,7 @@ export const ELEMENT_IDS = {
   FOLLOW_UP_INPUT: 'followUpInput',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
   POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
+  CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
   AGENT_FILTER_CONTAINER: 'agentFilterButtons',
   FILTER_ALL_BTN: 'filterAllBtn',

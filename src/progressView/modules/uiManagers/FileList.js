@@ -85,7 +85,17 @@ export class FileList {
 
     rounds.forEach((round) => {
       const files = filesByRound[round];
-      if (!files || files.length === 0) return;
+      if (!Array.isArray(files)) {
+        if (files !== undefined) {
+          console.warn(
+            `FileList.update: Expected array for round ${round}, got:`,
+            typeof files,
+            files,
+          );
+        }
+        return;
+      }
+      if (files.length === 0) return;
 
       const roundGroup = createFromTemplate('roundHeaderTemplate');
       if (!roundGroup) return;
