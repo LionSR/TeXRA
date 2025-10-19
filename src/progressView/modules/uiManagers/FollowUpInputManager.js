@@ -102,7 +102,6 @@ export class FollowUpInputManager {
 
     this.textarea.value = '';
     resetTextareaHeight(this.textarea);
-    autoResizeTextarea(this.textarea);
     this.textarea.focus();
   }
 
