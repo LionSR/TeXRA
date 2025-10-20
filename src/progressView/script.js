@@ -8,7 +8,7 @@ import { validateTemplates } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 // Initialize the state when the window loads
-progressViewState.initialize();
+progressViewState.load();
 
 // Register handlers for VSCode messages
 messageHandler.setup();
