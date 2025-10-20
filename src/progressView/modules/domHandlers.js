@@ -2,7 +2,7 @@
 import { LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { TaskGroupManager, LogEntryManager } from './taskManagers.js';
+import { TaskGroupDomManager, LogEntryManager } from './taskManagers.js';
 import { EventsManager } from './uiManagers/EventsManager.js';
 import { FileList } from './uiManagers/FileList.js';
 import { Status } from './uiManagers/Status.js';
@@ -11,7 +11,7 @@ import { Placeholder } from './uiManagers/Placeholder.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
-import { UsageSummary, UsageGroup } from './usageManagers.js';
+import { UsageSummary, UsageGroupManager } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -26,9 +26,9 @@ class ProgressViewDomHandler extends BaseDomHandler {
       toolbar: new Toolbar(),
       status: new Status(),
       usageSummary,
-      usageGroup: new UsageGroup(usageSummary),
+      usageGroup: new UsageGroupManager(usageSummary),
       fileList: new FileList(usageSummary),
-      taskGroups: new TaskGroupManager(),
+      taskGroups: new TaskGroupDomManager(),
       logEntries: new LogEntryManager(),
       events: new EventsManager(),
       placeholder: new Placeholder(),
