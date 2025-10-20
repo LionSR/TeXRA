@@ -71,7 +71,7 @@ export class Status {
     this._executionAvailable = false;
   }
 
-  setExecutionAvailability(hasExecution) {
+  setExecutionIdAvailability(hasExecution) {
     this._executionAvailable = Boolean(hasExecution);
     this._applyExecutionAvailability();
   }

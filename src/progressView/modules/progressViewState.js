@@ -32,7 +32,7 @@ class TaskGroups {
     this._cachedTotals = null; // Invalidate cache
   }
 
-  getAll() {
+  getGroupMap() {
     return this.groups;
   }
 
@@ -98,9 +98,9 @@ class ToggleStates {
     return this.states.get(id);
   }
 
-  clear(ids) {
+  clearSelection(ids) {
     if (!Array.isArray(ids)) {
-      console.error('ToggleStates.clear: ids must be an array');
+      console.error('ToggleStates.clearSelection: ids must be an array');
       return;
     }
     ids.forEach((id) => {
@@ -169,20 +169,20 @@ class StreamStatuses {
 /**
  * Tracks whether a stream has an execution directory available.
  */
-class ExecutionAvailability {
+class ExecutionIdAvailability {
   constructor() {
     this.availability = new Map();
   }
 
-  set(stream, available) {
+  setAvailable(stream, hasExecutionId) {
     if (!stream) {
-      console.error('ExecutionAvailability.set: stream is required');
+      console.error('ExecutionIdAvailability.setAvailable: stream is required');
       return;
     }
-    this.availability.set(stream, Boolean(available));
+    this.availability.set(stream, Boolean(hasExecutionId));
   }
 
-  get(stream) {
+  hasExecutionId(stream) {
     return this.availability.get(stream) ?? false;
   }
 
@@ -205,34 +205,34 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
-    this.agentFilter = 'all';
+    this.agentTypeFilter = 'all';
     this.currentGroupId = null;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
-    this.toggleStates = new ToggleStates(() => this.save());
+    this.toggleStates = new ToggleStates(() => this.saveToggleStates());
     this.streamStatuses = new StreamStatuses();
-    this.executionAvailability = new ExecutionAvailability();
+    this.executionIdAvailability = new ExecutionIdAvailability();
   }
 
-  setExecutionAvailability(stream, available) {
-    this.executionAvailability.set(stream, available);
+  setExecutionIdAvailable(stream, hasExecutionId) {
+    this.executionIdAvailability.setAvailable(stream, hasExecutionId);
   }
 
-  getExecutionAvailability(stream) {
-    return this.executionAvailability.get(stream);
+  hasExecutionId(stream) {
+    return this.executionIdAvailability.hasExecutionId(stream);
   }
 
-  clearExecutionAvailability(stream) {
-    this.executionAvailability.delete(stream);
+  clearExecutionIdAvailability(stream) {
+    this.executionIdAvailability.delete(stream);
   }
 
-  resetExecutionAvailability() {
-    this.executionAvailability.clear();
+  resetExecutionIdAvailability() {
+    this.executionIdAvailability.clear();
   }
 
   /** Load saved state from VS Code storage. */
-  initialize() {
+  load() {
     const previous = this.stateManager.getState();
     if (previous.groupToggleStates) {
       let data = previous.groupToggleStates;
@@ -283,7 +283,7 @@ export class ProgressViewState {
   }
 
   /** Persist the current group toggle states. */
-  save() {
+  saveToggleStates() {
     try {
       this.stateManager.update({
         groupToggleStates: this.toggleStates.entries(),
