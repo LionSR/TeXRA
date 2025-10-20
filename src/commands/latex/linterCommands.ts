@@ -140,7 +140,7 @@ export async function handleCountLinterMessages(): Promise<void> {
  * Fix linter issues in the current file using Claude
  */
 export async function handleFixLinterIssues(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({
@@ -177,14 +177,11 @@ export async function handleFixLinterIssues(
       `Found ${issues.length} linter issues in ${relativePath}`,
     );
 
-    await executeAgent(
-      {
-        agent: 'tex_linter_fix',
-        model: 'claude-3-7-sonnet-latest',
-        inputFile: relativePath,
-      },
-      context,
-    );
+    await executeAgent({
+      agent: 'tex_linter_fix',
+      model: 'claude-3-7-sonnet-latest',
+      inputFile: relativePath,
+    });
   } catch (err) {
     logger.error(
       CHANNEL,
