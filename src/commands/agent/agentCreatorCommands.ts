@@ -187,7 +187,7 @@ export function registerAgentCreatorCommands(context: vscode.ExtensionContext) {
   return agentCreatorCommands;
 }
 
-async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
+async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
   try {
     const agentName = await vscode.window.showInputBox({
       prompt: 'Enter a name for the new agent (without .yaml)',
@@ -230,7 +230,7 @@ async function handleCreateAgentWithAI(context: vscode.ExtensionContext) {
       outputFilesYaml = files.map((f) => `    - ${f}`).join('\n');
     }
 
-    const targetDir = await agentDirectories.custom(context);
+    const targetDir = await agentDirectories.custom();
 
     const filePath = vscode.Uri.file(`${targetDir}/${agentName}.yaml`);
 
