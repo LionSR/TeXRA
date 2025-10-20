@@ -49,7 +49,7 @@ async function handleMerge(
   const fileToUse = baseFile || inputFile;
 
   try {
-    await executeMergeAgent(model, fileToUse, editedFile, context);
+    await executeMergeAgent(model, fileToUse, editedFile);
   } catch (err) {
     // Log the error before re-throwing
     await showLoggedErrorMessage(
