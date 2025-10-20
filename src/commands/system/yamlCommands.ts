@@ -149,7 +149,7 @@ export async function handleTestAgentLoading(
 }
 
 export async function handleLoadSpecificAgent(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
     // Get agent name from user
@@ -166,7 +166,7 @@ export async function handleLoadSpecificAgent(
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
     // Use getAgentPath to find the agent's directory
-    const agentPath = await getAgentPath(agentName, context);
+    const agentPath = await getAgentPath(agentName);
     logger.info(CHANNEL, `Loading from path: ${agentPath.directory}`);
 
     // Load and display the agent configuration

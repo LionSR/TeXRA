@@ -1,6 +1,3 @@
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - agent utilities
 import {
   buildAgentOptionsPayload,
@@ -23,9 +20,7 @@ export interface AgentNameBuckets {
   defaultWorkflowAgent: string;
 }
 
-export async function getAllAgents(
-  context: vscode.ExtensionContext,
-): Promise<AgentNameBuckets> {
+export async function getAllAgents(): Promise<AgentNameBuckets> {
   const configuredWorkflowAgents = getConfig<string[]>('agents', []);
   const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
 
@@ -50,13 +45,11 @@ export async function getAllAgents(
 /**
  * Get all agent directories.
  */
-async function getAgentDirectories(
-  context: vscode.ExtensionContext,
-): Promise<AgentDirectoryMap> {
+async function getAgentDirectories(): Promise<AgentDirectoryMap> {
   return {
-    custom: await agentDirectories.custom(context),
-    builtIn: await agentDirectories.builtIn(context),
-    builtInToolUse: await agentDirectories.builtInToolUse(context),
+    custom: await agentDirectories.custom(),
+    builtIn: await agentDirectories.builtIn(),
+    builtInToolUse: await agentDirectories.builtInToolUse(),
   };
 }
 
@@ -66,12 +59,10 @@ async function getAgentDirectories(
  * A codicon indicator is added via data-multiple when either the agent declares
  * `isMultipleOutput: true` or a sibling `_multiple.yaml` definition exists.
  */
-export async function computeAgentOptions(
-  context: vscode.ExtensionContext,
-): Promise<AgentOptionsPayload> {
+export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   const { allAgents, toolUseAgents, defaultWorkflowAgent } =
-    await getAllAgents(context);
-  const dirs = await getAgentDirectories(context);
+    await getAllAgents();
+  const dirs = await getAgentDirectories();
 
   return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
     workflowAgent: defaultWorkflowAgent,

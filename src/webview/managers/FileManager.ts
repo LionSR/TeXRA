@@ -35,12 +35,28 @@ type FileUpdateOptions = {
 };
 
 export class FileManager {
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private webview: vscode.WebviewView | undefined;
 
-  async handleFileSelection(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  constructor(_context: vscode.ExtensionContext) {}
+
+  attachWebview(webviewView: vscode.WebviewView): void {
+    this.webview = webviewView;
+  }
+
+  private getWebview(): vscode.WebviewView | undefined {
+    if (!this.webview) {
+      logger.warn(CHANNEL, 'Webview not attached for FileManager operation');
+      return undefined;
+    }
+
+    return this.webview;
+  }
+
+  async handleFileSelection(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const singleFileType = message.command.replace('select', '');
     logger.debug(CHANNEL, `Selecting ${singleFileType}`);
 
@@ -56,9 +72,11 @@ export class FileManager {
     }
   }
 
-  async handleEditedFileSelection(
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleEditedFileSelection(): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const editedFile = await vscode.commands.executeCommand<string>(
       'texra.selectEditedFile',
     );
@@ -70,40 +88,39 @@ export class FileManager {
     }
   }
 
-  async handleInputFileSelected(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleInputFileSelected(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const baseFileNameForInput = path.basename(
       message.filePath,
       path.extname(message.filePath),
     );
     const filteredEditedFiles =
       await fileLister.listEditedFiles(baseFileNameForInput);
-    this.postFileUpdate(webviewView, 'Edited', filteredEditedFiles);
+    this.postFileUpdate('Edited', filteredEditedFiles);
   }
 
   handleGenericFileSelected(message: any): void {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
-  async handleRequestInputFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestInputFile(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
       )) || [];
-    await this.postFileUpdate(webviewView, 'Input', refreshedInputFiles, {
+    await this.postFileUpdate('Input', refreshedInputFiles, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
     });
   }
 
-  async handleRequestFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestFile(message: any): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
     const files = await (async () => {
       switch (fileType) {
@@ -117,15 +134,12 @@ export class FileManager {
           return [];
       }
     })();
-    await this.postFileUpdate(webviewView, fileType, files, {
+    await this.postFileUpdate(fileType, files, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
     });
   }
 
-  async handleRequestEditedFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestEditedFile(message: any): Promise<void> {
     let allEditedFiles: string[] = [];
     if (message.baseFile) {
       const baseFileNameForEdited = path.basename(
@@ -134,17 +148,14 @@ export class FileManager {
       );
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
-    await this.postFileUpdate(webviewView, 'Edited', allEditedFiles, {
+    await this.postFileUpdate('Edited', allEditedFiles, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
     });
   }
 
-  async handleRequestBaseFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestBaseFile(message: any): Promise<void> {
     const files = await fileLister.list('input');
-    await this.postFileUpdate(webviewView, 'Base', files, {
+    await this.postFileUpdate('Base', files, {
       notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
       additionalPayload: message?.preserveBaseFile
         ? { preserveBaseFile: true }
@@ -152,10 +163,11 @@ export class FileManager {
     });
   }
 
-  async handleRequestDefaultOutputFiles(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleRequestDefaultOutputFiles(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const agent = message.agent;
     if (!agent) {
       webviewView.webview.postMessage({
@@ -166,7 +178,7 @@ export class FileManager {
     }
 
     try {
-      const agentPath = await getAgentPath(agent, this.context);
+      const agentPath = await getAgentPath(agent);
       const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
       const files = Array.isArray(settings?.defaultOutputFiles)
         ? settings.defaultOutputFiles
@@ -187,7 +199,11 @@ export class FileManager {
     }
   }
 
-  handleSetMultipleFiles(message: any, webviewView: vscode.WebviewView): void {
+  handleSetMultipleFiles(message: any): void {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     if (message.files?.length > 0) {
       webviewView.webview.postMessage({
         command: message.command,
@@ -196,10 +212,11 @@ export class FileManager {
     }
   }
 
-  async handleSelectMultipleFiles(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleSelectMultipleFiles(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const fileType = message.fileType;
     let selectedFiles: string[] | null = null;
 
@@ -239,7 +256,7 @@ export class FileManager {
     }
   }
 
-  async handleRefreshAllFiles(webviewView: vscode.WebviewView): Promise<void> {
+  async handleRefreshAllFiles(): Promise<void> {
     const refreshedFiles = {
       input: await fileLister.list('input'),
       reference: await fileLister.list('reference'),
@@ -248,20 +265,17 @@ export class FileManager {
     };
 
     Object.entries(refreshedFiles).forEach(([type, files]) => {
-      this.postFileUpdate(
-        webviewView,
-        type.charAt(0).toUpperCase() + type.slice(1),
-        files,
-      );
+      this.postFileUpdate(type.charAt(0).toUpperCase() + type.slice(1), files);
     });
 
-    await this.updateBaseFileSelect(webviewView);
+    await this.updateBaseFileSelect();
   }
 
-  async handleGetCurrentFile(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleGetCurrentFile(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const fileType = message.fileType || 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
       'texra.getCurrentFile',
@@ -304,10 +318,7 @@ export class FileManager {
           if (derivedBaseFile) {
             const baseExists = await WorkspaceFS.exists(derivedBaseFile);
             if (baseExists) {
-              await this.handleRequestBaseFile(
-                { preserveBaseFile: true },
-                webviewView,
-              );
+              await this.handleRequestBaseFile({ preserveBaseFile: true });
               filePathToSelect = derivedBaseFile;
             } else {
               logger.info(
@@ -329,7 +340,7 @@ export class FileManager {
         commitCheckFile = currentOpenFile;
       }
       if (commitCheckFile) {
-        await this._maybeSelectCommitFromDiffFile(commitCheckFile, webviewView);
+        await this._maybeSelectCommitFromDiffFile(commitCheckFile);
       }
     } else {
       vscode.window.showInformationMessage(
@@ -340,8 +351,11 @@ export class FileManager {
 
   private async _maybeSelectCommitFromDiffFile(
     filePath: string,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const fileName = path.basename(filePath);
     const latexDiffMetadata = this._parseLatexDiffMetadata(filePath);
     if (!latexDiffMetadata) {
@@ -371,10 +385,11 @@ export class FileManager {
     }
   }
 
-  async handleAddOpenedFiles(
-    fileType: string,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleAddOpenedFiles(fileType: string): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const openedFiles = await this.getOpenedFiles();
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_OPENED_FILES,
@@ -384,10 +399,11 @@ export class FileManager {
     });
   }
 
-  async handleUpdateFiles(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleUpdateFiles(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const command = message.command;
     const fileType = command.replace('update', '');
     const files = message.files || [];
@@ -474,11 +490,14 @@ export class FileManager {
   }
 
   private async postFileUpdate(
-    webviewView: vscode.WebviewView,
     fileType: string,
     files: string[],
     options: FileUpdateOptions = {},
   ): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     if (options.notifyWhenEmpty && files.length === 0) {
       logger.debug(
         CHANNEL,
@@ -493,9 +512,11 @@ export class FileManager {
     });
   }
 
-  private async updateBaseFileSelect(
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async updateBaseFileSelect(): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     const baseFiles = await fileLister.list('input');
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.SET_BASE_FILE,
