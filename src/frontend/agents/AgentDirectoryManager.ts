@@ -22,15 +22,9 @@ export class AgentDirectoryManager {
   /**
    * Ensure a built-in agents directory exists and return its path.
    */
-  private async ensureBuiltInDir(
-    context: vscode.ExtensionContext,
-    dirName: string,
-  ): Promise<string> {
-    if (!context) {
-      throw new Error('Extension context required for built-in agents');
-    }
+  private async ensureBuiltInDir(dirName: string): Promise<string> {
+    this.ensureInitialized();
 
-    StorageFS.initialize(context);
     await GlobalStorageFS.ensureDir(dirName);
 
     const basePath = GlobalStorageFS.fullPath(dirName);
@@ -45,7 +39,7 @@ export class AgentDirectoryManager {
     StorageFS.initialize(context);
   }
 
-  private ensureInitialized(): void {
+  private ensureInitialized(): vscode.ExtensionContext {
     if (!this.context) {
       throw new Error(
         'Agent directories not initialized. Call agentDirectories.initialize(context) first.',
@@ -53,14 +47,15 @@ export class AgentDirectoryManager {
     }
 
     StorageFS.initialize(this.context);
+    return this.context;
   }
 
-  async builtIn(context: vscode.ExtensionContext): Promise<string> {
-    return this.ensureBuiltInDir(context, 'agents');
+  async builtIn(): Promise<string> {
+    return this.ensureBuiltInDir('agents');
   }
 
-  async builtInToolUse(context: vscode.ExtensionContext): Promise<string> {
-    return this.ensureBuiltInDir(context, 'tool_use_agents');
+  async builtInToolUse(): Promise<string> {
+    return this.ensureBuiltInDir('tool_use_agents');
   }
 
   private async ensureDefaultCustomDir(): Promise<string> {
@@ -132,11 +127,8 @@ export class AgentDirectoryManager {
     return configuredPath;
   }
 
-  async custom(context?: vscode.ExtensionContext): Promise<string> {
-    if (context) {
-      this.context = context;
-    }
-
+  async custom(): Promise<string> {
+    this.ensureInitialized();
     const configuredPath = getConfig<string>(
       'explorer.agentsDirectory',
       '',

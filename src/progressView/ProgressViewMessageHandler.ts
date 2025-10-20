@@ -45,6 +45,7 @@ interface CompareMessage extends BaseFileCommandMessage {
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
+  private activeView: vscode.WebviewView | undefined;
 
   constructor(
     private readonly provider: ProgressViewProvider,
@@ -57,6 +58,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing follow-up message',
     });
+  }
+
+  public override async handleMessage(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.activeView = webviewView;
+    await super.handleMessage(message, webviewView);
+  }
+
+  private getActiveView(): vscode.WebviewView | undefined {
+    if (!this.activeView) {
+      this.logger.warn(this.channel, 'No active progress view available');
+      return undefined;
+    }
+
+    return this.activeView;
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
@@ -134,44 +152,33 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
    * This allows the provider to process any pending updates that
    * were queued while the webview was initializing.
    */
-  protected override async handleWebviewReady(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  protected override async handleWebviewReady(message: any): Promise<void> {
+    const webviewView = this.getActiveView();
+    if (webviewView) {
+      await super.handleWebviewReady(message, webviewView);
+    }
     this.provider.markWebviewReady();
   }
 
-  private async handleSwitchStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleSwitchStream(message: any): Promise<void> {
     this.provider.setActiveStream(message.stream);
   }
 
-  private async handleDeleteStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleDeleteStream(message: any): Promise<void> {
     // Delete persisted session data if any
     await this.deleteSessionSnapshot(message.stream);
     this.provider.state.clearStream(message.stream);
     this.provider.updateWebview();
   }
 
-  private async handleEraseStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleEraseStream(message: any): Promise<void> {
     // Delete persisted session data when erasing stream
     await this.deleteSessionSnapshot(message.stream);
     this.provider.state.eraseStreamContent(message.stream);
     this.provider.updateWebview();
   }
 
-  private async handleDeleteAll(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleDeleteAll(message: any): Promise<void> {
     // Delete all persisted session data
     const allStates = this.provider.state.getAllTaskStates();
     for (const [stream] of allStates) {
@@ -182,17 +189,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.updateWebview();
   }
 
-  private async handleStopStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleStopStream(message: any): Promise<void> {
     await vscode.commands.executeCommand('texra.stopAgent', message.stream);
   }
 
-  private async handleRunAgain(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleRunAgain(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await vscode.commands.executeCommand(
         'texra.execute',
@@ -201,10 +202,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleDiffStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleDiffStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await vscode.commands.executeCommand('texra.runLatexdiff', {
         agent: taskState.agentConfig.agent,
@@ -216,36 +214,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handlePackStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handlePackStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await this.handleFileOperation(message.stream, taskState, 'texra.pack');
     });
   }
 
-  private async handleCleanStream(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleCleanStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await this.handleFileOperation(message.stream, taskState, 'texra.clean');
     });
   }
 
-  private async handleSortStreams(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleSortStreams(message: any): Promise<void> {
     this.provider.state.streamSortOrder = message.sortBy ?? 'time';
     this.provider.updateWebview();
   }
 
-  private async handleFilterStreams(
-    message: any,
-    _webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleFilterStreams(message: any): Promise<void> {
     const requestedFilter = message.filter;
     const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
       ? requestedFilter
@@ -254,30 +240,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.updateWebview();
   }
 
-  private async handleRestoreState(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleRestoreState(message: any): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand('texra.restoreState', taskState);
     }
   }
 
-  private async handleSendFollowUp(
-    message: any,
-    _webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleSendFollowUp(message: any): Promise<void> {
     await vscode.commands.executeCommand('texra.sendFollowUp', {
       stream: message.stream,
       text: message.text,
     });
   }
 
-  private async handlePolishFollowUp(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handlePolishFollowUp(message: any): Promise<void> {
     const stream = message.stream as StreamTabId | undefined;
     const text = typeof message.text === 'string' ? message.text.trim() : '';
     if (!stream || !text) {
@@ -309,7 +286,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
           progress.report({ message: 'Applying changes...', increment: 60 });
 
           if (result.success) {
-            webviewView.webview.postMessage({
+            const view = this.getActiveView();
+            view?.webview.postMessage({
               command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
               text: result.text,
             });
@@ -340,10 +318,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await vscode.window.showInformationMessage(text);
   }
 
-  private async handleOpenTaskStorage(
-    message: any,
-    _webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleOpenTaskStorage(message: any): Promise<void> {
     const stream = message.stream as StreamTabId | undefined;
     if (!stream) {
       await vscode.window.showInformationMessage(
@@ -384,23 +359,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
   }
 
-  private async handleOpenFile(
-    message: FileCommandMessage,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleOpenFile(message: FileCommandMessage): Promise<void> {
     await vscode.commands.executeCommand('texra.openFile', message.file);
   }
 
   private async handleOpenFileCompile(
     message: FileCommandMessage,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.openFileCompile', message.file);
   }
 
   private async handleCompareOriginal(
     message: BaseFileCommandMessage,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message.base) {
       this.logger.warn(
@@ -422,10 +392,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     );
   }
 
-  private async handleComparePrevious(
-    message: CompareMessage,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleComparePrevious(message: CompareMessage): Promise<void> {
     const previousFile = message.prev || message.base;
 
     if (previousFile) {
@@ -447,7 +414,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleAcceptFile(
     message: BaseFileCommandMessage,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message.base) {
       this.logger.warn(
@@ -471,7 +437,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleMergeFile(
     message: BaseFileCommandMessage,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message.base) {
       this.logger.warn(
@@ -495,7 +460,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleLatexdiffFile(
     message: BaseFileCommandMessage,
-    webviewView: vscode.WebviewView,
   ): Promise<void> {
     if (!message.base) {
       this.logger.warn(
@@ -517,10 +481,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     );
   }
 
-  private async handleOpenLabel(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleOpenLabel(message: any): Promise<void> {
     await vscode.commands.executeCommand('texra.openLabel', message.label);
   }
 

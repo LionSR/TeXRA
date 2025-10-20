@@ -58,17 +58,15 @@ export class ExplorerOperations {
 
   constructor(
     private workspaceRoot: string | undefined,
-    private context: vscode.ExtensionContext | undefined,
+    _context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    if (this.context) {
-      agentDirectories.builtIn(this.context).then((p) => {
-        this.builtInAgentsPath = p;
-      });
-      agentDirectories.builtInToolUse(this.context).then((p) => {
-        this.builtInToolUsePath = p;
-      });
-    }
+    agentDirectories.builtIn().then((p) => {
+      this.builtInAgentsPath = p;
+    });
+    agentDirectories.builtInToolUse().then((p) => {
+      this.builtInToolUsePath = p;
+    });
   }
 
   async open(uri: vscode.Uri) {
@@ -108,7 +106,7 @@ export class ExplorerOperations {
 
   private async createCustomCopy(uri: vscode.Uri) {
     try {
-      const customPath = await agentDirectories.custom(this.context);
+      const customPath = await agentDirectories.custom();
 
       const base = uri.fsPath.startsWith(this.builtInToolUsePath)
         ? this.builtInToolUsePath
@@ -136,7 +134,7 @@ export class ExplorerOperations {
 
   async create(node: FileItem | undefined, isFolder: boolean) {
     try {
-      const customBase = await agentDirectories.custom(this.context);
+      const customBase = await agentDirectories.custom();
 
       let parentPath = node?.resourceUri.fsPath || customBase;
 
