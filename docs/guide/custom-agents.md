@@ -182,7 +182,7 @@ For a minimal read-only configuration, see the built-in `ask` agent
 Common workspace helpers:
 
 - `glob` — Quickly list files matching a pattern, sorted by modification time.
-- `grep` — Run ripgrep searches without leaving the workspace sandbox.
+- `grep` — Run ripgrep searches without leaving the workspace sandbox. By default it returns matching content lines; switch the `output_mode` to `files_with_matches` or `count` to change the response format.
 - `ls` — Inspect directory contents with optional ignore globs.
 
 Example:
