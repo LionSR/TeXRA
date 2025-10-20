@@ -87,13 +87,12 @@ type AgentConstructor = {
  */
 export async function getAgentPath(
   agentName: string,
-  context: vscode.ExtensionContext,
 ): Promise<AgentPathResolution> {
   try {
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-      agentDirectories.custom(context),
-      agentDirectories.builtIn(context),
-      agentDirectories.builtInToolUse(context),
+      agentDirectories.custom(),
+      agentDirectories.builtIn(),
+      agentDirectories.builtInToolUse(),
     ]);
 
     const candidateDirectories = [
@@ -181,8 +180,6 @@ interface PrepareAgentInstanceParams {
   agentName: string;
   /** Partial agent configuration to merge with defaults */
   configPayload: Partial<AgentConfig>;
-  /** VS Code extension context for resource access */
-  context: vscode.ExtensionContext;
   /** Optional execution ID for tracking and logging */
   executionId?: ExecutionId;
   /** Optional agent class to use instead of automatic selection based on agent type */
@@ -229,8 +226,7 @@ interface PrepareAgentInstanceParams {
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType }> {
-  const { agentName, configPayload, context, executionId, agentClassOverride } =
-    params;
+  const { agentName, configPayload, executionId, agentClassOverride } = params;
 
   const configInput: Partial<AgentConfig> = {
     agent: agentName,
@@ -246,11 +242,11 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   let agentPathInfo: AgentPathResolution;
   try {
-    agentPathInfo = await getAgentPath(resolvedAgentName, context);
+    agentPathInfo = await getAgentPath(resolvedAgentName);
   } catch (err) {
     if (resolvedAgentName !== originalAgentName) {
       resolvedAgentName = originalAgentName;
-      agentPathInfo = await getAgentPath(originalAgentName, context);
+      agentPathInfo = await getAgentPath(originalAgentName);
     } else {
       throw err;
     }
@@ -328,7 +324,6 @@ interface ExecuteAgentOptions {
 export async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
-  context: vscode.ExtensionContext,
   executionId?: ExecutionId,
   options?: ExecuteAgentOptions,
 ): Promise<void> {
@@ -606,7 +601,6 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
 export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
-  context: vscode.ExtensionContext,
   executionId?: ExecutionId,
 ): Promise<void> {
   // Ensure required fields
@@ -626,7 +620,6 @@ export async function executeAgent(
       const { agent, agentType } = await prepareAgentInstance({
         agentName: requestedAgentName,
         configPayload: agentConfig,
-        context,
         executionId,
       });
 
@@ -643,7 +636,6 @@ export async function executeAgent(
 
       return { agent, agentType };
     },
-    context,
     executionId,
     { resume: false },
   );
@@ -656,7 +648,6 @@ export async function executeMergeAgent(
   model: string,
   inputFile: string,
   editedFile: string,
-  context: vscode.ExtensionContext,
 ): Promise<void> {
   const agentName = 'merge';
 
@@ -666,13 +657,11 @@ export async function executeMergeAgent(
       const { agent, agentType } = await prepareAgentInstance<MergeAgent>({
         agentName,
         configPayload: { agent: agentName, model, inputFile, editedFile },
-        context,
         agentClassOverride: MergeAgent,
       });
 
       return { agent, agentType };
     },
-    context,
     undefined,
   );
 }
