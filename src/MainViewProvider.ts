@@ -154,6 +154,13 @@ export class MainViewProvider
       return;
     }
 
+    const fallbackPayload: ProgressEventPayloads['restoreStateRequest'] = {
+      taskState: payload.taskState,
+      streamId: payload.streamId,
+      source: payload.source,
+      metadata: payload.metadata,
+    };
+
     await vscode.commands.executeCommand(
       'setContext',
       'texra.hasStateToRestore',
@@ -162,7 +169,7 @@ export class MainViewProvider
     await vscode.commands.executeCommand(
       'setContext',
       'texra.stateToRestore',
-      payload.taskState,
+      fallbackPayload,
     );
   };
 
@@ -261,11 +268,42 @@ export class MainViewProvider
           }
         }
 
+        let restorePayload:
+          | ProgressEventPayloads['restoreStateRequest']
+          | undefined;
+
         if (state && typeof state === 'object' && !Array.isArray(state)) {
+          const payloadCandidate = state as Record<string, unknown>;
+          if ('taskState' in payloadCandidate) {
+            restorePayload = {
+              taskState:
+                payloadCandidate.taskState as ProgressEventPayloads['restoreStateRequest']['taskState'],
+              streamId: payloadCandidate.streamId as
+                | ProgressEventPayloads['restoreStateRequest']['streamId']
+                | undefined,
+              source: payloadCandidate.source as
+                | ProgressEventPayloads['restoreStateRequest']['source']
+                | undefined,
+              metadata: payloadCandidate.metadata as
+                | ProgressEventPayloads['restoreStateRequest']['metadata']
+                | undefined,
+            };
+          } else {
+            restorePayload = {
+              taskState:
+                state as ProgressEventPayloads['restoreStateRequest']['taskState'],
+            };
+          }
+        }
+
+        if (restorePayload) {
           // Send the state to the webview
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-            state,
+            state: restorePayload.taskState,
+            streamId: restorePayload.streamId,
+            source: restorePayload.source,
+            metadata: restorePayload.metadata,
           });
 
           console.log('Restored state from context');

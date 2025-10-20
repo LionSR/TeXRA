@@ -127,16 +127,22 @@ describe('MainViewProvider restore handling', () => {
       activeFiles: {} as Record<FileType, boolean>,
     } as TaskState;
 
-    bus.emit('restoreStateRequest', {
+    const bufferedPayload = {
       taskState,
       source: 'test-suite',
       metadata: { case: 'buffered' },
-    });
+      streamId: 'test-stream',
+    };
+
+    bus.emit('restoreStateRequest', bufferedPayload);
 
     provider = new MainViewProvider(context);
 
     assert.strictEqual(contextStore.get('texra.hasStateToRestore'), true);
-    assert.deepStrictEqual(contextStore.get('texra.stateToRestore'), taskState);
+    assert.deepStrictEqual(
+      contextStore.get('texra.stateToRestore'),
+      bufferedPayload,
+    );
 
     const mockWebviewView = {
       webview: {
@@ -165,6 +171,8 @@ describe('MainViewProvider restore handling', () => {
     assert.ok(restoreMessage, 'Expected restore message to be posted');
     assert.deepStrictEqual(restoreMessage.state, taskState);
     assert.deepStrictEqual(restoreMessage.source, 'test-suite');
+    assert.deepStrictEqual(restoreMessage.streamId, 'test-stream');
+    assert.deepStrictEqual(restoreMessage.metadata, { case: 'buffered' });
 
     assert.strictEqual(contextStore.get('texra.hasStateToRestore'), false);
     assert.strictEqual(contextStore.get('texra.stateToRestore'), undefined);
