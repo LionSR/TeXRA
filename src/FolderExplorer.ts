@@ -24,13 +24,11 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
 
   constructor(
     private workspaceRoot: string | undefined,
-    private context?: vscode.ExtensionContext,
+    _context?: vscode.ExtensionContext,
   ) {
-    if (this.context) {
-      agentDirectories.builtIn(this.context).then((p) => {
-        this.builtInAgentsPath = p;
-      });
-    }
+    agentDirectories.builtIn().then((p) => {
+      this.builtInAgentsPath = p;
+    });
   }
 
   refresh(): void {
@@ -55,21 +53,14 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
   }
 
   async getChildren(element?: FileItem): Promise<FileItem[]> {
-    if (!this.context) {
-      logger.error(CHANNEL, 'Extension context not available');
-      return [];
-    }
-
     try {
       if (element) {
         return this.getFilesInDirectory(element.resourceUri.fsPath);
       }
 
       const items: FileItem[] = [];
-      const builtInPath = await agentDirectories.builtIn(this.context);
-      const builtInToolUsePath = await agentDirectories.builtInToolUse(
-        this.context,
-      );
+      const builtInPath = await agentDirectories.builtIn();
+      const builtInToolUsePath = await agentDirectories.builtInToolUse();
       items.push(
         new FileItem(
           'Built-in Agents',
@@ -85,7 +76,7 @@ export class FolderExplorer implements vscode.TreeDataProvider<FileItem> {
         ),
       );
 
-      const customPath = await agentDirectories.custom(this.context);
+      const customPath = await agentDirectories.custom();
       if (customPath) {
         items.push(
           new FileItem(

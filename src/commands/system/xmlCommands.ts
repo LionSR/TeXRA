@@ -78,7 +78,7 @@ export async function handleParseXml(): Promise<void> {
  * Validate and fix XML errors using Claude
  */
 export async function handleValidateAndFixXml(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({
@@ -96,14 +96,11 @@ export async function handleValidateAndFixXml(
 
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
 
-    await executeAgent(
-      {
-        agent: 'xml_validator',
-        model: 'claude-3-7-sonnet-latest',
-        inputFile: filePath,
-      },
-      context,
-    );
+    await executeAgent({
+      agent: 'xml_validator',
+      model: 'claude-3-7-sonnet-latest',
+      inputFile: filePath,
+    });
   } catch (err) {
     logger.error(
       CHANNEL,

@@ -29,7 +29,7 @@ export const executeCommand = {
         await AgentHistoryManager.addToHistory(config);
 
       // Run the agent directly, passing through the execution ID
-      await executeAgent(config, context, executionId);
+      await executeAgent(config, executionId);
     } catch (err) {
       throw err;
     }
