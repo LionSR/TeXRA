@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent commands
 import { executeCommand } from '@commands/agent/executeCommand';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - history view
 import { AgentHistoryManager } from '@historyView/managers';
@@ -92,7 +93,11 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
           historyItem.config,
           historyItem.session,
         );
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
+        bus.emit('restoreStateRequest', {
+          taskState,
+          source: 'historyView',
+          metadata: { historyId },
+        });
       } else {
         await vscode.window.showErrorMessage('History item not found');
       }

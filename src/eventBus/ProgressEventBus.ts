@@ -55,6 +55,13 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
+interface RestoreStateRequestPayload {
+  taskState: TaskState;
+  streamId?: StreamTabId;
+  source?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ProgressEventPayloads {
   addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
   updateLogMessage: { stream: StreamTabId; logMessage: LogMessageUpdate };
@@ -80,6 +87,7 @@ export interface ProgressEventPayloads {
   };
   clearTaskOutput: StreamTabId;
   updateStreamUsage: { stream: StreamTabId; usage: TokenUsageStats };
+  restoreStateRequest: RestoreStateRequestPayload;
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

@@ -27,6 +27,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -256,11 +257,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleRestoreState(
     message: any,
-    webviewView: vscode.WebviewView,
+    _webviewView: vscode.WebviewView,
   ): Promise<void> {
     const taskState = this.provider.state.getTaskState(message.stream);
     if (taskState) {
-      await vscode.commands.executeCommand('texra.restoreState', taskState);
+      bus.emit('restoreStateRequest', {
+        taskState,
+        streamId: message.stream,
+        source: 'progressView',
+      });
     }
   }
 

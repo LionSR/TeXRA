@@ -10,6 +10,8 @@ import { MainViewContentProvider } from './webview/MainViewContentProvider';
 import { watchConfig, getConfig } from '@utils/config';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
+import { bus } from './eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from './eventBus/ProgressEventBus';
 
 export class MainViewProvider
   extends BaseWebviewProvider
@@ -29,6 +31,7 @@ export class MainViewProvider
     this.setupFileWatcher();
     this.setupConfigurationWatcher();
     this.registerCommandHandlers();
+    this.registerRestoreStateListener();
   }
 
   private registerCommandHandlers() {
@@ -112,6 +115,56 @@ export class MainViewProvider
     // Dispose watcher when extension is deactivated
     this.context.subscriptions.push(this.fileWatcher);
   }
+
+  private registerRestoreStateListener() {
+    const dispose = bus.on(
+      'restoreStateRequest',
+      (payload) => void this.handleRestoreStateRequest(payload),
+    );
+
+    this.context.subscriptions.push({ dispose });
+  }
+
+  private readonly handleRestoreStateRequest = async (
+    payload: ProgressEventPayloads['restoreStateRequest'],
+  ): Promise<void> => {
+    try {
+      await vscode.commands.executeCommand('texra.mainView.focus');
+    } catch (error) {
+      console.warn('Failed to focus main view before restore:', error);
+    }
+
+    if (this._view) {
+      const view = this._view;
+      if ('show' in view && typeof view.show === 'function') {
+        try {
+          view.show(true);
+        } catch (error) {
+          console.warn('Failed to reveal main view before restore:', error);
+        }
+      }
+
+      await view.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+        state: payload.taskState,
+        streamId: payload.streamId,
+        source: payload.source,
+        metadata: payload.metadata,
+      });
+      return;
+    }
+
+    await vscode.commands.executeCommand(
+      'setContext',
+      'texra.hasStateToRestore',
+      true,
+    );
+    await vscode.commands.executeCommand(
+      'setContext',
+      'texra.stateToRestore',
+      payload.taskState,
+    );
+  };
 
   private async refreshFiles() {
     if (this._view) {
