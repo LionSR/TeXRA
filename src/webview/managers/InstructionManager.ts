@@ -24,6 +24,8 @@ const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
 
 export class InstructionManager {
+  private webview: vscode.WebviewView | undefined;
+
   constructor(private readonly _context: vscode.ExtensionContext) {
     setTimeout(() => {
       StorageFS.ensureDir(PASTED_DIR)
@@ -35,6 +37,19 @@ export class InstructionManager {
           ),
         );
     }, 100);
+  }
+
+  attachWebview(webviewView: vscode.WebviewView): void {
+    this.webview = webviewView;
+  }
+
+  private getWebview(): vscode.WebviewView | undefined {
+    if (!this.webview) {
+      logger.warn(CHANNEL, 'Webview not attached for InstructionManager');
+      return undefined;
+    }
+
+    return this.webview;
   }
 
   /**
@@ -71,10 +86,11 @@ export class InstructionManager {
     }
   }
 
-  async handlePolishInstructionText(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handlePolishInstructionText(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     try {
       const fileContext: FileContext = { agent: message.agent || undefined };
 
@@ -163,16 +179,17 @@ export class InstructionManager {
     }
   }
 
-  handleTranscribeInstruction(_view: vscode.WebviewView): void {
+  handleTranscribeInstruction(): void {
     vscode.window.showInformationMessage(
       'Please use the new recording interface with start/stop controls.',
     );
   }
 
-  async handleClipboardImage(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleClipboardImage(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     try {
       const { base64, mediaType, fileName } = message;
       if (!base64 || !mediaType || !fileName) {

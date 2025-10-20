@@ -21,7 +21,7 @@ import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<{ agent: BaseToolUseAgent; agentType: AgentType }> {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
@@ -41,7 +41,6 @@ async function buildToolUseAgent(
   const { agent, agentType } = await prepareAgentInstance<BaseToolUseAgent>({
     agentName: fullConfig.agent,
     configPayload: fullConfig,
-    context,
     executionId: snapshot.executionId as ExecutionId,
   });
 
@@ -121,7 +120,6 @@ export function registerResumeAgentCommand(
             agent,
             agentType,
           }),
-          context,
           executionId,
           { resume: true },
         );
