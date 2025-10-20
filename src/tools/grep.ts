@@ -98,7 +98,7 @@ export class GrepTool extends defineTool({
   schema: GrepInputSchema,
 }) {
   protected async execute(input: GrepInput): Promise<ToolResult> {
-    const outputMode: OutputMode = input.output_mode ?? 'files_with_matches';
+    const outputMode: OutputMode = input.output_mode ?? 'content';
     const { resolved: searchPath, display } = resolveAndFormat(input.path);
     const gitignore = await getGitignoreMatcher();
     const args = buildArguments(input, outputMode);
