@@ -9,7 +9,7 @@ import { createFromTemplate } from '@common/templateUtils.js';
 /**
  * Manages task group DOM operations.
  */
-export class TaskGroupManager {
+export class TaskGroupDomManager {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
@@ -20,7 +20,7 @@ export class TaskGroupManager {
    * Adds a log group to the DOM
    * @param {Object} group - Group data
    */
-  add(group) {
+  addGroup(group) {
     const existingGroup = this.groupElements.get(group.id);
     if (existingGroup) {
       if (!progressViewState.taskGroups.get(group.id)) {
@@ -31,27 +31,33 @@ export class TaskGroupManager {
         this.groupElements.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
-        this.update(group.id, group.status, group.endTime);
+        this.updateGroup(group.id, group.status, group.endTime);
         return;
       }
     }
 
     const detailsElem = createFromTemplate('groupDetailsTemplate');
     if (!detailsElem) {
-      console.error('TaskGroupManager.add: groupDetailsTemplate not found');
+      console.error(
+        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
+      );
       return;
     }
     detailsElem.id = `group-${group.id}`;
 
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
-      console.error('TaskGroupManager.add: failed to create group header');
+      console.error(
+        'TaskGroupDomManager.addGroup: failed to create group header',
+      );
       return;
     }
 
     const groupContainer = detailsElem.querySelector('.log-group-content');
     if (!groupContainer) {
-      console.error('TaskGroupManager.add: missing group content container');
+      console.error(
+        'TaskGroupDomManager.addGroup: missing group content container',
+      );
       return;
     }
     groupContainer.id = `group-content-${group.id}`;
@@ -98,7 +104,7 @@ export class TaskGroupManager {
    * @param {string} status - New status
    * @param {string} endTime - End time (optional)
    */
-  update(groupId, status, endTime) {
+  updateGroup(groupId, status, endTime) {
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
@@ -157,8 +163,9 @@ export class TaskGroupManager {
    * @param {string} groupId - ID of the group to collapse
    */
   collapseGroupAndChildren(groupId) {
-    // Find all child groups
-    for (const [childId, group] of progressViewState.taskGroups.getAll()) {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+
+    for (const [childId, group] of taskGroups.entries()) {
       if (group.parentGroupId === groupId) {
         this.collapseGroupAndChildren(childId);
       }

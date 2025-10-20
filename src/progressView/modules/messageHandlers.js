@@ -68,15 +68,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
-    state.agentFilter = message.agentFilter || 'all';
-    state.resetExecutionAvailability();
+    state.agentTypeFilter = message.agentFilter || 'all';
+    state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
         state.streamStatuses.set(s.name, s.status);
       } else {
         state.streamStatuses.delete(s.name);
       }
-      state.setExecutionAvailability(s.name, Boolean(s.executionId));
+      state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
@@ -85,7 +85,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     );
     if (filterContainer) {
       filterContainer.querySelectorAll('button[data-filter]').forEach((btn) => {
-        const isActive = btn.dataset.filter === state.agentFilter;
+        const isActive = btn.dataset.filter === state.agentTypeFilter;
         btn.classList.toggle('toggled', isActive);
         btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
@@ -110,8 +110,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
-    const hasExecution = state.getExecutionAvailability(message.activeStream);
-    dom.status.setExecutionAvailability(Boolean(hasExecution));
+    const hasExecution = state.hasExecutionId(message.activeStream);
+    dom.status.setExecutionIdAvailability(Boolean(hasExecution));
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
@@ -134,10 +134,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const childGroups = message.groups.filter((g) => g.parentGroupId);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
+          .forEach((g) => dom.taskGroups.addGroup(g));
         childGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
+          .forEach((g) => dom.taskGroups.addGroup(g));
       }
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
@@ -172,7 +172,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
     state.taskGroups.clear();
     dom.taskGroups.clear();
-    state.toggleStates.clear(groupIds);
+    state.toggleStates.clearSelection(groupIds);
 
     this._updatePlaceholderVisibility();
   }
@@ -231,7 +231,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAddTaskGroup(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      dom.taskGroups.add(message.group);
+      dom.taskGroups.addGroup(message.group);
       logContent.scrollTop = logContent.scrollHeight;
     }
   }
@@ -239,13 +239,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateTaskGroup(message) {
     if (message.stream === state.activeStream) {
       state.taskGroups.update(message.groupId, message.status, message.endTime);
-      dom.taskGroups.update(message.groupId, message.status, message.endTime);
+      dom.taskGroups.updateGroup(
+        message.groupId,
+        message.status,
+        message.endTime,
+      );
     }
   }
 
   handleUpdateStatus(message) {
-    const hasExecution = state.getExecutionAvailability(state.activeStream);
-    dom.status.setExecutionAvailability(Boolean(hasExecution));
+    const hasExecution = state.hasExecutionId(state.activeStream);
+    dom.status.setExecutionIdAvailability(Boolean(hasExecution));
     dom.status.update(message.status);
   }
 
@@ -300,7 +304,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
-      state.clearExecutionAvailability(message.stream);
+      state.clearExecutionIdAvailability(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = [];
         const headers = Array.from(
@@ -309,7 +313,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         for (const el of headers) {
           groupIds.push(el.id.replace('group-header-', ''));
         }
-        state.toggleStates.clear(groupIds);
+        state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
       }
     }
@@ -317,7 +321,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     state.toggleStates.clearAll();
-    state.resetExecutionAvailability();
+    state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
   }
 
