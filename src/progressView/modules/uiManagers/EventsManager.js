@@ -21,8 +21,8 @@ export class EventsManager {
    * Apply saved toggle states to any groups already in the DOM
    */
   applyToggleStates() {
-    const taskGroups = progressViewState.taskGroups.getAll();
-    for (const [groupId, _] of taskGroups) {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+    for (const [groupId] of taskGroups) {
       const isCollapsed = progressViewState.toggleStates.get(groupId);
       const detailsElem = document.getElementById(`group-${groupId}`);
 

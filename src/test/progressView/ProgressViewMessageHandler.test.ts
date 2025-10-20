@@ -38,7 +38,9 @@ describe('ProgressViewMessageHandler.handleFileOperation', () => {
       return undefined;
     };
 
-    const malformedEntry = { path: 'should-be-array' } as unknown as OutputFileInfo[];
+    const malformedEntry = {
+      path: 'should-be-array',
+    } as unknown as OutputFileInfo[];
 
     const providerStub = {
       state: {
@@ -61,7 +63,10 @@ describe('ProgressViewMessageHandler.handleFileOperation', () => {
       },
     } as unknown as ProgressViewProvider;
 
-    const handler = new ProgressViewMessageHandler(providerStub, extensionContext);
+    const handler = new ProgressViewMessageHandler(
+      providerStub,
+      extensionContext,
+    );
 
     const taskState = {
       agentConfig: {
@@ -74,7 +79,11 @@ describe('ProgressViewMessageHandler.handleFileOperation', () => {
       session: { agentCategory: AgentCategory.Workflow },
     } as unknown as WorkflowTaskState;
 
-    await (handler as any).handleFileOperation('stream-123', taskState, 'texra.pack');
+    await (handler as any).handleFileOperation(
+      'stream-123',
+      taskState,
+      'texra.pack',
+    );
 
     assert.strictEqual(commandCalls.length, 1);
     const [{ command, payload }] = commandCalls;

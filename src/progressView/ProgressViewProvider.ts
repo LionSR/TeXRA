@@ -68,7 +68,7 @@ export class ProgressViewProvider
     super(context);
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
-    this.logger = new AgentLogger('ProgressViewProviderNew');
+    this.logger = new AgentLogger('ProgressViewProvider');
 
     // Initialize new modular architecture
     const persistenceManager = new StatePersistenceManager(
