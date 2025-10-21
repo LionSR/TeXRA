@@ -6,6 +6,7 @@ import type {
   ContentBlock,
   ContentBlockParam,
   MessageParam,
+  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // Local imports - agent
@@ -63,6 +64,14 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
     'expected exactly one text block in Anthropic message content',
   );
   return textBlocks[0];
+}
+
+function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
+  if (!block) {
+    return undefined;
+  }
+
+  return (block as { cache_control?: unknown }).cache_control;
 }
 
 class PdfStubAnthropicHandler extends ModelHandlerAnthropic {
@@ -173,6 +182,147 @@ describe('ModelHandlerAnthropic message guards', () => {
         assert.match(err.message, /non-empty content block/i);
         return true;
       },
+    );
+  });
+
+  it('moves the cache control marker to the newest message block', async () => {
+    const handler = createAnthropicHandler();
+    const baseMessages = await handler.initializeMessages(
+      'prefix',
+      'initial request',
+    );
+    const initialContent = baseMessages[0].content as ContentBlockParam[];
+    const initialBlock = initialContent.at(-1);
+    const initialMarker = getCacheMarker(initialBlock);
+
+    assert.ok(
+      initialMarker,
+      'expected the initial request to include a cache control marker',
+    );
+
+    const updated = await handler.createRoundMessages(
+      [...baseMessages],
+      'next follow up',
+    );
+    const followUp = updated[updated.length - 1];
+    const followUpContent = followUp.content as ContentBlockParam[];
+    const followUpBlock = followUpContent.at(-1);
+    const followUpMarker = getCacheMarker(followUpBlock);
+
+    assert.ok(
+      followUpMarker,
+      'expected the newest message block to keep the cache marker',
+    );
+    assert.equal(
+      getCacheMarker(initialBlock),
+      undefined,
+      'previous message should have its cache marker removed',
+    );
+  });
+
+  it('avoids assigning cache control to non-text media blocks', async () => {
+    const handler = new PdfStubAnthropicHandler(
+      buildAnthropicConfig({ supportsVision: true }),
+    );
+
+    handler.setMediaContent([
+      { type: 'text', text: 'Image: diagram.png', citations: null },
+      {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/png',
+          data: 'ZHVtbXk=',
+        },
+      },
+    ] as ContentBlockParam[]);
+
+    const messages = await handler.initializeMessages('prefix text', '', [
+      'diagram.png',
+    ]);
+
+    const content = messages[0].content as ContentBlockParam[];
+    const finalBlock = content.at(-1);
+    assert.equal(
+      finalBlock?.type,
+      'image',
+      'expected the final block to be an image',
+    );
+    assert.equal(
+      getCacheMarker(finalBlock),
+      undefined,
+      'image block should not carry cache control metadata',
+    );
+
+    const lastTextBlock = [...content]
+      .reverse()
+      .find((block) => block.type === 'text');
+    assert.ok(
+      lastTextBlock,
+      'expected at least one text block in the message content',
+    );
+    assert.ok(
+      getCacheMarker(lastTextBlock),
+      'last eligible text block should include cache control metadata',
+    );
+  });
+
+  it('applies cache control to tool result follow-ups when supported', async () => {
+    const handler = createAnthropicHandler();
+    const call: ToolUseBlock = {
+      id: 'tool-call',
+      type: 'tool_use',
+      name: 'demo',
+      input: {},
+    } as ToolUseBlock;
+
+    const [, resultMsg] = await handler.createToolUseFollowUpMessages(
+      undefined,
+      'tool-call',
+      'demo',
+      call,
+      { output: 'ok' },
+    );
+
+    const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
+    assert.ok(
+      getCacheMarker(toolResultBlock),
+      'tool result block should include cache control metadata',
+    );
+  });
+
+  it('skips cache control when prompt caching is disabled', async () => {
+    const handler = createAnthropicHandler({ supportsPromptCaching: false });
+    const call: ToolUseBlock = {
+      id: 'tool-call',
+      type: 'tool_use',
+      name: 'demo',
+      input: {},
+    } as ToolUseBlock;
+
+    const baseMessages = await handler.initializeMessages('prefix', 'request');
+    const initialContent = baseMessages[0].content as ContentBlockParam[];
+    const initialBlock = initialContent.at(-1);
+
+    assert.equal(
+      getCacheMarker(initialBlock),
+      undefined,
+      'initial message should not include cache metadata when disabled',
+    );
+
+    const [, resultMsg] = await handler.createToolUseFollowUpMessages(
+      undefined,
+      'tool-call',
+      'demo',
+      call,
+      { output: 'ok' },
+    );
+
+    const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
+    assert.equal(
+      getCacheMarker(toolResultBlock),
+      undefined,
+      'tool result block should remain untouched when caching disabled',
     );
   });
 
