@@ -22,7 +22,6 @@
 }
 
 .file-select-header label {
-  font-weight: bold;
   margin-right: var(--spacing-small);
   display: flex;
   align-items: center;
