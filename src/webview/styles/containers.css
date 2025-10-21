@@ -13,6 +13,12 @@
   overflow: hidden;
 }
 
+.file-selection-group--disabled {
+  opacity: 0.6;
+  filter: grayscale(0.3);
+  pointer-events: none;
+}
+
 /* LaTeX diffs section */
 .latexdiffs-section {
   margin-top: auto;
