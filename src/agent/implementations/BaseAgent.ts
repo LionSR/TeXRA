@@ -75,6 +75,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     const streamTabId = this.getStreamTabId();
     this.logger = new AgentLogger(streamTabId, true);
     this.modelHandler.setLogger(this.logger);
+    this.modelHandler.setAgentType(this.agentSetting.agentType);
     this.usageMonitor = new UsageMonitor(
       this.modelHandler,
       this.logger.channelId,
