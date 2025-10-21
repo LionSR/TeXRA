@@ -40,7 +40,7 @@
 
 .instruction-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: var(--spacing-small);
   line-height: 1.5;
