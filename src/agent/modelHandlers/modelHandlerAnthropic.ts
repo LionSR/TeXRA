@@ -109,6 +109,22 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
+type CacheControlBlock = (ContentBlockParam | ContentBlock) & {
+  type: 'text' | 'tool_result';
+  cache_control?: { type: 'ephemeral' };
+};
+
+const isCacheControlEligibleBlock = (
+  block: ContentBlockParam | ContentBlock | undefined,
+): block is CacheControlBlock => {
+  if (!block || typeof block !== 'object') {
+    return false;
+  }
+
+  const blockType = (block as { type?: string }).type;
+  return blockType === 'text' || blockType === 'tool_result';
+};
+
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
@@ -116,7 +132,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ToolUseBlock,
   Anthropic
 > {
-  private cacheControlledBlock?: ContentBlockParam | ContentBlock;
+  private cacheControlledBlock?: CacheControlBlock;
 
   protected override get supportsToolFileOutputs(): boolean {
     return true;
@@ -126,25 +142,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  private setCacheControlTarget(
-    block: ContentBlockParam | ContentBlock,
-  ): void {
+  private setCacheControlTarget(block: ContentBlockParam | ContentBlock): void {
     if (!this.capabilities.supportsPromptCaching) {
       return;
     }
 
-    if (
-      this.cacheControlledBlock &&
-      this.cacheControlledBlock !== block &&
-      typeof this.cacheControlledBlock === 'object'
-    ) {
-      delete (this.cacheControlledBlock as any).cache_control;
+    if (!isCacheControlEligibleBlock(block)) {
+      return;
     }
 
-    if (block && typeof block === 'object') {
-      (block as any).cache_control = { type: 'ephemeral' as const };
-      this.cacheControlledBlock = block;
+    if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
+      delete this.cacheControlledBlock.cache_control;
     }
+
+    block.cache_control = { type: 'ephemeral' };
+    this.cacheControlledBlock = block;
   }
 
   private clearCacheControlTarget(): void {
@@ -153,10 +165,45 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return;
     }
 
-    if (this.cacheControlledBlock && typeof this.cacheControlledBlock === 'object') {
-      delete (this.cacheControlledBlock as any).cache_control;
+    if (this.cacheControlledBlock) {
+      delete this.cacheControlledBlock.cache_control;
     }
     this.cacheControlledBlock = undefined;
+  }
+
+  private findCacheControlCandidate(
+    content: (ContentBlockParam | ContentBlock)[] | undefined,
+  ): CacheControlBlock | undefined {
+    if (!Array.isArray(content) || content.length === 0) {
+      return undefined;
+    }
+
+    for (let idx = content.length - 1; idx >= 0; idx -= 1) {
+      const candidate = content[idx];
+      if (isCacheControlEligibleBlock(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private assignCacheControlToLatest(
+    content: (ContentBlockParam | ContentBlock)[] | undefined,
+  ): void {
+    if (!this.capabilities.supportsPromptCaching) {
+      return;
+    }
+
+    const target = this.findCacheControlCandidate(content);
+    if (target) {
+      this.setCacheControlTarget(target);
+    } else if (Array.isArray(content) && content.length > 0) {
+      this.logger.debug(
+        'No eligible content block available for Anthropic cache control marker',
+      );
+      this.clearCacheControlTarget();
+    }
   }
 
   async getClient(): Promise<Anthropic> {
@@ -662,6 +709,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
+    this.clearCacheControlTarget();
+
     // Create content list for the user message
     const userMessageContent: ContentBlockParam[] = [];
 
@@ -694,10 +743,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       { role: 'user', content: userMessageContent },
     ];
 
-    const cacheTarget = userMessageContent.at(-1);
-    if (cacheTarget) {
-      this.setCacheControlTarget(cacheTarget);
-    }
+    this.assignCacheControlToLatest(userMessageContent);
 
     return messages;
   }
@@ -750,10 +796,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     messages.push({ role: 'user', content: roundContent });
 
-    const cacheTarget = roundContent.at(-1);
-    if (cacheTarget) {
-      this.setCacheControlTarget(cacheTarget);
-    }
+    this.assignCacheControlToLatest(roundContent);
 
     return messages;
   }
@@ -776,10 +819,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const lastMessage = messages.at(-1);
     if (lastMessage && Array.isArray(lastMessage.content)) {
-      const cacheTarget = lastMessage.content.at(-1);
-      if (cacheTarget) {
-        this.setCacheControlTarget(cacheTarget);
-      }
+      this.assignCacheControlToLatest(lastMessage.content);
     }
 
     return messages;
@@ -966,10 +1006,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const lastMessage = messages.at(-1);
     if (lastMessage && Array.isArray(lastMessage.content)) {
-      const continuationTarget = lastMessage.content.at(-1);
-      if (continuationTarget) {
-        this.setCacheControlTarget(continuationTarget);
-      }
+      this.assignCacheControlToLatest(lastMessage.content);
     }
   }
 
@@ -1079,10 +1116,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.logger.debug(`Using existing content as prefill: ${outputFile}`);
     messages.push({ role: 'assistant', content });
 
-    const cacheTarget = content.at(-1);
-    if (cacheTarget) {
-      this.setCacheControlTarget(cacheTarget);
-    }
+    this.assignCacheControlToLatest(content);
 
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
@@ -1182,11 +1216,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
       }
 
-      const lastContentItem = Array.isArray(lastMessage.content)
-        ? lastMessage.content.at(-1)
-        : undefined;
-      if (lastContentItem) {
-        this.setCacheControlTarget(lastContentItem);
+      if (Array.isArray(lastMessage.content)) {
+        this.assignCacheControlToLatest(lastMessage.content);
       }
     }
     return;
@@ -1285,11 +1316,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // secondLastMessage.content = newContent;
         }
 
-        const lastContentItem = Array.isArray(secondLastMessage.content)
-          ? secondLastMessage.content.at(-1)
-          : undefined;
-        if (lastContentItem) {
-          this.setCacheControlTarget(lastContentItem);
+        if (Array.isArray(secondLastMessage.content)) {
+          this.assignCacheControlToLatest(secondLastMessage.content);
         }
 
         // Remove the user continuation prompt to keep the conversation clean
@@ -1333,11 +1361,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       messages.push(assistantMessage);
 
-      const lastContentItem = Array.isArray(assistantMessage.content)
-        ? assistantMessage.content.at(-1)
-        : undefined;
-      if (lastContentItem) {
-        this.setCacheControlTarget(lastContentItem);
+      if (Array.isArray(assistantMessage.content)) {
+        this.assignCacheControlToLatest(assistantMessage.content);
       }
 
       this.logger.debug('Added a new assistant message');
