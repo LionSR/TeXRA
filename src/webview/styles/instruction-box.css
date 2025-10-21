@@ -13,12 +13,6 @@
   padding: var(--spacing-medium);
 }
 
-.instruction-box label {
-  display: block;
-  margin-bottom: var(--spacing-tiny);
-  font-size: var(--font-size);
-}
-
 #instruction {
   min-height: var(--height-medium);
   max-height: var(--height-xlarge);
@@ -44,25 +38,6 @@
   align-items: center;
   margin-bottom: var(--spacing-small);
   line-height: 1.5;
-}
-
-.instruction-header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
-}
-
-.instruction-header label {
-  font-size: var(--font-size);
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-}
-
-.instruction-header label .codicon {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-  opacity: var(--opacity-subtle);
 }
 
 #executeButton {

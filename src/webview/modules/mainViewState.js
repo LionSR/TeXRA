@@ -337,7 +337,8 @@ export class MainViewState {
     // Disable Tool Config dropdown for tool use sessions
     const toggleToolConfig = safeGetElementById(ELEMENT_IDS.TOGGLE_TOOL_CONFIG);
     if (toggleToolConfig instanceof HTMLElement) {
-      toggleToolConfig.style.opacity = isToolUseSession ? '0.5' : '';
+      toggleToolConfig.style.opacity = isToolUseSession ? '0.6' : '';
+      toggleToolConfig.style.filter = isToolUseSession ? 'grayscale(0.3)' : '';
       toggleToolConfig.style.pointerEvents = isToolUseSession ? 'none' : '';
       toggleToolConfig.style.cursor = isToolUseSession ? 'not-allowed' : '';
     }
