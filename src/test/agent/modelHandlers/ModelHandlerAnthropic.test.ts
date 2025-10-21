@@ -66,9 +66,7 @@ function assertSingleTextBlock(content: ContentBlock[]): TextBlock {
   return textBlocks[0];
 }
 
-function getCacheMarker(
-  block?: ContentBlockParam | ContentBlock,
-): unknown {
+function getCacheMarker(block?: ContentBlockParam | ContentBlock): unknown {
   if (!block) {
     return undefined;
   }
@@ -189,7 +187,10 @@ describe('ModelHandlerAnthropic message guards', () => {
 
   it('moves the cache control marker to the newest message block', async () => {
     const handler = createAnthropicHandler();
-    const baseMessages = await handler.initializeMessages('prefix', 'initial request');
+    const baseMessages = await handler.initializeMessages(
+      'prefix',
+      'initial request',
+    );
     const initialContent = baseMessages[0].content as ContentBlockParam[];
     const initialBlock = initialContent.at(-1);
     const initialMarker = getCacheMarker(initialBlock);
@@ -216,6 +217,53 @@ describe('ModelHandlerAnthropic message guards', () => {
       getCacheMarker(initialBlock),
       undefined,
       'previous message should have its cache marker removed',
+    );
+  });
+
+  it('avoids assigning cache control to non-text media blocks', async () => {
+    const handler = new PdfStubAnthropicHandler(
+      buildAnthropicConfig({ supportsVision: true }),
+    );
+
+    handler.setMediaContent([
+      { type: 'text', text: 'Image: diagram.png', citations: null },
+      {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: 'image/png',
+          data: 'ZHVtbXk=',
+        },
+      },
+    ] as ContentBlockParam[]);
+
+    const messages = await handler.initializeMessages('prefix text', '', [
+      'diagram.png',
+    ]);
+
+    const content = messages[0].content as ContentBlockParam[];
+    const finalBlock = content.at(-1);
+    assert.equal(
+      finalBlock?.type,
+      'image',
+      'expected the final block to be an image',
+    );
+    assert.equal(
+      getCacheMarker(finalBlock),
+      undefined,
+      'image block should not carry cache control metadata',
+    );
+
+    const lastTextBlock = [...content]
+      .reverse()
+      .find((block) => block.type === 'text');
+    assert.ok(
+      lastTextBlock,
+      'expected at least one text block in the message content',
+    );
+    assert.ok(
+      getCacheMarker(lastTextBlock),
+      'last eligible text block should include cache control metadata',
     );
   });
 
