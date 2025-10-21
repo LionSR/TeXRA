@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 import type {
   BetaBase64ImageSource,
+  BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
   BetaRequestDocumentBlock,
@@ -56,6 +57,7 @@ import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
+  AgentType,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
@@ -96,9 +98,11 @@ import xmlUtils from '@utils/text/xmlUtils';
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
 type BetaMessageCreateParams = MessageCreateParams & {
   betas?: AnthropicBeta[];
+  context_management?: BetaContextManagementConfig | null;
 };
 type BetaMessageCountTokensParams = MessageCountTokensParams & {
   betas?: AnthropicBeta[];
+  context_management?: BetaContextManagementConfig | null;
 };
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
@@ -106,6 +110,7 @@ const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
+const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
@@ -315,6 +320,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (!existingBetas.includes(FILES_API_BETA)) {
         options.betas = [...existingBetas, FILES_API_BETA];
       }
+    }
+
+    if (this.agentType === AgentType.ToolUse) {
+      const existingBetas = options.betas ?? [];
+      if (!existingBetas.includes(CONTEXT_MANAGEMENT_BETA)) {
+        options.betas = [...existingBetas, CONTEXT_MANAGEMENT_BETA];
+      }
+
+      const contextManagementEdits = [
+        ...(options.context_management?.edits ?? []),
+      ];
+
+      if (
+        !contextManagementEdits.some(
+          (edit) => edit.type === 'clear_tool_uses_20250919',
+        )
+      ) {
+        contextManagementEdits.push({ type: 'clear_tool_uses_20250919' });
+      }
+
+      options.context_management = {
+        ...(options.context_management ?? {}),
+        edits: contextManagementEdits,
+      } satisfies BetaContextManagementConfig;
     }
 
     // this.logger.debug(
