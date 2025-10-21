@@ -9,7 +9,7 @@ import { encode as encodeHtml } from 'he';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
+import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { ToolState } from '../core/ToolState';
 import type { IModelHandler } from './types/IModelHandler';
@@ -106,6 +106,7 @@ export abstract class ModelHandler<
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
+  protected agentType?: AgentType;
 
   protected get supportsToolFileOutputs(): boolean {
     return false;
@@ -139,6 +140,20 @@ export abstract class ModelHandler<
    */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
+  }
+
+  /**
+   * Records the active agent type so provider handlers can adjust behaviour per session.
+   */
+  public setAgentType(agentType?: AgentType | null): void {
+    this.agentType = agentType ?? undefined;
+  }
+
+  /**
+   * Returns the agent type that is currently driving the handler, if any.
+   */
+  public getAgentType(): AgentType | undefined {
+    return this.agentType;
   }
 
   /**
