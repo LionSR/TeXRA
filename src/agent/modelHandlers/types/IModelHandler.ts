@@ -1,6 +1,6 @@
 // Local imports - agent components
 import type { AgentConfig } from '../../core/AgentConfig';
-import { AgentSetting } from '../../core/AgentDataclass';
+import { AgentSetting, AgentType } from '../../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
@@ -59,6 +59,12 @@ export interface IModelHandler<
 
   /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
+
+  /** Inform the handler about the active agent type. */
+  setAgentType(agentType?: AgentType | null): void;
+
+  /** Retrieve the agent type currently associated with the handler, if any. */
+  getAgentType(): AgentType | undefined;
 
   /** Retrieve an authenticated client instance. */
   getClient(): Promise<C>;
