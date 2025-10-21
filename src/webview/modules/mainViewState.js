@@ -27,6 +27,33 @@ import { WebviewStateManager } from '@common/webviewState.js';
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
+function setFileSelectionGroupDisabled(isDisabled) {
+  const container = document.querySelector('.file-selection-group');
+  if (!(container instanceof HTMLElement)) {
+    return;
+  }
+
+  container.classList.toggle('file-selection-group--disabled', isDisabled);
+  if (isDisabled) {
+    container.setAttribute('aria-disabled', 'true');
+  } else {
+    container.removeAttribute('aria-disabled');
+  }
+
+  const interactiveElements = container.querySelectorAll(
+    'select, button, input',
+  );
+  interactiveElements.forEach((element) => {
+    if (
+      element instanceof HTMLButtonElement ||
+      element instanceof HTMLSelectElement ||
+      element instanceof HTMLInputElement
+    ) {
+      element.disabled = isDisabled;
+    }
+  });
+}
+
 function getSelectDefaultValue(selectId, fallback) {
   const element = safeGetElementById(selectId);
   if (element instanceof HTMLSelectElement) {
@@ -273,6 +300,7 @@ export class MainViewState {
       sessionType === SESSION_TYPES.TOOL_USE
         ? SESSION_TYPES.TOOL_USE
         : SESSION_TYPES.WORKFLOW;
+    const isToolUseSession = normalized === SESSION_TYPES.TOOL_USE;
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
@@ -303,6 +331,8 @@ export class MainViewState {
       selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
       selectEl.tabIndex = isActive ? 0 : -1;
     });
+
+    setFileSelectionGroupDisabled(isToolUseSession);
 
     if (!skipSave) {
       this.save();
