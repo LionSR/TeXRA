@@ -175,7 +175,9 @@ export class MainViewState {
       );
 
       // Load tool config multi-select
-      const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
+      const toolConfigSelect = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_SELECT,
+      );
       if (toolConfigSelect) {
         const selectedValues = [];
         if (previousState.attachTeXCount) {

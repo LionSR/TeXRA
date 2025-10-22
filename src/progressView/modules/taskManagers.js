@@ -71,12 +71,17 @@ export class TaskGroupDomManager {
     progressViewState.taskGroups.set(group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id);
-    detailsElem.open = isCollapsed !== true;
+    if (isCollapsed !== true) {
+      detailsElem.setAttribute('open', '');
+    } else {
+      detailsElem.removeAttribute('open');
+    }
 
     detailsElem.prepend(headerElement);
 
-    detailsElem.addEventListener('toggle', () => {
-      progressViewState.toggleStates.set(group.id, !detailsElem.open);
+    detailsElem.addEventListener('vsc-collapsible-toggle', () => {
+      const isOpen = detailsElem.hasAttribute('open');
+      progressViewState.toggleStates.set(group.id, !isOpen);
     });
 
     this.groupElements.set(group.id, detailsElem);
