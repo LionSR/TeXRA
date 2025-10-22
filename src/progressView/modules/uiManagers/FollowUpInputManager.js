@@ -52,12 +52,16 @@ export class FollowUpInputManager {
         this._sendFollowUp();
       });
 
-      addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          this._sendFollowUp();
-        }
-      });
+      addEventListenerSafely(
+        ELEMENT_IDS.FOLLOW_UP_INPUT,
+        'keydown',
+        (event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            this._sendFollowUp();
+          }
+        },
+      );
 
       addEventListenerSafely(ELEMENT_IDS.POLISH_FOLLOW_UP_BTN, 'click', () => {
         this._polishFollowUp();

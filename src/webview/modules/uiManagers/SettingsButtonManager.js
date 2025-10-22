@@ -227,7 +227,10 @@ export class SettingsButtonManager extends BaseUIManager {
 
     this.addListener('model', 'change', (event) => {
       const selectElement = event.currentTarget;
-      if (!(selectElement instanceof HTMLElement) || !isSelectLikeElement(selectElement)) {
+      if (
+        !(selectElement instanceof HTMLElement) ||
+        !isSelectLikeElement(selectElement)
+      ) {
         return;
       }
       const selectedOption = getSelectedOptionElement(selectElement);

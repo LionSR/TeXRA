@@ -9,7 +9,11 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
-    <link rel="stylesheet" href="${codiconUri}" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
     <title>TeXRA History</title>
     <script
       nonce="${nonce}"
@@ -37,7 +41,11 @@
         }
       }
     </script>
-    <script type="module" nonce="${nonce}" src="${vscodeElementsBundleUri}"></script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
@@ -53,13 +61,13 @@
           placeholder="Search history items..."
         ></vscode-textfield>
         <div class="search-controls">
-                    <vscode-button
+          <vscode-button
             id="prevMatch"
             class="search-nav-btn"
             title="Previous match"
             icon="chevron-up"
           ></vscode-button>
-                    <vscode-button
+          <vscode-button
             id="nextMatch"
             class="search-nav-btn"
             title="Next match"
@@ -82,17 +90,17 @@
         <div class="history-item-header">
           <div class="history-timestamp"></div>
           <div class="history-actions button-group">
-                        <vscode-button
+            <vscode-button
               class="delete-btn"
               title=""
               icon="trash"
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               class="restore-btn"
               title=""
               icon="reply"
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               class="rerun-btn"
               title=""
               icon="debug-rerun"
