@@ -54,7 +54,7 @@ async function getAgentDirectories(): Promise<AgentDirectoryMap> {
 }
 
 /**
- * Compute agent <option> tags for the agent dropdown.
+ * Compute agent <vscode-option> tags for the agent dropdown.
  * Agents missing a YAML definition are marked as disabled and cannot be selected.
  * A codicon indicator is added via data-multiple when either the agent declares
  * `isMultipleOutput: true` or a sibling `_multiple.yaml` definition exists.

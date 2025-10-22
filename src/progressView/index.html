@@ -9,7 +9,11 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
-    <link rel="stylesheet" href="${codiconUri}" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
@@ -26,7 +30,6 @@
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
-          "split.js": "${splitJsUri}",
           "markdown-it": "https://esm.sh/markdown-it@14.1.0",
           "@vscode/markdown-it-katex": "https://esm.sh/@vscode/markdown-it-katex@1.1.2",
           "./modules/progressViewState.js": "${progressViewStateUri}",
@@ -54,7 +57,6 @@
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/RecordingButtonManager.js": "${recordingButtonManagerUri}",
           "@common/textareaUtils.js": "${textareaUtilsUri}",
-          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
@@ -71,354 +73,347 @@
     <script type="module" nonce="${nonce}">
       import 'https://esm.sh/katex@0.16.22/dist/contrib/copy-tex';
     </script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
   <body>
     <div class="main-container">
-      <div class="content-area split">
-        <div class="log-header">
-          <div class="header-left">
-            <span id="activeStreamName"></span>
-            <span
-              id="statusIndicator"
-              class="status-indicator stopped"
-              data-status="Ready"
-            ></span>
-            <span id="runSummary" class="run-summary"></span>
+      <vscode-split-layout initial-handle-position="80%">
+        <div slot="start" class="content-area">
+          <div class="log-header">
+            <div class="header-left">
+              <span id="activeStreamName"></span>
+              <span
+                id="statusIndicator"
+                class="status-indicator stopped"
+                data-status="Ready"
+              ></span>
+              <span id="runSummary" class="run-summary"></span>
+            </div>
+            <vscode-toolbar-container
+              id="toolbarContainer"
+              class="header-actions"
+            ></vscode-toolbar-container>
           </div>
-          <div id="toolbarContainer" class="header-actions button-group"></div>
-        </div>
-        <div
-          id="instructionContainer"
-          class="instruction-panel"
-          aria-hidden="true"
-        >
-          <div class="instruction-panel__header">
-            <span class="instruction-panel__title">Instruction</span>
-            <div class="instruction-panel__actions button-group">
-              <button
-                id="instructionCopyBtn"
-                class="vscode-button instruction-panel__copy"
-                type="button"
-                data-icon="copy"
-                title="Copy instruction"
-                aria-label="Copy instruction"
-                data-default-title="Copy instruction"
-                data-success-title="Copied!"
-                disabled
-              ></button>
-              <button
-                id="instructionToggleBtn"
-                class="vscode-button instruction-panel__toggle is-hidden"
-                type="button"
-                data-icon="chevron-down"
-                aria-expanded="false"
-                aria-label="Expand instruction"
-                aria-hidden="true"
-              ></button>
+          <div
+            id="instructionContainer"
+            class="instruction-panel"
+            aria-hidden="true"
+          >
+            <div class="instruction-panel__header">
+              <span class="instruction-panel__title">Instruction</span>
+              <vscode-toolbar-container class="instruction-panel__actions">
+                <vscode-toolbar-button
+                  id="instructionCopyBtn"
+                  class="instruction-panel__copy"
+                  icon="copy"
+                  title="Copy instruction"
+                  data-default-title="Copy instruction"
+                  data-success-title="Copied!"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  id="instructionToggleBtn"
+                  class="instruction-panel__toggle is-hidden"
+                  aria-expanded="false"
+                  aria-label="Expand instruction"
+                  aria-hidden="true"
+                  icon="chevron-down"
+                  title="Expand instruction"
+                ></vscode-toolbar-button>
+              </vscode-toolbar-container>
+            </div>
+            <div class="instruction-panel__body" role="presentation">
+              <vscode-textarea
+                id="instructionText"
+                class="instruction-panel__text"
+                readonly
+                resize="none"
+                rows="8"
+              ></vscode-textarea>
             </div>
           </div>
-          <div class="instruction-panel__body" role="presentation">
-            <div
-              id="instructionText"
-              class="instruction-panel__text"
-              role="document"
-            ></div>
+          <vscode-scrollable
+            id="logContent"
+            class="log-container"
+          ></vscode-scrollable>
+          <div id="generatedFiles" class="files-container"></div>
+          <div id="followUpContainer" class="follow-up-container">
+            <vscode-textarea
+              id="followUpInput"
+              placeholder="Send follow-up message"
+              rows="10"
+              resize="vertical"
+            ></vscode-textarea>
+            <div class="follow-up-actions">
+              <vscode-toolbar-button
+                id="polishFollowUpBtn"
+                icon="sparkle"
+                title="Polish follow-up with AI"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id="recordFollowUpBtn"
+                icon="mic"
+                title="Record follow-up with microphone"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id="clearFollowUpBtn"
+                icon="clear-all"
+                title="Clear input"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id="sendFollowUpBtn"
+                icon="send"
+                title="Send"
+              ></vscode-toolbar-button>
+            </div>
           </div>
-        </div>
-        <div id="logContent" class="log-container"></div>
-        <div id="generatedFiles" class="files-container"></div>
-        <div id="followUpContainer" class="follow-up-container">
-          <textarea
-            id="followUpInput"
-            class="vscode-textarea"
-            placeholder="Send follow-up message"
-          ></textarea>
-          <div class="follow-up-actions button-group">
-            <button
-              id="polishFollowUpBtn"
-              class="vscode-button"
-              title="Polish follow-up with AI"
-              data-icon="sparkle"
-            ></button>
-            <button
-              id="recordFollowUpBtn"
-              class="vscode-button"
-              title="Record follow-up with microphone"
-              data-icon="mic"
-            ></button>
-            <button
-              id="clearFollowUpBtn"
-              class="vscode-button"
-              title="Clear input"
-              data-icon="clear-all"
-            ></button>
-            <button
-              id="sendFollowUpBtn"
-              class="vscode-button"
-              title="Send"
-              data-icon="send"
-            ></button>
-          </div>
-        </div>
-        <template id="fileItemTemplate">
-          <div class="file-item">
-            <span class="file-name">
-              <span class="file-path clickable-link">
-                <span class="file-dir"></span>
-                <span class="file-basename"></span>
+          <template id="fileItemTemplate">
+            <div class="file-item">
+              <span class="file-name">
+                <span class="file-path clickable-link">
+                  <span class="file-dir"></span>
+                  <span class="file-basename"></span>
+                </span>
               </span>
-            </span>
-            <span class="file-stats"></span>
-            <span class="file-actions button-group">
-              <button
-                class="vscode-button compare-btn"
-                title="Compare with base"
-                data-icon="diff"
-              ></button>
-              <button
-                class="vscode-button accept-btn"
-                title="Accept edits"
-                data-icon="check"
-              ></button>
-              <button
-                class="vscode-button merge-btn"
-                title="Merge edits"
-                data-icon="git-merge"
-              ></button>
-              <button
-                class="vscode-button diff-btn"
-                title="LaTeXdiff"
-                data-icon="diff-single"
-              ></button>
-              <button
-                class="vscode-button prev-btn"
-                title="Compare with previous round"
-                data-icon="diff-added"
-              ></button>
-            </span>
-          </div>
-        </template>
-        <template id="usageTemplate">
-          <span class="group-usage">
-            <i class="codicon codicon-arrow-up"></i>
-            <span class="usage-input"></span>,
-            <i class="codicon codicon-arrow-down"></i>
-            <span class="usage-output"></span>, $<span
-              class="usage-cost"
-            ></span>
-          </span>
-        </template>
-        <template id="bulletTemplate">
-          <i class="codicon codicon-circle-small-filled group-bullet"></i>
-        </template>
-        <template id="streamTabTemplate">
-          <div class="tab-container" title="">
-            <button class="tab" data-stream="" title="">
-              <div class="tab-header">
-                <span class="tab-status status-indicator"></span>
-                <div class="tab-title"></div>
-              </div>
-              <div class="tab-meta">
-                <span class="model"></span>
-                <span class="last-active"></span>
-                <i class="agent-type"></i>
-                <i class="multi-file"></i>
-              </div>
-            </button>
-            <button
-              class="tab-delete"
-              data-stream=""
-              title="Delete stream"
-              data-icon="close"
-            ></button>
-          </div>
-        </template>
-        <template id="roundHeaderTemplate">
-          <div class="round-group">
-            <div class="round-header"></div>
-          </div>
-        </template>
-        <template id="logLineTemplate">
-          <div class="log-line">
-            <span class="timestamp"></span> <span class="level"></span
-            ><span class="message"></span>
-          </div>
-        </template>
-        <template id="nativeStatusTemplate">
-          <div class="native-status-line" role="status">
-            <span class="native-status-time"></span>
-            <span class="native-status-text"></span>
-          </div>
-        </template>
-        <template id="bannerDetailsTemplate">
-          <details class="banner-details">
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon icon"></i>
-              <span class="label"></span>
-              <button
-                type="button"
-                class="vscode-button banner-content-copy"
-                aria-label="Copy content"
-                title="Copy content"
-                data-default-title="Copy content"
-                data-success-title="Copied!"
-              >
-                <i class="codicon codicon-copy"></i>
-              </button>
-            </summary>
-            <div
-              class="banner-content log-entry-content markdown-content"
-            ></div>
-          </details>
-        </template>
-        <template id="toolUseTemplate">
-          <details class="banner-details">
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon codicon-wrench"></i>
-              <span class="tool-use-title">Tool Use</span>
-            </summary>
-            <div class="banner-content log-entry-content"></div>
-          </details>
-        </template>
-        <template id="userMessageTemplate">
-          <div class="user-message-container">
-            <div class="user-message">
-              <div class="user-message-header">
-                <i class="codicon codicon-account user-message-icon"></i>
-                <span class="user-message-timestamp"></span>
-              </div>
-              <div class="user-message-content"></div>
+              <span class="file-stats"></span>
+              <vscode-toolbar-container class="file-actions">
+                <vscode-toolbar-button
+                  class="compare-btn"
+                  icon="diff"
+                  title="Compare with base"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  class="accept-btn"
+                  icon="check"
+                  title="Accept edits"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  class="merge-btn"
+                  icon="git-merge"
+                  title="Merge edits"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  class="diff-btn"
+                  icon="diff-single"
+                  title="LaTeXdiff"
+                ></vscode-toolbar-button>
+                <vscode-toolbar-button
+                  class="prev-btn"
+                  icon="diff-added"
+                  title="Compare with previous round"
+                ></vscode-toolbar-button>
+              </vscode-toolbar-container>
             </div>
-          </div>
-        </template>
-        <template id="fileListDetailsTemplate">
-          <details class="file-list-details detail-section">
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon codicon-list-tree"></i>
-              <span class="summary-text"></span>
-            </summary>
-            <ul class="file-list-content detail-content detail-list"></ul>
-          </details>
-        </template>
-        <template id="missingOutputsDetailsTemplate">
-          <details class="file-list-details detail-section">
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon codicon-warning"></i>
-              <span class="summary-text"></span>
-            </summary>
-            <ul class="file-list-content detail-content detail-list"></ul>
-          </details>
-        </template>
-        <template id="latexdiffDetailsTemplate">
-          <details class="latexdiff-details detail-section" open>
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon codicon-diff"></i>
-              <span class="summary-text"></span>
-            </summary>
-            <ul class="latexdiff-content detail-content detail-list"></ul>
-          </details>
-        </template>
-        <template id="statisticsDetailsTemplate">
-          <details class="statistics-details detail-section" open>
-            <summary class="details-summary">
-              <i class="toggle-icon"></i>
-              <i class="codicon codicon-dashboard"></i>
-              <span>Statistics</span>
-            </summary>
-            <div class="statistics-content detail-content"></div>
-          </details>
-        </template>
-        <template id="groupDetailsTemplate">
-          <details class="log-group">
-            <div class="log-group-content"></div>
-          </details>
-        </template>
-        <template id="groupHeaderTemplate">
-          <summary class="log-group-header">
-            <span class="group-status-icon"></span>
-            <span class="group-title"></span>
-            <span class="group-time">
-              <span class="group-start-time"></span>
-              <span class="group-duration"></span>
+          </template>
+          <template id="usageTemplate">
+            <span class="group-usage">
+              <i class="codicon codicon-arrow-up"></i>
+              <span class="usage-input"></span>,
+              <i class="codicon codicon-arrow-down"></i>
+              <span class="usage-output"></span>, $<span
+                class="usage-cost"
+              ></span>
             </span>
-          </summary>
-        </template>
-      </div>
-      <div class="tabs split">
-        <div id="streamTabs" class="tabs-content">
-          <!-- Stream tabs will be dynamically inserted here -->
+          </template>
+          <template id="bulletTemplate">
+            <i class="codicon codicon-circle-small-filled group-bullet"></i>
+          </template>
+          <template id="streamTabTemplate">
+            <vscode-tree-item data-stream="" title="">
+              <span slot="icon-leaf" class="tab-status status-indicator"></span>
+              <div class="tab-content">
+                <div class="tab-header">
+                  <span class="tab-title"></span>
+                </div>
+                <div class="tab-meta">
+                  <span class="model"></span>
+                  <span class="last-active"></span>
+                  <i class="agent-type"></i>
+                  <i class="multi-file"></i>
+                </div>
+                <vscode-toolbar-button
+                  class="tab-delete"
+                  data-stream=""
+                  icon="close"
+                  label="Delete stream"
+                ></vscode-toolbar-button>
+              </div>
+            </vscode-tree-item>
+          </template>
+          <template id="roundHeaderTemplate">
+            <div class="round-group">
+              <div class="round-header"></div>
+            </div>
+          </template>
+          <template id="logLineTemplate">
+            <div class="log-line">
+              <span class="timestamp"></span> <span class="level"></span
+              ><span class="message"></span>
+            </div>
+          </template>
+          <template id="nativeStatusTemplate">
+            <div class="native-status-line" role="status">
+              <span class="native-status-time"></span>
+              <span class="native-status-text"></span>
+            </div>
+          </template>
+          <template id="bannerDetailsTemplate">
+            <details class="banner-details">
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon icon"></i>
+                <span class="label"></span>
+                <vscode-toolbar-button
+                  class="banner-content-copy"
+                  icon="copy"
+                  title="Copy content"
+                  data-default-title="Copy content"
+                  data-success-title="Copied!"
+                ></vscode-toolbar-button>
+              </summary>
+              <div
+                class="banner-content log-entry-content markdown-content"
+              ></div>
+            </details>
+          </template>
+          <template id="toolUseTemplate">
+            <details class="banner-details">
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-wrench"></i>
+                <span class="tool-use-title">Tool Use</span>
+              </summary>
+              <div class="banner-content log-entry-content"></div>
+            </details>
+          </template>
+          <template id="userMessageTemplate">
+            <div class="user-message-container">
+              <div class="user-message">
+                <div class="user-message-header">
+                  <i class="codicon codicon-account user-message-icon"></i>
+                  <span class="user-message-timestamp"></span>
+                </div>
+                <div class="user-message-content"></div>
+              </div>
+            </div>
+          </template>
+          <template id="fileListDetailsTemplate">
+            <details class="file-list-details detail-section">
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-list-tree"></i>
+                <span class="summary-text"></span>
+              </summary>
+              <ul class="file-list-content detail-content detail-list"></ul>
+            </details>
+          </template>
+          <template id="missingOutputsDetailsTemplate">
+            <details class="file-list-details detail-section">
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-warning"></i>
+                <span class="summary-text"></span>
+              </summary>
+              <ul class="file-list-content detail-content detail-list"></ul>
+            </details>
+          </template>
+          <template id="latexdiffDetailsTemplate">
+            <details class="latexdiff-details detail-section" open>
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-diff"></i>
+                <span class="summary-text"></span>
+              </summary>
+              <ul class="latexdiff-content detail-content detail-list"></ul>
+            </details>
+          </template>
+          <template id="statisticsDetailsTemplate">
+            <details class="statistics-details detail-section" open>
+              <summary class="details-summary">
+                <i class="toggle-icon"></i>
+                <i class="codicon codicon-dashboard"></i>
+                <span>Statistics</span>
+              </summary>
+              <div class="statistics-content detail-content"></div>
+            </details>
+          </template>
+          <template id="groupDetailsTemplate">
+            <details class="log-group">
+              <div class="log-group-content"></div>
+            </details>
+          </template>
+          <template id="groupHeaderTemplate">
+            <summary class="log-group-header">
+              <span class="group-status-icon"></span>
+              <span class="group-title"></span>
+              <span class="group-time">
+                <span class="group-start-time"></span>
+                <span class="group-duration"></span>
+              </span>
+            </summary>
+          </template>
         </div>
-        <div class="clear-all-container">
-          <div class="button-group agent-filter-group" id="agentFilterButtons">
-            <button
-              class="vscode-button"
-              id="filterAllBtn"
-              data-filter="all"
-              aria-pressed="true"
+        <div slot="end" class="tabs">
+          <vscode-tree id="streamTabs" class="tabs-content">
+            <!-- Stream tabs will be dynamically inserted here -->
+          </vscode-tree>
+          <div class="clear-all-container">
+            <vscode-radio-group
+              class="agent-filter-group"
+              id="agentFilterButtons"
+              aria-label="Filter streams by agent type"
             >
-              All
-            </button>
-            <button
-              class="vscode-button"
-              id="filterWorkflowBtn"
-              data-filter="workflow"
-              aria-pressed="false"
-            >
-              Workflow
-            </button>
-            <button
-              class="vscode-button"
-              id="filterToolBtn"
-              data-filter="toolUse"
-              aria-pressed="false"
-            >
-              Tool Use
-            </button>
-          </div>
-          <div class="button-group" id="sortButtons">
-            <button
-              class="vscode-button sort-btn"
-              id="sortTimeBtn"
-              data-sort="time"
-              title="Sort by time"
-              data-icon="clock"
-            ></button>
-            <button
-              class="vscode-button sort-btn"
-              id="sortFileBtn"
-              data-sort="inputFile"
-              title="Sort by file"
-              data-icon="file"
-            ></button>
-            <button
-              class="vscode-button sort-btn"
-              id="sortAgentBtn"
-              data-sort="agent"
-              title="Sort by agent"
-              data-icon="account"
-            ></button>
-            <button
-              class="vscode-button"
-              id="deleteAllBtn"
-              data-icon="close-all"
-            >
-              Delete All
-            </button>
+              <vscode-radio id="filterAllBtn" value="all" checked
+                >All</vscode-radio
+              >
+              <vscode-radio id="filterWorkflowBtn" value="workflow"
+                >Workflow</vscode-radio
+              >
+              <vscode-radio id="filterToolBtn" value="toolUse"
+                >Tool Use</vscode-radio
+              >
+            </vscode-radio-group>
+            <vscode-toolbar-container id="sortButtons">
+              <vscode-toolbar-button
+                class="sort-btn"
+                id="sortTimeBtn"
+                data-sort="time"
+                icon="clock"
+                title="Sort by time"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="sort-btn"
+                id="sortFileBtn"
+                data-sort="inputFile"
+                icon="file"
+                title="Sort by file"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="sort-btn"
+                id="sortAgentBtn"
+                data-sort="agent"
+                icon="account"
+                title="Sort by agent"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                id="deleteAllBtn"
+                icon="close-all"
+                title="Delete All"
+              ></vscode-toolbar-button>
+            </vscode-toolbar-container>
           </div>
         </div>
-      </div>
+      </vscode-split-layout>
     </div>
     <template id="iconButtonTemplate">
-      <button class="vscode-button">
+      <vscode-button>
         <i class="codicon"></i>
-      </button>
+      </vscode-button>
     </template>
     <template id="codiconTemplate">
       <i class="codicon"></i>

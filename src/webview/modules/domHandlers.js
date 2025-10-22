@@ -65,7 +65,6 @@ class MainViewDomHandler extends BaseDomHandler {
       vscode,
       fileList,
       mainViewState,
-      instructionManager,
     );
     this.settingsButtonManager = new SettingsButtonManager(
       vscode,

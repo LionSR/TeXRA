@@ -212,9 +212,10 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupRefreshIcons() {
-    const iconConfigs = [
+    const refreshConfigs = [
       {
-        className: 'codicon-file-code',
+        buttonIds: ['refreshInputFileButton'],
+        iconClass: 'codicon-file-code',
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
@@ -225,7 +226,8 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-book',
+        buttonIds: ['refreshReferenceFileButton'],
+        iconClass: 'codicon-book',
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
@@ -236,7 +238,8 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-file-add',
+        buttonIds: ['refreshAuxiliaryFileButton'],
+        iconClass: 'codicon-file-add',
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
@@ -247,7 +250,8 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-file-media',
+        buttonIds: ['refreshMediaFileButton'],
+        iconClass: 'codicon-file-media',
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
@@ -258,7 +262,8 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-edit',
+        buttonIds: ['refreshEditedFileButton'],
+        iconClass: 'codicon-edit',
         getRequests: () => {
           const baseFile = safeGetElementValue(BASE_FILE);
           return [
@@ -280,7 +285,8 @@ export class FileInputManager extends BaseUIManager {
         },
       },
       {
-        className: 'codicon-git-commit',
+        buttonIds: ['refreshCommitButton'],
+        iconClass: 'codicon-git-commit',
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
@@ -292,18 +298,16 @@ export class FileInputManager extends BaseUIManager {
       },
     ];
 
-    const icons = document.querySelectorAll(
-      '.file-select-header label .codicon.clickable',
-    );
-
-    icons.forEach((icon) => {
-      const config = iconConfigs.find((item) =>
-        icon.classList.contains(item.className),
-      );
-      if (!config) {
+    const wiredElements = new Set();
+    const registerElement = (element, handler) => {
+      if (!(element instanceof HTMLElement) || wiredElements.has(element)) {
         return;
       }
+      this.addListener(element, 'click', handler);
+      wiredElements.add(element);
+    };
 
+    refreshConfigs.forEach((config) => {
       const handler = () => {
         const requests = config.getRequests ? config.getRequests() : [];
         requests.forEach(({ command, payload = {} }) => {
@@ -314,7 +318,22 @@ export class FileInputManager extends BaseUIManager {
         });
       };
 
-      this.addListener(icon, 'click', handler);
+      (config.buttonIds ?? []).forEach((id) => {
+        const element = document.getElementById(id);
+        registerElement(element, handler);
+      });
+
+      if (config.iconClass) {
+        const selectors = [
+          `.file-select-header label .${config.iconClass}`,
+          `.file-select-header label .codicon.${config.iconClass}`,
+        ];
+        selectors.forEach((selector) => {
+          document.querySelectorAll(selector).forEach((element) => {
+            registerElement(element, handler);
+          });
+        });
+      }
     });
   }
 

@@ -67,17 +67,28 @@ export class ToggleManager {
 
   setupDocumentListeners() {
     document.addEventListener('click', (e) => {
-      const toolConfigOptions = safeGetElementById(
-        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
-      );
       const autoExtractOptions = safeGetElementById(
         ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
       );
-      const toggleToolConfig = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
-      );
       const toggleAutoExtract = safeGetElementById(
         ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      );
+
+      if (
+        !toggleAutoExtract?.contains(e.target) &&
+        !autoExtractOptions?.contains(e.target)
+      ) {
+        if (autoExtractOptions) {
+          autoExtractOptions.style.display = 'none';
+          this.updateAutoToggleState();
+        }
+      }
+
+      const toolConfigOptions = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      );
+      const toggleToolConfig = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
       );
 
       if (
@@ -87,15 +98,6 @@ export class ToggleManager {
         if (toolConfigOptions) {
           toolConfigOptions.style.display = 'none';
           this.updateToolConfigToggleState();
-        }
-      }
-      if (
-        !toggleAutoExtract?.contains(e.target) &&
-        !autoExtractOptions?.contains(e.target)
-      ) {
-        if (autoExtractOptions) {
-          autoExtractOptions.style.display = 'none';
-          this.updateAutoToggleState();
         }
       }
     });

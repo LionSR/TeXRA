@@ -55,6 +55,13 @@ export class HistoryViewProvider
           'codicons',
           'dist',
         ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'node_modules',
+          '@vscode-elements',
+          'elements',
+          'dist',
+        ),
       ],
     };
 
@@ -104,6 +111,13 @@ export class HistoryViewProvider
             'node_modules',
             '@vscode',
             'codicons',
+            'dist',
+          ),
+          vscode.Uri.joinPath(
+            this.context.extensionUri,
+            'node_modules',
+            '@vscode-elements',
+            'elements',
             'dist',
           ),
         ],

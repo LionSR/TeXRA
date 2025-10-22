@@ -19,6 +19,8 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   setChevronIcon,
+  isSelectLikeElement,
+  getSelectOptionElements,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
@@ -41,14 +43,21 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   const interactiveElements = container.querySelectorAll(
-    'select, button, input',
+    [
+      'select',
+      'button',
+      'input',
+      'vscode-button',
+      'vscode-toolbar-button',
+      'vscode-single-select',
+      'vscode-textarea',
+      'vscode-textfield',
+      'vscode-checkbox',
+      'vscode-radio',
+    ].join(', '),
   );
   interactiveElements.forEach((element) => {
-    if (
-      element instanceof HTMLButtonElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLInputElement
-    ) {
+    if (element instanceof HTMLElement && 'disabled' in element) {
       element.disabled = isDisabled;
     }
   });
@@ -56,12 +65,13 @@ function setFileSelectionGroupDisabled(isDisabled) {
 
 function getSelectDefaultValue(selectId, fallback) {
   const element = safeGetElementById(selectId);
-  if (element instanceof HTMLSelectElement) {
+  if (isSelectLikeElement(element)) {
     if (element.value) {
       return element.value;
     }
-    if (element.options.length > 0) {
-      return element.options[0].value;
+    const options = getSelectOptionElements(element);
+    if (options.length > 0) {
+      return options[0].value ?? '';
     }
   }
   return fallback;
@@ -168,6 +178,7 @@ export class MainViewState {
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
       });
 
+      // Load checkboxes
       CHECK_BOXES.forEach((id) => {
         safeSetElementChecked(id, previousState[id] ?? false);
       });
@@ -187,20 +198,7 @@ export class MainViewState {
         autoExtractOptions.style.display = 'none';
       }
 
-      const toggleToolConfig = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
-      );
-      const toolConfigOptions = safeGetElementById(
-        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
-      );
-      const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
-        safeGetElementChecked(id),
-      );
-      if (toggleToolConfig && toolConfigOptions) {
-        toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
-        toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-        toolConfigOptions.style.display = 'none';
-      }
+      // Tool config multi-select is initialized by loadState
 
       MULTIPLE_SELECTIONS.forEach((id) => {
         const toggleId = `toggle${capitalize(id)}`;
@@ -266,6 +264,7 @@ export class MainViewState {
       }
     });
 
+    // Save checkboxes
     CHECK_BOXES.forEach((id) => {
       state[id] = safeGetElementChecked(id);
     });
@@ -309,15 +308,38 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-      buttons.forEach((button) => {
-        if (!(button instanceof HTMLElement)) {
-          return;
-        }
-        const isActive = button.dataset.sessionType === normalized;
-        button.classList.toggle('active', isActive);
-        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      });
+      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
+      if (radioGroup) {
+        const radios = radioGroup.querySelectorAll('vscode-radio');
+        radios.forEach((radio) => {
+          if (!(radio instanceof HTMLElement)) {
+            return;
+          }
+          const radioValue =
+            radio.dataset.sessionType || radio.getAttribute('value');
+          const isActive = radioValue === normalized;
+          if ('checked' in radio) {
+            radio.checked = isActive;
+          }
+          if (isActive) {
+            radio.setAttribute('checked', '');
+            radio.setAttribute('aria-checked', 'true');
+          } else {
+            radio.removeAttribute('checked');
+            radio.setAttribute('aria-checked', 'false');
+          }
+        });
+      } else {
+        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+        buttons.forEach((button) => {
+          if (!(button instanceof HTMLElement)) {
+            return;
+          }
+          const isActive = button.dataset.sessionType === normalized;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
     }
 
     AGENT_SELECT_LIST.forEach((selectId) => {
@@ -334,14 +356,13 @@ export class MainViewState {
 
     setFileSelectionGroupDisabled(isToolUseSession);
 
-    // Disable Tool Config dropdown for tool use sessions
-    const toggleToolConfig = safeGetElementById(ELEMENT_IDS.TOGGLE_TOOL_CONFIG);
-    if (toggleToolConfig instanceof HTMLElement) {
-      toggleToolConfig.style.opacity = isToolUseSession ? '0.6' : '';
-      toggleToolConfig.style.filter = isToolUseSession ? 'grayscale(0.3)' : '';
-      toggleToolConfig.style.pointerEvents = isToolUseSession ? 'none' : '';
-      toggleToolConfig.style.cursor = isToolUseSession ? 'not-allowed' : '';
-    }
+    // Disable Tool Config checkboxes for tool use sessions
+    CHECK_BOXES_TOOL_USE.forEach((id) => {
+      const checkbox = safeGetElementById(id);
+      if (checkbox instanceof HTMLElement) {
+        checkbox.disabled = isToolUseSession;
+      }
+    });
 
     if (!skipSave) {
       this.save();

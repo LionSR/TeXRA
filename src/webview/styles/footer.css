@@ -8,7 +8,7 @@
   display: flex;
   gap: var(--spacing-small);
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -17,11 +17,16 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .model-selection-footer .agent-select-group {
+  display: flex;
   align-items: center;
   gap: var(--spacing-small);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .agent-select-controls {
@@ -35,12 +40,13 @@
 
 .agent-select-dropdowns {
   position: relative;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 10rem;
-  max-width: 14rem;
+  max-width: 16rem;
 }
 
-.agent-select-dropdowns select {
+.agent-select-dropdowns select,
+.agent-select-dropdowns vscode-single-select {
   width: 100%;
   min-width: 0;
 }
@@ -98,15 +104,12 @@
   visibility: visible;
 }
 
-.model-selection-footer .select-group {
-  flex: 0 0 auto;
-}
-
-.model-selection-footer .select-group select {
-  flex: 0 0 auto;
+.model-selection-footer .select-group select,
+.model-selection-footer .select-group vscode-single-select {
+  flex: 0 1 auto;
   width: auto;
   min-width: 6.4rem;
-  max-width: 8.8rem;
+  max-width: 9.6rem;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
@@ -114,5 +117,4 @@
 
 .model-selection-footer .codicon {
   margin-right: var(--spacing-small);
-  opacity: var(--opacity-subtle);
 }
