@@ -6,9 +6,8 @@
 .tabs {
   display: flex;
   flex-direction: column;
-  width: var(--width-sidebar);
-  min-width: var(--width-button-min);
-  max-width: var(--height-xlarge);
+  flex: 1;
+  min-width: 200px;
   font-size: var(--font-size-sm);
   border-left: var(--border-thin) solid var(--vscode-panel-border);
   height: 100%;
