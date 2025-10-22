@@ -67,12 +67,11 @@ export async function computeModelOptions(): Promise<string> {
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
-      const contextStr = config.contextWindow !== undefined
-        ? formatContext(config.contextWindow)
-        : '';
-      const contextAttr = contextStr
-        ? ` data-context="${contextStr}"`
-        : '';
+      const contextStr =
+        config.contextWindow !== undefined
+          ? formatContext(config.contextWindow)
+          : '';
+      const contextAttr = contextStr ? ` data-context="${contextStr}"` : '';
       const costStr = formatCost(config.inputPrice, config.outputPrice);
       const costAttr = costStr ? ` data-cost="${costStr}"` : '';
 
@@ -80,9 +79,10 @@ export async function computeModelOptions(): Promise<string> {
       const descriptionParts: string[] = [];
       if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
       if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
-      const descriptionAttr = descriptionParts.length > 0
-        ? ` description="${descriptionParts.join(' | ')}"`
-        : '';
+      const descriptionAttr =
+        descriptionParts.length > 0
+          ? ` description="${descriptionParts.join(' | ')}"`
+          : '';
 
       return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${label}</vscode-option>`;
     }),
