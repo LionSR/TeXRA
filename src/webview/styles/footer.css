@@ -108,8 +108,8 @@
 .model-selection-footer .select-group vscode-single-select {
   flex: 0 1 auto;
   width: auto;
-  min-width: 8rem;
-  max-width: 12rem;
+  min-width: 6.4rem;
+  max-width: 9.6rem;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
