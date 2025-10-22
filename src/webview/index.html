@@ -9,7 +9,11 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
-    <link rel="stylesheet" href="${codiconUri}" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
     <script type="importmap" nonce="${nonce}">
       {
         "imports": {
@@ -50,7 +54,11 @@
         }
       }
     </script>
-    <script type="module" nonce="${nonce}" src="${vscodeElementsBundleUri}"></script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
   </head>
@@ -73,12 +81,12 @@
                 >
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="currentInputFileButton"
                   title="Set current file as input"
                   icon="file-code"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyInputFileButton"
                   title="Empty"
                   icon="close"
@@ -89,17 +97,17 @@
                   title="Show or hide additional input files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
-                                <vscode-button
+                <vscode-button
                   id="addOpenedInputFilesButton"
                   title="Add opened files as input"
                   icon="folder-opened"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyInputFilesButton"
                   title="Empty"
                   icon="trash"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="selectInputFilesButton"
                   title="Add"
                   icon="add"
@@ -131,12 +139,12 @@
                 Reference</label
               >
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="currentReferenceFileButton"
                   title="Set current file as reference"
                   icon="file-code"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyReferenceFileButton"
                   title="Empty"
                   icon="close"
@@ -147,17 +155,17 @@
                   title="Show or hide additional reference files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
-                                <vscode-button
+                <vscode-button
                   id="addOpenedReferenceFilesButton"
                   title="Add opened files as reference"
                   icon="folder-opened"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyReferenceFilesButton"
                   title="Empty"
                   icon="trash"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="selectReferenceFilesButton"
                   title="Add"
                   icon="add"
@@ -189,12 +197,12 @@
                 Auxiliary</label
               >
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="currentAuxiliaryFileButton"
                   title="Set current file as auxiliary"
                   icon="file-code"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyAuxiliaryFileButton"
                   title="Empty"
                   icon="close"
@@ -205,17 +213,17 @@
                   title="Show or hide additional auxiliary files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
-                                <vscode-button
+                <vscode-button
                   id="addOpenedAuxiliaryFilesButton"
                   title="Add opened files as auxiliary"
                   icon="folder-opened"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyAuxiliaryFilesButton"
                   title="Empty"
                   icon="trash"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="selectAuxiliaryFilesButton"
                   title="Add"
                   icon="add"
@@ -261,14 +269,20 @@
                     class="dropdown-options"
                     style="display: none"
                   >
-                    <vscode-checkbox id="autoExtractFigure">Figures</vscode-checkbox>
-                    <vscode-checkbox id="autoExtractTikzFigure">TikZ Figures</vscode-checkbox>
-                    <vscode-checkbox id="autoCompileInputPdf">Compile Input PDF</vscode-checkbox>
+                    <vscode-checkbox id="autoExtractFigure"
+                      >Figures</vscode-checkbox
+                    >
+                    <vscode-checkbox id="autoExtractTikzFigure"
+                      >TikZ Figures</vscode-checkbox
+                    >
+                    <vscode-checkbox id="autoCompileInputPdf"
+                      >Compile Input PDF</vscode-checkbox
+                    >
                   </div>
                 </div>
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="emptyMediaFileButton"
                   title="Empty"
                   icon="close"
@@ -279,12 +293,12 @@
                   title="Show or hide additional media files"
                   ><i class="codicon codicon-chevron-down"></i
                 ></span>
-                                <vscode-button
+                <vscode-button
                   id="emptyMediaFilesButton"
                   title="Empty"
                   icon="trash"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="selectMediaFilesButton"
                   title="Add"
                   icon="add"
@@ -320,12 +334,12 @@
                 >
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="emptyOutputFilesButton"
                   title="Empty"
                   icon="trash"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="selectOutputFilesButton"
                   title="Add"
                   icon="add"
@@ -361,33 +375,37 @@
                   class="dropdown-options"
                   style="display: none"
                 >
-                  <vscode-checkbox id="attachTeXCount">Attach TeX Count</vscode-checkbox>
-                  <vscode-checkbox id="attachDiagnostics">Attach Diagnostics</vscode-checkbox>
+                  <vscode-checkbox id="attachTeXCount"
+                    >Attach TeX Count</vscode-checkbox
+                  >
+                  <vscode-checkbox id="attachDiagnostics"
+                    >Attach Diagnostics</vscode-checkbox
+                  >
                 </div>
               </div>
-                            <vscode-button
+              <vscode-button
                 id="packButton"
                 title="Pack the output for this agent into the History folder"
                 style="display: none"
                 icon="archive"
               ></vscode-button>
-                            <vscode-button
+              <vscode-button
                 id="cleanButton"
                 title="Clean the output for this agent"
                 style="display: none"
                 icon="trash"
               ></vscode-button>
-                            <vscode-button
+              <vscode-button
                 id="magicPolishButton"
                 title="Polish instruction text with AI"
                 icon="sparkle"
               ></vscode-button>
-                            <vscode-button
+              <vscode-button
                 id="recordInstructionButton"
                 title="Record instruction with microphone"
                 icon="mic"
               ></vscode-button>
-                            <vscode-button
+              <vscode-button
                 id="eraseInstructionButton"
                 title="Erase Instruction"
                 icon="clear-all"
@@ -396,7 +414,6 @@
           </div>
           <vscode-textarea
             id="instruction"
-            
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></vscode-textarea>
           <div class="instruction-controls">
@@ -469,7 +486,7 @@
                 </vscode-single-select>
               </div>
             </div>
-                        <vscode-button
+            <vscode-button
               id="executeButton"
               title="Execute"
               icon="play"
@@ -485,17 +502,19 @@
         >
           <span>Agent configuration is missing.</span>
           <div class="actions">
-                        <vscode-button
+            <vscode-button
               id="agentConfigEditButton"
               icon="list-selection"
-              Edit Agents
+              Edit
+              Agents
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               id="agentConfigDirButton"
               icon="folder-opened"
-              Set Directory
+              Set
+              Directory
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               id="agentConfigDocButton"
               icon="book"
               Docs
@@ -507,15 +526,19 @@
         <div id="apiKeyBanner" class="api-key-banner" style="display: none">
           <span>TeXRA requires an API key to run.</span>
           <div class="actions">
-                        <vscode-button
+            <vscode-button
               id="apiKeyBannerButton"
               icon="key"
-              Set API Key
+              Set
+              API
+              Key
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               id="apiKeyGuideButton"
               icon="book"
-              API Key Guide
+              API
+              Key
+              Guide
             ></vscode-button>
           </div>
         </div>
@@ -528,12 +551,12 @@
         >
           <span class="missing-tools"></span>
           <div class="actions">
-                        <vscode-button
+            <vscode-button
               id="dependencyRecheckButton"
               icon="refresh"
               Re-check
             ></vscode-button>
-                        <vscode-button
+            <vscode-button
               id="dependencyDismissButton"
               class="secondary"
               title="Dismiss (can be re-enabled in settings)"
@@ -564,12 +587,12 @@
                 >
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="currentBaseFileButton"
                   title="Set current file as base"
                   icon="file-code"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyBaseFileButton"
                   title="Empty"
                   icon="close"
@@ -594,32 +617,32 @@
                 >
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="acceptButton"
                   title="Accept changes from edited file and overwrite base file"
                   icon="check"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="compareButton"
                   title="Compare the selected edited file with the selected base file"
                   icon="diff"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="mergeButton"
                   title="Create a new verion of the base file by merging the edits suggested by the edited file"
                   icon="merge"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="latexdiffButton"
                   title="LaTeXdiff the selected edited file with the selected base file"
                   icon="diff-single"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="currentEditedFileButton"
                   title="Set current file as edited"
                   icon="file-code"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="emptyEditedFileButton"
                   title="Empty"
                   icon="close"
@@ -642,17 +665,17 @@
                 >
               </div>
               <div class="file-select-actions button-group">
-                                <vscode-button
+                <vscode-button
                   id="latexdiffvcButton"
                   title="LaTeXdiff the selected base file with another git commit"
                   icon="diff-single"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="packLatexdiffvcButton"
                   title="Pack the latexdiff-vc output into the History folder"
                   icon="archive"
                 ></vscode-button>
-                                <vscode-button
+                <vscode-button
                   id="cleanLatexdiffvcButton"
                   title="Clean the latexdiff-vc output"
                   icon="trash"

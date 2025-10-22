@@ -146,14 +146,18 @@ export function getSelectedOptionElement(element) {
 
   const currentValue = element.value ?? '';
   if (currentValue) {
-    const matchingOption = options.find((option) => option.value === currentValue);
+    const matchingOption = options.find(
+      (option) => option.value === currentValue,
+    );
     if (matchingOption) {
       return matchingOption;
     }
   }
 
   return (
-    options.find((option) => option.hasAttribute('selected') || option.selected) ??
+    options.find(
+      (option) => option.hasAttribute('selected') || option.selected,
+    ) ??
     options[0] ??
     null
   );
