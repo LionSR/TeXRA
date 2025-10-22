@@ -10,16 +10,8 @@
   /* Colors */
   --background-color: var(--vscode-sideBar-background);
   --text-color: var(--vscode-sideBar-foreground);
-  --button-background: var(--vscode-button-background);
-  --button-foreground: var(--vscode-button-foreground);
   --button-hover-background: var(--vscode-button-hoverBackground);
-  --input-background: var(--vscode-input-background);
-  --input-foreground: var(--vscode-input-foreground);
-  --input-border: var(--vscode-input-border);
-  --dropdown-background: var(--vscode-dropdown-background);
-  --dropdown-foreground: var(--vscode-dropdown-foreground);
   --dropdown-border: var(--vscode-dropdown-border);
-  --icon-color: var(--vscode-textLink-foreground);
   --focus-border: var(--vscode-focusBorder);
 
   /* Typography */
@@ -48,20 +40,17 @@
   --height-medium: 200px;
   --height-large: 300px;
   --height-xlarge: 400px;
-  --height-xxlarge: 500px;
   --height-max: 1000px;
 
   /* Widths */
   --width-icon: 16px;
   --width-button-min: 80px;
-  --width-sidebar: 120px;
   --width-dropdown: 160px;
 
   /* Borders */
   --border-thin: 1px;
   --border-medium: 2px;
   --border-thick: 3px;
-  --border-xlarge: 4px;
 
   /* Opacity levels */
   --opacity-disabled: 0.5;
@@ -80,13 +69,6 @@
   align-items: center;
   position: relative;
   top: 0;
-}
-
-/* Generic button group container */
-.button-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 /* VSCode Elements toolbar styling */
