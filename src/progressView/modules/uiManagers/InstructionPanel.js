@@ -110,15 +110,20 @@ export class InstructionPanel {
     }
 
     const elements = this._elements;
-    if (!elements?.container || !elements.body) {
+    if (!elements?.container || !elements.text) {
       return false;
     }
 
     const wasExpanded = this._expanded;
     elements.container.classList.remove('is-expanded');
 
+    // For vscode-textarea, check the wrapped textarea element for scroll detection
+    const textareaElement =
+      elements.text.wrappedElement ||
+      elements.text.shadowRoot?.querySelector('textarea') ||
+      elements.text;
     const hasOverflow =
-      elements.body.scrollHeight > elements.body.clientHeight + 1;
+      textareaElement.scrollHeight > textareaElement.clientHeight + 1;
 
     elements.container.classList.toggle('is-expanded', wasExpanded);
     return hasOverflow;
