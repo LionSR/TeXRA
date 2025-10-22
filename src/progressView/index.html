@@ -54,7 +54,6 @@
           "@common/templateUtils.js": "${templateUtilsUri}",
           "@common/RecordingButtonManager.js": "${recordingButtonManagerUri}",
           "@common/textareaUtils.js": "${textareaUtilsUri}",
-          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
@@ -71,6 +70,7 @@
     <script type="module" nonce="${nonce}">
       import 'https://esm.sh/katex@0.16.22/dist/contrib/copy-tex';
     </script>
+    <script type="module" nonce="${nonce}" src="${vscodeElementsBundleUri}"></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
@@ -97,26 +97,25 @@
           <div class="instruction-panel__header">
             <span class="instruction-panel__title">Instruction</span>
             <div class="instruction-panel__actions button-group">
-              <button
+                            <vscode-button
                 id="instructionCopyBtn"
-                class="vscode-button instruction-panel__copy"
+                class="instruction-panel__copy"
                 type="button"
-                data-icon="copy"
                 title="Copy instruction"
                 aria-label="Copy instruction"
                 data-default-title="Copy instruction"
                 data-success-title="Copied!"
-                disabled
-              ></button>
-              <button
+                icon="copy"
+              ></vscode-button>
+                            <vscode-button
                 id="instructionToggleBtn"
-                class="vscode-button instruction-panel__toggle is-hidden"
+                class="instruction-panel__toggle is-hidden"
                 type="button"
-                data-icon="chevron-down"
                 aria-expanded="false"
                 aria-label="Expand instruction"
                 aria-hidden="true"
-              ></button>
+                icon="chevron-down"
+              ></vscode-button>
             </div>
           </div>
           <div class="instruction-panel__body" role="presentation">
@@ -130,36 +129,32 @@
         <div id="logContent" class="log-container"></div>
         <div id="generatedFiles" class="files-container"></div>
         <div id="followUpContainer" class="follow-up-container">
-          <textarea
+          <vscode-textarea
             id="followUpInput"
-            class="vscode-textarea"
+            
             placeholder="Send follow-up message"
-          ></textarea>
+          ></vscode-textarea>
           <div class="follow-up-actions button-group">
-            <button
+                        <vscode-button
               id="polishFollowUpBtn"
-              class="vscode-button"
               title="Polish follow-up with AI"
-              data-icon="sparkle"
-            ></button>
-            <button
+              icon="sparkle"
+            ></vscode-button>
+                        <vscode-button
               id="recordFollowUpBtn"
-              class="vscode-button"
               title="Record follow-up with microphone"
-              data-icon="mic"
-            ></button>
-            <button
+              icon="mic"
+            ></vscode-button>
+                        <vscode-button
               id="clearFollowUpBtn"
-              class="vscode-button"
               title="Clear input"
-              data-icon="clear-all"
-            ></button>
-            <button
+              icon="clear-all"
+            ></vscode-button>
+                        <vscode-button
               id="sendFollowUpBtn"
-              class="vscode-button"
               title="Send"
-              data-icon="send"
-            ></button>
+              icon="send"
+            ></vscode-button>
           </div>
         </div>
         <template id="fileItemTemplate">
@@ -172,31 +167,31 @@
             </span>
             <span class="file-stats"></span>
             <span class="file-actions button-group">
-              <button
-                class="vscode-button compare-btn"
+                            <vscode-button
+                class="compare-btn"
                 title="Compare with base"
-                data-icon="diff"
-              ></button>
-              <button
-                class="vscode-button accept-btn"
+                icon="diff"
+              ></vscode-button>
+                            <vscode-button
+                class="accept-btn"
                 title="Accept edits"
-                data-icon="check"
-              ></button>
-              <button
-                class="vscode-button merge-btn"
+                icon="check"
+              ></vscode-button>
+                            <vscode-button
+                class="merge-btn"
                 title="Merge edits"
-                data-icon="git-merge"
-              ></button>
-              <button
-                class="vscode-button diff-btn"
+                icon="git-merge"
+              ></vscode-button>
+                            <vscode-button
+                class="diff-btn"
                 title="LaTeXdiff"
-                data-icon="diff-single"
-              ></button>
-              <button
-                class="vscode-button prev-btn"
+                icon="diff-single"
+              ></vscode-button>
+                            <vscode-button
+                class="prev-btn"
                 title="Compare with previous round"
-                data-icon="diff-added"
-              ></button>
+                icon="diff-added"
+              ></vscode-button>
             </span>
           </div>
         </template>
@@ -227,12 +222,12 @@
                 <i class="multi-file"></i>
               </div>
             </button>
-            <button
+                        <vscode-button
               class="tab-delete"
               data-stream=""
               title="Delete stream"
-              data-icon="close"
-            ></button>
+              icon="close"
+            ></vscode-button>
           </div>
         </template>
         <template id="roundHeaderTemplate">
@@ -258,16 +253,15 @@
               <i class="toggle-icon"></i>
               <i class="codicon icon"></i>
               <span class="label"></span>
-              <button
+                            <vscode-button
+                class="banner-content-copy"
                 type="button"
-                class="vscode-button banner-content-copy"
                 aria-label="Copy content"
                 title="Copy content"
                 data-default-title="Copy content"
                 data-success-title="Copied!"
-              >
                 <i class="codicon codicon-copy"></i>
-              </button>
+              ></vscode-button>
             </summary>
             <div
               class="banner-content log-entry-content markdown-content"
@@ -357,68 +351,61 @@
         </div>
         <div class="clear-all-container">
           <div class="button-group agent-filter-group" id="agentFilterButtons">
-            <button
-              class="vscode-button"
+                        <vscode-button
               id="filterAllBtn"
               data-filter="all"
               aria-pressed="true"
-            >
               All
-            </button>
-            <button
-              class="vscode-button"
+            ></vscode-button>
+                        <vscode-button
               id="filterWorkflowBtn"
               data-filter="workflow"
               aria-pressed="false"
-            >
               Workflow
-            </button>
-            <button
-              class="vscode-button"
+            ></vscode-button>
+                        <vscode-button
               id="filterToolBtn"
               data-filter="toolUse"
               aria-pressed="false"
-            >
               Tool Use
-            </button>
+            ></vscode-button>
           </div>
           <div class="button-group" id="sortButtons">
-            <button
-              class="vscode-button sort-btn"
+                        <vscode-button
+              class="sort-btn"
               id="sortTimeBtn"
               data-sort="time"
               title="Sort by time"
-              data-icon="clock"
-            ></button>
-            <button
-              class="vscode-button sort-btn"
+              icon="clock"
+            ></vscode-button>
+                        <vscode-button
+              class="sort-btn"
               id="sortFileBtn"
               data-sort="inputFile"
               title="Sort by file"
-              data-icon="file"
-            ></button>
-            <button
-              class="vscode-button sort-btn"
+              icon="file"
+            ></vscode-button>
+                        <vscode-button
+              class="sort-btn"
               id="sortAgentBtn"
               data-sort="agent"
               title="Sort by agent"
-              data-icon="account"
-            ></button>
-            <button
-              class="vscode-button"
+              icon="account"
+            ></vscode-button>
+                        <vscode-button
               id="deleteAllBtn"
-              data-icon="close-all"
-            >
+              icon="close-all"
               Delete All
-            </button>
+            ></vscode-button>
           </div>
         </div>
       </div>
     </div>
     <template id="iconButtonTemplate">
-      <button class="vscode-button">
+            <vscode-button
+
         <i class="codicon"></i>
-      </button>
+      ></vscode-button>
     </template>
     <template id="codiconTemplate">
       <i class="codicon"></i>

@@ -2,7 +2,6 @@
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { formatTokens } from '../formatters.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
@@ -157,8 +156,6 @@ export class FileList {
           file.path,
         );
 
-        // Replace any icon placeholders before attaching handlers
-        initializeIconButtons(clone);
 
         // Update buttons with click handlers
         this.updateFileButtons(clone, file, effectiveBase);
