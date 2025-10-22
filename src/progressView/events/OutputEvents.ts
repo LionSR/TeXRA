@@ -29,15 +29,22 @@ interface OutputEventsShared {
 
 type FilesByRound<T> = { [key: number]: T[] };
 
-const updateActiveStreamOutputs = (
-  state: ProgressViewState,
-  updater: WebviewUpdater,
-  stream: string,
+interface ActiveStreamOutputUpdate {
+  state: ProgressViewState;
+  updater: WebviewUpdater;
+  stream: string;
   updates: {
     files?: FilesByRound<OutputFileInfo> | undefined;
     missing?: FilesByRound<string> | undefined;
-  },
-): void => {
+  };
+}
+
+const updateActiveStreamOutputs = ({
+  state,
+  updater,
+  stream,
+  updates,
+}: ActiveStreamOutputUpdate): void => {
   if (state.activeStream !== stream || !updater.isAvailable()) {
     return;
   }
@@ -65,7 +72,7 @@ const registerOutputFileListeners = (
       if (files !== undefined) {
         updates.files = files;
       }
-      updateActiveStreamOutputs(state, updater, stream, updates);
+      updateActiveStreamOutputs({ state, updater, stream, updates });
     });
   });
 
@@ -79,7 +86,7 @@ const registerOutputFileListeners = (
         if (missing !== undefined) {
           updates.missing = missing;
         }
-        updateActiveStreamOutputs(state, updater, stream, updates);
+        updateActiveStreamOutputs({ state, updater, stream, updates });
       });
     },
   );
@@ -87,14 +94,24 @@ const registerOutputFileListeners = (
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
     withErrorBoundary('failed to handle clearMissingOutputs', () => {
       state.outputFiles.clearMissingOutputs(stream);
-      updateActiveStreamOutputs(state, updater, stream, { missing: {} });
+      updateActiveStreamOutputs({
+        state,
+        updater,
+        stream,
+        updates: { missing: {} },
+      });
     });
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
     withErrorBoundary('failed to handle clearOutputFiles', () => {
       state.outputFiles.clearFiles(stream);
-      updateActiveStreamOutputs(state, updater, stream, { files: {} });
+      updateActiveStreamOutputs({
+        state,
+        updater,
+        stream,
+        updates: { files: {} },
+      });
     });
   });
 

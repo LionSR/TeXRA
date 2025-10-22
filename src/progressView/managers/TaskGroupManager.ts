@@ -9,6 +9,12 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Types
 import { TaskGroup } from '@logger/LogTypes';
 
+export interface TaskGroupUpdatePayload {
+  stream: StreamTabId;
+  groupId: string;
+  updates: Partial<TaskGroup>;
+}
+
 /**
  * Manages task groups collection with persistence.
  * Handles adding, updating, and managing task groups for different streams.
@@ -40,11 +46,7 @@ export class TaskGroupManager extends PersistentMapManager<
   /**
    * Update an existing task group
    */
-  updateGroup(
-    stream: StreamTabId,
-    groupId: string,
-    updates: Partial<TaskGroup>,
-  ): void {
+  updateGroup({ stream, groupId, updates }: TaskGroupUpdatePayload): void {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
       this.logger.warn(
