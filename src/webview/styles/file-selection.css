@@ -19,6 +19,12 @@
   margin-bottom: var(--spacing-small);
   flex-wrap: nowrap;
   line-height: 1.5;
+  gap: var(--spacing-small);
+}
+
+.file-select-header > vscode-toolbar-button {
+  opacity: 1;
+  flex-shrink: 0;
 }
 
 .file-select-header label {
@@ -35,7 +41,10 @@
   flex: 1;
   min-width: 0;
   min-height: var(--height-control);
-  position: relative;
+}
+
+.file-select-label-group vscode-toolbar-button {
+  opacity: 1;
 }
 
 .file-select-label-group vscode-textfield {
@@ -50,10 +59,13 @@
 
 .file-select-actions,
 vscode-toolbar-container.file-select-actions {
-  flex-direction: column;
+  flex-direction: column !important;
   flex-wrap: nowrap;
   margin-left: auto;
-  position: relative;
+}
+
+.file-select-actions vscode-toolbar-button {
+  opacity: 1;
 }
 
 .file-select label {

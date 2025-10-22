@@ -99,15 +99,21 @@ export class EventsManager {
       }
     });
 
-    addEventListenerSafely(ELEMENT_IDS.AGENT_FILTER_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('[data-filter]');
-      if (btn && btn.dataset.filter) {
-        vscode.postMessage({
-          command: COMMANDS.FILTER_STREAMS,
-          filter: btn.dataset.filter,
-        });
-      }
-    });
+    // Handle agent filter radio group changes
+    const radioGroup = document.getElementById(
+      ELEMENT_IDS.AGENT_FILTER_CONTAINER,
+    );
+    if (radioGroup) {
+      addEventListenerSafely(radioGroup, 'change', (e) => {
+        const filter = radioGroup.value;
+        if (filter) {
+          vscode.postMessage({
+            command: COMMANDS.FILTER_STREAMS,
+            filter: filter,
+          });
+        }
+      });
+    }
 
     // Handle banner-details and file-list-details toggle events
     document.addEventListener(

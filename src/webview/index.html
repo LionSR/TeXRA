@@ -70,14 +70,15 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <vscode-toolbar-button
+                  id="refreshInputFileButton"
+                  icon="file-code"
+                  label="Refresh input files"
+                ></vscode-toolbar-button>
                 <label
                   for="inputFile"
                   title="Primary files the agent processes, such as .tex, .txt, or .md"
-                  ><i
-                    class="codicon codicon-file-code clickable"
-                    title="Refresh input files"
-                  ></i>
-                  Input</label
+                  >Input</label
                 >
               </div>
               <vscode-toolbar-container class="file-select-actions">
@@ -129,15 +130,18 @@
           </div>
           <div class="file-select">
             <div class="file-select-header">
-              <label
-                for="referenceFile"
-                title="Example or context files that guide the agent's output"
-                ><i
-                  class="codicon codicon-book clickable"
-                  title="Refresh reference files"
-                ></i>
-                Reference</label
-              >
+              <div class="file-select-label-group">
+                <vscode-toolbar-button
+                  id="refreshReferenceFileButton"
+                  icon="book"
+                  label="Refresh reference files"
+                ></vscode-toolbar-button>
+                <label
+                  for="referenceFile"
+                  title="Example or context files that guide the agent's output"
+                  >Reference</label
+                >
+              </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
                   id="currentReferenceFileButton"
@@ -187,15 +191,18 @@
           </div>
           <div class="file-select">
             <div class="file-select-header">
-              <label
-                for="auxiliaryFile"
-                title="Supporting files required for correct processing, including .cls, .sty, .bib"
-                ><i
-                  class="codicon codicon-file-add clickable"
-                  title="Refresh auxiliary files"
-                ></i>
-                Auxiliary</label
-              >
+              <div class="file-select-label-group">
+                <vscode-toolbar-button
+                  id="refreshAuxiliaryFileButton"
+                  icon="file-add"
+                  label="Refresh auxiliary files"
+                ></vscode-toolbar-button>
+                <label
+                  for="auxiliaryFile"
+                  title="Supporting files required for correct processing, including .cls, .sty, .bib"
+                  >Auxiliary</label
+                >
+              </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
                   id="currentAuxiliaryFileButton"
@@ -246,14 +253,15 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <vscode-toolbar-button
+                  id="refreshMediaFileButton"
+                  icon="file-media"
+                  label="Refresh media files"
+                ></vscode-toolbar-button>
                 <label
                   for="mediaFile"
                   title="Visual or audio assets such as images or PDFs"
-                  ><i
-                    class="codicon codicon-file-media clickable"
-                    title="Refresh media files"
-                  ></i>
-                  Media</label
+                  >Media</label
                 >
                 <div class="dropdown-container dropdown-left">
                   <span
@@ -414,7 +422,7 @@
           </div>
           <vscode-textarea
             id="instruction"
-            rows="5"
+            rows="8"
             resize="none"
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></vscode-textarea>
@@ -566,9 +574,7 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="baseFile"
-                  ><i class="codicon codicon-file"></i> Base</label
-                >
+                <label for="baseFile">Base</label>
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
@@ -590,14 +596,15 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
+                <vscode-toolbar-button
+                  id="refreshEditedFileButton"
+                  icon="edit"
+                  label="Refresh edited files"
+                ></vscode-toolbar-button>
                 <label
                   for="editedFile"
                   title="File containing edits to merge into the base file"
-                  ><i
-                    class="codicon codicon-edit clickable"
-                    title="Edited (Click to refresh)"
-                  ></i>
-                  Edited</label
+                  >Edited</label
                 >
               </div>
               <vscode-toolbar-container class="file-select-actions">
@@ -640,13 +647,12 @@
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
-                <label for="commit"
-                  ><i
-                    class="codicon codicon-git-commit clickable"
-                    title="Commit (Click to refresh)"
-                  ></i>
-                  Commit</label
-                >
+                <vscode-toolbar-button
+                  id="refreshCommitButton"
+                  icon="git-commit"
+                  label="Refresh commit list"
+                ></vscode-toolbar-button>
+                <label for="commit">Commit</label>
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button

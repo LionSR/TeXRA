@@ -144,7 +144,7 @@
             <vscode-textarea
               id="followUpInput"
               placeholder="Send follow-up message"
-              rows="4"
+              rows="8"
               resize="vertical"
             ></vscode-textarea>
             <vscode-toolbar-container class="follow-up-actions">
@@ -361,30 +361,22 @@
             <!-- Stream tabs will be dynamically inserted here -->
           </div>
           <div class="clear-all-container">
-            <vscode-toolbar-container
+            <vscode-radio-group
+              variant="vertical"
               class="agent-filter-group"
               id="agentFilterButtons"
+              aria-label="Filter streams by agent type"
             >
-              <vscode-toolbar-button
-                id="filterAllBtn"
-                data-filter="all"
-                toggleable
-                checked
-                >All</vscode-toolbar-button
+              <vscode-radio id="filterAllBtn" value="all" checked
+                >All</vscode-radio
               >
-              <vscode-toolbar-button
-                id="filterWorkflowBtn"
-                data-filter="workflow"
-                toggleable
-                >Workflow</vscode-toolbar-button
+              <vscode-radio id="filterWorkflowBtn" value="workflow"
+                >Workflow</vscode-radio
               >
-              <vscode-toolbar-button
-                id="filterToolBtn"
-                data-filter="toolUse"
-                toggleable
-                >Tool Use</vscode-toolbar-button
+              <vscode-radio id="filterToolBtn" value="toolUse"
+                >Tool Use</vscode-radio
               >
-            </vscode-toolbar-container>
+            </vscode-radio-group>
             <vscode-toolbar-container id="sortButtons">
               <vscode-toolbar-button
                 class="sort-btn"
@@ -407,9 +399,11 @@
                 icon="account"
                 label="Sort by agent"
               ></vscode-toolbar-button>
-              <vscode-button id="deleteAllBtn" icon="close-all"
-                >Delete All</vscode-button
-              >
+              <vscode-toolbar-button
+                id="deleteAllBtn"
+                icon="close-all"
+                label="Delete All"
+              ></vscode-toolbar-button>
             </vscode-toolbar-container>
           </div>
         </div>
