@@ -172,16 +172,10 @@ export class SettingsButtonManager extends BaseUIManager {
 
       const radioGroup = toggleContainer.querySelector('vscode-radio-group');
       if (radioGroup) {
-        this.addListener(radioGroup, 'change', (event) => {
-          const target = event?.target;
-          if (!(target instanceof HTMLElement)) {
-            return;
-          }
+        this.addListener(radioGroup, 'change', () => {
           // For vscode-radio-group, the value is on the radio group itself
           const sessionType =
-            target.value ||
-            target.getAttribute('value') ||
-            target.dataset.sessionType;
+            radioGroup.value || radioGroup.getAttribute('value');
           if (!sessionType) {
             return;
           }
