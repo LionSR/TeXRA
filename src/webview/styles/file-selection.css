@@ -48,7 +48,8 @@
   margin-right: var(--spacing-small);
 }
 
-.file-select-actions {
+.file-select-actions,
+vscode-toolbar-container.file-select-actions {
   flex-wrap: nowrap;
   margin-left: auto;
   position: relative;
