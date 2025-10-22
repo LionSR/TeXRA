@@ -9,7 +9,11 @@
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
-    <link rel="stylesheet" href="${codiconUri}" id="vscode-codicon-stylesheet" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css"
@@ -70,7 +74,11 @@
     <script type="module" nonce="${nonce}">
       import 'https://esm.sh/katex@0.16.22/dist/contrib/copy-tex';
     </script>
-    <script type="module" nonce="${nonce}" src="${vscodeElementsBundleUri}"></script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
@@ -132,7 +140,6 @@
         <div id="followUpContainer" class="follow-up-container">
           <vscode-textarea
             id="followUpInput"
-            
             placeholder="Send follow-up message"
           ></vscode-textarea>
           <vscode-toolbar-container class="follow-up-actions">
@@ -223,7 +230,7 @@
                 <i class="multi-file"></i>
               </div>
             </button>
-                        <vscode-button
+            <vscode-button
               class="tab-delete"
               data-stream=""
               title="Delete stream"
@@ -254,15 +261,16 @@
               <i class="toggle-icon"></i>
               <i class="codicon icon"></i>
               <span class="label"></span>
-                            <vscode-button
+              <vscode-button
                 class="banner-content-copy"
                 type="button"
                 aria-label="Copy content"
                 title="Copy content"
                 data-default-title="Copy content"
                 data-success-title="Copied!"
+              >
                 <i class="codicon codicon-copy"></i>
-              ></vscode-button>
+              </vscode-button>
             </summary>
             <div
               class="banner-content log-entry-content markdown-content"
@@ -355,7 +363,10 @@
             class="agent-filter-group"
             id="agentFilterButtons"
           >
-            <vscode-button id="filterAllBtn" data-filter="all" aria-pressed="true"
+            <vscode-button
+              id="filterAllBtn"
+              data-filter="all"
+              aria-pressed="true"
               >All</vscode-button
             >
             <vscode-button
@@ -401,10 +412,9 @@
       </div>
     </div>
     <template id="iconButtonTemplate">
-            <vscode-button
-
+      <vscode-button>
         <i class="codicon"></i>
-      ></vscode-button>
+      </vscode-button>
     </template>
     <template id="codiconTemplate">
       <i class="codicon"></i>
