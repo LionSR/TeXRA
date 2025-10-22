@@ -2,6 +2,7 @@
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
+  CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
@@ -69,9 +70,21 @@ function collectMultipleFileSelections(singleFiles, fileList) {
 
 function collectCheckboxValues() {
   const values = {};
-  CHECK_BOXES.forEach((id) => {
-    values[id] = safeGetElementChecked(id);
-  });
+  // Collect checkboxes (excluding tool config)
+  CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
+    (id) => {
+      values[id] = safeGetElementChecked(id);
+    },
+  );
+
+  // Collect tool config multi-select
+  const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
+  if (toolConfigSelect) {
+    const selectedValues = toolConfigSelect.value || [];
+    values.attachTeXCount = selectedValues.includes('attachTeXCount');
+    values.attachDiagnostics = selectedValues.includes('attachDiagnostics');
+  }
+
   return values;
 }
 
