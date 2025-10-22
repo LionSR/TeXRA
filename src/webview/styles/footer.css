@@ -35,9 +35,9 @@
 
 .agent-select-dropdowns {
   position: relative;
-  flex: 0 0 auto;
-  min-width: 10rem;
-  max-width: 14rem;
+  flex: 0 1 16rem;
+  min-width: 12rem;
+  max-width: 20rem;
 }
 
 .agent-select-dropdowns select {
@@ -46,39 +46,20 @@
 }
 
 .session-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.session-toggle vscode-radio-group {
   display: inline-flex;
-  border: 1px solid var(--vscode-button-border);
-  border-radius: var(--border-radius);
-  overflow: hidden;
-  background: var(--vscode-input-background);
+  align-items: center;
+  gap: var(--spacing-small);
 }
 
 .session-toggle__option {
-  flex: 1 1 50%;
-  padding: var(--spacing-tiny) var(--spacing-small);
+  margin: 0;
   font-size: var(--font-size-sm);
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  color: var(--vscode-foreground);
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-
-.session-toggle__option:hover,
-.session-toggle__option:focus {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.session-toggle__option.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
-.session-toggle__option:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
+  --vscode-font-size: var(--font-size-sm);
 }
 
 .agent-select {
