@@ -24,7 +24,7 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 }
 
 /**
- * Compute model <option> tags based on available API keys.
+ * Compute model <vscode-option> tags based on available API keys.
  * Models missing a required key receive a "✗" label and attributes so the
  * webview can handle API key setup prompts.
  */
@@ -36,7 +36,7 @@ export async function computeModelOptions(): Promise<string> {
     models.map(async (model) => {
       const config = MODEL_CONFIGS[model];
       if (!config) {
-        return `<option value="${model}">${model}</option>`;
+        return `<vscode-option value="${model}">${model}</vscode-option>`;
       }
 
       const provider = config.provider;
@@ -75,7 +75,7 @@ export async function computeModelOptions(): Promise<string> {
         ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
         : '';
 
-      return `<option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
+      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</vscode-option>`;
     }),
   );
 

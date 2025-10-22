@@ -1,12 +1,45 @@
 const DEFAULT_MAX_HEIGHT = 400;
 
-/**
- * Automatically resize a textarea based on its scroll height.
- * @param {HTMLTextAreaElement} textarea
- * @param {number} [maxHeight]
- */
-export function autoResizeTextarea(textarea, maxHeight = DEFAULT_MAX_HEIGHT) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
+function resolveTextareaTarget(target) {
+  if (!target) {
+    return { host: null, textarea: null };
+  }
+
+  if (target instanceof HTMLTextAreaElement) {
+    return { host: null, textarea: target };
+  }
+
+  const maybeElement = target;
+  const tagName = maybeElement?.tagName?.toLowerCase?.();
+  if (tagName === 'vscode-textarea') {
+    const host = maybeElement;
+    const wrapped = host.wrappedElement;
+    if (wrapped instanceof HTMLTextAreaElement) {
+      return { host, textarea: wrapped };
+    }
+    const shadowTextarea = host.shadowRoot?.querySelector('textarea');
+    if (shadowTextarea instanceof HTMLTextAreaElement) {
+      return { host, textarea: shadowTextarea };
+    }
+    return { host, textarea: null };
+  }
+
+  if (maybeElement?.wrappedElement instanceof HTMLTextAreaElement) {
+    return { host: maybeElement, textarea: maybeElement.wrappedElement };
+  }
+
+  return { host: null, textarea: null };
+}
+
+function syncHostValue(host, textarea) {
+  if (host && textarea) {
+    host.value = textarea.value;
+  }
+}
+
+export function autoResizeTextarea(target, maxHeight = DEFAULT_MAX_HEIGHT) {
+  const { textarea } = resolveTextareaTarget(target);
+  if (!textarea) {
     return;
   }
 
@@ -17,13 +50,9 @@ export function autoResizeTextarea(textarea, maxHeight = DEFAULT_MAX_HEIGHT) {
     textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
-/**
- * Insert text at the current cursor position in a textarea.
- * @param {HTMLTextAreaElement} textarea
- * @param {string} text
- */
-export function insertTextAtCursor(textarea, text) {
-  if (!(textarea instanceof HTMLTextAreaElement) || typeof text !== 'string') {
+export function insertTextAtCursor(target, text) {
+  const { host, textarea } = resolveTextareaTarget(target);
+  if (!textarea || typeof text !== 'string') {
     return;
   }
 
@@ -33,17 +62,17 @@ export function insertTextAtCursor(textarea, text) {
   textarea.value = original.slice(0, start) + text + original.slice(end);
   const newCursorPos = start + text.length;
   textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+  syncHostValue(host, textarea);
 }
 
-/**
- * Reset the height styles applied during auto-resize.
- * @param {HTMLTextAreaElement} textarea
- */
-export function resetTextareaHeight(textarea) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
+export function resetTextareaHeight(target) {
+  const { textarea } = resolveTextareaTarget(target);
+  if (!textarea) {
     return;
   }
 
   textarea.style.height = '';
   textarea.style.overflowY = '';
 }
+
+export { resolveTextareaTarget };
