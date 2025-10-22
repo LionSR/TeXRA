@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
+import type { TaskGroupUpdatePayload, WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
 // Local imports - events
@@ -41,7 +41,12 @@ export function createUsageEvents(
           withErrorBoundary('failed to handle updateGroupUsage', () => {
             const group = state.taskGroups.getGroup(stream, groupId);
             if (group) {
-              state.taskGroups.updateGroup(stream, groupId, { usage });
+              const update: TaskGroupUpdatePayload = {
+                stream,
+                groupId,
+                updates: { usage },
+              };
+              state.taskGroups.updateGroup(update);
             }
           });
         },
