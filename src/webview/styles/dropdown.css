@@ -99,7 +99,7 @@ vscode-option.disabled-model,
 vscode-option.disabled-agent,
 vscode-option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
-  opacity: 0.6;
+  opacity: var(--opacity-subtle);
   font-style: italic;
   background-color: var(--vscode-input-background);
 }
