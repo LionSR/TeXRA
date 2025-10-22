@@ -68,6 +68,7 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: var(--width-dropdown);
   display: none;
+  flex-direction: column;
   font-size: calc(var(--vscode-editor-font-size) * 0.9);
   padding: 1px;
   white-space: nowrap;
@@ -76,6 +77,8 @@
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
 .dropdown-options vscode-checkbox {
+  display: block;
+  width: 100%;
   padding: 1px var(--spacing-tiny);
   border-radius: var(--border-radius-small);
   font-weight: normal;
