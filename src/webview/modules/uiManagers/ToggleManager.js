@@ -56,6 +56,15 @@ export class ToggleManager {
     );
   }
 
+  updateToolConfigToggleState() {
+    this.updateDropdownToggleState(
+      ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      CHECK_BOXES_TOOL_USE,
+      'tools',
+    );
+  }
+
   setupDocumentListeners() {
     document.addEventListener('click', (e) => {
       const autoExtractOptions = safeGetElementById(
@@ -72,6 +81,23 @@ export class ToggleManager {
         if (autoExtractOptions) {
           autoExtractOptions.style.display = 'none';
           this.updateAutoToggleState();
+        }
+      }
+
+      const toolConfigOptions = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      );
+      const toggleToolConfig = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      );
+
+      if (
+        !toggleToolConfig?.contains(e.target) &&
+        !toolConfigOptions?.contains(e.target)
+      ) {
+        if (toolConfigOptions) {
+          toolConfigOptions.style.display = 'none';
+          this.updateToolConfigToggleState();
         }
       }
     });

@@ -14,13 +14,15 @@
 }
 
 #instruction {
-  min-height: var(--height-medium);
-  max-height: var(--height-xlarge);
-  resize: none;
-  overflow-y: auto;
-  transition: height 0.1s ease-out;
+  width: 100%;
   margin-top: var(--spacing-medium);
   margin-bottom: var(--spacing-medium);
+}
+
+/* Auto-resize is handled by JavaScript, but set a max-height limit */
+#instruction::part(control) {
+  max-height: var(--height-xlarge);
+  transition: height 0.1s ease-out;
 }
 
 .instruction-controls {
