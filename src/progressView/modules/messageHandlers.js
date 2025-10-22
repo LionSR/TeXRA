@@ -86,11 +86,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (filterContainer) {
       filterContainer.querySelectorAll('[data-filter]').forEach((btn) => {
         const isActive = btn.dataset.filter === state.agentTypeFilter;
-        // For vscode-button: active = primary (no secondary), inactive = secondary
+        // For vscode-toolbar-button with toggleable: use checked attribute
         if (isActive) {
-          btn.removeAttribute('secondary');
+          btn.setAttribute('checked', '');
         } else {
-          btn.setAttribute('secondary', '');
+          btn.removeAttribute('checked');
         }
         btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
