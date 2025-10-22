@@ -62,7 +62,7 @@ export class InstructionPanel {
     const textChanged = normalized !== this._currentText;
     this._currentText = normalized;
 
-    elements.text.textContent = normalized;
+    elements.text.value = normalized;
     elements.container.classList.add('is-visible');
     elements.container.setAttribute('aria-hidden', 'false');
 
@@ -95,7 +95,7 @@ export class InstructionPanel {
     this._currentText = '';
     this._expanded = false;
 
-    elements.text.textContent = '';
+    elements.text.value = '';
     elements.container.classList.remove('is-visible', 'is-expanded');
     elements.container.setAttribute('aria-hidden', 'true');
 
