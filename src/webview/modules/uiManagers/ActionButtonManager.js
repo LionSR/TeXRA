@@ -31,6 +31,12 @@ export class ActionButtonManager extends BaseUIManager {
           collectCurrentContext({ fileList: this.fileList });
         const model = safeGetElementValue('model');
 
+        // Show progress ring
+        const progressRing = document.getElementById('polishProgressRing');
+        if (progressRing) {
+          progressRing.style.display = 'inline-block';
+        }
+
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT,
           text: instruction.value,

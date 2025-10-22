@@ -374,8 +374,7 @@
                 class="tool-toggle"
                 title="Tool configuration options"
               >
-                <i class="codicon codicon-tools"></i
-                ><i class="codicon codicon-chevron-down"></i>
+                <i class="codicon codicon-chevron-down"></i>
               </span>
               <div
                 id="toolConfigOptions"
@@ -408,6 +407,10 @@
                 icon="sparkle"
                 label="Polish instruction text with AI"
               ></vscode-toolbar-button>
+              <vscode-progress-ring
+                id="polishProgressRing"
+                style="display: none; width: 16px; height: 16px"
+              ></vscode-progress-ring>
               <vscode-toolbar-button
                 id="recordInstructionButton"
                 icon="mic"

@@ -569,6 +569,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const instruction = this._getElement('instruction');
     if (instruction && message.text) {
       instruction.value = message.text;
+
+      // Hide progress ring
+      const progressRing = document.getElementById('polishProgressRing');
+      if (progressRing) {
+        progressRing.style.display = 'none';
+      }
+
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
         text: 'Instruction text has been polished!',
