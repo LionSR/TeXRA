@@ -27,7 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-medium);
+  gap: var(--spacing-large);
   flex-wrap: wrap;
   width: 100%;
 }
@@ -42,8 +42,9 @@
 
 #executeButton {
   font-size: var(--font-size);
-  margin-left: auto;
+  margin-left: var(--spacing-small);
   flex-shrink: 0;
+  min-width: 3rem;
 }
 
 /* Recording button states - icon change is enough, no red background needed */
