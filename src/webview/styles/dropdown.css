@@ -14,7 +14,8 @@
 }
 
 /* Toggle button styling */
-.auto-toggle {
+.auto-toggle,
+.tool-toggle {
   cursor: pointer;
   user-select: none;
   color: var(--vscode-foreground);
@@ -30,15 +31,17 @@
   font-weight: normal;
 }
 
-.auto-toggle.active {
+.auto-toggle.active,
+.tool-toggle.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
   border-color: var(--vscode-list-activeSelectionBackground);
 }
 
-/* Remove duplicate icon styling - use .auto-toggle .codicon instead */
+/* Remove duplicate icon styling - use .auto-toggle/.tool-toggle .codicon instead */
 
-.auto-toggle .codicon {
+.auto-toggle .codicon,
+.tool-toggle .codicon {
   font-size: var(--font-size-sm);
   margin-left: 1px;
   margin-right: 0;
