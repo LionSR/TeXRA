@@ -195,6 +195,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     return {
       [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (m) =>
         this.handleInstructionTextPolished(m),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (m) =>
+        this.handleInstructionTextPolishError(m),
       [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (m) =>
         this.handleInstructionTextTranscribed(m),
     };
@@ -570,10 +572,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (instruction && message.text) {
       instruction.value = message.text;
 
-      // Hide progress ring
-      const progressRing = document.getElementById('polishProgressRing');
-      if (progressRing) {
-        progressRing.style.display = 'none';
+      // Hide progress indicator
+      const progressContainer = document.getElementById(
+        'polishProgressContainer',
+      );
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
       }
 
       vscode.postMessage({
@@ -582,6 +586,23 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       });
       mainViewState.save();
     }
+    this._postHandle();
+  }
+
+  handleInstructionTextPolishError(message) {
+    // Hide progress indicator
+    const progressContainer = document.getElementById(
+      'polishProgressContainer',
+    );
+    if (progressContainer) {
+      progressContainer.style.display = 'none';
+    }
+
+    // Show error message
+    vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: `Error polishing text: ${message.error || 'Unknown error'}`,
+    });
     this._postHandle();
   }
 

@@ -92,6 +92,7 @@ export const MAIN_VIEW_COMMANDS = {
   // Extension response events
   CHECK_RESTORED_BASE_FILE: 'checkRestoredBaseFile',
   INSTRUCTION_TEXT_POLISHED: 'instructionTextPolished',
+  INSTRUCTION_TEXT_POLISH_ERROR: 'instructionTextPolishError',
   INSTRUCTION_TEXT_TRANSCRIBED: 'instructionTextTranscribed',
   RECORDING_STARTED: 'recordingStarted',
   RECORDING_ERROR: 'recordingError',
