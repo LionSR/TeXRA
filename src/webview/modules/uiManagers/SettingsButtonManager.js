@@ -50,25 +50,32 @@ export class SettingsButtonManager extends BaseUIManager {
       this.toggleManager.updateAutoToggleState();
     });
 
+    this.addListener(ELEMENT_IDS.TOGGLE_TOOL_CONFIG, 'click', (e) => {
+      e.stopPropagation();
+      const options = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_OPTIONS);
+      if (options) {
+        const visible = options.style.display === 'block';
+        options.style.display = visible ? 'none' : 'block';
+      }
+      this.toggleManager.updateToolConfigToggleState();
+    });
+
     CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
       this.addListener(id, 'change', () => {
         this.toggleManager.updateAutoToggleState();
       });
     });
 
-    // Add change listeners for checkboxes (excluding tool config)
-    CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
-      (id) => {
-        this.addListener(id, 'change', handleCheckboxChange);
-      },
-    );
+    CHECK_BOXES_TOOL_USE.forEach((id) => {
+      this.addListener(id, 'change', () => {
+        this.toggleManager.updateToolConfigToggleState();
+      });
+    });
 
-    // Add change listener for tool config multi-select
-    this.addListener(
-      ELEMENT_IDS.TOOL_CONFIG_SELECT,
-      'change',
-      handleCheckboxChange,
-    );
+    // Add change listeners for checkboxes
+    CHECK_BOXES.forEach((id) => {
+      this.addListener(id, 'change', handleCheckboxChange);
+    });
 
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
