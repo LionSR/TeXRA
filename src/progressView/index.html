@@ -230,12 +230,12 @@
                 <i class="multi-file"></i>
               </div>
             </button>
-            <vscode-button
+            <vscode-toolbar-button
               class="tab-delete"
               data-stream=""
-              title="Delete stream"
               icon="close"
-            ></vscode-button>
+              label="Delete stream"
+            ></vscode-toolbar-button>
           </div>
         </template>
         <template id="roundHeaderTemplate">
@@ -261,16 +261,13 @@
               <i class="toggle-icon"></i>
               <i class="codicon icon"></i>
               <span class="label"></span>
-              <vscode-button
+              <vscode-toolbar-button
                 class="banner-content-copy"
-                type="button"
-                aria-label="Copy content"
-                title="Copy content"
+                icon="copy"
+                label="Copy content"
                 data-default-title="Copy content"
                 data-success-title="Copied!"
-              >
-                <i class="codicon codicon-copy"></i>
-              </vscode-button>
+              ></vscode-toolbar-button>
             </summary>
             <div
               class="banner-content log-entry-content markdown-content"
