@@ -3,9 +3,6 @@
  * Imports all modular CSS files
  */
 
-/* Import common styles first */
-@import '../../common/styles/common.css';
-
 /* Import base styles */
 @import './base.css';
 
