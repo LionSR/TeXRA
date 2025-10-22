@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', function () {
   mainViewState.restore();
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
-  toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
   toggleManager.setupDocumentListeners();
   setupHandlers({ requestData: true });
