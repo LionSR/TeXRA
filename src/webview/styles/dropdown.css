@@ -69,7 +69,7 @@
   min-width: var(--width-dropdown);
   display: none;
   flex-direction: column;
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  font-size: var(--font-size-sm);
   padding: 1px;
   white-space: nowrap;
   font-weight: normal;
@@ -82,7 +82,7 @@
   padding: 1px var(--spacing-tiny);
   border-radius: var(--border-radius-small);
   font-weight: normal;
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  font-size: var(--font-size-sm);
   line-height: 1;
 }
 
@@ -93,7 +93,7 @@
 .dropdown-options .codicon {
   width: var(--width-icon);
   text-align: center;
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  font-size: var(--font-size-sm);
 }
 
 /* Disabled option styling - shared across dropdowns */

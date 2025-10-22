@@ -168,34 +168,10 @@
             "description": "Enable streaming API responses when supported by the model. This serves as a global default but can be overridden by provider-specific settings.",
             "scope": "resource"
           },
-          "texra.model.useStreamingAnthropic": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for Anthropic models. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
           "texra.model.useStreamingOpenai": {
             "type": "boolean",
             "default": true,
             "description": "Enable streaming for OpenAI models. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingGoogle": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for Google models. Works with both the OpenAI-compatible API and the native GenAI SDK. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingXai": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for xAI models via OpenAI-compatible API. Overrides the global useStreaming setting.",
-            "scope": "resource"
-          },
-          "texra.model.useStreamingDeepseek": {
-            "type": "boolean",
-            "default": true,
-            "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
           "texra.model.baseUrlDeepSeek": {
@@ -783,23 +759,6 @@
             "default": "",
             "description": "Path to the SoX executable. Overrides automatic detection.",
             "scope": "resource"
-          }
-        }
-      },
-      {
-        "title": "API Keys",
-        "properties": {
-          "texra.apiKeys.set": {
-            "type": "null",
-            "scope": "application",
-            "markdownDescription": "API keys are now stored securely. [Click here to set an API key](command:texra.setApiKey)",
-            "readOnly": true
-          },
-          "texra.apiKeys.remove": {
-            "type": "null",
-            "scope": "application",
-            "markdownDescription": "API keys are now stored securely. [Click here to remove the stored key](command:texra.removeApiKey)",
-            "readOnly": true
           }
         }
       },
