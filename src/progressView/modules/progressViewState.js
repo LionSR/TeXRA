@@ -63,7 +63,11 @@ class TaskGroups {
       return;
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'status',
+    );
+    if (hasStatusUpdate && updates.status) {
       group.status = updates.status;
     }
     if (
