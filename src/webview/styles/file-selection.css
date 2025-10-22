@@ -75,7 +75,6 @@ vscode-toolbar-container.file-select-actions {
   display: flex;
   align-items: center;
   height: var(--height-control);
-  opacity: var(--opacity-subtle);
 }
 
 .toggle-icon {
@@ -85,7 +84,6 @@ vscode-toolbar-container.file-select-actions {
   position: relative;
   padding: 0 var(--spacing-tiny);
   color: var(--text-color);
-  opacity: var(--opacity-subtle);
   display: flex;
   align-items: center;
   height: var(--height-control);
@@ -99,7 +97,6 @@ vscode-toolbar-container.file-select-actions {
 .file-select:has(.multiple-files-container[style*='block']) .optional-label,
 .file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: var(--opacity-full);
 }
 
 /* Add this specific selector for Multiple Output Files section */
@@ -153,13 +150,7 @@ vscode-toolbar-container.file-select-actions {
 }
 
 /* Show/hide behavior for LaTeX diffs */
-.latexdiffs-section:has(#latexdiffsContent[style*='none']) .optional-label,
-.latexdiffs-section:has(#latexdiffsContent[style*='none']) .toggle-icon {
-  opacity: var(--opacity-subtle);
-}
-
 .latexdiffs-section:has(#latexdiffsContent[style*='block']) .optional-label,
 .latexdiffs-section:has(#latexdiffsContent[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: var(--opacity-full);
 }

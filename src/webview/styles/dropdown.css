@@ -87,7 +87,6 @@
 .dropdown-options .codicon {
   width: var(--width-icon);
   text-align: center;
-  opacity: var(--opacity-subtle);
   font-size: calc(var(--vscode-editor-font-size) * 0.9);
 }
 
