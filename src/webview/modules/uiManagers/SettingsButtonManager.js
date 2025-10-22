@@ -50,16 +50,6 @@ export class SettingsButtonManager extends BaseUIManager {
       this.toggleManager.updateAutoToggleState();
     });
 
-    this.addListener(ELEMENT_IDS.TOGGLE_TOOL_CONFIG, 'click', (e) => {
-      e.stopPropagation();
-      const options = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_OPTIONS);
-      if (options) {
-        const visible = options.style.display === 'block';
-        options.style.display = visible ? 'none' : 'block';
-      }
-      this.toggleManager.updateToolConfigToggleState();
-    });
-
     CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
       this.addListener(id, 'change', () => {
         this.toggleManager.updateAutoToggleState();
