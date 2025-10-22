@@ -170,32 +170,22 @@ export class SettingsButtonManager extends BaseUIManager {
         }
       };
 
-      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
-      if (radioGroup) {
-        this.addListener(radioGroup, 'change', () => {
-          // For vscode-radio-group, the value is on the radio group itself
-          const sessionType =
-            radioGroup.value || radioGroup.getAttribute('value');
+      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+      buttons.forEach((button) => {
+        this.addListener(button, 'click', () => {
+          if (!(button instanceof HTMLElement)) {
+            return;
+          }
+          const sessionType = button.dataset.sessionType;
           if (!sessionType) {
             return;
           }
+          // Update active state on toggle buttons
+          buttons.forEach((btn) => btn.classList.remove('active'));
+          button.classList.add('active');
           handleSessionTypeSelection(sessionType);
         });
-      } else {
-        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-        buttons.forEach((button) => {
-          this.addListener(button, 'click', () => {
-            if (!(button instanceof HTMLElement)) {
-              return;
-            }
-            const sessionType = button.dataset.sessionType;
-            if (!sessionType) {
-              return;
-            }
-            handleSessionTypeSelection(sessionType);
-          });
-        });
-      }
+      });
     }
 
     AGENT_SELECT_LIST.forEach((id) => {
