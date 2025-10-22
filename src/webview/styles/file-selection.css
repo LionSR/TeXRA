@@ -113,6 +113,15 @@ vscode-toolbar-container.file-select-actions {
 }
 
 /* Add this specific selector for Multiple Output Files section */
+.file-select:has(#outputFilesContainer[style*='none']) .optional-label {
+  opacity: 0.6;
+}
+
+.file-select:has(#outputFilesContainer[style*='block']) .optional-label {
+  color: var(--vscode-foreground);
+  opacity: 1;
+}
+
 .file-select:has(#outputFilesContainer[style*='none']) #emptyOutputFilesButton,
 .file-select:has(#outputFilesContainer[style*='none'])
   #selectOutputFilesButton {
