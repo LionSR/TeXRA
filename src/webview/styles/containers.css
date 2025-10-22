@@ -10,7 +10,7 @@
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .file-selection-group--disabled {
@@ -34,6 +34,11 @@
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
+  overflow: visible;
+}
+
+#latexdiffsContent {
+  overflow: visible;
 }
 
 /* Ensure all button sizes are consistent */

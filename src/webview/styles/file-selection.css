@@ -167,3 +167,12 @@ vscode-toolbar-container.file-select-actions {
 .latexdiffs-section:has(#latexdiffsContent[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
 }
+
+/* Ensure commit dropdown can extend beyond container */
+#commit {
+  position: relative;
+}
+
+#commit::part(listbox) {
+  max-height: 300px;
+}
