@@ -144,8 +144,8 @@ export function getSelectedOptionElement(element) {
     return null;
   }
 
-  const currentValue = element.value ?? '';
-  if (currentValue) {
+  const currentValue = element.value;
+  if (currentValue !== undefined && currentValue !== null) {
     const matchingOption = options.find(
       (option) => option.value === currentValue,
     );
