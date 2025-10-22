@@ -159,31 +159,52 @@ export class SettingsButtonManager extends BaseUIManager {
   _setupDropdowns() {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-      buttons.forEach((button) => {
-        this.addListener(button, 'click', () => {
-          if (!(button instanceof HTMLElement)) {
+      const handleSessionTypeSelection = (sessionType) => {
+        const normalized = sessionType ?? SESSION_TYPES.WORKFLOW;
+        this.state.applySessionType(normalized);
+        const selectId =
+          AGENT_SELECT_IDS[normalized] ??
+          AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
+        const selectElement = safeGetElementById(selectId);
+        if (isSelectLikeElement(selectElement)) {
+          this._handleAgentSelection(selectElement);
+          if (typeof selectElement.focus === 'function') {
+            selectElement.focus();
+          }
+        } else {
+          this.state.save();
+        }
+      };
+
+      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
+      if (radioGroup) {
+        this.addListener(radioGroup, 'change', (event) => {
+          const target = event?.target;
+          if (!(target instanceof HTMLElement)) {
             return;
           }
-          const sessionType = button.dataset.sessionType;
+          const sessionType =
+            target.dataset.sessionType || target.getAttribute('value');
           if (!sessionType) {
             return;
           }
-          this.state.applySessionType(sessionType);
-          const selectId =
-            AGENT_SELECT_IDS[sessionType] ??
-            AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
-          const selectElement = safeGetElementById(selectId);
-          if (isSelectLikeElement(selectElement)) {
-            this._handleAgentSelection(selectElement);
-            if (typeof selectElement.focus === 'function') {
-              selectElement.focus();
-            }
-          } else {
-            this.state.save();
-          }
+          handleSessionTypeSelection(sessionType);
         });
-      });
+      } else {
+        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+        buttons.forEach((button) => {
+          this.addListener(button, 'click', () => {
+            if (!(button instanceof HTMLElement)) {
+              return;
+            }
+            const sessionType = button.dataset.sessionType;
+            if (!sessionType) {
+              return;
+            }
+            handleSessionTypeSelection(sessionType);
+          });
+        });
+      }
     }
 
     AGENT_SELECT_LIST.forEach((id) => {
