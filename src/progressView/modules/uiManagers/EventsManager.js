@@ -53,7 +53,7 @@ export class EventsManager {
 
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
-      const button = e.target.closest('button[data-command]');
+      const button = e.target.closest('[data-command]');
       if (!button || button.disabled) return;
 
       const command = button.dataset.command;
@@ -104,15 +104,24 @@ export class EventsManager {
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
     if (radioGroup) {
-      addEventListenerSafely(radioGroup, 'change', (e) => {
-        const filter = radioGroup.value;
-        if (filter) {
-          vscode.postMessage({
-            command: COMMANDS.FILTER_STREAMS,
-            filter: filter,
-          });
-        }
-      });
+      const attachRadioListener = () => {
+        addEventListenerSafely(radioGroup, 'change', (e) => {
+          const filter = radioGroup.value;
+          if (filter) {
+            vscode.postMessage({
+              command: COMMANDS.FILTER_STREAMS,
+              filter: filter,
+            });
+          }
+        });
+      };
+
+      // Wait for web component to be ready if needed
+      if (radioGroup.updateComplete) {
+        radioGroup.updateComplete.then(attachRadioListener);
+      } else {
+        attachRadioListener();
+      }
     }
 
     // Handle banner-details and file-list-details toggle events

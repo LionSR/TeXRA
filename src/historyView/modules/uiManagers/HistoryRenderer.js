@@ -219,7 +219,7 @@ export class HistoryRenderer {
     const container = safeGetElementById(ELEMENT_IDS.HISTORY_CONTAINER);
     if (!container) return;
     addEventListenerSafely(ELEMENT_IDS.HISTORY_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('button[data-command]');
+      const btn = e.target.closest('[data-command]');
       if (btn) {
         const command = btn.dataset.command;
         const historyId = btn.getAttribute('data-id');
