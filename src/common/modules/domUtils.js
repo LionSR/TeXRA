@@ -5,6 +5,16 @@ import {
   CHEVRON_RIGHT_CLASS,
 } from './iconConstants.js';
 
+function getTagName(element) {
+  return typeof element?.tagName === 'string'
+    ? element.tagName.toLowerCase()
+    : '';
+}
+
+function isVsCodeSelectElement(element) {
+  return getTagName(element) === 'vscode-single-select';
+}
+
 function setChevronIconImpl(
   element,
   expanded,
@@ -98,6 +108,59 @@ export function setElementsDisabled(idsOrElements, disabled) {
       el.disabled = disabled;
     }
   });
+}
+
+export function isSelectLikeElement(element) {
+  if (!element) {
+    return false;
+  }
+  if (element instanceof HTMLSelectElement) {
+    return true;
+  }
+  return isVsCodeSelectElement(element);
+}
+
+export function getSelectOptionElements(element) {
+  if (!isSelectLikeElement(element)) {
+    return [];
+  }
+  if (element instanceof HTMLSelectElement) {
+    return Array.from(element.options);
+  }
+  return Array.from(element.querySelectorAll('vscode-option'));
+}
+
+export function getSelectedOptionElement(element) {
+  if (!isSelectLikeElement(element)) {
+    return null;
+  }
+
+  if (element instanceof HTMLSelectElement) {
+    return element.options[element.selectedIndex] ?? null;
+  }
+
+  const options = getSelectOptionElements(element);
+  if (options.length === 0) {
+    return null;
+  }
+
+  const currentValue = element.value;
+  if (currentValue !== undefined && currentValue !== null) {
+    const matchingOption = options.find(
+      (option) => option.value === currentValue,
+    );
+    if (matchingOption) {
+      return matchingOption;
+    }
+  }
+
+  return (
+    options.find(
+      (option) => option.hasAttribute('selected') || option.selected,
+    ) ??
+    options[0] ??
+    null
+  );
 }
 
 /**

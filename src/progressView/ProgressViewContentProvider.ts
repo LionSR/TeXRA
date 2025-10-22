@@ -45,7 +45,6 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
     return {
       ...this.buildUriRecord(webview, this.moduleDescriptors),
-      splitJsUri: this.getNodeModulesUri(webview, 'split.js/dist/split.es.js'),
     };
   }
 }

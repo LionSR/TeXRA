@@ -9,7 +9,6 @@ import {
   setup as setupHandlers,
   cleanup as cleanupHandlers,
 } from './modules/messageHandlers.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -23,12 +22,11 @@ window.addEventListener('beforeunload', () => {
 
 // Setup UI when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
-  initializeIconButtons();
   mainViewState.restore();
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
-  toggleManager.updateToolConfigToggleState();
   toggleManager.updateAutoToggleState();
+  toggleManager.updateToolConfigToggleState();
   toggleManager.setupDocumentListeners();
   setupHandlers({ requestData: true });
   vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });

@@ -165,7 +165,7 @@ export function createAgentOptionTag(
   }
 
   const label = decorateLabel(agentName, metadata);
-  return `<option ${attributes.join(' ')}>${encodeHtml(label)}</option>`;
+  return `<vscode-option ${attributes.join(' ')}>${encodeHtml(label)}</vscode-option>`;
 }
 
 export function buildAgentOptionsPayload(
@@ -218,7 +218,7 @@ export function buildAgentOptionsPayload(
     emptyMessage: string,
   ): string => {
     if (entries.length === 0) {
-      return `<option value="">${emptyMessage}</option>`;
+      return `<vscode-option value="">${emptyMessage}</vscode-option>`;
     }
 
     let orderedEntries = [...entries];

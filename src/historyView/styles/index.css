@@ -131,28 +131,17 @@ mark.current-match {
 }
 
 /* Collapsible content */
-.collapsible {
+.history-collapsible {
+  margin-top: var(--spacing-small);
+}
+
+.history-collapsible::part(body) {
   max-height: var(--height-medium);
   overflow: hidden;
   transition: max-height 0.3s ease;
 }
 
-.collapsible.expanded {
-  max-height: var(--height-max);
-}
-
-.toggle-button {
-  color: var(--vscode-textLink-foreground);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-  margin-top: var(--spacing-small);
-}
-
-/* Automatically expand sections that contain search matches */
-.collapsible:has(mark) {
+.history-collapsible[open]::part(body) {
   max-height: var(--height-max);
 }
 
