@@ -630,7 +630,7 @@ export class LogEntryFormatter {
               <span class="tool-use-sublabel">Output:</span>
               <pre class="tool-output-preview">${preview}</pre>
               <details class="tool-output-details">
-                <summary>Show full output</summary>
+                <summary class="details-summary">Show full output</summary>
                 <pre class="tool-output-full">${encodedOutput}</pre>
               </details>
             </div>
@@ -885,7 +885,7 @@ export class LogEntryFormatter {
           }
         }
 
-        items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+        items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
       });
     });
 
@@ -942,7 +942,7 @@ export class LogEntryFormatter {
         const escaped = encodeHtml(filePath);
         const fileName = getBasename(filePath);
         const fileNameEscaped = encodeHtml(fileName);
-        return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
+        return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
       })
       .join('');
 
@@ -1037,7 +1037,7 @@ export class LogEntryFormatter {
 
       const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
 
-      items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
+      items += `<li class="detail-item"><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
         baseName,
       )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
         revisedName,
@@ -1073,7 +1073,7 @@ export class LogEntryFormatter {
     const items = [];
     const pushItem = (icon, label, value, suffix = '') => {
       items.push(
-        `<span class="stat-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
+        `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
       );
     };
 
