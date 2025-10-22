@@ -37,8 +37,7 @@
   margin-left: auto;
 }
 
-.collapsible-header:hover + .banner-content-copy,
-.banner-details:hover .banner-content-copy,
+.details-summary:hover .banner-content-copy,
 .banner-details:focus-within .banner-content-copy,
 .banner-content-copy:focus-visible,
 .banner-content-copy.copy-success {
