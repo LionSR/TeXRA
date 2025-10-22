@@ -30,28 +30,10 @@ body {
   overflow: hidden;
 }
 
-/* Split.js styles */
-.gutter {
-  background-color: var(--vscode-panel-border);
-  position: relative;
-}
-
-.gutter:hover {
-  background-color: var(--vscode-focusBorder);
-}
-
-.gutter-horizontal {
-  cursor: col-resize;
-  width: 1px;
-}
-
-.gutter-horizontal::after {
-  content: '';
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  top: 0;
-  bottom: 0;
+/* vscode-split-layout styles */
+vscode-split-layout {
+  height: 100vh;
+  width: 100%;
 }
 
 /* Animations */

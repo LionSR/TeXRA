@@ -1,8 +1,5 @@
-// Third-party imports
-import Split from 'split.js';
-
 // Local imports - progress view
-import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 import { copyWithFeedback } from '../utils.js';
 
@@ -110,14 +107,6 @@ export class EventsManager {
           filter: btn.dataset.filter,
         });
       }
-    });
-
-    // Initialize split view
-    Split(['.content-area', '.tabs'], {
-      sizes: [SPLIT_SIZES.CONTENT, SPLIT_SIZES.TABS],
-      minSize: [200, 100],
-      gutterSize: 5,
-      cursor: 'col-resize',
     });
 
     // Handle banner-details and file-list-details toggle events
