@@ -126,52 +126,38 @@ export class InstructionManager {
         );
       }
 
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Polishing your instruction text',
-          cancellable: false,
-        },
-        async (progress) => {
-          try {
-            progress.report({ message: 'Preparing text and context...' });
-            await sleep(300);
-            progress.report({
-              message: 'Sending to AI for polishing...',
-              increment: 30,
-            });
-            const result = await polishTextWithAI(message.text, fileContext);
-            progress.report({ message: 'Applying changes...', increment: 60 });
-            await sleep(300);
-            if (result.success) {
-              webviewView.webview.postMessage({
-                command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
-                text: result.text,
-              });
-            } else {
-              vscode.window.showErrorMessage(
-                result.error || 'Error polishing text',
-              );
-            }
-          } catch (error) {
-            vscode.window.showErrorMessage(
-              `Error polishing text: ${
-                error instanceof Error ? error.message : 'Unknown error'
-              }`,
-            );
-            logger.error(
-              CHANNEL,
-              `Error in handlePolishInstructionText: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
-        },
-      );
+      try {
+        const result = await polishTextWithAI(message.text, fileContext);
+        if (result.success) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
+            text: result.text,
+          });
+        } else {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+            error: result.error || 'Error polishing text',
+          });
+        }
+      } catch (error) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+          error:
+            error instanceof Error ? error.message : 'Unknown error occurred',
+        });
+        logger.error(
+          CHANNEL,
+          `Error in handlePolishInstructionText: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error setting up text polishing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      });
       logger.error(
         CHANNEL,
         `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
