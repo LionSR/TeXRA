@@ -407,10 +407,17 @@
                 icon="sparkle"
                 label="Polish instruction text with AI"
               ></vscode-toolbar-button>
-              <vscode-progress-ring
-                id="polishProgressRing"
-                style="display: none; width: 16px; height: 16px"
-              ></vscode-progress-ring>
+              <div
+                id="polishProgressContainer"
+                style="display: none; align-items: center; gap: 8px"
+              >
+                <vscode-progress-ring
+                  style="width: 16px; height: 16px"
+                ></vscode-progress-ring>
+                <span id="polishProgressText" style="font-size: 13px"
+                  >Polishing...</span
+                >
+              </div>
               <vscode-toolbar-button
                 id="recordInstructionButton"
                 icon="mic"

@@ -31,10 +31,12 @@ export class ActionButtonManager extends BaseUIManager {
           collectCurrentContext({ fileList: this.fileList });
         const model = safeGetElementValue('model');
 
-        // Show progress ring
-        const progressRing = document.getElementById('polishProgressRing');
-        if (progressRing) {
-          progressRing.style.display = 'inline-block';
+        // Show progress indicator
+        const progressContainer = document.getElementById(
+          'polishProgressContainer',
+        );
+        if (progressContainer) {
+          progressContainer.style.display = 'flex';
         }
 
         this.vscode.postMessage({
