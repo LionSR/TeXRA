@@ -190,7 +190,7 @@ export class MainViewProvider
 
     // Check if there's state to restore from the command
     const hasStateToRestore = await vscode.commands.executeCommand(
-      'getContext',
+      'vscode.getContextKeyValue',
       'texra.hasStateToRestore',
     );
 
@@ -198,7 +198,7 @@ export class MainViewProvider
       try {
         // Get the stored state
         const storedState = await vscode.commands.executeCommand(
-          'getContext',
+          'vscode.getContextKeyValue',
           'texra.stateToRestore',
         );
 
