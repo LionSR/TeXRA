@@ -167,27 +167,10 @@ export class MainViewState {
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
       });
 
-      // Load checkboxes (excluding tool config which is now a multi-select)
-      CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
-        (id) => {
-          safeSetElementChecked(id, previousState[id] ?? false);
-        },
-      );
-
-      // Load tool config multi-select
-      const toolConfigSelect = safeGetElementById(
-        ELEMENT_IDS.TOOL_CONFIG_SELECT,
-      );
-      if (toolConfigSelect) {
-        const selectedValues = [];
-        if (previousState.attachTeXCount) {
-          selectedValues.push('attachTeXCount');
-        }
-        if (previousState.attachDiagnostics) {
-          selectedValues.push('attachDiagnostics');
-        }
-        toolConfigSelect.value = selectedValues;
-      }
+      // Load checkboxes
+      CHECK_BOXES.forEach((id) => {
+        safeSetElementChecked(id, previousState[id] ?? false);
+      });
 
       const autoExtractToggle = safeGetElementById(
         ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,

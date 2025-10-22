@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
   toggleManager.updateAutoToggleState();
+  toggleManager.updateToolConfigToggleState();
   toggleManager.setupDocumentListeners();
   setupHandlers({ requestData: true });
   vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
