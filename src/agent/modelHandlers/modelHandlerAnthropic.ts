@@ -295,6 +295,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.config.fullName.includes('claude-opus-4') ||
         this.config.fullName.includes('claude-sonnet-4-5') ||
         this.config.fullName.includes('claude-sonnet-4') ||
+        this.config.fullName.includes('claude-haiku-4-5') ||
         this.config.fullName.includes('claude-3-7-sonnet')
       ) {
         delete options.temperature;
