@@ -87,7 +87,10 @@
             ></span>
             <span id="runSummary" class="run-summary"></span>
           </div>
-          <div id="toolbarContainer" class="header-actions button-group"></div>
+          <vscode-toolbar-container
+            id="toolbarContainer"
+            class="header-actions"
+          ></vscode-toolbar-container>
         </div>
         <div
           id="instructionContainer"
@@ -96,27 +99,25 @@
         >
           <div class="instruction-panel__header">
             <span class="instruction-panel__title">Instruction</span>
-            <div class="instruction-panel__actions button-group">
-                            <vscode-button
+            <vscode-toolbar-container class="instruction-panel__actions">
+              <vscode-toolbar-button
                 id="instructionCopyBtn"
                 class="instruction-panel__copy"
-                type="button"
-                title="Copy instruction"
-                aria-label="Copy instruction"
+                icon="copy"
+                label="Copy instruction"
                 data-default-title="Copy instruction"
                 data-success-title="Copied!"
-                icon="copy"
-              ></vscode-button>
-                            <vscode-button
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 id="instructionToggleBtn"
                 class="instruction-panel__toggle is-hidden"
-                type="button"
                 aria-expanded="false"
                 aria-label="Expand instruction"
                 aria-hidden="true"
                 icon="chevron-down"
-              ></vscode-button>
-            </div>
+                label="Expand instruction"
+              ></vscode-toolbar-button>
+            </vscode-toolbar-container>
           </div>
           <div class="instruction-panel__body" role="presentation">
             <div
@@ -134,28 +135,28 @@
             
             placeholder="Send follow-up message"
           ></vscode-textarea>
-          <div class="follow-up-actions button-group">
-                        <vscode-button
+          <vscode-toolbar-container class="follow-up-actions">
+            <vscode-toolbar-button
               id="polishFollowUpBtn"
-              title="Polish follow-up with AI"
               icon="sparkle"
-            ></vscode-button>
-                        <vscode-button
+              label="Polish follow-up with AI"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               id="recordFollowUpBtn"
-              title="Record follow-up with microphone"
               icon="mic"
-            ></vscode-button>
-                        <vscode-button
+              label="Record follow-up with microphone"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               id="clearFollowUpBtn"
-              title="Clear input"
               icon="clear-all"
-            ></vscode-button>
-                        <vscode-button
+              label="Clear input"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               id="sendFollowUpBtn"
-              title="Send"
               icon="send"
-            ></vscode-button>
-          </div>
+              label="Send"
+            ></vscode-toolbar-button>
+          </vscode-toolbar-container>
         </div>
         <template id="fileItemTemplate">
           <div class="file-item">
@@ -166,33 +167,33 @@
               </span>
             </span>
             <span class="file-stats"></span>
-            <span class="file-actions button-group">
-                            <vscode-button
+            <vscode-toolbar-container class="file-actions">
+              <vscode-toolbar-button
                 class="compare-btn"
-                title="Compare with base"
                 icon="diff"
-              ></vscode-button>
-                            <vscode-button
+                label="Compare with base"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 class="accept-btn"
-                title="Accept edits"
                 icon="check"
-              ></vscode-button>
-                            <vscode-button
+                label="Accept edits"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 class="merge-btn"
-                title="Merge edits"
                 icon="git-merge"
-              ></vscode-button>
-                            <vscode-button
+                label="Merge edits"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 class="diff-btn"
-                title="LaTeXdiff"
                 icon="diff-single"
-              ></vscode-button>
-                            <vscode-button
+                label="LaTeXdiff"
+              ></vscode-toolbar-button>
+              <vscode-toolbar-button
                 class="prev-btn"
-                title="Compare with previous round"
                 icon="diff-added"
-              ></vscode-button>
-            </span>
+                label="Compare with previous round"
+              ></vscode-toolbar-button>
+            </vscode-toolbar-container>
           </div>
         </template>
         <template id="usageTemplate">
@@ -350,54 +351,52 @@
           <!-- Stream tabs will be dynamically inserted here -->
         </div>
         <div class="clear-all-container">
-          <div class="button-group agent-filter-group" id="agentFilterButtons">
-                        <vscode-button
-              id="filterAllBtn"
-              data-filter="all"
-              aria-pressed="true"
-              All
-            ></vscode-button>
-                        <vscode-button
+          <vscode-toolbar-container
+            class="agent-filter-group"
+            id="agentFilterButtons"
+          >
+            <vscode-button id="filterAllBtn" data-filter="all" aria-pressed="true"
+              >All</vscode-button
+            >
+            <vscode-button
               id="filterWorkflowBtn"
               data-filter="workflow"
               aria-pressed="false"
-              Workflow
-            ></vscode-button>
-                        <vscode-button
+              >Workflow</vscode-button
+            >
+            <vscode-button
               id="filterToolBtn"
               data-filter="toolUse"
               aria-pressed="false"
-              Tool Use
-            ></vscode-button>
-          </div>
-          <div class="button-group" id="sortButtons">
-                        <vscode-button
+              >Tool Use</vscode-button
+            >
+          </vscode-toolbar-container>
+          <vscode-toolbar-container id="sortButtons">
+            <vscode-toolbar-button
               class="sort-btn"
               id="sortTimeBtn"
               data-sort="time"
-              title="Sort by time"
               icon="clock"
-            ></vscode-button>
-                        <vscode-button
+              label="Sort by time"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               class="sort-btn"
               id="sortFileBtn"
               data-sort="inputFile"
-              title="Sort by file"
               icon="file"
-            ></vscode-button>
-                        <vscode-button
+              label="Sort by file"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               class="sort-btn"
               id="sortAgentBtn"
               data-sort="agent"
-              title="Sort by agent"
               icon="account"
-            ></vscode-button>
-                        <vscode-button
-              id="deleteAllBtn"
-              icon="close-all"
-              Delete All
-            ></vscode-button>
-          </div>
+              label="Sort by agent"
+            ></vscode-toolbar-button>
+            <vscode-button id="deleteAllBtn" icon="close-all"
+              >Delete All</vscode-button
+            >
+          </vscode-toolbar-container>
         </div>
       </div>
     </div>

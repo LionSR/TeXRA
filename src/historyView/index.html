@@ -60,21 +60,21 @@
           type="search"
           placeholder="Search history items..."
         ></vscode-textfield>
-        <div class="search-controls">
-          <vscode-button
+        <vscode-toolbar-container class="search-controls">
+          <vscode-toolbar-button
             id="prevMatch"
             class="search-nav-btn"
-            title="Previous match"
             icon="chevron-up"
-          ></vscode-button>
-          <vscode-button
+            label="Previous match"
+          ></vscode-toolbar-button>
+          <vscode-toolbar-button
             id="nextMatch"
             class="search-nav-btn"
-            title="Next match"
             icon="chevron-down"
-          ></vscode-button>
+            label="Next match"
+          ></vscode-toolbar-button>
           <span id="matchCount" class="match-count"></span>
-        </div>
+        </vscode-toolbar-container>
       </div>
 
       <div id="clearButtonContainer">
@@ -89,23 +89,23 @@
       <div class="history-item">
         <div class="history-item-header">
           <div class="history-timestamp"></div>
-          <div class="history-actions button-group">
-            <vscode-button
+          <vscode-toolbar-container class="history-actions">
+            <vscode-toolbar-button
               class="delete-btn"
-              title=""
               icon="trash"
-            ></vscode-button>
-            <vscode-button
+              label="Delete"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               class="restore-btn"
-              title=""
               icon="reply"
-            ></vscode-button>
-            <vscode-button
+              label="Restore"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               class="rerun-btn"
-              title=""
               icon="debug-rerun"
-            ></vscode-button>
-          </div>
+              label="Rerun"
+            ></vscode-toolbar-button>
+          </vscode-toolbar-container>
         </div>
         <div class="history-details basic-details"></div>
         <div class="collapsible">
