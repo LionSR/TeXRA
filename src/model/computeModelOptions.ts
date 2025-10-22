@@ -67,15 +67,24 @@ export async function computeModelOptions(): Promise<string> {
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
-      const contextAttr =
-        config.contextWindow !== undefined
-          ? ` data-context="${formatContext(config.contextWindow)}"`
-          : '';
-      const costAttr = formatCost(config.inputPrice, config.outputPrice)
-        ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
+      const contextStr = config.contextWindow !== undefined
+        ? formatContext(config.contextWindow)
+        : '';
+      const contextAttr = contextStr
+        ? ` data-context="${contextStr}"`
+        : '';
+      const costStr = formatCost(config.inputPrice, config.outputPrice);
+      const costAttr = costStr ? ` data-cost="${costStr}"` : '';
+
+      // Build description for tooltip (context and cost)
+      const descriptionParts: string[] = [];
+      if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
+      if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
+      const descriptionAttr = descriptionParts.length > 0
+        ? ` description="${descriptionParts.join(' | ')}"`
         : '';
 
-      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</vscode-option>`;
+      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${label}</vscode-option>`;
     }),
   );
 
