@@ -61,7 +61,8 @@ vscode-toolbar-container.file-select-actions {
   font-size: var(--font-size);
 }
 
-.file-select select {
+.file-select select,
+.file-select vscode-single-select {
   width: 100%;
 }
 
