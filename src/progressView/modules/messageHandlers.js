@@ -84,7 +84,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
     if (filterContainer) {
-      filterContainer.querySelectorAll('button[data-filter]').forEach((btn) => {
+      filterContainer.querySelectorAll('[data-filter]').forEach((btn) => {
         const isActive = btn.dataset.filter === state.agentTypeFilter;
         btn.classList.toggle('toggled', isActive);
         btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');

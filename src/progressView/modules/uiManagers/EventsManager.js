@@ -103,7 +103,7 @@ export class EventsManager {
     });
 
     addEventListenerSafely(ELEMENT_IDS.AGENT_FILTER_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('button[data-filter]');
+      const btn = e.target.closest('[data-filter]');
       if (btn && btn.dataset.filter) {
         vscode.postMessage({
           command: COMMANDS.FILTER_STREAMS,
@@ -161,6 +161,9 @@ export class EventsManager {
       if (!copyButton) {
         return;
       }
+
+      // Prevent collapsible from toggling when clicking action buttons
+      e.stopPropagation();
 
       const contentElem = copyButton
         .closest('.banner-details')

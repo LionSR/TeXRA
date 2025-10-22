@@ -324,9 +324,11 @@ export class FileInputManager extends BaseUIManager {
         id === 'model' ||
         id === 'workflowAgent' ||
         id === 'toolUseAgent' ||
-        id === 'sessionType'
+        id === 'sessionType' ||
+        id === 'attachTeXCount' ||
+        id === 'attachDiagnostics'
       ) {
-        return; // handled by SettingsButtonManager
+        return; // handled by SettingsButtonManager or multi-select
       }
       if (id !== 'instruction') {
         this.addListener(id, 'change', () => this.state.save());
