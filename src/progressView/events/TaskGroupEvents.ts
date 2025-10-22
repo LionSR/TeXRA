@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
+import type { TaskGroupUpdatePayload, WebviewUpdater } from '../managers';
 import type { ProgressViewState } from '../state/ProgressViewState';
 
 // Local imports - events
@@ -79,15 +79,19 @@ export function createTaskGroupEvents(
     updater: WebviewUpdater,
   ): void => {
     withErrorBoundary('failed to handle updateTaskGroup', () => {
-      const { stream, groupId, status, endTime } = data;
+      const update: TaskGroupUpdatePayload = {
+        stream: data.stream,
+        groupId: data.groupId,
+        updates: {
+          status: data.status,
+          endTime: data.endTime,
+        },
+      };
 
-      state.taskGroups.updateGroup(stream, groupId, {
-        status,
-        endTime,
-      });
+      state.taskGroups.updateGroup(update);
 
-      if (updater.isAvailable() && stream === state.activeStream) {
-        updater.updateTaskGroup(stream, groupId, status, endTime);
+      if (updater.isAvailable() && data.stream === state.activeStream) {
+        updater.updateTaskGroup(update);
       }
     });
   };
