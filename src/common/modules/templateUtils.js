@@ -61,26 +61,22 @@ export function createIconButton({
   disabled = false,
   dataset = {},
 }) {
-  const element = document.createElement('vscode-button');
+  const element = document.createElement('vscode-toolbar-button');
   element.id = id;
   if (className) {
     element.className = className;
   }
   if (icon) {
     element.icon = icon;
-    element.iconOnly = true;
   }
-  element.title = title;
   if (title) {
+    element.setAttribute('label', title);
     element.setAttribute('aria-label', title);
-  } else {
-    element.removeAttribute('aria-label');
   }
   element.disabled = disabled;
   Object.entries(dataset).forEach(([key, value]) => {
     element.dataset[key] = value;
   });
-  element.type = 'button';
   return element;
 }
 
