@@ -187,8 +187,11 @@ export class SettingsButtonManager extends BaseUIManager {
           if (!(target instanceof HTMLElement)) {
             return;
           }
+          // For vscode-radio-group, the value is on the radio group itself
           const sessionType =
-            target.dataset.sessionType || target.getAttribute('value');
+            target.value ||
+            target.getAttribute('value') ||
+            target.dataset.sessionType;
           if (!sessionType) {
             return;
           }
