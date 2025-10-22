@@ -33,23 +33,85 @@ export class EventsManager {
    * Sets up all event listeners for the UI
    */
   setupEventListeners() {
-    // Stream tab click handler
-    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
-      const tabButton = e.target.closest('.tab');
-      const deleteButton = e.target.closest('.tab-delete');
+    // Debug: Listen to ALL events on the tree
+    const treeEl = document.getElementById(ELEMENT_IDS.STREAM_TABS);
+    if (treeEl) {
+      console.log('[EventsManager] Setting up tree listeners on:', treeEl);
 
-      if (tabButton && tabButton.dataset.stream) {
+      // Try all possible event names
+      ['vsc-tree-select', 'vsc-select', 'click', 'change'].forEach(
+        (eventName) => {
+          treeEl.addEventListener(eventName, (e) => {
+            console.log(`[EventsManager] Tree event "${eventName}":`, e);
+          });
+        },
+      );
+    }
+
+    // Stream tab selection handler (vscode-tree)
+    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'vsc-tree-select', (e) => {
+      console.log('[EventsManager] vsc-tree-select event:', e);
+      console.log('[EventsManager] event.detail:', e.detail);
+
+      // event.detail is directly an array of selected vscode-tree-item elements
+      const selectedItems = Array.isArray(e.detail) ? e.detail : [];
+      const firstItem = selectedItems[0];
+
+      console.log('[EventsManager] Selected item:', firstItem);
+      console.log('[EventsManager] Item dataset:', firstItem?.dataset);
+
+      if (firstItem?.dataset?.stream) {
+        console.log(
+          '[EventsManager] Switching to stream:',
+          firstItem.dataset.stream,
+        );
         vscode.postMessage({
           command: COMMANDS.SWITCH_STREAM,
-          stream: tabButton.dataset.stream,
+          stream: firstItem.dataset.stream,
         });
-      } else if (deleteButton && deleteButton.dataset.stream) {
-        vscode.postMessage({
-          command: COMMANDS.DELETE_STREAM,
-          stream: deleteButton.dataset.stream,
-        });
+      } else {
+        console.warn(
+          '[EventsManager] No valid stream in selection:',
+          firstItem,
+        );
       }
     });
+
+    // Stream tab delete button handler
+    addEventListenerSafely(
+      ELEMENT_IDS.STREAM_TABS,
+      'click',
+      (e) => {
+        console.log('[EventsManager] Click event:', {
+          target: e.target,
+          composedPath: e.composedPath(),
+        });
+
+        // Use composedPath to handle shadow DOM clicks
+        const path = e.composedPath();
+        const deleteButton = path.find((el) =>
+          el.classList?.contains('tab-delete'),
+        );
+
+        console.log('[EventsManager] Delete button found:', deleteButton);
+
+        if (deleteButton?.dataset?.stream) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          console.log(
+            '[EventsManager] Deleting stream:',
+            deleteButton.dataset.stream,
+          );
+          vscode.postMessage({
+            command: COMMANDS.DELETE_STREAM,
+            stream: deleteButton.dataset.stream,
+          });
+        }
+      },
+      true,
+    ); // Use capture phase
 
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
@@ -105,14 +167,17 @@ export class EventsManager {
     );
     if (radioGroup) {
       const attachRadioListener = () => {
-        addEventListenerSafely(radioGroup, 'change', () => {
-          const filter = radioGroup.value;
+        addEventListenerSafely(radioGroup, 'change', (event) => {
+          const target = event?.target;
+          const filter =
+            typeof target?.value === 'string' && target.value
+              ? target.value
+              : radioGroup.value;
           if (!filter) {
             return;
           }
           if (progressViewState.agentTypeFilter !== filter) {
             progressViewState.agentTypeFilter = filter;
-            progressViewState.pendingFilterUpdate = true;
             // Persist the new selection immediately so updates don't snap back
             vscode.postMessage({
               command: COMMANDS.FILTER_STREAMS,
