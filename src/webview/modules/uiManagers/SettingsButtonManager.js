@@ -177,22 +177,69 @@ export class SettingsButtonManager extends BaseUIManager {
         }
       };
 
-      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-      buttons.forEach((button) => {
-        this.addListener(button, 'click', () => {
-          if (!(button instanceof HTMLElement)) {
+      const resolveRadioGroup = (element) => {
+        if (!element) {
+          return null;
+        }
+        if (element.tagName === 'VSCODE-RADIO-GROUP') {
+          return element;
+        }
+        const radioGroup = element.querySelector('vscode-radio-group');
+        return radioGroup instanceof HTMLElement ? radioGroup : null;
+      };
+
+      const getSessionTypeFromGroup = (group) => {
+        if (!(group instanceof HTMLElement)) {
+          return undefined;
+        }
+        const groupValue =
+          (typeof group.value === 'string' && group.value.length > 0
+            ? group.value
+            : null) ?? group.getAttribute('value');
+        if (typeof groupValue === 'string' && groupValue.length > 0) {
+          return groupValue;
+        }
+        const checkedRadio = group.querySelector(
+          'vscode-radio[aria-checked="true"], vscode-radio[checked]'
+        );
+        if (checkedRadio instanceof HTMLElement) {
+          return (
+            checkedRadio.dataset.sessionType ??
+            checkedRadio.getAttribute('value') ??
+            undefined
+          );
+        }
+        return undefined;
+      };
+
+      const radioGroup = resolveRadioGroup(toggleContainer);
+      if (radioGroup) {
+        let lastSessionType = getSessionTypeFromGroup(radioGroup);
+        this.addListener(radioGroup, 'change', () => {
+          const sessionType = getSessionTypeFromGroup(radioGroup);
+          if (!sessionType || sessionType === lastSessionType) {
             return;
           }
-          const sessionType = button.dataset.sessionType;
-          if (!sessionType) {
-            return;
-          }
-          // Update active state on toggle buttons
-          buttons.forEach((btn) => btn.classList.remove('active'));
-          button.classList.add('active');
+          lastSessionType = sessionType;
           handleSessionTypeSelection(sessionType);
         });
-      });
+      } else {
+        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+        buttons.forEach((button) => {
+          this.addListener(button, 'click', () => {
+            if (!(button instanceof HTMLElement)) {
+              return;
+            }
+            const sessionType = button.dataset.sessionType;
+            if (!sessionType) {
+              return;
+            }
+            buttons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            handleSessionTypeSelection(sessionType);
+          });
+        });
+      }
     }
 
     AGENT_SELECT_LIST.forEach((id) => {

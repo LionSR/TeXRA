@@ -51,42 +51,6 @@
   min-width: 0;
 }
 
-.session-toggle {
-  display: inline-flex;
-  border: 1px solid var(--vscode-button-border);
-  border-radius: var(--border-radius);
-  overflow: hidden;
-  background: var(--vscode-input-background);
-}
-
-.session-toggle__option {
-  flex: 1 1 50%;
-  padding: var(--spacing-tiny) var(--spacing-small);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  color: var(--vscode-foreground);
-  transition:
-    background 0.12s ease,
-    color 0.12s ease;
-}
-
-.session-toggle__option:hover,
-.session-toggle__option:focus {
-  background: var(--vscode-list-hoverBackground);
-}
-
-.session-toggle__option.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
-.session-toggle__option:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
-}
-
 .agent-select {
   width: 100%;
   min-width: 0;

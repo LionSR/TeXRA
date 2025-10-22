@@ -308,8 +308,17 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
-      if (radioGroup) {
+      const radioGroup =
+        toggleContainer.tagName === 'VSCODE-RADIO-GROUP'
+          ? toggleContainer
+          : toggleContainer.querySelector('vscode-radio-group');
+      if (radioGroup instanceof HTMLElement) {
+        if (typeof radioGroup.value === 'string') {
+          radioGroup.value = normalized;
+        } else {
+          radioGroup.setAttribute('value', normalized);
+        }
+
         const radios = radioGroup.querySelectorAll('vscode-radio');
         radios.forEach((radio) => {
           if (!(radio instanceof HTMLElement)) {
