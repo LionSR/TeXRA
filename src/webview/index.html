@@ -413,33 +413,30 @@
                 ></i>
                 <div class="agent-select-controls">
                   <input type="hidden" id="sessionType" value="workflow" />
-                  <div id="sessionTypeToggle" class="session-toggle">
-                    <vscode-radio-group
-                      variant="horizontal"
-                      aria-label="Choose the session type"
+                  <div
+                    id="sessionTypeToggle"
+                    class="session-toggle"
+                    role="radiogroup"
+                    aria-label="Choose the session type"
+                  >
+                    <button
+                      type="button"
+                      class="session-toggle__option active"
+                      data-session-type="workflow"
+                      aria-pressed="true"
+                      title="Workflow agents automate document editing tasks"
                     >
-                      <vscode-radio
-                        class="session-toggle__option"
-                        name="sessionTypePicker"
-                        value="workflow"
-                        data-session-type="workflow"
-                        checked
-                        aria-checked="true"
-                        title="Workflow agents automate document editing tasks"
-                      >
-                        Workflow
-                      </vscode-radio>
-                      <vscode-radio
-                        class="session-toggle__option"
-                        name="sessionTypePicker"
-                        value="toolUse"
-                        data-session-type="toolUse"
-                        aria-checked="false"
-                        title="Tool-use agents execute commands and scripts"
-                      >
-                        Tool Use
-                      </vscode-radio>
-                    </vscode-radio-group>
+                      Workflow
+                    </button>
+                    <button
+                      type="button"
+                      class="session-toggle__option"
+                      data-session-type="toolUse"
+                      aria-pressed="false"
+                      title="Tool-use agents execute commands and scripts"
+                    >
+                      Tool Use
+                    </button>
                   </div>
                   <div class="agent-select-dropdowns">
                     <vscode-single-select
