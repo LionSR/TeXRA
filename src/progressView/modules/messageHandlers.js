@@ -68,9 +68,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
-    if (message.agentFilter !== undefined) {
+    if (
+      !state.pendingFilterUpdate &&
+      message.agentFilter !== undefined &&
+      message.agentFilter !== state.agentTypeFilter
+    ) {
       state.agentTypeFilter = message.agentFilter;
     }
+    state.pendingFilterUpdate = false;
+    const activeFilter = state.agentTypeFilter;
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
@@ -80,7 +86,29 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
     });
-    dom.streamTabs.update(message.streams, message.activeStream);
+    const filteredStreams = Array.isArray(message.streams)
+      ? message.streams.filter((info) => {
+          if (!info || typeof info !== 'object') {
+            return false;
+          }
+          if (activeFilter === 'all') {
+            return true;
+          }
+          const sessionKind =
+            info.agentSessionKind || info.uiTraits?.sessionKind;
+          return sessionKind === activeFilter;
+        })
+      : [];
+
+    const displayActiveStream = filteredStreams.some(
+      (s) => s.name === message.activeStream,
+    )
+      ? message.activeStream
+      : (filteredStreams[0]?.name ?? message.activeStream);
+
+    state.activeStream = displayActiveStream;
+
+    dom.streamTabs.update(filteredStreams, displayActiveStream);
 
     // Update agent filter radio group selection
     const radioGroup = document.getElementById(
@@ -99,9 +127,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
-    const activeStreamInfo = message.streams.find(
-      (s) => s.name === message.activeStream,
-    );
+    const activeStreamInfo =
+      filteredStreams.find((s) => s.name === displayActiveStream) ??
+      message.streams.find((s) => s.name === message.activeStream);
     const sessionKind =
       activeStreamInfo?.agentSessionKind ||
       activeStreamInfo?.uiTraits?.sessionKind ||
@@ -116,7 +144,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
-    const hasExecution = state.hasExecutionId(message.activeStream);
+    const hasExecution = state.hasExecutionId(displayActiveStream);
     dom.status.setExecutionIdAvailability(Boolean(hasExecution));
 
     // Update status based on whether there's an active stream
