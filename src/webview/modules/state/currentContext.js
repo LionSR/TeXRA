@@ -70,21 +70,9 @@ function collectMultipleFileSelections(singleFiles, fileList) {
 
 function collectCheckboxValues() {
   const values = {};
-  // Collect checkboxes (excluding tool config)
-  CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
-    (id) => {
-      values[id] = safeGetElementChecked(id);
-    },
-  );
-
-  // Collect tool config multi-select
-  const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
-  if (toolConfigSelect) {
-    const selectedValues = toolConfigSelect.value || [];
-    values.attachTeXCount = selectedValues.includes('attachTeXCount');
-    values.attachDiagnostics = selectedValues.includes('attachDiagnostics');
-  }
-
+  CHECK_BOXES.forEach((id) => {
+    values[id] = safeGetElementChecked(id);
+  });
   return values;
 }
 

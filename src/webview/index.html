@@ -360,15 +360,29 @@
         </div>
         <div class="instruction-box">
           <div class="instruction-header">
+            <div class="dropdown-container">
+              <span
+                id="toggleToolConfig"
+                class="tool-toggle"
+                title="Tool configuration options"
+              >
+                <i class="codicon codicon-tools"></i
+                ><i class="codicon codicon-chevron-down"></i>
+              </span>
+              <div
+                id="toolConfigOptions"
+                class="dropdown-options"
+                style="display: none"
+              >
+                <vscode-checkbox id="attachTeXCount"
+                  >Attach TeX Count</vscode-checkbox
+                >
+                <vscode-checkbox id="attachDiagnostics"
+                  >Attach Diagnostics</vscode-checkbox
+                >
+              </div>
+            </div>
             <vscode-toolbar-container class="instruction-header-actions">
-              <vscode-multi-select id="toolConfigSelect">
-                <vscode-option value="attachTeXCount"
-                  >Attach TeX Count</vscode-option
-                >
-                <vscode-option value="attachDiagnostics"
-                  >Attach Diagnostics</vscode-option
-                >
-              </vscode-multi-select>
               <vscode-toolbar-button
                 id="packButton"
                 icon="archive"
@@ -401,6 +415,7 @@
           <vscode-textarea
             id="instruction"
             rows="5"
+            resize="none"
             placeholder="Enter your specific instruction such as: Gently correct mathematical mistakes and typos."
           ></vscode-textarea>
           <div class="instruction-controls">
