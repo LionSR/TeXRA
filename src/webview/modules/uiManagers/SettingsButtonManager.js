@@ -74,7 +74,11 @@ export class SettingsButtonManager extends BaseUIManager {
     );
 
     // Add change listener for tool config multi-select
-    this.addListener(ELEMENT_IDS.TOOL_CONFIG_SELECT, 'change', handleCheckboxChange);
+    this.addListener(
+      ELEMENT_IDS.TOOL_CONFIG_SELECT,
+      'change',
+      handleCheckboxChange,
+    );
 
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
