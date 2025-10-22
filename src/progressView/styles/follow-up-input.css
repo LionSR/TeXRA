@@ -26,13 +26,15 @@
   line-height: 1.4;
 }
 
-.follow-up-actions {
+.follow-up-actions,
+vscode-toolbar-container.follow-up-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--spacing-small);
 }
 
-.follow-up-actions vscode-button {
+.follow-up-actions vscode-button,
+.follow-up-actions vscode-toolbar-button {
   /* Remove margin-bottom since we're using gap in flex column */
 }

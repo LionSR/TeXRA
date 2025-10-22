@@ -89,6 +89,18 @@
   gap: 4px;
 }
 
+/* VSCode Elements toolbar styling */
+vscode-toolbar-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+vscode-toolbar-button {
+  flex-shrink: 0;
+}
+
 /* Common clickable link style (actually used in progressView) */
 .clickable-link {
   cursor: pointer;
