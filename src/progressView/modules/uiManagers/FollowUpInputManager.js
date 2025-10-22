@@ -4,9 +4,7 @@ import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common helpers
 import {
-  autoResizeTextarea,
   insertTextAtCursor,
-  resetTextareaHeight,
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
 import {
@@ -41,12 +39,6 @@ export class FollowUpInputManager {
       if (!textarea) {
         return;
       }
-
-      autoResizeTextarea(target);
-
-      addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'input', () => {
-        autoResizeTextarea(target);
-      });
 
       addEventListenerSafely(ELEMENT_IDS.SEND_FOLLOW_UP_BTN, 'click', () => {
         this._sendFollowUp();
@@ -101,7 +93,6 @@ export class FollowUpInputManager {
     });
 
     this.textarea.value = '';
-    resetTextareaHeight(this.textarea);
   }
 
   _polishFollowUp() {
@@ -124,7 +115,6 @@ export class FollowUpInputManager {
     if (!this.textarea) return;
 
     this.textarea.value = '';
-    resetTextareaHeight(this.textarea);
     this.textarea.focus();
   }
 
@@ -138,7 +128,6 @@ export class FollowUpInputManager {
     }
 
     this.textarea.value = text;
-    autoResizeTextarea(this.textarea);
     this.textarea.focus();
   }
 
@@ -148,7 +137,6 @@ export class FollowUpInputManager {
     }
 
     insertTextAtCursor(this.textarea, text);
-    autoResizeTextarea(this.textarea);
     this.textarea.focus();
   }
 }

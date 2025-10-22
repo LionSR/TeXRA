@@ -2,7 +2,6 @@
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import {
-  autoResizeTextarea,
   insertTextAtCursor,
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
@@ -29,17 +28,13 @@ export class InstructionManager {
         return;
       }
 
-      autoResizeTextarea(target);
-
       target.addEventListener('input', () => {
-        autoResizeTextarea(target);
         this.state?.save();
       });
 
       setupPasteListener(
         target,
         this.vscode,
-        (ta) => autoResizeTextarea(ta),
         () => this.state?.save(),
         (ta, text) => insertTextAtCursor(ta, text),
       );

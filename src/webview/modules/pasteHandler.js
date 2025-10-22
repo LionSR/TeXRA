@@ -168,21 +168,17 @@ export async function handleImagePaste(
  * Setup paste event listener for a textarea element or VSCode web component
  * @param {HTMLElement} target - Target textarea or component
  * @param {Object} vscode - VS Code API
- * @param {Function} autoResizeTextarea - Auto resize function
  * @param {Function} saveState - Save state function
  * @param {Function} insertTextAtCursor - Function to insert text at cursor
  */
 export function setupPasteListener(
   target,
   vscode,
-  autoResizeTextarea,
   saveState,
   insertTextAtCursor,
 ) {
   const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea) return;
-
-  const resizeTarget = host ?? textarea;
 
   textarea.addEventListener('paste', async (e) => {
     const handled = await handleImagePaste(
@@ -193,7 +189,6 @@ export function setupPasteListener(
     );
 
     setTimeout(() => {
-      autoResizeTextarea(resizeTarget);
       saveState();
     }, 0);
 
