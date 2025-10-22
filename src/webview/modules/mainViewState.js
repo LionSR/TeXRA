@@ -167,9 +167,25 @@ export class MainViewState {
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
       });
 
-      CHECK_BOXES.forEach((id) => {
-        safeSetElementChecked(id, previousState[id] ?? false);
-      });
+      // Load checkboxes (excluding tool config which is now a multi-select)
+      CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
+        (id) => {
+          safeSetElementChecked(id, previousState[id] ?? false);
+        },
+      );
+
+      // Load tool config multi-select
+      const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
+      if (toolConfigSelect) {
+        const selectedValues = [];
+        if (previousState.attachTeXCount) {
+          selectedValues.push('attachTeXCount');
+        }
+        if (previousState.attachDiagnostics) {
+          selectedValues.push('attachDiagnostics');
+        }
+        toolConfigSelect.value = selectedValues;
+      }
 
       const autoExtractToggle = safeGetElementById(
         ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
@@ -186,20 +202,7 @@ export class MainViewState {
         autoExtractOptions.style.display = 'none';
       }
 
-      const toggleToolConfig = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
-      );
-      const toolConfigOptions = safeGetElementById(
-        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
-      );
-      const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
-        safeGetElementChecked(id),
-      );
-      if (toggleToolConfig && toolConfigOptions) {
-        toggleToolConfig.classList.toggle('active', hasToolConfigChecked);
-        toggleToolConfig.innerHTML = `<i class="codicon codicon-tools"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-        toolConfigOptions.style.display = 'none';
-      }
+      // Tool config multi-select is initialized by loadState
 
       MULTIPLE_SELECTIONS.forEach((id) => {
         const toggleId = `toggle${capitalize(id)}`;
@@ -265,9 +268,20 @@ export class MainViewState {
       }
     });
 
-    CHECK_BOXES.forEach((id) => {
-      state[id] = safeGetElementChecked(id);
-    });
+    // Save checkboxes (excluding tool config which is now a multi-select)
+    CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
+      (id) => {
+        state[id] = safeGetElementChecked(id);
+      },
+    );
+
+    // Save tool config multi-select as individual boolean flags
+    const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
+    if (toolConfigSelect) {
+      const selectedValues = toolConfigSelect.value || [];
+      state.attachTeXCount = selectedValues.includes('attachTeXCount');
+      state.attachDiagnostics = selectedValues.includes('attachDiagnostics');
+    }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
       const elementDiv = safeGetElementById(id);
@@ -356,13 +370,10 @@ export class MainViewState {
 
     setFileSelectionGroupDisabled(isToolUseSession);
 
-    // Disable Tool Config dropdown for tool use sessions
-    const toggleToolConfig = safeGetElementById(ELEMENT_IDS.TOGGLE_TOOL_CONFIG);
-    if (toggleToolConfig instanceof HTMLElement) {
-      toggleToolConfig.style.opacity = isToolUseSession ? '0.6' : '';
-      toggleToolConfig.style.filter = isToolUseSession ? 'grayscale(0.3)' : '';
-      toggleToolConfig.style.pointerEvents = isToolUseSession ? 'none' : '';
-      toggleToolConfig.style.cursor = isToolUseSession ? 'not-allowed' : '';
+    // Disable Tool Config multi-select for tool use sessions
+    const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
+    if (toolConfigSelect instanceof HTMLElement) {
+      toolConfigSelect.disabled = isToolUseSession;
     }
 
     if (!skipSave) {

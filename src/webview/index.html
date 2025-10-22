@@ -361,28 +361,14 @@
         <div class="instruction-box">
           <div class="instruction-header">
             <vscode-toolbar-container class="instruction-header-actions">
-              <div class="dropdown-container dropdown-left">
-                <span
-                  id="toggleToolConfig"
-                  class="auto-toggle"
-                  title="Tool Config options"
+              <vscode-multi-select id="toolConfigSelect">
+                <vscode-option value="attachTeXCount"
+                  >Attach TeX Count</vscode-option
                 >
-                  <i class="codicon codicon-tools"></i
-                  ><i class="codicon codicon-chevron-down"></i>
-                </span>
-                <div
-                  id="toolConfigOptions"
-                  class="dropdown-options"
-                  style="display: none"
+                <vscode-option value="attachDiagnostics"
+                  >Attach Diagnostics</vscode-option
                 >
-                  <vscode-checkbox id="attachTeXCount"
-                    >Attach TeX Count</vscode-checkbox
-                  >
-                  <vscode-checkbox id="attachDiagnostics"
-                    >Attach Diagnostics</vscode-checkbox
-                  >
-                </div>
-              </div>
+              </vscode-multi-select>
               <vscode-toolbar-button
                 id="packButton"
                 icon="archive"
