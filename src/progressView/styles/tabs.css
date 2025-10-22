@@ -33,17 +33,15 @@
 
 .agent-filter-group {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: var(--spacing-small);
   margin-bottom: var(--spacing-small);
-  width: 100%;
 }
 
 .agent-filter-group vscode-radio {
-  width: 100%;
-  display: flex;
-  align-items: center;
+  min-width: auto;
+  flex: 0 0 auto;
 }
 
 .tab-container {
