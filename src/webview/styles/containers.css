@@ -22,10 +22,9 @@
 /* LaTeX diffs section */
 .latexdiffs-section {
   margin-top: auto;
-  padding-top: var(--spacing-large);
+  padding: var(--spacing-large) 0 0;
   background-color: transparent;
   border: none;
-  padding: 0;
   margin-bottom: var(--spacing-large);
 }
 
