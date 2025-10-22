@@ -253,20 +253,10 @@ export class MainViewState {
       }
     });
 
-    // Save checkboxes (excluding tool config which is now a multi-select)
-    CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
-      (id) => {
-        state[id] = safeGetElementChecked(id);
-      },
-    );
-
-    // Save tool config multi-select as individual boolean flags
-    const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
-    if (toolConfigSelect) {
-      const selectedValues = toolConfigSelect.value || [];
-      state.attachTeXCount = selectedValues.includes('attachTeXCount');
-      state.attachDiagnostics = selectedValues.includes('attachDiagnostics');
-    }
+    // Save checkboxes
+    CHECK_BOXES.forEach((id) => {
+      state[id] = safeGetElementChecked(id);
+    });
 
     MULTIPLE_SELECTIONS.forEach((id) => {
       const elementDiv = safeGetElementById(id);
@@ -355,11 +345,13 @@ export class MainViewState {
 
     setFileSelectionGroupDisabled(isToolUseSession);
 
-    // Disable Tool Config multi-select for tool use sessions
-    const toolConfigSelect = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_SELECT);
-    if (toolConfigSelect instanceof HTMLElement) {
-      toolConfigSelect.disabled = isToolUseSession;
-    }
+    // Disable Tool Config checkboxes for tool use sessions
+    CHECK_BOXES_TOOL_USE.forEach((id) => {
+      const checkbox = safeGetElementById(id);
+      if (checkbox instanceof HTMLElement) {
+        checkbox.disabled = isToolUseSession;
+      }
+    });
 
     if (!skipSave) {
       this.save();
