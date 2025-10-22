@@ -308,15 +308,38 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-      buttons.forEach((button) => {
-        if (!(button instanceof HTMLElement)) {
-          return;
-        }
-        const isActive = button.dataset.sessionType === normalized;
-        button.classList.toggle('active', isActive);
-        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-      });
+      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
+      if (radioGroup) {
+        const radios = radioGroup.querySelectorAll('vscode-radio');
+        radios.forEach((radio) => {
+          if (!(radio instanceof HTMLElement)) {
+            return;
+          }
+          const radioValue =
+            radio.dataset.sessionType || radio.getAttribute('value');
+          const isActive = radioValue === normalized;
+          if ('checked' in radio) {
+            radio.checked = isActive;
+          }
+          if (isActive) {
+            radio.setAttribute('checked', '');
+            radio.setAttribute('aria-checked', 'true');
+          } else {
+            radio.removeAttribute('checked');
+            radio.setAttribute('aria-checked', 'false');
+          }
+        });
+      } else {
+        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+        buttons.forEach((button) => {
+          if (!(button instanceof HTMLElement)) {
+            return;
+          }
+          const isActive = button.dataset.sessionType === normalized;
+          button.classList.toggle('active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
     }
 
     AGENT_SELECT_LIST.forEach((selectId) => {
