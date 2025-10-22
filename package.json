@@ -1506,7 +1506,6 @@
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
-    "split.js": "^1.6.5",
     "tar": "^7.4.4",
     "turndown": "^7.2.1",
     "turndown-plugin-gfm": "^1.0.2",
