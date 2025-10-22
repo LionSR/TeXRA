@@ -41,7 +41,6 @@ body {
 .select-group .codicon {
   margin-right: var(--spacing-small);
   color: var(--text-color);
-  opacity: var(--opacity-subtle);
   vertical-align: text-bottom;
 }
 
