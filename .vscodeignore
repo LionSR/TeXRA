@@ -34,6 +34,7 @@ CLAUDE.md
 
 !node_modules/@vscode/codicons/dist/**
 !node_modules/split.js/**
+!node_modules/@vscode-elements/elements/dist/**
 
 
 !resources/**

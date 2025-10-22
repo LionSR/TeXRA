@@ -156,7 +156,6 @@ export class FileList {
           file.path,
         );
 
-
         // Update buttons with click handlers
         this.updateFileButtons(clone, file, effectiveBase);
 
