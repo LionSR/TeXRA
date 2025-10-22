@@ -56,39 +56,15 @@ export class ToggleManager {
     );
   }
 
-  updateToolConfigToggleState() {
-    this.updateDropdownToggleState(
-      ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
-      ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
-      CHECK_BOXES_TOOL_USE,
-      'tools',
-    );
-  }
-
   setupDocumentListeners() {
     document.addEventListener('click', (e) => {
-      const toolConfigOptions = safeGetElementById(
-        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
-      );
       const autoExtractOptions = safeGetElementById(
         ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
-      );
-      const toggleToolConfig = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
       );
       const toggleAutoExtract = safeGetElementById(
         ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
       );
 
-      if (
-        !toggleToolConfig?.contains(e.target) &&
-        !toolConfigOptions?.contains(e.target)
-      ) {
-        if (toolConfigOptions) {
-          toolConfigOptions.style.display = 'none';
-          this.updateToolConfigToggleState();
-        }
-      }
       if (
         !toggleAutoExtract?.contains(e.target) &&
         !autoExtractOptions?.contains(e.target)
