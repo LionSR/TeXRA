@@ -68,7 +68,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
-    state.agentTypeFilter = message.agentFilter || 'all';
+    if (message.agentFilter !== undefined) {
+      state.agentTypeFilter = message.agentFilter;
+    }
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
