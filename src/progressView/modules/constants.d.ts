@@ -8,7 +8,6 @@ export declare const STATUS: {
 };
 
 export declare const ELEMENT_IDS: Record<string, string>;
-export declare const SPLIT_SIZES: { CONTENT: number; TABS: number };
 export declare const MAX_HEIGHT: number;
 export declare const COMMANDS: Record<string, string>;
 export declare const WORKFLOW_TOOLBAR: ReadonlyArray<Record<string, unknown>>;

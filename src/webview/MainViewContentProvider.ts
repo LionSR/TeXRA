@@ -128,7 +128,9 @@ export class MainViewContentProvider extends BaseViewContentProvider {
 
     const models = getConfig<string[]>('models', []);
     const modelOptions = models
-      .map((model) => `<option value="${model}">${model}</option>`)
+      .map(
+        (model) => `<vscode-option value="${model}">${model}</vscode-option>`,
+      )
       .join('\n');
 
     return {
