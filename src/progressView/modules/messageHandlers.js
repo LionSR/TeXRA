@@ -237,13 +237,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateTaskGroup(message) {
-    if (message.stream === state.activeStream) {
-      state.taskGroups.update(message.groupId, message.status, message.endTime);
-      dom.taskGroups.updateGroup(
-        message.groupId,
-        message.status,
-        message.endTime,
-      );
+    const update = message?.update;
+    if (!update) {
+      return;
+    }
+
+    if (update.stream === state.activeStream) {
+      state.taskGroups.update(update);
+      dom.taskGroups.updateGroup(update);
     }
   }
 
@@ -259,7 +260,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateGroupUsage(message) {
     if (message.stream === state.activeStream) {
-      dom.usageGroup.update(message.groupId, message.usage);
+      dom.usageGroup.update({
+        groupId: message.groupId,
+        usage: message.usage,
+      });
     }
   }
 
