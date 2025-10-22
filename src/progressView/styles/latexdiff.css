@@ -2,18 +2,7 @@
  * Latexdiff log styles for ProgressView
  */
 
-.latexdiff-details {
-  margin: var(--spacing-small) 0;
-}
-.latexdiff-content {
-  padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
-  list-style: none;
-}
-
-.latexdiff-content li {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
+.latexdiff-content .detail-item {
   flex-wrap: wrap;
 }
 

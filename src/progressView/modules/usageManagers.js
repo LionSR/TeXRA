@@ -59,11 +59,15 @@ export class UsageGroupManager {
 
   /**
    * Update token and cost usage for a specific group
-   * @param {string} groupId - ID of the group to update
-   * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
-   * @param {boolean} skipPropagate - Whether to skip propagating to parents
+   * @param {{ groupId: string, usage?: Object, skipPropagate?: boolean }} payload
    */
-  update(groupId, usage, skipPropagate = false) {
+  update(payload) {
+    if (!payload || typeof payload !== 'object') {
+      console.error('UsageGroupManager.update: payload must be an object');
+      return;
+    }
+
+    const { groupId, usage, skipPropagate = false } = payload;
     if (!groupId) {
       console.error('UsageGroupManager.update: groupId is required');
       return;
@@ -160,14 +164,18 @@ export class UsageGroupManager {
       const totals = {
         ...this.computeAggregatedUsage(group.parentGroupId),
       };
-      this.update(group.parentGroupId, totals, true);
+      this.update({
+        groupId: group.parentGroupId,
+        usage: totals,
+        skipPropagate: true,
+      });
       this.propagateUsageToParents(group.parentGroupId);
     } else {
       // This is a top-level group, update it with aggregated usage from its children
       const totals = {
         ...this.computeAggregatedUsage(groupId),
       };
-      this.update(groupId, totals, true);
+      this.update({ groupId, usage: totals, skipPropagate: true });
     }
   }
 
