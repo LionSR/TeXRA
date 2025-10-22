@@ -39,6 +39,10 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 
 // Tool configuration checkboxes
 export const CHECK_BOXES_TOOL_USE = ['attachTeXCount', 'attachDiagnostics'];
+export const TOOL_CONFIG_VALUES = {
+  ATTACH_TEX_COUNT: 'attachTeXCount',
+  ATTACH_DIAGNOSTICS: 'attachDiagnostics',
+};
 
 // All checkboxes (combined)
 export const CHECK_BOXES = [
@@ -83,8 +87,7 @@ export const ELEMENT_IDS = {
   MODEL_SETTINGS_BUTTON: 'modelSettingsButton',
   TOGGLE_AUTO_EXTRACT: 'toggleAutoExtract',
   AUTO_EXTRACT_OPTIONS: 'autoExtractOptions',
-  TOGGLE_TOOL_CONFIG: 'toggleToolConfig',
-  TOOL_CONFIG_OPTIONS: 'toolConfigOptions',
+  TOOL_CONFIG_SELECT: 'toolConfigSelect',
   TOGGLE_LATEXDIFFS: 'toggleLatexdiffs',
   LATEXDIFFS_CONTENT: 'latexdiffsContent',
   COMMIT_SELECT: 'commit',
