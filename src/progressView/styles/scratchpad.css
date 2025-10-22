@@ -47,7 +47,7 @@
 }
 
 .tool-output-full {
-  max-height: 240px;
+  max-height: var(--height-xlarge);
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -55,15 +55,4 @@
 
 .tool-output-details {
   margin-top: var(--spacing-tiny);
-}
-
-.tool-output-details summary {
-  cursor: pointer;
-  color: var(--vscode-textLink-foreground);
-  font-size: var(--font-size-sm);
-}
-
-.tool-output-full {
-  max-height: 20rem;
-  overflow: auto;
 }

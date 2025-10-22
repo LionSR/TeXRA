@@ -348,7 +348,7 @@
     gap: var(--spacing-small);
   }
 
-  .follow-up-container input {
+  .follow-up-container :is(textarea, input) {
     flex: 1;
   }
 }

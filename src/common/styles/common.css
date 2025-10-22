@@ -66,6 +66,7 @@
   /* Opacity levels */
   --opacity-disabled: 0.5;
   --opacity-subtle: 0.7;
+  --opacity-normal: 0.85;
   --opacity-full: 1;
 }
 
@@ -222,6 +223,26 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Shared layout for collapsible detail sections */
+.detail-section {
+  margin: var(--spacing-small) 0;
+}
+
+.detail-content {
+  padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
+}
+
+.detail-list {
+  list-style: none;
+  margin: 0;
+}
+
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
 }
 
 /* Common clickable link style (actually used in progressView) */

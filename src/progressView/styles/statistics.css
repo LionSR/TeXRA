@@ -2,16 +2,10 @@
  * Statistics log styles for ProgressView
  */
 
-.statistics-details {
-  margin: var(--spacing-small) 0;
-}
-
 .statistics-content {
-  padding: var(--spacing-tiny) 0 var(--spacing-small) var(--spacing-large);
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-large);
-  list-style: none;
 }
 
 .stat-item {
