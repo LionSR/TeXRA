@@ -192,10 +192,6 @@
   margin-bottom: 0;
 }
 
-.markdown-content p:last-child {
-  margin-bottom: 0;
-}
-
 /* Scratchpad reflection patterns */
 .banner-content--scratchpad p:has(strong:first-child) {
   border-left: calc(var(--spacing-small) - 1px) solid
