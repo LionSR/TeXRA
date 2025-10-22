@@ -91,11 +91,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       // Also update the checked state on individual radio buttons
       radioGroup.querySelectorAll('vscode-radio').forEach((radio) => {
         const isActive = radio.value === state.agentTypeFilter;
-        if (isActive) {
-          radio.setAttribute('checked', '');
-        } else {
-          radio.removeAttribute('checked');
-        }
+        radio.checked = isActive;
+        radio.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        radio.toggleAttribute('checked', isActive);
       });
     }
 
