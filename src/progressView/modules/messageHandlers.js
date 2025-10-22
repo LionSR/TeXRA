@@ -69,13 +69,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
     if (
-      !state.pendingFilterUpdate &&
-      message.agentFilter !== undefined &&
+      typeof message.agentFilter === 'string' &&
       message.agentFilter !== state.agentTypeFilter
     ) {
       state.agentTypeFilter = message.agentFilter;
     }
-    state.pendingFilterUpdate = false;
     const activeFilter = state.agentTypeFilter;
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
@@ -368,10 +366,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
     dom.followUpInput.applyPolishedText(message.text);
-    vscode.postMessage({
-      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
-      text: 'Follow-up text has been polished!',
-    });
   }
 
   handleFollowUpTextTranscribed(message) {

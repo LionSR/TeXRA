@@ -580,10 +580,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         progressContainer.style.display = 'none';
       }
 
-      vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: 'Instruction text has been polished!',
-      });
       mainViewState.save();
     }
     this._postHandle();
