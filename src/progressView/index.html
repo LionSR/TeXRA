@@ -256,32 +256,33 @@
           </div>
         </template>
         <template id="bannerDetailsTemplate">
-          <vscode-collapsible class="banner-details">
-            <span slot="header" class="collapsible-header">
+          <details class="banner-details">
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon icon"></i>
               <span class="label"></span>
-            </span>
-            <vscode-toolbar-button
-              slot="actions"
-              class="banner-content-copy"
-              icon="copy"
-              label="Copy content"
-              data-default-title="Copy content"
-              data-success-title="Copied!"
-            ></vscode-toolbar-button>
+              <vscode-toolbar-button
+                class="banner-content-copy"
+                icon="copy"
+                label="Copy content"
+                data-default-title="Copy content"
+                data-success-title="Copied!"
+              ></vscode-toolbar-button>
+            </summary>
             <div
               class="banner-content log-entry-content markdown-content"
             ></div>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="toolUseTemplate">
-          <vscode-collapsible class="banner-details">
-            <span slot="header" class="collapsible-header">
+          <details class="banner-details">
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon codicon-wrench"></i>
               <span class="tool-use-title">Tool Use</span>
-            </span>
+            </summary>
             <div class="banner-content log-entry-content"></div>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="userMessageTemplate">
           <div class="user-message-container">
@@ -295,40 +296,44 @@
           </div>
         </template>
         <template id="fileListDetailsTemplate">
-          <vscode-collapsible class="file-list-details detail-section">
-            <span slot="header" class="collapsible-header">
+          <details class="file-list-details detail-section">
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon codicon-list-tree"></i>
               <span class="summary-text"></span>
-            </span>
+            </summary>
             <ul class="file-list-content detail-content detail-list"></ul>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="missingOutputsDetailsTemplate">
-          <vscode-collapsible class="file-list-details detail-section">
-            <span slot="header" class="collapsible-header">
+          <details class="file-list-details detail-section">
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon codicon-warning"></i>
               <span class="summary-text"></span>
-            </span>
+            </summary>
             <ul class="file-list-content detail-content detail-list"></ul>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="latexdiffDetailsTemplate">
-          <vscode-collapsible class="latexdiff-details detail-section" open>
-            <span slot="header" class="collapsible-header">
+          <details class="latexdiff-details detail-section" open>
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon codicon-diff"></i>
               <span class="summary-text"></span>
-            </span>
+            </summary>
             <ul class="latexdiff-content detail-content detail-list"></ul>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="statisticsDetailsTemplate">
-          <vscode-collapsible class="statistics-details detail-section" open>
-            <span slot="header" class="collapsible-header">
+          <details class="statistics-details detail-section" open>
+            <summary class="details-summary">
+              <i class="toggle-icon"></i>
               <i class="codicon codicon-dashboard"></i>
               <span>Statistics</span>
-            </span>
+            </summary>
             <div class="statistics-content detail-content"></div>
-          </vscode-collapsible>
+          </details>
         </template>
         <template id="groupDetailsTemplate">
           <details class="log-group">
