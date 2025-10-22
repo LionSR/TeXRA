@@ -20,7 +20,6 @@
           "./modules/mainViewState.js": "${webviewStateModuleUri}",
           "./modules/uiManagers/FileList.js": "${fileListUri}",
           "./modules/uiManagers/FileSelect.js": "${fileSelectUri}",
-          "./modules/uiManagers/ToggleManager.js": "${toggleManagerUri}",
           "./modules/uiManagers/BaseUIManager.js": "${baseUIManagerUri}",
           "./modules/uiManagers/FileInputManager.js": "${fileInputManagerUri}",
           "./modules/uiManagers/ActionButtonManager.js": "${actionButtonManagerUri}",
@@ -263,30 +262,29 @@
                   title="Visual or audio assets such as images or PDFs"
                   >Media</label
                 >
-                <div class="dropdown-container dropdown-left">
-                  <span
+                <div class="menu-trigger menu-trigger--left">
+                  <vscode-toolbar-button
                     id="toggleAutoExtract"
-                    class="auto-toggle"
+                    icon="wand"
+                    toggleable
+                    aria-haspopup="menu"
+                    aria-controls="autoExtractOptions"
+                    aria-expanded="false"
                     title="Auto-extract options"
-                  >
-                    <i class="codicon codicon-wand"></i
-                    ><i class="codicon codicon-chevron-down"></i>
-                  </span>
-                  <div
-                    id="autoExtractOptions"
-                    class="dropdown-options"
-                    style="display: none"
-                  >
-                    <vscode-checkbox id="autoExtractFigure"
-                      >Figures</vscode-checkbox
-                    >
-                    <vscode-checkbox id="autoExtractTikzFigure"
-                      >TikZ Figures</vscode-checkbox
-                    >
-                    <vscode-checkbox id="autoCompileInputPdf"
-                      >Compile Input PDF</vscode-checkbox
-                    >
-                  </div>
+                  ></vscode-toolbar-button>
+                  <vscode-context-menu id="autoExtractOptions" prevent-close>
+                    <div class="menu-content">
+                      <vscode-checkbox id="autoExtractFigure"
+                        >Figures</vscode-checkbox
+                      >
+                      <vscode-checkbox id="autoExtractTikzFigure"
+                        >TikZ Figures</vscode-checkbox
+                      >
+                      <vscode-checkbox id="autoCompileInputPdf"
+                        >Compile Input PDF</vscode-checkbox
+                      >
+                    </div>
+                  </vscode-context-menu>
                 </div>
               </div>
               <vscode-toolbar-container class="file-select-actions">
@@ -368,26 +366,26 @@
         </div>
         <div class="instruction-box">
           <div class="instruction-header">
-            <div class="dropdown-container">
-              <span
+            <div class="menu-trigger menu-trigger--right">
+              <vscode-toolbar-button
                 id="toggleToolConfig"
-                class="tool-toggle"
+                icon="tools"
+                toggleable
+                aria-haspopup="menu"
+                aria-controls="toolConfigOptions"
+                aria-expanded="false"
                 title="Tool configuration options"
-              >
-                <i class="codicon codicon-chevron-down"></i>
-              </span>
-              <div
-                id="toolConfigOptions"
-                class="dropdown-options"
-                style="display: none"
-              >
-                <vscode-checkbox id="attachTeXCount"
-                  >Attach TeX Count</vscode-checkbox
-                >
-                <vscode-checkbox id="attachDiagnostics"
-                  >Attach Diagnostics</vscode-checkbox
-                >
-              </div>
+              ></vscode-toolbar-button>
+              <vscode-context-menu id="toolConfigOptions" prevent-close>
+                <div class="menu-content">
+                  <vscode-checkbox id="attachTeXCount"
+                    >Attach TeX Count</vscode-checkbox
+                  >
+                  <vscode-checkbox id="attachDiagnostics"
+                    >Attach Diagnostics</vscode-checkbox
+                  >
+                </div>
+              </vscode-context-menu>
             </div>
             <vscode-toolbar-container class="instruction-header-actions">
               <vscode-toolbar-button

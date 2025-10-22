@@ -23,7 +23,6 @@ import {
   getSelectOptionElements,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
 const DEFAULT_WORKFLOW_AGENT = 'correct';
@@ -107,10 +106,36 @@ export class MainViewState {
     const autoExtractOptions = safeGetElementById(
       ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
     );
-    if (autoExtractToggle && autoExtractOptions) {
-      autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-      autoExtractOptions.style.display = 'none';
+    if (autoExtractToggle) {
+      if ('checked' in autoExtractToggle) {
+        autoExtractToggle.checked = false;
+      }
+      autoExtractToggle.removeAttribute('checked');
+    }
+    if (autoExtractOptions) {
+      if ('show' in autoExtractOptions) {
+        autoExtractOptions.show = false;
+      } else {
+        autoExtractOptions.removeAttribute('show');
+      }
+    }
+
+    const toolConfigToggle = safeGetElementById(ELEMENT_IDS.TOGGLE_TOOL_CONFIG);
+    const toolConfigOptions = safeGetElementById(
+      ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+    );
+    if (toolConfigToggle) {
+      if ('checked' in toolConfigToggle) {
+        toolConfigToggle.checked = false;
+      }
+      toolConfigToggle.removeAttribute('checked');
+    }
+    if (toolConfigOptions) {
+      if ('show' in toolConfigOptions) {
+        toolConfigOptions.show = false;
+      } else {
+        toolConfigOptions.removeAttribute('show');
+      }
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
@@ -192,10 +217,41 @@ export class MainViewState {
       const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
         safeGetElementChecked(id),
       );
-      if (autoExtractToggle && autoExtractOptions) {
-        autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-        autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-        autoExtractOptions.style.display = 'none';
+      if (autoExtractToggle) {
+        if ('checked' in autoExtractToggle) {
+          autoExtractToggle.checked = hasAutoExtractChecked;
+        }
+        autoExtractToggle.toggleAttribute('checked', hasAutoExtractChecked);
+      }
+      if (autoExtractOptions) {
+        if ('show' in autoExtractOptions) {
+          autoExtractOptions.show = false;
+        } else {
+          autoExtractOptions.removeAttribute('show');
+        }
+      }
+
+      const toolConfigToggle = safeGetElementById(
+        ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      );
+      const toolConfigOptions = safeGetElementById(
+        ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      );
+      const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
+        safeGetElementChecked(id),
+      );
+      if (toolConfigToggle) {
+        if ('checked' in toolConfigToggle) {
+          toolConfigToggle.checked = hasToolConfigChecked;
+        }
+        toolConfigToggle.toggleAttribute('checked', hasToolConfigChecked);
+      }
+      if (toolConfigOptions) {
+        if ('show' in toolConfigOptions) {
+          toolConfigOptions.show = false;
+        } else {
+          toolConfigOptions.removeAttribute('show');
+        }
       }
 
       // Tool config multi-select is initialized by loadState

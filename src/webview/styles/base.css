@@ -50,6 +50,44 @@ body {
   height: var(--height-button);
 }
 
+/* Shared menu trigger styling */
+.menu-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.menu-trigger vscode-context-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-tiny));
+  min-width: var(--width-dropdown, 12rem);
+  z-index: 30;
+  display: none;
+}
+
+.menu-trigger vscode-context-menu[show] {
+  display: block;
+}
+
+.menu-trigger--left vscode-context-menu {
+  left: 0;
+}
+
+.menu-trigger--right vscode-context-menu {
+  right: 0;
+}
+
+.menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-tiny);
+  padding: var(--spacing-tiny) var(--spacing-small);
+}
+
+.menu-content vscode-checkbox {
+  width: 100%;
+}
+
 /* Input field - uses common.css styles */
 
 /* Section header - extended from common.css */
