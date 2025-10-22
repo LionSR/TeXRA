@@ -365,24 +365,26 @@
             class="agent-filter-group"
             id="agentFilterButtons"
           >
-            <vscode-toolbar-button
+            <vscode-button
               id="filterAllBtn"
               data-filter="all"
               aria-pressed="true"
-              label="All"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+              >All</vscode-button
+            >
+            <vscode-button
               id="filterWorkflowBtn"
               data-filter="workflow"
               aria-pressed="false"
-              label="Workflow"
-            ></vscode-toolbar-button>
-            <vscode-toolbar-button
+              secondary
+              >Workflow</vscode-button
+            >
+            <vscode-button
               id="filterToolBtn"
               data-filter="toolUse"
               aria-pressed="false"
-              label="Tool Use"
-            ></vscode-toolbar-button>
+              secondary
+              >Tool Use</vscode-button
+            >
           </vscode-toolbar-container>
           <vscode-toolbar-container id="sortButtons">
             <vscode-toolbar-button

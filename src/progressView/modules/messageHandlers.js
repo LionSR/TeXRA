@@ -86,7 +86,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (filterContainer) {
       filterContainer.querySelectorAll('[data-filter]').forEach((btn) => {
         const isActive = btn.dataset.filter === state.agentTypeFilter;
-        btn.classList.toggle('toggled', isActive);
+        // For vscode-button: active = primary (no secondary), inactive = secondary
+        if (isActive) {
+          btn.removeAttribute('secondary');
+        } else {
+          btn.setAttribute('secondary', '');
+        }
         btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
     }
