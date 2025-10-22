@@ -1,49 +1,86 @@
 const DEFAULT_MAX_HEIGHT = 400;
 
+function getNativeTextarea(textarea) {
+  if (!textarea) {
+    return null;
+  }
+
+  if (textarea instanceof HTMLTextAreaElement) {
+    return textarea;
+  }
+
+  if (
+    typeof textarea === 'object' &&
+    'tagName' in textarea &&
+    typeof textarea.tagName === 'string' &&
+    textarea.tagName.toLowerCase() === 'vscode-textarea'
+  ) {
+    const wrapped =
+      'wrappedElement' in textarea ? textarea.wrappedElement : undefined;
+    if (wrapped instanceof HTMLTextAreaElement) {
+      return wrapped;
+    }
+    const shadowTextarea = textarea.querySelector?.('textarea');
+    if (shadowTextarea instanceof HTMLTextAreaElement) {
+      return shadowTextarea;
+    }
+  }
+
+  return null;
+}
+
 /**
  * Automatically resize a textarea based on its scroll height.
- * @param {HTMLTextAreaElement} textarea
+ * @param {HTMLElement|HTMLTextAreaElement} textarea
  * @param {number} [maxHeight]
  */
 export function autoResizeTextarea(textarea, maxHeight = DEFAULT_MAX_HEIGHT) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
+  const nativeTextarea = getNativeTextarea(textarea);
+  if (!nativeTextarea) {
     return;
   }
 
-  textarea.style.height = 'auto';
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-  textarea.style.height = `${newHeight}px`;
-  textarea.style.overflowY =
-    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  nativeTextarea.style.height = 'auto';
+  const newHeight = Math.min(nativeTextarea.scrollHeight, maxHeight);
+  nativeTextarea.style.height = `${newHeight}px`;
+  nativeTextarea.style.overflowY =
+    nativeTextarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 /**
  * Insert text at the current cursor position in a textarea.
- * @param {HTMLTextAreaElement} textarea
+ * @param {HTMLElement|HTMLTextAreaElement} textarea
  * @param {string} text
  */
 export function insertTextAtCursor(textarea, text) {
-  if (!(textarea instanceof HTMLTextAreaElement) || typeof text !== 'string') {
+  if (typeof text !== 'string') {
     return;
   }
 
-  const start = textarea.selectionStart ?? textarea.value.length;
-  const end = textarea.selectionEnd ?? textarea.value.length;
-  const original = textarea.value;
-  textarea.value = original.slice(0, start) + text + original.slice(end);
+  const nativeTextarea = getNativeTextarea(textarea);
+  if (!nativeTextarea) {
+    return;
+  }
+
+  const start = nativeTextarea.selectionStart ?? nativeTextarea.value.length;
+  const end = nativeTextarea.selectionEnd ?? nativeTextarea.value.length;
+  const original = nativeTextarea.value;
+  nativeTextarea.value =
+    original.slice(0, start) + text + original.slice(end);
   const newCursorPos = start + text.length;
-  textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+  nativeTextarea.selectionStart = nativeTextarea.selectionEnd = newCursorPos;
 }
 
 /**
  * Reset the height styles applied during auto-resize.
- * @param {HTMLTextAreaElement} textarea
+ * @param {HTMLElement|HTMLTextAreaElement} textarea
  */
 export function resetTextareaHeight(textarea) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
+  const nativeTextarea = getNativeTextarea(textarea);
+  if (!nativeTextarea) {
     return;
   }
 
-  textarea.style.height = '';
-  textarea.style.overflowY = '';
+  nativeTextarea.style.height = '';
+  nativeTextarea.style.overflowY = '';
 }

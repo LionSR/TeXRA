@@ -199,7 +199,7 @@ export class SettingsButtonManager extends BaseUIManager {
       this.addListener(id, 'change', (event) => {
         const target = event.target;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !this._isSelectableElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -219,7 +219,7 @@ export class SettingsButtonManager extends BaseUIManager {
 
     this.addListener('model', 'change', (e) => {
       const selectElement = e.target;
-      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      const selectedOption = this._getSelectedOption(selectElement);
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -256,7 +256,7 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _handleAgentSelection(selectElement) {
-    if (!(selectElement instanceof HTMLSelectElement)) {
+    if (!this._isSelectableElement(selectElement)) {
       return;
     }
 
@@ -265,7 +265,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state.applySessionType(sessionType, { skipSave: true });
 
     const selectedAgent = selectElement.value;
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const selectedOption = this._getSelectedOption(selectElement);
 
     if (
       selectedOption &&
@@ -293,5 +293,33 @@ export class SettingsButtonManager extends BaseUIManager {
     }
 
     this.state.save();
+  }
+
+  _isSelectableElement(element) {
+    return (
+      element instanceof HTMLSelectElement ||
+      (element &&
+        typeof element.tagName === 'string' &&
+        element.tagName.toLowerCase() === 'vscode-single-select')
+    );
+  }
+
+  _getSelectedOption(selectElement) {
+    if (!selectElement) {
+      return null;
+    }
+    if (selectElement instanceof HTMLSelectElement) {
+      return selectElement.options[selectElement.selectedIndex];
+    }
+    if (this._isSelectableElement(selectElement)) {
+      const options = Array.from(
+        selectElement.querySelectorAll('vscode-option'),
+      );
+      if (typeof selectElement.selectedIndex === 'number') {
+        return options[selectElement.selectedIndex] ?? null;
+      }
+      return options.find((option) => option.value === selectElement.value) ?? null;
+    }
+    return null;
   }
 }

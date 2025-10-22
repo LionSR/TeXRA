@@ -55,11 +55,14 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = createFromTemplate('selectOptionTemplate', {
-      text: { '': text },
-      attributes: { '': { value } },
-    });
-    if (option) select.appendChild(option);
+    const option = document.createElement('vscode-option');
+    option.value = value;
+    option.textContent = text;
+    select.appendChild(option);
+  }
+
+  _getOptions(selectElement) {
+    return Array.from(selectElement.querySelectorAll('vscode-option'));
   }
 
   handleRecentCommits(message) {
@@ -84,7 +87,7 @@ export class FileSelect {
 
       const manualSelection = this._manualCommitSelection;
       if (manualSelection) {
-        const options = Array.from(commitDiv.options);
+        const options = this._getOptions(commitDiv);
         const existingOption = options.find((option) =>
           this._areEquivalentCommitHashes(
             option.value,
@@ -93,7 +96,7 @@ export class FileSelect {
         );
 
         if (!existingOption) {
-          this.addOption(
+          const option = this.addOption(
             commitDiv,
             manualSelection.commitHash,
             manualSelection.commitLabel,
@@ -107,7 +110,7 @@ export class FileSelect {
             manualSelection.commitLabel &&
             existingOption.text !== manualSelection.commitLabel
           ) {
-            existingOption.text = manualSelection.commitLabel;
+            existingOption.textContent = manualSelection.commitLabel;
           }
           safeSetElementValue(
             ELEMENT_IDS.COMMIT_SELECT,
@@ -127,7 +130,7 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(fileDiv.options);
+    const options = this._getOptions(fileDiv);
     if (options.some((o) => o.value === filePath)) {
       safeSetElementValue(fileId, filePath);
       fileDiv.dispatchEvent(new Event('change'));
@@ -145,15 +148,20 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(commitDiv.options);
+    const options = this._getOptions(commitDiv);
     const existingOption = options.find((option) =>
-      this._areEquivalentCommitHashes(option.value, commitHash),
+      this._areEquivalentCommitHashes(option.value ?? '', commitHash),
     );
 
     if (!existingOption) {
-      this.addOption(commitDiv, commitHash, commitLabel || commitHash);
+      const option = this.addOption(
+        commitDiv,
+        commitHash,
+        commitLabel || commitHash,
+      );
+      option.setAttribute('data-manual', 'true');
     } else if (commitLabel) {
-      existingOption.text = commitLabel;
+      existingOption.textContent = commitLabel;
     }
 
     safeSetElementValue(ELEMENT_IDS.COMMIT_SELECT, commitHash);

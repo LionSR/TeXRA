@@ -41,14 +41,10 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   const interactiveElements = container.querySelectorAll(
-    'select, button, input',
+    'select, button, input, vscode-button, vscode-single-select, vscode-checkbox, vscode-textarea',
   );
   interactiveElements.forEach((element) => {
-    if (
-      element instanceof HTMLButtonElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLInputElement
-    ) {
+    if ('disabled' in element) {
       element.disabled = isDisabled;
     }
   });
@@ -56,12 +52,25 @@ function setFileSelectionGroupDisabled(isDisabled) {
 
 function getSelectDefaultValue(selectId, fallback) {
   const element = safeGetElementById(selectId);
-  if (element instanceof HTMLSelectElement) {
-    if (element.value) {
-      return element.value;
-    }
-    if (element.options.length > 0) {
-      return element.options[0].value;
+  if (!element) {
+    return fallback;
+  }
+
+  if ('value' in element && element.value) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLSelectElement && element.options.length > 0) {
+    return element.options[0].value;
+  }
+
+  if (
+    typeof element.tagName === 'string' &&
+    element.tagName.toLowerCase() === 'vscode-single-select'
+  ) {
+    const firstOption = element.querySelector('vscode-option');
+    if (firstOption?.value) {
+      return firstOption.value;
     }
   }
   return fallback;

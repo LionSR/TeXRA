@@ -144,6 +144,10 @@ export abstract class BaseViewContentProvider {
   ): Record<string, vscode.Uri> {
     return {
       commonStyleUri: this.getCommonUri(webview, 'styles/common.css'),
+      vscodeElementsBundleUri: this.getNodeModulesUri(
+        webview,
+        '@vscode-elements/elements/dist/bundled.js',
+      ),
       webviewStateUri: this.getCommonUri(webview, 'modules/webviewState.js'),
       webviewContextUri: this.getCommonUri(
         webview,
@@ -155,10 +159,6 @@ export abstract class BaseViewContentProvider {
         'webview/themeHandlers.js',
       ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
-      iconButtonInitializerUri: this.getCommonUri(
-        webview,
-        'modules/iconButtonInitializer.js',
-      ),
       recordingButtonManagerUri: this.getCommonUri(
         webview,
         'modules/RecordingButtonManager.js',

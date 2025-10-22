@@ -38,7 +38,7 @@
   margin-bottom: var(--spacing-small);
 }
 
-.agent-filter-group .vscode-button {
+.agent-filter-group vscode-button {
   min-width: auto;
 }
 

@@ -57,23 +57,54 @@ export function createIconButton({
   id,
   icon,
   title = '',
-  className = 'vscode-button',
+  className = '',
   disabled = false,
   dataset = {},
+  iconOnly = true,
+  secondary = false,
 }) {
-  const element = renderTemplate('iconButtonTemplate');
+  const element = document.createElement('vscode-button');
   if (!element) return null;
-  const iconEl = element.querySelector('i');
-  if (iconEl) {
-    iconEl.classList.add(`codicon-${icon}`);
+
+  if (id) {
+    element.id = id;
   }
-  element.id = id;
-  element.className = className;
-  element.title = title;
+
+  if (className) {
+    const classes = className
+      .split(/\s+/)
+      .filter((cls) => cls && cls !== 'vscode-button');
+    if (classes.length > 0) {
+      element.className = classes.join(' ');
+    }
+  }
+
+  if (icon) {
+    element.setAttribute('icon', icon);
+  }
+
+  if (iconOnly) {
+    element.setAttribute('icon-only', '');
+  }
+
+  if (secondary) {
+    element.setAttribute('secondary', '');
+  }
+
+  if (title) {
+    element.title = title;
+    element.setAttribute('aria-label', title);
+  }
+
   element.disabled = disabled;
+
   Object.entries(dataset).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
     element.dataset[key] = value;
   });
+
   return element;
 }
 

@@ -38,8 +38,8 @@
 }
 
 /* Ensure all button sizes are consistent */
-.latexdiffs-section .vscode-button,
-.file-select-actions .vscode-button {
+.latexdiffs-section vscode-button,
+.file-select-actions vscode-button {
   width: var(--height-control);
   height: var(--height-control);
 }

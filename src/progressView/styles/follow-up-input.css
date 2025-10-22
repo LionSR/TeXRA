@@ -33,6 +33,6 @@
   gap: var(--spacing-small);
 }
 
-.follow-up-actions .vscode-button {
-  /* Remove margin-bottom since we're using gap in flex column */
+.follow-up-actions vscode-button {
+  /* Buttons spaced via flex gap */
 }

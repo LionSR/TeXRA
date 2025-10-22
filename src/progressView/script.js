@@ -3,7 +3,6 @@ import { COMMANDS } from './modules/constants.js';
 import { progressViewDomHandler } from './modules/domHandlers.js';
 import { messageHandler } from './modules/messageHandlers.js';
 import { progressViewState } from './modules/progressViewState.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { validateTemplates } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -21,7 +20,6 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('DOMContentLoaded', () => {
   validateTemplates([
     'fileItemTemplate',
-    'iconButtonTemplate',
     'usageTemplate',
     'bulletTemplate',
     'streamTabTemplate',
@@ -36,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'statisticsDetailsTemplate',
     'groupHeaderTemplate',
   ]);
-  initializeIconButtons();
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
