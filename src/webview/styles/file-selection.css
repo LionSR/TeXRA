@@ -38,7 +38,7 @@
   position: relative;
 }
 
-.file-select-label-group .vscode-input {
+.file-select-label-group vscode-textfield {
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -90,9 +90,9 @@
 }
 
 /* When toggled (input is visible), make the label more prominent */
-.file-select-label-group:has(.vscode-input[style*='inline-block'])
+.file-select-label-group:has(vscode-textfield[style*='inline-block'])
   .optional-label,
-.file-select-label-group:has(.vscode-input[style*='inline-block']) .toggle-icon,
+.file-select-label-group:has(vscode-textfield[style*='inline-block']) .toggle-icon,
 .file-select:has(.multiple-files-container[style*='block']) .optional-label,
 .file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);

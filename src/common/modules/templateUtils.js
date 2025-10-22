@@ -57,23 +57,30 @@ export function createIconButton({
   id,
   icon,
   title = '',
-  className = 'vscode-button',
+  className = '',
   disabled = false,
   dataset = {},
 }) {
-  const element = renderTemplate('iconButtonTemplate');
-  if (!element) return null;
-  const iconEl = element.querySelector('i');
-  if (iconEl) {
-    iconEl.classList.add(`codicon-${icon}`);
-  }
+  const element = document.createElement('vscode-button');
   element.id = id;
-  element.className = className;
+  if (className) {
+    element.className = className;
+  }
+  if (icon) {
+    element.icon = icon;
+    element.iconOnly = true;
+  }
   element.title = title;
+  if (title) {
+    element.setAttribute('aria-label', title);
+  } else {
+    element.removeAttribute('aria-label');
+  }
   element.disabled = disabled;
   Object.entries(dataset).forEach(([key, value]) => {
     element.dataset[key] = value;
   });
+  element.type = 'button';
   return element;
 }
 

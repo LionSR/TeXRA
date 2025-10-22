@@ -51,13 +51,26 @@ export class RecordingButtonManager {
       return;
     }
 
-    this.button.innerHTML = '';
     const iconName = this.isRecording ? this.stopIcon : this.startIcon;
-    const icon = createCodicon(iconName);
-    if (icon) {
-      this.button.appendChild(icon);
+    const title = this.isRecording ? this.stopTitle : this.startTitle;
+    const isVsCodeButton =
+      typeof this.button.tagName === 'string' &&
+      this.button.tagName.toLowerCase() === 'vscode-button';
+
+    if (isVsCodeButton) {
+      this.button.icon = iconName;
+      this.button.iconOnly = true;
+      this.button.setAttribute('aria-label', title);
+      this.button.title = title;
+    } else {
+      this.button.innerHTML = '';
+      const icon = createCodicon(iconName);
+      if (icon) {
+        this.button.appendChild(icon);
+      }
+      this.button.title = title;
     }
-    this.button.title = this.isRecording ? this.stopTitle : this.startTitle;
+
     this.button.classList.toggle(this.recordingClass, this.isRecording);
   }
 

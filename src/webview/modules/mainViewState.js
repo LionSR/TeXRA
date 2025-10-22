@@ -19,6 +19,8 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   setChevronIcon,
+  isSelectLikeElement,
+  getSelectOptionElements,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
@@ -41,14 +43,10 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   const interactiveElements = container.querySelectorAll(
-    'select, button, input',
+    'select, button, input, vscode-button, vscode-single-select, vscode-textarea',
   );
   interactiveElements.forEach((element) => {
-    if (
-      element instanceof HTMLButtonElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLInputElement
-    ) {
+    if (element instanceof HTMLElement && 'disabled' in element) {
       element.disabled = isDisabled;
     }
   });
@@ -56,12 +54,13 @@ function setFileSelectionGroupDisabled(isDisabled) {
 
 function getSelectDefaultValue(selectId, fallback) {
   const element = safeGetElementById(selectId);
-  if (element instanceof HTMLSelectElement) {
+  if (isSelectLikeElement(element)) {
     if (element.value) {
       return element.value;
     }
-    if (element.options.length > 0) {
-      return element.options[0].value;
+    const options = getSelectOptionElements(element);
+    if (options.length > 0) {
+      return options[0].value ?? '';
     }
   }
   return fallback;
