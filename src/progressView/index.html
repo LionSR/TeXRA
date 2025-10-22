@@ -137,10 +137,10 @@
               ></vscode-textarea>
             </div>
           </div>
-          <vscode-scrollable
-            id="logContent"
-            class="log-container"
-          ></vscode-scrollable>
+          <vscode-scrollable id="logContent" class="log-container">
+            <vscode-tree id="logGroupTree" class="log-group-tree"></vscode-tree>
+            <div id="logUngroupedContainer" class="log-ungrouped"></div>
+          </vscode-scrollable>
           <div id="generatedFiles" class="files-container"></div>
           <div id="followUpContainer" class="follow-up-container">
             <vscode-textarea
@@ -343,19 +343,17 @@
             </details>
           </template>
           <template id="groupDetailsTemplate">
-            <details class="log-group">
-              <div class="log-group-content"></div>
-            </details>
+            <vscode-tree-item class="log-group" branch></vscode-tree-item>
           </template>
           <template id="groupHeaderTemplate">
-            <summary class="log-group-header">
+            <div class="log-group-header">
               <span class="group-status-icon"></span>
               <span class="group-title"></span>
               <span class="group-time">
                 <span class="group-start-time"></span>
                 <span class="group-duration"></span>
               </span>
-            </summary>
+            </div>
           </template>
         </div>
         <div slot="end" class="tabs">
