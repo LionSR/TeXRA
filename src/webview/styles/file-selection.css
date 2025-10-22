@@ -51,6 +51,7 @@
 
 .file-select-actions,
 vscode-toolbar-container.file-select-actions {
+  flex-direction: column;
   flex-wrap: nowrap;
   margin-left: auto;
   position: relative;

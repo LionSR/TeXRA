@@ -138,7 +138,6 @@ export class ProgressViewProvider
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'modules'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'webview'),
-        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
         vscode.Uri.joinPath(
           this._extensionUri,
           'node_modules',
