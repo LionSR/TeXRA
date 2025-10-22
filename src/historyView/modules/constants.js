@@ -20,16 +20,13 @@ export const ELEMENT_IDS = {
 
 // CSS class names used across modules
 export const CLASS_NAMES = {
-  COLLAPSIBLE: 'collapsible',
-  EXPANDED: 'expanded',
-  TOGGLE_BUTTON: 'toggle-button',
+  HISTORY_COLLAPSIBLE: 'history-collapsible',
   CURRENT_MATCH: 'current-match',
 };
 
 // Text labels and messages
 export const LABELS = {
-  SHOW_MORE: 'Show more',
-  SHOW_LESS: 'Show less',
   EMPTY_STATE: 'No history items found',
   CLEAR_ALL_HISTORY: 'Clear All History',
+  MORE_DETAILS: 'More details',
 };

@@ -14,7 +14,11 @@ import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
-import { safeGetElementById } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  isSelectLikeElement,
+  getSelectedOptionElement,
+} from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -68,6 +72,7 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
+    // Add change listeners for checkboxes
     CHECK_BOXES.forEach((id) => {
       this.addListener(id, 'change', handleCheckboxChange);
     });
@@ -155,6 +160,23 @@ export class SettingsButtonManager extends BaseUIManager {
   _setupDropdowns() {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
+      const handleSessionTypeSelection = (sessionType) => {
+        const normalized = sessionType ?? SESSION_TYPES.WORKFLOW;
+        this.state.applySessionType(normalized);
+        const selectId =
+          AGENT_SELECT_IDS[normalized] ??
+          AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
+        const selectElement = safeGetElementById(selectId);
+        if (isSelectLikeElement(selectElement)) {
+          this._handleAgentSelection(selectElement);
+          if (typeof selectElement.focus === 'function') {
+            selectElement.focus();
+          }
+        } else {
+          this.state.save();
+        }
+      };
+
       const buttons = toggleContainer.querySelectorAll('[data-session-type]');
       buttons.forEach((button) => {
         this.addListener(button, 'click', () => {
@@ -165,26 +187,20 @@ export class SettingsButtonManager extends BaseUIManager {
           if (!sessionType) {
             return;
           }
-          this.state.applySessionType(sessionType);
-          const selectId =
-            AGENT_SELECT_IDS[sessionType] ??
-            AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
-          const selectElement = safeGetElementById(selectId);
-          if (selectElement instanceof HTMLSelectElement) {
-            this._handleAgentSelection(selectElement);
-            selectElement.focus();
-          } else {
-            this.state.save();
-          }
+          // Update active state on toggle buttons
+          buttons.forEach((btn) => btn.classList.remove('active'));
+          button.classList.add('active');
+          handleSessionTypeSelection(sessionType);
         });
       });
     }
 
     AGENT_SELECT_LIST.forEach((id) => {
       this.addListener(id, 'focus', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -197,9 +213,10 @@ export class SettingsButtonManager extends BaseUIManager {
       });
 
       this.addListener(id, 'change', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -217,9 +234,15 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    this.addListener('model', 'change', (e) => {
-      const selectElement = e.target;
-      const selectedOption = selectElement.options[selectElement.selectedIndex];
+    this.addListener('model', 'change', (event) => {
+      const selectElement = event.currentTarget;
+      if (
+        !(selectElement instanceof HTMLElement) ||
+        !isSelectLikeElement(selectElement)
+      ) {
+        return;
+      }
+      const selectedOption = getSelectedOptionElement(selectElement);
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -256,7 +279,7 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _handleAgentSelection(selectElement) {
-    if (!(selectElement instanceof HTMLSelectElement)) {
+    if (!isSelectLikeElement(selectElement)) {
       return;
     }
 
@@ -265,7 +288,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state.applySessionType(sessionType, { skipSave: true });
 
     const selectedAgent = selectElement.value;
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const selectedOption = getSelectedOptionElement(selectElement);
 
     if (
       selectedOption &&

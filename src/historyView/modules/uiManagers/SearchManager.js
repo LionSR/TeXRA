@@ -1,5 +1,5 @@
 // Local imports - history view
-import { CLASS_NAMES, ELEMENT_IDS, LABELS } from '../constants.js';
+import { CLASS_NAMES, ELEMENT_IDS } from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
 /* global Mark */
 import { safeGetElementById } from '@common/domUtils.js';
@@ -100,36 +100,34 @@ export class SearchManager {
 
   expandAllCollapsibleSections() {
     document
-      .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
+      .querySelectorAll(`.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`)
       .forEach((section) => {
-        if (!section.classList.contains(CLASS_NAMES.EXPANDED)) {
-          section.classList.add(CLASS_NAMES.EXPANDED);
-          const id = section.id.replace('content-', '');
-          const toggle = document.querySelector(
-            `.${CLASS_NAMES.TOGGLE_BUTTON}[data-id="${id}"]`,
-          );
-          if (toggle) {
-            toggle.textContent = LABELS.SHOW_LESS;
-          }
+        if (!(section instanceof HTMLElement)) {
+          return;
         }
+        if ('open' in section) {
+          section.open = true;
+        }
+        section.setAttribute('open', '');
       });
   }
 
   applySavedToggleStates() {
     document
-      .querySelectorAll(`.${CLASS_NAMES.COLLAPSIBLE}`)
+      .querySelectorAll(`.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`)
       .forEach((section) => {
-        const id = section.id.replace('content-', '');
+        if (!(section instanceof HTMLElement)) {
+          return;
+        }
+        const id = section.dataset.id;
         const expanded = this.state.toggleStates.get(id);
-        const toggle = document.querySelector(
-          `.${CLASS_NAMES.TOGGLE_BUTTON}[data-id="${id}"]`,
-        );
+        if ('open' in section) {
+          section.open = Boolean(expanded);
+        }
         if (expanded) {
-          section.classList.add(CLASS_NAMES.EXPANDED);
-          if (toggle) toggle.textContent = LABELS.SHOW_LESS;
+          section.setAttribute('open', '');
         } else {
-          section.classList.remove(CLASS_NAMES.EXPANDED);
-          if (toggle) toggle.textContent = LABELS.SHOW_MORE;
+          section.removeAttribute('open');
         }
       });
   }

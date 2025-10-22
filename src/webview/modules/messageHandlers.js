@@ -31,6 +31,9 @@ import {
   safeGetElementById,
   setChevronIcon,
   waitForElement,
+  isSelectLikeElement,
+  getSelectOptionElements,
+  getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 
@@ -105,7 +108,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         }
 
         let select = document.getElementById('model');
-        if (!(select instanceof HTMLSelectElement)) {
+        if (!isSelectLikeElement(select)) {
           const waitHandle = waitForElement('#model');
 
           // Cancel any previous waiter to prevent race conditions
@@ -138,7 +141,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           }
 
           // Verify element was found
-          if (!(select instanceof HTMLSelectElement)) {
+          if (!isSelectLikeElement(select)) {
             console.warn(
               'SET_MODEL_OPTIONS: Model select element not found after waiting',
             );
@@ -166,7 +169,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             return;
           }
           const select = document.getElementById(id);
-          if (!(select instanceof HTMLSelectElement)) {
+          if (!isSelectLikeElement(select)) {
             return;
           }
           this._applyAgentOptions(select, html);
@@ -192,18 +195,23 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     return {
       [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED]: (m) =>
         this.handleInstructionTextPolished(m),
+      [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR]: (m) =>
+        this.handleInstructionTextPolishError(m),
       [MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED]: (m) =>
         this.handleInstructionTextTranscribed(m),
     };
   }
 
   _applyModelOptions(selectElement, optionsHtml) {
+    if (!isSelectLikeElement(selectElement)) {
+      return;
+    }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml;
     if (previous) {
       selectElement.value = previous;
     }
-    Array.from(selectElement.options).forEach((opt) => {
+    getSelectOptionElements(selectElement).forEach((opt) => {
       const { provider, context, cost } = opt.dataset;
       if (provider || context || cost) {
         opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
@@ -212,15 +220,18 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
+    if (!isSelectLikeElement(selectElement)) {
+      return;
+    }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml ?? '';
     if (previous) {
       selectElement.value = previous;
       if (
         selectElement.value !== previous &&
-        selectElement.options.length > 0
+        getSelectOptionElements(selectElement).length > 0
       ) {
-        const fallbackOption = Array.from(selectElement.options).find(
+        const fallbackOption = getSelectOptionElements(selectElement).find(
           (option) => !option.disabled,
         );
         if (fallbackOption) {
@@ -229,7 +240,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       }
     }
 
-    Array.from(selectElement.options).forEach((opt) => {
+    getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
   }
@@ -301,7 +312,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return null;
     }
     const element = this._getElement(selectId);
-    return element instanceof HTMLSelectElement ? element : null;
+    return isSelectLikeElement(element) ? element : null;
   }
 
   _getActiveAgentSelection() {
@@ -560,12 +571,34 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const instruction = this._getElement('instruction');
     if (instruction && message.text) {
       instruction.value = message.text;
-      vscode.postMessage({
-        command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
-        text: 'Instruction text has been polished!',
-      });
+
+      // Hide progress indicator
+      const progressContainer = document.getElementById(
+        'polishProgressContainer',
+      );
+      if (progressContainer) {
+        progressContainer.style.display = 'none';
+      }
+
       mainViewState.save();
     }
+    this._postHandle();
+  }
+
+  handleInstructionTextPolishError(message) {
+    // Hide progress indicator
+    const progressContainer = document.getElementById(
+      'polishProgressContainer',
+    );
+    if (progressContainer) {
+      progressContainer.style.display = 'none';
+    }
+
+    // Show error message
+    vscode.postMessage({
+      command: MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: `Error polishing text: ${message.error || 'Unknown error'}`,
+    });
     this._postHandle();
   }
 

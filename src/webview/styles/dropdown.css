@@ -14,7 +14,8 @@
 }
 
 /* Toggle button styling */
-.auto-toggle {
+.auto-toggle,
+.tool-toggle {
   cursor: pointer;
   user-select: none;
   color: var(--vscode-foreground);
@@ -30,15 +31,17 @@
   font-weight: normal;
 }
 
-.auto-toggle.active {
+.auto-toggle.active,
+.tool-toggle.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
   border-color: var(--vscode-list-activeSelectionBackground);
 }
 
-/* Remove duplicate icon styling - use .auto-toggle .codicon instead */
+/* Remove duplicate icon styling - use .auto-toggle/.tool-toggle .codicon instead */
 
-.auto-toggle .codicon {
+.auto-toggle .codicon,
+.tool-toggle .codicon {
   font-size: var(--font-size-sm);
   margin-left: 1px;
   margin-right: 0;
@@ -65,47 +68,49 @@
   box-shadow: var(--vscode-widget-shadow);
   min-width: var(--width-dropdown);
   display: none;
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  flex-direction: column;
+  font-size: var(--font-size-sm);
   padding: 1px;
   white-space: nowrap;
   font-weight: normal;
 }
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
-.dropdown-options .vscode-checkbox {
+.dropdown-options vscode-checkbox {
+  display: block;
+  width: 100%;
   padding: 1px var(--spacing-tiny);
   border-radius: var(--border-radius-small);
   font-weight: normal;
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  font-size: var(--font-size-sm);
   line-height: 1;
 }
 
-.dropdown-options .vscode-checkbox:hover {
+.dropdown-options vscode-checkbox:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
 .dropdown-options .codicon {
   width: var(--width-icon);
   text-align: center;
-  opacity: var(--opacity-subtle);
-  font-size: calc(var(--vscode-editor-font-size) * 0.9);
+  font-size: var(--font-size-sm);
 }
 
 /* Disabled option styling - shared across dropdowns */
-option.disabled-option,
-option.disabled-model,
-option.disabled-agent,
-option[data-requires-key='true'] {
+vscode-option.disabled-option,
+vscode-option.disabled-model,
+vscode-option.disabled-agent,
+vscode-option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
-  opacity: 0.6;
+  opacity: var(--opacity-subtle);
   font-style: italic;
   background-color: var(--vscode-input-background);
 }
 
-option[data-multiple='true'] {
+vscode-option[data-multiple='true'] {
   font-family: codicon, var(--vscode-font-family);
 }
 
-option[data-tool-use='true'] {
+vscode-option[data-tool-use='true'] {
   font-style: italic;
 }
