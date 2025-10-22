@@ -70,6 +70,36 @@ export function safeSetElementChecked(id, checked) {
   element.checked = checked;
 }
 
+/**
+ * Sets a boolean property on an element, falling back to toggling the
+ * corresponding attribute when the property is unavailable.
+ *
+ * @param {Element | null | undefined} element - The element to update.
+ * @param {string} property - The property/attribute name to set.
+ * @param {boolean} value - The boolean value to assign.
+ */
+export function setBooleanPropertyOrAttribute(element, property, value) {
+  if (!element || typeof property !== 'string' || property.length === 0) {
+    return;
+  }
+
+  const booleanValue = Boolean(value);
+  if (property in element) {
+    element[property] = booleanValue;
+    return;
+  }
+
+  if (element instanceof Element) {
+    if (typeof element.toggleAttribute === 'function') {
+      element.toggleAttribute(property, booleanValue);
+    } else if (booleanValue) {
+      element.setAttribute(property, '');
+    } else {
+      element.removeAttribute(property);
+    }
+  }
+}
+
 export function safeGetElementById(id) {
   const element = document.getElementById(id);
   if (!element) {

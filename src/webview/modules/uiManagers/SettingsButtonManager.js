@@ -19,6 +19,7 @@ import {
   safeGetElementChecked,
   isSelectLikeElement,
   getSelectedOptionElement,
+  setBooleanPropertyOrAttribute,
 } from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
@@ -129,10 +130,7 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
     const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
-    if ('checked' in button) {
-      button.checked = hasChecked;
-    }
-    button.toggleAttribute('checked', hasChecked);
+    setBooleanPropertyOrAttribute(button, 'checked', hasChecked);
   }
 
   _setupSettingsButtons() {

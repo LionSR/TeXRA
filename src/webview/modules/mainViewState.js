@@ -18,6 +18,7 @@ import {
   safeGetElementChecked,
   safeSetElementValue,
   safeSetElementChecked,
+  setBooleanPropertyOrAttribute,
   setChevronIcon,
   isSelectLikeElement,
   getSelectOptionElements,
@@ -106,11 +107,8 @@ export class MainViewState {
     const autoExtractOptions = safeGetElementById(
       ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
     );
-    if (autoExtractToggle) {
-      if ('checked' in autoExtractToggle) {
-        autoExtractToggle.checked = false;
-      }
-      autoExtractToggle.removeAttribute('checked');
+    if (autoExtractToggle instanceof HTMLElement) {
+      setBooleanPropertyOrAttribute(autoExtractToggle, 'checked', false);
     }
     if (autoExtractOptions) {
       if ('show' in autoExtractOptions) {
@@ -124,11 +122,8 @@ export class MainViewState {
     const toolConfigOptions = safeGetElementById(
       ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
     );
-    if (toolConfigToggle) {
-      if ('checked' in toolConfigToggle) {
-        toolConfigToggle.checked = false;
-      }
-      toolConfigToggle.removeAttribute('checked');
+    if (toolConfigToggle instanceof HTMLElement) {
+      setBooleanPropertyOrAttribute(toolConfigToggle, 'checked', false);
     }
     if (toolConfigOptions) {
       if ('show' in toolConfigOptions) {
@@ -217,11 +212,12 @@ export class MainViewState {
       const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
         safeGetElementChecked(id),
       );
-      if (autoExtractToggle) {
-        if ('checked' in autoExtractToggle) {
-          autoExtractToggle.checked = hasAutoExtractChecked;
-        }
-        autoExtractToggle.toggleAttribute('checked', hasAutoExtractChecked);
+      if (autoExtractToggle instanceof HTMLElement) {
+        setBooleanPropertyOrAttribute(
+          autoExtractToggle,
+          'checked',
+          hasAutoExtractChecked,
+        );
       }
       if (autoExtractOptions) {
         if ('show' in autoExtractOptions) {
@@ -240,11 +236,12 @@ export class MainViewState {
       const hasToolConfigChecked = CHECK_BOXES_TOOL_USE.some((id) =>
         safeGetElementChecked(id),
       );
-      if (toolConfigToggle) {
-        if ('checked' in toolConfigToggle) {
-          toolConfigToggle.checked = hasToolConfigChecked;
-        }
-        toolConfigToggle.toggleAttribute('checked', hasToolConfigChecked);
+      if (toolConfigToggle instanceof HTMLElement) {
+        setBooleanPropertyOrAttribute(
+          toolConfigToggle,
+          'checked',
+          hasToolConfigChecked,
+        );
       }
       if (toolConfigOptions) {
         if ('show' in toolConfigOptions) {
