@@ -58,12 +58,6 @@ export const ELEMENT_IDS = {
   FILTER_TOOL_BTN: 'filterToolBtn',
 };
 
-// Default sizes for split view
-export const SPLIT_SIZES = {
-  CONTENT: 80,
-  TABS: 20,
-};
-
 // Constants for layout configuration
 export const MAX_HEIGHT = 400;
 
