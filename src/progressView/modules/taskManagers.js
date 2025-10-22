@@ -31,7 +31,13 @@ export class TaskGroupDomManager {
         this.groupElements.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
-        this.updateGroup(group.id, group.status, group.endTime);
+        this.updateGroup({
+          groupId: group.id,
+          updates: {
+            status: group.status,
+            endTime: group.endTime,
+          },
+        });
         return;
       }
     }
@@ -83,13 +89,21 @@ export class TaskGroupDomManager {
       const parentGroupContent =
         parentDetails?.querySelector('.log-group-content');
       if (parentGroupContent) {
-        insertChronologically(parentGroupContent, detailsElem, group.startTime);
+        insertChronologically({
+          container: parentGroupContent,
+          element: detailsElem,
+          timestamp: group.startTime,
+        });
         return;
       }
     }
 
     // For top-level groups, insert in chronological order
-    insertChronologically(container, detailsElem, group.startTime);
+    insertChronologically({
+      container,
+      element: detailsElem,
+      timestamp: group.startTime,
+    });
 
     // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
@@ -104,13 +118,33 @@ export class TaskGroupDomManager {
    * @param {string} status - New status
    * @param {string} endTime - End time (optional)
    */
-  updateGroup(groupId, status, endTime) {
+  updateGroup(update) {
+    if (!update || typeof update !== 'object') {
+      return;
+    }
+
+    const { groupId, updates = {} } = update;
+    if (!groupId) {
+      return;
+    }
+
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
-    group.status = status;
-    if (endTime) {
-      group.endTime = endTime;
+    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'status',
+    );
+    const hasEndTimeUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'endTime',
+    );
+
+    if (hasStatusUpdate) {
+      group.status = updates.status;
+    }
+    if (hasEndTimeUpdate && updates.endTime) {
+      group.endTime = updates.endTime;
     }
 
     const detailsElem = this.groupElements.get(groupId);
@@ -126,14 +160,16 @@ export class TaskGroupDomManager {
       // Update the status icon
       const statusIconElem = header.querySelector('.group-status-icon');
       if (statusIconElem) {
-        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(status);
+        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(
+          group.status,
+        );
       }
 
       // Update or add the duration display when the group finishes
       const timeContainer = header.querySelector('.group-time');
 
-      if (endTime) {
-        const endDate = endTime;
+      if (hasEndTimeUpdate && group.endTime) {
+        const endDate = group.endTime;
         const startDate = group.startTime;
         const durationMs = endDate - startDate;
 
@@ -155,6 +191,8 @@ export class TaskGroupDomManager {
         }
       }
     }
+
+    progressViewState.taskGroups.set(groupId, group);
   }
 
   /**
@@ -290,7 +328,11 @@ export class LogEntryManager {
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
 
-        insertChronologically(groupContent, logLineElement, msgDate);
+        insertChronologically({
+          container: groupContent,
+          element: logLineElement,
+          timestamp: msgDate,
+        });
 
         return true;
       }
