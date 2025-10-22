@@ -43,7 +43,18 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   const interactiveElements = container.querySelectorAll(
-    'select, button, input, vscode-button, vscode-single-select, vscode-textarea',
+    [
+      'select',
+      'button',
+      'input',
+      'vscode-button',
+      'vscode-toolbar-button',
+      'vscode-single-select',
+      'vscode-textarea',
+      'vscode-textfield',
+      'vscode-checkbox',
+      'vscode-radio',
+    ].join(', '),
   );
   interactiveElements.forEach((element) => {
     if (element instanceof HTMLElement && 'disabled' in element) {
