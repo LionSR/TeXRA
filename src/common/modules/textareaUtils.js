@@ -1,56 +1,43 @@
-const DEFAULT_MAX_HEIGHT = 400;
-
+/**
+ * Resolve textarea target to get both the host element and wrapped textarea.
+ * For vscode-textarea, we use the wrappedElement property per API docs.
+ * @param {HTMLElement|HTMLTextAreaElement} target
+ * @returns {{host: HTMLElement|null, textarea: HTMLTextAreaElement|null}}
+ */
 function resolveTextareaTarget(target) {
   if (!target) {
     return { host: null, textarea: null };
   }
 
+  // Native textarea
   if (target instanceof HTMLTextAreaElement) {
     return { host: null, textarea: target };
   }
 
-  const maybeElement = target;
-  const tagName = maybeElement?.tagName?.toLowerCase?.();
-  if (tagName === 'vscode-textarea') {
-    const host = maybeElement;
-    const wrapped = host.wrappedElement;
-    if (wrapped instanceof HTMLTextAreaElement) {
-      return { host, textarea: wrapped };
-    }
-    const shadowTextarea = host.shadowRoot?.querySelector('textarea');
-    if (shadowTextarea instanceof HTMLTextAreaElement) {
-      return { host, textarea: shadowTextarea };
-    }
-    return { host, textarea: null };
-  }
-
-  if (maybeElement?.wrappedElement instanceof HTMLTextAreaElement) {
-    return { host: maybeElement, textarea: maybeElement.wrappedElement };
+  // vscode-textarea web component - use wrappedElement API
+  if (target?.wrappedElement instanceof HTMLTextAreaElement) {
+    return { host: target, textarea: target.wrappedElement };
   }
 
   return { host: null, textarea: null };
 }
 
+/**
+ * Sync value from wrapped textarea to host element.
+ * vscode-textarea should handle this automatically, but we do it for safety.
+ */
 function syncHostValue(host, textarea) {
-  if (host && textarea) {
+  if (host && textarea && host.value !== textarea.value) {
     host.value = textarea.value;
   }
 }
 
-export function autoResizeTextarea(target, maxHeight = DEFAULT_MAX_HEIGHT) {
-  const { host, textarea } = resolveTextareaTarget(target);
-  if (!textarea) {
-    return;
-  }
-
-  textarea.style.height = 'auto';
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-  textarea.style.height = `${newHeight}px`;
-  textarea.style.overflowY =
-    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  syncHostValue(host, textarea);
-}
-
+/**
+ * Insert text at the current cursor position in a textarea.
+ * Works with both native textarea and vscode-textarea elements.
+ * @param {HTMLElement|HTMLTextAreaElement} target - The textarea element
+ * @param {string} text - The text to insert
+ */
 export function insertTextAtCursor(target, text) {
   const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea || typeof text !== 'string') {
@@ -63,17 +50,6 @@ export function insertTextAtCursor(target, text) {
   textarea.value = original.slice(0, start) + text + original.slice(end);
   const newCursorPos = start + text.length;
   textarea.selectionStart = textarea.selectionEnd = newCursorPos;
-  syncHostValue(host, textarea);
-}
-
-export function resetTextareaHeight(target) {
-  const { host, textarea } = resolveTextareaTarget(target);
-  if (!textarea) {
-    return;
-  }
-
-  textarea.style.height = '';
-  textarea.style.overflowY = '';
   syncHostValue(host, textarea);
 }
 
