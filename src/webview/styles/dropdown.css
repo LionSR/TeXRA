@@ -72,7 +72,7 @@
 }
 
 /* Dropdown option labels - special styles not covered by vscode-checkbox */
-.dropdown-options .vscode-checkbox {
+.dropdown-options vscode-checkbox {
   padding: 1px var(--spacing-tiny);
   border-radius: var(--border-radius-small);
   font-weight: normal;
@@ -80,7 +80,7 @@
   line-height: 1;
 }
 
-.dropdown-options .vscode-checkbox:hover {
+.dropdown-options vscode-checkbox:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
@@ -92,20 +92,20 @@
 }
 
 /* Disabled option styling - shared across dropdowns */
-option.disabled-option,
-option.disabled-model,
-option.disabled-agent,
-option[data-requires-key='true'] {
+vscode-option.disabled-option,
+vscode-option.disabled-model,
+vscode-option.disabled-agent,
+vscode-option[data-requires-key='true'] {
   color: var(--vscode-descriptionForeground);
   opacity: 0.6;
   font-style: italic;
   background-color: var(--vscode-input-background);
 }
 
-option[data-multiple='true'] {
+vscode-option[data-multiple='true'] {
   font-family: codicon, var(--vscode-font-family);
 }
 
-option[data-tool-use='true'] {
+vscode-option[data-tool-use='true'] {
   font-style: italic;
 }

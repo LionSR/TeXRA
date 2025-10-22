@@ -7,6 +7,7 @@ import {
   autoResizeTextarea,
   insertTextAtCursor,
   resetTextareaHeight,
+  resolveTextareaTarget,
 } from '@common/textareaUtils.js';
 import {
   addEventListenerSafely,
@@ -28,37 +29,56 @@ export class FollowUpInputManager {
   }
 
   setup() {
-    this.textarea = safeGetElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
-    if (!this.textarea) {
+    const target = safeGetElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
+    if (!target) {
       return;
     }
 
-    autoResizeTextarea(this.textarea);
+    this.textarea = target;
 
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'input', () => {
-      autoResizeTextarea(this.textarea);
-    });
-
-    addEventListenerSafely(ELEMENT_IDS.SEND_FOLLOW_UP_BTN, 'click', () => {
-      this._sendFollowUp();
-    });
-
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        this._sendFollowUp();
+    const applySetup = () => {
+      const { textarea } = resolveTextareaTarget(target);
+      if (!textarea) {
+        return;
       }
-    });
 
-    addEventListenerSafely(ELEMENT_IDS.POLISH_FOLLOW_UP_BTN, 'click', () => {
-      this._polishFollowUp();
-    });
+      autoResizeTextarea(target);
 
-    addEventListenerSafely(ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN, 'click', () => {
-      this._clearFollowUp();
-    });
+      addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'input', () => {
+        autoResizeTextarea(target);
+      });
 
-    this.recordingButton.setup();
+      addEventListenerSafely(ELEMENT_IDS.SEND_FOLLOW_UP_BTN, 'click', () => {
+        this._sendFollowUp();
+      });
+
+      addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          this._sendFollowUp();
+        }
+      });
+
+      addEventListenerSafely(ELEMENT_IDS.POLISH_FOLLOW_UP_BTN, 'click', () => {
+        this._polishFollowUp();
+      });
+
+      addEventListenerSafely(ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN, 'click', () => {
+        this._clearFollowUp();
+      });
+
+      this.recordingButton.setup();
+    };
+
+    const needsUpgrade =
+      target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
+      typeof target.updateComplete?.then === 'function';
+
+    if (needsUpgrade) {
+      target.updateComplete.then(() => applySetup());
+    } else {
+      applySetup();
+    }
   }
 
   _sendFollowUp() {

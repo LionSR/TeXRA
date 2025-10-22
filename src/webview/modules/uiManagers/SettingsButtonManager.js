@@ -14,7 +14,11 @@ import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
-import { safeGetElementById } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  isSelectLikeElement,
+  getSelectedOptionElement,
+} from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -170,9 +174,11 @@ export class SettingsButtonManager extends BaseUIManager {
             AGENT_SELECT_IDS[sessionType] ??
             AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
           const selectElement = safeGetElementById(selectId);
-          if (selectElement instanceof HTMLSelectElement) {
+          if (isSelectLikeElement(selectElement)) {
             this._handleAgentSelection(selectElement);
-            selectElement.focus();
+            if (typeof selectElement.focus === 'function') {
+              selectElement.focus();
+            }
           } else {
             this.state.save();
           }
@@ -182,9 +188,10 @@ export class SettingsButtonManager extends BaseUIManager {
 
     AGENT_SELECT_LIST.forEach((id) => {
       this.addListener(id, 'focus', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -197,9 +204,10 @@ export class SettingsButtonManager extends BaseUIManager {
       });
 
       this.addListener(id, 'change', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -217,9 +225,12 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    this.addListener('model', 'change', (e) => {
-      const selectElement = e.target;
-      const selectedOption = selectElement.options[selectElement.selectedIndex];
+    this.addListener('model', 'change', (event) => {
+      const selectElement = event.currentTarget;
+      if (!(selectElement instanceof HTMLElement) || !isSelectLikeElement(selectElement)) {
+        return;
+      }
+      const selectedOption = getSelectedOptionElement(selectElement);
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -256,7 +267,7 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _handleAgentSelection(selectElement) {
-    if (!(selectElement instanceof HTMLSelectElement)) {
+    if (!isSelectLikeElement(selectElement)) {
       return;
     }
 
@@ -265,7 +276,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state.applySessionType(sessionType, { skipSave: true });
 
     const selectedAgent = selectElement.value;
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const selectedOption = getSelectedOptionElement(selectElement);
 
     if (
       selectedOption &&

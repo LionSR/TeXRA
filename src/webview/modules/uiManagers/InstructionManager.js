@@ -4,6 +4,7 @@ import { safeGetElementById } from '@common/domUtils.js';
 import {
   autoResizeTextarea,
   insertTextAtCursor,
+  resolveTextareaTarget,
 } from '@common/textareaUtils.js';
 
 export class InstructionManager {
@@ -14,27 +15,44 @@ export class InstructionManager {
   }
 
   setup() {
-    const textarea = safeGetElementById(this.textareaId);
-    if (!textarea) {
+    const target = safeGetElementById(this.textareaId);
+    if (!target) {
       console.warn(
         `[InstructionManager] Element with id '${this.textareaId}' not found`,
       );
       return;
     }
 
-    autoResizeTextarea(textarea);
+    const applySetup = () => {
+      const { textarea } = resolveTextareaTarget(target);
+      if (!textarea) {
+        return;
+      }
 
-    textarea.addEventListener('input', () => {
-      autoResizeTextarea(textarea);
-      this.state?.save();
-    });
+      autoResizeTextarea(target);
 
-    setupPasteListener(
-      textarea,
-      this.vscode,
-      (ta) => autoResizeTextarea(ta),
-      () => this.state?.save(),
-      (ta, text) => insertTextAtCursor(ta, text),
-    );
+      target.addEventListener('input', () => {
+        autoResizeTextarea(target);
+        this.state?.save();
+      });
+
+      setupPasteListener(
+        target,
+        this.vscode,
+        (ta) => autoResizeTextarea(ta),
+        () => this.state?.save(),
+        (ta, text) => insertTextAtCursor(ta, text),
+      );
+    };
+
+    const needsUpgrade =
+      target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
+      typeof target.updateComplete?.then === 'function';
+
+    if (needsUpgrade) {
+      target.updateComplete.then(() => applySetup());
+    } else {
+      applySetup();
+    }
   }
 }

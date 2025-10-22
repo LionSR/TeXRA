@@ -5,7 +5,6 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
 // Local imports
@@ -36,7 +35,7 @@ export class HistoryRenderer {
       return;
     }
 
-    clearButtonContainer.innerHTML = `<button class="vscode-button button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</button>`;
+    clearButtonContainer.innerHTML = `<vscode-button class="button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</vscode-button>`;
     addEventListenerSafely(ELEMENT_IDS.CLEAR_HISTORY_BTN, 'click', () => {
       vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
     });
@@ -181,9 +180,6 @@ export class HistoryRenderer {
       collapsible.remove();
       toggleButton.remove();
     }
-
-    // Convert any icon placeholders within this item
-    initializeIconButtons(container);
 
     return container;
   }
