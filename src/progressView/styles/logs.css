@@ -273,7 +273,8 @@
 }
 
 /* File action buttons inherit VS Code styling from the web components */
-.file-actions vscode-button {
+.file-actions vscode-button,
+.file-actions vscode-toolbar-button {
   margin-right: 0;
   margin-left: var(--spacing-tiny);
 }
