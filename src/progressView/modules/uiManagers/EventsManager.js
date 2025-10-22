@@ -105,12 +105,17 @@ export class EventsManager {
     );
     if (radioGroup) {
       const attachRadioListener = () => {
-        addEventListenerSafely(radioGroup, 'change', (e) => {
+        addEventListenerSafely(radioGroup, 'change', () => {
           const filter = radioGroup.value;
-          if (filter) {
+          if (!filter) {
+            return;
+          }
+          if (progressViewState.agentTypeFilter !== filter) {
+            progressViewState.agentTypeFilter = filter;
+            // Persist the new selection immediately so updates don't snap back
             vscode.postMessage({
               command: COMMANDS.FILTER_STREAMS,
-              filter: filter,
+              filter,
             });
           }
         });
