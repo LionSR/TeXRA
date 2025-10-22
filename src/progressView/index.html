@@ -144,6 +144,8 @@
           <vscode-textarea
             id="followUpInput"
             placeholder="Send follow-up message"
+            rows="4"
+            resize="vertical"
           ></vscode-textarea>
           <vscode-toolbar-container class="follow-up-actions">
             <vscode-toolbar-button
@@ -363,24 +365,24 @@
             class="agent-filter-group"
             id="agentFilterButtons"
           >
-            <vscode-button
+            <vscode-toolbar-button
               id="filterAllBtn"
               data-filter="all"
               aria-pressed="true"
-              >All</vscode-button
-            >
-            <vscode-button
+              label="All"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               id="filterWorkflowBtn"
               data-filter="workflow"
               aria-pressed="false"
-              >Workflow</vscode-button
-            >
-            <vscode-button
+              label="Workflow"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
               id="filterToolBtn"
               data-filter="toolUse"
               aria-pressed="false"
-              >Tool Use</vscode-button
-            >
+              label="Tool Use"
+            ></vscode-toolbar-button>
           </vscode-toolbar-container>
           <vscode-toolbar-container id="sortButtons">
             <vscode-toolbar-button

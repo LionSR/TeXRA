@@ -20,9 +20,8 @@
 #followUpInput {
   min-height: 106px;
   max-height: 400px;
-  resize: vertical;
   flex: 1;
-  overflow-y: hidden;
+  overflow-y: auto;
   line-height: 1.4;
 }
 
