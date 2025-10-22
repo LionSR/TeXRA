@@ -15,95 +15,47 @@ import { vscode } from '@common/webviewContext.js';
  */
 export class EventsManager {
   /**
-   * Apply saved toggle states to any groups already in the DOM
-   */
-  applyToggleStates() {
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const [groupId] of taskGroups) {
-      const isCollapsed = progressViewState.toggleStates.get(groupId);
-      const detailsElem = document.getElementById(`group-${groupId}`);
-
-      if (detailsElem && isCollapsed !== undefined) {
-        detailsElem.open = !isCollapsed;
-      }
-    }
-  }
-
-  /**
    * Sets up all event listeners for the UI
    */
   setupEventListeners() {
-    // Debug: Listen to ALL events on the tree
-    const treeEl = document.getElementById(ELEMENT_IDS.STREAM_TABS);
-    if (treeEl) {
-      console.log('[EventsManager] Setting up tree listeners on:', treeEl);
-
-      // Try all possible event names
-      ['vsc-tree-select', 'vsc-select', 'click', 'change'].forEach(
-        (eventName) => {
-          treeEl.addEventListener(eventName, (e) => {
-            console.log(`[EventsManager] Tree event "${eventName}":`, e);
-          });
-        },
-      );
-    }
-
     // Stream tab selection handler (vscode-tree)
-    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'vsc-tree-select', (e) => {
-      console.log('[EventsManager] vsc-tree-select event:', e);
-      console.log('[EventsManager] event.detail:', e.detail);
-
-      // event.detail is directly an array of selected vscode-tree-item elements
-      const selectedItems = Array.isArray(e.detail) ? e.detail : [];
-      const firstItem = selectedItems[0];
-
-      console.log('[EventsManager] Selected item:', firstItem);
-      console.log('[EventsManager] Item dataset:', firstItem?.dataset);
-
-      if (firstItem?.dataset?.stream) {
-        console.log(
-          '[EventsManager] Switching to stream:',
-          firstItem.dataset.stream,
-        );
+    addEventListenerSafely(
+      ELEMENT_IDS.STREAM_TABS,
+      'vsc-tree-select',
+      (event) => {
+        const detail = event.detail;
+        const selectedItems = Array.isArray(detail)
+          ? detail
+          : Array.isArray(detail?.selection)
+            ? detail.selection
+            : [];
+        const firstItem = selectedItems[0];
+        const stream = firstItem?.dataset?.stream;
+        if (!stream) {
+          return;
+        }
         vscode.postMessage({
           command: COMMANDS.SWITCH_STREAM,
-          stream: firstItem.dataset.stream,
+          stream,
         });
-      } else {
-        console.warn(
-          '[EventsManager] No valid stream in selection:',
-          firstItem,
-        );
-      }
-    });
+      },
+    );
 
     // Stream tab delete button handler
     addEventListenerSafely(
       ELEMENT_IDS.STREAM_TABS,
       'click',
       (e) => {
-        console.log('[EventsManager] Click event:', {
-          target: e.target,
-          composedPath: e.composedPath(),
-        });
-
         // Use composedPath to handle shadow DOM clicks
         const path = e.composedPath();
         const deleteButton = path.find((el) =>
           el.classList?.contains('tab-delete'),
         );
 
-        console.log('[EventsManager] Delete button found:', deleteButton);
-
         if (deleteButton?.dataset?.stream) {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
-
-          console.log(
-            '[EventsManager] Deleting stream:',
-            deleteButton.dataset.stream,
-          );
           vscode.postMessage({
             command: COMMANDS.DELETE_STREAM,
             stream: deleteButton.dataset.stream,
@@ -125,9 +77,6 @@ export class EventsManager {
         vscode.postMessage({ command, stream: activeStream });
       }
     });
-
-    // File list toggle - removed as filesToggle element doesn't exist in the HTML
-    // This appears to be orphaned code from a previous design
 
     // File list button handler
     addEventListenerSafely(

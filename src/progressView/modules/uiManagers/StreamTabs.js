@@ -31,14 +31,6 @@ export class StreamTabs {
       return;
     }
 
-    console.log('[StreamTabs] Container element:', tabsContainer.tagName);
-    console.log(
-      '[StreamTabs] Updating with streams:',
-      streams.length,
-      'active:',
-      activeStream,
-    );
-
     tabsContainer.innerHTML = '';
     let activeInfo = null;
     streams.forEach((info) => {
@@ -67,7 +59,6 @@ export class StreamTabs {
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';
-        console.log(`[StreamTabs] Setting status for ${info.name}: ${status}`);
         statusEl.classList.add(status);
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
@@ -94,13 +85,6 @@ export class StreamTabs {
         tabEl.setAttribute('selected', '');
         activeInfo = info;
       }
-
-      console.log('[StreamTabs] Created tab element:', {
-        name: info.name,
-        dataset: tabEl.dataset,
-        hasStatusEl: !!statusEl,
-        hasDeleteBtn: !!tabEl.querySelector('.tab-delete'),
-      });
 
       tabsContainer.appendChild(tabEl);
     });
