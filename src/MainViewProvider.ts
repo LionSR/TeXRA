@@ -152,6 +152,13 @@ export class MainViewProvider
           'codicons',
           'dist',
         ),
+        vscode.Uri.joinPath(
+          this.context.extensionUri,
+          'node_modules',
+          '@vscode-elements',
+          'elements',
+          'dist',
+        ),
       ],
     };
 

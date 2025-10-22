@@ -146,6 +146,13 @@ export class ProgressViewProvider
           'codicons',
           'dist',
         ),
+        vscode.Uri.joinPath(
+          this._extensionUri,
+          'node_modules',
+          '@vscode-elements',
+          'elements',
+          'dist',
+        ),
       ],
     };
 
