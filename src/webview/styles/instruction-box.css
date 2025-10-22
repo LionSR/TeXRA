@@ -14,7 +14,6 @@
 }
 
 #instruction {
-  min-height: var(--height-medium);
   max-height: var(--height-xlarge);
   resize: none;
   overflow-y: auto;

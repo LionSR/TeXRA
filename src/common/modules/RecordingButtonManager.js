@@ -53,13 +53,18 @@ export class RecordingButtonManager {
 
     const iconName = this.isRecording ? this.stopIcon : this.startIcon;
     const title = this.isRecording ? this.stopTitle : this.startTitle;
+    const tagName =
+      typeof this.button.tagName === 'string'
+        ? this.button.tagName.toLowerCase()
+        : '';
     const isVsCodeButton =
-      typeof this.button.tagName === 'string' &&
-      this.button.tagName.toLowerCase() === 'vscode-button';
+      tagName === 'vscode-button' || tagName === 'vscode-toolbar-button';
 
     if (isVsCodeButton) {
       this.button.icon = iconName;
-      this.button.iconOnly = true;
+      if (tagName === 'vscode-button') {
+        this.button.iconOnly = true;
+      }
       this.button.setAttribute('aria-label', title);
       this.button.title = title;
     } else {
