@@ -18,11 +18,14 @@
 
 /* Style the textarea for multi-line input */
 #followUpInput {
+  flex: 1;
+  line-height: 1.4;
+}
+
+#followUpInput::part(control) {
   min-height: 106px;
   max-height: 400px;
-  flex: 1;
   overflow-y: auto;
-  line-height: 1.4;
 }
 
 .follow-up-actions,
