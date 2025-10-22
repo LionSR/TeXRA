@@ -128,11 +128,13 @@
               </vscode-toolbar-container>
             </div>
             <div class="instruction-panel__body" role="presentation">
-              <div
+              <vscode-textarea
                 id="instructionText"
                 class="instruction-panel__text"
-                role="document"
-              ></div>
+                readonly
+                resize="none"
+                rows="6"
+              ></vscode-textarea>
             </div>
           </div>
           <vscode-scrollable
