@@ -140,10 +140,14 @@ export class TaskGroupDomManager {
       'endTime',
     );
 
-    if (hasStatusUpdate) {
+    if (hasStatusUpdate && updates.status) {
       group.status = updates.status;
     }
-    if (hasEndTimeUpdate && updates.endTime) {
+    if (
+      hasEndTimeUpdate &&
+      updates.endTime !== undefined &&
+      updates.endTime !== null
+    ) {
       group.endTime = updates.endTime;
     }
 
@@ -168,7 +172,11 @@ export class TaskGroupDomManager {
       // Update or add the duration display when the group finishes
       const timeContainer = header.querySelector('.group-time');
 
-      if (hasEndTimeUpdate && group.endTime) {
+      if (
+        hasEndTimeUpdate &&
+        group.endTime !== undefined &&
+        group.endTime !== null
+      ) {
         const endDate = group.endTime;
         const startDate = group.startTime;
         const durationMs = endDate - startDate;
