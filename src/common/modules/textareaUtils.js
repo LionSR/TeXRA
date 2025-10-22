@@ -38,7 +38,7 @@ function syncHostValue(host, textarea) {
 }
 
 export function autoResizeTextarea(target, maxHeight = DEFAULT_MAX_HEIGHT) {
-  const { textarea } = resolveTextareaTarget(target);
+  const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea) {
     return;
   }
@@ -48,6 +48,7 @@ export function autoResizeTextarea(target, maxHeight = DEFAULT_MAX_HEIGHT) {
   textarea.style.height = `${newHeight}px`;
   textarea.style.overflowY =
     textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  syncHostValue(host, textarea);
 }
 
 export function insertTextAtCursor(target, text) {
@@ -66,13 +67,14 @@ export function insertTextAtCursor(target, text) {
 }
 
 export function resetTextareaHeight(target) {
-  const { textarea } = resolveTextareaTarget(target);
+  const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea) {
     return;
   }
 
   textarea.style.height = '';
   textarea.style.overflowY = '';
+  syncHostValue(host, textarea);
 }
 
 export { resolveTextareaTarget };
