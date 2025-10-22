@@ -32,14 +32,17 @@
 }
 
 .agent-filter-group {
+  display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
+  gap: var(--spacing-small);
   margin-bottom: var(--spacing-small);
 }
 
 .agent-filter-group vscode-button,
 .agent-filter-group vscode-toolbar-button {
   min-width: auto;
+  flex: 0 0 auto;
 }
 
 .tab-container {
