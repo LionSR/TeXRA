@@ -120,9 +120,9 @@ export class EventsManager {
       cursor: 'col-resize',
     });
 
-    // Handle collapsible toggle events for vscode-collapsible elements
+    // Handle banner-details and file-list-details toggle events
     document.addEventListener(
-      'vsc-collapsible-toggle',
+      'toggle',
       (e) => {
         if (
           e.target &&
@@ -131,8 +131,11 @@ export class EventsManager {
             e.target.classList.contains('latexdiff-details') ||
             e.target.classList.contains('statistics-details'))
         ) {
-          // vscode-collapsible handles its own chevron icon
-          // No need to manually update toggle icon
+          const toggleIcon = e.target.querySelector('.toggle-icon');
+          if (toggleIcon) {
+            const isOpen = e.target.open;
+            setChevronIconHorizontal(toggleIcon, isOpen);
+          }
         }
       },
       true,
