@@ -80,19 +80,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     });
     dom.streamTabs.update(message.streams, message.activeStream);
 
-    const filterContainer = document.getElementById(
+    // Update agent filter radio group selection
+    const radioGroup = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
-    if (filterContainer) {
-      filterContainer.querySelectorAll('[data-filter]').forEach((btn) => {
-        const isActive = btn.dataset.filter === state.agentTypeFilter;
-        // For vscode-toolbar-button with toggleable: use checked attribute
+    if (radioGroup) {
+      radioGroup.value = state.agentTypeFilter;
+      // Also update the checked state on individual radio buttons
+      radioGroup.querySelectorAll('vscode-radio').forEach((radio) => {
+        const isActive = radio.value === state.agentTypeFilter;
         if (isActive) {
-          btn.setAttribute('checked', '');
+          radio.setAttribute('checked', '');
         } else {
-          btn.removeAttribute('checked');
+          radio.removeAttribute('checked');
         }
-        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
       });
     }
 

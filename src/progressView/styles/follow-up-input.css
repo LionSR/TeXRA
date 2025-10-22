@@ -18,8 +18,12 @@
 
 /* Style the textarea for multi-line input */
 #followUpInput {
+  display: block;
   flex: 1;
   line-height: 1.4;
+  min-height: 106px;
+  max-height: 400px;
+  height: auto;
 }
 
 #followUpInput::part(control) {
@@ -31,7 +35,7 @@
 .follow-up-actions,
 vscode-toolbar-container.follow-up-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: column !important;
   align-items: center;
   gap: var(--spacing-small);
 }
