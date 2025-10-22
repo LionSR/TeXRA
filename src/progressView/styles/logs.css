@@ -5,8 +5,6 @@
 
 .log-container {
   flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding: var(--spacing-tiny) var(--spacing-medium);
   min-width: 0;
   min-height: 0;
@@ -272,8 +270,9 @@
   flex-wrap: nowrap;
 }
 
-/* File action buttons use common.css vscode-button styling */
-.file-actions .vscode-button {
+/* File action buttons inherit VS Code styling from the web components */
+.file-actions vscode-button,
+.file-actions vscode-toolbar-button {
   margin-right: 0;
   margin-left: var(--spacing-tiny);
 }

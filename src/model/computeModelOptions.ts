@@ -24,7 +24,7 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
 }
 
 /**
- * Compute model <option> tags based on available API keys.
+ * Compute model <vscode-option> tags based on available API keys.
  * Models missing a required key receive a "✗" label and attributes so the
  * webview can handle API key setup prompts.
  */
@@ -36,7 +36,7 @@ export async function computeModelOptions(): Promise<string> {
     models.map(async (model) => {
       const config = MODEL_CONFIGS[model];
       if (!config) {
-        return `<option value="${model}">${model}</option>`;
+        return `<vscode-option value="${model}">${model}</vscode-option>`;
       }
 
       const provider = config.provider;
@@ -67,15 +67,24 @@ export async function computeModelOptions(): Promise<string> {
 
       // Build data attributes, only including them if values are defined
       const providerAttr = provider ? ` data-provider="${provider}"` : '';
-      const contextAttr =
+      const contextStr =
         config.contextWindow !== undefined
-          ? ` data-context="${formatContext(config.contextWindow)}"`
+          ? formatContext(config.contextWindow)
           : '';
-      const costAttr = formatCost(config.inputPrice, config.outputPrice)
-        ? ` data-cost="${formatCost(config.inputPrice, config.outputPrice)}"`
-        : '';
+      const contextAttr = contextStr ? ` data-context="${contextStr}"` : '';
+      const costStr = formatCost(config.inputPrice, config.outputPrice);
+      const costAttr = costStr ? ` data-cost="${costStr}"` : '';
 
-      return `<option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}>${label}</option>`;
+      // Build description for tooltip (context and cost)
+      const descriptionParts: string[] = [];
+      if (contextStr) descriptionParts.push(`Context: ${contextStr}`);
+      if (costStr) descriptionParts.push(`Cost (in/out per 1M): ${costStr}`);
+      const descriptionAttr =
+        descriptionParts.length > 0
+          ? ` description="${descriptionParts.join(' | ')}"`
+          : '';
+
+      return `<vscode-option value="${model}"${requiresKeyAttr}${providerAttr}${contextAttr}${costAttr}${descriptionAttr}>${label}</vscode-option>`;
     }),
   );
 

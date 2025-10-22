@@ -1,29 +1,46 @@
-const DEFAULT_MAX_HEIGHT = 400;
-
 /**
- * Automatically resize a textarea based on its scroll height.
- * @param {HTMLTextAreaElement} textarea
- * @param {number} [maxHeight]
+ * Resolve textarea target to get both the host element and wrapped textarea.
+ * For vscode-textarea, we use the wrappedElement property per API docs.
+ * @param {HTMLElement|HTMLTextAreaElement} target
+ * @returns {{host: HTMLElement|null, textarea: HTMLTextAreaElement|null}}
  */
-export function autoResizeTextarea(textarea, maxHeight = DEFAULT_MAX_HEIGHT) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
-    return;
+function resolveTextareaTarget(target) {
+  if (!target) {
+    return { host: null, textarea: null };
   }
 
-  textarea.style.height = 'auto';
-  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-  textarea.style.height = `${newHeight}px`;
-  textarea.style.overflowY =
-    textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  // Native textarea
+  if (target instanceof HTMLTextAreaElement) {
+    return { host: null, textarea: target };
+  }
+
+  // vscode-textarea web component - use wrappedElement API
+  if (target?.wrappedElement instanceof HTMLTextAreaElement) {
+    return { host: target, textarea: target.wrappedElement };
+  }
+
+  return { host: null, textarea: null };
+}
+
+/**
+ * Sync value from wrapped textarea to host element.
+ * vscode-textarea should handle this automatically, but we do it for safety.
+ */
+function syncHostValue(host, textarea) {
+  if (host && textarea && host.value !== textarea.value) {
+    host.value = textarea.value;
+  }
 }
 
 /**
  * Insert text at the current cursor position in a textarea.
- * @param {HTMLTextAreaElement} textarea
- * @param {string} text
+ * Works with both native textarea and vscode-textarea elements.
+ * @param {HTMLElement|HTMLTextAreaElement} target - The textarea element
+ * @param {string} text - The text to insert
  */
-export function insertTextAtCursor(textarea, text) {
-  if (!(textarea instanceof HTMLTextAreaElement) || typeof text !== 'string') {
+export function insertTextAtCursor(target, text) {
+  const { host, textarea } = resolveTextareaTarget(target);
+  if (!textarea || typeof text !== 'string') {
     return;
   }
 
@@ -33,17 +50,7 @@ export function insertTextAtCursor(textarea, text) {
   textarea.value = original.slice(0, start) + text + original.slice(end);
   const newCursorPos = start + text.length;
   textarea.selectionStart = textarea.selectionEnd = newCursorPos;
+  syncHostValue(host, textarea);
 }
 
-/**
- * Reset the height styles applied during auto-resize.
- * @param {HTMLTextAreaElement} textarea
- */
-export function resetTextareaHeight(textarea) {
-  if (!(textarea instanceof HTMLTextAreaElement)) {
-    return;
-  }
-
-  textarea.style.height = '';
-  textarea.style.overflowY = '';
-}
+export { resolveTextareaTarget };

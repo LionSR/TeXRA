@@ -1,7 +1,6 @@
 // Local imports - progress view
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 
@@ -31,6 +30,15 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
+
+    console.log('[StreamTabs] Container element:', tabsContainer.tagName);
+    console.log(
+      '[StreamTabs] Updating with streams:',
+      streams.length,
+      'active:',
+      activeStream,
+    );
+
     tabsContainer.innerHTML = '';
     let activeInfo = null;
     streams.forEach((info) => {
@@ -47,22 +55,24 @@ export class StreamTabs {
         },
         attributes: {
           '': { title: tooltip },
-          '.tab': { title: tooltip },
-          '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
-          '.tab': { stream: info.name },
+          '': { stream: info.name },
           '.tab-delete': { stream: info.name },
         },
       });
       if (!tabEl) return;
-      initializeIconButtons(tabEl);
+
+      // Set status indicator color based on status
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';
+        console.log(`[StreamTabs] Setting status for ${info.name}: ${status}`);
         statusEl.classList.add(status);
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
+      } else {
+        console.warn('[StreamTabs] Status element not found in tab');
       }
       const agentIcon = tabEl.querySelector('.agent-type');
       if (agentIcon) {
@@ -81,9 +91,17 @@ export class StreamTabs {
         }
       }
       if (info.name === activeStream) {
-        tabEl.classList.add('active');
+        tabEl.setAttribute('selected', '');
         activeInfo = info;
       }
+
+      console.log('[StreamTabs] Created tab element:', {
+        name: info.name,
+        dataset: tabEl.dataset,
+        hasStatusEl: !!statusEl,
+        hasDeleteBtn: !!tabEl.querySelector('.tab-delete'),
+      });
+
       tabsContainer.appendChild(tabEl);
     });
 

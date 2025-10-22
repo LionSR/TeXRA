@@ -5,7 +5,6 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
 // Local imports
@@ -36,7 +35,7 @@ export class HistoryRenderer {
       return;
     }
 
-    clearButtonContainer.innerHTML = `<button class="vscode-button button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</button>`;
+    clearButtonContainer.innerHTML = `<vscode-button class="button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</vscode-button>`;
     addEventListenerSafely(ELEMENT_IDS.CLEAR_HISTORY_BTN, 'click', () => {
       vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
     });
@@ -60,32 +59,30 @@ export class HistoryRenderer {
     const container = createFromTemplate('historyItemTemplate', {
       text: {
         '.history-timestamp': date,
-        '.toggle-button': LABELS.SHOW_MORE,
       },
       attributes: {
-        '.collapsible': { id: `content-${item.id}` },
+        '.history-collapsible': { heading: LABELS.MORE_DETAILS },
         '.delete-btn': { title: 'Delete this history item' },
         '.restore-btn': { title: 'Load configuration to main view' },
         '.rerun-btn': { title: 'Execute this configuration' },
       },
       dataset: {
+        '.history-collapsible': { id: item.id },
         '.delete-btn': { id: item.id, command: COMMANDS.DELETE_AGENT },
         '.restore-btn': { id: item.id, command: COMMANDS.RESTORE_AGENT },
         '.rerun-btn': { id: item.id, command: COMMANDS.RERUN_AGENT },
-        '.toggle-button': { id: item.id },
       },
     });
 
     if (!container) return document.createElement('div');
 
     const basicDetails = container.querySelector('.basic-details');
-    const collapsible = container.querySelector(`.${CLASS_NAMES.COLLAPSIBLE}`);
-    const detailsContainer = container.querySelector('.extra-details');
-    const toggleButton = container.querySelector(
-      `.${CLASS_NAMES.TOGGLE_BUTTON}`,
+    const collapsible = container.querySelector(
+      `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`,
     );
+    const detailsContainer = container.querySelector('.extra-details');
 
-    if (!basicDetails || !collapsible || !detailsContainer || !toggleButton) {
+    if (!basicDetails || !collapsible || !detailsContainer) {
       console.warn('[HistoryRenderer] Invalid history item template');
       return document.createElement('div');
     }
@@ -179,11 +176,7 @@ export class HistoryRenderer {
       detailsContainer.innerHTML = detailsHTML;
     } else {
       collapsible.remove();
-      toggleButton.remove();
     }
-
-    // Convert any icon placeholders within this item
-    initializeIconButtons(container);
 
     return container;
   }
@@ -226,40 +219,55 @@ export class HistoryRenderer {
     const container = safeGetElementById(ELEMENT_IDS.HISTORY_CONTAINER);
     if (!container) return;
     addEventListenerSafely(ELEMENT_IDS.HISTORY_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('button[data-command]');
+      const btn = e.target.closest('[data-command]');
       if (btn) {
         const command = btn.dataset.command;
         const historyId = btn.getAttribute('data-id');
         vscode.postMessage({ command, historyId });
         return;
       }
-      const toggle = e.target.closest(`.${CLASS_NAMES.TOGGLE_BUTTON}`);
-      if (toggle) {
-        const id = toggle.getAttribute('data-id');
-        const content = safeGetElementById(`content-${id}`);
-        if (!content) return;
-        const expanded = content.classList.toggle(CLASS_NAMES.EXPANDED);
-        toggle.textContent = expanded ? LABELS.SHOW_LESS : LABELS.SHOW_MORE;
-        historyViewState.toggleStates.set(id, expanded);
+    });
+
+    const collapsibles = container.querySelectorAll(
+      `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}`,
+    );
+    collapsibles.forEach((element) => {
+      if (!(element instanceof HTMLElement)) {
+        return;
       }
+      if (element.dataset.toggleListenerAttached === 'true') {
+        return;
+      }
+      element.dataset.toggleListenerAttached = 'true';
+      addEventListenerSafely(element, 'vsc-collapsible-toggle', (event) => {
+        const id = element.dataset.id;
+        if (!id) return;
+        const detail = event?.detail;
+        const isOpen =
+          typeof detail?.open === 'boolean'
+            ? detail.open
+            : element.hasAttribute('open');
+        historyViewState.toggleStates.set(id, isOpen);
+      });
     });
   }
 
   applyToggleStates() {
     const entries = historyViewState.toggleStates.entries();
     for (const [id, expanded] of entries) {
-      const content = document.getElementById(`content-${id}`);
-      const toggle = document.querySelector(
-        `.${CLASS_NAMES.TOGGLE_BUTTON}[data-id="${id}"]`,
+      const collapsible = document.querySelector(
+        `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}[data-id="${id}"]`,
       );
-      if (content && toggle) {
-        if (expanded) {
-          content.classList.add(CLASS_NAMES.EXPANDED);
-          toggle.textContent = LABELS.SHOW_LESS;
-        } else {
-          content.classList.remove(CLASS_NAMES.EXPANDED);
-          toggle.textContent = LABELS.SHOW_MORE;
-        }
+      if (!collapsible) {
+        continue;
+      }
+      if ('open' in collapsible) {
+        collapsible.open = Boolean(expanded);
+      }
+      if (expanded) {
+        collapsible.setAttribute('open', '');
+      } else {
+        collapsible.removeAttribute('open');
       }
     }
   }

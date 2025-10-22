@@ -10,7 +10,7 @@
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .file-selection-group--disabled {
@@ -34,13 +34,22 @@
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
+  overflow: visible;
+}
+
+#latexdiffsContent {
+  overflow: visible;
 }
 
 /* Ensure all button sizes are consistent */
-.latexdiffs-section .vscode-button,
-.file-select-actions .vscode-button {
+.latexdiffs-section vscode-button,
+.latexdiffs-section vscode-toolbar-button,
+.file-select-actions vscode-button,
+.file-select-actions vscode-toolbar-button {
   width: var(--height-control);
   height: var(--height-control);
+  min-width: var(--height-control);
+  min-height: var(--height-control);
 }
 
 /* Container for multiple files */

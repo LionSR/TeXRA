@@ -373,8 +373,10 @@ describe('MainViewMessageHandler state restoration', () => {
       <input id="auxiliaryFile" />
       <input id="mediaFile" />
       <div id="sessionTypeToggle">
-        <button data-session-type="workflow"></button>
-        <button data-session-type="toolUse"></button>
+        <vscode-radio-group>
+          <vscode-radio data-session-type="workflow" value="workflow"></vscode-radio>
+          <vscode-radio data-session-type="toolUse" value="toolUse"></vscode-radio>
+        </vscode-radio-group>
       </div>
       <div id="inputFilesContainer" style="display: none;">
         <div id="inputFiles"></div>
