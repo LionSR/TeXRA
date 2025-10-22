@@ -35,7 +35,9 @@ export class FollowUpInputManager {
 
     autoResizeTextarea(this.textarea);
 
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'input', () => {
+    const inputTarget = this.textarea.wrappedElement ?? this.textarea;
+
+    addEventListenerSafely(inputTarget, 'input', () => {
       autoResizeTextarea(this.textarea);
     });
 
@@ -43,7 +45,7 @@ export class FollowUpInputManager {
       this._sendFollowUp();
     });
 
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (event) => {
+    addEventListenerSafely(inputTarget, 'keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         this._sendFollowUp();

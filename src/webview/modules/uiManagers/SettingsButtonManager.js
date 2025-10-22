@@ -170,7 +170,7 @@ export class SettingsButtonManager extends BaseUIManager {
             AGENT_SELECT_IDS[sessionType] ??
             AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
           const selectElement = safeGetElementById(selectId);
-          if (selectElement instanceof HTMLSelectElement) {
+          if (selectElement instanceof HTMLElement) {
             this._handleAgentSelection(selectElement);
             selectElement.focus();
           } else {
@@ -184,7 +184,7 @@ export class SettingsButtonManager extends BaseUIManager {
       this.addListener(id, 'focus', (event) => {
         const target = event.target;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -199,7 +199,7 @@ export class SettingsButtonManager extends BaseUIManager {
       this.addListener(id, 'change', (event) => {
         const target = event.target;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -219,7 +219,16 @@ export class SettingsButtonManager extends BaseUIManager {
 
     this.addListener('model', 'change', (e) => {
       const selectElement = e.target;
-      const selectedOption = selectElement.options[selectElement.selectedIndex];
+      if (!(selectElement instanceof HTMLElement)) {
+        return;
+      }
+
+      const options = Array.from(
+        selectElement.querySelectorAll('vscode-option'),
+      );
+      const selectedOption = options.find(
+        (opt) => opt.value === selectElement.value,
+      );
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -256,7 +265,7 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _handleAgentSelection(selectElement) {
-    if (!(selectElement instanceof HTMLSelectElement)) {
+    if (!(selectElement instanceof HTMLElement)) {
       return;
     }
 
@@ -265,7 +274,8 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state.applySessionType(sessionType, { skipSave: true });
 
     const selectedAgent = selectElement.value;
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const options = Array.from(selectElement.querySelectorAll('vscode-option'));
+    const selectedOption = options.find((opt) => opt.value === selectedAgent);
 
     if (
       selectedOption &&

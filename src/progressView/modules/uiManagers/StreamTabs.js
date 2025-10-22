@@ -1,7 +1,6 @@
 // Local imports - progress view
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 
@@ -56,7 +55,6 @@ export class StreamTabs {
         },
       });
       if (!tabEl) return;
-      initializeIconButtons(tabEl);
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';

@@ -57,20 +57,35 @@ export function createIconButton({
   id,
   icon,
   title = '',
-  className = 'vscode-button',
+  className = '',
   disabled = false,
   dataset = {},
+  iconOnly = true,
 }) {
-  const element = renderTemplate('iconButtonTemplate');
-  if (!element) return null;
-  const iconEl = element.querySelector('i');
-  if (iconEl) {
-    iconEl.classList.add(`codicon-${icon}`);
+  const element = document.createElement('vscode-button');
+  if (!element) {
+    console.warn('createIconButton: failed to create vscode-button');
+    return null;
   }
-  element.id = id;
-  element.className = className;
-  element.title = title;
-  element.disabled = disabled;
+  if (id) {
+    element.id = id;
+  }
+  if (className) {
+    element.className = className;
+  }
+  if (title) {
+    element.title = title;
+    element.setAttribute('aria-label', title);
+  }
+  if (typeof disabled === 'boolean') {
+    element.disabled = disabled;
+  }
+  if (icon) {
+    element.icon = icon;
+  }
+  if (iconOnly) {
+    element.setAttribute('icon-only', '');
+  }
   Object.entries(dataset).forEach(([key, value]) => {
     element.dataset[key] = value;
   });

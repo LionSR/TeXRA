@@ -272,8 +272,8 @@
   flex-wrap: nowrap;
 }
 
-/* File action buttons use common.css vscode-button styling */
-.file-actions .vscode-button {
+/* File action buttons */
+.file-actions vscode-button {
   margin-right: 0;
   margin-left: var(--spacing-tiny);
 }

@@ -31,7 +31,7 @@ function getAgent(sessionType) {
   const selectId =
     AGENT_SELECT_IDS[sessionType] ?? AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
   const selectElement = safeGetElementById(selectId);
-  if (selectElement instanceof HTMLSelectElement && selectElement.value) {
+  if (selectElement instanceof HTMLElement && selectElement.value) {
     return selectElement.value;
   }
   return '';

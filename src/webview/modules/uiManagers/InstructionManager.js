@@ -24,7 +24,8 @@ export class InstructionManager {
 
     autoResizeTextarea(textarea);
 
-    textarea.addEventListener('input', () => {
+    const inputTarget = textarea.wrappedElement ?? textarea;
+    inputTarget.addEventListener('input', () => {
       autoResizeTextarea(textarea);
       this.state?.save();
     });

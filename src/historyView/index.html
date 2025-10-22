@@ -30,7 +30,6 @@
           "@common/webviewContext.js": "${webviewContextUri}",
           "@common/domUtils.js": "${domUtilsUri}",
           "@common/templateUtils.js": "${templateUtilsUri}",
-          "@common/iconButtonInitializer.js": "${iconButtonInitializerUri}",
           "@common/htmlEncoding.js": "${htmlEncodingUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
           "@common/BaseDomHandler.js": "${baseDomHandlerUri}",
@@ -38,6 +37,11 @@
         }
       }
     </script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
     <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
   </head>
 
@@ -46,25 +50,28 @@
       <h2>Agent Execution History</h2>
 
       <div id="searchContainer" class="search-container">
-        <input
-          type="text"
+        <vscode-textfield
           id="searchInput"
-          class="search-input vscode-input"
+          class="search-input"
           placeholder="Search history items..."
-        />
+        ></vscode-textfield>
         <div class="search-controls">
-          <button
+          <vscode-button
             id="prevMatch"
-            class="vscode-button search-nav-btn"
+            class="search-nav-btn"
             title="Previous match"
-            data-icon="chevron-up"
-          ></button>
-          <button
+            icon="chevron-up"
+            icon-only
+            aria-label="Previous match"
+          ></vscode-button>
+          <vscode-button
             id="nextMatch"
-            class="vscode-button search-nav-btn"
+            class="search-nav-btn"
             title="Next match"
-            data-icon="chevron-down"
-          ></button>
+            icon="chevron-down"
+            icon-only
+            aria-label="Next match"
+          ></vscode-button>
           <span id="matchCount" class="match-count"></span>
         </div>
       </div>
@@ -82,34 +89,29 @@
         <div class="history-item-header">
           <div class="history-timestamp"></div>
           <div class="history-actions button-group">
-            <button
-              class="vscode-button delete-btn"
-              title=""
-              data-icon="trash"
-            ></button>
-            <button
-              class="vscode-button restore-btn"
-              title=""
-              data-icon="reply"
-            ></button>
-            <button
-              class="vscode-button rerun-btn"
-              title=""
-              data-icon="debug-rerun"
-            ></button>
+            <vscode-button
+              class="delete-btn"
+              icon="trash"
+              icon-only
+            ></vscode-button>
+            <vscode-button
+              class="restore-btn"
+              icon="reply"
+              icon-only
+            ></vscode-button>
+            <vscode-button
+              class="rerun-btn"
+              icon="debug-rerun"
+              icon-only
+            ></vscode-button>
           </div>
         </div>
         <div class="history-details basic-details"></div>
         <div class="collapsible">
           <div class="history-details extra-details"></div>
         </div>
-        <button class="toggle-button"></button>
+        <vscode-button class="toggle-button" secondary></vscode-button>
       </div>
-    </template>
-    <template id="iconButtonTemplate">
-      <button class="vscode-button">
-        <i class="codicon"></i>
-      </button>
     </template>
     <template id="codiconTemplate">
       <i class="codicon"></i>

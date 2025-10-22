@@ -105,7 +105,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         }
 
         let select = document.getElementById('model');
-        if (!(select instanceof HTMLSelectElement)) {
+        if (!(select instanceof HTMLElement)) {
           const waitHandle = waitForElement('#model');
 
           // Cancel any previous waiter to prevent race conditions
@@ -138,7 +138,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           }
 
           // Verify element was found
-          if (!(select instanceof HTMLSelectElement)) {
+          if (!(select instanceof HTMLElement)) {
             console.warn(
               'SET_MODEL_OPTIONS: Model select element not found after waiting',
             );
@@ -166,7 +166,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             return;
           }
           const select = document.getElementById(id);
-          if (!(select instanceof HTMLSelectElement)) {
+          if (!(select instanceof HTMLElement)) {
             return;
           }
           this._applyAgentOptions(select, html);
@@ -203,12 +203,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (previous) {
       selectElement.value = previous;
     }
-    Array.from(selectElement.options).forEach((opt) => {
-      const { provider, context, cost } = opt.dataset;
-      if (provider || context || cost) {
-        opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
-      }
-    });
+    Array.from(selectElement.querySelectorAll('vscode-option')).forEach(
+      (opt) => {
+        const { provider, context, cost } = opt.dataset;
+        if (provider || context || cost) {
+          opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
+        }
+      },
+    );
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
@@ -218,20 +220,22 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       selectElement.value = previous;
       if (
         selectElement.value !== previous &&
-        selectElement.options.length > 0
+        selectElement.querySelectorAll('vscode-option').length > 0
       ) {
-        const fallbackOption = Array.from(selectElement.options).find(
-          (option) => !option.disabled,
-        );
+        const fallbackOption = Array.from(
+          selectElement.querySelectorAll('vscode-option'),
+        ).find((option) => !option.disabled);
         if (fallbackOption) {
           selectElement.value = fallbackOption.value;
         }
       }
     }
 
-    Array.from(selectElement.options).forEach((opt) => {
-      this._decorateAgentOption(opt);
-    });
+    Array.from(selectElement.querySelectorAll('vscode-option')).forEach(
+      (opt) => {
+        this._decorateAgentOption(opt);
+      },
+    );
   }
 
   _decorateAgentOption(opt) {
@@ -301,7 +305,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return null;
     }
     const element = this._getElement(selectId);
-    return element instanceof HTMLSelectElement ? element : null;
+    return element instanceof HTMLElement ? element : null;
   }
 
   _getActiveAgentSelection() {

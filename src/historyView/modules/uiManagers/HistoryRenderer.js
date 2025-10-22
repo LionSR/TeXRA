@@ -5,7 +5,6 @@ import {
   addEventListenerSafely,
   safeGetElementById,
 } from '@common/domUtils.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
 // Local imports
@@ -36,7 +35,15 @@ export class HistoryRenderer {
       return;
     }
 
-    clearButtonContainer.innerHTML = `<button class="vscode-button button-clear" id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}">${LABELS.CLEAR_ALL_HISTORY}</button>`;
+    clearButtonContainer.innerHTML = `
+      <vscode-button
+        class="button-clear"
+        id="${ELEMENT_IDS.CLEAR_HISTORY_BTN}"
+        icon="trash"
+      >
+        ${LABELS.CLEAR_ALL_HISTORY}
+      </vscode-button>
+    `;
     addEventListenerSafely(ELEMENT_IDS.CLEAR_HISTORY_BTN, 'click', () => {
       vscode.postMessage({ command: COMMANDS.CLEAR_HISTORY });
     });
@@ -64,9 +71,18 @@ export class HistoryRenderer {
       },
       attributes: {
         '.collapsible': { id: `content-${item.id}` },
-        '.delete-btn': { title: 'Delete this history item' },
-        '.restore-btn': { title: 'Load configuration to main view' },
-        '.rerun-btn': { title: 'Execute this configuration' },
+        '.delete-btn': {
+          title: 'Delete this history item',
+          'aria-label': 'Delete this history item',
+        },
+        '.restore-btn': {
+          title: 'Load configuration to main view',
+          'aria-label': 'Load configuration to main view',
+        },
+        '.rerun-btn': {
+          title: 'Execute this configuration',
+          'aria-label': 'Execute this configuration',
+        },
       },
       dataset: {
         '.delete-btn': { id: item.id, command: COMMANDS.DELETE_AGENT },
@@ -182,9 +198,6 @@ export class HistoryRenderer {
       toggleButton.remove();
     }
 
-    // Convert any icon placeholders within this item
-    initializeIconButtons(container);
-
     return container;
   }
 
@@ -226,7 +239,7 @@ export class HistoryRenderer {
     const container = safeGetElementById(ELEMENT_IDS.HISTORY_CONTAINER);
     if (!container) return;
     addEventListenerSafely(ELEMENT_IDS.HISTORY_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('button[data-command]');
+      const btn = e.target.closest('[data-command]');
       if (btn) {
         const command = btn.dataset.command;
         const historyId = btn.getAttribute('data-id');

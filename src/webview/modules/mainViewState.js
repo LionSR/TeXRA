@@ -41,14 +41,10 @@ function setFileSelectionGroupDisabled(isDisabled) {
   }
 
   const interactiveElements = container.querySelectorAll(
-    'select, button, input',
+    'vscode-single-select, vscode-button, vscode-textfield, vscode-textarea, select, button, input',
   );
   interactiveElements.forEach((element) => {
-    if (
-      element instanceof HTMLButtonElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLInputElement
-    ) {
+    if ('disabled' in element) {
       element.disabled = isDisabled;
     }
   });
@@ -56,12 +52,13 @@ function setFileSelectionGroupDisabled(isDisabled) {
 
 function getSelectDefaultValue(selectId, fallback) {
   const element = safeGetElementById(selectId);
-  if (element instanceof HTMLSelectElement) {
+  if (element instanceof HTMLElement) {
     if (element.value) {
       return element.value;
     }
-    if (element.options.length > 0) {
-      return element.options[0].value;
+    const options = element.querySelectorAll('vscode-option');
+    if (options.length > 0) {
+      return options[0].value;
     }
   }
   return fallback;

@@ -6,7 +6,6 @@ import {
   setElementsDisabled,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
@@ -55,11 +54,14 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = createFromTemplate('selectOptionTemplate', {
-      text: { '': text },
-      attributes: { '': { value } },
-    });
-    if (option) select.appendChild(option);
+    if (!select) {
+      return null;
+    }
+    const option = document.createElement('vscode-option');
+    option.value = value;
+    option.textContent = text;
+    select.appendChild(option);
+    return option;
   }
 
   handleRecentCommits(message) {
@@ -84,7 +86,7 @@ export class FileSelect {
 
       const manualSelection = this._manualCommitSelection;
       if (manualSelection) {
-        const options = Array.from(commitDiv.options);
+        const options = Array.from(commitDiv.querySelectorAll('vscode-option'));
         const existingOption = options.find((option) =>
           this._areEquivalentCommitHashes(
             option.value,
@@ -127,7 +129,7 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(fileDiv.options);
+    const options = Array.from(fileDiv.querySelectorAll('vscode-option'));
     if (options.some((o) => o.value === filePath)) {
       safeSetElementValue(fileId, filePath);
       fileDiv.dispatchEvent(new Event('change'));
@@ -145,7 +147,7 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(commitDiv.options);
+    const options = Array.from(commitDiv.querySelectorAll('vscode-option'));
     const existingOption = options.find((option) =>
       this._areEquivalentCommitHashes(option.value, commitHash),
     );

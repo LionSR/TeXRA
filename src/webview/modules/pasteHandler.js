@@ -185,7 +185,8 @@ export function setupPasteListener(
 ) {
   if (!textarea) return;
 
-  textarea.addEventListener('paste', async (e) => {
+  const target = textarea.wrappedElement ?? textarea;
+  target.addEventListener('paste', async (e) => {
     const handled = await handleImagePaste(
       e,
       textarea,
