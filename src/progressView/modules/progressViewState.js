@@ -42,27 +42,43 @@ class TaskGroups {
   }
 
   /**
-   * Update an existing log group with new status or end time.
-   * @param {string} groupId - ID of the group to update
-   * @param {string} status - New status
-   * @param {number} [endTime] - Optional end time
+   * Update an existing log group with a structured payload.
+   * @param {{ groupId: string, updates?: Object }} payload
    */
-  update(groupId, status, endTime) {
+  update(payload) {
+    if (!payload || typeof payload !== 'object') {
+      console.error('TaskGroups.update: payload must be an object');
+      return;
+    }
+
+    const { groupId, updates = {} } = payload;
     if (!groupId) {
       console.error('TaskGroups.update: groupId is required');
       return;
     }
+
     const group = this.groups.get(groupId);
     if (!group) {
       console.error(`TaskGroups.update: group not found for id ${groupId}`);
       return;
     }
 
-    if (status) {
-      group.status = status;
+    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'status',
+    );
+    if (hasStatusUpdate && updates.status) {
+      group.status = updates.status;
     }
-    if (endTime !== undefined && endTime !== null) {
-      group.endTime = endTime;
+    if (
+      Object.prototype.hasOwnProperty.call(updates, 'endTime') &&
+      updates.endTime !== undefined &&
+      updates.endTime !== null
+    ) {
+      group.endTime = updates.endTime;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'usage')) {
+      group.usage = updates.usage;
     }
 
     this.groups.set(groupId, group);
