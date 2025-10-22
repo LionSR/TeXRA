@@ -66,15 +66,15 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    CHECK_BOXES_TOOL_USE.forEach((id) => {
-      this.addListener(id, 'change', () => {
-        this.toggleManager.updateToolConfigToggleState();
-      });
-    });
+    // Add change listeners for checkboxes (excluding tool config)
+    CHECK_BOXES.filter((id) => !CHECK_BOXES_TOOL_USE.includes(id)).forEach(
+      (id) => {
+        this.addListener(id, 'change', handleCheckboxChange);
+      },
+    );
 
-    CHECK_BOXES.forEach((id) => {
-      this.addListener(id, 'change', handleCheckboxChange);
-    });
+    // Add change listener for tool config multi-select
+    this.addListener(ELEMENT_IDS.TOOL_CONFIG_SELECT, 'change', handleCheckboxChange);
 
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
