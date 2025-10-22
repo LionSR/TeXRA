@@ -7,6 +7,7 @@ import { COMMANDS, STATUS } from '../modules/constants.js';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
+import type { TaskGroupUpdatePayload } from './TaskGroupManager';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { InstructionUpdate, StreamTabInfo } from '../types';
 import type { OutputFileInfo } from '@agent/output/types';
@@ -250,21 +251,13 @@ export class WebviewUpdater {
   /**
    * Update a task group in the webview
    */
-  updateTaskGroup(
-    stream: StreamTabId,
-    groupId: string,
-    status: StatusType,
-    endTime?: number,
-  ): void {
+  updateTaskGroup(update: TaskGroupUpdatePayload): void {
     const webview = this.getWebview();
     if (!webview) return;
 
     webview.postMessage({
       command: COMMANDS.UPDATE_TASK_GROUP,
-      stream,
-      groupId,
-      status,
-      endTime,
+      update,
     });
   }
 

@@ -54,12 +54,16 @@ export function appendFormatted(container, formatted) {
  *   callback to extract a timestamp from each child. Should return milliseconds
  *   since epoch or null if the child should be ignored.
  */
-export function insertChronologically(
+export function insertChronologically({
   container,
   element,
   timestamp,
   getChildTimestamp,
-) {
+}) {
+  if (!container || !element || timestamp === undefined || timestamp === null) {
+    return;
+  }
+
   const targetTime =
     timestamp instanceof Date ? timestamp.getTime() : timestamp;
   const children = Array.from(container.children);
