@@ -6,10 +6,6 @@
 .instruction-box {
   margin-bottom: var(--spacing-small);
   position: relative;
-  background-color: var(--background-color);
-  border: var(--border-thin) solid
-    var(--vscode-widget-border, var(--dropdown-border));
-  border-radius: var(--border-radius);
   padding: var(--spacing-medium);
 }
 
