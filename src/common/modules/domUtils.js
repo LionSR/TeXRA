@@ -96,16 +96,37 @@ export function safeGetElementChecked(id) {
   return element.checked;
 }
 
+export function setElementDisabled(element, disabled) {
+  if (!element) {
+    return;
+  }
+
+  if ('disabled' in element) {
+    try {
+      element.disabled = disabled;
+    } catch (error) {
+      // Ignore assignment errors from custom elements without writable props
+    }
+  }
+
+  if (element instanceof Element) {
+    element.toggleAttribute('disabled', Boolean(disabled));
+  }
+}
+
 export function setElementsDisabled(idsOrElements, disabled) {
   const elements = Array.isArray(idsOrElements)
     ? idsOrElements
     : [idsOrElements];
+
   elements.forEach((el) => {
     if (typeof el === 'string') {
       const elem = document.getElementById(el);
-      if (elem) elem.disabled = disabled;
-    } else if (el) {
-      el.disabled = disabled;
+      if (elem) {
+        setElementDisabled(elem, disabled);
+      }
+    } else {
+      setElementDisabled(el, disabled);
     }
   });
 }
