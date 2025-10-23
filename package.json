@@ -1502,7 +1502,7 @@
     "minimatch": "^10.0.3",
     "nanoid": "^5.1.6",
     "node-pandoc": "^0.3.0",
-    "openai": "^6.5.0",
+    "openai": "^6.6.0",
     "pdf2pic": "^3.2.0",
     "shell-quote": "^1.8.3",
     "sortablejs": "^1.15.6",
