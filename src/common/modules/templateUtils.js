@@ -1,3 +1,6 @@
+// Local imports - common
+import { setElementDisabled } from './domUtils.js';
+
 export function renderTemplate(templateId) {
   const template = document.getElementById(templateId);
   if (!template) {
@@ -73,7 +76,7 @@ export function createIconButton({
     element.setAttribute('label', title);
     element.setAttribute('aria-label', title);
   }
-  element.disabled = disabled;
+  setElementDisabled(element, disabled);
   Object.entries(dataset).forEach(([key, value]) => {
     element.dataset[key] = value;
   });
