@@ -135,9 +135,6 @@ export function isSelectLikeElement(element) {
   if (!element) {
     return false;
   }
-  if (element instanceof HTMLSelectElement) {
-    return true;
-  }
   return isVsCodeSelectElement(element);
 }
 
@@ -145,19 +142,12 @@ export function getSelectOptionElements(element) {
   if (!isSelectLikeElement(element)) {
     return [];
   }
-  if (element instanceof HTMLSelectElement) {
-    return Array.from(element.options);
-  }
   return Array.from(element.querySelectorAll('vscode-option'));
 }
 
 export function getSelectedOptionElement(element) {
   if (!isSelectLikeElement(element)) {
     return null;
-  }
-
-  if (element instanceof HTMLSelectElement) {
-    return element.options[element.selectedIndex] ?? null;
   }
 
   const options = getSelectOptionElements(element);
