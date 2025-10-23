@@ -19,6 +19,7 @@ import {
   safeSetElementValue,
   safeSetElementChecked,
   setChevronIcon,
+  setElementDisabled,
   isSelectLikeElement,
   getSelectOptionElements,
 } from '@common/domUtils.js';
@@ -57,9 +58,7 @@ function setFileSelectionGroupDisabled(isDisabled) {
     ].join(', '),
   );
   interactiveElements.forEach((element) => {
-    if (element instanceof HTMLElement && 'disabled' in element) {
-      element.disabled = isDisabled;
-    }
+    setElementDisabled(element, isDisabled);
   });
 }
 
