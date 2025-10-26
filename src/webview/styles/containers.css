@@ -87,6 +87,14 @@
 .agent-config-banner .actions,
 .dependency-banner .actions {
   display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.dependency-banner .dependency-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-small);
 }
 
