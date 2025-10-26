@@ -4,10 +4,52 @@ import * as vscode from 'vscode';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
-import { sleep } from '@utils/helpers';
 
 const CHANNEL = 'LinterUtils';
 logger.initialize(CHANNEL);
+
+const DIAGNOSTIC_UPDATE_TIMEOUT_MS = 7500;
+
+async function waitForDiagnosticsUpdate(
+  targetUri: vscode.Uri,
+  timeoutMs: number = DIAGNOSTIC_UPDATE_TIMEOUT_MS,
+): Promise<void> {
+  if (timeoutMs <= 0) {
+    return;
+  }
+
+  const targetKey = targetUri.toString();
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+
+    const diagnosticsDisposable = vscode.languages.onDidChangeDiagnostics(
+      (event) => {
+        if (event.uris.some((uri) => uri.toString() === targetKey)) {
+          finish();
+        }
+      },
+    );
+
+    const timeoutHandle = setTimeout(() => {
+      logger.debug(
+        CHANNEL,
+        `Timed out waiting for diagnostics update for ${targetUri.fsPath}`,
+      );
+      finish();
+    }, timeoutMs);
+
+    function finish(): void {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutHandle);
+      diagnosticsDisposable.dispose();
+      resolve();
+    }
+  });
+}
 
 /**
  * Trigger a LaTeX build for a specific file
@@ -60,21 +102,16 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
       `Triggering LaTeX build for ${filePath} to refresh linter diagnostics`,
     );
 
-    // Trigger the build
-    await vscode.commands.executeCommand('latex-workshop.build', fileUri);
+    let diagnosticsWait: Promise<void> | undefined;
 
-    // Wait for the build and diagnostics to complete
-    await sleep(2500);
-
-    // Try to trigger diagnostics refresh explicitly if the editor is available
-    if (editor) {
-      // Save the file again after build to ensure diagnostics are refreshed
-      await editor.document.save();
-      logger.debug(CHANNEL, `Saved file after build: ${filePath}`);
+    try {
+      diagnosticsWait = waitForDiagnosticsUpdate(fileUri);
+      await vscode.commands.executeCommand('latex-workshop.build', fileUri);
+    } finally {
+      if (diagnosticsWait) {
+        await diagnosticsWait;
+      }
     }
-
-    // Wait a bit more for diagnostics to be updated
-    await sleep(500);
   } catch (buildErr) {
     logger.warn(
       CHANNEL,
