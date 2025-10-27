@@ -27,6 +27,7 @@ import {
 import {
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
+  LATEX_FORBIDDEN_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
   FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
@@ -103,6 +104,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   // LaTeX Content Formatting
   EQUATION_REPLACEMENTS,
   SECTION_REPLACEMENTS,
+  LATEX_FORBIDDEN_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
   FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
@@ -139,6 +141,7 @@ export function getAllReplacements(): ReplacementCategory {
     'latex_spacing',
     'equations',
     'sections',
+    'latex_forbidden_commands',
     'characters',
     'font_commands',
     'latex_xml',
