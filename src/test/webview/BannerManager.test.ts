@@ -148,7 +148,7 @@ class BannerManager {
         'vscode-toolbar-button',
       ) as ToolbarButtonElement;
       recheckButton.id = 'dependencyRecheckButton';
-      recheckButton.icon = 'refresh';
+      recheckButton.setAttribute('icon', 'refresh');
       recheckButton.textContent = 'Re-check';
       actions.insertBefore(recheckButton, actions.firstChild);
     }
@@ -166,7 +166,7 @@ class BannerManager {
     ) as ToolbarButtonElement;
     button.className = 'secondary dependency-install-button';
     button.textContent = 'Install';
-    button.icon = 'cloud-download';
+    button.setAttribute('icon', 'cloud-download');
     button.dataset.tool = tool;
 
     item.appendChild(nameSpan);
