@@ -2,7 +2,6 @@
 import {
   CHECK_BOXES_AUTO_EXTRACT,
   CHECK_BOXES_TOOL_USE,
-  CHECK_BOXES,
   ELEMENT_IDS,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
@@ -18,6 +17,7 @@ import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
 import {
   safeGetElementById,
+  safeGetElementChecked,
   isSelectLikeElement,
   getSelectedOptionElement,
 } from '@common/domUtils.js';
@@ -27,62 +27,98 @@ import { vscode } from '@common/webviewContext.js';
 export class SettingsButtonManager extends BaseUIManager {
   constructor(
     vscodeInstance = vscode,
-    toggleManager,
     latexdiffManager,
     state = mainViewState,
     eventBus = webviewEventBus,
   ) {
     super();
     this.vscode = vscodeInstance;
-    this.toggleManager = toggleManager;
     this.latexdiffManager = latexdiffManager;
     this.state = state;
     this.eventBus = eventBus;
     this._dependencyInstallListeners = [];
     this._lastRadioSessionType = undefined;
+    this._menuObservers = [];
   }
 
   _setupToggles() {
-    this.addListener(ELEMENT_IDS.TOGGLE_AUTO_EXTRACT, 'click', (e) => {
-      e.stopPropagation();
-      const options = safeGetElementById(ELEMENT_IDS.AUTO_EXTRACT_OPTIONS);
-      if (options) {
-        const visible = options.style.display === 'block';
-        options.style.display = visible ? 'none' : 'block';
-      }
-      this.toggleManager.updateAutoToggleState();
+    this._initializeMenuToggle({
+      buttonId: ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      menuId: ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
+      checkboxIds: CHECK_BOXES_AUTO_EXTRACT,
     });
 
-    this.addListener(ELEMENT_IDS.TOGGLE_TOOL_CONFIG, 'click', (e) => {
-      e.stopPropagation();
-      const options = safeGetElementById(ELEMENT_IDS.TOOL_CONFIG_OPTIONS);
-      if (options) {
-        const visible = options.style.display === 'block';
-        options.style.display = visible ? 'none' : 'block';
-      }
-      this.toggleManager.updateToolConfigToggleState();
-    });
-
-    CHECK_BOXES_AUTO_EXTRACT.forEach((id) => {
-      this.addListener(id, 'change', () => {
-        this.toggleManager.updateAutoToggleState();
-      });
-    });
-
-    CHECK_BOXES_TOOL_USE.forEach((id) => {
-      this.addListener(id, 'change', () => {
-        this.toggleManager.updateToolConfigToggleState();
-      });
-    });
-
-    // Add change listeners for checkboxes
-    CHECK_BOXES.forEach((id) => {
-      this.addListener(id, 'change', handleCheckboxChange);
+    this._initializeMenuToggle({
+      buttonId: ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      menuId: ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+      checkboxIds: CHECK_BOXES_TOOL_USE,
     });
 
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
     });
+  }
+
+  _initializeMenuToggle({ buttonId, menuId, checkboxIds }) {
+    const button = safeGetElementById(buttonId);
+    const menu = safeGetElementById(menuId);
+
+    if (!(button instanceof HTMLElement) || !(menu instanceof HTMLElement)) {
+      return;
+    }
+
+    if ('toggleable' in button) {
+      try {
+        button.toggleable = true;
+      } catch (error) {
+        button.setAttribute('toggleable', '');
+      }
+    } else {
+      button.setAttribute('toggleable', '');
+    }
+
+    button.setAttribute('aria-haspopup', 'true');
+
+    const updateButtonState = () => {
+      const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
+      if ('checked' in button) {
+        button.checked = hasChecked;
+      } else {
+        button.toggleAttribute('data-active', Boolean(hasChecked));
+      }
+    };
+
+    const updateAriaExpanded = () => {
+      const expanded = Boolean(menu.show);
+      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    };
+
+    const handleButtonChange = (event) => {
+      event.stopPropagation();
+      menu.show = !menu.show;
+      updateAriaExpanded();
+      updateButtonState();
+    };
+
+    this.addListener(button, 'change', handleButtonChange);
+
+    const handleCheckboxUpdate = (event) => {
+      handleCheckboxChange(event);
+      updateButtonState();
+    };
+
+    checkboxIds.forEach((checkboxId) => {
+      this.addListener(checkboxId, 'change', handleCheckboxUpdate);
+    });
+
+    if (typeof MutationObserver === 'function') {
+      const observer = new MutationObserver(updateAriaExpanded);
+      observer.observe(menu, { attributes: true, attributeFilter: ['show'] });
+      this._menuObservers.push(observer);
+    }
+
+    updateButtonState();
+    updateAriaExpanded();
   }
 
   _setupSettingsButtons() {
@@ -160,6 +196,11 @@ export class SettingsButtonManager extends BaseUIManager {
     this._dependencyInstallListeners = [];
   }
 
+  _disconnectMenuObservers() {
+    this._menuObservers.forEach((observer) => observer.disconnect());
+    this._menuObservers = [];
+  }
+
   _setupDropdowns() {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
@@ -204,7 +245,7 @@ export class SettingsButtonManager extends BaseUIManager {
         const initialSessionType = getSessionTypeFromGroup(radioGroup);
         if (initialSessionType) {
           this._setLastRadioSessionType(
-            normalizeSessionType(initialSessionType)
+            normalizeSessionType(initialSessionType),
           );
         }
 
@@ -319,6 +360,12 @@ export class SettingsButtonManager extends BaseUIManager {
     this._setupSettingsButtons();
     this._setupDropdowns();
     this._setupDependencyBanner();
+  }
+
+  cleanup() {
+    this._disposeDependencyInstallListeners();
+    this._disconnectMenuObservers();
+    super.cleanup();
   }
 
   _handleAgentSelection(selectElement) {
