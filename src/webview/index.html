@@ -446,31 +446,28 @@
                 ></i>
                 <div class="agent-select-controls">
                   <input type="hidden" id="sessionType" value="workflow" />
-                  <div
+                  <vscode-radio-group
                     id="sessionTypeToggle"
-                    class="session-toggle"
-                    role="radiogroup"
                     aria-label="Choose the session type"
+                    orientation="horizontal"
+                    value="workflow"
                   >
-                    <button
-                      type="button"
-                      class="session-toggle__option active"
+                    <vscode-radio
+                      value="workflow"
                       data-session-type="workflow"
-                      aria-pressed="true"
+                      checked
                       title="Workflow agents automate document editing tasks"
                     >
                       Workflow
-                    </button>
-                    <button
-                      type="button"
-                      class="session-toggle__option"
+                    </vscode-radio>
+                    <vscode-radio
+                      value="toolUse"
                       data-session-type="toolUse"
-                      aria-pressed="false"
                       title="Tool-use agents execute commands and scripts"
                     >
                       Tool Use
-                    </button>
-                  </div>
+                    </vscode-radio>
+                  </vscode-radio-group>
                   <div class="agent-select-dropdowns">
                     <vscode-single-select
                       id="workflowAgent"

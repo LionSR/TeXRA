@@ -10,6 +10,8 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  normalizeSessionType,
+  resolveRadioGroup,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -279,10 +281,7 @@ export class MainViewState {
 
     const sessionTypeValue =
       state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
-    const normalizedSessionType =
-      sessionTypeValue === SESSION_TYPES.TOOL_USE
-        ? SESSION_TYPES.TOOL_USE
-        : SESSION_TYPES.WORKFLOW;
+    const normalizedSessionType = normalizeSessionType(sessionTypeValue);
     const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
     if (activeSelectId) {
       state.agent = safeGetElementValue(activeSelectId) ?? '';
@@ -294,10 +293,7 @@ export class MainViewState {
 
   applySessionType(sessionType, options = {}) {
     const { skipSave = false } = options;
-    const normalized =
-      sessionType === SESSION_TYPES.TOOL_USE
-        ? SESSION_TYPES.TOOL_USE
-        : SESSION_TYPES.WORKFLOW;
+    const normalized = normalizeSessionType(sessionType);
     const isToolUseSession = normalized === SESSION_TYPES.TOOL_USE;
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
@@ -307,8 +303,12 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const radioGroup = toggleContainer.querySelector('vscode-radio-group');
-      if (radioGroup) {
+      const radioGroup = resolveRadioGroup(toggleContainer);
+      if (radioGroup instanceof HTMLElement) {
+        if (typeof radioGroup.value === 'string') {
+          radioGroup.value = normalized;
+        }
+
         const radios = radioGroup.querySelectorAll('vscode-radio');
         radios.forEach((radio) => {
           if (!(radio instanceof HTMLElement)) {
