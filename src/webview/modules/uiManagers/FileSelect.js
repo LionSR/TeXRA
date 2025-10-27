@@ -33,9 +33,22 @@ export class FileSelect {
       console.warn(`[FileSelect] Element with id '${id}' not found`);
       return;
     }
+    const previousValue = selectDiv.value;
     selectDiv.innerHTML = '';
     this.addOption(selectDiv, '', 'None');
     files.forEach((f) => this.addOption(selectDiv, f, f));
+    if (
+      previousValue !== undefined &&
+      previousValue !== null &&
+      previousValue !== ''
+    ) {
+      const hasPreviousOption = Array.from(
+        selectDiv.querySelectorAll('vscode-option'),
+      ).some((option) => option.value === previousValue);
+      if (hasPreviousOption) {
+        safeSetElementValue(id, previousValue);
+      }
+    }
   }
 
   updateEdited(baseFile) {
