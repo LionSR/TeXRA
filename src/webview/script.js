@@ -2,7 +2,6 @@
 import {
   mainViewDomHandler,
   instructionManager,
-  toggleManager,
 } from './modules/domHandlers.js';
 import { mainViewState } from './modules/mainViewState.js';
 import {
@@ -25,9 +24,6 @@ document.addEventListener('DOMContentLoaded', function () {
   mainViewState.restore();
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
-  toggleManager.updateAutoToggleState();
-  toggleManager.updateToolConfigToggleState();
-  toggleManager.setupDocumentListeners();
   setupHandlers({ requestData: true });
   vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
 });
