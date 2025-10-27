@@ -1,6 +1,7 @@
 export { default as LATEX_SPACING_REPLACEMENTS } from './rules/spacing';
 export { default as EQUATION_REPLACEMENTS } from './rules/equations';
 export { default as SECTION_REPLACEMENTS } from './rules/sections';
+export { default as LATEX_FORBIDDEN_REPLACEMENTS } from './rules/forbiddenCommands';
 export { default as CHARACTER_REPLACEMENTS } from './rules/characters';
 export { default as FONT_COMMAND_REPLACEMENTS } from './rules/fontCommands';
 export { default as UNICODE_REPLACEMENTS } from './rules/unicode';
