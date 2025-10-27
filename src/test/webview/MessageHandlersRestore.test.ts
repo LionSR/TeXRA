@@ -8,6 +8,170 @@ import * as vm from 'vm';
 // @ts-ignore: jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
 
+function registerVSCodeComponents(dom: JSDOM) {
+  const { customElements } = dom.window;
+  const HTMLElementCtor = dom.window
+    .HTMLElement as unknown as typeof HTMLElement;
+  if (!customElements) {
+    return;
+  }
+
+  if (!customElements.get('vscode-option')) {
+    class VSCodeOptionElement extends HTMLElementCtor {
+      get value(): string {
+        const attr = this.getAttribute('value');
+        return attr ?? this.textContent ?? '';
+      }
+
+      set value(nextValue: string | null | undefined) {
+        if (nextValue === null || nextValue === undefined) {
+          this.removeAttribute('value');
+          return;
+        }
+        this.setAttribute('value', nextValue);
+      }
+
+      get selected(): boolean {
+        return this.hasAttribute('selected');
+      }
+
+      set selected(isSelected: boolean) {
+        if (isSelected) {
+          this.setAttribute('selected', '');
+          this.setAttribute('aria-selected', 'true');
+        } else {
+          this.removeAttribute('selected');
+          this.removeAttribute('aria-selected');
+        }
+      }
+    }
+
+    customElements.define('vscode-option', VSCodeOptionElement);
+  }
+
+  if (!customElements.get('vscode-single-select')) {
+    class VSCodeSingleSelectElement extends HTMLElementCtor {
+      private _value = '';
+      private _selectedIndex = -1;
+
+      static get observedAttributes() {
+        return ['value'];
+      }
+
+      connectedCallback(): void {
+        this.#upgradeProperty('value');
+        if (!this.hasAttribute('role')) {
+          this.setAttribute('role', 'combobox');
+        }
+
+        if (this.hasAttribute('value')) {
+          this.#applyValue(this.getAttribute('value') ?? '');
+        } else {
+          const selectedOption = this.options.find((option) => option.selected);
+          if (selectedOption) {
+            this.#applyValue(selectedOption.value);
+          }
+        }
+      }
+
+      attributeChangedCallback(
+        _name: string,
+        _oldValue: string | null,
+        newValue: string | null,
+      ) {
+        this.#applyValue(newValue ?? '');
+      }
+
+      get value(): string {
+        return this._value;
+      }
+
+      set value(nextValue: string | null | undefined) {
+        const normalized = nextValue ?? '';
+        if (normalized === this._value) {
+          return;
+        }
+        this.#applyValue(normalized);
+        if (this.getAttribute('value') !== normalized) {
+          this.setAttribute('value', normalized);
+        }
+      }
+
+      get options(): Array<HTMLElement & { value: string; selected: boolean }> {
+        return Array.from(this.querySelectorAll('vscode-option')) as Array<
+          HTMLElement & { value: string; selected: boolean }
+        >;
+      }
+
+      get selectedIndex(): number {
+        if (this._selectedIndex >= 0) {
+          return this._selectedIndex;
+        }
+        return this.options.findIndex((option) => option.selected);
+      }
+
+      set selectedIndex(index: number) {
+        const options = this.options;
+        if (index < 0 || index >= options.length) {
+          this._selectedIndex = -1;
+          this._value = '';
+          this.removeAttribute('value');
+          options.forEach((option) => {
+            option.selected = false;
+          });
+          return;
+        }
+
+        options.forEach((option, optionIndex) => {
+          option.selected = optionIndex === index;
+        });
+
+        const selectedOption = options[index];
+        this._selectedIndex = index;
+        this._value = selectedOption?.value ?? '';
+        if (selectedOption) {
+          this.setAttribute('value', selectedOption.value);
+        } else {
+          this.removeAttribute('value');
+        }
+      }
+
+      #applyValue(value: string) {
+        this._value = value ?? '';
+        const options = this.options;
+        let matched = false;
+        options.forEach((option, index) => {
+          const isMatch = option.value === this._value;
+          option.selected = isMatch;
+          if (isMatch) {
+            matched = true;
+            this._selectedIndex = index;
+          }
+        });
+        if (!matched) {
+          this._selectedIndex = -1;
+        }
+      }
+
+      #upgradeProperty(prop: string) {
+        if (Object.prototype.hasOwnProperty.call(this, prop)) {
+          const value = (this as unknown as Record<string, unknown>)[prop];
+          delete (this as unknown as Record<string, unknown>)[prop];
+          (this as unknown as Record<string, unknown>)[prop] = value;
+        }
+      }
+    }
+
+    customElements.define('vscode-single-select', VSCodeSingleSelectElement);
+  }
+}
+
+function createTestDom(markup: string): JSDOM {
+  const dom = new JSDOM(markup);
+  registerVSCodeComponents(dom);
+  return dom;
+}
+
 function loadFileListModule(dom: JSDOM) {
   const filePath = path.resolve(
     __dirname,
@@ -311,7 +475,7 @@ function loadMessageHandlerModule(dom: JSDOM) {
 
 describe('FileList remove callbacks', () => {
   it('invokes registered callbacks and hides the container when empty', () => {
-    const dom = new JSDOM(`
+    const dom = createTestDom(`
       <div id="inputFilesContainer" style="display: block;">
         <div id="inputFiles"></div>
       </div>
@@ -362,10 +526,19 @@ describe('FileList remove callbacks', () => {
 
 describe('MainViewMessageHandler state restoration', () => {
   it('hydrates lists through FileList and wires removal callbacks', () => {
-    const dom = new JSDOM(`
-      <select id="sessionType"></select>
-      <select id="workflowAgentSelect"></select>
-      <select id="toolUseAgentSelect"></select>
+    const dom = createTestDom(`
+      <vscode-single-select id="sessionType" value="workflow">
+        <vscode-option value="workflow">Workflow</vscode-option>
+        <vscode-option value="toolUse">Tool Use</vscode-option>
+      </vscode-single-select>
+      <vscode-single-select id="workflowAgentSelect">
+        <vscode-option value="agent-a">Agent A</vscode-option>
+        <vscode-option value="agent-b">Agent B</vscode-option>
+      </vscode-single-select>
+      <vscode-single-select id="toolUseAgentSelect">
+        <vscode-option value="agent-a">Agent A</vscode-option>
+        <vscode-option value="agent-b">Agent B</vscode-option>
+      </vscode-single-select>
       <input id="model" />
       <textarea id="instruction"></textarea>
       <input id="inputFile" />
