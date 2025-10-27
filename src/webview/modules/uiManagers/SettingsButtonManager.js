@@ -8,6 +8,7 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  normalizeSessionType,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
@@ -162,7 +163,7 @@ export class SettingsButtonManager extends BaseUIManager {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
       const handleSessionTypeSelection = (sessionType) => {
-        const normalized = this._normalizeSessionType(sessionType);
+        const normalized = normalizeSessionType(sessionType);
         this._setLastRadioSessionType(normalized);
         this.state.applySessionType(normalized);
         const selectId =
@@ -222,7 +223,7 @@ export class SettingsButtonManager extends BaseUIManager {
           if (!sessionType) {
             return;
           }
-          const normalized = this._normalizeSessionType(sessionType);
+          const normalized = normalizeSessionType(sessionType);
           if (normalized === this._lastRadioSessionType) {
             return;
           }
@@ -337,7 +338,7 @@ export class SettingsButtonManager extends BaseUIManager {
 
     const sessionType =
       selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
-    const normalized = this._normalizeSessionType(sessionType);
+    const normalized = normalizeSessionType(sessionType);
     this._setLastRadioSessionType(normalized);
     this.state.applySessionType(normalized, { skipSave: true });
 
@@ -372,13 +373,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state.save();
   }
 
-  _normalizeSessionType(sessionType) {
-    return sessionType === SESSION_TYPES.TOOL_USE
-      ? SESSION_TYPES.TOOL_USE
-      : SESSION_TYPES.WORKFLOW;
-  }
-
   _setLastRadioSessionType(sessionType) {
-    this._lastRadioSessionType = this._normalizeSessionType(sessionType);
+    this._lastRadioSessionType = normalizeSessionType(sessionType);
   }
 }

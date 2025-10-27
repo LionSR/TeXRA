@@ -10,6 +10,7 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  normalizeSessionType,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -279,10 +280,7 @@ export class MainViewState {
 
     const sessionTypeValue =
       state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
-    const normalizedSessionType =
-      sessionTypeValue === SESSION_TYPES.TOOL_USE
-        ? SESSION_TYPES.TOOL_USE
-        : SESSION_TYPES.WORKFLOW;
+    const normalizedSessionType = normalizeSessionType(sessionTypeValue);
     const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
     if (activeSelectId) {
       state.agent = safeGetElementValue(activeSelectId) ?? '';
@@ -294,10 +292,7 @@ export class MainViewState {
 
   applySessionType(sessionType, options = {}) {
     const { skipSave = false } = options;
-    const normalized =
-      sessionType === SESSION_TYPES.TOOL_USE
-        ? SESSION_TYPES.TOOL_USE
-        : SESSION_TYPES.WORKFLOW;
+    const normalized = normalizeSessionType(sessionType);
     const isToolUseSession = normalized === SESSION_TYPES.TOOL_USE;
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
