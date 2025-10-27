@@ -52,7 +52,7 @@ function collectMultipleFileSelections(singleFiles, fileList) {
   const selections = {};
   MULTIPLE_SELECTIONS.forEach((id) => {
     const container = safeGetElementById(`${id}Container`);
-    const isActive = container?.style.display !== 'none';
+    const isActive = container?.hasAttribute('open') ?? false;
     selections[`${id}Active`] = isActive;
 
     const filesDiv = safeGetElementById(id);

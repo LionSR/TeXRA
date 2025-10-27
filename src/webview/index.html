@@ -92,41 +92,43 @@
                   icon="close"
                   title="Empty"
                 ></vscode-toolbar-button>
-                <span
-                  id="toggleInputFiles"
-                  class="toggle-icon"
-                  title="Show or hide additional input files"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <vscode-toolbar-button
-                  id="addOpenedInputFilesButton"
-                  icon="folder-opened"
-                  title="Add opened files as input"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="emptyInputFilesButton"
-                  icon="trash"
-                  title="Empty"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="selectInputFilesButton"
-                  icon="add"
-                  title="Add"
-                ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
             <vscode-single-select id="inputFile">
               <vscode-option value="">None</vscode-option>
             </vscode-single-select>
-            <div
+            <vscode-collapsible
               id="inputFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
+              class="multiple-files-collapsible"
             >
-              <div class="multiple-files-content">
-                <div id="inputFiles" class="multiple-files-list"></div>
+              <div slot="header" class="multiple-files-header">
+                <span class="multiple-files-label">Additional Input Files</span>
+                <vscode-toolbar-container
+                  class="file-select-actions file-select-actions--multiple"
+                >
+                  <vscode-toolbar-button
+                    id="addOpenedInputFilesButton"
+                    icon="folder-opened"
+                    title="Add opened files as input"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="emptyInputFilesButton"
+                    icon="trash"
+                    title="Empty"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="selectInputFilesButton"
+                    icon="add"
+                    title="Add"
+                  ></vscode-toolbar-button>
+                </vscode-toolbar-container>
               </div>
-            </div>
+              <div class="multiple-files-container">
+                <div class="multiple-files-content">
+                  <div id="inputFiles" class="multiple-files-list"></div>
+                </div>
+              </div>
+            </vscode-collapsible>
           </div>
           <div class="file-select">
             <div class="file-select-header">
@@ -153,41 +155,45 @@
                   icon="close"
                   title="Empty"
                 ></vscode-toolbar-button>
-                <span
-                  id="toggleReferenceFiles"
-                  class="toggle-icon"
-                  title="Show or hide additional reference files"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <vscode-toolbar-button
-                  id="addOpenedReferenceFilesButton"
-                  icon="folder-opened"
-                  title="Add opened files as reference"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="emptyReferenceFilesButton"
-                  icon="trash"
-                  title="Empty"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="selectReferenceFilesButton"
-                  icon="add"
-                  title="Add"
-                ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
             <vscode-single-select id="referenceFile">
               <vscode-option value="">None</vscode-option>
             </vscode-single-select>
-            <div
+            <vscode-collapsible
               id="referenceFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
+              class="multiple-files-collapsible"
             >
-              <div class="multiple-files-content">
-                <div id="referenceFiles" class="multiple-files-list"></div>
+              <div slot="header" class="multiple-files-header">
+                <span class="multiple-files-label"
+                  >Additional Reference Files</span
+                >
+                <vscode-toolbar-container
+                  class="file-select-actions file-select-actions--multiple"
+                >
+                  <vscode-toolbar-button
+                    id="addOpenedReferenceFilesButton"
+                    icon="folder-opened"
+                    title="Add opened files as reference"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="emptyReferenceFilesButton"
+                    icon="trash"
+                    title="Empty"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="selectReferenceFilesButton"
+                    icon="add"
+                    title="Add"
+                  ></vscode-toolbar-button>
+                </vscode-toolbar-container>
               </div>
-            </div>
+              <div class="multiple-files-container">
+                <div class="multiple-files-content">
+                  <div id="referenceFiles" class="multiple-files-list"></div>
+                </div>
+              </div>
+            </vscode-collapsible>
           </div>
           <div class="file-select">
             <div class="file-select-header">
@@ -214,41 +220,45 @@
                   icon="close"
                   title="Empty"
                 ></vscode-toolbar-button>
-                <span
-                  id="toggleAuxiliaryFiles"
-                  class="toggle-icon"
-                  title="Show or hide additional auxiliary files"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <vscode-toolbar-button
-                  id="addOpenedAuxiliaryFilesButton"
-                  icon="folder-opened"
-                  title="Add opened files as auxiliary"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="emptyAuxiliaryFilesButton"
-                  icon="trash"
-                  title="Empty"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="selectAuxiliaryFilesButton"
-                  icon="add"
-                  title="Add"
-                ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
             <vscode-single-select id="auxiliaryFile">
               <vscode-option value="">None</vscode-option>
             </vscode-single-select>
-            <div
+            <vscode-collapsible
               id="auxiliaryFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
+              class="multiple-files-collapsible"
             >
-              <div class="multiple-files-content">
-                <div id="auxiliaryFiles" class="multiple-files-list"></div>
+              <div slot="header" class="multiple-files-header">
+                <span class="multiple-files-label"
+                  >Additional Auxiliary Files</span
+                >
+                <vscode-toolbar-container
+                  class="file-select-actions file-select-actions--multiple"
+                >
+                  <vscode-toolbar-button
+                    id="addOpenedAuxiliaryFilesButton"
+                    icon="folder-opened"
+                    title="Add opened files as auxiliary"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="emptyAuxiliaryFilesButton"
+                    icon="trash"
+                    title="Empty"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="selectAuxiliaryFilesButton"
+                    icon="add"
+                    title="Add"
+                  ></vscode-toolbar-button>
+                </vscode-toolbar-container>
               </div>
-            </div>
+              <div class="multiple-files-container">
+                <div class="multiple-files-content">
+                  <div id="auxiliaryFiles" class="multiple-files-list"></div>
+                </div>
+              </div>
+            </vscode-collapsible>
           </div>
           <div class="file-select">
             <div class="file-select-header">
@@ -295,75 +305,74 @@
                   icon="close"
                   title="Empty"
                 ></vscode-toolbar-button>
-                <span
-                  id="toggleMediaFiles"
-                  class="toggle-icon"
-                  title="Show or hide additional media files"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <vscode-toolbar-button
-                  id="emptyMediaFilesButton"
-                  icon="trash"
-                  title="Empty"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="selectMediaFilesButton"
-                  icon="add"
-                  title="Add"
-                ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
             <vscode-single-select id="mediaFile">
               <vscode-option value="">None</vscode-option>
             </vscode-single-select>
-            <div
+            <vscode-collapsible
               id="mediaFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
+              class="multiple-files-collapsible"
             >
-              <div class="multiple-files-content">
-                <div id="mediaFiles" class="multiple-files-list"></div>
+              <div slot="header" class="multiple-files-header">
+                <span class="multiple-files-label">Additional Media Files</span>
+                <vscode-toolbar-container
+                  class="file-select-actions file-select-actions--multiple"
+                >
+                  <vscode-toolbar-button
+                    id="emptyMediaFilesButton"
+                    icon="trash"
+                    title="Empty"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="selectMediaFilesButton"
+                    icon="add"
+                    title="Add"
+                  ></vscode-toolbar-button>
+                </vscode-toolbar-container>
               </div>
-            </div>
+              <div class="multiple-files-container">
+                <div class="multiple-files-content">
+                  <div id="mediaFiles" class="multiple-files-list"></div>
+                </div>
+              </div>
+            </vscode-collapsible>
           </div>
           <div class="file-select">
-            <div class="file-select-header">
-              <div class="file-select-label-group">
-                <span
-                  id="toggleOutputFiles"
-                  class="toggle-icon"
-                  title="Show or hide additional files for the agent’s output"
-                  ><i class="codicon codicon-chevron-down"></i
-                ></span>
-                <span
-                  class="optional-label"
-                  title="List the files that should receive the agent’s output"
-                  >Multiple Outputs</span
-                >
-              </div>
-              <vscode-toolbar-container class="file-select-actions">
-                <vscode-toolbar-button
-                  id="emptyOutputFilesButton"
-                  icon="trash"
-                  title="Empty"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="selectOutputFilesButton"
-                  icon="add"
-                  title="Add"
-                ></vscode-toolbar-button>
-              </vscode-toolbar-container>
-            </div>
-            <div
+            <vscode-collapsible
               id="outputFilesContainer"
-              class="multiple-files-container"
-              style="display: none"
+              class="multiple-files-collapsible"
             >
-              <div class="multiple-files-content">
-                <div id="outputFiles" class="multiple-files-list"></div>
-                <!-- Output filename override removed -->
+              <div slot="header" class="file-select-header">
+                <div class="file-select-label-group">
+                  <span
+                    class="optional-label"
+                    title="List the files that should receive the agent’s output"
+                    >Multiple Outputs</span
+                  >
+                </div>
+                <vscode-toolbar-container
+                  class="file-select-actions file-select-actions--multiple"
+                >
+                  <vscode-toolbar-button
+                    id="emptyOutputFilesButton"
+                    icon="trash"
+                    title="Empty"
+                  ></vscode-toolbar-button>
+                  <vscode-toolbar-button
+                    id="selectOutputFilesButton"
+                    icon="add"
+                    title="Add"
+                  ></vscode-toolbar-button>
+                </vscode-toolbar-container>
               </div>
-            </div>
+              <div class="multiple-files-container">
+                <div class="multiple-files-content">
+                  <div id="outputFiles" class="multiple-files-list"></div>
+                  <!-- Output filename override removed -->
+                </div>
+              </div>
+            </vscode-collapsible>
           </div>
         </div>
         <div class="instruction-box">

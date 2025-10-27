@@ -68,6 +68,11 @@ vscode-toolbar-container.file-select-actions {
   opacity: 1;
 }
 
+.file-select-actions--multiple {
+  flex-direction: row !important;
+  gap: var(--spacing-small);
+}
+
 .file-select label {
   display: block;
   margin-bottom: var(--spacing-tiny);
@@ -102,60 +107,43 @@ vscode-toolbar-container.file-select-actions {
   height: var(--height-control);
 }
 
-/* When toggled (input is visible), make the label more prominent */
+/* When inputs are active, make the labels more prominent */
 .file-select-label-group:has(vscode-textfield[style*='inline-block'])
   .optional-label,
 .file-select-label-group:has(vscode-textfield[style*='inline-block'])
   .toggle-icon,
-.file-select:has(.multiple-files-container[style*='block']) .optional-label,
-.file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
+.multiple-files-collapsible[open] .multiple-files-label,
+.multiple-files-collapsible[open] .optional-label {
   color: var(--vscode-foreground);
 }
 
-/* Add this specific selector for Multiple Output Files section */
-.file-select:has(#outputFilesContainer[style*='none']) .optional-label {
+.multiple-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-small);
+  padding: 0 var(--spacing-small);
+}
+
+.multiple-files-label {
+  color: var(--text-color);
+  font-size: var(--font-size);
+  display: flex;
+  align-items: center;
+  height: var(--height-control);
+  white-space: nowrap;
+}
+
+.multiple-files-collapsible {
+  margin-top: var(--spacing-small);
+}
+
+.multiple-files-collapsible:not([open]) .optional-label,
+.multiple-files-collapsible:not([open]) .multiple-files-label {
   opacity: 0.6;
 }
 
-.file-select:has(#outputFilesContainer[style*='block']) .optional-label {
-  color: var(--vscode-foreground);
-  opacity: 1;
-}
-
-.file-select:has(#outputFilesContainer[style*='none']) #emptyOutputFilesButton,
-.file-select:has(#outputFilesContainer[style*='none'])
-  #selectOutputFilesButton {
-  display: none;
-}
-
-/* Hide multiple file operation buttons when containers are not toggled */
-.file-select:has(#inputFilesContainer[style*='none']) #emptyInputFilesButton,
-.file-select:has(#inputFilesContainer[style*='none']) #selectInputFilesButton,
-.file-select:has(#inputFilesContainer[style*='none'])
-  #addOpenedInputFilesButton {
-  display: none;
-}
-
-.file-select:has(#referenceFilesContainer[style*='none'])
-  #emptyReferenceFilesButton,
-.file-select:has(#referenceFilesContainer[style*='none'])
-  #selectReferenceFilesButton,
-.file-select:has(#referenceFilesContainer[style*='none'])
-  #addOpenedReferenceFilesButton {
-  display: none;
-}
-
-.file-select:has(#auxiliaryFilesContainer[style*='none'])
-  #emptyAuxiliaryFilesButton,
-.file-select:has(#auxiliaryFilesContainer[style*='none'])
-  #selectAuxiliaryFilesButton,
-.file-select:has(#auxiliaryFilesContainer[style*='none'])
-  #addOpenedAuxiliaryFilesButton {
-  display: none;
-}
-
-.file-select:has(#mediaFilesContainer[style*='none']) #emptyMediaFilesButton,
-.file-select:has(#mediaFilesContainer[style*='none']) #selectMediaFilesButton {
+.multiple-files-collapsible:not([open]) .file-select-actions--multiple {
   display: none;
 }
 

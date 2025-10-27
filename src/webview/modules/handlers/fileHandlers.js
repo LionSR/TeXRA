@@ -9,7 +9,7 @@ import { mainViewState } from '../mainViewState.js';
 import { fileList } from '../uiManagers/FileList.js';
 import { fileSelect } from '../uiManagers/FileSelect.js';
 import { safeSetElementValue } from '@common/domUtils.js';
-import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import { uncapitalize } from '@common/stringUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - utilities
 
@@ -18,10 +18,9 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
  * @param {Object} ctx
  * @param {Function} ctx.postHandle
  * @param {Function} ctx.getElement
- * @param {Function} ctx.setToggleIcon
  */
 export function createFileHandlers(ctx) {
-  const { postHandle, getElement, setToggleIcon } = ctx;
+  const { postHandle, getElement } = ctx;
   const createSetFileHandler = (fileType, domId) => (message) => {
     fileSelect.update(domId, message.files);
     postHandle();
@@ -44,8 +43,8 @@ export function createFileHandlers(ctx) {
       fileType === 'output' ? ELEMENT_IDS.OUTPUT_FILES : `${fileType}Files`;
     const toggleId =
       fileType === 'output'
-        ? ELEMENT_IDS.TOGGLE_OUTPUT_FILES
-        : `toggle${capitalize(fileType)}Files`;
+        ? ELEMENT_IDS.OUTPUT_FILES_CONTAINER
+        : `${fileType}FilesContainer`;
 
     handlers[MAIN_VIEW_COMMANDS[`SET_${fileType.toUpperCase()}_FILES`]] =
       createSetFilesHandler(fileType, listId, toggleId);
@@ -71,15 +70,14 @@ export function createFileHandlers(ctx) {
   function handleAddMediaFile(message) {
     const listDiv = getElement('mediaFiles');
     const existingFiles = listDiv ? fileList.getSelected(listDiv) : [];
-    fileList.update('mediaFiles', 'toggleMediaFiles', [
+    fileList.update('mediaFiles', 'mediaFilesContainer', [
       ...existingFiles,
       message.file,
     ]);
     const container = getElement('mediaFilesContainer');
-    if (container && container.style.display === 'none') {
-      container.style.display = 'block';
-      const toggleIcon = getElement('toggleMediaFiles');
-      setToggleIcon(toggleIcon, true);
+    if (container && !container.hasAttribute('open')) {
+      container.setAttribute('open', '');
+      container.dispatchEvent(new Event('toggle', { bubbles: true }));
     }
 
     postHandle();
@@ -116,7 +114,7 @@ export function createFileHandlers(ctx) {
       const fileType = message.fileType.replace('Files', '');
       const singleFileId = `${uncapitalize(fileType)}File`;
       const multipleFileId = `${uncapitalize(fileType)}Files`;
-      const toggleId = `toggle${capitalize(fileType)}Files`;
+      const toggleId = `${uncapitalize(fileType)}FilesContainer`;
 
       let filesToAdd = message.files ?? [];
       if (message.shouldFilter) {

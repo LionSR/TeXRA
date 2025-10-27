@@ -2,9 +2,7 @@
 import {
   addEventListenerSafely,
   safeGetElementById,
-  setChevronIcon,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
@@ -15,6 +13,31 @@ export class FileList {
     this._saveFn = saveFn;
     this._removeCallbacks = new Map();
     this._batchMode = false;
+  }
+
+  _getCollapsible(containerId, toggleId) {
+    if (toggleId) {
+      const toggleElement = safeGetElementById(toggleId);
+      if (toggleElement) {
+        return toggleElement;
+      }
+    }
+    return safeGetElementById(`${containerId}Container`);
+  }
+
+  _setOpen(collapsible, isOpen, emitEvent = true) {
+    if (!collapsible) {
+      return;
+    }
+    const wasOpen = collapsible.hasAttribute('open');
+    if (isOpen) {
+      collapsible.setAttribute('open', '');
+    } else {
+      collapsible.removeAttribute('open');
+    }
+    if (emitEvent && wasOpen !== isOpen) {
+      collapsible.dispatchEvent(new Event('toggle', { bubbles: true }));
+    }
   }
 
   /** Set the callback used to persist state */
@@ -47,8 +70,8 @@ export class FileList {
    */
   add(containerId, file) {
     const container = safeGetElementById(containerId);
-    const toggleIcon = safeGetElementById(`toggle${capitalize(containerId)}`);
-    if (!container || !toggleIcon) return;
+    const collapsible = this._getCollapsible(containerId);
+    if (!container || !collapsible) return;
 
     const placeholder = container.querySelector('.file-list-placeholder');
     if (placeholder) {
@@ -76,7 +99,7 @@ export class FileList {
         }
 
         if (container.children.length === 0) {
-          this.empty(containerId, `toggle${capitalize(containerId)}`, false);
+          this.empty(containerId, undefined, false);
         } else {
           this._save();
         }
@@ -88,8 +111,8 @@ export class FileList {
   /** Update a multi-file list, showing the toggle when files exist */
   update(listId, toggleId, files) {
     const listDiv = safeGetElementById(listId);
-    const toggleIcon = safeGetElementById(toggleId);
-    if (!listDiv || !toggleIcon) return;
+    const collapsible = this._getCollapsible(listId, toggleId);
+    if (!listDiv || !collapsible) return;
 
     const existing = this.getSelected(listDiv);
     const newFiles = files.filter((f) => !existing.includes(f));
@@ -99,13 +122,7 @@ export class FileList {
       newFiles.forEach((file) => this.add(listId, file));
       this._batchMode = false;
 
-      listDiv.style.display = 'block';
-      setChevronIcon(toggleIcon, true);
-
-      const container = safeGetElementById(`${listId}Container`);
-      if (container) {
-        container.style.display = 'block';
-      }
+      this._setOpen(collapsible, true);
     }
     this._save();
   }
@@ -118,18 +135,16 @@ export class FileList {
 
   /** Show or hide a file list container */
   setVisibility(containerId, toggleId, isVisible) {
-    const container = safeGetElementById(`${containerId}Container`);
-    const toggleIcon = safeGetElementById(toggleId);
-    if (!container || !toggleIcon) return;
-    container.style.display = isVisible ? 'block' : 'none';
-    setChevronIcon(toggleIcon, isVisible);
+    const collapsible = this._getCollapsible(containerId, toggleId);
+    if (!collapsible) return;
+    this._setOpen(collapsible, isVisible);
   }
 
   /** Toggle visibility of a file list container */
   toggle(containerId, toggleId) {
-    const container = safeGetElementById(`${containerId}Container`);
-    if (!container) return;
-    const isVisible = container.style.display !== 'none';
+    const collapsible = this._getCollapsible(containerId, toggleId);
+    if (!collapsible) return;
+    const isVisible = collapsible.hasAttribute('open');
     this.setVisibility(containerId, toggleId, !isVisible);
     this._save();
   }
@@ -137,15 +152,11 @@ export class FileList {
   /** Empty all files from a container and hide it */
   empty(containerId, toggleId, shouldSave = true) {
     const listDiv = safeGetElementById(containerId);
-    const container = safeGetElementById(`${containerId}Container`);
-    if (!listDiv || !container) return;
+    const collapsible = this._getCollapsible(containerId, toggleId);
+    if (!listDiv || !collapsible) return;
 
     listDiv.innerHTML = '';
-    container.style.display = 'none';
-    const toggleIconDiv = safeGetElementById(toggleId);
-    if (toggleIconDiv) {
-      setChevronIcon(toggleIconDiv, false);
-    }
+    this._setOpen(collapsible, false);
     if (shouldSave) {
       this._save();
     }
@@ -156,9 +167,8 @@ export class FileList {
     ids.forEach((id) => {
       const selectDiv = safeGetElementById(id);
       if (!selectDiv) return;
-      const toggleId = `toggle${capitalize(id)}`;
       if (selectDiv.children.length === 0) {
-        this.setVisibility(id, toggleId, false);
+        this.setVisibility(id, undefined, false);
       }
     });
   }

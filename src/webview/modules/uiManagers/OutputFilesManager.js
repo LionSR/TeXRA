@@ -3,12 +3,11 @@ import { INPUT_FILE, ELEMENT_IDS } from '../constants.js';
 import { mainViewState } from '../mainViewState.js';
 import { fileList } from './FileList.js';
 import { fileSelect } from './FileSelect.js';
-import { safeGetElementById, setChevronIcon } from '@common/domUtils.js';
+import { safeGetElementById } from '@common/domUtils.js';
 
 const INPUT_FILE_ID = INPUT_FILE;
 const OUTPUT_FILES_ID = ELEMENT_IDS.OUTPUT_FILES;
 const OUTPUT_FILES_CONTAINER_ID = ELEMENT_IDS.OUTPUT_FILES_CONTAINER;
-const TOGGLE_OUTPUT_FILES_ID = ELEMENT_IDS.TOGGLE_OUTPUT_FILES;
 
 /**
  * Manages output files UI logic.
@@ -70,31 +69,18 @@ export class OutputFilesManager {
     this.state.save();
   }
 
-  /** Toggle visibility of the output files container */
-  toggleOutputFiles() {
-    const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
-    if (!container) return;
-
-    const containerVisible = container.style.display !== 'none';
-
-    if (!containerVisible) {
-      this.initializeOutputFiles();
-    }
-
-    this.fileList.toggle(OUTPUT_FILES_ID, TOGGLE_OUTPUT_FILES_ID);
-  }
-
   /** Initialize the output files container based on state */
   initializeOutputContainer() {
     const container = safeGetElementById(OUTPUT_FILES_CONTAINER_ID);
-    const toggleIcon = safeGetElementById(TOGGLE_OUTPUT_FILES_ID);
+    if (!container) return;
 
-    if (container && toggleIcon) {
-      const state = this.state.get();
-      const shouldShow = state && state.outputFilesActive;
+    const state = this.state.get();
+    const shouldShow = Boolean(state && state.outputFilesActive);
 
-      container.style.display = shouldShow ? 'block' : 'none';
-      setChevronIcon(toggleIcon, shouldShow);
+    if (shouldShow) {
+      container.setAttribute('open', '');
+    } else {
+      container.removeAttribute('open');
     }
   }
 }

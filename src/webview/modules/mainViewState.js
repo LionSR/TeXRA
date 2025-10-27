@@ -25,7 +25,6 @@ import {
   isSelectLikeElement,
   getSelectOptionElements,
 } from '@common/domUtils.js';
-import { capitalize } from '@common/stringUtils.js';
 import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
@@ -115,8 +114,8 @@ export class MainViewState {
     }
 
     MULTIPLE_SELECTIONS.forEach((id) => {
-      const toggleId = `toggle${capitalize(id)}`;
-      fileList.setVisibility(id, toggleId, false);
+      const collapsibleId = `${id}Container`;
+      fileList.setVisibility(id, collapsibleId, false);
       const listDiv = safeGetElementById(id);
       if (listDiv) {
         listDiv.innerHTML = '';
@@ -202,7 +201,7 @@ export class MainViewState {
       // Tool config multi-select is initialized by loadState
 
       MULTIPLE_SELECTIONS.forEach((id) => {
-        const toggleId = `toggle${capitalize(id)}`;
+        const collapsibleId = `${id}Container`;
         const selectDiv = safeGetElementById(id);
         if (!selectDiv) {
           console.warn(`Element with id '${id}' not found`);
@@ -211,19 +210,22 @@ export class MainViewState {
         selectDiv.innerHTML = '';
 
         const filesArray = previousState[id] ?? [];
-        const isVisible = previousState[`${id}Visible`];
+        const storedOpen =
+          previousState[`${id}Open`] ??
+          previousState[`${id}Active`] ??
+          previousState[`${id}Visible`];
+        const isOpen =
+          storedOpen !== undefined
+            ? Boolean(storedOpen)
+            : filesArray.length > 0;
 
         if (filesArray && filesArray.length > 0) {
           filesArray.forEach((file) => {
             fileList.add(id, file);
           });
-          fileList.setVisibility(
-            id,
-            toggleId,
-            isVisible !== undefined ? isVisible : true,
-          );
+          fileList.setVisibility(id, collapsibleId, isOpen);
         } else {
-          fileList.setVisibility(id, toggleId, false);
+          fileList.setVisibility(id, collapsibleId, false);
         }
       });
 
@@ -274,8 +276,9 @@ export class MainViewState {
       const elementDiv = safeGetElementById(id);
       if (!elementDiv) return;
       const containerDiv = safeGetElementById(`${id}Container`);
-      state[`${id}Visible`] =
-        containerDiv && containerDiv.style.display === 'block';
+      const isOpen = containerDiv?.hasAttribute('open') ?? false;
+      state[`${id}Active`] = isOpen;
+      state[`${id}Open`] = isOpen;
       state[id] = fileList.getSelected(elementDiv);
     });
 

@@ -29,7 +29,6 @@ import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
   safeGetElementById,
-  setChevronIcon,
   waitForElement,
   isSelectLikeElement,
   getSelectOptionElements,
@@ -61,7 +60,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const ctx = {
       postHandle: this._postHandle.bind(this),
       getElement: this._getElement.bind(this),
-      setToggleIcon: this._setToggleIcon.bind(this),
     };
 
     this._registerFileListCallbacks();
@@ -349,11 +347,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /* ---------- Private helpers ---------- */
-  _setToggleIcon(element, isVisible) {
-    if (!element) return;
-    setChevronIcon(element, isVisible);
-  }
-
   _registerFileListCallbacks() {
     const updateCommands = {
       input: MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES,
@@ -515,28 +508,30 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
       const multipleFilesId = `${fileType}Files`;
       const multipleFiles = this._getElement(multipleFilesId);
-      if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+      const collapsibleId = `${fileType}FilesContainer`;
+      const collapsible = this._getElement(collapsibleId);
 
-        const container = this._getElement(containerId);
-        if (container) {
-          container.style.display = isVisible ? 'block' : 'none';
+      if (multipleFiles) {
+        multipleFiles.innerHTML = '';
+      }
+
+      if (filesArray.length > 0 && multipleFiles) {
+        fileList._batchMode = true;
+        filesArray.forEach((file) => {
+          fileList.add(multipleFilesId, file);
+        });
+        fileList._batchMode = false;
+      }
+
+      if (collapsible) {
+        const wasOpen = collapsible.hasAttribute('open');
+        if (isVisible) {
+          collapsible.setAttribute('open', '');
+        } else {
+          collapsible.removeAttribute('open');
         }
-
-        const toggleElement = this._getElement(toggleId);
-        this._setToggleIcon(toggleElement, isVisible);
-
-        if (multipleFiles) {
-          multipleFiles.innerHTML = '';
-        }
-
-        if (filesArray.length > 0 && multipleFiles) {
-          fileList._batchMode = true;
-          filesArray.forEach((file) => {
-            fileList.add(multipleFilesId, file);
-          });
-          fileList._batchMode = false;
+        if (wasOpen !== isVisible) {
+          collapsible.dispatchEvent(new Event('toggle', { bubbles: true }));
         }
       }
     }

@@ -6,6 +6,7 @@ import {
   MULTIPLE_SELECTIONS,
   FILE_TYPES,
   ELEMENTS_TO_SAVE,
+  ELEMENT_IDS,
   INPUT_FILE,
   REFERENCE_FILE,
   AUXILIARY_FILE,
@@ -46,13 +47,14 @@ export class FileInputManager extends BaseUIManager {
       singleId: `${type}File`,
       emptySingleId: `empty${cap}FileButton`,
       listId: `${type}Files`,
-      toggleId: `toggle${cap}Files`,
+      toggleId: `${type}FilesContainer`,
       emptyListId: `empty${cap}FilesButton`,
     };
 
     if (type === 'output') {
       ids.singleId = undefined;
       ids.emptySingleId = undefined;
+      ids.toggleId = ELEMENT_IDS.OUTPUT_FILES_CONTAINER;
     }
 
     if (type === 'base' || type === 'edited') {
@@ -200,12 +202,13 @@ export class FileInputManager extends BaseUIManager {
       }
 
       if (toggleId) {
-        this.addListener(toggleId, 'click', () => {
-          if (type === 'output') {
-            this.outputFilesManager.toggleOutputFiles();
-          } else {
-            this.fileList.toggle(listId, toggleId);
+        this.addListener(toggleId, 'toggle', () => {
+          const collapsible = safeGetElementById(toggleId);
+          const isOpen = collapsible?.hasAttribute('open');
+          if (type === 'output' && isOpen) {
+            this.outputFilesManager.initializeOutputFiles();
           }
+          this.state.save();
         });
       }
     });

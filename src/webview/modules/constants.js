@@ -94,7 +94,6 @@ export const ELEMENT_IDS = {
   COMMIT_SELECT: 'commit',
   OUTPUT_FILES: 'outputFiles',
   OUTPUT_FILES_CONTAINER: 'outputFilesContainer',
-  TOGGLE_OUTPUT_FILES: 'toggleOutputFiles',
   INSTRUCTION: 'instruction',
   API_KEY_BANNER: 'apiKeyBanner',
   API_KEY_BANNER_BUTTON: 'apiKeyBannerButton',

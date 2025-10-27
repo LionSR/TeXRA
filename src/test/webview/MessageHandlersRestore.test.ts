@@ -186,8 +186,6 @@ function loadFileListModule(dom: JSDOM) {
     'const fileList = new FileList();\nmodule.exports = { FileList, fileList };',
   );
 
-  const iconCalls: Array<{ elementId: string | null; isVisible: boolean }> = [];
-
   const context = {
     module: { exports: {} },
     exports: {},
@@ -202,9 +200,6 @@ function loadFileListModule(dom: JSDOM) {
       el.addEventListener(event, handler);
     },
     safeGetElementById: (id: string) => dom.window.document.getElementById(id),
-    setChevronIcon: (element: HTMLElement | null, isVisible: boolean) => {
-      iconCalls.push({ elementId: element?.id ?? null, isVisible });
-    },
     createFromTemplate: (
       _templateId: string,
       config: { text?: Record<string, string>; dataset?: Record<string, any> },
@@ -227,8 +222,6 @@ function loadFileListModule(dom: JSDOM) {
 
       return item;
     },
-    capitalize: (value: string) =>
-      value.charAt(0).toUpperCase() + value.slice(1),
   } as unknown as vm.Context;
 
   (context as any).globalThis = context;
@@ -241,7 +234,6 @@ function loadFileListModule(dom: JSDOM) {
 
   return {
     FileList: (context.module as any).exports.FileList as any,
-    iconCalls,
   };
 }
 
@@ -295,10 +287,6 @@ function loadMessageHandlerModule(dom: JSDOM) {
   const vscodeMessages: any[] = [];
   const mainViewStateSetCalls: any[] = [];
   const mainViewStateUpdateCalls: any[] = [];
-  const setChevronCalls: Array<{
-    elementId: string | null;
-    isVisible: boolean;
-  }> = [];
   let restoreCalled = false;
 
   const constantsMock = {
@@ -312,7 +300,6 @@ function loadMessageHandlerModule(dom: JSDOM) {
     ELEMENT_IDS: {
       OUTPUT_FILES: 'outputFiles',
       OUTPUT_FILES_CONTAINER: 'outputFilesContainer',
-      TOGGLE_OUTPUT_FILES: 'toggleOutputFiles',
       SESSION_TYPE_TOGGLE: 'sessionTypeToggle',
       LATEXDIFFS_CONTENT: 'latexdiffsContent',
       TOGGLE_LATEXDIFFS: 'toggleLatexdiffs',
@@ -342,9 +329,6 @@ function loadMessageHandlerModule(dom: JSDOM) {
       }
     },
     safeGetElementById: (id: string) => dom.window.document.getElementById(id),
-    setChevronIcon: (element: HTMLElement | null, isVisible: boolean) => {
-      setChevronCalls.push({ elementId: element?.id ?? null, isVisible });
-    },
   };
 
   const __mocks = {
@@ -466,7 +450,6 @@ function loadMessageHandlerModule(dom: JSDOM) {
       vscodeMessages,
       mainViewStateSetCalls,
       mainViewStateUpdateCalls,
-      setChevronCalls,
       restoreCalled: () => restoreCalled,
       constants: constantsMock,
     },
@@ -476,13 +459,12 @@ function loadMessageHandlerModule(dom: JSDOM) {
 describe('FileList remove callbacks', () => {
   it('invokes registered callbacks and hides the container when empty', () => {
     const dom = createTestDom(`
-      <div id="inputFilesContainer" style="display: block;">
+      <vscode-collapsible id="inputFilesContainer" open>
         <div id="inputFiles"></div>
-      </div>
-      <div id="toggleInputFiles"></div>
+      </vscode-collapsible>
     `);
 
-    const { FileList, iconCalls } = loadFileListModule(dom);
+    const { FileList } = loadFileListModule(dom);
     let saveCount = 0;
     let lastRemoved: string[] | null = null;
     const list = new FileList(() => {
@@ -502,6 +484,12 @@ describe('FileList remove callbacks', () => {
     assert.deepEqual(lastRemoved, ['beta.tex']);
     assert.strictEqual(saveCount, 1);
 
+    const container = dom.window.document.getElementById('inputFilesContainer');
+    let toggleCount = 0;
+    container?.addEventListener('toggle', () => {
+      toggleCount += 1;
+    });
+
     const secondRemove = dom.window.document.querySelector(
       '#inputFiles .remove-button',
     ) as HTMLElement;
@@ -509,17 +497,8 @@ describe('FileList remove callbacks', () => {
       new dom.window.Event('click', { bubbles: true }),
     );
     assert.deepEqual(lastRemoved, []);
-    assert.strictEqual(
-      dom.window.document.getElementById('inputFilesContainer')?.style.display,
-      'none',
-    );
-    assert(
-      iconCalls.some(
-        (call) =>
-          call.elementId === 'toggleInputFiles' && call.isVisible === false,
-      ),
-      'expected toggle icon to be updated when the list becomes empty',
-    );
+    assert.strictEqual(container?.hasAttribute('open'), false);
+    assert.strictEqual(toggleCount > 0, true);
     assert.strictEqual(saveCount, 3);
   });
 });
@@ -549,10 +528,9 @@ describe('MainViewMessageHandler state restoration', () => {
         <vscode-radio data-session-type="workflow" value="workflow"></vscode-radio>
         <vscode-radio data-session-type="toolUse" value="toolUse"></vscode-radio>
       </vscode-radio-group>
-      <div id="inputFilesContainer" style="display: none;">
+      <vscode-collapsible id="inputFilesContainer">
         <div id="inputFiles"></div>
-      </div>
-      <div id="toggleInputFiles"></div>
+      </vscode-collapsible>
     `);
 
     const { MainViewMessageHandler, mocks } = loadMessageHandlerModule(dom);
@@ -582,14 +560,7 @@ describe('MainViewMessageHandler state restoration', () => {
     assert.strictEqual(mocks.restoreCalled(), true);
 
     const container = dom.window.document.getElementById('inputFilesContainer');
-    assert.strictEqual(container?.style.display, 'block');
-    assert(
-      mocks.setChevronCalls.some(
-        (call) =>
-          call.elementId === 'toggleInputFiles' && call.isVisible === true,
-      ),
-      'expected toggle icon to be expanded when restoring visible list',
-    );
+    assert.strictEqual(container?.hasAttribute('open'), true);
 
     const removeCallback = mocks.fileListRemoveCallbacks.get('inputFiles');
     assert(removeCallback, 'expected removal callback to be registered');
