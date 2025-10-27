@@ -181,6 +181,15 @@ export class SettingsButtonManager extends BaseUIManager {
         }
       };
 
+      /**
+       * Gets the current session type from a vscode-radio-group element.
+       * Uses multiple fallback strategies to ensure compatibility:
+       * 1. Check group's value property (web component API)
+       * 2. Check group's value attribute (fallback for delayed property sync)
+       * 3. Query for checked radio and extract its session type
+       * @param {HTMLElement} group - The radio group element
+       * @returns {string|undefined} The session type, or undefined if not found
+       */
       const getSessionTypeFromGroup = (group) => {
         if (!(group instanceof HTMLElement)) {
           return undefined;
@@ -207,10 +216,19 @@ export class SettingsButtonManager extends BaseUIManager {
 
       const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup) {
-        this._setLastRadioSessionType(getSessionTypeFromGroup(radioGroup));
+        // Initialize last session type from radio group
+        // Only set if we can determine a valid initial value to avoid masking the first user interaction
+        const initialSessionType = getSessionTypeFromGroup(radioGroup);
+        if (initialSessionType) {
+          this._setLastRadioSessionType(initialSessionType);
+        } else {
+          console.warn('Radio group has no initial session type value');
+        }
+
         this.addListener(radioGroup, 'change', () => {
           const sessionType = getSessionTypeFromGroup(radioGroup);
           if (!sessionType) {
+            console.warn('Could not determine session type from radio group');
             return;
           }
           const normalized = normalizeSessionType(sessionType);
