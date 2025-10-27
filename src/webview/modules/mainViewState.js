@@ -11,6 +11,7 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   normalizeSessionType,
+  resolveRadioGroup,
 } from './constants.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
@@ -302,10 +303,7 @@ export class MainViewState {
 
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const radioGroup =
-        toggleContainer.tagName === 'VSCODE-RADIO-GROUP'
-          ? toggleContainer
-          : toggleContainer.querySelector('vscode-radio-group');
+      const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup instanceof HTMLElement) {
         if (typeof radioGroup.value === 'string') {
           radioGroup.value = normalized;

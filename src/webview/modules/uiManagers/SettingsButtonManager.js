@@ -9,6 +9,7 @@ import {
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
   normalizeSessionType,
+  resolveRadioGroup,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
@@ -178,17 +179,6 @@ export class SettingsButtonManager extends BaseUIManager {
         } else {
           this.state.save();
         }
-      };
-
-      const resolveRadioGroup = (element) => {
-        if (!element) {
-          return null;
-        }
-        if (element.tagName === 'VSCODE-RADIO-GROUP') {
-          return element;
-        }
-        const radioGroup = element.querySelector('vscode-radio-group');
-        return radioGroup instanceof HTMLElement ? radioGroup : null;
       };
 
       const getSessionTypeFromGroup = (group) => {
