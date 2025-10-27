@@ -250,10 +250,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           const messageType = message.logMessage.messageType;
           if (messageType === 'thinking' || messageType === 'scratchpad') {
             formatted.setAttribute('open', '');
-            const toggleIcon = formatted.querySelector('.toggle-icon');
-            if (toggleIcon) {
-              toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
-            }
+            formatted.dataset.isOpen = 'true';
           }
         }
         appendFormatted(ungroupedContainer ?? logContent, formatted);
@@ -279,11 +276,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
             const messageType = message.logMessage.messageType;
             if (messageType === 'thinking' || messageType === 'scratchpad') {
               formatted.setAttribute('open', '');
-              const toggleIcon = formatted.querySelector('.toggle-icon');
-              if (toggleIcon) {
-                toggleIcon.className =
-                  'codicon codicon-chevron-down toggle-icon';
-              }
+              formatted.dataset.isOpen = 'true';
             }
           }
           appendFormatted(ungroupedContainer ?? logContent, formatted);

@@ -4,10 +4,7 @@ import { progressViewState } from '../progressViewState.js';
 import { copyWithFeedback } from '../utils.js';
 
 // Local imports
-import {
-  addEventListenerSafely,
-  setChevronIconHorizontal,
-} from '@common/domUtils.js';
+import { addEventListenerSafely } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -144,22 +141,26 @@ export class EventsManager {
       }
     }
 
-    // Handle banner-details and file-list-details toggle events
+    // Track collapsible open state emitted by the VS Code toolkit component
     document.addEventListener(
-      'toggle',
+      'vsc-collapsible-toggle',
       (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
         if (
-          e.target &&
-          (e.target.classList.contains('banner-details') ||
-            e.target.classList.contains('file-list-details') ||
-            e.target.classList.contains('latexdiff-details') ||
-            e.target.classList.contains('statistics-details'))
+          target.classList.contains('banner-details') ||
+          target.classList.contains('file-list-details') ||
+          target.classList.contains('latexdiff-details') ||
+          target.classList.contains('statistics-details')
         ) {
-          const toggleIcon = e.target.querySelector('.toggle-icon');
-          if (toggleIcon) {
-            const isOpen = e.target.open;
-            setChevronIconHorizontal(toggleIcon, isOpen);
-          }
+          const detail = /** @type {{ open?: boolean }} */ (e.detail);
+          const isOpen =
+            typeof detail?.open === 'boolean'
+              ? detail.open
+              : target.hasAttribute('open');
+          target.dataset.isOpen = isOpen ? 'true' : 'false';
         }
       },
       true,

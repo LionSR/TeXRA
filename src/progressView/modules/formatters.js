@@ -23,10 +23,6 @@ import { STATUS } from './constants.js';
 // Local imports
 import { katexMacros } from './katexMacros.js';
 import { createFromTemplate } from '@common/templateUtils.js';
-import {
-  CHEVRON_RIGHT_CLASS,
-  CHEVRON_DOWN_CLASS,
-} from '@common/iconConstants.js';
 import { getBasename } from '@common/pathUtils.js';
 import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
 
@@ -428,10 +424,10 @@ export class LogEntryFormatter {
 
     const headerLabel = element.querySelector('.tool-use-title');
     const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
     if (headerLabel) headerLabel.textContent = 'Tool Use';
     if (iconElem) iconElem.className = 'codicon codicon-wrench';
+    element.heading = 'Tool Use';
+    element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
     element.classList.remove('tool-use-error');
 
     const contentElem = element.querySelector('.banner-content');
@@ -711,14 +707,15 @@ export class LogEntryFormatter {
     const { element, contentElem, summaryElem } = bannerEntry;
 
     if (summaryElem) {
-      const timestampElem = document.createElement('span');
-      timestampElem.classList.add('timestamp');
-      timestampElem.title = tooltipTimestamp;
-      timestampElem.textContent = verbose ? `[${timeDisplay}]` : '';
-      summaryElem.insertBefore(
-        timestampElem,
-        summaryElem.querySelector('.banner-content-copy'),
-      );
+      const timestampElem = summaryElem.querySelector('.timestamp');
+      if (timestampElem) {
+        timestampElem.title = tooltipTimestamp;
+        const shouldShowTimestamp = Boolean(verbose);
+        timestampElem.textContent = shouldShowTimestamp
+          ? `[${timeDisplay}]`
+          : '';
+        timestampElem.toggleAttribute('hidden', !shouldShowTimestamp);
+      }
     }
 
     if (contentElem) {
@@ -752,14 +749,16 @@ export class LogEntryFormatter {
     } else {
       element.removeAttribute('open');
     }
+    element.dataset.isOpen = open ? 'true' : 'false';
 
     if (logId) element.dataset.logId = logId;
     if (groupId) element.dataset.groupId = groupId;
     if (timestamp) element.dataset.fullTimestamp = timestamp;
 
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) {
-      toggleIcon.className = `${open ? CHEVRON_DOWN_CLASS : CHEVRON_RIGHT_CLASS} toggle-icon`;
+    if (typeof labelText === 'string') {
+      element.heading = labelText;
+    } else {
+      element.heading = '';
     }
 
     const iconElem = element.querySelector('.icon');
@@ -771,11 +770,6 @@ export class LogEntryFormatter {
       } else {
         iconElem.hidden = true;
       }
-    }
-
-    const labelElem = element.querySelector('.label');
-    if (labelElem) {
-      labelElem.textContent = labelText ?? '';
     }
 
     const copyButton = element.querySelector('.banner-content-copy');
@@ -807,8 +801,8 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
     const summaryElem = element.querySelector('.summary-text');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    element.heading = 'Generated Files';
+    element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
 
     const parsed = data ?? JSON.parse(decodeHtml(content));
 
@@ -871,6 +865,7 @@ export class LogEntryFormatter {
     summary += ')';
 
     if (summaryElem) summaryElem.textContent = summary;
+    else element.heading = summary;
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -884,8 +879,8 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
     const summaryElem = element.querySelector('.summary-text');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    element.heading = 'Missing Outputs';
+    element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
 
     const parsed = data ?? JSON.parse(decodeHtml(content));
 
@@ -948,6 +943,7 @@ export class LogEntryFormatter {
     const summary = `Missing outputs (${missingFiles.length})`;
 
     if (summaryElem) summaryElem.textContent = summary;
+    else element.heading = summary;
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -971,8 +967,7 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.latexdiff-content');
     const summaryElem = element.querySelector('.summary-text');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
+    element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
 
     const parsed = data ?? JSON.parse(decodeHtml(content));
     const entries = Array.isArray(parsed)
@@ -1021,6 +1016,7 @@ export class LogEntryFormatter {
         : `Latexdiff results (${entries.length})`;
 
     if (summaryElem) summaryElem.textContent = summary;
+    element.heading = summary;
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -1034,8 +1030,8 @@ export class LogEntryFormatter {
     const element = createFromTemplate('statisticsDetailsTemplate');
     if (!element) return null;
     const contentElem = element.querySelector('.statistics-content');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    element.heading = 'Statistics';
+    element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
     const parsed = data;
     if (!parsed || typeof parsed !== 'object') {
       return null;

@@ -459,10 +459,7 @@ export class LogEntryManager {
           logMessage.messageType === 'scratchpad')
       ) {
         newEl.setAttribute('open', '');
-        const toggleIcon = newEl.querySelector('.toggle-icon');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
-        }
+        newEl.dataset.isOpen = 'true';
       }
 
       if (existing instanceof HTMLElement && newEl instanceof HTMLElement) {

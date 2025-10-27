@@ -130,12 +130,3 @@ vscode-toolbar-button {
 .details-summary:hover {
   opacity: 1;
 }
-
-.details-summary::-webkit-details-marker {
-  display: none;
-}
-
-.details-summary .toggle-icon {
-  opacity: var(--opacity-subtle);
-  font-size: var(--font-size-sm);
-}
