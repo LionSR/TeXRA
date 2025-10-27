@@ -124,3 +124,14 @@ export const AGENT_SELECT_IDS = {
 };
 
 export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
+
+/**
+ * Normalizes a session type value to ensure it's a valid SESSION_TYPE.
+ * @param {string} sessionType - The session type to normalize
+ * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
+ */
+export function normalizeSessionType(sessionType) {
+  return sessionType === SESSION_TYPES.TOOL_USE
+    ? SESSION_TYPES.TOOL_USE
+    : SESSION_TYPES.WORKFLOW;
+}
