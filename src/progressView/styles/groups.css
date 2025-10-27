@@ -43,7 +43,7 @@
   border-left-color: var(--vscode-testing-iconPassed);
 }
 
-vscode-tree-item.log-group[branch]:not([open]) > [slot='children'] {
+vscode-tree-item.log-group[branch]:not([expanded]) > [slot='children'] {
   display: none;
 }
 
