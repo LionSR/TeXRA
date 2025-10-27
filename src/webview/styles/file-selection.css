@@ -159,13 +159,6 @@ vscode-toolbar-container.file-select-actions {
   display: none;
 }
 
-/* Update icon styles */
-.file-select-header label .codicon {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-  vertical-align: text-bottom;
-}
-
 /* LaTeX diffs section header styling */
 .latexdiffs-section .file-select-header {
   margin-bottom: 0;

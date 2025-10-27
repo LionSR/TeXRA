@@ -96,16 +96,37 @@ export function safeGetElementChecked(id) {
   return element.checked;
 }
 
+export function setElementDisabled(element, disabled) {
+  if (!element) {
+    return;
+  }
+
+  if ('disabled' in element) {
+    try {
+      element.disabled = disabled;
+    } catch (error) {
+      // Ignore assignment errors from custom elements without writable props
+    }
+  }
+
+  if (element instanceof Element) {
+    element.toggleAttribute('disabled', Boolean(disabled));
+  }
+}
+
 export function setElementsDisabled(idsOrElements, disabled) {
   const elements = Array.isArray(idsOrElements)
     ? idsOrElements
     : [idsOrElements];
+
   elements.forEach((el) => {
     if (typeof el === 'string') {
       const elem = document.getElementById(el);
-      if (elem) elem.disabled = disabled;
-    } else if (el) {
-      el.disabled = disabled;
+      if (elem) {
+        setElementDisabled(elem, disabled);
+      }
+    } else {
+      setElementDisabled(el, disabled);
     }
   });
 }
@@ -114,9 +135,6 @@ export function isSelectLikeElement(element) {
   if (!element) {
     return false;
   }
-  if (element instanceof HTMLSelectElement) {
-    return true;
-  }
   return isVsCodeSelectElement(element);
 }
 
@@ -124,19 +142,12 @@ export function getSelectOptionElements(element) {
   if (!isSelectLikeElement(element)) {
     return [];
   }
-  if (element instanceof HTMLSelectElement) {
-    return Array.from(element.options);
-  }
   return Array.from(element.querySelectorAll('vscode-option'));
 }
 
 export function getSelectedOptionElement(element) {
   if (!isSelectLikeElement(element)) {
     return null;
-  }
-
-  if (element instanceof HTMLSelectElement) {
-    return element.options[element.selectedIndex] ?? null;
   }
 
   const options = getSelectOptionElements(element);

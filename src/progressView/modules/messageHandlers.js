@@ -15,6 +15,24 @@ import { vscode } from '@common/webviewContext.js';
 const state = progressViewState;
 const dom = progressViewDomHandler;
 
+function scrollToBottom(element) {
+  if (!element) {
+    return;
+  }
+
+  if (
+    typeof element.scrollPos === 'number' &&
+    typeof element.scrollMax === 'number'
+  ) {
+    element.scrollPos = element.scrollMax;
+    return;
+  }
+
+  if ('scrollTop' in element && 'scrollHeight' in element) {
+    element.scrollTop = element.scrollHeight;
+  }
+}
+
 // Create formatter instances
 
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
@@ -185,7 +203,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           appendFormatted(logContent, formatted);
         }
       });
-      logContent.scrollTop = logContent.scrollHeight;
+      scrollToBottom(logContent);
 
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
@@ -228,7 +246,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         }
         appendFormatted(logContent, formatted);
       }
-      logContent.scrollTop = logContent.scrollHeight;
+      scrollToBottom(logContent);
     }
   }
 
@@ -255,7 +273,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           }
           appendFormatted(logContent, formatted);
         }
-        logContent.scrollTop = logContent.scrollHeight;
+        scrollToBottom(logContent);
       }
     }
   }
@@ -264,7 +282,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
-      logContent.scrollTop = logContent.scrollHeight;
+      scrollToBottom(logContent);
     }
   }
 
