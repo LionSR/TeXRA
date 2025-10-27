@@ -195,9 +195,9 @@ export class SettingsButtonManager extends BaseUIManager {
           return undefined;
         }
         const groupValue =
-          (typeof group.value === 'string' && group.value.length > 0
+          typeof group.value === 'string' && group.value.length > 0
             ? group.value
-            : null) ?? group.getAttribute('value');
+            : group.getAttribute('value');
         if (typeof groupValue === 'string' && groupValue.length > 0) {
           return groupValue;
         }
@@ -366,7 +366,7 @@ export class SettingsButtonManager extends BaseUIManager {
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
-      sessionInput.value = sessionType;
+      sessionInput.value = normalized;
     }
 
     this.state.save();
