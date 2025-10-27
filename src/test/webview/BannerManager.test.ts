@@ -9,6 +9,8 @@ import { JSDOM } from 'jsdom';
 // Since BannerManager uses ES6 modules with path aliases that Node.js doesn't understand,
 // we'll create a mock implementation that mirrors the actual behavior for testing purposes.
 
+type ToolbarButtonElement = HTMLElement & { icon?: string };
+
 // Mock BannerManager implementation for testing
 class BannerManager {
   private _listeners: Array<{
@@ -108,24 +110,68 @@ class BannerManager {
   }
 
   private _setupDependencyBanner(element: any, config: any) {
-    const textSpan = element.querySelector('span');
-    if (!textSpan) {
-      console.warn('[BannerManager] Dependency banner missing text element');
+    const container = element.querySelector('.missing-tools');
+    const actions = element.querySelector('.actions');
+
+    if (!(container && actions)) {
+      console.warn(
+        '[BannerManager] Dependency banner missing required elements',
+      );
       return;
     }
 
-    const missing = config?.missingTools || [];
-    const formattedTools = missing.map((tool: string) => {
-      if (tool === 'gm/magick') {
-        return 'GraphicsMagick or ImageMagick';
-      }
-      return tool;
-    });
+    container.textContent = '';
 
-    textSpan.textContent =
-      missing.length > 0
-        ? `Missing dependencies: ${formattedTools.join(', ')}`
-        : 'Missing dependencies: none';
+    const missing = config?.missingTools || [];
+    if (missing.length > 0) {
+      const intro = document.createElement('span');
+      intro.textContent = 'Missing dependencies:';
+      container.appendChild(intro);
+
+      missing.forEach((tool: string) => {
+        if (tool === 'gm/magick') {
+          this._addDependencyItem(container, 'GraphicsMagick', 'gm');
+          this._addDependencyItem(container, 'ImageMagick', 'magick');
+        } else {
+          this._addDependencyItem(container, tool, tool);
+        }
+      });
+    } else {
+      container.textContent = 'Missing dependencies: none';
+    }
+
+    let recheckButton = actions.querySelector(
+      '#dependencyRecheckButton',
+    ) as ToolbarButtonElement | null;
+    if (!recheckButton) {
+      recheckButton = document.createElement(
+        'vscode-toolbar-button',
+      ) as ToolbarButtonElement;
+      recheckButton.id = 'dependencyRecheckButton';
+      recheckButton.icon = 'refresh';
+      recheckButton.textContent = 'Re-check';
+      actions.insertBefore(recheckButton, actions.firstChild);
+    }
+  }
+
+  private _addDependencyItem(container: any, label: string, tool: string) {
+    const item = document.createElement('div');
+    item.classList.add('dependency-item');
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = label;
+
+    const button = document.createElement(
+      'vscode-toolbar-button',
+    ) as ToolbarButtonElement;
+    button.className = 'secondary dependency-install-button';
+    button.textContent = 'Install';
+    button.icon = 'cloud-download';
+    button.dataset.tool = tool;
+
+    item.appendChild(nameSpan);
+    item.appendChild(button);
+    container.appendChild(item);
   }
 
   addListener(
