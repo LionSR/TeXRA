@@ -305,10 +305,7 @@ export class MainViewState {
     if (toggleContainer) {
       const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup instanceof HTMLElement) {
-        // Set both attribute and property for proper web component synchronization
-        // The attribute ensures immediate DOM reflection, property ensures component state
-        radioGroup.setAttribute('value', normalized);
-        if ('value' in radioGroup) {
+        if (typeof radioGroup.value === 'string') {
           radioGroup.value = normalized;
         }
 
