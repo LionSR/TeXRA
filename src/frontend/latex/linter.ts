@@ -102,15 +102,15 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
       `Triggering LaTeX build for ${filePath} to refresh linter diagnostics`,
     );
 
-    let diagnosticsWait: Promise<void> | undefined;
+    // Start listening for diagnostics updates before triggering the build
+    // to ensure we don't miss the event if the build completes quickly
+    const diagnosticsWait = waitForDiagnosticsUpdate(fileUri);
 
     try {
-      diagnosticsWait = waitForDiagnosticsUpdate(fileUri);
       await vscode.commands.executeCommand('latex-workshop.build', fileUri);
     } finally {
-      if (diagnosticsWait) {
-        await diagnosticsWait;
-      }
+      // Wait for diagnostics to update (or timeout)
+      await diagnosticsWait;
     }
   } catch (buildErr) {
     logger.warn(
