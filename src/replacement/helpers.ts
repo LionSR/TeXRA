@@ -227,6 +227,13 @@ export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
       `\\end{${sectionType}*}`,
       `\\end {${sectionType}}`,
       `\\end {${sectionType}*}`,
+      // Additional space variants
+      `\\end{ ${sectionType}}`,
+      `\\end{ ${sectionType}*}`,
+      `\\end{${sectionType} }`,
+      `\\end{${sectionType}* }`,
+      `\\end { ${sectionType} }`,
+      `\\end { ${sectionType}* }`,
     ];
 
     invalidEndings.forEach((ending) => {
