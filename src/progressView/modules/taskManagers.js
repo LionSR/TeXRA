@@ -9,86 +9,174 @@ import { createFromTemplate } from '@common/templateUtils.js';
 /**
  * Manages task group DOM operations.
  */
-export class TaskGroupManager {
+export class TaskGroupDomManager {
   constructor() {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
+    this.groupObservers = new Map();
   }
 
   /**
    * Adds a log group to the DOM
    * @param {Object} group - Group data
    */
-  add(group) {
+  addGroup(group) {
     const existingGroup = this.groupElements.get(group.id);
     if (existingGroup) {
       if (!progressViewState.taskGroups.get(group.id)) {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
-        existingGroup.remove();
-        this.groupElements.delete(group.id);
+        this.removeGroup(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
-        this.update(group.id, group.status, group.endTime);
+        this.updateGroup({
+          groupId: group.id,
+          updates: {
+            status: group.status,
+            endTime: group.endTime,
+          },
+        });
         return;
       }
     }
 
-    const detailsElem = createFromTemplate('groupDetailsTemplate');
-    if (!detailsElem) {
-      console.error('TaskGroupManager.add: groupDetailsTemplate not found');
+    const treeItem = createFromTemplate('groupDetailsTemplate');
+    if (!treeItem) {
+      console.error(
+        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
+      );
       return;
     }
-    detailsElem.id = `group-${group.id}`;
+    treeItem.id = `group-${group.id}`;
+    treeItem.dataset.groupId = group.id;
+    treeItem.setAttribute('branch', '');
 
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
-      console.error('TaskGroupManager.add: failed to create group header');
+      console.error(
+        'TaskGroupDomManager.addGroup: failed to create group header',
+      );
       return;
     }
 
-    const groupContainer = detailsElem.querySelector('.log-group-content');
-    if (!groupContainer) {
-      console.error('TaskGroupManager.add: missing group content container');
-      return;
-    }
-    groupContainer.id = `group-content-${group.id}`;
+    treeItem.appendChild(headerElement);
 
     progressViewState.taskGroups.set(group.id, group);
 
-    const isCollapsed = progressViewState.toggleStates.get(group.id);
-    detailsElem.open = isCollapsed !== true;
+    const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
+    const isExpanded = !isCollapsed;
+    treeItem.toggleAttribute('expanded', isExpanded);
+    treeItem.expanded = isExpanded;
 
-    detailsElem.prepend(headerElement);
+    this._observeGroup(treeItem, group.id);
 
-    detailsElem.addEventListener('toggle', () => {
-      progressViewState.toggleStates.set(group.id, !detailsElem.open);
-    });
+    this.groupElements.set(group.id, treeItem);
 
-    this.groupElements.set(group.id, detailsElem);
-
-    // Insert the group at the right position in the parent
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const treeRoot = this._getTreeRoot();
+    if (!treeRoot) {
+      console.error('TaskGroupDomManager.addGroup: log group tree missing');
+      return;
+    }
 
     if (group.parentGroupId) {
-      const parentDetails = this.groupElements.get(group.parentGroupId);
-      const parentGroupContent =
-        parentDetails?.querySelector('.log-group-content');
-      if (parentGroupContent) {
-        insertChronologically(parentGroupContent, detailsElem, group.startTime);
+      const parentItem = this.groupElements.get(group.parentGroupId);
+      if (parentItem instanceof HTMLElement) {
+        treeItem.setAttribute('slot', 'children');
+        insertChronologically({
+          container: parentItem,
+          element: treeItem,
+          timestamp: group.startTime,
+        });
         return;
       }
+    } else {
+      treeItem.removeAttribute('slot');
     }
 
     // For top-level groups, insert in chronological order
-    insertChronologically(container, detailsElem, group.startTime);
+    insertChronologically({
+      container: treeRoot,
+      element: treeItem,
+      timestamp: group.startTime,
+    });
 
     // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
       progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
+    }
+  }
+
+  _getTreeRoot() {
+    let tree = document.getElementById(ELEMENT_IDS.LOG_GROUP_TREE);
+    if (tree) {
+      return tree;
+    }
+
+    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!container) {
+      return null;
+    }
+
+    tree = document.createElement('vscode-tree');
+    tree.id = ELEMENT_IDS.LOG_GROUP_TREE;
+    tree.classList.add('log-group-tree');
+    container.prepend(tree);
+    return tree;
+  }
+
+  _observeGroup(treeItem, groupId) {
+    if (!(treeItem instanceof HTMLElement)) {
+      return;
+    }
+
+    this._disconnectObserver(groupId);
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'expanded'
+        ) {
+          const isCollapsed = !treeItem.hasAttribute('expanded');
+          progressViewState.toggleStates.set(groupId, isCollapsed);
+        }
+      }
+    });
+
+    observer.observe(treeItem, {
+      attributes: true,
+      attributeFilter: ['expanded'],
+    });
+
+    this.groupObservers.set(groupId, observer);
+  }
+
+  _disconnectObserver(groupId) {
+    const existing = this.groupObservers.get(groupId);
+    if (existing) {
+      existing.disconnect();
+      this.groupObservers.delete(groupId);
+    }
+  }
+
+  removeGroup(groupId) {
+    if (!groupId) {
+      return;
+    }
+
+    this._disconnectObserver(groupId);
+
+    const treeItem = this.groupElements.get(groupId);
+    if (treeItem instanceof HTMLElement) {
+      treeItem.remove();
+    }
+
+    this.groupElements.delete(groupId);
+    if (progressViewState.toggleStates.get(groupId) !== undefined) {
+      progressViewState.toggleStates.clearSelection([groupId]);
     }
   }
 
@@ -98,21 +186,45 @@ export class TaskGroupManager {
    * @param {string} status - New status
    * @param {string} endTime - End time (optional)
    */
-  update(groupId, status, endTime) {
-    const group = progressViewState.taskGroups.get(groupId);
-    if (!group) return;
-
-    group.status = status;
-    if (endTime) {
-      group.endTime = endTime;
-    }
-
-    const detailsElem = this.groupElements.get(groupId);
-    if (!detailsElem) {
+  updateGroup(update) {
+    if (!update || typeof update !== 'object') {
       return;
     }
 
-    const header = detailsElem.querySelector('.log-group-header');
+    const { groupId, updates = {} } = update;
+    if (!groupId) {
+      return;
+    }
+
+    const group = progressViewState.taskGroups.get(groupId);
+    if (!group) return;
+
+    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'status',
+    );
+    const hasEndTimeUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'endTime',
+    );
+
+    if (hasStatusUpdate && updates.status) {
+      group.status = updates.status;
+    }
+    if (
+      hasEndTimeUpdate &&
+      updates.endTime !== undefined &&
+      updates.endTime !== null
+    ) {
+      group.endTime = updates.endTime;
+    }
+
+    const treeItem = this.groupElements.get(groupId);
+    if (!(treeItem instanceof HTMLElement)) {
+      return;
+    }
+
+    const header = treeItem.querySelector('.log-group-header');
     if (header) {
       const level = this.headerFormatter._getGroupLevel(group);
       header.className = this.headerFormatter._getHeaderClass(group, level);
@@ -120,14 +232,20 @@ export class TaskGroupManager {
       // Update the status icon
       const statusIconElem = header.querySelector('.group-status-icon');
       if (statusIconElem) {
-        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(status);
+        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(
+          group.status,
+        );
       }
 
       // Update or add the duration display when the group finishes
       const timeContainer = header.querySelector('.group-time');
 
-      if (endTime) {
-        const endDate = endTime;
+      if (
+        hasEndTimeUpdate &&
+        group.endTime !== undefined &&
+        group.endTime !== null
+      ) {
+        const endDate = group.endTime;
         const startDate = group.startTime;
         const durationMs = endDate - startDate;
 
@@ -149,6 +267,8 @@ export class TaskGroupManager {
         }
       }
     }
+
+    progressViewState.taskGroups.set(groupId, group);
   }
 
   /**
@@ -157,17 +277,19 @@ export class TaskGroupManager {
    * @param {string} groupId - ID of the group to collapse
    */
   collapseGroupAndChildren(groupId) {
-    // Find all child groups
-    for (const [childId, group] of progressViewState.taskGroups.getAll()) {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+
+    for (const [childId, group] of taskGroups.entries()) {
       if (group.parentGroupId === groupId) {
         this.collapseGroupAndChildren(childId);
       }
     }
 
     // Collapse this group
-    const detailsElem = this.groupElements.get(groupId);
-    if (detailsElem) {
-      detailsElem.open = false;
+    const treeItem = this.groupElements.get(groupId);
+    if (treeItem instanceof HTMLElement) {
+      treeItem.toggleAttribute('expanded', false);
+      treeItem.expanded = false;
       progressViewState.toggleStates.set(groupId, true);
     }
   }
@@ -186,8 +308,11 @@ export class TaskGroupManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, detailsElem] of this.groupElements.entries()) {
-      if (!detailsElem || !detailsElem.open) {
+    for (const [id, treeItem] of this.groupElements.entries()) {
+      if (
+        !(treeItem instanceof HTMLElement) ||
+        !treeItem.hasAttribute('expanded')
+      ) {
         continue;
       }
 
@@ -250,8 +375,17 @@ export class TaskGroupManager {
    * Clear cached group references.
    */
   clear() {
+    for (const groupId of [...this.groupElements.keys()]) {
+      this.removeGroup(groupId);
+    }
+    this.groupObservers.clear();
     this.groupElements.clear();
     this.previousActiveGroupId = null;
+
+    const treeRoot = document.getElementById(ELEMENT_IDS.LOG_GROUP_TREE);
+    if (treeRoot) {
+      treeRoot.innerHTML = '';
+    }
   }
 }
 
@@ -271,19 +405,29 @@ export class LogEntryManager {
   append(logMessage) {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
-      const groupContent = document.getElementById(
-        `group-content-${logMessage.groupId}`,
+      const groupElement = document.getElementById(
+        `group-${logMessage.groupId}`,
       );
-      if (groupContent) {
+      if (groupElement instanceof HTMLElement) {
         const logLineElement = this.entryFormatter.format(logMessage);
         if (!logLineElement) {
           return true;
         }
 
+        if (!(logLineElement instanceof HTMLElement)) {
+          return false;
+        }
+
+        logLineElement.setAttribute('slot', 'children');
+
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
 
-        insertChronologically(groupContent, logLineElement, msgDate);
+        insertChronologically({
+          container: groupElement,
+          element: logLineElement,
+          timestamp: msgDate,
+        });
 
         return true;
       }
@@ -318,6 +462,13 @@ export class LogEntryManager {
         const toggleIcon = newEl.querySelector('.toggle-icon');
         if (toggleIcon) {
           toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+        }
+      }
+
+      if (existing instanceof HTMLElement && newEl instanceof HTMLElement) {
+        const slotName = existing.getAttribute('slot');
+        if (slotName) {
+          newEl.setAttribute('slot', slotName);
         }
       }
 

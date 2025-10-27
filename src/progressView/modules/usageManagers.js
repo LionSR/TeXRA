@@ -37,7 +37,8 @@ export class UsageSummary {
    */
   computeTotal() {
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.taskGroups.getAll().values()) {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+    for (const group of taskGroups.values()) {
       if (group.usage) {
         totals.inputTokens += group.usage.inputTokens || 0;
         totals.outputTokens += group.usage.outputTokens || 0;
@@ -51,27 +52,31 @@ export class UsageSummary {
 /**
  * Manages usage display for individual groups.
  */
-export class UsageGroup {
+export class UsageGroupManager {
   constructor(usageSummary) {
     this.usageSummary = usageSummary; // Use the shared instance
   }
 
   /**
    * Update token and cost usage for a specific group
-   * @param {string} groupId - ID of the group to update
-   * @param {Object} usage - Usage data with inputTokens, outputTokens, cost
-   * @param {boolean} skipPropagate - Whether to skip propagating to parents
+   * @param {{ groupId: string, usage?: Object, skipPropagate?: boolean }} payload
    */
-  update(groupId, usage, skipPropagate = false) {
+  update(payload) {
+    if (!payload || typeof payload !== 'object') {
+      console.error('UsageGroupManager.update: payload must be an object');
+      return;
+    }
+
+    const { groupId, usage, skipPropagate = false } = payload;
     if (!groupId) {
-      console.error('UsageGroup.update: groupId is required');
+      console.error('UsageGroupManager.update: groupId is required');
       return;
     }
 
     const groupHeader = document.getElementById(`group-header-${groupId}`);
     if (!groupHeader) {
       console.warn(
-        `UsageGroup.update: Group header not found for ID: ${groupId}`,
+        `UsageGroupManager.update: Group header not found for ID: ${groupId}`,
       );
       return;
     }
@@ -81,7 +86,7 @@ export class UsageGroup {
     if (!usageElem) {
       usageElem = createFromTemplate('usageTemplate');
       if (!usageElem) {
-        console.error('UsageGroup.update: usageTemplate not found');
+        console.error('UsageGroupManager.update: usageTemplate not found');
         return;
       }
       // Determine the group level by checking for the 'top-level' class
@@ -129,7 +134,8 @@ export class UsageGroup {
    */
   computeAggregatedUsage(parentId) {
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    for (const group of progressViewState.taskGroups.getAll().values()) {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+    for (const group of taskGroups.values()) {
       if (group.parentGroupId === parentId) {
         if (group.usage) {
           totals.inputTokens += group.usage.inputTokens || 0;
@@ -158,14 +164,18 @@ export class UsageGroup {
       const totals = {
         ...this.computeAggregatedUsage(group.parentGroupId),
       };
-      this.update(group.parentGroupId, totals, true);
+      this.update({
+        groupId: group.parentGroupId,
+        usage: totals,
+        skipPropagate: true,
+      });
       this.propagateUsageToParents(group.parentGroupId);
     } else {
       // This is a top-level group, update it with aggregated usage from its children
       const totals = {
         ...this.computeAggregatedUsage(groupId),
       };
-      this.update(groupId, totals, true);
+      this.update({ groupId, usage: totals, skipPropagate: true });
     }
   }
 

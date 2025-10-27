@@ -38,15 +38,41 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly executionManager: ExecutionManager;
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
+  private activeView: vscode.WebviewView | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     super('MainView');
     this.settingsManager = new SettingsManager();
-    this.recordingManager = new RecordingManager(context);
+    this.recordingManager = new RecordingManager(context, {
+      recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
+      transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
+      progressTitle: 'Transcribing instruction',
+    });
     this.fileManager = new FileManager(context);
     this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);
+  }
+
+  public override async handleMessage(
+    message: any,
+    webviewView: vscode.WebviewView,
+  ): Promise<void> {
+    this.activeView = webviewView;
+    this.fileManager.attachWebview(webviewView);
+    this.instructionManager.attachWebview(webviewView);
+
+    await super.handleMessage(message, webviewView);
+  }
+
+  private getActiveView(): vscode.WebviewView | undefined {
+    if (!this.activeView) {
+      this.logger.warn(this.channel, 'No active webview available');
+      return undefined;
+    }
+
+    return this.activeView;
   }
 
   protected createHandlers(): Record<
@@ -75,20 +101,20 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
 
       // Delegate to managers for specific functionality
       // File selection commands
-      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m, w) =>
-        this.fileManager.handleFileSelection(m, w),
-      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: async (m, w) =>
-        this.fileManager.handleFileSelection(m, w),
-      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: async (m, w) =>
-        this.fileManager.handleFileSelection(m, w),
-      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: async (m, w) =>
-        this.fileManager.handleFileSelection(m, w),
-      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: async (_m, w) =>
-        this.fileManager.handleEditedFileSelection(w),
+      [MAIN_VIEW_COMMANDS.SELECT_INPUT_FILE]: async (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_REFERENCE_FILE]: async (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_AUXILIARY_FILE]: async (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_MEDIA_FILE]: async (m) =>
+        this.fileManager.handleFileSelection(m),
+      [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: async () =>
+        this.fileManager.handleEditedFileSelection(),
 
       // File selected commands
-      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: async (m, w) =>
-        this.fileManager.handleInputFileSelected(m, w),
+      [MAIN_VIEW_COMMANDS.INPUT_FILE_SELECTED]: async (m) =>
+        this.fileManager.handleInputFileSelected(m),
       [MAIN_VIEW_COMMANDS.REFERENCE_FILE_SELECTED]: async (m) =>
         this.fileManager.handleGenericFileSelected(m),
       [MAIN_VIEW_COMMANDS.AUXILIARY_FILE_SELECTED]: async (m) =>
@@ -99,38 +125,38 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleGenericFileSelected(m),
 
       // Request file commands
-      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m, w) =>
-        this.fileManager.handleRequestInputFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m, w) =>
-        this.fileManager.handleRequestFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m, w) =>
-        this.fileManager.handleRequestFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: async (m, w) =>
-        this.fileManager.handleRequestFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m, w) =>
-        this.fileManager.handleRequestEditedFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m, w) =>
-        this.fileManager.handleRequestBaseFile(m, w),
-      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m, w) =>
-        this.fileManager.handleRequestDefaultOutputFiles(m, w),
+      [MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE]: async (m) =>
+        this.fileManager.handleRequestInputFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE]: async (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE]: async (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE]: async (m) =>
+        this.fileManager.handleRequestFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE]: async (m) =>
+        this.fileManager.handleRequestEditedFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE]: async (m) =>
+        this.fileManager.handleRequestBaseFile(m),
+      [MAIN_VIEW_COMMANDS.REQUEST_DEFAULT_OUTPUT_FILES]: async (m) =>
+        this.fileManager.handleRequestDefaultOutputFiles(m),
 
       // Multiple file operations
-      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: async (m, w) =>
-        this.fileManager.handleSetMultipleFiles(m, w),
-      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: async (m, w) =>
-        this.fileManager.handleSetMultipleFiles(m, w),
-      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: async (m, w) =>
-        this.fileManager.handleSetMultipleFiles(m, w),
-      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: async (m, w) =>
-        this.fileManager.handleSetMultipleFiles(m, w),
-      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: async (m, w) =>
-        this.fileManager.handleSelectMultipleFiles(m, w),
+      [MAIN_VIEW_COMMANDS.SET_INPUT_FILES]: async (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_REFERENCE_FILES]: async (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_AUXILIARY_FILES]: async (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SET_MEDIA_FILES]: async (m) =>
+        this.fileManager.handleSetMultipleFiles(m),
+      [MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES]: async (m) =>
+        this.fileManager.handleSelectMultipleFiles(m),
 
       // Other file operations
-      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: async (m, w) =>
-        this.fileManager.handleGetCurrentFile(m, w),
-      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m, w) =>
-        this.fileManager.handleAddOpenedFiles(m.fileType, w),
+      [MAIN_VIEW_COMMANDS.GET_CURRENT_FILE]: async (m) =>
+        this.fileManager.handleGetCurrentFile(m),
+      [MAIN_VIEW_COMMANDS.ADD_OPENED_FILES]: async (m) =>
+        this.fileManager.handleAddOpenedFiles(m.fileType),
 
       // Execution commands
       [MAIN_VIEW_COMMANDS.MERGE]: async (m) =>
@@ -147,7 +173,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
         if (m?.customDirSet) {
-          const dir = await agentDirectories.custom(this.context);
+          const dir = await agentDirectories.custom();
           if (dir) {
             await vscode.commands.executeCommand(
               'revealFileInOS',
@@ -168,12 +194,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
       // Instruction commands
-      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m, w) =>
-        this.instructionManager.handlePolishInstructionText(m, w),
-      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: async (_m, w) =>
-        this.instructionManager.handleTranscribeInstruction(w),
-      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m, w) =>
-        this.instructionManager.handleClipboardImage(m, w),
+      [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: async (m) =>
+        this.instructionManager.handlePolishInstructionText(m),
+      [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: async () =>
+        this.instructionManager.handleTranscribeInstruction(),
+      [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: async (m) =>
+        this.instructionManager.handleClipboardImage(m),
       [MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY]: async () =>
         safeExecuteCommand('texra.setApiKey'),
       [MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY]: async (m) => {
@@ -198,29 +224,35 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           ),
         );
       },
-      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
-      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m, w) => {
+      [MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER]: async (m) => {
         /* Banner handled client-side */
-        w.webview.postMessage(m);
+        const view = this.getActiveView();
+        view?.webview.postMessage(m);
       },
       [MAIN_VIEW_COMMANDS.UPDATE_DEPENDENCY_REMINDER_SETTING]: async (m) => {
         await setConfig('ui.showDependencyReminders', m.value);
@@ -232,15 +264,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
           await safeExecuteCommand(command, args);
         }
       },
-      [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async (_m, w) => {
+      [MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES]: async () => {
+        const view = this.getActiveView();
+        if (!view) {
+          return;
+        }
         const missingTools = await checkCoreDependencies(true);
         if (missingTools.length > 0) {
-          w.webview.postMessage({
+          view.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER,
             missingTools,
           });
         } else {
-          w.webview.postMessage({
+          view.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER,
           });
         }
@@ -253,24 +289,34 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.recordingManager.stop(w),
 
       // File refresh and update operations
-      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async (_m, w) =>
-        this.fileManager.handleRefreshAllFiles(w),
-      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
-      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: async (m, w) =>
-        this.fileManager.handleUpdateFiles(m, w),
+      [MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES]: async () =>
+        this.fileManager.handleRefreshAllFiles(),
+      [MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES]: async (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_REFERENCE_FILES]: async (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_AUXILIARY_FILES]: async (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES]: async (m) =>
+        this.fileManager.handleUpdateFiles(m),
+      [MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES]: async (m) =>
+        this.fileManager.handleUpdateFiles(m),
 
       // Git/diff operations
-      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m, w) =>
-        this.diffManager.handleRequestRecentCommits(m, w),
-      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async (_m, w) =>
-        this.diffManager.handleRefreshCommits(w),
+      [MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS]: async (m) => {
+        const view = this.getActiveView();
+        if (!view) {
+          return;
+        }
+        await this.diffManager.handleRequestRecentCommits(m, view);
+      },
+      [MAIN_VIEW_COMMANDS.REFRESH_COMMITS]: async () => {
+        const view = this.getActiveView();
+        if (!view) {
+          return;
+        }
+        await this.diffManager.handleRefreshCommits(view);
+      },
       [MAIN_VIEW_COMMANDS.LATEXDIFF]: async (m) =>
         this.diffManager.handleLatexdiff(m),
       [MAIN_VIEW_COMMANDS.LATEXDIFFVC]: async (m) =>
@@ -303,18 +349,16 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   }
 
   // Implement handler methods
-  private async handleInfoMessage(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleInfoMessage(message: any): Promise<void> {
     vscode.window.showInformationMessage(message.text);
     this.logger.debug(`Information message: ${message.text}`);
   }
 
-  private async handleThemeRequest(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleThemeRequest(message: any): Promise<void> {
+    const webviewView = this.getActiveView();
+    if (!webviewView) {
+      return;
+    }
     const theme =
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
         ? 'dark'
@@ -325,10 +369,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleDebugModeRequest(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleDebugModeRequest(message: any): Promise<void> {
+    const webviewView = this.getActiveView();
+    if (!webviewView) {
+      return;
+    }
     const debugMode = getConfig<boolean>('logger.debugMode', false);
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
@@ -336,10 +381,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handleModelSelection(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleModelSelection(message: any): Promise<void> {
+    const webviewView = this.getActiveView();
+    if (!webviewView) {
+      return;
+    }
     if (message.model) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.MODEL_SELECTED,
@@ -348,17 +394,15 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     }
   }
 
-  private async handleShowAgentHistory(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  private async handleShowAgentHistory(message: any): Promise<void> {
     await safeExecuteCommand('texra.showAgentHistory', [], this.viewName);
   }
 
-  protected async handleWebviewReady(
-    _message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  protected async handleWebviewReady(_message: any): Promise<void> {
+    const webviewView = this.getActiveView();
+    if (!webviewView) {
+      return;
+    }
     await super.handleWebviewReady(_message, webviewView);
     try {
       const modelOptions = await computeModelOptions();
@@ -377,7 +421,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         }
       }
 
-      const agentOptions = await computeAgentOptions(this.context);
+      const agentOptions = await computeAgentOptions();
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS,
         options: agentOptions,

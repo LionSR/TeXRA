@@ -62,7 +62,7 @@ export class InstructionPanel {
     const textChanged = normalized !== this._currentText;
     this._currentText = normalized;
 
-    elements.text.textContent = normalized;
+    elements.text.value = normalized;
     elements.container.classList.add('is-visible');
     elements.container.setAttribute('aria-hidden', 'false');
 
@@ -95,7 +95,7 @@ export class InstructionPanel {
     this._currentText = '';
     this._expanded = false;
 
-    elements.text.textContent = '';
+    elements.text.value = '';
     elements.container.classList.remove('is-visible', 'is-expanded');
     elements.container.setAttribute('aria-hidden', 'true');
 
@@ -110,15 +110,20 @@ export class InstructionPanel {
     }
 
     const elements = this._elements;
-    if (!elements?.container || !elements.body) {
+    if (!elements?.container || !elements.text) {
       return false;
     }
 
     const wasExpanded = this._expanded;
     elements.container.classList.remove('is-expanded');
 
+    // For vscode-textarea, check the wrapped textarea element for scroll detection
+    const textareaElement =
+      elements.text.wrappedElement ||
+      elements.text.shadowRoot?.querySelector('textarea') ||
+      elements.text;
     const hasOverflow =
-      elements.body.scrollHeight > elements.body.clientHeight + 1;
+      textareaElement.scrollHeight > textareaElement.clientHeight + 1;
 
     elements.container.classList.toggle('is-expanded', wasExpanded);
     return hasOverflow;

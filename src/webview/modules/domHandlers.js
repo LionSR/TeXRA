@@ -22,7 +22,7 @@ export const instructionManager = new InstructionManager(
   mainViewState,
 );
 export const toggleManager = new ToggleManager();
-export const recordingManager = new RecordingManager(vscode, webviewEventBus);
+export const recordingManager = new RecordingManager(vscode);
 
 /**
  * Coordinates UI managers for the main webview.
@@ -65,7 +65,6 @@ class MainViewDomHandler extends BaseDomHandler {
       vscode,
       fileList,
       mainViewState,
-      instructionManager,
     );
     this.settingsButtonManager = new SettingsButtonManager(
       vscode,

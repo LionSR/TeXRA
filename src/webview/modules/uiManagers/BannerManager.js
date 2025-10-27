@@ -166,10 +166,9 @@ export class BannerManager extends BaseUIManager {
     // Ensure re-check button exists
     let recheckButton = actions.querySelector('#dependencyRecheckButton');
     if (!recheckButton) {
-      recheckButton = document.createElement('button');
+      recheckButton = document.createElement('vscode-toolbar-button');
       recheckButton.id = 'dependencyRecheckButton';
-      recheckButton.className = 'vscode-button';
-      recheckButton.dataset.icon = 'refresh';
+      recheckButton.setAttribute('icon', 'refresh');
       recheckButton.textContent = 'Re-check';
       actions.insertBefore(recheckButton, actions.firstChild);
     }
@@ -189,10 +188,10 @@ export class BannerManager extends BaseUIManager {
     const nameSpan = document.createElement('span');
     nameSpan.textContent = label;
 
-    const button = document.createElement('button');
-    button.className = 'vscode-button secondary dependency-install-button';
+    const button = document.createElement('vscode-toolbar-button');
+    button.className = 'secondary dependency-install-button';
     button.textContent = 'Install';
-    button.dataset.icon = 'cloud-download';
+    button.setAttribute('icon', 'cloud-download');
     button.dataset.tool = tool;
 
     item.appendChild(nameSpan);

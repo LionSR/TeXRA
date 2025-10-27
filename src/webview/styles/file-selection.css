@@ -19,10 +19,15 @@
   margin-bottom: var(--spacing-small);
   flex-wrap: nowrap;
   line-height: 1.5;
+  gap: var(--spacing-small);
+}
+
+.file-select-header > vscode-toolbar-button {
+  opacity: 1;
+  flex-shrink: 0;
 }
 
 .file-select-header label {
-  font-weight: bold;
   margin-right: var(--spacing-small);
   display: flex;
   align-items: center;
@@ -36,10 +41,13 @@
   flex: 1;
   min-width: 0;
   min-height: var(--height-control);
-  position: relative;
 }
 
-.file-select-label-group .vscode-input {
+.file-select-label-group vscode-toolbar-button {
+  opacity: 1;
+}
+
+.file-select-label-group vscode-textfield {
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -49,10 +57,15 @@
   margin-right: var(--spacing-small);
 }
 
-.file-select-actions {
+.file-select-actions,
+vscode-toolbar-container.file-select-actions {
+  flex-direction: column !important;
   flex-wrap: nowrap;
   margin-left: auto;
-  position: relative;
+}
+
+.file-select-actions vscode-toolbar-button {
+  opacity: 1;
 }
 
 .file-select label {
@@ -61,7 +74,8 @@
   font-size: var(--font-size);
 }
 
-.file-select select {
+.file-select select,
+.file-select vscode-single-select {
   width: 100%;
 }
 
@@ -74,7 +88,6 @@
   display: flex;
   align-items: center;
   height: var(--height-control);
-  opacity: var(--opacity-subtle);
 }
 
 .toggle-icon {
@@ -84,23 +97,31 @@
   position: relative;
   padding: 0 var(--spacing-tiny);
   color: var(--text-color);
-  opacity: var(--opacity-subtle);
   display: flex;
   align-items: center;
   height: var(--height-control);
 }
 
 /* When toggled (input is visible), make the label more prominent */
-.file-select-label-group:has(.vscode-input[style*='inline-block'])
+.file-select-label-group:has(vscode-textfield[style*='inline-block'])
   .optional-label,
-.file-select-label-group:has(.vscode-input[style*='inline-block']) .toggle-icon,
+.file-select-label-group:has(vscode-textfield[style*='inline-block'])
+  .toggle-icon,
 .file-select:has(.multiple-files-container[style*='block']) .optional-label,
 .file-select:has(.multiple-files-container[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: var(--opacity-full);
 }
 
 /* Add this specific selector for Multiple Output Files section */
+.file-select:has(#outputFilesContainer[style*='none']) .optional-label {
+  opacity: 0.6;
+}
+
+.file-select:has(#outputFilesContainer[style*='block']) .optional-label {
+  color: var(--vscode-foreground);
+  opacity: 1;
+}
+
 .file-select:has(#outputFilesContainer[style*='none']) #emptyOutputFilesButton,
 .file-select:has(#outputFilesContainer[style*='none'])
   #selectOutputFilesButton {
@@ -138,26 +159,22 @@
   display: none;
 }
 
-/* Update icon styles */
-.file-select-header label .codicon {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-  vertical-align: text-bottom;
-}
-
 /* LaTeX diffs section header styling */
 .latexdiffs-section .file-select-header {
   margin-bottom: 0;
 }
 
 /* Show/hide behavior for LaTeX diffs */
-.latexdiffs-section:has(#latexdiffsContent[style*='none']) .optional-label,
-.latexdiffs-section:has(#latexdiffsContent[style*='none']) .toggle-icon {
-  opacity: var(--opacity-subtle);
-}
-
 .latexdiffs-section:has(#latexdiffsContent[style*='block']) .optional-label,
 .latexdiffs-section:has(#latexdiffsContent[style*='block']) .toggle-icon {
   color: var(--vscode-foreground);
-  opacity: var(--opacity-full);
+}
+
+/* Ensure commit dropdown can extend beyond container */
+#commit {
+  position: relative;
+}
+
+#commit::part(listbox) {
+  max-height: 300px;
 }

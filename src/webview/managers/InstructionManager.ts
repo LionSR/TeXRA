@@ -24,6 +24,8 @@ const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
 
 export class InstructionManager {
+  private webview: vscode.WebviewView | undefined;
+
   constructor(private readonly _context: vscode.ExtensionContext) {
     setTimeout(() => {
       StorageFS.ensureDir(PASTED_DIR)
@@ -35,6 +37,19 @@ export class InstructionManager {
           ),
         );
     }, 100);
+  }
+
+  attachWebview(webviewView: vscode.WebviewView): void {
+    this.webview = webviewView;
+  }
+
+  private getWebview(): vscode.WebviewView | undefined {
+    if (!this.webview) {
+      logger.warn(CHANNEL, 'Webview not attached for InstructionManager');
+      return undefined;
+    }
+
+    return this.webview;
   }
 
   /**
@@ -71,10 +86,11 @@ export class InstructionManager {
     }
   }
 
-  async handlePolishInstructionText(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handlePolishInstructionText(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     try {
       const fileContext: FileContext = { agent: message.agent || undefined };
 
@@ -110,52 +126,38 @@ export class InstructionManager {
         );
       }
 
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Polishing your instruction text',
-          cancellable: false,
-        },
-        async (progress) => {
-          try {
-            progress.report({ message: 'Preparing text and context...' });
-            await sleep(300);
-            progress.report({
-              message: 'Sending to AI for polishing...',
-              increment: 30,
-            });
-            const result = await polishTextWithAI(message.text, fileContext);
-            progress.report({ message: 'Applying changes...', increment: 60 });
-            await sleep(300);
-            if (result.success) {
-              webviewView.webview.postMessage({
-                command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
-                text: result.text,
-              });
-            } else {
-              vscode.window.showErrorMessage(
-                result.error || 'Error polishing text',
-              );
-            }
-          } catch (error) {
-            vscode.window.showErrorMessage(
-              `Error polishing text: ${
-                error instanceof Error ? error.message : 'Unknown error'
-              }`,
-            );
-            logger.error(
-              CHANNEL,
-              `Error in handlePolishInstructionText: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
-        },
-      );
+      try {
+        const result = await polishTextWithAI(message.text, fileContext);
+        if (result.success) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED,
+            text: result.text,
+          });
+        } else {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+            error: result.error || 'Error polishing text',
+          });
+        }
+      } catch (error) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+          error:
+            error instanceof Error ? error.message : 'Unknown error occurred',
+        });
+        logger.error(
+          CHANNEL,
+          `Error in handlePolishInstructionText: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     } catch (error) {
-      vscode.window.showErrorMessage(
-        `Error setting up text polishing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
+        error:
+          error instanceof Error ? error.message : 'Unknown error occurred',
+      });
       logger.error(
         CHANNEL,
         `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
@@ -163,16 +165,17 @@ export class InstructionManager {
     }
   }
 
-  handleTranscribeInstruction(_view: vscode.WebviewView): void {
+  handleTranscribeInstruction(): void {
     vscode.window.showInformationMessage(
       'Please use the new recording interface with start/stop controls.',
     );
   }
 
-  async handleClipboardImage(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
+  async handleClipboardImage(message: any): Promise<void> {
+    const webviewView = this.getWebview();
+    if (!webviewView) {
+      return;
+    }
     try {
       const { base64, mediaType, fileName } = message;
       if (!base64 || !mediaType || !fileName) {

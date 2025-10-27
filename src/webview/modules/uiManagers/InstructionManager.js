@@ -1,6 +1,10 @@
 // Local imports - webview
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
+import {
+  insertTextAtCursor,
+  resolveTextareaTarget,
+} from '@common/textareaUtils.js';
 
 export class InstructionManager {
   constructor(textareaId, vscode, state) {
@@ -9,45 +13,41 @@ export class InstructionManager {
     this.state = state;
   }
 
-  autoResizeTextarea(textarea) {
-    textarea.style.height = 'auto';
-    const maxHeight = 400;
-    const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-    textarea.style.height = `${newHeight}px`;
-    textarea.style.overflowY =
-      textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  }
-
-  insertTextAtCursor(textarea, text) {
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const original = textarea.value;
-    textarea.value = original.slice(0, start) + text + original.slice(end);
-    textarea.selectionStart = textarea.selectionEnd = start + text.length;
-  }
-
   setup() {
-    const textarea = safeGetElementById(this.textareaId);
-    if (!textarea) {
+    const target = safeGetElementById(this.textareaId);
+    if (!target) {
       console.warn(
         `[InstructionManager] Element with id '${this.textareaId}' not found`,
       );
       return;
     }
 
-    this.autoResizeTextarea(textarea);
+    const applySetup = () => {
+      const { textarea } = resolveTextareaTarget(target);
+      if (!textarea) {
+        return;
+      }
 
-    textarea.addEventListener('input', () => {
-      this.autoResizeTextarea(textarea);
-      this.state?.save();
-    });
+      target.addEventListener('input', () => {
+        this.state?.save();
+      });
 
-    setupPasteListener(
-      textarea,
-      this.vscode,
-      (ta) => this.autoResizeTextarea(ta),
-      () => this.state?.save(),
-      (ta, text) => this.insertTextAtCursor(ta, text),
-    );
+      setupPasteListener(
+        target,
+        this.vscode,
+        () => this.state?.save(),
+        (ta, text) => insertTextAtCursor(ta, text),
+      );
+    };
+
+    const needsUpgrade =
+      target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
+      typeof target.updateComplete?.then === 'function';
+
+    if (needsUpgrade) {
+      target.updateComplete.then(() => applySetup());
+    } else {
+      applySetup();
+    }
   }
 }

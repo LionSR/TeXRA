@@ -6,6 +6,7 @@ import { appendFormatted } from './utils.js';
 // Local imports - log state
 import { progressViewState } from './progressViewState.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
+import { vscode } from '@common/webviewContext.js';
 
 // Session kind values match TypeScript AgentSessionKind enum
 // No need to duplicate - we use the actual values from messages
@@ -13,6 +14,24 @@ import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js'
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
+
+function scrollToBottom(element) {
+  if (!element) {
+    return;
+  }
+
+  if (
+    typeof element.scrollPos === 'number' &&
+    typeof element.scrollMax === 'number'
+  ) {
+    element.scrollPos = element.scrollMax;
+    return;
+  }
+
+  if ('scrollTop' in element && 'scrollHeight' in element) {
+    element.scrollTop = element.scrollHeight;
+  }
+}
 
 // Create formatter instances
 
@@ -56,39 +75,77 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
+      [COMMANDS.FOLLOW_UP_TEXT_POLISHED]: (m) =>
+        this.handleFollowUpTextPolished(m),
+      [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
+        this.handleFollowUpTextTranscribed(m),
+      [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
+      [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
     };
   }
 
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
-    state.agentFilter = message.agentFilter || 'all';
-    state.resetExecutionAvailability();
+    if (
+      typeof message.agentFilter === 'string' &&
+      message.agentFilter !== state.agentTypeFilter
+    ) {
+      state.agentTypeFilter = message.agentFilter;
+    }
+    const activeFilter = state.agentTypeFilter;
+    state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
         state.streamStatuses.set(s.name, s.status);
       } else {
         state.streamStatuses.delete(s.name);
       }
-      state.setExecutionAvailability(s.name, Boolean(s.executionId));
+      state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
     });
-    dom.streamTabs.update(message.streams, message.activeStream);
+    const filteredStreams = Array.isArray(message.streams)
+      ? message.streams.filter((info) => {
+          if (!info || typeof info !== 'object') {
+            return false;
+          }
+          if (activeFilter === 'all') {
+            return true;
+          }
+          const sessionKind =
+            info.agentSessionKind || info.uiTraits?.sessionKind;
+          return sessionKind === activeFilter;
+        })
+      : [];
 
-    const filterContainer = document.getElementById(
+    const displayActiveStream = filteredStreams.some(
+      (s) => s.name === message.activeStream,
+    )
+      ? message.activeStream
+      : (filteredStreams[0]?.name ?? message.activeStream);
+
+    state.activeStream = displayActiveStream;
+
+    dom.streamTabs.update(filteredStreams, displayActiveStream);
+
+    // Update agent filter radio group selection
+    const radioGroup = document.getElementById(
       ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
-    if (filterContainer) {
-      filterContainer.querySelectorAll('button[data-filter]').forEach((btn) => {
-        const isActive = btn.dataset.filter === state.agentFilter;
-        btn.classList.toggle('toggled', isActive);
-        btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    if (radioGroup) {
+      radioGroup.value = state.agentTypeFilter;
+      // Also update the checked state on individual radio buttons
+      radioGroup.querySelectorAll('vscode-radio').forEach((radio) => {
+        const isActive = radio.value === state.agentTypeFilter;
+        radio.checked = isActive;
+        radio.setAttribute('aria-checked', isActive ? 'true' : 'false');
+        radio.toggleAttribute('checked', isActive);
       });
     }
 
     this._updatePlaceholderVisibility();
 
-    const activeStreamInfo = message.streams.find(
-      (s) => s.name === message.activeStream,
-    );
+    const activeStreamInfo =
+      filteredStreams.find((s) => s.name === displayActiveStream) ??
+      message.streams.find((s) => s.name === message.activeStream);
     const sessionKind =
       activeStreamInfo?.agentSessionKind ||
       activeStreamInfo?.uiTraits?.sessionKind ||
@@ -103,8 +160,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
-    const hasExecution = state.getExecutionAvailability(message.activeStream);
-    dom.status.setExecutionAvailability(Boolean(hasExecution));
+    const hasExecution = state.hasExecutionId(displayActiveStream);
+    dom.status.setExecutionIdAvailability(Boolean(hasExecution));
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
@@ -118,19 +175,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const ungroupedContainer = document.getElementById(
+      ELEMENT_IDS.LOG_UNGROUPED,
+    );
     if (message.stream === state.activeStream) {
-      logContent.innerHTML = '';
       state.taskGroups.clear();
       dom.taskGroups.clear();
+      if (ungroupedContainer) {
+        ungroupedContainer.innerHTML = '';
+      }
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
+          .forEach((g) => dom.taskGroups.addGroup(g));
         childGroups
           .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.add(g));
+          .forEach((g) => dom.taskGroups.addGroup(g));
       }
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
@@ -139,14 +201,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {
             const formatted = this._entryFormatter.format(msg);
-            appendFormatted(logContent, formatted);
+            appendFormatted(ungroupedContainer ?? logContent, formatted);
           }
         } else {
           const formatted = this._entryFormatter.format(msg);
-          appendFormatted(logContent, formatted);
+          appendFormatted(ungroupedContainer ?? logContent, formatted);
         }
       });
-      logContent.scrollTop = logContent.scrollHeight;
+      scrollToBottom(logContent);
 
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
@@ -157,15 +219,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleClearLogs() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    logContent.innerHTML = '';
-    const groupIds = [];
-    const headers = Array.from(document.querySelectorAll('.log-group-header'));
-    for (const el of headers) {
-      groupIds.push(el.id.replace('group-header-', ''));
+    const ungroupedContainer = document.getElementById(
+      ELEMENT_IDS.LOG_UNGROUPED,
+    );
+    if (ungroupedContainer) {
+      ungroupedContainer.innerHTML = '';
     }
+    if (logContent) {
+      logContent.scrollTop = 0;
+    }
+    const groupIds = [...state.taskGroups.getGroupMap().keys()];
     state.taskGroups.clear();
     dom.taskGroups.clear();
-    state.toggleStates.clear(groupIds);
+    state.toggleStates.clearSelection(groupIds);
 
     this._updatePlaceholderVisibility();
   }
@@ -173,6 +239,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      const ungroupedContainer = document.getElementById(
+        ELEMENT_IDS.LOG_UNGROUPED,
+      );
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(message.logMessage);
@@ -187,15 +256,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
             }
           }
         }
-        appendFormatted(logContent, formatted);
+        appendFormatted(ungroupedContainer ?? logContent, formatted);
       }
-      logContent.scrollTop = logContent.scrollHeight;
+      scrollToBottom(logContent);
     }
   }
 
   handleUpdateLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      const ungroupedContainer = document.getElementById(
+        ELEMENT_IDS.LOG_UNGROUPED,
+      );
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         // Fallback: append as new log with proper group placement
@@ -214,9 +286,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
               }
             }
           }
-          appendFormatted(logContent, formatted);
+          appendFormatted(ungroupedContainer ?? logContent, formatted);
         }
-        logContent.scrollTop = logContent.scrollHeight;
+        scrollToBottom(logContent);
       }
     }
   }
@@ -224,21 +296,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAddTaskGroup(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      dom.taskGroups.add(message.group);
-      logContent.scrollTop = logContent.scrollHeight;
+      dom.taskGroups.addGroup(message.group);
+      scrollToBottom(logContent);
     }
   }
 
   handleUpdateTaskGroup(message) {
-    if (message.stream === state.activeStream) {
-      state.taskGroups.update(message.groupId, message.status, message.endTime);
-      dom.taskGroups.update(message.groupId, message.status, message.endTime);
+    const update = message?.update;
+    if (!update) {
+      return;
+    }
+
+    if (update.stream === state.activeStream) {
+      state.taskGroups.update(update);
+      dom.taskGroups.updateGroup(update);
     }
   }
 
   handleUpdateStatus(message) {
-    const hasExecution = state.getExecutionAvailability(state.activeStream);
-    dom.status.setExecutionAvailability(Boolean(hasExecution));
+    const hasExecution = state.hasExecutionId(state.activeStream);
+    dom.status.setExecutionIdAvailability(Boolean(hasExecution));
     dom.status.update(message.status);
   }
 
@@ -248,7 +325,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateGroupUsage(message) {
     if (message.stream === state.activeStream) {
-      dom.usageGroup.update(message.groupId, message.usage);
+      dom.usageGroup.update({
+        groupId: message.groupId,
+        usage: message.usage,
+      });
     }
   }
 
@@ -293,16 +373,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
-      state.clearExecutionAvailability(message.stream);
+      state.clearExecutionIdAvailability(message.stream);
       if (message.stream === state.activeStream) {
-        const groupIds = [];
-        const headers = Array.from(
-          document.querySelectorAll('.log-group-header'),
-        );
-        for (const el of headers) {
-          groupIds.push(el.id.replace('group-header-', ''));
-        }
-        state.toggleStates.clear(groupIds);
+        const groupIds = [...state.taskGroups.getGroupMap().keys()];
+        state.taskGroups.clear();
+        dom.taskGroups.clear();
+        state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
       }
     }
@@ -310,8 +386,36 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     state.toggleStates.clearAll();
-    state.resetExecutionAvailability();
+    state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
+  }
+
+  handleFollowUpTextPolished(message) {
+    if (typeof message.text !== 'string') {
+      return;
+    }
+    dom.followUpInput.applyPolishedText(message.text);
+  }
+
+  handleFollowUpTextTranscribed(message) {
+    if (typeof message.text !== 'string') {
+      dom.followUpInput.setRecording(false);
+      return;
+    }
+    dom.followUpInput.insertTranscription(message.text);
+    dom.followUpInput.setRecording(false);
+    vscode.postMessage({
+      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: 'Follow-up text transcribed!',
+    });
+  }
+
+  handleRecordingStarted() {
+    dom.followUpInput.setRecording(true);
+  }
+
+  handleRecordingError() {
+    dom.followUpInput.setRecording(false);
   }
 }
 

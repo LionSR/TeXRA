@@ -18,15 +18,28 @@
 
 /* Style the textarea for multi-line input */
 #followUpInput {
-  min-height: 36px;
-  max-height: 200px;
-  resize: none;
+  display: block;
   flex: 1;
-  overflow-y: auto;
   line-height: 1.4;
+  min-height: 106px;
+  max-height: 400px;
+  height: auto;
 }
 
-/* Align send button to bottom */
-#sendFollowUpBtn {
-  margin-bottom: var(--spacing-tiny);
+#followUpInput::part(control) {
+  min-height: 106px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.follow-up-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.follow-up-actions vscode-button,
+.follow-up-actions vscode-toolbar-button {
+  /* Remove margin-bottom since we're using gap in flex column */
 }

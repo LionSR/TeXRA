@@ -68,7 +68,7 @@ export class ProgressViewProvider
     super(context);
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
-    this.logger = new AgentLogger('ProgressViewProviderNew');
+    this.logger = new AgentLogger('ProgressViewProvider');
 
     // Initialize new modular architecture
     const persistenceManager = new StatePersistenceManager(
@@ -83,7 +83,7 @@ export class ProgressViewProvider
 
     // Initialize existing components
     this.contentProvider = new ProgressViewContentProvider(context);
-    this.messageHandler = new ProgressViewMessageHandler(this);
+    this.messageHandler = new ProgressViewMessageHandler(this, context);
 
     // Set instance
     ProgressViewProvider._instance = this;
@@ -138,12 +138,18 @@ export class ProgressViewProvider
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'modules'),
         vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'webview'),
-        vscode.Uri.joinPath(this._extensionUri, 'node_modules', 'split.js'),
         vscode.Uri.joinPath(
           this._extensionUri,
           'node_modules',
           '@vscode',
           'codicons',
+          'dist',
+        ),
+        vscode.Uri.joinPath(
+          this._extensionUri,
+          'node_modules',
+          '@vscode-elements',
+          'elements',
           'dist',
         ),
       ],
@@ -272,9 +278,13 @@ export class ProgressViewProvider
           if (group.status === STATUS.RUNNING) {
             // Update the group to ERROR status with current end time
             const endTime = Date.now();
-            this.state.taskGroups.updateGroup(streamId, groupId, {
-              status: STATUS.ERROR,
-              endTime,
+            this.state.taskGroups.updateGroup({
+              stream: streamId,
+              groupId,
+              updates: {
+                status: STATUS.ERROR,
+                endTime,
+              },
             });
 
             this.logger.debug(

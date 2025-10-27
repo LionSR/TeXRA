@@ -1,8 +1,5 @@
-// Third-party imports
-import Split from 'split.js';
-
 // Local imports - progress view
-import { COMMANDS, SPLIT_SIZES, ELEMENT_IDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 import { copyWithFeedback } from '../utils.js';
 
@@ -18,45 +15,59 @@ import { vscode } from '@common/webviewContext.js';
  */
 export class EventsManager {
   /**
-   * Apply saved toggle states to any groups already in the DOM
-   */
-  applyToggleStates() {
-    const taskGroups = progressViewState.taskGroups.getAll();
-    for (const [groupId, _] of taskGroups) {
-      const isCollapsed = progressViewState.toggleStates.get(groupId);
-      const detailsElem = document.getElementById(`group-${groupId}`);
-
-      if (detailsElem && isCollapsed !== undefined) {
-        detailsElem.open = !isCollapsed;
-      }
-    }
-  }
-
-  /**
    * Sets up all event listeners for the UI
    */
   setupEventListeners() {
-    // Stream tab click handler
-    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
-      const tabButton = e.target.closest('.tab');
-      const deleteButton = e.target.closest('.tab-delete');
-
-      if (tabButton && tabButton.dataset.stream) {
+    // Stream tab selection handler (vscode-tree)
+    addEventListenerSafely(
+      ELEMENT_IDS.STREAM_TABS,
+      'vsc-tree-select',
+      (event) => {
+        const detail = event.detail;
+        const selectedItems = Array.isArray(detail)
+          ? detail
+          : Array.isArray(detail?.selection)
+            ? detail.selection
+            : [];
+        const firstItem = selectedItems[0];
+        const stream = firstItem?.dataset?.stream;
+        if (!stream) {
+          return;
+        }
         vscode.postMessage({
           command: COMMANDS.SWITCH_STREAM,
-          stream: tabButton.dataset.stream,
+          stream,
         });
-      } else if (deleteButton && deleteButton.dataset.stream) {
-        vscode.postMessage({
-          command: COMMANDS.DELETE_STREAM,
-          stream: deleteButton.dataset.stream,
-        });
-      }
-    });
+      },
+    );
+
+    // Stream tab delete button handler
+    addEventListenerSafely(
+      ELEMENT_IDS.STREAM_TABS,
+      'click',
+      (e) => {
+        // Use composedPath to handle shadow DOM clicks
+        const path = e.composedPath();
+        const deleteButton = path.find((el) =>
+          el.classList?.contains('tab-delete'),
+        );
+
+        if (deleteButton?.dataset?.stream) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          vscode.postMessage({
+            command: COMMANDS.DELETE_STREAM,
+            stream: deleteButton.dataset.stream,
+          });
+        }
+      },
+      true,
+    ); // Use capture phase
 
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
-      const button = e.target.closest('button[data-command]');
+      const button = e.target.closest('[data-command]');
       if (!button || button.disabled) return;
 
       const command = button.dataset.command;
@@ -66,9 +77,6 @@ export class EventsManager {
         vscode.postMessage({ command, stream: activeStream });
       }
     });
-
-    // File list toggle - removed as filesToggle element doesn't exist in the HTML
-    // This appears to be orphaned code from a previous design
 
     // File list button handler
     addEventListenerSafely(
@@ -102,49 +110,39 @@ export class EventsManager {
       }
     });
 
-    addEventListenerSafely(ELEMENT_IDS.AGENT_FILTER_CONTAINER, 'click', (e) => {
-      const btn = e.target.closest('button[data-filter]');
-      if (btn && btn.dataset.filter) {
-        vscode.postMessage({
-          command: COMMANDS.FILTER_STREAMS,
-          filter: btn.dataset.filter,
-        });
-      }
-    });
-
-    // Follow-up input handler
-    const sendFollowUp = () => {
-      const followInput = document.getElementById(ELEMENT_IDS.FOLLOW_UP_INPUT);
-      if (!followInput) return;
-      const text = followInput.value.trim();
-      if (!text) return;
-      vscode.postMessage({
-        command: COMMANDS.SEND_FOLLOW_UP,
-        stream: progressViewState.activeStream,
-        text,
-      });
-      followInput.value = '';
-    };
-    addEventListenerSafely(
-      ELEMENT_IDS.SEND_FOLLOW_UP_BTN,
-      'click',
-      sendFollowUp,
+    // Handle agent filter radio group changes
+    const radioGroup = document.getElementById(
+      ELEMENT_IDS.AGENT_FILTER_CONTAINER,
     );
-    addEventListenerSafely(ELEMENT_IDS.FOLLOW_UP_INPUT, 'keydown', (e) => {
-      // Enter sends, Shift+Enter adds new line
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendFollowUp();
-      }
-    });
+    if (radioGroup) {
+      const attachRadioListener = () => {
+        addEventListenerSafely(radioGroup, 'change', (event) => {
+          const target = event?.target;
+          const filter =
+            typeof target?.value === 'string' && target.value
+              ? target.value
+              : radioGroup.value;
+          if (!filter) {
+            return;
+          }
+          if (progressViewState.agentTypeFilter !== filter) {
+            progressViewState.agentTypeFilter = filter;
+            // Persist the new selection immediately so updates don't snap back
+            vscode.postMessage({
+              command: COMMANDS.FILTER_STREAMS,
+              filter,
+            });
+          }
+        });
+      };
 
-    // Initialize split view
-    Split(['.content-area', '.tabs'], {
-      sizes: [SPLIT_SIZES.CONTENT, SPLIT_SIZES.TABS],
-      minSize: [200, 100],
-      gutterSize: 5,
-      cursor: 'col-resize',
-    });
+      // Wait for web component to be ready if needed
+      if (radioGroup.updateComplete) {
+        radioGroup.updateComplete.then(attachRadioListener);
+      } else {
+        attachRadioListener();
+      }
+    }
 
     // Handle banner-details and file-list-details toggle events
     document.addEventListener(
@@ -190,6 +188,9 @@ export class EventsManager {
       if (!copyButton) {
         return;
       }
+
+      // Prevent collapsible from toggling when clicking action buttons
+      e.stopPropagation();
 
       const contentElem = copyButton
         .closest('.banner-details')

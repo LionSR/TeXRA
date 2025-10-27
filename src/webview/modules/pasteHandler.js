@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 // Local imports - webview
 // Image paste handling utilities
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
+import { resolveTextareaTarget } from '@common/textareaUtils.js';
 
 // Comprehensive MIME type to extension mapping
 export const IMAGE_MIME_TYPES = {
@@ -113,14 +114,15 @@ export async function processClipboardImage(file, mimeType, vscode) {
  */
 export async function handleImagePaste(
   event,
-  textarea,
+  target,
   vscode,
   insertTextAtCursor,
 ) {
+  const { host, textarea } = resolveTextareaTarget(target);
+  const activeTextarea = textarea ?? target;
   const items = event.clipboardData?.items || [];
   const images = [];
 
-  // Collect all image items
   for (const item of items) {
     if (item.type.startsWith('image/')) {
       const file = item.getAsFile();
@@ -134,21 +136,16 @@ export async function handleImagePaste(
     return false;
   }
 
-  // Prevent default paste behavior
   event.preventDefault();
 
-  // Get any text content from clipboard
   let insertText = event.clipboardData?.getData('text/plain') || '';
 
-  // Process all images
   const fileNames = await Promise.all(
     images.map(({ file, type }) => processClipboardImage(file, type, vscode)),
   );
 
-  // Build the text to insert
   fileNames.forEach((fileName) => {
     if (fileName) {
-      // Add spacing if needed
       if (
         insertText &&
         !insertText.endsWith(' ') &&
@@ -160,43 +157,43 @@ export async function handleImagePaste(
     }
   });
 
-  // Insert all text and image references
   if (insertText) {
-    insertTextAtCursor(textarea, insertText);
+    insertTextAtCursor(host ?? activeTextarea, insertText);
   }
 
   return true;
 }
 
 /**
- * Setup paste event listener for a textarea
- * @param {HTMLTextAreaElement} textarea - Target textarea
+ * Setup paste event listener for a textarea element or VSCode web component
+ * @param {HTMLElement} target - Target textarea or component
  * @param {Object} vscode - VS Code API
- * @param {Function} autoResizeTextarea - Auto resize function
  * @param {Function} saveState - Save state function
  * @param {Function} insertTextAtCursor - Function to insert text at cursor
  */
 export function setupPasteListener(
-  textarea,
+  target,
   vscode,
-  autoResizeTextarea,
   saveState,
   insertTextAtCursor,
 ) {
+  const { host, textarea } = resolveTextareaTarget(target);
   if (!textarea) return;
 
   textarea.addEventListener('paste', async (e) => {
     const handled = await handleImagePaste(
       e,
-      textarea,
+      target,
       vscode,
       insertTextAtCursor,
     );
 
-    // Auto-resize textarea after paste
     setTimeout(() => {
-      autoResizeTextarea(textarea);
       saveState();
     }, 0);
+
+    if (!handled) {
+      saveState();
+    }
   });
 }

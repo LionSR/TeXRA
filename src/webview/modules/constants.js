@@ -39,6 +39,10 @@ export const CHECK_BOXES_AUTO_EXTRACT = [
 
 // Tool configuration checkboxes
 export const CHECK_BOXES_TOOL_USE = ['attachTeXCount', 'attachDiagnostics'];
+export const TOOL_CONFIG_VALUES = {
+  ATTACH_TEX_COUNT: 'attachTeXCount',
+  ATTACH_DIAGNOSTICS: 'attachDiagnostics',
+};
 
 // All checkboxes (combined)
 export const CHECK_BOXES = [
@@ -120,3 +124,37 @@ export const AGENT_SELECT_IDS = {
 };
 
 export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
+
+/**
+ * Tag name constant for VS Code radio group web component
+ */
+export const VSCODE_RADIO_GROUP_TAG = 'VSCODE-RADIO-GROUP';
+
+/**
+ * Normalizes a session type value to ensure it's a valid SESSION_TYPE.
+ * @param {string} sessionType - The session type to normalize
+ * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
+ */
+export function normalizeSessionType(sessionType) {
+  return sessionType === SESSION_TYPES.TOOL_USE
+    ? SESSION_TYPES.TOOL_USE
+    : SESSION_TYPES.WORKFLOW;
+}
+
+/**
+ * Resolves a vscode-radio-group element from a container element.
+ * If the element itself is a radio group, returns it directly.
+ * Otherwise, searches for a radio group child element.
+ * @param {HTMLElement|null|undefined} element - The container element
+ * @returns {HTMLElement|null} The radio group element, or null if not found
+ */
+export function resolveRadioGroup(element) {
+  if (!element) {
+    return null;
+  }
+  if (element.tagName === VSCODE_RADIO_GROUP_TAG) {
+    return element;
+  }
+  const radioGroup = element.querySelector('vscode-radio-group');
+  return radioGroup instanceof HTMLElement ? radioGroup : null;
+}

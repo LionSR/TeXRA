@@ -155,10 +155,11 @@ export abstract class BaseViewContentProvider {
         'webview/themeHandlers.js',
       ),
       templateUtilsUri: this.getCommonUri(webview, 'modules/templateUtils.js'),
-      iconButtonInitializerUri: this.getCommonUri(
+      recordingButtonManagerUri: this.getCommonUri(
         webview,
-        'modules/iconButtonInitializer.js',
+        'modules/RecordingButtonManager.js',
       ),
+      textareaUtilsUri: this.getCommonUri(webview, 'modules/textareaUtils.js'),
       htmlEncodingUri: this.getCommonUri(webview, 'modules/htmlEncoding.js'),
       iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
       baseWebviewMessageHandlerUri: this.getCommonUri(
@@ -172,6 +173,10 @@ export abstract class BaseViewContentProvider {
       ),
       stringUtilsUri: this.getCommonUri(webview, 'modules/stringUtils.js'),
       pathUtilsUri: this.getCommonUri(webview, 'modules/pathUtils.js'),
+      vscodeElementsBundleUri: this.getNodeModulesUri(
+        webview,
+        '@vscode-elements/elements/dist/bundled.js',
+      ),
       codiconUri: this.getNodeModulesUri(
         webview,
         '@vscode/codicons/dist/codicon.css',

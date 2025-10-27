@@ -2,7 +2,6 @@
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { formatTokens } from '../formatters.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
@@ -85,7 +84,17 @@ export class FileList {
 
     rounds.forEach((round) => {
       const files = filesByRound[round];
-      if (!files || files.length === 0) return;
+      if (!Array.isArray(files)) {
+        if (files !== undefined) {
+          console.warn(
+            `FileList.update: Expected array for round ${round}, got:`,
+            typeof files,
+            files,
+          );
+        }
+        return;
+      }
+      if (files.length === 0) return;
 
       const roundGroup = createFromTemplate('roundHeaderTemplate');
       if (!roundGroup) return;
@@ -146,9 +155,6 @@ export class FileList {
           file.original,
           file.path,
         );
-
-        // Replace any icon placeholders before attaching handlers
-        initializeIconButtons(clone);
 
         // Update buttons with click handlers
         this.updateFileButtons(clone, file, effectiveBase);

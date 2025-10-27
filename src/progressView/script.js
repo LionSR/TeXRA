@@ -3,12 +3,11 @@ import { COMMANDS } from './modules/constants.js';
 import { progressViewDomHandler } from './modules/domHandlers.js';
 import { messageHandler } from './modules/messageHandlers.js';
 import { progressViewState } from './modules/progressViewState.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { validateTemplates } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 // Initialize the state when the window loads
-progressViewState.initialize();
+progressViewState.load();
 
 // Register handlers for VSCode messages
 messageHandler.setup();
@@ -21,7 +20,6 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('DOMContentLoaded', () => {
   validateTemplates([
     'fileItemTemplate',
-    'iconButtonTemplate',
     'usageTemplate',
     'bulletTemplate',
     'streamTabTemplate',
@@ -36,14 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     'statisticsDetailsTemplate',
     'groupHeaderTemplate',
   ]);
-  initializeIconButtons();
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
-
-  // Apply saved group toggle states to any groups already in the DOM
-  progressViewDomHandler.events.applyToggleStates();
+  progressViewDomHandler.followUpInput.setup();
 
   // Notify extension that the webview is ready to receive messages
   vscode.postMessage({ command: COMMANDS.WEBVIEW_READY });

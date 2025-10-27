@@ -22,6 +22,8 @@ export const STATUS = {
 // DOM element IDs used across the progress view
 export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
+  LOG_GROUP_TREE: 'logGroupTree',
+  LOG_UNGROUPED: 'logUngroupedContainer',
   LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
@@ -48,17 +50,14 @@ export const ELEMENT_IDS = {
   ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
+  RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
+  POLISH_FOLLOW_UP_BTN: 'polishFollowUpBtn',
+  CLEAR_FOLLOW_UP_BTN: 'clearFollowUpBtn',
   SEND_FOLLOW_UP_BTN: 'sendFollowUpBtn',
   AGENT_FILTER_CONTAINER: 'agentFilterButtons',
   FILTER_ALL_BTN: 'filterAllBtn',
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
   FILTER_TOOL_BTN: 'filterToolBtn',
-};
-
-// Default sizes for split view
-export const SPLIT_SIZES = {
-  CONTENT: 80,
-  TABS: 20,
 };
 
 // Constants for layout configuration
@@ -76,7 +75,7 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   icon: 'folder-opened',
   command: COMMANDS.OPEN_TASK_STORAGE,
   title: 'Open the workspace storage folder for this run',
-  className: 'vscode-button storage-button toolbar-button--hidden',
+  className: 'storage-button toolbar-button--hidden',
   disabled: true,
 });
 
@@ -88,7 +87,7 @@ const WORKFLOW_TOOLBAR = [
     command: COMMANDS.STOP_STREAM,
     title:
       'Request task interruption (current API call will be aborted if supported)',
-    className: 'vscode-button stop-button',
+    className: 'stop-button',
     disabled: true,
   },
   {
@@ -96,7 +95,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'debug-rerun',
     command: COMMANDS.RUN_AGAIN,
     title: 'Run this task again',
-    className: 'vscode-button run-button',
+    className: 'run-button',
     disabled: true,
   },
   {
@@ -104,7 +103,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'reply',
     command: COMMANDS.RESTORE_STATE,
     title: 'Restore this configuration to the main view',
-    className: 'vscode-button restore-button',
+    className: 'restore-button',
     disabled: true,
   },
   {
@@ -112,7 +111,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'diff-multiple',
     command: COMMANDS.DIFF_STREAM,
     title: 'Run latexdiff on existing tex files',
-    className: 'vscode-button diff-button',
+    className: 'diff-button',
     disabled: true,
   },
   {
@@ -120,7 +119,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'archive',
     command: COMMANDS.PACK_STREAM,
     title: 'Pack the output for this agent into the History folder',
-    className: 'vscode-button pack-button',
+    className: 'pack-button',
     disabled: true,
   },
   {
@@ -128,7 +127,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'trash',
     command: COMMANDS.CLEAN_STREAM,
     title: 'Clean the output for this agent',
-    className: 'vscode-button clean-button',
+    className: 'clean-button',
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },
@@ -137,7 +136,7 @@ const WORKFLOW_TOOLBAR = [
     icon: 'clear-all',
     command: COMMANDS.ERASE_STREAM,
     title: 'Erase the stream output for this agent',
-    className: 'vscode-button clear-button',
+    className: 'clear-button',
     disabled: false,
   },
 ];
@@ -150,7 +149,7 @@ const TOOL_USE_TOOLBAR = [
     command: COMMANDS.STOP_STREAM,
     title:
       'Request task interruption (current API call will be aborted if supported)',
-    className: 'vscode-button stop-button',
+    className: 'stop-button',
     disabled: true,
   },
   {
@@ -158,7 +157,7 @@ const TOOL_USE_TOOLBAR = [
     icon: 'reply',
     command: COMMANDS.RESTORE_STATE,
     title: 'Restore this configuration to the main view',
-    className: 'vscode-button restore-button',
+    className: 'restore-button',
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },
@@ -167,7 +166,7 @@ const TOOL_USE_TOOLBAR = [
     icon: 'clear-all',
     command: COMMANDS.ERASE_STREAM,
     title: 'Erase the stream output for this agent',
-    className: 'vscode-button clear-button',
+    className: 'clear-button',
     disabled: false,
   },
 ];

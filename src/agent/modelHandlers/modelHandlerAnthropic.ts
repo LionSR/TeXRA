@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 import type {
   BetaBase64ImageSource,
+  BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
   BetaRequestDocumentBlock,
@@ -56,6 +57,7 @@ import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
+  AgentType,
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
@@ -96,9 +98,11 @@ import xmlUtils from '@utils/text/xmlUtils';
 // The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
 type BetaMessageCreateParams = MessageCreateParams & {
   betas?: AnthropicBeta[];
+  context_management?: BetaContextManagementConfig | null;
 };
 type BetaMessageCountTokensParams = MessageCountTokensParams & {
   betas?: AnthropicBeta[];
+  context_management?: BetaContextManagementConfig | null;
 };
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
@@ -106,8 +110,25 @@ const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
 const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
+const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
+
+type CacheControlBlock = (ContentBlockParam | ContentBlock) & {
+  type: 'text' | 'tool_result';
+  cache_control?: { type: 'ephemeral' };
+};
+
+const isCacheControlEligibleBlock = (
+  block: ContentBlockParam | ContentBlock | undefined,
+): block is CacheControlBlock => {
+  if (!block || typeof block !== 'object') {
+    return false;
+  }
+
+  const blockType = (block as { type?: string }).type;
+  return blockType === 'text' || blockType === 'tool_result';
+};
 
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
@@ -116,12 +137,78 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ToolUseBlock,
   Anthropic
 > {
+  private cacheControlledBlock?: CacheControlBlock;
+
   protected override get supportsToolFileOutputs(): boolean {
     return true;
   }
 
   protected override get supportsInlineToolImages(): boolean {
     return true;
+  }
+
+  private setCacheControlTarget(block: ContentBlockParam | ContentBlock): void {
+    if (!this.capabilities.supportsPromptCaching) {
+      return;
+    }
+
+    if (!isCacheControlEligibleBlock(block)) {
+      return;
+    }
+
+    if (this.cacheControlledBlock && this.cacheControlledBlock !== block) {
+      delete this.cacheControlledBlock.cache_control;
+    }
+
+    block.cache_control = { type: 'ephemeral' };
+    this.cacheControlledBlock = block;
+  }
+
+  private clearCacheControlTarget(): void {
+    if (!this.capabilities.supportsPromptCaching) {
+      this.cacheControlledBlock = undefined;
+      return;
+    }
+
+    if (this.cacheControlledBlock) {
+      delete this.cacheControlledBlock.cache_control;
+    }
+    this.cacheControlledBlock = undefined;
+  }
+
+  private findCacheControlCandidate(
+    content: (ContentBlockParam | ContentBlock)[] | undefined,
+  ): CacheControlBlock | undefined {
+    if (!Array.isArray(content) || content.length === 0) {
+      return undefined;
+    }
+
+    for (let idx = content.length - 1; idx >= 0; idx -= 1) {
+      const candidate = content[idx];
+      if (isCacheControlEligibleBlock(candidate)) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private assignCacheControlToLatest(
+    content: (ContentBlockParam | ContentBlock)[] | undefined,
+  ): void {
+    if (!this.capabilities.supportsPromptCaching) {
+      return;
+    }
+
+    const target = this.findCacheControlCandidate(content);
+    if (target) {
+      this.setCacheControlTarget(target);
+    } else if (Array.isArray(content) && content.length > 0) {
+      this.logger.debug(
+        'No eligible content block available for Anthropic cache control marker',
+      );
+      this.clearCacheControlTarget();
+    }
   }
 
   async getClient(): Promise<Anthropic> {
@@ -208,6 +295,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         this.config.fullName.includes('claude-opus-4') ||
         this.config.fullName.includes('claude-sonnet-4-5') ||
         this.config.fullName.includes('claude-sonnet-4') ||
+        this.config.fullName.includes('claude-haiku-4-5') ||
         this.config.fullName.includes('claude-3-7-sonnet')
       ) {
         delete options.temperature;
@@ -315,6 +403,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (!existingBetas.includes(FILES_API_BETA)) {
         options.betas = [...existingBetas, FILES_API_BETA];
       }
+    }
+
+    if (this.agentType === AgentType.ToolUse) {
+      const existingBetas = options.betas ?? [];
+      if (!existingBetas.includes(CONTEXT_MANAGEMENT_BETA)) {
+        options.betas = [...existingBetas, CONTEXT_MANAGEMENT_BETA];
+      }
+
+      const contextManagementEdits = [
+        ...(options.context_management?.edits ?? []),
+      ];
+
+      if (
+        !contextManagementEdits.some(
+          (edit) => edit.type === 'clear_tool_uses_20250919',
+        )
+      ) {
+        contextManagementEdits.push({ type: 'clear_tool_uses_20250919' });
+      }
+
+      options.context_management = {
+        ...(options.context_management ?? {}),
+        edits: contextManagementEdits,
+      } satisfies BetaContextManagementConfig;
     }
 
     // this.logger.debug(
@@ -627,6 +739,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
+    this.clearCacheControlTarget();
+
     // Create content list for the user message
     const userMessageContent: ContentBlockParam[] = [];
 
@@ -650,9 +764,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         type: 'text',
         text: trimmedRequest,
         citations: null,
-        ...(this.capabilities.supportsPromptCaching
-          ? { cache_control: { type: 'ephemeral' } }
-          : {}),
       };
       userMessageContent.push(requestBlock);
     }
@@ -661,23 +772,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const messages: MessageParam[] = [
       { role: 'user', content: userMessageContent },
     ];
+
+    this.assignCacheControlToLatest(userMessageContent);
+
     return messages;
-  }
-
-  public removeCacheControl(content: ContentBlock[] | ContentBlockParam[]) {
-    // With the updated Anthropic prompt caching, we should ensure we never exceed
-    // Anthropic's limit of 4 cache_control blocks across the entire conversation
-
-    // Complete removal approach - remove all cache_control properties
-    // This ensures we don't accumulate too many cache points over time
-    if (Array.isArray(content) && content.length > 0) {
-      for (let i = 0; i < content.length; i++) {
-        const item = content[i] as any;
-        if (typeof item === 'object' && item?.cache_control) {
-          delete item.cache_control;
-        }
-      }
-    }
   }
 
   /** Creates message array for subsequent rounds, managing cache control and image content. */
@@ -715,9 +813,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         type: 'text',
         text: trimmedMessage,
         citations: null,
-        ...(this.capabilities.supportsPromptCaching
-          ? { cache_control: { type: 'ephemeral' } }
-          : {}),
       };
       roundContent.push(messageBlock);
     }
@@ -729,17 +824,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       throw new Error(errMsg);
     }
 
-    // We need to ensure we don't exceed Anthropic's limit of 4 cache_control blocks
-    // Remove cache_control from ALL previous message contents
-    if (this.capabilities.supportsPromptCaching) {
-      for (const msg of messages) {
-        if (Array.isArray(msg.content)) {
-          this.removeCacheControl(msg.content);
-        }
-      }
-    }
-
     messages.push({ role: 'user', content: roundContent });
+
+    this.assignCacheControlToLatest(roundContent);
+
     return messages;
   }
 
@@ -758,6 +846,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       role: 'user',
       content: [{ type: 'text', text: trimmedMessage, citations: null }],
     });
+
+    const lastMessage = messages.at(-1);
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      this.assignCacheControlToLatest(lastMessage.content);
+    }
+
     return messages;
   }
 
@@ -938,9 +1032,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessageContinuation }],
-      // cache_control: { type: 'ephemeral' },
-      // if we keep removing this userContinuation message, then the cache_control will be removed too!
     });
+
+    const lastMessage = messages.at(-1);
+    if (lastMessage && Array.isArray(lastMessage.content)) {
+      this.assignCacheControlToLatest(lastMessage.content);
+    }
   }
 
   /** Initializes output file and handles prefill content, returning [isComplete, updatedMessages]. */
@@ -1027,10 +1124,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
       }
 
-      const lastMsgContent = messages.at(-1)?.content;
-      if (lastMsgContent && Array.isArray(lastMsgContent)) {
-        this.removeCacheControl(lastMsgContent);
-      }
+      this.clearCacheControlTarget();
 
       endTurn = true;
       return [endTurn, messages];
@@ -1047,13 +1141,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       {
         type: 'text' as const,
         text: fileContent,
-        ...(this.capabilities.supportsPromptCaching
-          ? { cache_control: { type: 'ephemeral' as const } }
-          : {}),
       },
     ];
     this.logger.debug(`Using existing content as prefill: ${outputFile}`);
     messages.push({ role: 'assistant', content });
+
+    this.assignCacheControlToLatest(content);
 
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
@@ -1153,27 +1246,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ];
       }
 
-      if (this.capabilities.supportsPromptCaching) {
-        // First remove all cache_control from all previous messages to stay under the limit
-        for (let i = 0; i < messages.length - 1; i++) {
-          const msg = messages[i];
-          if (Array.isArray(msg.content)) {
-            this.removeCacheControl(msg.content);
-          }
-        }
-
-        // Then ensure the current message has at most one cache_control
-        if (Array.isArray(lastMessage.content)) {
-          // Remove all existing cache_control
-          this.removeCacheControl(lastMessage.content);
-
-          const lastContentItem = lastMessage.content.at(-1);
-          if (lastContentItem && typeof lastContentItem === 'object') {
-            (lastContentItem as any).cache_control = {
-              type: 'ephemeral',
-            };
-          }
-        }
+      if (Array.isArray(lastMessage.content)) {
+        this.assignCacheControlToLatest(lastMessage.content);
       }
     }
     return;
@@ -1272,14 +1346,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           // secondLastMessage.content = newContent;
         }
 
-        // Remove cache_control from previous messages if needed
-        if (this.capabilities.supportsPromptCaching) {
-          for (let i = 0; i < messages.length - 1; i++) {
-            const msg = messages[i];
-            if (Array.isArray(msg.content)) {
-              this.removeCacheControl(msg.content);
-            }
-          }
+        if (Array.isArray(secondLastMessage.content)) {
+          this.assignCacheControlToLatest(secondLastMessage.content);
         }
 
         // Remove the user continuation prompt to keep the conversation clean
@@ -1322,6 +1390,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       messages.push(assistantMessage);
+
+      if (Array.isArray(assistantMessage.content)) {
+        this.assignCacheControlToLatest(assistantMessage.content);
+      }
+
       this.logger.debug('Added a new assistant message');
     }
   }
@@ -1616,6 +1689,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
         },
       ],
     };
+
+    const toolResultBlock = Array.isArray(resultMsg.content)
+      ? resultMsg.content.at(-1)
+      : undefined;
+    if (toolResultBlock) {
+      this.setCacheControlTarget(toolResultBlock);
+    }
+
     return [callMsg, resultMsg];
   }
 }

@@ -6,7 +6,6 @@ import {
   setElementsDisabled,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
@@ -34,9 +33,22 @@ export class FileSelect {
       console.warn(`[FileSelect] Element with id '${id}' not found`);
       return;
     }
+    const previousValue = selectDiv.value;
     selectDiv.innerHTML = '';
     this.addOption(selectDiv, '', 'None');
     files.forEach((f) => this.addOption(selectDiv, f, f));
+    if (
+      previousValue !== undefined &&
+      previousValue !== null &&
+      previousValue !== ''
+    ) {
+      const hasPreviousOption = Array.from(
+        selectDiv.querySelectorAll('vscode-option'),
+      ).some((option) => option.value === previousValue);
+      if (hasPreviousOption) {
+        safeSetElementValue(id, previousValue);
+      }
+    }
   }
 
   updateEdited(baseFile) {
@@ -55,11 +67,13 @@ export class FileSelect {
   }
 
   addOption(select, value, text) {
-    const option = createFromTemplate('selectOptionTemplate', {
-      text: { '': text },
-      attributes: { '': { value } },
-    });
-    if (option) select.appendChild(option);
+    if (!select) {
+      return;
+    }
+    const option = document.createElement('vscode-option');
+    option.value = value;
+    option.textContent = text;
+    select.appendChild(option);
   }
 
   handleRecentCommits(message) {
@@ -84,7 +98,7 @@ export class FileSelect {
 
       const manualSelection = this._manualCommitSelection;
       if (manualSelection) {
-        const options = Array.from(commitDiv.options);
+        const options = Array.from(commitDiv.querySelectorAll('vscode-option'));
         const existingOption = options.find((option) =>
           this._areEquivalentCommitHashes(
             option.value,
@@ -105,9 +119,9 @@ export class FileSelect {
         } else {
           if (
             manualSelection.commitLabel &&
-            existingOption.text !== manualSelection.commitLabel
+            existingOption.textContent !== manualSelection.commitLabel
           ) {
-            existingOption.text = manualSelection.commitLabel;
+            existingOption.textContent = manualSelection.commitLabel;
           }
           safeSetElementValue(
             ELEMENT_IDS.COMMIT_SELECT,
@@ -127,7 +141,7 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(fileDiv.options);
+    const options = Array.from(fileDiv.querySelectorAll('vscode-option'));
     if (options.some((o) => o.value === filePath)) {
       safeSetElementValue(fileId, filePath);
       fileDiv.dispatchEvent(new Event('change'));
@@ -145,7 +159,7 @@ export class FileSelect {
       return;
     }
 
-    const options = Array.from(commitDiv.options);
+    const options = Array.from(commitDiv.querySelectorAll('vscode-option'));
     const existingOption = options.find((option) =>
       this._areEquivalentCommitHashes(option.value, commitHash),
     );
@@ -153,7 +167,7 @@ export class FileSelect {
     if (!existingOption) {
       this.addOption(commitDiv, commitHash, commitLabel || commitHash);
     } else if (commitLabel) {
-      existingOption.text = commitLabel;
+      existingOption.textContent = commitLabel;
     }
 
     safeSetElementValue(ELEMENT_IDS.COMMIT_SELECT, commitHash);

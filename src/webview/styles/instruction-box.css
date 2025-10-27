@@ -6,81 +6,46 @@
 .instruction-box {
   margin-bottom: var(--spacing-small);
   position: relative;
-  background-color: var(--background-color);
-  border: var(--border-thin) solid
-    var(--vscode-widget-border, var(--dropdown-border));
-  border-radius: var(--border-radius);
   padding: var(--spacing-medium);
 }
 
-.instruction-box label {
-  display: block;
-  margin-bottom: var(--spacing-tiny);
-  font-size: var(--font-size);
-}
-
 #instruction {
-  min-height: var(--height-medium);
-  max-height: var(--height-xlarge);
-  resize: none;
-  overflow-y: auto;
-  transition: height 0.1s ease-out;
+  width: 100%;
   margin-top: var(--spacing-medium);
   margin-bottom: var(--spacing-medium);
+}
+
+/* Auto-resize is handled by JavaScript, but set a max-height limit */
+#instruction::part(control) {
+  max-height: var(--height-xlarge);
+  transition: height 0.1s ease-out;
 }
 
 .instruction-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-medium);
-  flex-wrap: wrap;
+  gap: var(--spacing-small);
+  flex-wrap: nowrap;
   width: 100%;
 }
 
 .instruction-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: var(--spacing-small);
   line-height: 1.5;
 }
 
-.instruction-header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
-}
-
-.instruction-header label {
-  font-size: var(--font-size);
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-}
-
-.instruction-header label .codicon {
-  margin-right: var(--spacing-small);
-  color: var(--icon-color);
-  opacity: var(--opacity-subtle);
-}
-
 #executeButton {
   font-size: var(--font-size);
-  margin-left: auto;
+  margin-left: var(--spacing-small);
   flex-shrink: 0;
+  min-width: 3rem;
 }
 
-/* Recording button states */
-#recordInstructionButton.recording {
-  background-color: var(--vscode-statusBarItem-errorBackground, #d32f2f);
-  color: var(--vscode-statusBarItem-errorForeground, #ffffff);
-}
-
-#recordInstructionButton.recording:hover {
-  background-color: var(--vscode-statusBarItem-errorBackground, #b71c1c);
-}
-
+/* Recording button states - icon change is enough, no red background needed */
 #recordInstructionButton.recording .codicon-stop-circle {
   animation: pulse 1.5s ease-in-out infinite;
 }

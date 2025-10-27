@@ -6,9 +6,8 @@
 .tabs {
   display: flex;
   flex-direction: column;
-  width: var(--width-sidebar);
-  min-width: var(--width-button-min);
-  max-width: var(--height-xlarge);
+  flex: 1;
+  min-width: 200px;
   font-size: var(--font-size-sm);
   border-left: var(--border-thin) solid var(--vscode-panel-border);
   height: 100%;
@@ -20,6 +19,7 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  --vscode-tree-indent: 0px;
 }
 
 .clear-all-container {
@@ -28,40 +28,32 @@
   padding: var(--spacing-small);
 }
 
-.clear-all-container .button-group {
-  justify-content: space-between;
-}
-
 .agent-filter-group {
+  display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
+  gap: var(--spacing-small);
   margin-bottom: var(--spacing-small);
 }
 
-.agent-filter-group .vscode-button {
+.agent-filter-group vscode-radio {
   min-width: auto;
+  flex: 0 0 auto;
 }
 
-.tab-container {
-  display: flex;
-  align-items: center;
+/* vscode-tree-item content styling */
+vscode-tree-item {
   position: relative;
-  width: 100%;
 }
 
-.tab {
-  flex: 1;
+.tab-content {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--spacing-small) var(--spacing-medium);
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: var(--vscode-foreground);
-  text-align: left;
-  font-family: var(--font-family);
+  flex: 1;
   min-width: 0;
+  position: relative;
+  width: 100%;
 }
 
 .tab-header {
@@ -71,9 +63,17 @@
   width: 100%;
 }
 
-.tab-header .tab-status {
-  margin-left: 0;
-  margin-right: 0;
+/* Status indicator in icon slot - matches main status indicators */
+.tab-status.status-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  margin: 3px;
+}
+
+.tab-status.status-indicator:hover::after {
+  display: none; /* Don't show tooltip in tree */
 }
 
 .tab-title {
@@ -98,52 +98,21 @@
   margin-left: var(--spacing-small);
 }
 
-.tab-container:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.tab-container.active {
-  background-color: var(--vscode-list-activeSelectionBackground);
-}
-
-.tab-container.active .tab {
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
-.tab-delete {
-  display: none;
-  padding: var(--spacing-tiny);
-  border: none;
-  background: none;
-  color: var(--vscode-foreground);
-  opacity: var(--opacity-subtle);
-  cursor: pointer;
-  margin-right: var(--spacing-small);
-  font-size: var(--font-size-sm);
-  width: calc(var(--height-control) - var(--spacing-small));
-  height: calc(var(--height-control) - var(--spacing-small));
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-container:hover .tab-delete {
+/* Delete button visibility on hover */
+vscode-tree-item:hover .tab-delete {
   display: flex;
   align-items: center;
 }
 
+.tab-delete {
+  display: none;
+  position: absolute;
+  right: var(--spacing-tiny);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: var(--opacity-subtle);
+}
+
 .tab-delete:hover {
   opacity: var(--opacity-full);
-  color: var(--vscode-errorForeground);
-}
-
-.tab-delete .codicon {
-  font-size: var(--font-size-sm);
-  color: var(--vscode-foreground);
-  opacity: var(--opacity-subtle);
-  margin-right: 0;
-}
-
-.tab-delete:hover .codicon {
-  opacity: var(--opacity-full);
-  color: var(--vscode-errorForeground);
 }

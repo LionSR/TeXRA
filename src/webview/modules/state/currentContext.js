@@ -2,6 +2,7 @@
 import {
   MULTIPLE_SELECTIONS,
   CHECK_BOXES,
+  CHECK_BOXES_TOOL_USE,
   ELEMENT_IDS,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
@@ -12,6 +13,7 @@ import {
   safeGetElementById,
   safeGetElementValue,
   safeGetElementChecked,
+  isSelectLikeElement,
 } from '@common/domUtils.js';
 
 const DEFAULT_SINGLE_FILE_TYPES = ['input', 'reference', 'auxiliary', 'media'];
@@ -31,7 +33,7 @@ function getAgent(sessionType) {
   const selectId =
     AGENT_SELECT_IDS[sessionType] ?? AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
   const selectElement = safeGetElementById(selectId);
-  if (selectElement instanceof HTMLSelectElement && selectElement.value) {
+  if (isSelectLikeElement(selectElement) && selectElement.value) {
     return selectElement.value;
   }
   return '';

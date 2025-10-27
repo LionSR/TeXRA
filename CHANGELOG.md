@@ -2,7 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.34.0] - [Unreleased]
+## [0.34.1] - 2025-10-24
+
+### Bug Fixes
+
+- Fix toolbar controls and automatic log scrolling in progress view.
+- Fix Claude Haiku 4.5T thinking mode not working correctly.
+- Fix dropdown menus being cut off at container edges.
+
+### Improvements
+
+- Show inline progress display when polishing instructions instead of notifications.
+- Cleaner and more streamlined progress board stream tabs.
+- More compact model selection dropdown for better screen space usage.
+- Updated core dependencies for improved stability.
+
+## [0.34.0] - [2025-10-19]
 
 ### Features
 
@@ -11,8 +26,10 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- Streamline custom agent prompts by keeping all rounds in the `userRequest` list while automatically migrating older `userReflect` entries and highlighting anything that still needs attention.
+- Streamline custom agent prompts by keeping all rounds in the `userRequest` list whileth automatically migrating older `userReflect` entries and highlighting anything that still needs attention.
 - Ensure the model picker waits for its options to load so newly enabled models reliably appear, even on slower machines.
+- Add Magic Polish and microphone recording controls directly to the progress view follow-up input box with auto-resizing textarea for more convenient conversation continuations.
+- Update CoT (Chain-of-Thought) agent icon from terminal to list-tree for clearer visual distinction in progress view stream tabs.
 
 ### Bug Fixes
 

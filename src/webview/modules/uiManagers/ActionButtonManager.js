@@ -8,12 +8,11 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
 export class ActionButtonManager extends BaseUIManager {
-  constructor(vscodeInstance = vscode, fileList, state, instructionMgr) {
+  constructor(vscodeInstance = vscode, fileList, state) {
     super();
     this.vscode = vscodeInstance;
     this.fileList = fileList;
     this.state = state;
-    this.instructionManager = instructionMgr;
   }
 
   _setupInstructionButtons() {
@@ -21,7 +20,6 @@ export class ActionButtonManager extends BaseUIManager {
       const instruction = safeGetElementById(ELEMENT_IDS.INSTRUCTION);
       if (instruction) {
         instruction.value = '';
-        this.instructionManager.autoResizeTextarea(instruction);
         this.state.save();
       }
     });
@@ -32,6 +30,14 @@ export class ActionButtonManager extends BaseUIManager {
         const { agent, singleFileSelections, multipleFileSelections } =
           collectCurrentContext({ fileList: this.fileList });
         const model = safeGetElementValue('model');
+
+        // Show progress indicator
+        const progressContainer = document.getElementById(
+          'polishProgressContainer',
+        );
+        if (progressContainer) {
+          progressContainer.style.display = 'flex';
+        }
 
         this.vscode.postMessage({
           command: MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT,

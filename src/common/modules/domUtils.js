@@ -5,6 +5,16 @@ import {
   CHEVRON_RIGHT_CLASS,
 } from './iconConstants.js';
 
+function getTagName(element) {
+  return typeof element?.tagName === 'string'
+    ? element.tagName.toLowerCase()
+    : '';
+}
+
+function isVsCodeSelectElement(element) {
+  return getTagName(element) === 'vscode-single-select';
+}
+
 function setChevronIconImpl(
   element,
   expanded,
@@ -86,18 +96,82 @@ export function safeGetElementChecked(id) {
   return element.checked;
 }
 
+export function setElementDisabled(element, disabled) {
+  if (!element) {
+    return;
+  }
+
+  if ('disabled' in element) {
+    try {
+      element.disabled = disabled;
+    } catch (error) {
+      // Ignore assignment errors from custom elements without writable props
+    }
+  }
+
+  if (element instanceof Element) {
+    element.toggleAttribute('disabled', Boolean(disabled));
+  }
+}
+
 export function setElementsDisabled(idsOrElements, disabled) {
   const elements = Array.isArray(idsOrElements)
     ? idsOrElements
     : [idsOrElements];
+
   elements.forEach((el) => {
     if (typeof el === 'string') {
       const elem = document.getElementById(el);
-      if (elem) elem.disabled = disabled;
-    } else if (el) {
-      el.disabled = disabled;
+      if (elem) {
+        setElementDisabled(elem, disabled);
+      }
+    } else {
+      setElementDisabled(el, disabled);
     }
   });
+}
+
+export function isSelectLikeElement(element) {
+  if (!element) {
+    return false;
+  }
+  return isVsCodeSelectElement(element);
+}
+
+export function getSelectOptionElements(element) {
+  if (!isSelectLikeElement(element)) {
+    return [];
+  }
+  return Array.from(element.querySelectorAll('vscode-option'));
+}
+
+export function getSelectedOptionElement(element) {
+  if (!isSelectLikeElement(element)) {
+    return null;
+  }
+
+  const options = getSelectOptionElements(element);
+  if (options.length === 0) {
+    return null;
+  }
+
+  const currentValue = element.value;
+  if (currentValue !== undefined && currentValue !== null) {
+    const matchingOption = options.find(
+      (option) => option.value === currentValue,
+    );
+    if (matchingOption) {
+      return matchingOption;
+    }
+  }
+
+  return (
+    options.find(
+      (option) => option.hasAttribute('selected') || option.selected,
+    ) ??
+    options[0] ??
+    null
+  );
 }
 
 /**

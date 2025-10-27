@@ -30,10 +30,6 @@ import {
 import { getBasename } from '@common/pathUtils.js';
 import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
 
-// Constants
-export const BULLET_MARKUP =
-  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
-
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
   warn: '🟡',
@@ -108,31 +104,6 @@ export const TaskGroupLevel = {
  */
 export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
-}
-
-/**
- * Extracts timestamps from HTML messages.
- */
-export class MessageTimestampExtractor {
-  /**
-   * Extract timestamp from a log line element
-   * @param {HTMLElement} element - Log line element
-   * @returns {string} Extracted timestamp
-   */
-  extract(element) {
-    const logLine = element.classList.contains('log-line')
-      ? element
-      : element.querySelector('.log-line');
-    if (logLine && logLine.dataset.fullTimestamp) {
-      return logLine.dataset.fullTimestamp;
-    }
-
-    const text = logLine
-      ? logLine.textContent || ''
-      : element.textContent || '';
-    const match = text.match(/\[(.*?)\]/);
-    return match ? match[1] : '';
-  }
 }
 
 /**
@@ -276,10 +247,7 @@ export class LogEntryFormatter {
           'tool use',
         ),
       modelResponse: (params) =>
-        this._safeFormat(
-          () => this._formatModelResponse(params),
-          'model response',
-        ),
+        this._safeFormat(() => this._formatModelResponse(params), 'Assistant'),
       fileList: (text, data, id) =>
         this._safeFormat(
           () => this._formatFileList(text, data, id),
@@ -633,7 +601,7 @@ export class LogEntryFormatter {
               <span class="tool-use-sublabel">Output:</span>
               <pre class="tool-output-preview">${preview}</pre>
               <details class="tool-output-details">
-                <summary>Show full output</summary>
+                <summary class="details-summary">Show full output</summary>
                 <pre class="tool-output-full">${encodedOutput}</pre>
               </details>
             </div>
@@ -730,7 +698,7 @@ export class LogEntryFormatter {
       groupId,
       timestamp: fullTimestamp,
       iconClass: 'codicon-sparkle',
-      labelText: 'Model response',
+      labelText: 'Assistant',
       copyTitle: 'Copy model output',
       contentClass: 'banner-content--model',
       open: true,
@@ -888,7 +856,7 @@ export class LogEntryFormatter {
           }
         }
 
-        items += `<li title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+        items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
       });
     });
 
@@ -945,7 +913,7 @@ export class LogEntryFormatter {
         const escaped = encodeHtml(filePath);
         const fileName = getBasename(filePath);
         const fileNameEscaped = encodeHtml(fileName);
-        return `<li title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
+        return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-warning"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span></li>`;
       })
       .join('');
 
@@ -1040,7 +1008,7 @@ export class LogEntryFormatter {
 
       const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
 
-      items += `<li><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
+      items += `<li class="detail-item"><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
         baseName,
       )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
         revisedName,
@@ -1076,7 +1044,7 @@ export class LogEntryFormatter {
     const items = [];
     const pushItem = (icon, label, value, suffix = '') => {
       items.push(
-        `<span class="stat-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
+        `<span class="stat-item detail-item" title="${label}"><i class="codicon ${icon}"></i> ${value}${suffix}</span>`,
       );
     };
 

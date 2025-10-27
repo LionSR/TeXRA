@@ -1,12 +1,11 @@
 // Local imports - progress view
 // Local imports
 import { ELEMENT_IDS } from '../constants.js';
-import { initializeIconButtons } from '@common/iconButtonInitializer.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 
 const AGENT_ICONS = {
-  CoT: 'terminal',
+  CoT: 'list-tree',
   direct: 'lightbulb',
   toolUse: 'tools',
   unknown: 'question',
@@ -31,6 +30,7 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
+
     tabsContainer.innerHTML = '';
     let activeInfo = null;
     streams.forEach((info) => {
@@ -47,22 +47,23 @@ export class StreamTabs {
         },
         attributes: {
           '': { title: tooltip },
-          '.tab': { title: tooltip },
-          '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
-          '.tab': { stream: info.name },
+          '': { stream: info.name },
           '.tab-delete': { stream: info.name },
         },
       });
       if (!tabEl) return;
-      initializeIconButtons(tabEl);
+
+      // Set status indicator color based on status
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';
         statusEl.classList.add(status);
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
+      } else {
+        console.warn('[StreamTabs] Status element not found in tab');
       }
       const agentIcon = tabEl.querySelector('.agent-type');
       if (agentIcon) {
@@ -81,9 +82,10 @@ export class StreamTabs {
         }
       }
       if (info.name === activeStream) {
-        tabEl.classList.add('active');
+        tabEl.setAttribute('selected', '');
         activeInfo = info;
       }
+
       tabsContainer.appendChild(tabEl);
     });
 

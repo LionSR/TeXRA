@@ -8,13 +8,19 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  normalizeSessionType,
+  resolveRadioGroup,
 } from '../constants.js';
 import { handleCheckboxChange } from '../fileHandlers.js';
 import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
-import { safeGetElementById } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  isSelectLikeElement,
+  getSelectedOptionElement,
+} from '@common/domUtils.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -33,6 +39,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state = state;
     this.eventBus = eventBus;
     this._dependencyInstallListeners = [];
+    this._lastRadioSessionType = undefined;
   }
 
   _setupToggles() {
@@ -68,6 +75,7 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
+    // Add change listeners for checkboxes
     CHECK_BOXES.forEach((id) => {
       this.addListener(id, 'change', handleCheckboxChange);
     });
@@ -155,36 +163,87 @@ export class SettingsButtonManager extends BaseUIManager {
   _setupDropdowns() {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
-      const buttons = toggleContainer.querySelectorAll('[data-session-type]');
-      buttons.forEach((button) => {
-        this.addListener(button, 'click', () => {
-          if (!(button instanceof HTMLElement)) {
-            return;
+      const handleSessionTypeSelection = (sessionType) => {
+        const normalized = normalizeSessionType(sessionType);
+        this._setLastRadioSessionType(normalized);
+        this.state.applySessionType(normalized);
+        const selectId =
+          AGENT_SELECT_IDS[normalized] ??
+          AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
+        const selectElement = safeGetElementById(selectId);
+        if (isSelectLikeElement(selectElement)) {
+          this._handleAgentSelection(selectElement);
+          if (typeof selectElement.focus === 'function') {
+            selectElement.focus();
           }
-          const sessionType = button.dataset.sessionType;
+        } else {
+          this.state.save();
+        }
+      };
+
+      /**
+       * Gets the current session type from a vscode-radio-group element.
+       * @param {HTMLElement} group - The radio group element
+       * @returns {string|undefined} The session type, or undefined if not found
+       */
+      const getSessionTypeFromGroup = (group) => {
+        if (
+          !(group instanceof HTMLElement) ||
+          typeof group.value !== 'string' ||
+          group.value.length === 0
+        ) {
+          return undefined;
+        }
+        return group.value;
+      };
+
+      const radioGroup = resolveRadioGroup(toggleContainer);
+      if (radioGroup) {
+        // Initialize last session type from radio group
+        // Only set if we can determine a valid initial value to avoid masking the first user interaction
+        const initialSessionType = getSessionTypeFromGroup(radioGroup);
+        if (initialSessionType) {
+          this._setLastRadioSessionType(
+            normalizeSessionType(initialSessionType)
+          );
+        }
+
+        this.addListener(radioGroup, 'change', () => {
+          const sessionType = getSessionTypeFromGroup(radioGroup);
           if (!sessionType) {
             return;
           }
-          this.state.applySessionType(sessionType);
-          const selectId =
-            AGENT_SELECT_IDS[sessionType] ??
-            AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
-          const selectElement = safeGetElementById(selectId);
-          if (selectElement instanceof HTMLSelectElement) {
-            this._handleAgentSelection(selectElement);
-            selectElement.focus();
-          } else {
-            this.state.save();
+          const normalized = normalizeSessionType(sessionType);
+          if (normalized === this._lastRadioSessionType) {
+            return;
           }
+          handleSessionTypeSelection(normalized);
         });
-      });
+      } else {
+        const buttons = toggleContainer.querySelectorAll('[data-session-type]');
+        buttons.forEach((button) => {
+          this.addListener(button, 'click', () => {
+            if (!(button instanceof HTMLElement)) {
+              return;
+            }
+            const sessionType = button.dataset.sessionType;
+            if (!sessionType) {
+              return;
+            }
+            buttons.forEach((btn) => btn.classList.remove('active'));
+            button.classList.add('active');
+            handleSessionTypeSelection(sessionType);
+          });
+        });
+      }
     }
 
     AGENT_SELECT_LIST.forEach((id) => {
       this.addListener(id, 'focus', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -197,9 +256,10 @@ export class SettingsButtonManager extends BaseUIManager {
       });
 
       this.addListener(id, 'change', (event) => {
-        const target = event.target;
+        const target = event.currentTarget;
         if (
-          !(target instanceof HTMLSelectElement) ||
+          !(target instanceof HTMLElement) ||
+          !isSelectLikeElement(target) ||
           target.classList.contains('agent-select--hidden')
         ) {
           return;
@@ -217,9 +277,15 @@ export class SettingsButtonManager extends BaseUIManager {
       });
     });
 
-    this.addListener('model', 'change', (e) => {
-      const selectElement = e.target;
-      const selectedOption = selectElement.options[selectElement.selectedIndex];
+    this.addListener('model', 'change', (event) => {
+      const selectElement = event.currentTarget;
+      if (
+        !(selectElement instanceof HTMLElement) ||
+        !isSelectLikeElement(selectElement)
+      ) {
+        return;
+      }
+      const selectedOption = getSelectedOptionElement(selectElement);
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -256,16 +322,18 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _handleAgentSelection(selectElement) {
-    if (!(selectElement instanceof HTMLSelectElement)) {
+    if (!isSelectLikeElement(selectElement)) {
       return;
     }
 
     const sessionType =
       selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
-    this.state.applySessionType(sessionType, { skipSave: true });
+    const normalized = normalizeSessionType(sessionType);
+    this._setLastRadioSessionType(normalized);
+    this.state.applySessionType(normalized, { skipSave: true });
 
     const selectedAgent = selectElement.value;
-    const selectedOption = selectElement.options[selectElement.selectedIndex];
+    const selectedOption = getSelectedOptionElement(selectElement);
 
     if (
       selectedOption &&
@@ -289,9 +357,13 @@ export class SettingsButtonManager extends BaseUIManager {
 
     const sessionInput = safeGetElementById(SESSION_TYPE_INPUT);
     if (sessionInput) {
-      sessionInput.value = sessionType;
+      sessionInput.value = normalized;
     }
 
     this.state.save();
+  }
+
+  _setLastRadioSessionType(sessionType) {
+    this._lastRadioSessionType = sessionType;
   }
 }

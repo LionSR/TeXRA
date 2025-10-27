@@ -212,9 +212,9 @@ export class FileInputManager extends BaseUIManager {
   }
 
   _setupRefreshIcons() {
-    const iconConfigs = [
+    const refreshConfigs = [
       {
-        className: 'codicon-file-code',
+        buttonIds: ['refreshInputFileButton'],
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_INPUT_FILE,
@@ -225,7 +225,7 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-book',
+        buttonIds: ['refreshReferenceFileButton'],
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_REFERENCE_FILE,
@@ -236,7 +236,7 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-file-add',
+        buttonIds: ['refreshAuxiliaryFileButton'],
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_AUXILIARY_FILE,
@@ -247,7 +247,7 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-file-media',
+        buttonIds: ['refreshMediaFileButton'],
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_MEDIA_FILE,
@@ -258,7 +258,7 @@ export class FileInputManager extends BaseUIManager {
         ],
       },
       {
-        className: 'codicon-edit',
+        buttonIds: ['refreshEditedFileButton'],
         getRequests: () => {
           const baseFile = safeGetElementValue(BASE_FILE);
           return [
@@ -280,7 +280,7 @@ export class FileInputManager extends BaseUIManager {
         },
       },
       {
-        className: 'codicon-git-commit',
+        buttonIds: ['refreshCommitButton'],
         getRequests: () => [
           {
             command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
@@ -292,18 +292,16 @@ export class FileInputManager extends BaseUIManager {
       },
     ];
 
-    const icons = document.querySelectorAll(
-      '.file-select-header label .codicon.clickable',
-    );
-
-    icons.forEach((icon) => {
-      const config = iconConfigs.find((item) =>
-        icon.classList.contains(item.className),
-      );
-      if (!config) {
+    const wiredElements = new Set();
+    const registerElement = (element, handler) => {
+      if (!(element instanceof HTMLElement) || wiredElements.has(element)) {
         return;
       }
+      this.addListener(element, 'click', handler);
+      wiredElements.add(element);
+    };
 
+    refreshConfigs.forEach((config) => {
       const handler = () => {
         const requests = config.getRequests ? config.getRequests() : [];
         requests.forEach(({ command, payload = {} }) => {
@@ -314,7 +312,10 @@ export class FileInputManager extends BaseUIManager {
         });
       };
 
-      this.addListener(icon, 'click', handler);
+      (config.buttonIds ?? []).forEach((id) => {
+        const element = document.getElementById(id);
+        registerElement(element, handler);
+      });
     });
   }
 

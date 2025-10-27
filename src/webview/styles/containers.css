@@ -10,16 +10,21 @@
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
   margin-bottom: var(--spacing-large);
-  overflow: hidden;
+  overflow: visible;
+}
+
+.file-selection-group--disabled {
+  opacity: 0.6;
+  filter: grayscale(0.3);
+  pointer-events: none;
 }
 
 /* LaTeX diffs section */
 .latexdiffs-section {
   margin-top: auto;
-  padding-top: var(--spacing-large);
+  padding: var(--spacing-large) 0 0;
   background-color: transparent;
   border: none;
-  padding: 0;
   margin-bottom: var(--spacing-large);
 }
 
@@ -29,13 +34,22 @@
   border: 1px solid var(--vscode-widget-border, var(--dropdown-border));
   border-radius: var(--border-radius);
   padding: var(--spacing-medium);
+  overflow: visible;
+}
+
+#latexdiffsContent {
+  overflow: visible;
 }
 
 /* Ensure all button sizes are consistent */
-.latexdiffs-section .vscode-button,
-.file-select-actions .vscode-button {
+.latexdiffs-section vscode-button,
+.latexdiffs-section vscode-toolbar-button,
+.file-select-actions vscode-button,
+.file-select-actions vscode-toolbar-button {
   width: var(--height-control);
   height: var(--height-control);
+  min-width: var(--height-control);
+  min-height: var(--height-control);
 }
 
 /* Container for multiple files */
@@ -73,6 +87,14 @@
 .agent-config-banner .actions,
 .dependency-banner .actions {
   display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}
+
+.dependency-banner .dependency-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-small);
 }
 
