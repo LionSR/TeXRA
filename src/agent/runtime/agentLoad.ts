@@ -81,14 +81,24 @@ export async function loadYaml(absolutePath: string): Promise<object> {
     return parsedYaml;
   } catch (err) {
     const moreInfo = 'More Info';
-    vscode.window
+    const openFile = 'Open File';
+    void vscode.window
       .showErrorMessage(
         `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
         moreInfo,
+        openFile,
       )
-      .then((selection) => {
+      .then(async (selection) => {
         if (selection === moreInfo) {
           void vscode.commands.executeCommand('texra.openDoc', 'custom-agents');
+          return;
+        }
+
+        if (selection === openFile) {
+          const document = await vscode.workspace.openTextDocument(
+            vscode.Uri.file(absolutePath),
+          );
+          await vscode.window.showTextDocument(document);
         }
       });
     throw err;
