@@ -37,6 +37,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this.state = state;
     this.eventBus = eventBus;
     this._dependencyInstallListeners = [];
+    this._lastRadioSessionType = undefined;
   }
 
   _setupToggles() {
@@ -161,7 +162,8 @@ export class SettingsButtonManager extends BaseUIManager {
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
       const handleSessionTypeSelection = (sessionType) => {
-        const normalized = sessionType ?? SESSION_TYPES.WORKFLOW;
+        const normalized = this._normalizeSessionType(sessionType);
+        this._setLastRadioSessionType(normalized);
         this.state.applySessionType(normalized);
         const selectId =
           AGENT_SELECT_IDS[normalized] ??
@@ -214,14 +216,17 @@ export class SettingsButtonManager extends BaseUIManager {
 
       const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup) {
-        let lastSessionType = getSessionTypeFromGroup(radioGroup);
+        this._setLastRadioSessionType(getSessionTypeFromGroup(radioGroup));
         this.addListener(radioGroup, 'change', () => {
           const sessionType = getSessionTypeFromGroup(radioGroup);
-          if (!sessionType || sessionType === lastSessionType) {
+          if (!sessionType) {
             return;
           }
-          lastSessionType = sessionType;
-          handleSessionTypeSelection(sessionType);
+          const normalized = this._normalizeSessionType(sessionType);
+          if (normalized === this._lastRadioSessionType) {
+            return;
+          }
+          handleSessionTypeSelection(normalized);
         });
       } else {
         const buttons = toggleContainer.querySelectorAll('[data-session-type]');
@@ -332,7 +337,9 @@ export class SettingsButtonManager extends BaseUIManager {
 
     const sessionType =
       selectElement.dataset.sessionType || SESSION_TYPES.WORKFLOW;
-    this.state.applySessionType(sessionType, { skipSave: true });
+    const normalized = this._normalizeSessionType(sessionType);
+    this._setLastRadioSessionType(normalized);
+    this.state.applySessionType(normalized, { skipSave: true });
 
     const selectedAgent = selectElement.value;
     const selectedOption = getSelectedOptionElement(selectElement);
@@ -363,5 +370,15 @@ export class SettingsButtonManager extends BaseUIManager {
     }
 
     this.state.save();
+  }
+
+  _normalizeSessionType(sessionType) {
+    return sessionType === SESSION_TYPES.TOOL_USE
+      ? SESSION_TYPES.TOOL_USE
+      : SESSION_TYPES.WORKFLOW;
+  }
+
+  _setLastRadioSessionType(sessionType) {
+    this._lastRadioSessionType = this._normalizeSessionType(sessionType);
   }
 }
