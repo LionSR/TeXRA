@@ -126,6 +126,11 @@ export const AGENT_SELECT_IDS = {
 export const AGENT_SELECT_LIST = Object.values(AGENT_SELECT_IDS);
 
 /**
+ * Tag name constant for VS Code radio group web component
+ */
+export const VSCODE_RADIO_GROUP_TAG = 'VSCODE-RADIO-GROUP';
+
+/**
  * Normalizes a session type value to ensure it's a valid SESSION_TYPE.
  * @param {string} sessionType - The session type to normalize
  * @returns {string} Either SESSION_TYPES.TOOL_USE or SESSION_TYPES.WORKFLOW
@@ -147,7 +152,7 @@ export function resolveRadioGroup(element) {
   if (!element) {
     return null;
   }
-  if (element.tagName === 'VSCODE-RADIO-GROUP') {
+  if (element.tagName === VSCODE_RADIO_GROUP_TAG) {
     return element;
   }
   const radioGroup = element.querySelector('vscode-radio-group');
