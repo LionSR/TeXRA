@@ -213,6 +213,31 @@ export function generateSectionSpacingFixes(
 }
 
 /**
+ * Generates patterns that remove invalid section ending commands.
+ * These commands (e.g., \end{section}) should never appear in LaTeX output.
+ */
+export function generateInvalidSectionEndingFixes(sectionTypes: string[]): {
+  [key: string]: string;
+} {
+  const patterns: { [key: string]: string } = {};
+
+  sectionTypes.forEach((sectionType) => {
+    const invalidEndings = [
+      `\\end{${sectionType}}`,
+      `\\end{${sectionType}*}`,
+      `\\end {${sectionType}}`,
+      `\\end {${sectionType}*}`,
+    ];
+
+    invalidEndings.forEach((ending) => {
+      patterns[ending] = '';
+    });
+  });
+
+  return patterns;
+}
+
+/**
  * Generates patterns for non-breaking spaces in references
  */
 export function generateReferenceSpacing(referenceTypes: string[]): {
