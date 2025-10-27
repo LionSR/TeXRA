@@ -28,10 +28,6 @@
   padding: var(--spacing-small);
 }
 
-.clear-all-container .button-group {
-  justify-content: space-between;
-}
-
 .agent-filter-group {
   display: flex;
   justify-content: flex-start;
