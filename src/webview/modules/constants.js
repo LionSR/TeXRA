@@ -135,3 +135,21 @@ export function normalizeSessionType(sessionType) {
     ? SESSION_TYPES.TOOL_USE
     : SESSION_TYPES.WORKFLOW;
 }
+
+/**
+ * Resolves a vscode-radio-group element from a container element.
+ * If the element itself is a radio group, returns it directly.
+ * Otherwise, searches for a radio group child element.
+ * @param {HTMLElement|null|undefined} element - The container element
+ * @returns {HTMLElement|null} The radio group element, or null if not found
+ */
+export function resolveRadioGroup(element) {
+  if (!element) {
+    return null;
+  }
+  if (element.tagName === 'VSCODE-RADIO-GROUP') {
+    return element;
+  }
+  const radioGroup = element.querySelector('vscode-radio-group');
+  return radioGroup instanceof HTMLElement ? radioGroup : null;
+}
