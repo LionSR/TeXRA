@@ -28,9 +28,7 @@ export class TaskGroupDomManager {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
-        this._disconnectObserver(group.id);
-        existingGroup.remove();
-        this.groupElements.delete(group.id);
+        this.removeGroup(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
         this.updateGroup({
@@ -68,12 +66,9 @@ export class TaskGroupDomManager {
     progressViewState.taskGroups.set(group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
-    treeItem.open = !isCollapsed;
-    if (treeItem.open) {
-      treeItem.setAttribute('open', '');
-    } else {
-      treeItem.removeAttribute('open');
-    }
+    const isExpanded = !isCollapsed;
+    treeItem.toggleAttribute('expanded', isExpanded);
+    treeItem.expanded = isExpanded;
 
     this._observeGroup(treeItem, group.id);
 
@@ -88,7 +83,7 @@ export class TaskGroupDomManager {
     if (group.parentGroupId) {
       const parentItem = this.groupElements.get(group.parentGroupId);
       if (parentItem instanceof HTMLElement) {
-        treeItem.slot = 'children';
+        treeItem.setAttribute('slot', 'children');
         insertChronologically({
           container: parentItem,
           element: treeItem,
@@ -143,9 +138,9 @@ export class TaskGroupDomManager {
       for (const mutation of mutations) {
         if (
           mutation.type === 'attributes' &&
-          mutation.attributeName === 'open'
+          mutation.attributeName === 'expanded'
         ) {
-          const isCollapsed = !treeItem.hasAttribute('open');
+          const isCollapsed = !treeItem.hasAttribute('expanded');
           progressViewState.toggleStates.set(groupId, isCollapsed);
         }
       }
@@ -153,7 +148,7 @@ export class TaskGroupDomManager {
 
     observer.observe(treeItem, {
       attributes: true,
-      attributeFilter: ['open'],
+      attributeFilter: ['expanded'],
     });
 
     this.groupObservers.set(groupId, observer);
@@ -164,6 +159,24 @@ export class TaskGroupDomManager {
     if (existing) {
       existing.disconnect();
       this.groupObservers.delete(groupId);
+    }
+  }
+
+  removeGroup(groupId) {
+    if (!groupId) {
+      return;
+    }
+
+    this._disconnectObserver(groupId);
+
+    const treeItem = this.groupElements.get(groupId);
+    if (treeItem instanceof HTMLElement) {
+      treeItem.remove();
+    }
+
+    this.groupElements.delete(groupId);
+    if (progressViewState.toggleStates.get(groupId) !== undefined) {
+      progressViewState.toggleStates.clearSelection([groupId]);
     }
   }
 
@@ -275,8 +288,8 @@ export class TaskGroupDomManager {
     // Collapse this group
     const treeItem = this.groupElements.get(groupId);
     if (treeItem instanceof HTMLElement) {
-      treeItem.open = false;
-      treeItem.removeAttribute('open');
+      treeItem.toggleAttribute('expanded', false);
+      treeItem.expanded = false;
       progressViewState.toggleStates.set(groupId, true);
     }
   }
@@ -296,7 +309,10 @@ export class TaskGroupDomManager {
     let latestTime = 0;
 
     for (const [id, treeItem] of this.groupElements.entries()) {
-      if (!(treeItem instanceof HTMLElement) || !treeItem.open) {
+      if (
+        !(treeItem instanceof HTMLElement) ||
+        !treeItem.hasAttribute('expanded')
+      ) {
         continue;
       }
 
@@ -359,11 +375,11 @@ export class TaskGroupDomManager {
    * Clear cached group references.
    */
   clear() {
-    this.groupElements.clear();
-    for (const observer of this.groupObservers.values()) {
-      observer.disconnect();
+    for (const groupId of [...this.groupElements.keys()]) {
+      this.removeGroup(groupId);
     }
     this.groupObservers.clear();
+    this.groupElements.clear();
     this.previousActiveGroupId = null;
 
     const treeRoot = document.getElementById(ELEMENT_IDS.LOG_GROUP_TREE);
