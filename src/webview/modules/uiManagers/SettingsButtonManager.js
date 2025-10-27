@@ -88,6 +88,8 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
 
+    this._ensureMenuUsesSlotContent(menu);
+
     const getMenuOpen = () => {
       if ('show' in menu) {
         return Boolean(menu.show);
@@ -122,6 +124,51 @@ export class SettingsButtonManager extends BaseUIManager {
 
     updateExpanded();
     this._updateMenuButtonState(buttonId, checkboxIds);
+  }
+
+  _ensureMenuUsesSlotContent(menu) {
+    if (!menu || typeof menu.tagName !== 'string') {
+      return;
+    }
+
+    if (menu.tagName.toLowerCase() !== 'vscode-context-menu') {
+      return;
+    }
+
+    if (!('data' in menu)) {
+      return;
+    }
+
+    const currentData = menu.data;
+    if (!Array.isArray(currentData)) {
+      return;
+    }
+
+    if (currentData.length > 0) {
+      return;
+    }
+
+    try {
+      // Attempt to clear the auto-provided data array so the component renders
+      // its slotted children instead of expecting a data-driven configuration.
+      menu.data = undefined;
+      if (typeof menu.requestUpdate === 'function') {
+        menu.requestUpdate();
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof TypeError)) {
+        throw error;
+      }
+    }
+
+    if ('_data' in menu) {
+      menu._data = undefined;
+    }
+
+    if (typeof menu.requestUpdate === 'function') {
+      menu.requestUpdate();
+    }
   }
 
   _updateMenuButtonState(buttonId, checkboxIds) {
