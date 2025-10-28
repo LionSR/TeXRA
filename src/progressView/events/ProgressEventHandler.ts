@@ -117,9 +117,15 @@ export class ProgressEventHandler {
 
     const taskState = this.state.getTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
+    const sessionKindHint = this.state.getSessionKindHint(stream);
+    const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
 
     if (instructionUpdate) {
-      this.webviewUpdater.updateInstruction(stream, instructionUpdate);
+      this.webviewUpdater.updateInstruction(
+        stream,
+        instructionUpdate,
+        sessionKind,
+      );
     } else {
       this.webviewUpdater.clearInstruction(stream);
     }
