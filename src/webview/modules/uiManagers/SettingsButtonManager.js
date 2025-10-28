@@ -204,7 +204,7 @@ export class SettingsButtonManager extends BaseUIManager {
         const initialSessionType = getSessionTypeFromGroup(radioGroup);
         if (initialSessionType) {
           this._setLastRadioSessionType(
-            normalizeSessionType(initialSessionType)
+            normalizeSessionType(initialSessionType),
           );
         }
 
