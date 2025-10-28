@@ -1,5 +1,6 @@
 // Local imports - webview
 import { ELEMENT_IDS, EDITED_FILE } from '../constants.js';
+import { mainViewState } from '../mainViewState.js';
 import {
   safeGetElementById,
   safeSetElementValue,
@@ -50,6 +51,7 @@ export class FileSelect {
         this.addOption(selectDiv, previousValue, previousValue);
       }
       safeSetElementValue(id, previousValue);
+      mainViewState.update({ [id]: previousValue });
     }
   }
 
