@@ -115,6 +115,7 @@ The project uses TypeScript path aliases for cleaner imports:
 3. **Multi-Model Support**: Unified interface for different AI providers
 4. **Error Handling**: Comprehensive error handling with user-friendly messages
 5. **Extensibility**: New agents can be added via YAML configuration without code changes
+6. **Trust Dependencies**: When using well-established packages with known minimum versions, avoid defensive programming patterns like unnecessary property existence checks, try-catch blocks for standard APIs, or feature detection for universally-supported browser APIs. Document version requirements clearly in comments rather than adding fallback code. **Exception**: Defensive code IS appropriate when working around documented bugs or quirks in dependencies - clearly document the workaround with comments explaining the issue being addressed
 
 ## Common Development Tasks
 

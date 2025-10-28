@@ -125,6 +125,8 @@ When refactoring, aim for code that looks like it was designed correctly from th
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
 - **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
+- **Trust Dependencies**: Avoid defensive programming for standard APIs. When uncertain about a dependency's behavior, **always investigate first**: examine `node_modules/` (source code, type definitions, package.json, custom-elements.json) to understand the actual behavior before adding code. If you must add fallbacks to make things work initially, treat them as temporary—track down the root cause and remove unnecessary defensive code afterward. Exception: workarounds for documented component quirks should be kept but simplified and clearly commented
+- **Dropdown Menus**: Should close when clicking outside, not just on toggle
 
 ### Source Organization
 

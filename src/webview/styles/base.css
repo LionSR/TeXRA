@@ -71,3 +71,67 @@ body {
 .codicon.clickable:hover {
   color: var(--button-hover-background);
 }
+
+/* Dropdown containers shared across sections */
+.dropdown-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dropdown-container vscode-toolbar-button {
+  flex-shrink: 0;
+}
+
+.dropdown-container .dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-tiny));
+  right: 0;
+  z-index: 100;
+}
+
+.dropdown-container.dropdown-left .dropdown-menu {
+  left: 0;
+  right: auto;
+}
+
+.dropdown-container .dropdown-menu .dropdown-menu-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--spacing-tiny);
+}
+
+.dropdown-container .dropdown-menu vscode-checkbox {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding: var(--spacing-tiny);
+  font-size: var(--font-size-sm);
+}
+
+.dropdown-container .dropdown-menu vscode-checkbox:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+vscode-toolbar-button[aria-expanded='true'] .codicon-chevron-down {
+  transform: rotate(180deg);
+}
+
+vscode-option.disabled-option,
+vscode-option.disabled-model,
+vscode-option.disabled-agent,
+vscode-option[data-requires-key='true'] {
+  color: var(--vscode-descriptionForeground);
+  opacity: var(--opacity-subtle);
+  font-style: italic;
+  background-color: var(--vscode-input-background);
+}
+
+vscode-option[data-multiple='true'] {
+  font-family: codicon, var(--vscode-font-family);
+}
+
+vscode-option[data-tool-use='true'] {
+  font-style: italic;
+}

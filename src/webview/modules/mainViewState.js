@@ -26,7 +26,6 @@ import {
   getSelectOptionElements,
 } from '@common/domUtils.js';
 import { capitalize } from '@common/stringUtils.js';
-import { CHEVRON_DOWN_CLASS } from '@common/iconConstants.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
 const DEFAULT_WORKFLOW_AGENT = 'correct';
@@ -102,18 +101,6 @@ export class MainViewState {
   setDefaults() {
     this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
 
-    const autoExtractToggle = safeGetElementById(
-      ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
-    );
-    const autoExtractOptions = safeGetElementById(
-      ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
-    );
-    if (autoExtractToggle && autoExtractOptions) {
-      autoExtractToggle.classList.remove('active');
-      autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-      autoExtractOptions.style.display = 'none';
-    }
-
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
       fileList.setVisibility(id, toggleId, false);
@@ -183,21 +170,6 @@ export class MainViewState {
       CHECK_BOXES.forEach((id) => {
         safeSetElementChecked(id, previousState[id] ?? false);
       });
-
-      const autoExtractToggle = safeGetElementById(
-        ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
-      );
-      const autoExtractOptions = safeGetElementById(
-        ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
-      );
-      const hasAutoExtractChecked = CHECK_BOXES_AUTO_EXTRACT.some((id) =>
-        safeGetElementChecked(id),
-      );
-      if (autoExtractToggle && autoExtractOptions) {
-        autoExtractToggle.classList.toggle('active', hasAutoExtractChecked);
-        autoExtractToggle.innerHTML = `<i class="codicon codicon-wand"></i><i class="${CHEVRON_DOWN_CLASS}"></i>`;
-        autoExtractOptions.style.display = 'none';
-      }
 
       // Tool config multi-select is initialized by loadState
 
