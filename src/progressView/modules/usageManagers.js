@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { ELEMENT_IDS } from './constants.js';
+import { ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
 import { formatTokens, TaskGroupLevel } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
@@ -73,7 +73,9 @@ export class UsageGroupManager {
       return;
     }
 
-    const groupHeader = document.getElementById(`group-header-${groupId}`);
+    const groupHeader = document.getElementById(
+      `${GROUP_DOM_IDS.HEADER_PREFIX}${groupId}`,
+    );
     if (!groupHeader) {
       console.warn(
         `UsageGroupManager.update: Group header not found for ID: ${groupId}`,

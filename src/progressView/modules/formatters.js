@@ -18,7 +18,7 @@ import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
 
 // Local imports - progress view
-import { STATUS } from './constants.js';
+import { STATUS, GROUP_DOM_IDS } from './constants.js';
 
 // Local imports
 import { katexMacros } from './katexMacros.js';
@@ -1213,7 +1213,7 @@ export class TaskGroupHeaderFormatter {
     const header = createFromTemplate('groupHeaderTemplate');
     if (!header) return null;
 
-    header.id = `group-header-${group.id}`;
+    header.id = `${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}`;
     header.className = this._getHeaderClass(group, level);
 
     const statusIconElem = header.querySelector('.group-status-icon');
