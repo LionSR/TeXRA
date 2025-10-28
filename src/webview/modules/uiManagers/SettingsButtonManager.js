@@ -67,6 +67,8 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
 
+    this._ensureMenuUsesSlotContent(menu);
+
     // The Lit-based vscode-toolbar-button added a toggleable property in
     // @vscode-elements/elements v2.3.1. Older builds only support the
     // boolean attribute, so we attempt the property first and fall back.
@@ -126,6 +128,51 @@ export class SettingsButtonManager extends BaseUIManager {
 
     updateButtonState();
     updateAriaExpanded();
+  }
+
+  _ensureMenuUsesSlotContent(menu) {
+    if (!menu || typeof menu.tagName !== 'string') {
+      return;
+    }
+
+    if (menu.tagName.toLowerCase() !== 'vscode-context-menu') {
+      return;
+    }
+
+    if (!('data' in menu)) {
+      return;
+    }
+
+    const currentData = menu.data;
+    if (!Array.isArray(currentData)) {
+      return;
+    }
+
+    if (currentData.length > 0) {
+      return;
+    }
+
+    try {
+      // Attempt to clear the auto-provided data array so the component renders
+      // its slotted children instead of expecting a data-driven configuration.
+      menu.data = undefined;
+      if (typeof menu.requestUpdate === 'function') {
+        menu.requestUpdate();
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof TypeError)) {
+        throw error;
+      }
+    }
+
+    if ('_data' in menu) {
+      menu._data = undefined;
+    }
+
+    if (typeof menu.requestUpdate === 'function') {
+      menu.requestUpdate();
+    }
   }
 
   _setupSettingsButtons() {
