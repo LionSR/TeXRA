@@ -34,20 +34,22 @@ export class FileSelect {
       return;
     }
     const previousValue = selectDiv.value;
-    selectDiv.innerHTML = '';
-    this.addOption(selectDiv, '', 'None');
-    files.forEach((f) => this.addOption(selectDiv, f, f));
-    if (
+    const normalizedFiles = Array.isArray(files) ? files : [];
+    const shouldPreserveValue =
       previousValue !== undefined &&
       previousValue !== null &&
-      previousValue !== ''
-    ) {
-      const hasPreviousOption = Array.from(
-        selectDiv.querySelectorAll('vscode-option'),
-      ).some((option) => option.value === previousValue);
-      if (hasPreviousOption) {
-        safeSetElementValue(id, previousValue);
+      previousValue !== '';
+
+    selectDiv.innerHTML = '';
+    this.addOption(selectDiv, '', 'None');
+    normalizedFiles.forEach((f) => this.addOption(selectDiv, f, f));
+
+    if (shouldPreserveValue) {
+      const hasPreviousOption = normalizedFiles.includes(previousValue);
+      if (!hasPreviousOption) {
+        this.addOption(selectDiv, previousValue, previousValue);
       }
+      safeSetElementValue(id, previousValue);
     }
   }
 
