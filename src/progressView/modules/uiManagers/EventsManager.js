@@ -104,11 +104,21 @@ export class EventsManager {
     );
     if (radioGroup) {
       const attachRadioListener = () => {
-        addEventListenerSafely(radioGroup, 'change', () => {
-          const filter = radioGroup.value;
+        addEventListenerSafely(radioGroup, 'change', (event) => {
+          if (!(event?.target instanceof Element)) {
+            return;
+          }
+
+          const selectedRadio =
+            event.target.closest('vscode-radio') ||
+            radioGroup.querySelector('vscode-radio[checked]');
+          const filter =
+            selectedRadio?.value || selectedRadio?.getAttribute('value') || '';
+
           if (!filter) {
             return;
           }
+
           if (progressViewState.agentTypeFilter !== filter) {
             progressViewState.agentTypeFilter = filter;
             progressViewState.pendingFilterUpdate = true;
