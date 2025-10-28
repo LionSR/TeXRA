@@ -3,6 +3,9 @@ import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
 
+// Local imports - logging
+import { withLogGroup } from '@logger/logGroupUtils';
+
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
@@ -40,76 +43,54 @@ export class CoTAgent extends BaseReflectionAgent {
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, processGroupId } = options;
-    // Declare the process group ID at the function scope level
-    // Initialize with processGroupId if provided, otherwise it will be set in the try block
-    let outputProcessGroupId: string = processGroupId || '';
 
-    try {
-      // Start a main output processing group if none provided
-      if (!processGroupId) {
-        outputProcessGroupId = await this.logger.startGroup(
-          `OutputProcessing-Round${currRound}`,
-          undefined,
-          this.logger.getActiveGroupId(),
-        );
-      }
+    const runOutputHandling = async (groupId?: string): Promise<string[]> => {
+      const effectiveGroupId = groupId ?? this.logger.getActiveGroupId();
 
-      // Initialize output files array if needed
-      this.outputHandler.ensureRound(currRound);
+      try {
+        this.outputHandler.ensureRound(currRound);
 
-      if (endTurn) {
-        this.logger.debug(
-          `Processing output for round ${currRound}`,
-          outputProcessGroupId,
-        );
+        if (endTurn) {
+          this.logger.debug(
+            `Processing output for round ${currRound}`,
+            effectiveGroupId,
+          );
 
-        // First fix XML structure
-        await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-          outputFile,
-          this.agentSetting.documentTag,
-        );
+          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+            outputFile,
+            this.agentSetting.documentTag,
+          );
 
-        // Then process output files using the output handler
-        await this.outputHandler.processOutputFiles(
-          outputFile,
-          currRound,
-          outputProcessGroupId,
-        );
+          await this.outputHandler.processOutputFiles(
+            outputFile,
+            currRound,
+            effectiveGroupId,
+          );
+        }
 
-        // Note: latexdiff processing is now handled in the parent class's handleOutput method
-      }
-
-      // Finally handle statistics in base class (but pass our group ID)
-      const result = await super.handleOutput(
-        currRound,
-        stateRound,
-        stateGlobal,
-        {
+        return super.handleOutput(currRound, stateRound, stateGlobal, {
           outputFile,
           endTurn,
-          processGroupId: outputProcessGroupId,
-        },
-      );
-
-      // Only end the processing group if we created it
-      // Maybe this kind of setup is more graceful to do a withGroup kind of function?
-      if (!processGroupId) {
-        this.logger.endGroup(outputProcessGroupId, 'stopped');
+          processGroupId: effectiveGroupId,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Error in handleOutput for round ${currRound}: ${error}`,
+          effectiveGroupId,
+        );
+        throw error;
       }
+    };
 
-      return result;
-    } catch (err) {
-      this.logger.error(
-        `Error in handleOutput for round ${currRound}: ${err}`,
-        processGroupId,
-      );
-
-      // Only end the processing group if we created it and we have a valid outputProcessGroupId
-      if (!processGroupId && outputProcessGroupId) {
-        this.logger.endGroup(outputProcessGroupId, 'error');
-      }
-
-      throw err; // Re-throw to maintain error propagation
+    if (processGroupId) {
+      return runOutputHandling(processGroupId);
     }
+
+    return withLogGroup(
+      this.logger,
+      `OutputProcessing-Round${currRound}`,
+      runOutputHandling,
+      { parentGroupId: this.logger.getActiveGroupId() },
+    );
   }
 }
