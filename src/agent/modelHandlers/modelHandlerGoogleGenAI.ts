@@ -436,9 +436,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const stream = await chat.sendMessageStream(streamParams);
 
         const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
+        const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
+          ? this.createOutputStream()
           : undefined;
         const fullParts: Part[] = [];
         let lastCandidate: Candidate | undefined;
@@ -819,9 +819,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, Content[]]> {
     let endTurn = false;
+    const logGroupId = this.logger.getActiveGroupId();
     this.logger.debug(
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
@@ -862,7 +862,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);
@@ -923,7 +923,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   processThinkingBlock(
     responseObject: GenerateContentResponse,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (
@@ -964,9 +963,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (thoughtContent) {
+      const logGroupId = this.logger.getActiveGroupId();
       this.logger.debug(
         `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
-        groupId,
+        logGroupId,
       );
     }
 

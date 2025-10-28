@@ -521,9 +521,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = client.responses.stream(streamParams, { signal });
       const groupId = this.logger.getActiveGroupId();
-      const thinking = this.createThinkingStream(groupId);
+      const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream(groupId)
+        ? this.createOutputStream()
         : undefined;
       const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
       for await (const event of responseStream) {
@@ -1039,9 +1039,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
+    const logGroupId = this.logger.getActiveGroupId();
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
@@ -1071,7 +1071,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);
@@ -1197,7 +1197,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Process reasoning summaries from the Responses API. */
   processThinkingBlock(
     responseObject: Response,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     const outputArr = responseObject?.output;
@@ -1223,9 +1222,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (thoughtContent) {
+      const logGroupId = this.logger.getActiveGroupId();
       this.logger.debug(
         `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,
-        groupId,
+        logGroupId,
       );
     }
 

@@ -53,7 +53,6 @@ export interface ToolUseCycleOptions<C = unknown> {
 export async function runToolUseCycle<C = unknown>(
   options: ToolUseCycleOptions<C>,
   messages: ProviderMessage[],
-  groupId?: string,
 ): Promise<void> {
   const {
     modelHandler,
@@ -80,7 +79,6 @@ export async function runToolUseCycle<C = unknown>(
       context: {
         logger,
         modelName,
-        groupId,
       },
       fileOptions: {
         continuationCount: iteration,
@@ -112,7 +110,6 @@ export async function runToolUseCycle<C = unknown>(
       context: {
         logger,
         modelName,
-        groupId,
       },
       fileOptions: {
         continuationCount: iteration,
@@ -124,16 +121,12 @@ export async function runToolUseCycle<C = unknown>(
       break;
     }
 
-    const thinking = modelHandler.processThinkingBlock(
-      response,
-      groupId,
-      toolState,
-    );
+    const thinking = modelHandler.processThinkingBlock(response, toolState);
     const useStreaming = modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
-        logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+        logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
       }
     }
 
@@ -146,10 +139,10 @@ export async function runToolUseCycle<C = unknown>(
       '',
     );
     if (text) {
-      logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      logger.debug(`Model response: ${text.slice(0, 100)}`);
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
-        logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+        logger.info(formatted, undefined, MESSAGE_TYPES.MODEL_RESPONSE);
       }
     }
     if (usage) {
@@ -160,7 +153,7 @@ export async function runToolUseCycle<C = unknown>(
         cost: normalized.cost,
         elapsedTime: normalized.responseTime,
       };
-      logger.statistics(stats, groupId);
+      logger.statistics(stats);
     }
 
     const endTurn = modelHandler.isEndTurnStop(stopReason);
@@ -186,7 +179,7 @@ export async function runToolUseCycle<C = unknown>(
         input: toolInfo,
         output: sanitizeToolResultForLog(errorResult),
       };
-      logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
     }
 
@@ -203,7 +196,7 @@ export async function runToolUseCycle<C = unknown>(
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       break;
     }
     let input = parsed.input ?? parsed.args;
@@ -280,7 +273,7 @@ export async function runToolUseCycle<C = unknown>(
       output: sanitizeToolResultForLog(result),
     };
 
-    logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+    logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
     // Build provider-specific message containing the tool result
     const resultObj: Record<string, unknown> = {};

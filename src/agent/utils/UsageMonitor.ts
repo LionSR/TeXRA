@@ -28,11 +28,8 @@ export class UsageMonitor {
     private readonly logger: AgentLogger,
   ) {}
 
-  async recordUsage(
-    stateGlobal: AgentStateGlobal,
-    groupId?: string,
-  ): Promise<void> {
-    const statsGroupId = groupId ?? this.logger.getActiveGroupId();
+  async recordUsage(stateGlobal: AgentStateGlobal): Promise<void> {
+    const statsGroupId = this.logger.getActiveGroupId();
 
     try {
       let responseUsage:
@@ -156,9 +153,9 @@ export class UsageMonitor {
         }),
       };
 
-      this.logger.statistics(payload, statsGroupId);
+      this.logger.statistics(payload);
     } catch (error) {
-      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+      this.logger.error(`Error printing statistics: ${error}`);
     }
   }
 }

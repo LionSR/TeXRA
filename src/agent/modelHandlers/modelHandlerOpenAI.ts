@@ -177,9 +177,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
           signal,
         });
         const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
+        const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
+          ? this.createOutputStream()
           : undefined;
 
         if (this.config.fullName.includes('deepseek')) {
@@ -822,9 +822,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
+    const logGroupId = this.logger.getActiveGroupId();
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
@@ -856,7 +856,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     // Write file content to output file
@@ -1115,13 +1115,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /**
    * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
    * @param responseObject The response object from the OpenAI API
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with thinking blocks
    * @returns Always returns null as OpenAI doesn't support thinking blocks
    */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
@@ -1134,9 +1132,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
       toolState.thinkingAdded = true;
     }
 
+    const logGroupId = this.logger.getActiveGroupId();
+
     this.logger.debug(
       `OpenAI reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
-      groupId,
+      logGroupId,
     );
     return reasoning;
   }

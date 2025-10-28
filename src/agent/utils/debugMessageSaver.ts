@@ -75,6 +75,7 @@ export async function maybeSaveDebugObject({
   }
 
   const { logger, modelName, executionId, groupId } = context;
+  const resolvedGroupId = groupId ?? logger.getActiveGroupId();
   const { outputFile, baseName = objectType, continuationCount } = fileOptions;
 
   const fileBase =
@@ -99,8 +100,14 @@ export async function maybeSaveDebugObject({
         object,
       );
     }
-    logger.info(`Saved ${objectType} object to ${debugFilePath}`, groupId);
+    logger.info(
+      `Saved ${objectType} object to ${debugFilePath}`,
+      resolvedGroupId,
+    );
   } catch (error) {
-    logger.error(`Failed to save ${objectType} object: ${error}`, groupId);
+    logger.error(
+      `Failed to save ${objectType} object: ${error}`,
+      resolvedGroupId,
+    );
   }
 }

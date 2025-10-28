@@ -42,54 +42,37 @@ export class CoTAgent extends BaseReflectionAgent {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
-
-    const runOutputHandling = async (groupId?: string): Promise<string[]> => {
-      const effectiveGroupId = groupId ?? this.logger.getActiveGroupId();
-
-      try {
-        this.outputHandler.ensureRound(currRound);
-
-        if (endTurn) {
-          this.logger.debug(
-            `Processing output for round ${currRound}`,
-            effectiveGroupId,
-          );
-
-          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-            outputFile,
-            this.agentSetting.documentTag,
-          );
-
-          await this.outputHandler.processOutputFiles(
-            outputFile,
-            currRound,
-            effectiveGroupId,
-          );
-        }
-
-        return super.handleOutput(currRound, stateRound, stateGlobal, {
-          outputFile,
-          endTurn,
-          processGroupId: effectiveGroupId,
-        });
-      } catch (error) {
-        this.logger.error(
-          `Error in handleOutput for round ${currRound}: ${error}`,
-          effectiveGroupId,
-        );
-        throw error;
-      }
-    };
-
-    if (processGroupId) {
-      return runOutputHandling(processGroupId);
-    }
+    const { outputFile, endTurn } = options;
 
     return withLogGroup(
       this.logger,
       `OutputProcessing-Round${currRound}`,
-      runOutputHandling,
+      async () => {
+        try {
+          this.outputHandler.ensureRound(currRound);
+
+          if (endTurn) {
+            this.logger.debug(`Processing output for round ${currRound}`);
+
+            await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+              outputFile,
+              this.agentSetting.documentTag,
+            );
+
+            await this.outputHandler.processOutputFiles(outputFile, currRound);
+          }
+
+          return super.handleOutput(currRound, stateRound, stateGlobal, {
+            outputFile,
+            endTurn,
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error in handleOutput for round ${currRound}: ${error}`,
+          );
+          throw error;
+        }
+      },
       { parentGroupId: this.logger.getActiveGroupId() },
     );
   }

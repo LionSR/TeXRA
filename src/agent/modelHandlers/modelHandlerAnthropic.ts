@@ -465,9 +465,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         try {
           const groupId = this.logger.getActiveGroupId();
-          const thinking = this.createThinkingStream(groupId);
+          const thinking = this.createThinkingStream();
           const output = this.isOutputStreamingEnabled()
-            ? this.createOutputStream(groupId)
+            ? this.createOutputStream()
             : undefined;
           stream.on('thinking', (delta: string) => {
             thinking.append(delta);
@@ -1048,10 +1048,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, MessageParam[]]> {
     const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
+    const logGroupId = this.logger.getActiveGroupId();
 
     if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
       if (this.capabilities.supportsAssistantPrefill) {
@@ -1097,7 +1097,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, logGroupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);
@@ -1441,7 +1441,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Process thinking blocks for Anthropic models
    * @param responseObject The response object from Anthropic API
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking blocks
    * @returns The extracted thinking content (or null if none)
    * This preserves the full thinking objects including signature which is required
@@ -1449,7 +1448,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   processThinkingBlock(
     responseObject: BetaMessage,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (!responseObject) {
@@ -1459,6 +1457,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Extract all thinking blocks from the response
     const thinkingBlocks = [];
     let regularThinkingContent = null;
+    const logGroupId = this.logger.getActiveGroupId();
 
     try {
       if (responseObject.content && Array.isArray(responseObject.content)) {
@@ -1478,7 +1477,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } catch (e) {
       this.logger.error(
         `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        groupId,
+        logGroupId,
         undefined,
         e,
       );
@@ -1491,7 +1490,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     this.logger.debug(
       `Found ${thinkingBlocks.length} thinking blocks`,
-      groupId,
+      logGroupId,
     );
 
     // If toolState is provided, update it with all thinking blocks
@@ -1506,12 +1505,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         toolState.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to toolState`,
-          groupId,
+          logGroupId,
         );
       } else {
         this.logger.debug(
           `Skipping adding thinking blocks to toolState because of cut off message`,
-          groupId,
+          logGroupId,
         );
       }
     }

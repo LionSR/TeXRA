@@ -138,7 +138,6 @@ export interface IModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, M[]]>;
 
   /** Compute the cost for a response. */
@@ -185,7 +184,6 @@ export interface IModelHandler<
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null;
 

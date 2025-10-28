@@ -32,11 +32,7 @@ export interface IOutputHandler {
   indentLatexFiles(filePaths: string[]): Promise<void>;
 
   /** Process output files from XML or direct input. */
-  processOutputFiles(
-    outputFile: string,
-    currRound: number,
-    groupId?: string,
-  ): Promise<void>;
+  processOutputFiles(outputFile: string, currRound: number): Promise<void>;
 
   /** Gather mapping and diff stats for output files of a round. */
   gatherOutputFileInfo(currRound: number): Promise<OutputFileInfo[]>;
@@ -45,11 +41,7 @@ export interface IOutputHandler {
   getRoundMapping(currRound: number): RoundFileMapping;
 
   /** Validate expected output files for the given round. */
-  validateExpectedOutputs(
-    outputFile: string,
-    currRound: number,
-    groupId?: string,
-  ): Promise<void>;
+  validateExpectedOutputs(outputFile: string, currRound: number): Promise<void>;
 
   /** Finalize processing for a round. */
   finalizeRound(
@@ -57,7 +49,6 @@ export interface IOutputHandler {
     currRound: number,
     options: {
       endTurn: boolean;
-      groupId?: string;
     },
   ): Promise<void>;
 }

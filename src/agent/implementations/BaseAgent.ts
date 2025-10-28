@@ -196,9 +196,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected async trackRoundUsage(
     stateGlobal: AgentStateGlobal,
-    groupId?: string,
   ): Promise<void> {
-    await this.usageMonitor.recordUsage(stateGlobal, groupId);
+    await this.usageMonitor.recordUsage(stateGlobal);
   }
 
   /**

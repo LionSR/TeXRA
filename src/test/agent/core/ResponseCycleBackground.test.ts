@@ -246,6 +246,7 @@ describe('ResponseCycle background reasoning logs', () => {
 
   it('logs reasoning content when background responses disable streaming', async () => {
     const loggedEvents: LoggedEvent[] = [];
+    let activeGroupId: string | undefined = 'group';
     const loggerStub = {
       channelId: 'test',
       isAgentLogger: true,
@@ -264,8 +265,10 @@ describe('ResponseCycle background reasoning logs', () => {
       userMessage() {},
       startGroup: async () => 'group',
       endGroup() {},
-      getActiveGroupId: () => undefined,
-      setActiveGroupId() {},
+      getActiveGroupId: () => activeGroupId,
+      setActiveGroupId(value?: string) {
+        activeGroupId = value;
+      },
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {
@@ -381,6 +384,7 @@ describe('ResponseCycle background reasoning logs', () => {
     configValues.set('texra.model.useStreamingOpenai', true);
     configValues.set('texra.model.useBackgroundResponses', false);
 
+    let activeGroupId: string | undefined = 'group';
     const loggerStub = {
       channelId: 'test',
       isAgentLogger: true,
@@ -395,8 +399,10 @@ describe('ResponseCycle background reasoning logs', () => {
       userMessage() {},
       startGroup: async () => 'group',
       endGroup() {},
-      getActiveGroupId: () => undefined,
-      setActiveGroupId() {},
+      getActiveGroupId: () => activeGroupId,
+      setActiveGroupId(value?: string) {
+        activeGroupId = value;
+      },
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {

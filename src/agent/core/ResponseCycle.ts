@@ -40,6 +40,7 @@ export interface ResponseCycleOptions<C = unknown> {
   userVars: Record<string, any>;
   logger: AgentLogger;
   client: C;
+  executionId?: ExecutionId;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
 }
@@ -55,8 +56,6 @@ export async function runResponseCycle<C = unknown>(
   stateGlobal: AgentStateGlobal,
   toolState: ToolState,
   outputFile: string,
-  roundGroupId?: string,
-  executionId?: ExecutionId,
 ): Promise<[AgentStateRound, AgentStateGlobal, ToolState, boolean]> {
   const {
     modelHandler,
@@ -66,11 +65,10 @@ export async function runResponseCycle<C = unknown>(
     userVars,
     logger,
     client,
+    executionId,
     checkInterruption,
     setAbortController,
   } = options;
-
-  const taskGroupId = roundGroupId;
 
   let endTurn = false;
   while (!endTurn) {
@@ -90,7 +88,6 @@ export async function runResponseCycle<C = unknown>(
       logger,
       modelName: agentConfig.model,
       executionId,
-      groupId: taskGroupId,
     };
     const debugFileOptions = {
       continuationCount: stateRound.continuationCount,
@@ -129,43 +126,35 @@ export async function runResponseCycle<C = unknown>(
       });
       setAbortController(null);
     }
-    await maybeSaveDebugObject({
-      object: responseObject,
-      objectType: 'response',
-      context: debugContext,
-      fileOptions: debugFileOptions,
-    });
     if (!responseObject) {
       logger.warn(
         'Model response was aborted or returned no data; output may be incomplete.',
-        taskGroupId,
       );
       break;
     }
     const responseTime = (Date.now() - startTime) / 1000;
     stateRound.updateResponseTime(responseTime);
-    logger.debug(`Response time: ${responseTime.toFixed(2)}s`, taskGroupId);
+    logger.debug(`Response time: ${responseTime.toFixed(2)}s`);
 
     const [newResponse, responseUsage, stopReason] =
       modelHandler.extractResponse(responseObject, agentSetting.endTag);
 
-    logger.debug(`Stop reason: ${stopReason}`, taskGroupId);
-    logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`, taskGroupId);
+    logger.debug(`Stop reason: ${stopReason}`);
+    logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
     const thinkingContent = modelHandler.processThinkingBlock(
       responseObject,
-      taskGroupId,
       toolState,
     );
     const useStreaming = modelHandler.getStreamingConfig();
 
     if (newResponse) {
-      logger.debug(`Model response: ${newResponse.slice(0, 100)}`, taskGroupId);
+      logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
       if (!useStreaming) {
         const formattedResponse = await xmlUtils.formatContent(newResponse);
         logger.info(
           formattedResponse,
-          taskGroupId,
+          undefined,
           // Workflow agents should not surface final completions in the progress view,
           // so mark the response as INTERNAL while still writing it to the output channel.
           MESSAGE_TYPES.INTERNAL,
@@ -178,7 +167,7 @@ export async function runResponseCycle<C = unknown>(
     // so we avoid duplicate logging here
     if (thinkingContent && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinkingContent);
-      logger.info(formatted, taskGroupId, MESSAGE_TYPES.THINKING);
+      logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
     }
 
     const scratchpad = await xmlUtils.extractScratchpad(
@@ -186,7 +175,7 @@ export async function runResponseCycle<C = unknown>(
       'scratchpad',
     );
     if (scratchpad) {
-      logger.info(scratchpad, taskGroupId, MESSAGE_TYPES.SCRATCHPAD);
+      logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     const APIUsage = modelHandler.computeResponseUsage(
@@ -203,17 +192,10 @@ export async function runResponseCycle<C = unknown>(
     if (repetitionResult.massiveRepetitionDetected) {
       logger.error(
         `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-        taskGroupId,
       );
-      logger.error(
-        'Massive repetition detected - skipping this response',
-        taskGroupId,
-      );
-      logger.error('Message structure when repetition detected:', taskGroupId);
-      logger.error(
-        JSON.stringify(messageToSkeleton(messages), null, 2),
-        taskGroupId,
-      );
+      logger.error('Massive repetition detected - skipping this response');
+      logger.error('Message structure when repetition detected:');
+      logger.error(JSON.stringify(messageToSkeleton(messages), null, 2));
       break;
     }
 
@@ -231,24 +213,22 @@ export async function runResponseCycle<C = unknown>(
     );
 
     if (!exists) {
-      logger.debug(`Creating new file: ${outputFile}`, taskGroupId);
+      logger.debug(`Creating new file: ${outputFile}`);
       await WorkspaceFS.write(outputFile, processedResponse);
     } else {
-      logger.debug(`Appending to existing file: ${outputFile}`, taskGroupId);
+      logger.debug(`Appending to existing file: ${outputFile}`);
       await WorkspaceFS.appendFile(
         outputFile,
         bestConnector + processedResponse,
       );
     }
 
-    logger.debug('Response preview:', taskGroupId);
+    logger.debug('Response preview:');
     logger.debug(
       `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
-      taskGroupId,
     );
     logger.debug(
       `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
-      taskGroupId,
     );
 
     if (modelHandler.capabilities.supportsAssistantPrefill) {
@@ -282,7 +262,7 @@ export async function runResponseCycle<C = unknown>(
     stateRound.incrementContinuation();
     logger.info(
       `Starting continuation #${stateRound.continuationCount}`,
-      taskGroupId,
+      undefined,
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
@@ -291,7 +271,6 @@ export async function runResponseCycle<C = unknown>(
     ) {
       logger.debug(
         'Should continue - adding continuation message to conversation',
-        taskGroupId,
       );
       if (modelHandler.capabilities.supportsAssistantPrefill) {
         modelHandler.addContinueMessageWithPrefill(

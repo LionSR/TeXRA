@@ -181,14 +181,14 @@ export abstract class ModelHandler<
    * Creates a log stream for progressive updates to the Progress view.
    *
    * @param type Message type for the stream.
-   * @param groupId Optional log group identifier.
    * @returns Object with `append` and `finalize` helpers.
    */
-  protected createLogStream(type: MessageType, groupId?: string) {
+  protected createLogStream(type: MessageType) {
     const streamId = this.logger.channelId;
     const id = randomUUID();
     let buffer = '';
     let isFirstUpdate = true;
+    const groupId = this.logger.getActiveGroupId();
 
     return {
       append: (text: string) => {
@@ -269,15 +269,15 @@ export abstract class ModelHandler<
   /**
    * Convenience wrapper for thinking streams.
    */
-  protected createThinkingStream(groupId?: string) {
-    return this.createLogStream(MESSAGE_TYPES.THINKING, groupId);
+  protected createThinkingStream() {
+    return this.createLogStream(MESSAGE_TYPES.THINKING);
   }
 
   /**
    * Convenience wrapper for output streams.
    */
-  protected createOutputStream(groupId?: string) {
-    return this.createLogStream(MESSAGE_TYPES.MODEL_RESPONSE, groupId);
+  protected createOutputStream() {
+    return this.createLogStream(MESSAGE_TYPES.MODEL_RESPONSE);
   }
 
   /**
@@ -966,7 +966,6 @@ export abstract class ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, M[]]>;
 
   /**
@@ -1016,13 +1015,11 @@ export abstract class ModelHandler<
   /**
    * Extracts thinking content from model responses
    * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null;
 

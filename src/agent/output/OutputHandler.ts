@@ -52,7 +52,6 @@ export class OutputHandler implements IOutputHandler {
   public outputMappings: { [key: number]: NamedOutputFile[] };
   private roundMappings: { [key: number]: RoundFileMapping };
   public baseFiles: string[];
-  public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
@@ -151,10 +150,6 @@ export class OutputHandler implements IOutputHandler {
   ): void {
     if (groupId) {
       this.logger.endGroup(groupId, status);
-    } else if (this.processGroupId) {
-      // this.logger.info(`Completed output processing`, this.processGroupId);
-      this.logger.endGroup(this.processGroupId, status);
-      this.processGroupId = undefined;
     }
   }
 
@@ -279,7 +274,6 @@ export class OutputHandler implements IOutputHandler {
   public async validateExpectedOutputs(
     outputFile: string,
     currRound: number,
-    groupId?: string,
   ): Promise<void> {
     const expected = this.agentConfig.outputFiles;
     if (!expected || expected.length === 0) {
@@ -329,7 +323,7 @@ export class OutputHandler implements IOutputHandler {
         documentTag: this.agentSetting.documentTag,
       };
 
-      this.logger.missingOutputs(missingOutputsData, groupId);
+      this.logger.missingOutputs(missingOutputsData);
     }
 
     bus.emit('updateMissingOutputs', {
@@ -346,25 +340,21 @@ export class OutputHandler implements IOutputHandler {
   public async finalizeRound(
     outputFile: string,
     currRound: number,
-    options: { endTurn: boolean; groupId?: string },
+    options: { endTurn: boolean },
   ): Promise<void> {
-    const { endTurn, groupId } = options;
+    const { endTurn } = options;
     this.ensureRound(currRound);
     const fileInfos = await this.gatherOutputFileInfo(currRound);
 
     if (endTurn) {
       try {
-        await this.validateExpectedOutputs(outputFile, currRound, groupId);
-        this.logger.debug(
-          `Expected outputs validated for round ${currRound}`,
-          groupId,
-        );
+        await this.validateExpectedOutputs(outputFile, currRound);
+        this.logger.debug(`Expected outputs validated for round ${currRound}`);
       } catch (error) {
         this.logger.error(
           `Expected output validation failed after round ${currRound}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          groupId,
         );
       }
     }
@@ -387,7 +377,6 @@ export class OutputHandler implements IOutputHandler {
           `Failed to open output file ${filePath}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          groupId,
         );
       }
     }
@@ -399,9 +388,7 @@ export class OutputHandler implements IOutputHandler {
   public async processOutputFiles(
     outputFile: string,
     currRound: number,
-    groupId?: string,
   ): Promise<void> {
-    const activeGroupId = groupId || this.logger.getActiveGroupId();
     this.ensureRound(currRound);
 
     if (
@@ -411,7 +398,6 @@ export class OutputHandler implements IOutputHandler {
       // Multiple output files case
       this.logger.debug(
         `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
-        activeGroupId,
       );
 
       try {
@@ -423,7 +409,6 @@ export class OutputHandler implements IOutputHandler {
           await this.indentLatexFiles(processedFiles);
           this.logger.debug(
             `Indented multiple output files: ${processedFiles.join(',')}`,
-            activeGroupId,
           );
 
           this.setRoundOutputs(currRound, processedFiles, processedPairs);
@@ -438,24 +423,20 @@ export class OutputHandler implements IOutputHandler {
         } else {
           this.logger.debug(
             `No processed files were generated from ${outputFile}`,
-            activeGroupId,
           );
           this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
           `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
+          undefined,
           MESSAGE_TYPES.INTERNAL,
         );
         this.setRoundOutputs(currRound, [], []);
       }
     } else {
       // Single output file case
-      this.logger.debug(
-        `Processing single output for ${outputFile}`,
-        activeGroupId,
-      );
+      this.logger.debug(`Processing single output for ${outputFile}`);
 
       try {
         let processed: NamedOutputFile = {
@@ -477,23 +458,19 @@ export class OutputHandler implements IOutputHandler {
 
         if (processed && processed.path) {
           await this.indentLatexFile(processed.path);
-          this.logger.debug(
-            `Indented single output file: ${processed.path}`,
-            activeGroupId,
-          );
+          this.logger.debug(`Indented single output file: ${processed.path}`);
 
           this.setRoundOutputs(currRound, [processed.path], [processed]);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
-            activeGroupId,
           );
           this.setRoundOutputs(currRound, [], []);
         }
       } catch (err) {
         this.logger.debug(
           `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
-          activeGroupId,
+          undefined,
           MESSAGE_TYPES.INTERNAL,
         );
         const missingOutputsData = {
@@ -501,7 +478,7 @@ export class OutputHandler implements IOutputHandler {
           xmlFile: outputFile,
           documentTag: this.agentSetting.documentTag,
         };
-        this.logger.missingOutputs(missingOutputsData, activeGroupId);
+        this.logger.missingOutputs(missingOutputsData);
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
           filesByRound: { [currRound]: [] },

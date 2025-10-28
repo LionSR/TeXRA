@@ -39,60 +39,38 @@ export class DirectAgent extends BaseReflectionAgent {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
-
-    const runOutputHandling = async (groupId?: string): Promise<string[]> => {
-      const effectiveGroupId = groupId ?? this.logger.getActiveGroupId();
-
-      try {
-        this.outputHandler.ensureRound(currRound);
-
-        if (endTurn) {
-          this.logger.debug(
-            `Processing output for round ${currRound}`,
-            effectiveGroupId,
-          );
-
-          if (this.useScratchpad) {
-            await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-              outputFile,
-              this.agentSetting.documentTag,
-            );
-          }
-
-          await this.outputHandler.processOutputFiles(
-            outputFile,
-            currRound,
-            effectiveGroupId,
-          );
-          this.logger.debug(
-            `Output files processed for round ${currRound}`,
-            effectiveGroupId,
-          );
-        }
-
-        return super.handleOutput(currRound, stateRound, stateGlobal, {
-          outputFile,
-          endTurn,
-          processGroupId: effectiveGroupId,
-        });
-      } catch (error) {
-        this.logger.error(
-          `Error in DirectAgent.handleOutput: ${error}`,
-          effectiveGroupId,
-        );
-        throw error;
-      }
-    };
-
-    if (processGroupId) {
-      return runOutputHandling(processGroupId);
-    }
+    const { outputFile, endTurn } = options;
 
     return withLogGroup(
       this.logger,
       `OutputProcessing-Round${currRound}`,
-      runOutputHandling,
+      async () => {
+        try {
+          this.outputHandler.ensureRound(currRound);
+
+          if (endTurn) {
+            this.logger.debug(`Processing output for round ${currRound}`);
+
+            if (this.useScratchpad) {
+              await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+                outputFile,
+                this.agentSetting.documentTag,
+              );
+            }
+
+            await this.outputHandler.processOutputFiles(outputFile, currRound);
+            this.logger.debug(`Output files processed for round ${currRound}`);
+          }
+
+          return super.handleOutput(currRound, stateRound, stateGlobal, {
+            outputFile,
+            endTurn,
+          });
+        } catch (error) {
+          this.logger.error(`Error in DirectAgent.handleOutput: ${error}`);
+          throw error;
+        }
+      },
       { parentGroupId: this.logger.getActiveGroupId() },
     );
   }
