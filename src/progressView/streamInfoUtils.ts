@@ -78,7 +78,6 @@ export function buildStreamInfos(
       return acc;
     }
 
-
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
