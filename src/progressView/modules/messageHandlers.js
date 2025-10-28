@@ -85,15 +85,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStreams(message) {
-    state.activeStream = message.activeStream;
-    if (
-      !state.pendingFilterUpdate &&
-      message.agentFilter !== undefined &&
-      message.agentFilter !== state.agentTypeFilter
-    ) {
-      state.agentTypeFilter = message.agentFilter;
+    try {
+      state.activeStream = message.activeStream;
+      if (
+        !state.pendingFilterUpdate &&
+        message.agentFilter !== undefined &&
+        message.agentFilter !== state.agentTypeFilter
+      ) {
+        state.agentTypeFilter = message.agentFilter;
+      }
+    } finally {
+      state.pendingFilterUpdate = false;
     }
-    state.pendingFilterUpdate = false;
     const activeFilter = state.agentTypeFilter;
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
@@ -178,9 +181,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
-      logContent.innerHTML = '';
-      state.taskGroups.clear();
       dom.taskGroups.clear();
+      state.taskGroups.clear();
+      logContent.innerHTML = '';
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -216,13 +219,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleClearLogs() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
+    dom.taskGroups.clear();
+    state.taskGroups.clear();
+    state.toggleStates.clearSelection(groupIds);
     if (logContent) {
       logContent.innerHTML = '';
     }
-    const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
-    state.taskGroups.clear();
-    dom.taskGroups.clear();
-    state.toggleStates.clearSelection(groupIds);
 
     this._updatePlaceholderVisibility();
   }

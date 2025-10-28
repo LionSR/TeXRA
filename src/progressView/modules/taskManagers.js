@@ -58,6 +58,7 @@ export class TaskGroupDomManager {
       console.error(
         'TaskGroupDomManager.addGroup: failed to create group header',
       );
+      detailsElem.remove();
       return;
     }
 
@@ -66,6 +67,7 @@ export class TaskGroupDomManager {
       console.error(
         'TaskGroupDomManager.addGroup: missing group content container',
       );
+      detailsElem.remove();
       return;
     }
     groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
