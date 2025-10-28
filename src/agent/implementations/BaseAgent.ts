@@ -186,6 +186,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return false;
   }
 
+  public isInterruptionRequested(): boolean {
+    return this.isInterrupted;
+  }
+
   public setExecutionId(id: ExecutionId): void {
     this.executionId = id;
   }

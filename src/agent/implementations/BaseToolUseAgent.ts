@@ -215,7 +215,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
       while (true) {
         if (!shouldSkipCycle) {
-          await runToolUseCycle(cycleOptions, this.messages);
+          await runToolUseCycle({
+            options: cycleOptions,
+            messages: this.messages,
+          });
         } else {
           shouldSkipCycle = false;
         }
