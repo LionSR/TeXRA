@@ -61,12 +61,9 @@ export class RecordingButtonManager {
       tagName === 'vscode-button' || tagName === 'vscode-toolbar-button';
 
     if (isVsCodeButton) {
-      this.button.setAttribute('icon', iconName);
+      this.button.icon = iconName;
       if (tagName === 'vscode-button') {
         this.button.iconOnly = true;
-      }
-      if (tagName === 'vscode-toolbar-button') {
-        this.button.setAttribute('label', title);
       }
       this.button.setAttribute('aria-label', title);
       this.button.title = title;
