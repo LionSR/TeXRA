@@ -34,7 +34,7 @@ export interface ToolUseCycleOptions<C = unknown> {
   toolRegistry: Record<string, BaseTool<any>>;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
-  toolState?: ToolState | null;
+  toolState: ToolState;
   modelName?: string;
   executionId?: ExecutionId;
 }
@@ -52,7 +52,7 @@ export async function runToolUseCycle<C = unknown>(
     options: context.options,
     state: {
       messages: context.messages,
-      toolState: context.options.toolState ?? null,
+      toolState: context.options.toolState,
       groupId: context.groupId,
       iteration: 0,
       shouldStop: false,
