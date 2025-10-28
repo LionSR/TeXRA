@@ -396,31 +396,6 @@
                   </vscode-radio>
                 </vscode-radio-group>
               </div>
-              <div class="dropdown-container">
-                <vscode-toolbar-button
-                  id="toggleToolConfig"
-                  icon="tools"
-                  title="Tool configuration options"
-                  toggleable
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                >
-                  <i class="codicon codicon-chevron-down"></i>
-                </vscode-toolbar-button>
-                <vscode-context-menu
-                  id="toolConfigOptions"
-                  class="dropdown-menu"
-                >
-                  <div class="dropdown-menu-content">
-                    <vscode-checkbox id="attachTeXCount"
-                      >Attach TeX Count</vscode-checkbox
-                    >
-                    <vscode-checkbox id="attachDiagnostics"
-                      >Attach Diagnostics</vscode-checkbox
-                    >
-                  </div>
-                </vscode-context-menu>
-              </div>
             </div>
             <vscode-toolbar-container class="instruction-header-actions">
               <vscode-toolbar-button
@@ -512,6 +487,28 @@
                   ${modelOptions}
                 </vscode-single-select>
               </div>
+            </div>
+            <div class="dropdown-container">
+              <vscode-toolbar-button
+                id="toggleToolConfig"
+                icon="tools"
+                title="Tool configuration options"
+                toggleable
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                <i class="codicon codicon-chevron-down"></i>
+              </vscode-toolbar-button>
+              <vscode-context-menu id="toolConfigOptions" class="dropdown-menu">
+                <div class="dropdown-menu-content">
+                  <vscode-checkbox id="attachTeXCount"
+                    >Attach TeX Count</vscode-checkbox
+                  >
+                  <vscode-checkbox id="attachDiagnostics"
+                    >Attach Diagnostics</vscode-checkbox
+                  >
+                </div>
+              </vscode-context-menu>
             </div>
             <vscode-button
               id="executeButton"
