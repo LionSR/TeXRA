@@ -424,9 +424,15 @@ export class LogEntryFormatter {
 
     const headerLabel = element.querySelector('.tool-use-title');
     const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
-    if (headerLabel) headerLabel.textContent = 'Tool Use';
+    const updateHeading = (value) => {
+      if (headerLabel) {
+        headerLabel.textContent = value;
+      }
+      element.heading = value;
+    };
+
+    updateHeading('Tool Use');
     if (iconElem) iconElem.className = 'codicon codicon-wrench';
-    element.heading = 'Tool Use';
     element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
     element.classList.remove('tool-use-error');
 
@@ -464,7 +470,7 @@ export class LogEntryFormatter {
     }
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      if (headerLabel) headerLabel.textContent = 'Tool Use (raw entry)';
+      updateHeading('Tool Use (raw entry)');
       if (iconElem) iconElem.className = 'codicon codicon-wrench';
       element.classList.remove('tool-use-error');
 
@@ -549,7 +555,7 @@ export class LogEntryFormatter {
       ? `${titleBase} — ${headerSummary}`
       : titleBase;
 
-    if (headerLabel) headerLabel.textContent = titleText;
+    updateHeading(titleText);
     if (iconElem) {
       iconElem.className = isError
         ? 'codicon codicon-error'
@@ -1016,7 +1022,7 @@ export class LogEntryFormatter {
         : `Latexdiff results (${entries.length})`;
 
     if (summaryElem) summaryElem.textContent = summary;
-    element.heading = summary;
+    else element.heading = summary;
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;

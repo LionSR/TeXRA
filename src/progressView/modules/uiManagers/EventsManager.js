@@ -141,7 +141,7 @@ export class EventsManager {
       }
     }
 
-    // Track collapsible open state emitted by the VS Code toolkit component
+    // Track collapsible open state emitted by the VS Code elements component
     document.addEventListener(
       'vsc-collapsible-toggle',
       (e) => {
