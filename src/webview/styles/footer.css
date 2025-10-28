@@ -24,8 +24,8 @@
   align-items: center;
   gap: var(--spacing-small);
   flex: 0 1 auto;
-  min-width: 10rem;
-  max-width: 14rem;
+  min-width: 8rem;
+  max-width: 12rem;
 }
 
 .agent-select-dropdowns {
@@ -40,8 +40,8 @@
 
 .model-selection-footer .select-group select,
 .model-selection-footer .select-group vscode-single-select {
-  min-width: 6.4rem;
-  max-width: 9.6rem;
+  min-width: 5rem;
+  max-width: 8rem;
 }
 
 .agent-select--hidden {
