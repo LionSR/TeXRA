@@ -178,7 +178,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.updateWebview();
   }
 
-  private async handleDeleteAll(message: any): Promise<void> {
+  private async handleDeleteAll(_message: any): Promise<void> {
+    // Show confirmation dialog
+    const confirmation = await vscode.window.showWarningMessage(
+      'Are you sure you want to delete all streams? This action cannot be undone.',
+      { modal: true },
+      'Delete All',
+      'Cancel',
+    );
+
+    if (confirmation !== 'Delete All') {
+      return;
+    }
+
     // Delete all persisted session data
     const allStates = this.provider.state.getAllTaskStates();
     for (const [stream] of allStates) {

@@ -6,6 +6,7 @@
   display: none;
   border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
 }
 
 .instruction-panel.is-visible {
@@ -47,10 +48,6 @@
   color: var(--vscode-testing-iconPassed, #2ea043);
 }
 
-.instruction-panel__toggle.is-hidden {
-  display: none;
-}
-
 .instruction-panel__body {
   padding: 0 var(--spacing-medium) var(--spacing-medium);
 }
@@ -61,10 +58,6 @@
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
   line-height: 1.45;
-}
-
-.instruction-panel.is-expanded .instruction-panel__text {
-  max-height: 30rem;
 }
 
 .instruction-panel__text::part(control) {
