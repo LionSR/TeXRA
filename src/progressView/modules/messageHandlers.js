@@ -87,11 +87,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreams(message) {
     state.activeStream = message.activeStream;
     if (
-      typeof message.agentFilter === 'string' &&
+      !state.pendingFilterUpdate &&
+      message.agentFilter !== undefined &&
       message.agentFilter !== state.agentTypeFilter
     ) {
       state.agentTypeFilter = message.agentFilter;
     }
+    state.pendingFilterUpdate = false;
     const activeFilter = state.agentTypeFilter;
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
@@ -175,15 +177,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const ungroupedContainer = document.getElementById(
-      ELEMENT_IDS.LOG_UNGROUPED,
-    );
     if (message.stream === state.activeStream) {
+      logContent.innerHTML = '';
       state.taskGroups.clear();
       dom.taskGroups.clear();
-      if (ungroupedContainer) {
-        ungroupedContainer.innerHTML = '';
-      }
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -201,11 +198,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {
             const formatted = this._entryFormatter.format(msg);
-            appendFormatted(ungroupedContainer ?? logContent, formatted);
+            appendFormatted(logContent, formatted);
           }
         } else {
           const formatted = this._entryFormatter.format(msg);
-          appendFormatted(ungroupedContainer ?? logContent, formatted);
+          appendFormatted(logContent, formatted);
         }
       });
       scrollToBottom(logContent);
@@ -219,16 +216,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleClearLogs() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const ungroupedContainer = document.getElementById(
-      ELEMENT_IDS.LOG_UNGROUPED,
-    );
-    if (ungroupedContainer) {
-      ungroupedContainer.innerHTML = '';
+    logContent.innerHTML = '';
+    const groupIds = [];
+    const headers = Array.from(document.querySelectorAll('.log-group-header'));
+    for (const el of headers) {
+      groupIds.push(el.id.replace('group-header-', ''));
     }
-    if (logContent) {
-      logContent.scrollTop = 0;
-    }
-    const groupIds = [...state.taskGroups.getGroupMap().keys()];
     state.taskGroups.clear();
     dom.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
@@ -239,9 +232,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const ungroupedContainer = document.getElementById(
-        ELEMENT_IDS.LOG_UNGROUPED,
-      );
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(message.logMessage);
@@ -256,7 +246,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
             }
           }
         }
-        appendFormatted(ungroupedContainer ?? logContent, formatted);
+        appendFormatted(logContent, formatted);
       }
       scrollToBottom(logContent);
     }
@@ -265,9 +255,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const ungroupedContainer = document.getElementById(
-        ELEMENT_IDS.LOG_UNGROUPED,
-      );
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         // Fallback: append as new log with proper group placement
@@ -286,7 +273,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
               }
             }
           }
-          appendFormatted(ungroupedContainer ?? logContent, formatted);
+          appendFormatted(logContent, formatted);
         }
         scrollToBottom(logContent);
       }
@@ -375,9 +362,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       if (message.stream === state.activeStream) {
-        const groupIds = [...state.taskGroups.getGroupMap().keys()];
-        state.taskGroups.clear();
-        dom.taskGroups.clear();
+        const groupIds = [];
+        const headers = Array.from(
+          document.querySelectorAll('.log-group-header'),
+        );
+        for (const el of headers) {
+          groupIds.push(el.id.replace('group-header-', ''));
+        }
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
       }
@@ -395,6 +386,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
     dom.followUpInput.applyPolishedText(message.text);
+    vscode.postMessage({
+      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
+      text: 'Follow-up text has been polished!',
+    });
   }
 
   handleFollowUpTextTranscribed(message) {

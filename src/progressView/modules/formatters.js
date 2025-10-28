@@ -30,6 +30,10 @@ import {
 import { getBasename } from '@common/pathUtils.js';
 import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
 
+// Constants
+export const BULLET_MARKUP =
+  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
+
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
   warn: '🟡',
@@ -104,6 +108,31 @@ export const TaskGroupLevel = {
  */
 export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
+}
+
+/**
+ * Extracts timestamps from HTML messages.
+ */
+export class MessageTimestampExtractor {
+  /**
+   * Extract timestamp from a log line element
+   * @param {HTMLElement} element - Log line element
+   * @returns {string} Extracted timestamp
+   */
+  extract(element) {
+    const logLine = element.classList.contains('log-line')
+      ? element
+      : element.querySelector('.log-line');
+    if (logLine && logLine.dataset.fullTimestamp) {
+      return logLine.dataset.fullTimestamp;
+    }
+
+    const text = logLine
+      ? logLine.textContent || ''
+      : element.textContent || '';
+    const match = text.match(/\[(.*?)\]/);
+    return match ? match[1] : '';
+  }
 }
 
 /**
