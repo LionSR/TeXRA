@@ -21,14 +21,15 @@ import { vscode } from '@common/webviewContext.js';
 class ProgressViewDomHandler extends BaseDomHandler {
   constructor() {
     const usageSummary = new UsageSummary();
+    const taskGroups = new TaskGroupDomManager();
     super({
       streamTabs: new StreamTabs(),
       toolbar: new Toolbar(),
       status: new Status(),
       usageSummary,
-      usageGroup: new UsageGroupManager(usageSummary),
+      taskGroups,
+      usageGroup: new UsageGroupManager(usageSummary, taskGroups),
       fileList: new FileList(usageSummary),
-      taskGroups: new TaskGroupDomManager(),
       logEntries: new LogEntryManager(),
       events: new EventsManager(),
       placeholder: new Placeholder(),

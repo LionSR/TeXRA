@@ -53,22 +53,18 @@ export class TaskGroupDomManager {
     treeItem.dataset.groupId = group.id;
     treeItem.setAttribute('branch', '');
 
-    const headerElement = this.headerFormatter.create(group);
-    if (!headerElement) {
-      console.error(
-        'TaskGroupDomManager.addGroup: failed to create group header',
-      );
-      return;
-    }
-
-    treeItem.appendChild(headerElement);
-
     progressViewState.taskGroups.set(group.id, group);
 
     const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
     const isExpanded = !isCollapsed;
-    treeItem.toggleAttribute('expanded', isExpanded);
-    treeItem.expanded = isExpanded;
+    treeItem.open = isExpanded;
+    if (isExpanded) {
+      treeItem.setAttribute('open', '');
+    } else {
+      treeItem.removeAttribute('open');
+    }
+
+    this.headerFormatter.render(treeItem, group);
 
     this._observeGroup(treeItem, group.id);
 
@@ -123,6 +119,12 @@ export class TaskGroupDomManager {
     tree = document.createElement('vscode-tree');
     tree.id = ELEMENT_IDS.LOG_GROUP_TREE;
     tree.classList.add('log-group-tree');
+    tree.setAttribute('indent-guides', 'always');
+    try {
+      tree.indentGuides = 'always';
+    } catch (error) {
+      // Ignore assignment failures in environments without property reflection
+    }
     container.prepend(tree);
     return tree;
   }
@@ -138,9 +140,9 @@ export class TaskGroupDomManager {
       for (const mutation of mutations) {
         if (
           mutation.type === 'attributes' &&
-          mutation.attributeName === 'expanded'
+          mutation.attributeName === 'open'
         ) {
-          const isCollapsed = !treeItem.hasAttribute('expanded');
+          const isCollapsed = !treeItem.hasAttribute('open');
           progressViewState.toggleStates.set(groupId, isCollapsed);
         }
       }
@@ -148,7 +150,7 @@ export class TaskGroupDomManager {
 
     observer.observe(treeItem, {
       attributes: true,
-      attributeFilter: ['expanded'],
+      attributeFilter: ['open'],
     });
 
     this.groupObservers.set(groupId, observer);
@@ -224,48 +226,15 @@ export class TaskGroupDomManager {
       return;
     }
 
-    const header = treeItem.querySelector('.log-group-header');
-    if (header) {
-      const level = this.headerFormatter._getGroupLevel(group);
-      header.className = this.headerFormatter._getHeaderClass(group, level);
+    this.headerFormatter.render(treeItem, group);
 
-      // Update the status icon
-      const statusIconElem = header.querySelector('.group-status-icon');
-      if (statusIconElem) {
-        statusIconElem.innerHTML = this.headerFormatter._getStatusIcon(
-          group.status,
-        );
-      }
-
-      // Update or add the duration display when the group finishes
-      const timeContainer = header.querySelector('.group-time');
-
-      if (
-        hasEndTimeUpdate &&
-        group.endTime !== undefined &&
-        group.endTime !== null
-      ) {
-        const endDate = group.endTime;
-        const startDate = group.startTime;
-        const durationMs = endDate - startDate;
-
-        // Update or create duration element
-        const durationElem = header.querySelector('.group-duration');
-        if (durationElem) {
-          durationElem.textContent = `${this.headerFormatter._formatDuration(durationMs)}`;
-          durationElem.style.display = 'inline';
-        } else if (timeContainer) {
-          const durationSpan = document.createElement('span');
-          durationSpan.className = 'group-duration';
-          durationSpan.textContent = `${this.headerFormatter._formatDuration(durationMs)}`;
-          durationSpan.style.display = 'inline';
-          timeContainer.appendChild(durationSpan);
-        }
-
-        if (/^r\d+$/.test(group.name)) {
-          this.playSystemSound();
-        }
-      }
+    if (
+      hasEndTimeUpdate &&
+      group.endTime !== undefined &&
+      group.endTime !== null &&
+      /^r\d+$/.test(group.name)
+    ) {
+      this.playSystemSound();
     }
 
     progressViewState.taskGroups.set(groupId, group);
@@ -288,8 +257,8 @@ export class TaskGroupDomManager {
     // Collapse this group
     const treeItem = this.groupElements.get(groupId);
     if (treeItem instanceof HTMLElement) {
-      treeItem.toggleAttribute('expanded', false);
-      treeItem.expanded = false;
+      treeItem.open = false;
+      treeItem.removeAttribute('open');
       progressViewState.toggleStates.set(groupId, true);
     }
   }
@@ -311,7 +280,7 @@ export class TaskGroupDomManager {
     for (const [id, treeItem] of this.groupElements.entries()) {
       if (
         !(treeItem instanceof HTMLElement) ||
-        !treeItem.hasAttribute('expanded')
+        !treeItem.hasAttribute('open')
       ) {
         continue;
       }

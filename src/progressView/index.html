@@ -343,17 +343,32 @@
             </details>
           </template>
           <template id="groupDetailsTemplate">
-            <vscode-tree-item class="log-group" branch></vscode-tree-item>
-          </template>
-          <template id="groupHeaderTemplate">
-            <div class="log-group-header">
-              <span class="group-status-icon"></span>
-              <span class="group-title"></span>
-              <span class="group-time">
-                <span class="group-start-time"></span>
-                <span class="group-duration"></span>
+            <vscode-tree-item class="log-group" branch>
+              <span
+                slot="icon-branch"
+                class="group-status-icon"
+                aria-hidden="true"
+              ></span>
+              <span
+                slot="icon-branch-opened"
+                class="group-status-icon"
+                aria-hidden="true"
+              ></span>
+              <span slot="content" class="log-group-header">
+                <span class="group-title"></span>
+                <span class="group-meta">
+                  <span class="group-usage"></span>
+                  <i
+                    class="codicon codicon-circle-small-filled group-bullet"
+                    aria-hidden="true"
+                  ></i>
+                  <span class="group-time">
+                    <span class="group-start-time"></span>
+                    <span class="group-duration"></span>
+                  </span>
+                </span>
               </span>
-            </div>
+            </vscode-tree-item>
           </template>
         </div>
         <div slot="end" class="tabs">

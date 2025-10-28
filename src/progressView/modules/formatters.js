@@ -1171,95 +1171,40 @@ export class LogEntryFormatter {
  * Formats task group headers.
  */
 export class TaskGroupHeaderFormatter {
+  constructor() {
+    this._statusClasses = new Set(Object.values(STATUS));
+  }
+
   /**
-   * Create a group header element
-   * @param {Object} group - Task group data
-   * @returns {HTMLElement|null} Header element or null if template creation fails
+   * Render a group header inside the provided tree item element.
+   * @param {HTMLElement} treeItem - The tree item hosting the group.
+   * @param {Object} group - Task group data.
    */
-  create(group) {
+  render(treeItem, group) {
+    if (!(treeItem instanceof HTMLElement)) {
+      return;
+    }
+
+    const header = treeItem.querySelector('.log-group-header');
+    if (!header) {
+      return;
+    }
+
     const startDate = new Date(group.startTime);
     const level = this._getGroupLevel(group);
     const formattedStartTime = level.formatTime(startDate);
 
-    const header = createFromTemplate('groupHeaderTemplate');
-    if (!header) return null;
-
-    header.id = `group-header-${group.id}`;
-    header.className = this._getHeaderClass(group, level);
-
-    const statusIconElem = header.querySelector('.group-status-icon');
-    if (statusIconElem) {
-      statusIconElem.innerHTML = this._getStatusIcon(group.status);
-    }
-
-    const titleElem = header.querySelector('.group-title');
-    if (titleElem) {
-      if (level.showTitle) {
-        titleElem.textContent = group.name;
-      } else {
-        titleElem.remove();
-      }
-    }
-
-    const startTimeElem = header.querySelector('.group-start-time');
-    if (startTimeElem) {
-      startTimeElem.dataset.start = String(group.startTime);
-      startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
-    }
-
-    const durationElem = header.querySelector('.group-duration');
-    if (durationElem) {
-      if (group.endTime) {
-        const durationMs = group.endTime - group.startTime;
-        durationElem.textContent = this._formatDuration(durationMs);
-      } else {
-        durationElem.remove();
-      }
-    }
-
-    // Add usage information if available
-    if (group.usage) {
-      const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
-      const usageDisplay =
-        `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-        `$${cost.toFixed(3)}</span>`;
-
-      const bulletMarkup =
-        '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
-
-      // Add usage and bullet based on level
-      const timeSpan = header.querySelector('.group-time');
-      if (timeSpan) {
-        if (level.headerOrder === 'time-first') {
-          // For root level: time → bullet → usage
-          timeSpan.insertAdjacentHTML(
-            'afterend',
-            usageDisplay ? `${bulletMarkup}${usageDisplay}` : '',
-          );
-        } else {
-          // For nested level: usage → bullet → time
-          timeSpan.insertAdjacentHTML(
-            'beforebegin',
-            usageDisplay ? `${usageDisplay}${bulletMarkup}` : '',
-          );
-        }
-      }
-    }
-
-    return header;
+    this._applyLevelClasses(treeItem, header, level);
+    this._updateStatus(treeItem, group.status);
+    this._updateTitle(header, level, group.name);
+    this._updateStartTime(header, group.startTime, formattedStartTime);
+    this._updateDuration(header, group.startTime, group.endTime);
+    this._updateUsage(header, level, group.usage);
+    this._updateStatusIcons(treeItem, group.status);
   }
 
   _getGroupLevel(group) {
     return group.parentGroupId ? TaskGroupLevel.NESTED : TaskGroupLevel.ROOT;
-  }
-
-  _getHeaderClass(group, level) {
-    const classes = ['log-group-header', group.status];
-    if (level.cssClass) {
-      classes.push(level.cssClass);
-    }
-    return classes.join(' ');
   }
 
   _getStatusIcon(status) {
@@ -1270,9 +1215,111 @@ export class TaskGroupHeaderFormatter {
         return '<i class="codicon codicon-error"></i>';
       case STATUS.STOPPED:
         return '<i class="codicon codicon-check"></i>';
+      case STATUS.WAITING:
+        return '<i class="codicon codicon-clock"></i>';
+      case STATUS.RESUMING:
+        return '<i class="codicon codicon-debug-step-over"></i>';
+      case STATUS.READY:
+        return '<i class="codicon codicon-circle-outline"></i>';
       default:
         return '<i class="codicon codicon-circle-outline"></i>';
     }
+  }
+
+  _applyLevelClasses(treeItem, header, level) {
+    const isRoot = level === TaskGroupLevel.ROOT;
+    treeItem.classList.toggle('top-level', isRoot);
+    treeItem.classList.toggle('nested', !isRoot);
+    header.classList.toggle('top-level', isRoot);
+    header.classList.toggle('nested', !isRoot);
+  }
+
+  _updateStatus(treeItem, status) {
+    this._statusClasses.forEach((statusClass) => {
+      treeItem.classList.remove(statusClass);
+    });
+    if (status) {
+      treeItem.classList.add(status);
+    }
+
+    if (status) {
+      treeItem.dataset.status = status;
+    } else {
+      delete treeItem.dataset.status;
+    }
+  }
+
+  _updateTitle(header, level, name) {
+    const titleElem = header.querySelector('.group-title');
+    if (!titleElem) {
+      return;
+    }
+
+    if (level.showTitle && name) {
+      titleElem.textContent = name;
+      titleElem.removeAttribute('hidden');
+    } else {
+      titleElem.textContent = '';
+      titleElem.setAttribute('hidden', '');
+    }
+  }
+
+  _updateStartTime(header, startTime, formattedStartTime) {
+    const startTimeElem = header.querySelector('.group-start-time');
+    if (!startTimeElem) {
+      return;
+    }
+
+    startTimeElem.dataset.start = String(startTime);
+    startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
+  }
+
+  _updateDuration(header, startTime, endTime) {
+    const durationElem = header.querySelector('.group-duration');
+    if (!durationElem) {
+      return;
+    }
+
+    if (endTime !== undefined && endTime !== null) {
+      const durationMs = endTime - startTime;
+      durationElem.textContent = this._formatDuration(durationMs);
+      durationElem.classList.remove('is-hidden');
+    } else {
+      durationElem.textContent = '';
+      durationElem.classList.add('is-hidden');
+    }
+  }
+
+  _updateUsage(header, level, usage) {
+    const usageElem = header.querySelector('.group-usage');
+    const bulletElem = header.querySelector('.group-bullet');
+    if (!usageElem || !bulletElem) {
+      return;
+    }
+
+    if (usage) {
+      const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
+      usageElem.innerHTML =
+        `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
+        `$${cost.toFixed(3)}`;
+      usageElem.classList.remove('is-hidden');
+      bulletElem.classList.remove('is-hidden');
+    } else {
+      usageElem.textContent = '';
+      usageElem.classList.add('is-hidden');
+      bulletElem.classList.add('is-hidden');
+    }
+  }
+
+  _updateStatusIcons(treeItem, status) {
+    const iconMarkup = this._getStatusIcon(status);
+    const icons = treeItem.querySelectorAll(
+      '[slot="icon-branch"], [slot="icon-branch-opened"]',
+    );
+    icons.forEach((icon) => {
+      icon.innerHTML = iconMarkup;
+    });
   }
 
   _formatDuration(durationMs) {

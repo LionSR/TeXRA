@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'missingOutputsDetailsTemplate',
     'latexdiffDetailsTemplate',
     'statisticsDetailsTemplate',
-    'groupHeaderTemplate',
+    'groupDetailsTemplate',
   ]);
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();

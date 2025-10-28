@@ -1,9 +1,7 @@
 // Local imports - progress view
 import { ELEMENT_IDS } from './constants.js';
-import { formatTokens, TaskGroupLevel } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
-import { createFromTemplate } from '@common/templateUtils.js';
 
 /**
  * Manages usage summary display.
@@ -53,8 +51,9 @@ export class UsageSummary {
  * Manages usage display for individual groups.
  */
 export class UsageGroupManager {
-  constructor(usageSummary) {
+  constructor(usageSummary, taskGroupDomManager) {
     this.usageSummary = usageSummary; // Use the shared instance
+    this.taskGroups = taskGroupDomManager;
   }
 
   /**
@@ -73,53 +72,28 @@ export class UsageGroupManager {
       return;
     }
 
-    const groupHeader = document.getElementById(`group-header-${groupId}`);
-    if (!groupHeader) {
+    const group = progressViewState.taskGroups.get(groupId);
+    if (!group) {
       console.warn(
-        `UsageGroupManager.update: Group header not found for ID: ${groupId}`,
+        `UsageGroupManager.update: Group not found for ID: ${groupId}`,
       );
       return;
     }
 
-    // Find or create usage display element in the group header
-    let usageElem = groupHeader.querySelector('.group-usage');
-    if (!usageElem) {
-      usageElem = createFromTemplate('usageTemplate');
-      if (!usageElem) {
-        console.error('UsageGroupManager.update: usageTemplate not found');
-        return;
-      }
-      // Determine the group level by checking for the 'top-level' class
-      const level = groupHeader.classList.contains('top-level')
-        ? TaskGroupLevel.ROOT
-        : TaskGroupLevel.NESTED;
-      this.insertUsageElement(groupHeader, usageElem, level);
-    }
-
-    if (!usageElem) return;
-
-    const inputEl = usageElem.querySelector('.usage-input');
-    const outputEl = usageElem.querySelector('.usage-output');
-    const costEl = usageElem.querySelector('.usage-cost');
-
-    if (!usage) {
-      if (inputEl) inputEl.textContent = '';
-      if (outputEl) outputEl.textContent = '';
-      if (costEl) costEl.textContent = '';
-      return;
-    }
-
-    const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
-    if (inputEl) inputEl.textContent = formatTokens(inputTokens);
-    if (outputEl) outputEl.textContent = formatTokens(outputTokens);
-    if (costEl) costEl.textContent = cost.toFixed(3);
-
-    // Persist usage on the group state so the summary can be computed
-    const group = progressViewState.taskGroups.get(groupId);
-    if (group) {
+    if (usage) {
+      const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
       group.usage = { inputTokens, outputTokens, cost };
-      progressViewState.taskGroups.set(groupId, group);
+    } else {
+      delete group.usage;
     }
+
+    progressViewState.taskGroups.set(groupId, group);
+
+    const treeItem = this.taskGroups?.groupElements?.get(groupId);
+    if (treeItem instanceof HTMLElement) {
+      this.taskGroups.headerFormatter.render(treeItem, group);
+    }
+
     if (!skipPropagate) {
       this.propagateUsageToParents(groupId);
     }
@@ -161,9 +135,7 @@ export class UsageGroupManager {
 
     // If this group has a parent, update the parent with aggregated usage
     if (group.parentGroupId) {
-      const totals = {
-        ...this.computeAggregatedUsage(group.parentGroupId),
-      };
+      const totals = this.computeAggregatedUsage(group.parentGroupId);
       this.update({
         groupId: group.parentGroupId,
         usage: totals,
@@ -172,56 +144,8 @@ export class UsageGroupManager {
       this.propagateUsageToParents(group.parentGroupId);
     } else {
       // This is a top-level group, update it with aggregated usage from its children
-      const totals = {
-        ...this.computeAggregatedUsage(groupId),
-      };
+      const totals = this.computeAggregatedUsage(groupId);
       this.update({ groupId, usage: totals, skipPropagate: true });
-    }
-  }
-
-  /**
-   * Determines where to insert a usage element based on group level and existing elements
-   * @private
-   * @param {HTMLElement} groupHeader - The group header element
-   * @param {HTMLElement} usageElem - The usage element to insert
-   * @param {Object} level - The task group level configuration
-   */
-  insertUsageElement(groupHeader, usageElem, level) {
-    const timeContainer = groupHeader.querySelector('.group-time');
-
-    let bulletElem = groupHeader.querySelector('.group-bullet');
-    if (!bulletElem) {
-      bulletElem = createFromTemplate('bulletTemplate');
-    }
-
-    // If bullet template is missing, skip adding it
-    const hasBullet = !!bulletElem;
-
-    if (timeContainer) {
-      if (level.headerOrder === 'time-first') {
-        // For root level groups: time comes first, then usage
-        if (hasBullet) {
-          timeContainer.parentNode.insertBefore(
-            bulletElem,
-            timeContainer.nextSibling,
-          );
-        }
-        timeContainer.parentNode.insertBefore(
-          usageElem,
-          hasBullet ? bulletElem.nextSibling : timeContainer.nextSibling,
-        );
-      } else {
-        // For nested groups: usage comes first, then time
-        groupHeader.insertBefore(usageElem, timeContainer);
-        if (hasBullet) {
-          groupHeader.insertBefore(bulletElem, timeContainer);
-        }
-      }
-    } else {
-      groupHeader.appendChild(usageElem);
-      if (hasBullet) {
-        groupHeader.appendChild(bulletElem);
-      }
     }
   }
 }
