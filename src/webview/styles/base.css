@@ -98,15 +98,16 @@ body {
 .dropdown-container .dropdown-menu .dropdown-menu-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-tiny);
-  padding: 0 var(--spacing-tiny);
+  gap: 0;
+  padding: var(--spacing-tiny);
 }
 
 .dropdown-container .dropdown-menu vscode-checkbox {
   display: flex;
   align-items: center;
-  height: var(--height-control);
-  padding: 0 var(--spacing-tiny);
+  height: 20px;
+  padding: var(--spacing-tiny);
+  font-size: var(--font-size-sm);
 }
 
 .dropdown-container .dropdown-menu vscode-checkbox:hover {
