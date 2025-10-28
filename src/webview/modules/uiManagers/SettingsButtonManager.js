@@ -146,48 +146,19 @@ export class SettingsButtonManager extends BaseUIManager {
   _ensureMenuUsesSlotContent(menu) {
     // Workaround for vscode-context-menu component quirk where it auto-creates
     // an empty data array that prevents rendering of slotted children.
-    // This defensive code is necessary to handle the component's internal behavior.
-    if (!menu || typeof menu.tagName !== 'string') {
-      return;
-    }
-
-    if (menu.tagName.toLowerCase() !== 'vscode-context-menu') {
-      return;
-    }
-
-    if (!('data' in menu)) {
-      return;
-    }
-
-    const currentData = menu.data;
-    if (!Array.isArray(currentData)) {
-      return;
-    }
-
-    if (currentData.length > 0) {
-      return;
-    }
-
-    try {
-      // Clear the auto-provided data array so the component renders slotted children
-      menu.data = undefined;
-      if (typeof menu.requestUpdate === 'function') {
-        menu.requestUpdate();
+    if (
+      menu?.tagName?.toLowerCase() === 'vscode-context-menu' &&
+      Array.isArray(menu.data) &&
+      menu.data.length === 0
+    ) {
+      try {
+        menu.data = undefined;
+        menu.requestUpdate?.();
+      } catch (e) {
+        // Fallback for readonly property
+        menu._data = undefined;
+        menu.requestUpdate?.();
       }
-      return;
-    } catch (error) {
-      if (!(error instanceof TypeError)) {
-        throw error;
-      }
-    }
-
-    // Fallback: try setting private property
-    if ('_data' in menu) {
-      menu._data = undefined;
-    }
-
-    if (typeof menu.requestUpdate === 'function') {
-      menu.requestUpdate();
     }
   }
 
