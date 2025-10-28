@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { ELEMENT_IDS } from './constants.js';
+import { ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
 import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
@@ -14,6 +14,7 @@ export class TaskGroupDomManager {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
+    this.toggleListeners = new Map();
   }
 
   /**
@@ -27,6 +28,7 @@ export class TaskGroupDomManager {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
+        this._removeToggleListener(group.id);
         existingGroup.remove();
         this.groupElements.delete(group.id);
       } else {
@@ -49,7 +51,7 @@ export class TaskGroupDomManager {
       );
       return;
     }
-    detailsElem.id = `group-${group.id}`;
+    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
 
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
@@ -66,7 +68,7 @@ export class TaskGroupDomManager {
       );
       return;
     }
-    groupContainer.id = `group-content-${group.id}`;
+    groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
     progressViewState.taskGroups.set(group.id, group);
 
@@ -75,14 +77,24 @@ export class TaskGroupDomManager {
 
     detailsElem.prepend(headerElement);
 
-    detailsElem.addEventListener('toggle', () => {
+    const toggleListener = () => {
       progressViewState.toggleStates.set(group.id, !detailsElem.open);
-    });
+    };
+    detailsElem.addEventListener('toggle', toggleListener);
+    this.toggleListeners.set(group.id, toggleListener);
 
     this.groupElements.set(group.id, detailsElem);
 
     // Insert the group at the right position in the parent
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!container) {
+      console.error(
+        'TaskGroupDomManager.addGroup: missing log content container',
+      );
+      this._removeToggleListener(group.id);
+      this.groupElements.delete(group.id);
+      return;
+    }
 
     if (group.parentGroupId) {
       const parentDetails = this.groupElements.get(group.parentGroupId);
@@ -303,8 +315,21 @@ export class TaskGroupDomManager {
    * Clear cached group references.
    */
   clear() {
+    for (const groupId of this.groupElements.keys()) {
+      this._removeToggleListener(groupId);
+    }
     this.groupElements.clear();
+    this.toggleListeners.clear();
     this.previousActiveGroupId = null;
+  }
+
+  _removeToggleListener(groupId) {
+    const listener = this.toggleListeners.get(groupId);
+    const element = this.groupElements.get(groupId);
+    if (listener && element) {
+      element.removeEventListener('toggle', listener);
+    }
+    this.toggleListeners.delete(groupId);
   }
 }
 
@@ -324,12 +349,15 @@ export class LogEntryManager {
   append(logMessage) {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
-      const groupContent = document.getElementById(
-        `group-content-${logMessage.groupId}`,
-      );
+      const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${logMessage.groupId}`;
+      const groupContent = document.getElementById(groupContentId);
       if (groupContent) {
         const logLineElement = this.entryFormatter.format(logMessage);
         if (!logLineElement) {
+          console.debug(
+            'LogEntryManager.append: formatter returned null for message',
+            logMessage,
+          );
           return true;
         }
 

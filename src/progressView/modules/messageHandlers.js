@@ -216,12 +216,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleClearLogs() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    logContent.innerHTML = '';
-    const groupIds = [];
-    const headers = Array.from(document.querySelectorAll('.log-group-header'));
-    for (const el of headers) {
-      groupIds.push(el.id.replace('group-header-', ''));
+    if (logContent) {
+      logContent.innerHTML = '';
     }
+    const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
     state.taskGroups.clear();
     dom.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
@@ -362,13 +360,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       if (message.stream === state.activeStream) {
-        const groupIds = [];
-        const headers = Array.from(
-          document.querySelectorAll('.log-group-header'),
-        );
-        for (const el of headers) {
-          groupIds.push(el.id.replace('group-header-', ''));
-        }
+        const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
       }
