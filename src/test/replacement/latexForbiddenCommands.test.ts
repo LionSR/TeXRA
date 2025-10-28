@@ -70,7 +70,8 @@ describe('latex forbidden commands replacements', () => {
   });
 
   it('handles multiple invalid endings in one document', () => {
-    const input = '\\section{A}\n\\end{section}\nText\n\\section{B}\n\\end{section}';
+    const input =
+      '\\section{A}\n\\end{section}\nText\n\\section{B}\n\\end{section}';
     const expected = '\\section{A}\n\nText\n\\section{B}\n';
     const result = applyReplacements(input, LATEX_FORBIDDEN_REPLACEMENTS, {
       processMathUnicode: false,
