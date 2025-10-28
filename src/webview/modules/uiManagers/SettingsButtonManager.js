@@ -67,10 +67,17 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
 
+    // The Lit-based vscode-toolbar-button added a toggleable property in
+    // @vscode-elements/elements v2.3.1. Older builds only support the
+    // boolean attribute, so we attempt the property first and fall back.
     if ('toggleable' in button) {
       try {
         button.toggleable = true;
       } catch (error) {
+        console.warn(
+          '[SettingsButtonManager] Falling back to toggleable attribute for toolbar button.',
+          error,
+        );
         button.setAttribute('toggleable', '');
       }
     } else {
@@ -96,8 +103,6 @@ export class SettingsButtonManager extends BaseUIManager {
     const handleButtonChange = (event) => {
       event.stopPropagation();
       menu.show = !menu.show;
-      updateAriaExpanded();
-      updateButtonState();
     };
 
     this.addListener(button, 'change', handleButtonChange);
@@ -112,6 +117,8 @@ export class SettingsButtonManager extends BaseUIManager {
     });
 
     if (typeof MutationObserver === 'function') {
+      // Observe the "show" attribute so we react when the menu closes itself
+      // (e.g. due to focus loss or another menu opening).
       const observer = new MutationObserver(updateAriaExpanded);
       observer.observe(menu, { attributes: true, attributeFilter: ['show'] });
       this._menuObservers.push(observer);

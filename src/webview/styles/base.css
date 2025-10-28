@@ -83,7 +83,7 @@ body {
   flex-shrink: 0;
 }
 
-.dropdown-menu {
+.dropdown-container .dropdown-menu {
   position: absolute;
   top: calc(100% + var(--spacing-tiny));
   right: 0;
@@ -95,21 +95,21 @@ body {
   right: auto;
 }
 
-.dropdown-menu .dropdown-menu-content {
+.dropdown-container .dropdown-menu .dropdown-menu-content {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-tiny);
   padding: 0 var(--spacing-tiny);
 }
 
-.dropdown-menu vscode-checkbox {
+.dropdown-container .dropdown-menu vscode-checkbox {
   display: flex;
   align-items: center;
   height: var(--height-control);
   padding: 0 var(--spacing-tiny);
 }
 
-.dropdown-menu vscode-checkbox:hover {
+.dropdown-container .dropdown-menu vscode-checkbox:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
