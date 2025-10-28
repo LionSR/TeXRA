@@ -7,7 +7,7 @@
 .model-selection-footer {
   display: flex;
   gap: var(--spacing-small);
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .model-selection-footer .select-group,
@@ -15,7 +15,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .agent-select-controls,
@@ -23,9 +23,9 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 10rem;
-  max-width: 16rem;
+  max-width: 14rem;
 }
 
 .agent-select-dropdowns {
