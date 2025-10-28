@@ -67,6 +67,8 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
 
+    this._ensureMenuUsesSlotContent(menu);
+
     // Requires @vscode-elements/elements v2.3.1+
     button.toggleable = true;
     button.setAttribute('aria-haspopup', 'true');
@@ -105,6 +107,54 @@ export class SettingsButtonManager extends BaseUIManager {
 
     updateButtonState();
     updateAriaExpanded();
+  }
+
+  _ensureMenuUsesSlotContent(menu) {
+    // Workaround for vscode-context-menu component quirk where it auto-creates
+    // an empty data array that prevents rendering of slotted children.
+    // This defensive code is necessary to handle the component's internal behavior.
+    if (!menu || typeof menu.tagName !== 'string') {
+      return;
+    }
+
+    if (menu.tagName.toLowerCase() !== 'vscode-context-menu') {
+      return;
+    }
+
+    if (!('data' in menu)) {
+      return;
+    }
+
+    const currentData = menu.data;
+    if (!Array.isArray(currentData)) {
+      return;
+    }
+
+    if (currentData.length > 0) {
+      return;
+    }
+
+    try {
+      // Clear the auto-provided data array so the component renders slotted children
+      menu.data = undefined;
+      if (typeof menu.requestUpdate === 'function') {
+        menu.requestUpdate();
+      }
+      return;
+    } catch (error) {
+      if (!(error instanceof TypeError)) {
+        throw error;
+      }
+    }
+
+    // Fallback: try setting private property
+    if ('_data' in menu) {
+      menu._data = undefined;
+    }
+
+    if (typeof menu.requestUpdate === 'function') {
+      menu.requestUpdate();
+    }
   }
 
   _setupSettingsButtons() {
