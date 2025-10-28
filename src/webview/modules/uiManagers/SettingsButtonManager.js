@@ -67,8 +67,6 @@ export class SettingsButtonManager extends BaseUIManager {
       return;
     }
 
-    this._ensureMenuUsesSlotContent(menu);
-
     // Requires @vscode-elements/elements v2.3.1+
     button.toggleable = true;
     button.setAttribute('aria-haspopup', 'true');
@@ -107,13 +105,6 @@ export class SettingsButtonManager extends BaseUIManager {
 
     updateButtonState();
     updateAriaExpanded();
-  }
-
-  _ensureMenuUsesSlotContent(menu) {
-    // Clear auto-provided empty data array to force rendering of slotted children
-    // Requires @vscode-elements/elements v2.3.1+
-    menu.data = undefined;
-    menu.requestUpdate();
   }
 
   _setupSettingsButtons() {
