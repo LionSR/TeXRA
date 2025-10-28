@@ -400,10 +400,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
     dom.followUpInput.applyPolishedText(message.text);
-    vscode.postMessage({
-      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
-      text: 'Follow-up text has been polished!',
-    });
   }
 
   handleFollowUpTextTranscribed(message) {
@@ -413,10 +409,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
     dom.followUpInput.insertTranscription(message.text);
     dom.followUpInput.setRecording(false);
-    vscode.postMessage({
-      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
-      text: 'Follow-up text transcribed!',
-    });
   }
 
   handleRecordingStarted() {
