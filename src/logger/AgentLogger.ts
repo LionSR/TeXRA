@@ -16,6 +16,69 @@ import { SHORT_SLEEP_MS } from '@utils/config';
  * Encapsulates logging functionality for agents with a dedicated channel.
  * Uses the updated consolidated logger system.
  */
+export class GroupScopedLogger {
+  constructor(
+    private readonly baseLogger: AgentLogger,
+    public readonly groupId: string,
+  ) {}
+
+  debug(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
+    this.baseLogger.debug(message, groupId ?? this.groupId, messageType, data);
+  }
+
+  info(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
+    this.baseLogger.info(message, groupId ?? this.groupId, messageType, data);
+  }
+
+  warn(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
+    this.baseLogger.warn(message, groupId ?? this.groupId, messageType, data);
+  }
+
+  error(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void {
+    this.baseLogger.error(message, groupId ?? this.groupId, messageType, data);
+  }
+
+  fileList(files: unknown[], groupId?: string): void {
+    this.baseLogger.fileList(files, groupId ?? this.groupId);
+  }
+
+  missingOutputs(info: unknown, groupId?: string): void {
+    this.baseLogger.missingOutputs(info, groupId ?? this.groupId);
+  }
+
+  latexDiff(results: unknown[], groupId?: string): void {
+    this.baseLogger.latexDiff(results, groupId ?? this.groupId);
+  }
+
+  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
+    this.baseLogger.statistics(stats, groupId ?? this.groupId);
+  }
+
+  userMessage(message: string, groupId?: string): void {
+    this.baseLogger.userMessage(message, groupId ?? this.groupId);
+  }
+}
+
 export class AgentLogger {
   public readonly isAgentLogger: boolean;
 
@@ -179,5 +242,9 @@ export class AgentLogger {
    */
   setActiveGroupId(groupId: string | undefined): void {
     logger.setActiveGroupId(this.channelId, groupId);
+  }
+
+  createGroupLogger(groupId: string): GroupScopedLogger {
+    return new GroupScopedLogger(this, groupId);
   }
 }

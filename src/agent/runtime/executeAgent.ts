@@ -372,34 +372,29 @@ export async function executeAgentWithLogging<T extends IAgent>(
     await withLogGroup(
       logger,
       `Task: ${agentName}@${config.model}`,
-      async (mainTaskGroupId) => {
+      async (mainTaskGroup) => {
+        const mainTaskLog = mainTaskGroup?.logger ?? logger;
         try {
           await withLogGroup(
             logger,
             `Task Details`,
-            async (taskDetailsGroupId) => {
-              if (!isResume && taskDetailsGroupId) {
-                logger.info(
+            async (taskDetailsGroup) => {
+              const taskDetailsLog = taskDetailsGroup?.logger ?? mainTaskLog;
+              if (!isResume && taskDetailsGroup) {
+                taskDetailsLog.info(
                   `Starting task execution for ${activeStreamId}`,
-                  taskDetailsGroupId,
                 );
-                logger.info(
-                  `Input file: ${config.inputFile}`,
-                  taskDetailsGroupId,
-                );
+                taskDetailsLog.info(`Input file: ${config.inputFile}`);
               }
 
-              logger.debug(
+              taskDetailsLog.debug(
                 `Creating stream with ID: ${activeStreamId}`,
-                taskDetailsGroupId,
               );
-              logger.debug(
+              taskDetailsLog.debug(
                 `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
-                taskDetailsGroupId,
               );
-              logger.debug(
+              taskDetailsLog.debug(
                 `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-                taskDetailsGroupId,
               );
 
               // Switch to this stream and set its status to running
@@ -462,13 +457,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 }
 
                 // Store taskState
-                logger.debug(
+                taskDetailsLog.debug(
                   `Storing taskState for stream: ${activeStreamId}`,
-                  taskDetailsGroupId,
                 );
-                logger.debug(
+                taskDetailsLog.debug(
                   `Config for taskState: ${JSON.stringify(config)}`,
-                  taskDetailsGroupId,
                 );
 
                 // Convert AgentConfig to TaskState using utility function
@@ -477,28 +470,23 @@ export async function executeAgentWithLogging<T extends IAgent>(
                   executionId,
                   taskState: agentConfigToTaskState(config, metadata),
                 });
-                logger.debug(
+                mainTaskLog.debug(
                   `Task state stored for stream: ${activeStreamId}`,
-                  mainTaskGroupId,
                 );
               }
             },
-            { parentGroupId: mainTaskGroupId, skip: isResume },
+            { skip: isResume },
           );
         } catch (err) {
-          logger.error(
+          mainTaskLog.error(
             `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
           );
           throw err;
         }
 
         try {
           // Run the agent
-          logger.info(
-            `Executing ${agentName} with model ${config.model}`,
-            mainTaskGroupId,
-          );
+          mainTaskLog.info(`Executing ${agentName} with model ${config.model}`);
           if (!agent) {
             throw new Error('Agent instance was not initialized');
           }
@@ -506,7 +494,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           await agent.run();
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
-          logger.debug(`Task completed successfully`, mainTaskGroupId);
+          mainTaskLog.debug(`Task completed successfully`);
           // Update status to stopped on successful completion
           bus.emit('updateStreamStatus', {
             stream: activeStreamId,
@@ -514,9 +502,8 @@ export async function executeAgentWithLogging<T extends IAgent>(
           });
         } catch (err) {
           // Mark the task as failed
-          logger.error(
+          mainTaskLog.error(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
           );
           // Update status to error if agent run fails
           bus.emit('updateStreamStatus', {
