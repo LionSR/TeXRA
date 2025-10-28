@@ -23,7 +23,7 @@
 
 .instruction-controls {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: var(--spacing-small);
   flex-wrap: wrap;
