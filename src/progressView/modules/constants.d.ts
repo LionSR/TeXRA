@@ -8,6 +8,11 @@ export declare const STATUS: {
 };
 
 export declare const ELEMENT_IDS: Record<string, string>;
+export declare const GROUP_DOM_IDS: Readonly<{
+  DETAILS_PREFIX: string;
+  HEADER_PREFIX: string;
+  CONTENT_PREFIX: string;
+}>;
 export declare const MAX_HEIGHT: number;
 export declare const COMMANDS: Record<string, string>;
 export declare const WORKFLOW_TOOLBAR: ReadonlyArray<Record<string, unknown>>;

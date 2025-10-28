@@ -18,7 +18,7 @@ import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
 
 // Local imports - progress view
-import { STATUS } from './constants.js';
+import { STATUS, GROUP_DOM_IDS } from './constants.js';
 
 // Local imports
 import { katexMacros } from './katexMacros.js';
@@ -29,6 +29,10 @@ import {
 } from '@common/iconConstants.js';
 import { getBasename } from '@common/pathUtils.js';
 import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
+
+// Constants
+export const BULLET_MARKUP =
+  '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
@@ -104,6 +108,31 @@ export const TaskGroupLevel = {
  */
 export function formatTokens(tokens) {
   return tokens > 4096 ? `${Math.round(tokens / 1000)}k` : `${tokens}`;
+}
+
+/**
+ * Extracts timestamps from HTML messages.
+ */
+export class MessageTimestampExtractor {
+  /**
+   * Extract timestamp from a log line element
+   * @param {HTMLElement} element - Log line element
+   * @returns {string} Extracted timestamp
+   */
+  extract(element) {
+    const logLine = element.classList.contains('log-line')
+      ? element
+      : element.querySelector('.log-line');
+    if (logLine && logLine.dataset.fullTimestamp) {
+      return logLine.dataset.fullTimestamp;
+    }
+
+    const text = logLine
+      ? logLine.textContent || ''
+      : element.textContent || '';
+    const match = text.match(/\[(.*?)\]/);
+    return match ? match[1] : '';
+  }
 }
 
 /**
@@ -1184,7 +1213,7 @@ export class TaskGroupHeaderFormatter {
     const header = createFromTemplate('groupHeaderTemplate');
     if (!header) return null;
 
-    header.id = `group-header-${group.id}`;
+    header.id = `${GROUP_DOM_IDS.HEADER_PREFIX}${group.id}`;
     header.className = this._getHeaderClass(group, level);
 
     const statusIconElem = header.querySelector('.group-status-icon');

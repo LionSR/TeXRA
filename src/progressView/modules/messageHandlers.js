@@ -85,14 +85,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateStreams(message) {
-    state.activeStream = message.activeStream;
-    if (
-      typeof message.agentFilter === 'string' &&
-      message.agentFilter !== state.agentTypeFilter
-    ) {
-      state.agentTypeFilter = message.agentFilter;
+    try {
+      state.activeStream = message.activeStream;
+      if (
+        !state.pendingFilterUpdate &&
+        message.agentFilter !== undefined &&
+        message.agentFilter !== state.agentTypeFilter
+      ) {
+        state.agentTypeFilter = message.agentFilter;
+      }
+    } finally {
+      state.pendingFilterUpdate = false;
     }
-    const activeFilter = state.agentTypeFilter;
     state.resetExecutionIdAvailability();
     message.streams.forEach((s) => {
       if (s.status) {
@@ -102,29 +106,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
     });
-    const filteredStreams = Array.isArray(message.streams)
-      ? message.streams.filter((info) => {
-          if (!info || typeof info !== 'object') {
-            return false;
-          }
-          if (activeFilter === 'all') {
-            return true;
-          }
-          const sessionKind =
-            info.agentSessionKind || info.uiTraits?.sessionKind;
-          return sessionKind === activeFilter;
-        })
-      : [];
 
-    const displayActiveStream = filteredStreams.some(
-      (s) => s.name === message.activeStream,
-    )
-      ? message.activeStream
-      : (filteredStreams[0]?.name ?? message.activeStream);
+    // Backend already sends filtered streams, no need to filter again
+    const streams = message.streams || [];
 
-    state.activeStream = displayActiveStream;
-
-    dom.streamTabs.update(filteredStreams, displayActiveStream);
+    dom.streamTabs.update(streams, message.activeStream);
 
     // Update agent filter radio group selection
     const radioGroup = document.getElementById(
@@ -143,9 +129,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     this._updatePlaceholderVisibility();
 
-    const activeStreamInfo =
-      filteredStreams.find((s) => s.name === displayActiveStream) ??
-      message.streams.find((s) => s.name === message.activeStream);
+    const activeStreamInfo = streams.find(
+      (s) => s.name === message.activeStream,
+    );
     const sessionKind =
       activeStreamInfo?.agentSessionKind ||
       activeStreamInfo?.uiTraits?.sessionKind ||
@@ -160,7 +146,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     dom.toolbar.render(sessionKind);
 
-    const hasExecution = state.hasExecutionId(displayActiveStream);
+    const hasExecution = state.hasExecutionId(message.activeStream);
     dom.status.setExecutionIdAvailability(Boolean(hasExecution));
 
     // Update status based on whether there's an active stream
@@ -175,15 +161,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const ungroupedContainer = document.getElementById(
-      ELEMENT_IDS.LOG_UNGROUPED,
-    );
     if (message.stream === state.activeStream) {
-      state.taskGroups.clear();
       dom.taskGroups.clear();
-      if (ungroupedContainer) {
-        ungroupedContainer.innerHTML = '';
-      }
+      state.taskGroups.clear();
+      logContent.innerHTML = '';
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -201,11 +182,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {
             const formatted = this._entryFormatter.format(msg);
-            appendFormatted(ungroupedContainer ?? logContent, formatted);
+            appendFormatted(logContent, formatted);
           }
         } else {
           const formatted = this._entryFormatter.format(msg);
-          appendFormatted(ungroupedContainer ?? logContent, formatted);
+          appendFormatted(logContent, formatted);
         }
       });
       scrollToBottom(logContent);
@@ -219,19 +200,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleClearLogs() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const ungroupedContainer = document.getElementById(
-      ELEMENT_IDS.LOG_UNGROUPED,
-    );
-    if (ungroupedContainer) {
-      ungroupedContainer.innerHTML = '';
-    }
-    if (logContent) {
-      logContent.scrollTop = 0;
-    }
-    const groupIds = [...state.taskGroups.getGroupMap().keys()];
-    state.taskGroups.clear();
+    const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
     dom.taskGroups.clear();
+    state.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
+    if (logContent) {
+      logContent.innerHTML = '';
+    }
 
     this._updatePlaceholderVisibility();
   }
@@ -239,9 +214,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const ungroupedContainer = document.getElementById(
-        ELEMENT_IDS.LOG_UNGROUPED,
-      );
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(message.logMessage);
@@ -256,7 +228,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
             }
           }
         }
-        appendFormatted(ungroupedContainer ?? logContent, formatted);
+        appendFormatted(logContent, formatted);
       }
       scrollToBottom(logContent);
     }
@@ -265,9 +237,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const ungroupedContainer = document.getElementById(
-        ELEMENT_IDS.LOG_UNGROUPED,
-      );
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         // Fallback: append as new log with proper group placement
@@ -286,7 +255,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
               }
             }
           }
-          appendFormatted(ungroupedContainer ?? logContent, formatted);
+          appendFormatted(logContent, formatted);
         }
         scrollToBottom(logContent);
       }
@@ -366,8 +335,44 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const metadata = payload?.metadata ?? {};
-    dom.instructionPanel.show(text, metadata);
+    const sessionKind = message.sessionKind || 'workflow';
+    const isToolUseAgent = sessionKind === 'toolUse';
+
+    if (isToolUseAgent) {
+      // For Tool Use agents, show instruction as a user message in chat
+      dom.instructionPanel.hide();
+
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        // Check if instruction message already exists
+        const existingInstruction = logContent.querySelector(
+          '.user-message-container[data-instruction="true"]',
+        );
+        if (!existingInstruction) {
+          const userMessage = this._entryFormatter.format({
+            id: `instruction-${activeStream}`,
+            messageType: 'userMessage',
+            text: text,
+            timestamp: Date.now(),
+            groupId: undefined,
+          });
+
+          if (userMessage) {
+            userMessage.dataset.instruction = 'true';
+            // Insert at the beginning of the log content
+            if (logContent.firstChild) {
+              logContent.insertBefore(userMessage, logContent.firstChild);
+            } else {
+              logContent.appendChild(userMessage);
+            }
+          }
+        }
+      }
+    } else {
+      // For Workflow agents, show in instruction panel
+      const metadata = payload?.metadata ?? {};
+      dom.instructionPanel.show(text, metadata);
+    }
   }
 
   handleDeleteStream(message) {
@@ -375,9 +380,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       if (message.stream === state.activeStream) {
-        const groupIds = [...state.taskGroups.getGroupMap().keys()];
-        state.taskGroups.clear();
-        dom.taskGroups.clear();
+        const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
       }
@@ -404,10 +407,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
     dom.followUpInput.insertTranscription(message.text);
     dom.followUpInput.setRecording(false);
-    vscode.postMessage({
-      command: COMMANDS.SHOW_INFORMATION_MESSAGE,
-      text: 'Follow-up text transcribed!',
-    });
   }
 
   handleRecordingStarted() {
