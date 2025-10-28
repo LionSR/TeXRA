@@ -63,7 +63,7 @@ export class SettingsButtonManager extends BaseUIManager {
     const button = safeGetElementById(buttonId);
     const menu = safeGetElementById(menuId);
 
-    if (!(button instanceof HTMLElement) || !(menu instanceof HTMLElement)) {
+    if (!button || !menu) {
       return;
     }
 
@@ -110,48 +110,10 @@ export class SettingsButtonManager extends BaseUIManager {
   }
 
   _ensureMenuUsesSlotContent(menu) {
-    if (!menu || typeof menu.tagName !== 'string') {
-      return;
-    }
-
-    if (menu.tagName.toLowerCase() !== 'vscode-context-menu') {
-      return;
-    }
-
-    if (!('data' in menu)) {
-      return;
-    }
-
-    const currentData = menu.data;
-    if (!Array.isArray(currentData)) {
-      return;
-    }
-
-    if (currentData.length > 0) {
-      return;
-    }
-
-    try {
-      // Attempt to clear the auto-provided data array so the component renders
-      // its slotted children instead of expecting a data-driven configuration.
-      menu.data = undefined;
-      if (typeof menu.requestUpdate === 'function') {
-        menu.requestUpdate();
-      }
-      return;
-    } catch (error) {
-      if (!(error instanceof TypeError)) {
-        throw error;
-      }
-    }
-
-    if ('_data' in menu) {
-      menu._data = undefined;
-    }
-
-    if (typeof menu.requestUpdate === 'function') {
-      menu.requestUpdate();
-    }
+    // Clear auto-provided empty data array to force rendering of slotted children
+    // Requires @vscode-elements/elements v2.3.1+
+    menu.data = undefined;
+    menu.requestUpdate();
   }
 
   _setupSettingsButtons() {
