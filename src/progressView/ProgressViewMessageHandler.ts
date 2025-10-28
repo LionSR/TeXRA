@@ -248,7 +248,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
       ? requestedFilter
       : 'all';
-    console.log(`[handleFilterStreams] Changing filter to: ${filter}`);
     this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }

@@ -110,8 +110,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     // Backend already sends filtered streams, no need to filter again
     const streams = message.streams || [];
 
-    state.activeStream = message.activeStream;
-
     dom.streamTabs.update(streams, message.activeStream);
 
     // Update agent filter radio group selection
