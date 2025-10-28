@@ -112,7 +112,7 @@
                   id="instructionCopyBtn"
                   class="instruction-panel__copy"
                   icon="copy"
-                  title="Copy instruction"
+                  label="Copy instruction"
                   data-default-title="Copy instruction"
                   data-success-title="Copied!"
                 ></vscode-toolbar-button>
@@ -123,7 +123,6 @@
                   aria-label="Expand instruction"
                   aria-hidden="true"
                   icon="chevron-down"
-                  title="Expand instruction"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -133,14 +132,14 @@
                 class="instruction-panel__text"
                 readonly
                 resize="none"
-                rows="8"
+                rows="6"
               ></vscode-textarea>
             </div>
           </div>
-          <vscode-scrollable id="logContent" class="log-container">
-            <vscode-tree id="logGroupTree" class="log-group-tree"></vscode-tree>
-            <div id="logUngroupedContainer" class="log-ungrouped"></div>
-          </vscode-scrollable>
+          <vscode-scrollable
+            id="logContent"
+            class="log-container"
+          ></vscode-scrollable>
           <div id="generatedFiles" class="files-container"></div>
           <div id="followUpContainer" class="follow-up-container">
             <vscode-textarea
@@ -149,28 +148,28 @@
               rows="10"
               resize="vertical"
             ></vscode-textarea>
-            <div class="follow-up-actions">
+            <vscode-toolbar-container class="follow-up-actions">
               <vscode-toolbar-button
                 id="polishFollowUpBtn"
                 icon="sparkle"
-                title="Polish follow-up with AI"
+                label="Polish follow-up with AI"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="recordFollowUpBtn"
                 icon="mic"
-                title="Record follow-up with microphone"
+                label="Record follow-up with microphone"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="clearFollowUpBtn"
                 icon="clear-all"
-                title="Clear input"
+                label="Clear input"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="sendFollowUpBtn"
                 icon="send"
-                title="Send"
+                label="Send"
               ></vscode-toolbar-button>
-            </div>
+            </vscode-toolbar-container>
           </div>
           <template id="fileItemTemplate">
             <div class="file-item">
@@ -185,27 +184,27 @@
                 <vscode-toolbar-button
                   class="compare-btn"
                   icon="diff"
-                  title="Compare with base"
+                  label="Compare with base"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="accept-btn"
                   icon="check"
-                  title="Accept edits"
+                  label="Accept edits"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="merge-btn"
                   icon="git-merge"
-                  title="Merge edits"
+                  label="Merge edits"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="diff-btn"
                   icon="diff-single"
-                  title="LaTeXdiff"
+                  label="LaTeXdiff"
                 ></vscode-toolbar-button>
                 <vscode-toolbar-button
                   class="prev-btn"
                   icon="diff-added"
-                  title="Compare with previous round"
+                  label="Compare with previous round"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -224,11 +223,11 @@
             <i class="codicon codicon-circle-small-filled group-bullet"></i>
           </template>
           <template id="streamTabTemplate">
-            <vscode-tree-item data-stream="" title="">
-              <span slot="icon-leaf" class="tab-status status-indicator"></span>
-              <div class="tab-content">
+            <div class="tab-container" title="">
+              <button class="tab" data-stream="" title="">
                 <div class="tab-header">
-                  <span class="tab-title"></span>
+                  <span class="tab-status status-indicator"></span>
+                  <div class="tab-title"></div>
                 </div>
                 <div class="tab-meta">
                   <span class="model"></span>
@@ -236,14 +235,14 @@
                   <i class="agent-type"></i>
                   <i class="multi-file"></i>
                 </div>
-                <vscode-toolbar-button
-                  class="tab-delete"
-                  data-stream=""
-                  icon="close"
-                  label="Delete stream"
-                ></vscode-toolbar-button>
-              </div>
-            </vscode-tree-item>
+              </button>
+              <vscode-toolbar-button
+                class="tab-delete"
+                data-stream=""
+                icon="close"
+                label="Delete stream"
+              ></vscode-toolbar-button>
+            </div>
           </template>
           <template id="roundHeaderTemplate">
             <div class="round-group">
@@ -271,7 +270,7 @@
                 <vscode-toolbar-button
                   class="banner-content-copy"
                   icon="copy"
-                  title="Copy content"
+                  label="Copy content"
                   data-default-title="Copy content"
                   data-success-title="Copied!"
                 ></vscode-toolbar-button>
@@ -343,23 +342,25 @@
             </details>
           </template>
           <template id="groupDetailsTemplate">
-            <vscode-tree-item class="log-group" branch></vscode-tree-item>
+            <details class="log-group">
+              <div class="log-group-content"></div>
+            </details>
           </template>
           <template id="groupHeaderTemplate">
-            <div class="log-group-header">
+            <summary class="log-group-header">
               <span class="group-status-icon"></span>
               <span class="group-title"></span>
               <span class="group-time">
                 <span class="group-start-time"></span>
                 <span class="group-duration"></span>
               </span>
-            </div>
+            </summary>
           </template>
         </div>
         <div slot="end" class="tabs">
-          <vscode-tree id="streamTabs" class="tabs-content">
+          <div id="streamTabs" class="tabs-content">
             <!-- Stream tabs will be dynamically inserted here -->
-          </vscode-tree>
+          </div>
           <div class="clear-all-container">
             <vscode-radio-group
               class="agent-filter-group"
@@ -382,26 +383,26 @@
                 id="sortTimeBtn"
                 data-sort="time"
                 icon="clock"
-                title="Sort by time"
+                label="Sort by time"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="sort-btn"
                 id="sortFileBtn"
                 data-sort="inputFile"
                 icon="file"
-                title="Sort by file"
+                label="Sort by file"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 class="sort-btn"
                 id="sortAgentBtn"
                 data-sort="agent"
                 icon="account"
-                title="Sort by agent"
+                label="Sort by agent"
               ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="deleteAllBtn"
                 icon="close-all"
-                title="Delete All"
+                label="Delete All"
               ></vscode-toolbar-button>
             </vscode-toolbar-container>
           </div>

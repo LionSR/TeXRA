@@ -30,7 +30,6 @@ export class StreamTabs {
       console.error('StreamTabs.update: streamTabs container not found');
       return;
     }
-
     tabsContainer.innerHTML = '';
     let activeInfo = null;
     streams.forEach((info) => {
@@ -47,23 +46,21 @@ export class StreamTabs {
         },
         attributes: {
           '': { title: tooltip },
+          '.tab': { title: tooltip },
+          '.tab-delete': { title: 'Delete stream' },
         },
         dataset: {
-          '': { stream: info.name },
+          '.tab': { stream: info.name },
           '.tab-delete': { stream: info.name },
         },
       });
       if (!tabEl) return;
-
-      // Set status indicator color based on status
       const statusEl = tabEl.querySelector('.tab-status');
       if (statusEl) {
         const status = info.status || 'stopped';
         statusEl.classList.add(status);
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
-      } else {
-        console.warn('[StreamTabs] Status element not found in tab');
       }
       const agentIcon = tabEl.querySelector('.agent-type');
       if (agentIcon) {
@@ -82,10 +79,9 @@ export class StreamTabs {
         }
       }
       if (info.name === activeStream) {
-        tabEl.setAttribute('selected', '');
+        tabEl.classList.add('active');
         activeInfo = info;
       }
-
       tabsContainer.appendChild(tabEl);
     });
 

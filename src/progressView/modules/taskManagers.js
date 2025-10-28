@@ -14,7 +14,6 @@ export class TaskGroupDomManager {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
-    this.groupObservers = new Map();
   }
 
   /**
@@ -28,7 +27,8 @@ export class TaskGroupDomManager {
         console.warn(
           `Group ${group.id} exists in DOM but not in state - removing from DOM`,
         );
-        this.removeGroup(group.id);
+        existingGroup.remove();
+        this.groupElements.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
         this.updateGroup({
@@ -42,16 +42,14 @@ export class TaskGroupDomManager {
       }
     }
 
-    const treeItem = createFromTemplate('groupDetailsTemplate');
-    if (!treeItem) {
+    const detailsElem = createFromTemplate('groupDetailsTemplate');
+    if (!detailsElem) {
       console.error(
         'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
       );
       return;
     }
-    treeItem.id = `group-${group.id}`;
-    treeItem.dataset.groupId = group.id;
-    treeItem.setAttribute('branch', '');
+    detailsElem.id = `group-${group.id}`;
 
     const headerElement = this.headerFormatter.create(group);
     if (!headerElement) {
@@ -61,44 +59,49 @@ export class TaskGroupDomManager {
       return;
     }
 
-    treeItem.appendChild(headerElement);
+    const groupContainer = detailsElem.querySelector('.log-group-content');
+    if (!groupContainer) {
+      console.error(
+        'TaskGroupDomManager.addGroup: missing group content container',
+      );
+      return;
+    }
+    groupContainer.id = `group-content-${group.id}`;
 
     progressViewState.taskGroups.set(group.id, group);
 
-    const isCollapsed = progressViewState.toggleStates.get(group.id) === true;
-    const isExpanded = !isCollapsed;
-    treeItem.toggleAttribute('expanded', isExpanded);
-    treeItem.expanded = isExpanded;
+    const isCollapsed = progressViewState.toggleStates.get(group.id);
+    detailsElem.open = isCollapsed !== true;
 
-    this._observeGroup(treeItem, group.id);
+    detailsElem.prepend(headerElement);
 
-    this.groupElements.set(group.id, treeItem);
+    detailsElem.addEventListener('toggle', () => {
+      progressViewState.toggleStates.set(group.id, !detailsElem.open);
+    });
 
-    const treeRoot = this._getTreeRoot();
-    if (!treeRoot) {
-      console.error('TaskGroupDomManager.addGroup: log group tree missing');
-      return;
-    }
+    this.groupElements.set(group.id, detailsElem);
+
+    // Insert the group at the right position in the parent
+    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
 
     if (group.parentGroupId) {
-      const parentItem = this.groupElements.get(group.parentGroupId);
-      if (parentItem instanceof HTMLElement) {
-        treeItem.setAttribute('slot', 'children');
+      const parentDetails = this.groupElements.get(group.parentGroupId);
+      const parentGroupContent =
+        parentDetails?.querySelector('.log-group-content');
+      if (parentGroupContent) {
         insertChronologically({
-          container: parentItem,
-          element: treeItem,
+          container: parentGroupContent,
+          element: detailsElem,
           timestamp: group.startTime,
         });
         return;
       }
-    } else {
-      treeItem.removeAttribute('slot');
     }
 
     // For top-level groups, insert in chronological order
     insertChronologically({
-      container: treeRoot,
-      element: treeItem,
+      container,
+      element: detailsElem,
       timestamp: group.startTime,
     });
 
@@ -106,77 +109,6 @@ export class TaskGroupDomManager {
     if (!group.parentGroupId) {
       progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
-    }
-  }
-
-  _getTreeRoot() {
-    let tree = document.getElementById(ELEMENT_IDS.LOG_GROUP_TREE);
-    if (tree) {
-      return tree;
-    }
-
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!container) {
-      return null;
-    }
-
-    tree = document.createElement('vscode-tree');
-    tree.id = ELEMENT_IDS.LOG_GROUP_TREE;
-    tree.classList.add('log-group-tree');
-    container.prepend(tree);
-    return tree;
-  }
-
-  _observeGroup(treeItem, groupId) {
-    if (!(treeItem instanceof HTMLElement)) {
-      return;
-    }
-
-    this._disconnectObserver(groupId);
-
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        if (
-          mutation.type === 'attributes' &&
-          mutation.attributeName === 'expanded'
-        ) {
-          const isCollapsed = !treeItem.hasAttribute('expanded');
-          progressViewState.toggleStates.set(groupId, isCollapsed);
-        }
-      }
-    });
-
-    observer.observe(treeItem, {
-      attributes: true,
-      attributeFilter: ['expanded'],
-    });
-
-    this.groupObservers.set(groupId, observer);
-  }
-
-  _disconnectObserver(groupId) {
-    const existing = this.groupObservers.get(groupId);
-    if (existing) {
-      existing.disconnect();
-      this.groupObservers.delete(groupId);
-    }
-  }
-
-  removeGroup(groupId) {
-    if (!groupId) {
-      return;
-    }
-
-    this._disconnectObserver(groupId);
-
-    const treeItem = this.groupElements.get(groupId);
-    if (treeItem instanceof HTMLElement) {
-      treeItem.remove();
-    }
-
-    this.groupElements.delete(groupId);
-    if (progressViewState.toggleStates.get(groupId) !== undefined) {
-      progressViewState.toggleStates.clearSelection([groupId]);
     }
   }
 
@@ -219,12 +151,12 @@ export class TaskGroupDomManager {
       group.endTime = updates.endTime;
     }
 
-    const treeItem = this.groupElements.get(groupId);
-    if (!(treeItem instanceof HTMLElement)) {
+    const detailsElem = this.groupElements.get(groupId);
+    if (!detailsElem) {
       return;
     }
 
-    const header = treeItem.querySelector('.log-group-header');
+    const header = detailsElem.querySelector('.log-group-header');
     if (header) {
       const level = this.headerFormatter._getGroupLevel(group);
       header.className = this.headerFormatter._getHeaderClass(group, level);
@@ -286,10 +218,9 @@ export class TaskGroupDomManager {
     }
 
     // Collapse this group
-    const treeItem = this.groupElements.get(groupId);
-    if (treeItem instanceof HTMLElement) {
-      treeItem.toggleAttribute('expanded', false);
-      treeItem.expanded = false;
+    const detailsElem = this.groupElements.get(groupId);
+    if (detailsElem) {
+      detailsElem.open = false;
       progressViewState.toggleStates.set(groupId, true);
     }
   }
@@ -308,11 +239,8 @@ export class TaskGroupDomManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, treeItem] of this.groupElements.entries()) {
-      if (
-        !(treeItem instanceof HTMLElement) ||
-        !treeItem.hasAttribute('expanded')
-      ) {
+    for (const [id, detailsElem] of this.groupElements.entries()) {
+      if (!detailsElem || !detailsElem.open) {
         continue;
       }
 
@@ -375,17 +303,8 @@ export class TaskGroupDomManager {
    * Clear cached group references.
    */
   clear() {
-    for (const groupId of [...this.groupElements.keys()]) {
-      this.removeGroup(groupId);
-    }
-    this.groupObservers.clear();
     this.groupElements.clear();
     this.previousActiveGroupId = null;
-
-    const treeRoot = document.getElementById(ELEMENT_IDS.LOG_GROUP_TREE);
-    if (treeRoot) {
-      treeRoot.innerHTML = '';
-    }
   }
 }
 
@@ -405,26 +324,20 @@ export class LogEntryManager {
   append(logMessage) {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
-      const groupElement = document.getElementById(
-        `group-${logMessage.groupId}`,
+      const groupContent = document.getElementById(
+        `group-content-${logMessage.groupId}`,
       );
-      if (groupElement instanceof HTMLElement) {
+      if (groupContent) {
         const logLineElement = this.entryFormatter.format(logMessage);
         if (!logLineElement) {
           return true;
         }
 
-        if (!(logLineElement instanceof HTMLElement)) {
-          return false;
-        }
-
-        logLineElement.setAttribute('slot', 'children');
-
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
 
         insertChronologically({
-          container: groupElement,
+          container: groupContent,
           element: logLineElement,
           timestamp: msgDate,
         });
@@ -462,13 +375,6 @@ export class LogEntryManager {
         const toggleIcon = newEl.querySelector('.toggle-icon');
         if (toggleIcon) {
           toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
-        }
-      }
-
-      if (existing instanceof HTMLElement && newEl instanceof HTMLElement) {
-        const slotName = existing.getAttribute('slot');
-        if (slotName) {
-          newEl.setAttribute('slot', slotName);
         }
       }
 
