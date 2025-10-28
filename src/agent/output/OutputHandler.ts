@@ -26,6 +26,7 @@ import {
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - utilities
@@ -57,6 +58,7 @@ export class OutputHandler implements IOutputHandler {
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
+  private readonly openedOutputs: Set<string>;
 
   constructor(
     agentSetting: AgentSetting,
@@ -88,6 +90,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
     );
     this.diffStatsManager = new DiffStatsManager();
+    this.openedOutputs = new Set();
   }
 
   /**
@@ -370,6 +373,24 @@ export class OutputHandler implements IOutputHandler {
       stream: this.channel,
       filesByRound: { [currRound]: fileInfos },
     });
+
+    for (const { path: filePath } of fileInfos) {
+      if (this.openedOutputs.has(filePath)) {
+        continue;
+      }
+
+      try {
+        await openBuildDisplayIfTex(filePath, { preserveFocus: true });
+        this.openedOutputs.add(filePath);
+      } catch (error) {
+        this.logger.error(
+          `Failed to open output file ${filePath}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          groupId,
+        );
+      }
+    }
   }
 
   /**
