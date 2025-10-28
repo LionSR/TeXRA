@@ -178,7 +178,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.updateWebview();
   }
 
-  private async handleDeleteAll(message: any): Promise<void> {
+  private async handleDeleteAll(_message: any): Promise<void> {
     // Show confirmation dialog
     const confirmation = await vscode.window.showWarningMessage(
       'Are you sure you want to delete all streams? This action cannot be undone.',
@@ -248,6 +248,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const filter: AgentTypeFilter = isAgentTypeFilter(requestedFilter)
       ? requestedFilter
       : 'all';
+    console.log(`[handleFilterStreams] Changing filter to: ${filter}`);
     this.provider.state.agentTypeFilter = filter;
     this.provider.updateWebview();
   }
