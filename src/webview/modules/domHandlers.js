@@ -11,7 +11,6 @@ import { latexdiffManager } from './uiManagers/LatexdiffManager.js';
 import { outputFilesManager } from './uiManagers/OutputFilesManager.js';
 import { RecordingManager } from './uiManagers/RecordingManager.js';
 import { SettingsButtonManager } from './uiManagers/SettingsButtonManager.js';
-import { ToggleManager } from './uiManagers/ToggleManager.js';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
@@ -21,7 +20,6 @@ export const instructionManager = new InstructionManager(
   vscode,
   mainViewState,
 );
-export const toggleManager = new ToggleManager();
 export const recordingManager = new RecordingManager(vscode);
 
 /**
@@ -68,7 +66,6 @@ class MainViewDomHandler extends BaseDomHandler {
     );
     this.settingsButtonManager = new SettingsButtonManager(
       vscode,
-      toggleManager,
       latexdiffManager,
       mainViewState,
       webviewEventBus,
@@ -157,3 +154,7 @@ class MainViewDomHandler extends BaseDomHandler {
 }
 
 export const mainViewDomHandler = new MainViewDomHandler();
+
+export function cleanupManagers() {
+  mainViewDomHandler.cleanupUI();
+}
