@@ -65,15 +65,19 @@ export function buildStreamInfos(
     const outputs = taskState?.agentConfig.outputFiles || [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
-    const sessionCategory =
-      taskState?.session?.agentCategory ??
-      sessionKindHint ??
-      AgentCategory.Workflow; // Default to Workflow if unknown
+    let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
 
-    // Filter logic: check if the stream matches the current filter
-    if (!matchesAgentFilter(sessionCategory, filter)) {
+    // Filter logic: streams without category only show when filter is "all"
+    if (!sessionCategory) {
+      if (filter !== 'all') {
+        return acc;
+      }
+      // Default to Workflow for display purposes only when filter is "all"
+      sessionCategory = AgentCategory.Workflow;
+    } else if (!matchesAgentFilter(sessionCategory, filter)) {
       return acc;
     }
+
 
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
