@@ -154,3 +154,7 @@ class MainViewDomHandler extends BaseDomHandler {
 }
 
 export const mainViewDomHandler = new MainViewDomHandler();
+
+export function cleanupManagers() {
+  mainViewDomHandler.cleanupUI();
+}

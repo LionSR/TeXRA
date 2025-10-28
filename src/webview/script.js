@@ -2,6 +2,7 @@
 import {
   mainViewDomHandler,
   instructionManager,
+  cleanupManagers,
 } from './modules/domHandlers.js';
 import { mainViewState } from './modules/mainViewState.js';
 import {
@@ -16,7 +17,7 @@ setupHandlers({ requestData: false });
 
 window.addEventListener('beforeunload', () => {
   cleanupHandlers();
-  mainViewDomHandler.cleanupUI();
+  cleanupManagers();
 });
 
 // Setup UI when DOM is loaded
