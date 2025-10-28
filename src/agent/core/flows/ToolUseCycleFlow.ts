@@ -40,9 +40,52 @@ interface DebugFileOptions {
   baseName: string;
 }
 
+interface ToolValidationDiagnostics {
+  type: 'validation_error';
+  issues: any;
+  formatted: Array<{
+    path: string;
+    message: string;
+    expected?: unknown;
+    received?: unknown;
+    code?: string;
+  }>;
+}
+
+function normalizeToolCallError(
+  toolName: string,
+  error: unknown,
+): { message: string; diagnostics?: ToolValidationDiagnostics } {
+  if (error && typeof error === 'object' && 'issues' in error) {
+    const zodError = error as { issues?: any[] };
+    const issues = Array.isArray(zodError.issues) ? zodError.issues : [];
+    return {
+      message: `${toolName}: Invalid parameters provided`,
+      diagnostics: {
+        type: 'validation_error',
+        issues,
+        formatted: issues.map((issue) => ({
+          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
+          message: issue.message,
+          expected: issue.expected,
+          received: issue.received,
+          code: issue.code,
+        })),
+      },
+    };
+  }
+
+  const fallbackMessage =
+    error instanceof Error
+      ? `${toolName}: ${error.message}`
+      : `${toolName}: ${String(error)}`;
+
+  return { message: fallbackMessage };
+}
+
 export interface ToolUseCycleState {
   messages: ProviderMessage[];
-  toolState?: ToolState | null;
+  toolState: ToolState;
   groupId?: string;
   iteration: number;
   shouldStop: boolean;
@@ -220,7 +263,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
       state.groupId,
-      state.toolState ?? undefined,
+      state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
@@ -270,7 +313,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (!toolInfo || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
-        state.toolState?.updateLastResponse(text);
+        state.toolState.updateLastResponse(text);
       }
       state.shouldStop = true;
       return { stopReason, text, endTurn: true };
@@ -310,7 +353,10 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async exec(
     shared: ToolUseCycleShared<C>,
-  ): Promise<{ skipped: true } | { parsed: any; name: string; input: any }> {
+  ): Promise<
+    | { skipped: true }
+    | { parsed: any; name: string; input: any; toolCallId: string }
+  > {
     const { options, state } = shared;
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
@@ -337,8 +383,23 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const id =
-      parsed.call_id || parsed.id || parsed.tool_use_id || parsed.tool_call_id;
+    const rawToolCallId =
+      parsed.call_id ?? parsed.id ?? parsed.tool_use_id ?? parsed.tool_call_id;
+    if (!rawToolCallId) {
+      const errorMsg = `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`;
+      const errorResult = toolResult({ error: errorMsg, isError: true });
+      const toolUseLog = {
+        tool: parsed.name || parsed.function?.name || 'unknown',
+        input: parsed,
+        output: sanitizeToolResultForLog(errorResult),
+      };
+      options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      state.shouldStop = true;
+      return { skipped: true };
+    }
+
+    const toolCallId = String(rawToolCallId);
+
     const name = parsed.name || parsed.function?.name;
     if (!name) {
       const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
@@ -374,13 +435,15 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
-    return { parsed, name, input };
+    return { parsed, name, input, toolCallId };
   }
 
   async post(
     shared: ToolUseCycleShared<C>,
     _prepRes: unknown,
-    execRes: { skipped: true } | { parsed: any; name: string; input: any },
+    execRes:
+      | { skipped: true }
+      | { parsed: any; name: string; input: any; toolCallId: string },
   ): Promise<string | undefined> {
     const { options, state } = shared;
     if ('skipped' in execRes) {
@@ -399,31 +462,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       try {
         result = await tool.call(execRes.input);
       } catch (err) {
-        let errorMessage: string;
-        let diagnostics: any;
-        if (err && typeof err === 'object' && 'issues' in err) {
-          const zodError = err as any;
-          errorMessage = `${execRes.name}: Invalid parameters provided`;
-          diagnostics = {
-            type: 'validation_error',
-            issues: zodError.issues,
-            formatted: zodError.issues?.map((issue: any) => ({
-              path: issue.path.join('.'),
-              message: issue.message,
-              expected: issue.expected,
-              received: issue.received,
-              code: issue.code,
-            })),
-          };
-        } else {
-          errorMessage =
-            err instanceof Error
-              ? `${execRes.name}: ${err.message}`
-              : `${execRes.name}: ${String(err)}`;
-        }
-
+        const { message, diagnostics } = normalizeToolCallError(
+          execRes.name,
+          err,
+        );
         result = toolResult({
-          error: errorMessage,
+          error: message,
           isError: true,
           diagnostics,
         });
@@ -437,7 +481,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     };
     options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
-    if (result.files && result.files.length > 0 && state.toolState) {
+    if (result.files && result.files.length > 0) {
       const existing = state.toolState.mediaFiles;
       const toAdd: string[] = [];
       for (const attachment of result.files) {
@@ -465,10 +509,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,
-        execRes.parsed.call_id ||
-          execRes.parsed.id ||
-          execRes.parsed.tool_use_id ||
-          execRes.parsed.tool_call_id,
+        execRes.toolCallId,
         execRes.name,
         execRes.parsed,
         (() => {
@@ -485,7 +526,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           if (result.files !== undefined) payload.files = result.files;
           return payload;
         })(),
-        state.toolState ?? undefined,
+        state.toolState,
         state.text ?? '',
       );
 

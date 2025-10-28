@@ -128,7 +128,6 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   ): Promise<string | undefined> {
     const { cycle } = shared;
     if (prepRes.interrupted) {
-      cycle.endTurn = true;
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -184,6 +183,13 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
           ? options.agentSetting.tools
           : undefined,
       );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `Model invocation failed: ${error.message}`
+          : 'Model invocation failed with an unknown error';
+      options.logger.error(message, cycle.roundGroupId);
+      throw error;
     } finally {
       options.setAbortController(null);
     }
@@ -223,7 +229,6 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         'Model response was aborted or returned no data; output may be incomplete.',
         cycle.roundGroupId,
       );
-      cycle.endTurn = true;
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -397,7 +402,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.processedResponse = execRes.processedResponse;
 
     if (execRes.repetitionDetected || !execRes.processedResponse) {
-      cycle.endTurn = true;
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -490,7 +494,6 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = shared;
 
     if ('skipped' in execRes) {
-      cycle.endTurn = true;
       cycle.shouldStop = true;
       return 'complete';
     }
