@@ -269,14 +269,46 @@ export class SettingsButtonManager extends BaseUIManager {
        * @returns {string|undefined} The session type, or undefined if not found
        */
       const getSessionTypeFromGroup = (group) => {
-        if (
-          !(group instanceof HTMLElement) ||
-          typeof group.value !== 'string' ||
-          group.value.length === 0
-        ) {
+        if (!(group instanceof HTMLElement)) {
           return undefined;
         }
-        return group.value;
+
+        const radios = Array.from(group.querySelectorAll('vscode-radio'));
+        if (radios.length === 0) {
+          return undefined;
+        }
+
+        const findSessionType = (radio) => {
+          if (!(radio instanceof HTMLElement)) {
+            return undefined;
+          }
+
+          const sessionType =
+            radio.dataset.sessionType || radio.getAttribute('value');
+          return sessionType && sessionType.length > 0
+            ? sessionType
+            : undefined;
+        };
+
+        const checkedRadio =
+          radios.find((radio) => {
+            if (!(radio instanceof HTMLElement)) {
+              return false;
+            }
+            const hasCheckedProperty =
+              'checked' in radio && Boolean(radio.checked);
+            return (
+              hasCheckedProperty ||
+              radio.hasAttribute('checked') ||
+              radio.getAttribute('aria-checked') === 'true'
+            );
+          }) ?? null;
+
+        if (checkedRadio) {
+          return findSessionType(checkedRadio);
+        }
+
+        return findSessionType(radios[0]);
       };
 
       const radioGroup = resolveRadioGroup(toggleContainer);
@@ -290,8 +322,20 @@ export class SettingsButtonManager extends BaseUIManager {
           );
         }
 
-        this.addListener(radioGroup, 'change', () => {
-          const sessionType = getSessionTypeFromGroup(radioGroup);
+        this.addListener(radioGroup, 'change', (event) => {
+          let sessionType;
+          const target = event?.target;
+          if (target instanceof HTMLElement) {
+            const isRadio = target.tagName.toLowerCase() === 'vscode-radio';
+            if (isRadio) {
+              sessionType =
+                target.dataset.sessionType || target.getAttribute('value');
+            }
+          }
+
+          if (!sessionType) {
+            sessionType = getSessionTypeFromGroup(radioGroup);
+          }
           if (!sessionType) {
             return;
           }
