@@ -36,7 +36,7 @@ export class ActionButtonManager extends BaseUIManager {
           'polishProgressContainer',
         );
         if (progressContainer) {
-          progressContainer.style.display = 'flex';
+          progressContainer.style.display = 'block';
         }
 
         this.vscode.postMessage({

@@ -106,7 +106,7 @@
             aria-hidden="true"
           >
             <div class="instruction-panel__header">
-              <span class="instruction-panel__title">Instruction</span>
+              <span class="instruction-panel__title">Chat</span>
               <vscode-toolbar-container class="instruction-panel__actions">
                 <vscode-toolbar-button
                   id="instructionCopyBtn"
@@ -116,15 +116,6 @@
                   title="Copy instruction"
                   data-default-title="Copy instruction"
                   data-success-title="Copied!"
-                ></vscode-toolbar-button>
-                <vscode-toolbar-button
-                  id="instructionToggleBtn"
-                  class="instruction-panel__toggle is-hidden"
-                  aria-expanded="false"
-                  aria-label="Expand instruction"
-                  aria-hidden="true"
-                  icon="chevron-down"
-                  title="Expand instruction"
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
@@ -150,12 +141,16 @@
               rows="10"
               resize="vertical"
             ></vscode-textarea>
-            <vscode-toolbar-container class="follow-up-actions">
+            <div class="follow-up-actions">
               <vscode-toolbar-button
                 id="polishFollowUpBtn"
                 icon="sparkle"
                 label="Polish follow-up with AI"
               ></vscode-toolbar-button>
+              <vscode-progress-ring
+                id="polishFollowUpProgressContainer"
+                style="display: none; width: 16px; height: 16px"
+              ></vscode-progress-ring>
               <vscode-toolbar-button
                 id="recordFollowUpBtn"
                 icon="mic"
@@ -171,7 +166,7 @@
                 icon="send"
                 label="Send"
               ></vscode-toolbar-button>
-            </vscode-toolbar-container>
+            </div>
           </div>
           <template id="fileItemTemplate">
             <div class="file-item">
