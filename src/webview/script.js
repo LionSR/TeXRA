@@ -2,7 +2,7 @@
 import {
   mainViewDomHandler,
   instructionManager,
-  toggleManager,
+  cleanupManagers,
 } from './modules/domHandlers.js';
 import { mainViewState } from './modules/mainViewState.js';
 import {
@@ -17,7 +17,7 @@ setupHandlers({ requestData: false });
 
 window.addEventListener('beforeunload', () => {
   cleanupHandlers();
-  mainViewDomHandler.cleanupUI();
+  cleanupManagers();
 });
 
 // Setup UI when DOM is loaded
@@ -25,9 +25,6 @@ document.addEventListener('DOMContentLoaded', function () {
   mainViewState.restore();
   instructionManager.setup();
   mainViewDomHandler.initializeUI();
-  toggleManager.updateAutoToggleState();
-  toggleManager.updateToolConfigToggleState();
-  toggleManager.setupDocumentListeners();
   setupHandlers({ requestData: true });
   vscode.postMessage({ command: MAIN_VIEW_COMMANDS.WEBVIEW_READY });
 });
