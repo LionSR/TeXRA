@@ -58,6 +58,12 @@ export const ELEMENT_IDS = {
   FILTER_TOOL_BTN: 'filterToolBtn',
 };
 
+export const GROUP_DOM_IDS = Object.freeze({
+  DETAILS_PREFIX: 'group-',
+  HEADER_PREFIX: 'group-header-',
+  CONTENT_PREFIX: 'group-content-',
+});
+
 // Constants for layout configuration
 export const MAX_HEIGHT = 400;
 
