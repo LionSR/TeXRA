@@ -370,6 +370,23 @@
               </span>
             </vscode-tree-item>
           </template>
+          <template id="contentTreeItemTemplate">
+            <vscode-tree-item class="content-item" branch>
+              <span slot="icon-branch" class="content-icon"></span>
+              <span slot="icon-branch-opened" class="content-icon"></span>
+              <span class="content-label">
+                <span class="content-title"></span>
+                <vscode-toolbar-button
+                  class="content-copy"
+                  icon="copy"
+                  title="Copy content"
+                  data-default-title="Copy content"
+                  data-success-title="Copied!"
+                ></vscode-toolbar-button>
+              </span>
+              <div slot="children" class="content-body markdown-content"></div>
+            </vscode-tree-item>
+          </template>
         </div>
         <div slot="end" class="tabs">
           <vscode-tree id="streamTabs" class="tabs-content">

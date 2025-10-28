@@ -400,6 +400,14 @@ export class LogEntryManager {
 
         logLineElement.setAttribute('slot', 'children');
 
+        // Set level for content tree items
+        if (
+          logLineElement.classList.contains('content-item') &&
+          typeof groupElement.level === 'number'
+        ) {
+          logLineElement.level = groupElement.level + 1;
+        }
+
         // Extract timestamp from the message for chronological ordering
         const msgDate = new Date(logMessage.timestamp);
 

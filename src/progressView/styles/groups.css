@@ -145,3 +145,50 @@ vscode-tree-item.log-group > [slot='children'].log-line,
 vscode-tree-item.log-group > [slot='children'].banner-details {
   margin-bottom: var(--spacing-tiny);
 }
+
+/* Content tree items (Thinking, Scratchpad, Files, Latexdiff) */
+vscode-tree-item.content-item {
+  display: block;
+  margin-bottom: var(--spacing-tiny);
+}
+
+.content-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  width: 100%;
+}
+
+.content-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.content-copy {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.content-copy:hover {
+  opacity: 1;
+}
+
+/* Content body styling */
+.content-body {
+  padding: var(--spacing-small);
+  margin-top: var(--spacing-tiny);
+}
+
+.content-body ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.content-body .detail-item {
+  padding: var(--spacing-tiny) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+}

@@ -373,27 +373,33 @@ export class LogEntryFormatter {
 
     const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
     const isThinking = contentType.includes('Thinking');
-    const bannerEntry = this._createBannerEntry({
+
+    // Create tree item instead of details element
+    const treeItem = this._createContentTreeItem({
       logId,
       groupId,
       timestamp,
       iconClass: isThinking ? 'codicon-lightbulb' : 'codicon-pencil',
-      labelText: isThinking ? 'Thinking' : 'Scratchpad',
+      title: isThinking ? 'Thinking' : 'Scratchpad',
       copyTitle: isThinking ? 'Copy thinking' : 'Copy scratchpad',
-      contentClass: isThinking
-        ? 'banner-content--thinking'
-        : 'banner-content--scratchpad',
       open: false,
     });
 
-    if (!bannerEntry || !bannerEntry.contentElem) {
-      return bannerEntry ? bannerEntry.element : null;
+    if (!treeItem || !treeItem.contentElem) {
+      return treeItem ? treeItem.element : null;
     }
 
-    bannerEntry.contentElem.dataset.rawContent = decodedContent;
-    bannerEntry.contentElem.innerHTML = parsedMarkdown;
+    // Add specific class for styling
+    if (isThinking) {
+      treeItem.element.classList.add('thinking-item');
+    } else {
+      treeItem.element.classList.add('scratchpad-item');
+    }
 
-    return bannerEntry.element;
+    treeItem.contentElem.dataset.rawContent = decodedContent;
+    treeItem.contentElem.innerHTML = parsedMarkdown;
+
+    return treeItem.element;
   }
 
   _formatToolUse(content, structuredData, logId, groupId, timestamp) {
@@ -780,20 +786,98 @@ export class LogEntryFormatter {
     };
   }
 
-  _formatFileList(content, data, logId) {
-    const element = createFromTemplate('fileListDetailsTemplate');
+  /**
+   * Creates a tree item for collapsible content (Thinking, Scratchpad, Files, etc.)
+   * @param {Object} options - Configuration for the tree item
+   * @returns {Object} Object containing the tree item element and content container
+   */
+  _createContentTreeItem({
+    logId,
+    groupId,
+    timestamp,
+    iconClass,
+    title,
+    copyTitle,
+    open = false,
+  }) {
+    const element = createFromTemplate('contentTreeItemTemplate');
     if (!element) return null;
-    const contentElem = element.querySelector('.file-list-content');
-    const summaryElem = element.querySelector('.summary-text');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
+    // Set data attributes
+    if (logId) element.dataset.logId = logId;
+    if (groupId) element.dataset.groupId = groupId;
+    if (timestamp) element.dataset.fullTimestamp = timestamp;
+
+    // Set open state
+    if (open) {
+      element.setAttribute('open', '');
+      element.open = true;
+    }
+
+    // Set up icons
+    const icons = element.querySelectorAll('.content-icon');
+    icons.forEach((icon) => {
+      icon.innerHTML = `<i class="codicon ${iconClass}"></i>`;
+    });
+
+    // Set title
+    const titleElem = element.querySelector('.content-title');
+    if (titleElem) {
+      titleElem.textContent = title;
+    }
+
+    // Set up copy button
+    const copyButton = element.querySelector('.content-copy');
+    if (copyButton) {
+      const defaultTitle = copyTitle || `Copy ${title.toLowerCase()}`;
+      copyButton.dataset.defaultTitle = defaultTitle;
+      copyButton.dataset.successTitle = 'Copied!';
+      copyButton.setAttribute('title', defaultTitle);
+      copyButton.setAttribute('aria-label', defaultTitle);
+    }
+
+    // Get content container
+    const contentElem = element.querySelector('.content-body');
+
+    return {
+      element,
+      contentElem,
+      copyButton,
+    };
+  }
+
+  _formatFileList(content, data, logId) {
     const parsed = data ?? JSON.parse(decodeHtml(content));
 
     if (!Array.isArray(parsed)) {
       console.warn('Missing structured data for file list log entry');
       return null;
     }
+
+    const totalFiles = parsed.length;
+    const loadedFiles = parsed.filter((f) => f.ok).length;
+    const failedFiles = totalFiles - loadedFiles;
+
+    let title = `Files (${loadedFiles}/${totalFiles} loaded`;
+    if (failedFiles > 0) {
+      title += `, ${failedFiles} not found`;
+    }
+    title += ')';
+
+    // Create tree item
+    const treeItem = this._createContentTreeItem({
+      logId,
+      iconClass: 'codicon-list-tree',
+      title,
+      copyTitle: 'Copy file list',
+      open: false,
+    });
+
+    if (!treeItem || !treeItem.contentElem) {
+      return treeItem ? treeItem.element : null;
+    }
+
+    treeItem.element.classList.add('file-list-item');
 
     // Group files by source for better organization
     const filesBySource = {};
@@ -838,23 +922,11 @@ export class LogEntryFormatter {
       });
     });
 
-    const totalFiles = parsed.length;
-    const loadedFiles = parsed.filter((f) => f.ok).length;
-    const failedFiles = totalFiles - loadedFiles;
+    // Wrap items in a list
+    treeItem.contentElem.innerHTML = `<ul class="file-list-content detail-content detail-list">${items}</ul>`;
+    if (logId) treeItem.contentElem.dataset.logId = logId;
 
-    let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
-    if (failedFiles > 0) {
-      summary += `, ${failedFiles} not found`;
-    }
-    summary += ')';
-
-    if (summaryElem) summaryElem.textContent = summary;
-    if (contentElem) {
-      contentElem.innerHTML = items;
-      if (logId) contentElem.dataset.logId = logId;
-    }
-
-    return element;
+    return treeItem.element;
   }
 
   _formatMissingOutputs(content, data, logId) {
@@ -945,13 +1017,6 @@ export class LogEntryFormatter {
   }
 
   _formatLatexdiff(content, data, logId) {
-    const element = createFromTemplate('latexdiffDetailsTemplate');
-    if (!element) return null;
-    const contentElem = element.querySelector('.latexdiff-content');
-    const summaryElem = element.querySelector('.summary-text');
-    const toggleIcon = element.querySelector('.toggle-icon');
-    if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
-
     const parsed = data ?? JSON.parse(decodeHtml(content));
     const entries = Array.isArray(parsed)
       ? parsed
@@ -962,6 +1027,26 @@ export class LogEntryFormatter {
     if (entries.length === 0) {
       return null;
     }
+
+    const title =
+      entries.length === 1
+        ? 'Latexdiff result'
+        : `Latexdiff results (${entries.length})`;
+
+    // Create tree item
+    const treeItem = this._createContentTreeItem({
+      logId,
+      iconClass: 'codicon-diff',
+      title,
+      copyTitle: 'Copy latexdiff results',
+      open: true,
+    });
+
+    if (!treeItem || !treeItem.contentElem) {
+      return treeItem ? treeItem.element : null;
+    }
+
+    treeItem.element.classList.add('latexdiff-item');
 
     let items = '';
     entries.forEach((d) => {
@@ -993,18 +1078,11 @@ export class LogEntryFormatter {
       )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
     });
 
-    const summary =
-      entries.length === 1
-        ? 'Latexdiff result'
-        : `Latexdiff results (${entries.length})`;
+    // Wrap items in a list
+    treeItem.contentElem.innerHTML = `<ul class="latexdiff-content detail-content detail-list">${items}</ul>`;
+    if (logId) treeItem.contentElem.dataset.logId = logId;
 
-    if (summaryElem) summaryElem.textContent = summary;
-    if (contentElem) {
-      contentElem.innerHTML = items;
-      if (logId) contentElem.dataset.logId = logId;
-    }
-
-    return element;
+    return treeItem.element;
   }
 
   _formatStatistics(content, data, logId) {
