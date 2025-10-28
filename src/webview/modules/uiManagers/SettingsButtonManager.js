@@ -99,13 +99,11 @@ export class SettingsButtonManager extends BaseUIManager {
       this.addListener(checkboxId, 'change', handleCheckboxUpdate);
     });
 
-    if (typeof MutationObserver === 'function') {
-      // Observe the "show" attribute so we react when the menu closes itself
-      // (e.g. due to focus loss or another menu opening).
-      const observer = new MutationObserver(updateAriaExpanded);
-      observer.observe(menu, { attributes: true, attributeFilter: ['show'] });
-      this._menuObservers.push(observer);
-    }
+    // Observe the "show" attribute so we react when the menu closes itself
+    // (e.g. due to focus loss or another menu opening).
+    const observer = new MutationObserver(updateAriaExpanded);
+    observer.observe(menu, { attributes: true, attributeFilter: ['show'] });
+    this._menuObservers.push(observer);
 
     updateButtonState();
     updateAriaExpanded();
