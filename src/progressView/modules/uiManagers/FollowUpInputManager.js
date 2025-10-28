@@ -104,6 +104,14 @@ export class FollowUpInputManager {
       return;
     }
 
+    // Show progress indicator
+    const progressContainer = document.getElementById(
+      'polishFollowUpProgressContainer',
+    );
+    if (progressContainer) {
+      progressContainer.style.display = 'block';
+    }
+
     this.vscode.postMessage({
       command: COMMANDS.POLISH_FOLLOW_UP,
       stream,
@@ -125,6 +133,14 @@ export class FollowUpInputManager {
   applyPolishedText(text) {
     if (!this.textarea || typeof text !== 'string') {
       return;
+    }
+
+    // Hide progress indicator
+    const progressContainer = document.getElementById(
+      'polishFollowUpProgressContainer',
+    );
+    if (progressContainer) {
+      progressContainer.style.display = 'none';
     }
 
     this.textarea.value = text;
