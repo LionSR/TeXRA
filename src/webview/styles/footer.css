@@ -19,6 +19,12 @@
   flex: 0 1 auto;
 }
 
+.model-selection-footer .codicon {
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
 .agent-select-controls,
 .agent-select-dropdowns {
   display: flex;
