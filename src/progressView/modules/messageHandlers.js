@@ -354,8 +354,44 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const metadata = payload?.metadata ?? {};
-    dom.instructionPanel.show(text, metadata);
+    const sessionKind = message.sessionKind || 'workflow';
+    const isToolUseAgent = sessionKind === 'toolUse';
+
+    if (isToolUseAgent) {
+      // For Tool Use agents, show instruction as a user message in chat
+      dom.instructionPanel.hide();
+
+      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (logContent) {
+        // Check if instruction message already exists
+        const existingInstruction = logContent.querySelector(
+          '.user-message-container[data-instruction="true"]',
+        );
+        if (!existingInstruction) {
+          const userMessage = this._entryFormatter.format({
+            id: `instruction-${activeStream}`,
+            messageType: 'userMessage',
+            text: text,
+            timestamp: Date.now(),
+            groupId: undefined,
+          });
+
+          if (userMessage) {
+            userMessage.dataset.instruction = 'true';
+            // Insert at the beginning of the log content
+            if (logContent.firstChild) {
+              logContent.insertBefore(userMessage, logContent.firstChild);
+            } else {
+              logContent.appendChild(userMessage);
+            }
+          }
+        }
+      }
+    } else {
+      // For Workflow agents, show in instruction panel
+      const metadata = payload?.metadata ?? {};
+      dom.instructionPanel.show(text, metadata);
+    }
   }
 
   handleDeleteStream(message) {

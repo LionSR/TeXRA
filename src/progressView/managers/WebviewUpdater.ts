@@ -183,7 +183,11 @@ export class WebviewUpdater {
   /**
    * Update instruction panel content
    */
-  updateInstruction(stream: StreamTabId, instruction: InstructionUpdate): void {
+  updateInstruction(
+    stream: StreamTabId,
+    instruction: InstructionUpdate,
+    sessionKind?: string,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
@@ -191,6 +195,7 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
+      sessionKind,
     });
   }
 
@@ -302,8 +307,10 @@ export class WebviewUpdater {
       const taskState = state.getTaskState(activeStream);
       const instructionUpdate =
         WebviewUpdater.createInstructionUpdate(taskState);
+      const activeStreamInfo = streams.find((s) => s.name === activeStream);
+      const sessionKind = activeStreamInfo?.agentSessionKind;
       if (instructionUpdate) {
-        this.updateInstruction(activeStream, instructionUpdate);
+        this.updateInstruction(activeStream, instructionUpdate, sessionKind);
       } else {
         this.clearInstruction(activeStream);
       }
