@@ -6,8 +6,9 @@
 /* Model Selection Footer styles */
 .model-selection-footer {
   display: flex;
+  flex-direction: column;
   gap: var(--spacing-small);
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: nowrap;
   flex: 1 1 auto;
   min-width: 0;
@@ -17,7 +18,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  flex: 0 1 auto;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
@@ -25,7 +26,7 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  flex: 1 1 auto;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
@@ -34,15 +35,16 @@
   flex-direction: row;
   align-items: center;
   gap: var(--spacing-small);
-  flex: 0 0 auto;
+  flex: 1 1 100%;
   min-width: 0;
 }
 
 .agent-select-dropdowns {
   position: relative;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 10rem;
-  max-width: 16rem;
+  max-width: 18rem;
+  width: 100%;
 }
 
 .agent-select-dropdowns select,
@@ -70,10 +72,10 @@
 
 .model-selection-footer .select-group select,
 .model-selection-footer .select-group vscode-single-select {
-  flex: 0 1 auto;
-  width: auto;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 6.4rem;
-  max-width: 9.6rem;
+  max-width: 18rem;
   height: var(--height-control);
   font-size: var(--font-size);
   padding: var(--spacing-tiny) var(--spacing-small);
