@@ -117,14 +117,33 @@ export class EventsManager {
     if (radioGroup) {
       const attachRadioListener = () => {
         addEventListenerSafely(radioGroup, 'change', (event) => {
-          const target = event?.target;
-          const filter =
-            typeof target?.value === 'string' && target.value
-              ? target.value
-              : radioGroup.value;
+          const composedPath =
+            typeof event?.composedPath === 'function'
+              ? event.composedPath()
+              : [];
+          /** @type {HTMLElement | undefined} */
+          const radioFromPath = composedPath.find(
+            (el) => el?.tagName?.toLowerCase?.() === 'vscode-radio',
+          );
+          const fallbackRadio = radioGroup.querySelector(
+            'vscode-radio[checked]',
+          );
+          const selectedRadio = radioFromPath || fallbackRadio;
+
+          let filter = '';
+          if (selectedRadio instanceof HTMLElement) {
+            filter =
+              selectedRadio.getAttribute('value') || selectedRadio.value || '';
+          }
+
+          if (!filter && typeof radioGroup.value === 'string') {
+            filter = radioGroup.value;
+          }
+
           if (!filter) {
             return;
           }
+
           if (progressViewState.agentTypeFilter !== filter) {
             progressViewState.agentTypeFilter = filter;
             // Persist the new selection immediately so updates don't snap back
