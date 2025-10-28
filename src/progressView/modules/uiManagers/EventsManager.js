@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { COMMANDS, ELEMENT_IDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS, GROUP_DOM_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 import { copyWithFeedback } from '../utils.js';
 
@@ -21,7 +21,9 @@ export class EventsManager {
     const taskGroups = progressViewState.taskGroups.getGroupMap();
     for (const [groupId] of taskGroups) {
       const isCollapsed = progressViewState.toggleStates.get(groupId);
-      const detailsElem = document.getElementById(`group-${groupId}`);
+      const detailsElem = document.getElementById(
+        `${GROUP_DOM_IDS.DETAILS_PREFIX}${groupId}`,
+      );
 
       if (detailsElem && isCollapsed !== undefined) {
         detailsElem.open = !isCollapsed;
@@ -63,9 +65,6 @@ export class EventsManager {
         vscode.postMessage({ command, stream: activeStream });
       }
     });
-
-    // File list toggle - removed as filesToggle element doesn't exist in the HTML
-    // This appears to be orphaned code from a previous design
 
     // File list button handler
     addEventListenerSafely(
