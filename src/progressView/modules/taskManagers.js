@@ -388,6 +388,13 @@ export class LogEntryManager {
       const groupElement = document.getElementById(
         `group-${logMessage.groupId}`,
       );
+      if (!groupElement) {
+        console.warn(
+          `LogEntryManager.append: Group not found for ID: ${logMessage.groupId}, messageType: ${logMessage.messageType}`,
+        );
+        return false;
+      }
+
       if (groupElement instanceof HTMLElement) {
         const logLineElement = this.entryFormatter.format(logMessage);
         if (!logLineElement) {

@@ -244,15 +244,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       );
       const addedToGroup = dom.logEntries.append(message.logMessage);
       if (!addedToGroup) {
+        console.warn(
+          `handleNewLog: Failed to add to group, adding to root. MessageType: ${message.logMessage.messageType}, GroupId: ${message.logMessage.groupId}`,
+        );
         const formatted = this._entryFormatter.format(message.logMessage);
         if (formatted instanceof HTMLElement) {
+          // Set level 0 for tree items at root
+          if (formatted.tagName.toLowerCase() === 'vscode-tree-item') {
+            formatted.level = 0;
+          }
+
           // For thinking and scratchpad, auto-expand when live streaming
           const messageType = message.logMessage.messageType;
           if (messageType === 'thinking' || messageType === 'scratchpad') {
-            formatted.setAttribute('open', '');
-            const toggleIcon = formatted.querySelector('.toggle-icon');
-            if (toggleIcon) {
-              toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
+            // Handle tree items (vscode-tree-item)
+            if (formatted.tagName.toLowerCase() === 'vscode-tree-item') {
+              formatted.setAttribute('open', '');
+              formatted.open = true;
+            } else {
+              // Handle legacy details elements
+              formatted.setAttribute('open', '');
+              const toggleIcon = formatted.querySelector('.toggle-icon');
+              if (toggleIcon) {
+                toggleIcon.className =
+                  'codicon codicon-chevron-down toggle-icon';
+              }
             }
           }
         }
@@ -273,16 +289,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         // Fallback: append as new log with proper group placement
         const addedToGroup = dom.logEntries.append(message.logMessage);
         if (!addedToGroup) {
+          console.warn(
+            `handleUpdateLog: Failed to add to group, adding to root. MessageType: ${message.logMessage.messageType}, GroupId: ${message.logMessage.groupId}`,
+          );
           const formatted = this._entryFormatter.format(message.logMessage);
           if (formatted instanceof HTMLElement) {
+            // Set level 0 for tree items at root
+            if (formatted.tagName.toLowerCase() === 'vscode-tree-item') {
+              formatted.level = 0;
+            }
+
             // For thinking and scratchpad, auto-expand when live streaming
             const messageType = message.logMessage.messageType;
             if (messageType === 'thinking' || messageType === 'scratchpad') {
-              formatted.setAttribute('open', '');
-              const toggleIcon = formatted.querySelector('.toggle-icon');
-              if (toggleIcon) {
-                toggleIcon.className =
-                  'codicon codicon-chevron-down toggle-icon';
+              // Handle tree items (vscode-tree-item)
+              if (formatted.tagName.toLowerCase() === 'vscode-tree-item') {
+                formatted.setAttribute('open', '');
+                formatted.open = true;
+              } else {
+                // Handle legacy details elements
+                formatted.setAttribute('open', '');
+                const toggleIcon = formatted.querySelector('.toggle-icon');
+                if (toggleIcon) {
+                  toggleIcon.className =
+                    'codicon codicon-chevron-down toggle-icon';
+                }
               }
             }
           }
