@@ -36,7 +36,6 @@ import {
 
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { withLogGroup } from '@logger/logGroupUtils';
@@ -513,18 +512,6 @@ export async function executeAgentWithLogging<T extends IAgent>(
             stream: activeStreamId,
             status: 'stopped',
           });
-
-          const generated = Object.values(
-            (agent as any).outputHandler?.outputFiles || {},
-          )
-            .flat()
-            .filter(
-              (file): file is string =>
-                typeof file === 'string' && file.trim().length > 0,
-            );
-          for (const out of generated) {
-            await openBuildDisplayIfTex(out, { preserveFocus: true });
-          }
         } catch (err) {
           // Mark the task as failed
           logger.error(
