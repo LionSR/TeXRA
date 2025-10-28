@@ -26,16 +26,36 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-small);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   width: 100%;
 }
 
 .instruction-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
+  gap: var(--spacing-medium);
   margin-bottom: var(--spacing-small);
   line-height: 1.5;
+  flex-wrap: wrap;
+}
+
+.instruction-header-leading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+  flex-wrap: wrap;
+}
+
+.instruction-session-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.instruction-session-toggle vscode-radio-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
 }
 
 #executeButton {
@@ -43,6 +63,7 @@
   margin-left: var(--spacing-small);
   flex-shrink: 0;
   min-width: 3rem;
+  align-self: center;
 }
 
 /* Recording button states - icon change is enough, no red background needed */
