@@ -155,6 +155,8 @@ export class EventsManager {
           target.classList.contains('latexdiff-details') ||
           target.classList.contains('statistics-details')
         ) {
+          // Tool-use entries also carry banner-details, so they flow through
+          // this branch without needing a dedicated class check.
           const detail = /** @type {{ open?: boolean }} */ (e.detail);
           const isOpen =
             typeof detail?.open === 'boolean'

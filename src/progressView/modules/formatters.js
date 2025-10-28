@@ -103,6 +103,22 @@ export function formatTokens(tokens) {
 }
 
 /**
+ * Keep the visible summary label and the collapsible component's heading
+ * property aligned so accessibility metadata mirrors the rendered title.
+ *
+ * @param {HTMLElement & { heading?: string }} element - collapsible element
+ * @param {Element|null} summaryElem - slotted summary label element
+ * @param {string} value - text to display
+ */
+function syncCollapsibleHeading(element, summaryElem, value) {
+  const headingText = typeof value === 'string' ? value : '';
+  if (summaryElem instanceof HTMLElement) {
+    summaryElem.textContent = headingText;
+  }
+  element.heading = headingText;
+}
+
+/**
  * Handles log entry formatting with markdown support.
  */
 export class LogEntryFormatter {
@@ -425,10 +441,9 @@ export class LogEntryFormatter {
     const headerLabel = element.querySelector('.tool-use-title');
     const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
     const updateHeading = (value) => {
-      if (headerLabel) {
-        headerLabel.textContent = value;
-      }
-      element.heading = value;
+      // Keep the slotted title and the collapsible heading property in sync so
+      // keyboard navigation announces the same label the user sees.
+      syncCollapsibleHeading(element, headerLabel, value);
     };
 
     updateHeading('Tool Use');
@@ -807,7 +822,7 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
     const summaryElem = element.querySelector('.summary-text');
-    element.heading = 'Generated Files';
+    syncCollapsibleHeading(element, summaryElem, 'Generated Files');
     element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
 
     const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -870,8 +885,7 @@ export class LogEntryFormatter {
     }
     summary += ')';
 
-    if (summaryElem) summaryElem.textContent = summary;
-    else element.heading = summary;
+    syncCollapsibleHeading(element, summaryElem, summary);
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -885,7 +899,7 @@ export class LogEntryFormatter {
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
     const summaryElem = element.querySelector('.summary-text');
-    element.heading = 'Missing Outputs';
+    syncCollapsibleHeading(element, summaryElem, 'Missing Outputs');
     element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
 
     const parsed = data ?? JSON.parse(decodeHtml(content));
@@ -948,8 +962,7 @@ export class LogEntryFormatter {
 
     const summary = `Missing outputs (${missingFiles.length})`;
 
-    if (summaryElem) summaryElem.textContent = summary;
-    else element.heading = summary;
+    syncCollapsibleHeading(element, summaryElem, summary);
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -1021,8 +1034,7 @@ export class LogEntryFormatter {
         ? 'Latexdiff result'
         : `Latexdiff results (${entries.length})`;
 
-    if (summaryElem) summaryElem.textContent = summary;
-    else element.heading = summary;
+    syncCollapsibleHeading(element, summaryElem, summary);
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
@@ -1035,8 +1047,9 @@ export class LogEntryFormatter {
     // Note: content parameter kept for consistency with other formatters but not used
     const element = createFromTemplate('statisticsDetailsTemplate');
     if (!element) return null;
+    const summaryElem = element.querySelector('.summary-text');
     const contentElem = element.querySelector('.statistics-content');
-    element.heading = 'Statistics';
+    syncCollapsibleHeading(element, summaryElem, 'Statistics');
     element.dataset.isOpen = element.hasAttribute('open') ? 'true' : 'false';
     const parsed = data;
     if (!parsed || typeof parsed !== 'object') {
