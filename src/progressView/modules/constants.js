@@ -22,8 +22,6 @@ export const STATUS = {
 // DOM element IDs used across the progress view
 export const ELEMENT_IDS = {
   LOG_CONTENT: 'logContent',
-  LOG_GROUP_TREE: 'logGroupTree',
-  LOG_UNGROUPED: 'logUngroupedContainer',
   LOG_PLACEHOLDER: 'logPlaceholder',
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
@@ -59,6 +57,12 @@ export const ELEMENT_IDS = {
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
   FILTER_TOOL_BTN: 'filterToolBtn',
 };
+
+export const GROUP_DOM_IDS = Object.freeze({
+  DETAILS_PREFIX: 'group-',
+  HEADER_PREFIX: 'group-header-',
+  CONTENT_PREFIX: 'group-content-',
+});
 
 // Constants for layout configuration
 export const MAX_HEIGHT = 400;

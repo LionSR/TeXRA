@@ -33,12 +33,16 @@ document.addEventListener('DOMContentLoaded', () => {
     'latexdiffDetailsTemplate',
     'statisticsDetailsTemplate',
     'groupHeaderTemplate',
+    'groupDetailsTemplate',
   ]);
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
   progressViewDomHandler.followUpInput.setup();
+
+  // Apply saved group toggle states to any groups already in the DOM
+  progressViewDomHandler.events.applyToggleStates();
 
   // Notify extension that the webview is ready to receive messages
   vscode.postMessage({ command: COMMANDS.WEBVIEW_READY });

@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { COMMANDS, ELEMENT_IDS } from '../constants.js';
+import { COMMANDS, ELEMENT_IDS, GROUP_DOM_IDS } from '../constants.js';
 import { progressViewState } from '../progressViewState.js';
 import { copyWithFeedback } from '../utils.js';
 
@@ -15,55 +15,43 @@ import { vscode } from '@common/webviewContext.js';
  */
 export class EventsManager {
   /**
+   * Apply saved toggle states to any groups already in the DOM
+   */
+  applyToggleStates() {
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+    for (const [groupId] of taskGroups) {
+      const isCollapsed = progressViewState.toggleStates.get(groupId);
+      const detailsElem = document.getElementById(
+        `${GROUP_DOM_IDS.DETAILS_PREFIX}${groupId}`,
+      );
+
+      if (detailsElem && isCollapsed !== undefined) {
+        detailsElem.open = !isCollapsed;
+      }
+    }
+  }
+
+  /**
    * Sets up all event listeners for the UI
    */
   setupEventListeners() {
-    // Stream tab selection handler (vscode-tree)
-    addEventListenerSafely(
-      ELEMENT_IDS.STREAM_TABS,
-      'vsc-tree-select',
-      (event) => {
-        const detail = event.detail;
-        const selectedItems = Array.isArray(detail)
-          ? detail
-          : Array.isArray(detail?.selection)
-            ? detail.selection
-            : [];
-        const firstItem = selectedItems[0];
-        const stream = firstItem?.dataset?.stream;
-        if (!stream) {
-          return;
-        }
+    // Stream tab click handler
+    addEventListenerSafely(ELEMENT_IDS.STREAM_TABS, 'click', (e) => {
+      const tabButton = e.target.closest('.tab');
+      const deleteButton = e.target.closest('.tab-delete');
+
+      if (tabButton && tabButton.dataset.stream) {
         vscode.postMessage({
           command: COMMANDS.SWITCH_STREAM,
-          stream,
+          stream: tabButton.dataset.stream,
         });
-      },
-    );
-
-    // Stream tab delete button handler
-    addEventListenerSafely(
-      ELEMENT_IDS.STREAM_TABS,
-      'click',
-      (e) => {
-        // Use composedPath to handle shadow DOM clicks
-        const path = e.composedPath();
-        const deleteButton = path.find((el) =>
-          el.classList?.contains('tab-delete'),
-        );
-
-        if (deleteButton?.dataset?.stream) {
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-          vscode.postMessage({
-            command: COMMANDS.DELETE_STREAM,
-            stream: deleteButton.dataset.stream,
-          });
-        }
-      },
-      true,
-    ); // Use capture phase
+      } else if (deleteButton && deleteButton.dataset.stream) {
+        vscode.postMessage({
+          command: COMMANDS.DELETE_STREAM,
+          stream: deleteButton.dataset.stream,
+        });
+      }
+    });
 
     // Toolbar click handler
     addEventListenerSafely(ELEMENT_IDS.TOOLBAR_CONTAINER, 'click', (e) => {
@@ -117,16 +105,23 @@ export class EventsManager {
     if (radioGroup) {
       const attachRadioListener = () => {
         addEventListenerSafely(radioGroup, 'change', (event) => {
-          const target = event?.target;
+          if (!(event?.target instanceof Element)) {
+            return;
+          }
+
+          const selectedRadio =
+            event.target.closest('vscode-radio') ||
+            radioGroup.querySelector('vscode-radio[checked]');
           const filter =
-            typeof target?.value === 'string' && target.value
-              ? target.value
-              : radioGroup.value;
+            selectedRadio?.value || selectedRadio?.getAttribute('value') || '';
+
           if (!filter) {
             return;
           }
+
           if (progressViewState.agentTypeFilter !== filter) {
             progressViewState.agentTypeFilter = filter;
+            progressViewState.pendingFilterUpdate = true;
             // Persist the new selection immediately so updates don't snap back
             vscode.postMessage({
               command: COMMANDS.FILTER_STREAMS,
