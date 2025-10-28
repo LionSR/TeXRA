@@ -57,6 +57,43 @@ export class SettingsButtonManager extends BaseUIManager {
     this.addListener(ELEMENT_IDS.TOGGLE_LATEXDIFFS, 'click', () => {
       this.latexdiffManager.toggleLatexdiffs();
     });
+
+    // Close menus when clicking outside
+    this._setupClickOutsideHandler();
+  }
+
+  _setupClickOutsideHandler() {
+    const menuConfig = [
+      {
+        menuId: ELEMENT_IDS.AUTO_EXTRACT_OPTIONS,
+        buttonId: ELEMENT_IDS.TOGGLE_AUTO_EXTRACT,
+      },
+      {
+        menuId: ELEMENT_IDS.TOOL_CONFIG_OPTIONS,
+        buttonId: ELEMENT_IDS.TOGGLE_TOOL_CONFIG,
+      },
+    ];
+
+    const handleClickOutside = (event) => {
+      menuConfig.forEach(({ menuId, buttonId }) => {
+        const menu = safeGetElementById(menuId);
+        const button = safeGetElementById(buttonId);
+
+        if (!menu || !menu.show) {
+          return;
+        }
+
+        // Close menu if click is outside both the menu and its button
+        const clickedInsideMenu = event.target.closest(`#${menuId}`);
+        const clickedButton = event.target.closest(`#${buttonId}`);
+
+        if (!clickedInsideMenu && !clickedButton) {
+          menu.show = false;
+        }
+      });
+    };
+
+    this.addListener(document, 'click', handleClickOutside);
   }
 
   _initializeMenuToggle({ buttonId, menuId, checkboxIds }) {
