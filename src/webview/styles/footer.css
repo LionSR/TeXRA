@@ -6,6 +6,7 @@
 /* Model Selection Footer styles */
 .model-selection-footer {
   display: flex;
+  align-items: center;
   gap: var(--spacing-small);
   flex: 0 1 auto;
 }

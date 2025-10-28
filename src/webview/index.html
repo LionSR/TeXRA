@@ -79,6 +79,31 @@
                   title="Primary files the agent processes, such as .tex, .txt, or .md"
                   >Input</label
                 >
+                <div class="dropdown-container dropdown-left">
+                  <vscode-toolbar-button
+                    id="toggleToolConfig"
+                    icon="tools"
+                    title="Tool configuration options"
+                    toggleable
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                  >
+                    <i class="codicon codicon-chevron-down"></i>
+                  </vscode-toolbar-button>
+                  <vscode-context-menu
+                    id="toolConfigOptions"
+                    class="dropdown-menu"
+                  >
+                    <div class="dropdown-menu-content">
+                      <vscode-checkbox id="attachTeXCount"
+                        >Attach TeX Count</vscode-checkbox
+                      >
+                      <vscode-checkbox id="attachDiagnostics"
+                        >Attach Diagnostics</vscode-checkbox
+                      >
+                    </div>
+                  </vscode-context-menu>
+                </div>
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
@@ -201,31 +226,6 @@
                   title="Supporting files required for correct processing, including .cls, .sty, .bib"
                   >Auxiliary</label
                 >
-                <div class="dropdown-container dropdown-left">
-                  <vscode-toolbar-button
-                    id="toggleToolConfig"
-                    icon="tools"
-                    title="Tool configuration options"
-                    toggleable
-                    aria-haspopup="true"
-                    aria-expanded="false"
-                  >
-                    <i class="codicon codicon-chevron-down"></i>
-                  </vscode-toolbar-button>
-                  <vscode-context-menu
-                    id="toolConfigOptions"
-                    class="dropdown-menu"
-                  >
-                    <div class="dropdown-menu-content">
-                      <vscode-checkbox id="attachTeXCount"
-                        >Attach TeX Count</vscode-checkbox
-                      >
-                      <vscode-checkbox id="attachDiagnostics"
-                        >Attach Diagnostics</vscode-checkbox
-                      >
-                    </div>
-                  </vscode-context-menu>
-                </div>
               </div>
               <vscode-toolbar-container class="file-select-actions">
                 <vscode-toolbar-button
