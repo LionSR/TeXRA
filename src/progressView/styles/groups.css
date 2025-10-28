@@ -3,14 +3,10 @@
  * Styling for grouped log entries and hierarchy
  */
 
-/* Log Group Tree */
+/* Log Group Tree - use native indent guides */
 .log-group-tree {
   display: block;
   width: 100%;
-  --vscode-tree-inactiveIndentGuidesStroke: var(
-    --vscode-tree-indentGuidesStroke,
-    var(--vscode-panel-border)
-  );
 }
 
 .log-group-tree vscode-tree-item.log-group {
@@ -18,137 +14,126 @@
   margin-bottom: var(--spacing-tiny);
 }
 
+/* Group content styling using native ::part(content) */
 .log-group-tree vscode-tree-item.log-group::part(content) {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
   padding: var(--spacing-tiny) var(--spacing-medium);
   border-radius: var(--border-radius-small);
-  border-left: var(--border-medium) solid var(--vscode-panel-border);
-  background-color: transparent;
+  border-left: var(--border-medium) solid
+    var(--group-status-color, var(--vscode-panel-border));
   transition: border-color 120ms ease;
 }
 
-.log-group-tree vscode-tree-item.log-group.nested::part(content) {
+/* Nested groups have thinner border */
+.log-group-tree vscode-tree-item.log-group[data-parent]::part(content) {
   border-left-width: var(--border-thin);
 }
 
-.log-group-tree vscode-tree-item.log-group.running::part(content) {
-  border-left-color: var(--vscode-statusBarItem-warningBackground);
+/* Status colors via data attributes */
+.log-group-tree vscode-tree-item.log-group[data-status='running'] {
+  --group-status-color: var(--vscode-statusBarItem-warningBackground);
 }
 
-.log-group-tree vscode-tree-item.log-group.error::part(content) {
-  border-left-color: var(--vscode-errorForeground);
+.log-group-tree vscode-tree-item.log-group[data-status='error'] {
+  --group-status-color: var(--vscode-errorForeground);
 }
 
-.log-group-tree vscode-tree-item.log-group.stopped::part(content) {
-  border-left-color: var(--vscode-testing-iconPassed);
+.log-group-tree vscode-tree-item.log-group[data-status='stopped'] {
+  --group-status-color: var(--vscode-testing-iconPassed);
 }
 
-.log-group-tree vscode-tree-item.log-group.waiting::part(content),
-.log-group-tree vscode-tree-item.log-group.resuming::part(content) {
-  border-left-color: var(
+.log-group-tree vscode-tree-item.log-group[data-status='waiting'],
+.log-group-tree vscode-tree-item.log-group[data-status='resuming'] {
+  --group-status-color: var(
     --vscode-progressBar-background,
     var(--vscode-panel-border)
   );
 }
 
-/* Header layout */
+/* Header layout - simplified with minimal customization */
 .log-group-header {
   display: flex;
   align-items: center;
-  gap: var(--spacing-small);
+  gap: var(--spacing-medium);
   width: 100%;
   min-width: 0;
-  --group-usage-order: 1;
-  --group-bullet-order: 2;
-  --group-time-order: 3;
 }
 
-.log-group-header.top-level {
-  --group-time-order: 1;
-  --group-bullet-order: 2;
-  --group-usage-order: 3;
-  gap: var(--spacing-medium);
-}
-
-.group-status-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
-
-.group-status-icon .codicon {
-  font-size: 16px;
-}
-
+/* Title takes available space */
 .group-title {
   font-weight: 600;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.log-group-header.top-level .group-title {
+/* Hide empty titles */
+.group-title:empty {
   display: none;
 }
 
+/* Right-aligned metadata group */
 .group-meta {
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
+/* Usage display */
 .group-usage {
   display: flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  order: var(--group-usage-order);
   white-space: nowrap;
+  font-size: var(--font-size-sm);
 }
 
-.group-usage i {
-  font-size: inherit;
-}
-
+/* Bullet separator */
 .group-bullet {
-  order: var(--group-bullet-order);
   margin: 0 var(--spacing-tiny);
+  opacity: var(--opacity-subtle);
 }
 
+/* Time display */
 .group-time {
   display: flex;
   align-items: center;
   gap: var(--spacing-small);
-  order: var(--group-time-order);
   font-size: var(--font-size-sm);
   opacity: var(--opacity-subtle);
 }
 
-.group-duration.is-hidden,
-.group-usage.is-hidden,
-.group-bullet.is-hidden {
-  display: none !important;
+/* Hide empty elements */
+.group-duration:empty,
+.group-usage:empty {
+  display: none;
 }
 
-/* Use the spin animation defined in base.css */
+.group-usage:empty + .group-bullet {
+  display: none;
+}
+
+/* Spin animation for status icons */
 .spin {
   animation: spin 2s linear infinite;
 }
 
+/* Ungrouped logs container */
 .log-ungrouped {
   margin-top: var(--spacing-small);
 }
 
-/* Log lines within a group */
+/* Collapse/expand behavior for non-tree-item children (log lines, banners, etc) */
+vscode-tree-item.log-group[branch]:not([open])
+  > [slot='children']:not(vscode-tree-item) {
+  display: none;
+}
+
+/* Spacing for child log entries - let native tree handle indentation */
 vscode-tree-item.log-group > [slot='children'].log-line,
 vscode-tree-item.log-group > [slot='children'].banner-details {
   margin-left: var(--spacing-small);
-}
-
-.log-line[data-group-id],
-.banner-details[data-group-id] {
-  border-left: var(--border-medium) solid transparent;
+  margin-bottom: var(--spacing-tiny);
 }

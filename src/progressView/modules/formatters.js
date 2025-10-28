@@ -56,46 +56,24 @@ const TIME_FORMAT_OPTIONS = {
 };
 
 /**
- * Represents different task group hierarchy levels with associated behaviors
+ * Format timestamp based on group level
+ * @param {Date} date - Date to format
+ * @param {boolean} isNested - Whether this is a nested group
+ * @returns {string} Formatted timestamp
  */
-export const TaskGroupLevel = {
-  ROOT: {
-    name: 'root',
-    formatTime: (date) => {
-      try {
-        return new Intl.DateTimeFormat(
-          undefined,
-          DATETIME_FORMAT_OPTIONS,
-        ).format(date);
-      } catch (error) {
-        const isoTimestamp = date.toISOString();
-        const timePart =
-          isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
-        return `${isoTimestamp.split('T')[0]} ${timePart}`;
-      }
-    },
-    showTitle: false,
-    headerOrder: 'time-first', // time → bullet → usage
-    cssClass: 'top-level',
-  },
-  NESTED: {
-    name: 'nested',
-    formatTime: (date) => {
-      try {
-        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(
-          date,
-        );
-      } catch (error) {
-        return (
-          date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString()
-        );
-      }
-    },
-    showTitle: true,
-    headerOrder: 'usage-first', // usage → bullet → time
-    cssClass: null,
-  },
-};
+function formatGroupTime(date, isNested) {
+  try {
+    const options = isNested ? TIME_FORMAT_OPTIONS : DATETIME_FORMAT_OPTIONS;
+    return new Intl.DateTimeFormat(undefined, options).format(date);
+  } catch (error) {
+    const isoTimestamp = date.toISOString();
+    if (isNested) {
+      return isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+    }
+    const timePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+    return `${isoTimestamp.split('T')[0]} ${timePart}`;
+  }
+}
 
 /**
  * Format token counts, displaying values in "k" units when exceeding 4096.
@@ -1168,13 +1146,9 @@ export class LogEntryFormatter {
 }
 
 /**
- * Formats task group headers.
+ * Formats task group headers - simplified implementation
  */
 export class TaskGroupHeaderFormatter {
-  constructor() {
-    this._statusClasses = new Set(Object.values(STATUS));
-  }
-
   /**
    * Render a group header inside the provided tree item element.
    * @param {HTMLElement} treeItem - The tree item hosting the group.
@@ -1190,23 +1164,66 @@ export class TaskGroupHeaderFormatter {
       return;
     }
 
-    const startDate = new Date(group.startTime);
-    const level = this._getGroupLevel(group);
-    const formattedStartTime = level.formatTime(startDate);
+    const isNested = Boolean(group.parentGroupId);
 
-    this._applyLevelClasses(treeItem, header, level);
-    this._updateStatus(treeItem, group.status);
-    this._updateTitle(header, level, group.name);
-    this._updateStartTime(header, group.startTime, formattedStartTime);
-    this._updateDuration(header, group.startTime, group.endTime);
-    this._updateUsage(header, level, group.usage);
+    // Set data attributes for CSS styling
+    treeItem.dataset.status = group.status || '';
+    if (isNested) {
+      treeItem.dataset.parent = group.parentGroupId;
+    } else {
+      delete treeItem.dataset.parent;
+    }
+
+    // Query all elements once
+    const titleElem = header.querySelector('.group-title');
+    const startTimeElem = header.querySelector('.group-start-time');
+    const durationElem = header.querySelector('.group-duration');
+    const usageElem = header.querySelector('.group-usage');
+
+    // Update title
+    if (titleElem) {
+      titleElem.textContent = group.name || '';
+    }
+
+    // Update start time
+    if (startTimeElem) {
+      const startDate = new Date(group.startTime);
+      const formattedTime = formatGroupTime(startDate, isNested);
+      startTimeElem.dataset.start = String(group.startTime);
+      startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedTime}`;
+    }
+
+    // Update duration (only if group has ended)
+    if (durationElem) {
+      if (group.endTime !== undefined && group.endTime !== null) {
+        const durationMs = group.endTime - group.startTime;
+        durationElem.textContent = this._formatDuration(durationMs);
+      } else {
+        durationElem.textContent = '';
+      }
+    }
+
+    // Update usage
+    if (usageElem) {
+      if (group.usage) {
+        const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
+        usageElem.innerHTML =
+          `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
+          `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
+          `$${cost.toFixed(3)}`;
+      } else {
+        usageElem.textContent = '';
+      }
+    }
+
+    // Update status icons
     this._updateStatusIcons(treeItem, group.status);
   }
 
-  _getGroupLevel(group) {
-    return group.parentGroupId ? TaskGroupLevel.NESTED : TaskGroupLevel.ROOT;
-  }
-
+  /**
+   * Get status icon HTML for a given status
+   * @private
+   */
   _getStatusIcon(status) {
     switch (status) {
       case STATUS.RUNNING:
@@ -1220,98 +1237,15 @@ export class TaskGroupHeaderFormatter {
       case STATUS.RESUMING:
         return '<i class="codicon codicon-debug-step-over"></i>';
       case STATUS.READY:
-        return '<i class="codicon codicon-circle-outline"></i>';
       default:
         return '<i class="codicon codicon-circle-outline"></i>';
     }
   }
 
-  _applyLevelClasses(treeItem, header, level) {
-    const isRoot = level === TaskGroupLevel.ROOT;
-    treeItem.classList.toggle('top-level', isRoot);
-    treeItem.classList.toggle('nested', !isRoot);
-    header.classList.toggle('top-level', isRoot);
-    header.classList.toggle('nested', !isRoot);
-  }
-
-  _updateStatus(treeItem, status) {
-    this._statusClasses.forEach((statusClass) => {
-      treeItem.classList.remove(statusClass);
-    });
-    if (status) {
-      treeItem.classList.add(status);
-    }
-
-    if (status) {
-      treeItem.dataset.status = status;
-    } else {
-      delete treeItem.dataset.status;
-    }
-  }
-
-  _updateTitle(header, level, name) {
-    const titleElem = header.querySelector('.group-title');
-    if (!titleElem) {
-      return;
-    }
-
-    if (level.showTitle && name) {
-      titleElem.textContent = name;
-      titleElem.removeAttribute('hidden');
-    } else {
-      titleElem.textContent = '';
-      titleElem.setAttribute('hidden', '');
-    }
-  }
-
-  _updateStartTime(header, startTime, formattedStartTime) {
-    const startTimeElem = header.querySelector('.group-start-time');
-    if (!startTimeElem) {
-      return;
-    }
-
-    startTimeElem.dataset.start = String(startTime);
-    startTimeElem.innerHTML = `<i class="codicon codicon-clock"></i> ${formattedStartTime}`;
-  }
-
-  _updateDuration(header, startTime, endTime) {
-    const durationElem = header.querySelector('.group-duration');
-    if (!durationElem) {
-      return;
-    }
-
-    if (endTime !== undefined && endTime !== null) {
-      const durationMs = endTime - startTime;
-      durationElem.textContent = this._formatDuration(durationMs);
-      durationElem.classList.remove('is-hidden');
-    } else {
-      durationElem.textContent = '';
-      durationElem.classList.add('is-hidden');
-    }
-  }
-
-  _updateUsage(header, level, usage) {
-    const usageElem = header.querySelector('.group-usage');
-    const bulletElem = header.querySelector('.group-bullet');
-    if (!usageElem || !bulletElem) {
-      return;
-    }
-
-    if (usage) {
-      const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
-      usageElem.innerHTML =
-        `<i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-        `$${cost.toFixed(3)}`;
-      usageElem.classList.remove('is-hidden');
-      bulletElem.classList.remove('is-hidden');
-    } else {
-      usageElem.textContent = '';
-      usageElem.classList.add('is-hidden');
-      bulletElem.classList.add('is-hidden');
-    }
-  }
-
+  /**
+   * Update status icons in branch icon slots
+   * @private
+   */
   _updateStatusIcons(treeItem, status) {
     const iconMarkup = this._getStatusIcon(status);
     const icons = treeItem.querySelectorAll(
@@ -1322,14 +1256,13 @@ export class TaskGroupHeaderFormatter {
     });
   }
 
+  /**
+   * Format duration in milliseconds to human-readable string
+   * @private
+   */
   _formatDuration(durationMs) {
-    // Handle edge cases
     if (durationMs < 0) return '0s';
-
-    // For very short durations, show under a second
-    if (durationMs < 1000) {
-      return '<1s';
-    }
+    if (durationMs < 1000) return '<1s';
 
     const seconds = Math.floor(durationMs / 1000) % 60;
     const minutes = Math.floor(durationMs / (1000 * 60));

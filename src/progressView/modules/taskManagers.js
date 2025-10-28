@@ -79,7 +79,9 @@ export class TaskGroupDomManager {
     if (group.parentGroupId) {
       const parentItem = this.groupElements.get(group.parentGroupId);
       if (parentItem instanceof HTMLElement) {
-        treeItem.setAttribute('slot', 'children');
+        // Child tree items go in the default slot (no slot attribute)
+        // Only non-tree-item children like log lines use slot="children"
+        treeItem.removeAttribute('slot');
         insertChronologically({
           container: parentItem,
           element: treeItem,

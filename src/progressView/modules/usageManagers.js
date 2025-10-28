@@ -49,16 +49,17 @@ export class UsageSummary {
 
 /**
  * Manages usage display for individual groups.
+ * Simplified implementation that stores usage per group and computes aggregates on-demand.
  */
 export class UsageGroupManager {
   constructor(usageSummary, taskGroupDomManager) {
-    this.usageSummary = usageSummary; // Use the shared instance
+    this.usageSummary = usageSummary;
     this.taskGroups = taskGroupDomManager;
   }
 
   /**
    * Update token and cost usage for a specific group
-   * @param {{ groupId: string, usage?: Object, skipPropagate?: boolean }} payload
+   * @param {{ groupId: string, usage?: Object }} payload
    */
   update(payload) {
     if (!payload || typeof payload !== 'object') {
@@ -66,7 +67,7 @@ export class UsageGroupManager {
       return;
     }
 
-    const { groupId, usage, skipPropagate = false } = payload;
+    const { groupId, usage } = payload;
     if (!groupId) {
       console.error('UsageGroupManager.update: groupId is required');
       return;
@@ -80,6 +81,7 @@ export class UsageGroupManager {
       return;
     }
 
+    // Store usage for this group
     if (usage) {
       const { inputTokens = 0, outputTokens = 0, cost = 0 } = usage;
       group.usage = { inputTokens, outputTokens, cost };
@@ -89,63 +91,91 @@ export class UsageGroupManager {
 
     progressViewState.taskGroups.set(groupId, group);
 
-    const treeItem = this.taskGroups?.groupElements?.get(groupId);
-    if (treeItem instanceof HTMLElement) {
-      this.taskGroups.headerFormatter.render(treeItem, group);
-    }
+    // Update all affected groups in a single pass
+    this._updateAffectedGroups(groupId);
 
-    if (!skipPropagate) {
-      this.propagateUsageToParents(groupId);
-    }
-
-    // Refresh the cumulative summary displayed in the header
+    // Refresh the cumulative summary
     this.usageSummary.update();
   }
 
   /**
-   * Compute aggregated usage for all children of a parent group
+   * Update the UI for this group and all its ancestors
    * @private
    */
-  computeAggregatedUsage(parentId) {
-    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const group of taskGroups.values()) {
-      if (group.parentGroupId === parentId) {
-        if (group.usage) {
-          totals.inputTokens += group.usage.inputTokens || 0;
-          totals.outputTokens += group.usage.outputTokens || 0;
-          totals.cost += group.usage.cost || 0;
-        }
-        const childTotals = this.computeAggregatedUsage(group.id);
-        totals.inputTokens += childTotals.inputTokens;
-        totals.outputTokens += childTotals.outputTokens;
-        totals.cost += childTotals.cost;
-      }
-    }
-    return totals;
-  }
-
-  /**
-   * Propagate usage updates to parent groups
-   * @private
-   */
-  propagateUsageToParents(groupId) {
+  _updateAffectedGroups(groupId) {
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
-    // If this group has a parent, update the parent with aggregated usage
-    if (group.parentGroupId) {
-      const totals = this.computeAggregatedUsage(group.parentGroupId);
-      this.update({
-        groupId: group.parentGroupId,
-        usage: totals,
-        skipPropagate: true,
-      });
-      this.propagateUsageToParents(group.parentGroupId);
-    } else {
-      // This is a top-level group, update it with aggregated usage from its children
-      const totals = this.computeAggregatedUsage(groupId);
-      this.update({ groupId, usage: totals, skipPropagate: true });
+    // Get all groups that need updating (this group and all ancestors)
+    const groupsToUpdate = [groupId];
+    let currentId = group.parentGroupId;
+    while (currentId) {
+      groupsToUpdate.push(currentId);
+      const parent = progressViewState.taskGroups.get(currentId);
+      currentId = parent?.parentGroupId;
     }
+
+    // Update each group's display with its computed usage
+    for (const id of groupsToUpdate) {
+      const groupToUpdate = progressViewState.taskGroups.get(id);
+      if (!groupToUpdate) continue;
+
+      // Compute aggregated usage for this group (includes own + all descendants)
+      const aggregatedUsage = this._computeGroupUsage(id);
+
+      // Update the display with aggregated usage
+      const treeItem = this.taskGroups?.groupElements?.get(id);
+      if (treeItem instanceof HTMLElement) {
+        // Temporarily set aggregated usage for rendering
+        const originalUsage = groupToUpdate.usage;
+        groupToUpdate.usage = aggregatedUsage;
+        this.taskGroups.headerFormatter.render(treeItem, groupToUpdate);
+        groupToUpdate.usage = originalUsage; // Restore original
+      }
+    }
+  }
+
+  /**
+   * Compute total usage for a group and all its descendants
+   * @private
+   */
+  _computeGroupUsage(groupId) {
+    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+    const group = progressViewState.taskGroups.get(groupId);
+
+    // Add this group's usage
+    if (group?.usage) {
+      totals.inputTokens += group.usage.inputTokens || 0;
+      totals.outputTokens += group.usage.outputTokens || 0;
+      totals.cost += group.usage.cost || 0;
+    }
+
+    // Add all descendants' usage in a single pass
+    const taskGroups = progressViewState.taskGroups.getGroupMap();
+    const descendants = new Set();
+
+    // Find all descendants
+    const findDescendants = (parentId) => {
+      for (const [id, g] of taskGroups.entries()) {
+        if (g.parentGroupId === parentId && !descendants.has(id)) {
+          descendants.add(id);
+          findDescendants(id);
+        }
+      }
+    };
+
+    findDescendants(groupId);
+
+    // Sum up usage from all descendants
+    for (const descendantId of descendants) {
+      const descendant = taskGroups.get(descendantId);
+      if (descendant?.usage) {
+        totals.inputTokens += descendant.usage.inputTokens || 0;
+        totals.outputTokens += descendant.usage.outputTokens || 0;
+        totals.cost += descendant.usage.cost || 0;
+      }
+    }
+
+    return totals;
   }
 }
