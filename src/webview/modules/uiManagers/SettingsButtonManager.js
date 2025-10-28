@@ -69,32 +69,13 @@ export class SettingsButtonManager extends BaseUIManager {
 
     this._ensureMenuUsesSlotContent(menu);
 
-    // The Lit-based vscode-toolbar-button added a toggleable property in
-    // @vscode-elements/elements v2.3.1. Older builds only support the
-    // boolean attribute, so we attempt the property first and fall back.
-    if ('toggleable' in button) {
-      try {
-        button.toggleable = true;
-      } catch (error) {
-        console.warn(
-          '[SettingsButtonManager] Falling back to toggleable attribute for toolbar button.',
-          error,
-        );
-        button.setAttribute('toggleable', '');
-      }
-    } else {
-      button.setAttribute('toggleable', '');
-    }
-
+    // Requires @vscode-elements/elements v2.3.1+
+    button.toggleable = true;
     button.setAttribute('aria-haspopup', 'true');
 
     const updateButtonState = () => {
       const hasChecked = checkboxIds.some((id) => safeGetElementChecked(id));
-      if ('checked' in button) {
-        button.checked = hasChecked;
-      } else {
-        button.toggleAttribute('data-active', Boolean(hasChecked));
-      }
+      button.checked = hasChecked;
     };
 
     const updateAriaExpanded = () => {
