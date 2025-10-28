@@ -277,10 +277,6 @@ export class MainViewState {
     if (toggleContainer) {
       const radioGroup = resolveRadioGroup(toggleContainer);
       if (radioGroup instanceof HTMLElement) {
-        if (typeof radioGroup.value === 'string') {
-          radioGroup.value = normalized;
-        }
-
         const radios = radioGroup.querySelectorAll('vscode-radio');
         radios.forEach((radio) => {
           if (!(radio instanceof HTMLElement)) {

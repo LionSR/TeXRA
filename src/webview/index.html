@@ -370,27 +370,57 @@
         </div>
         <div class="instruction-box">
           <div class="instruction-header">
-            <div class="dropdown-container">
-              <vscode-toolbar-button
-                id="toggleToolConfig"
-                icon="tools"
-                title="Tool configuration options"
-                toggleable
-                aria-haspopup="true"
-                aria-expanded="false"
-              >
-                <i class="codicon codicon-chevron-down"></i>
-              </vscode-toolbar-button>
-              <vscode-context-menu id="toolConfigOptions" class="dropdown-menu">
-                <div class="dropdown-menu-content">
-                  <vscode-checkbox id="attachTeXCount"
-                    >Attach TeX Count</vscode-checkbox
+            <div class="instruction-header-leading">
+              <div class="instruction-session-toggle">
+                <input type="hidden" id="sessionType" value="workflow" />
+                <vscode-radio-group
+                  id="sessionTypeToggle"
+                  aria-label="Choose the session type"
+                  orientation="horizontal"
+                  value="workflow"
+                >
+                  <vscode-radio
+                    value="workflow"
+                    data-session-type="workflow"
+                    checked
+                    title="Workflow agents automate document editing tasks"
                   >
-                  <vscode-checkbox id="attachDiagnostics"
-                    >Attach Diagnostics</vscode-checkbox
+                    Workflow
+                  </vscode-radio>
+                  <vscode-radio
+                    value="toolUse"
+                    data-session-type="toolUse"
+                    title="Tool-use agents execute commands and scripts"
                   >
-                </div>
-              </vscode-context-menu>
+                    Tool Use
+                  </vscode-radio>
+                </vscode-radio-group>
+              </div>
+              <div class="dropdown-container">
+                <vscode-toolbar-button
+                  id="toggleToolConfig"
+                  icon="tools"
+                  title="Tool configuration options"
+                  toggleable
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                >
+                  <i class="codicon codicon-chevron-down"></i>
+                </vscode-toolbar-button>
+                <vscode-context-menu
+                  id="toolConfigOptions"
+                  class="dropdown-menu"
+                >
+                  <div class="dropdown-menu-content">
+                    <vscode-checkbox id="attachTeXCount"
+                      >Attach TeX Count</vscode-checkbox
+                    >
+                    <vscode-checkbox id="attachDiagnostics"
+                      >Attach Diagnostics</vscode-checkbox
+                    >
+                  </div>
+                </vscode-context-menu>
+              </div>
             </div>
             <vscode-toolbar-container class="instruction-header-actions">
               <vscode-toolbar-button
@@ -448,29 +478,6 @@
                   title="Agent settings"
                 ></i>
                 <div class="agent-select-controls">
-                  <input type="hidden" id="sessionType" value="workflow" />
-                  <vscode-radio-group
-                    id="sessionTypeToggle"
-                    aria-label="Choose the session type"
-                    orientation="horizontal"
-                    value="workflow"
-                  >
-                    <vscode-radio
-                      value="workflow"
-                      data-session-type="workflow"
-                      checked
-                      title="Workflow agents automate document editing tasks"
-                    >
-                      Workflow
-                    </vscode-radio>
-                    <vscode-radio
-                      value="toolUse"
-                      data-session-type="toolUse"
-                      title="Tool-use agents execute commands and scripts"
-                    >
-                      Tool Use
-                    </vscode-radio>
-                  </vscode-radio-group>
                   <div class="agent-select-dropdowns">
                     <vscode-single-select
                       id="workflowAgent"
