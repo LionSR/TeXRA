@@ -131,9 +131,17 @@ vscode-tree-item.log-group[branch]:not([open])
   display: none;
 }
 
-/* Spacing for child log entries - let native tree handle indentation */
+/* Indentation for non-tree-item children to match tree hierarchy */
+vscode-tree-item.log-group > [slot='children']:not(vscode-tree-item) {
+  display: block;
+  padding-left: var(--spacing-small);
+  margin-left: var(--spacing-small);
+  border-left: var(--border-thin) dashed
+    var(--vscode-editorGroupHeader-tabsBorder);
+}
+
+/* Spacing for child log entries */
 vscode-tree-item.log-group > [slot='children'].log-line,
 vscode-tree-item.log-group > [slot='children'].banner-details {
-  margin-left: var(--spacing-small);
   margin-bottom: var(--spacing-tiny);
 }

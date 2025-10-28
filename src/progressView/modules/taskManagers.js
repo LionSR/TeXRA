@@ -86,10 +86,20 @@ export class TaskGroupDomManager {
           element: treeItem,
           timestamp: group.startTime,
         });
+
+        // Manually set the level based on parent's level
+        // The vscode-tree-item should do this automatically via slotchange,
+        // but we ensure it's set immediately for dynamically added items
+        if (typeof parentItem.level === 'number') {
+          treeItem.level = parentItem.level + 1;
+        }
+
         return;
       }
     } else {
       treeItem.removeAttribute('slot');
+      // Top-level items are at level 0
+      treeItem.level = 0;
     }
 
     // For top-level groups, insert in chronological order
