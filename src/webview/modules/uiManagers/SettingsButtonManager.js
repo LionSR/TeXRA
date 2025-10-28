@@ -278,6 +278,11 @@ export class SettingsButtonManager extends BaseUIManager {
           return undefined;
         }
 
+        /**
+         * Extract session type from a radio element
+         * @param {HTMLElement} radio - The radio button element
+         * @returns {string|undefined} The session type or undefined if not found
+         */
         const findSessionType = (radio) => {
           if (!(radio instanceof HTMLElement)) {
             return undefined;
@@ -290,19 +295,18 @@ export class SettingsButtonManager extends BaseUIManager {
             : undefined;
         };
 
-        const checkedRadio =
-          radios.find((radio) => {
-            if (!(radio instanceof HTMLElement)) {
-              return false;
-            }
-            const hasCheckedProperty =
-              'checked' in radio && Boolean(radio.checked);
-            return (
-              hasCheckedProperty ||
-              radio.hasAttribute('checked') ||
-              radio.getAttribute('aria-checked') === 'true'
-            );
-          }) ?? null;
+        const checkedRadio = radios.find((radio) => {
+          if (!(radio instanceof HTMLElement)) {
+            return false;
+          }
+          const hasCheckedProperty =
+            'checked' in radio && Boolean(radio.checked);
+          return (
+            hasCheckedProperty ||
+            radio.hasAttribute('checked') ||
+            radio.getAttribute('aria-checked') === 'true'
+          );
+        });
 
         if (checkedRadio) {
           return findSessionType(checkedRadio);
