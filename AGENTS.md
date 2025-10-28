@@ -125,6 +125,8 @@ When refactoring, aim for code that looks like it was designed correctly from th
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
 - **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
+- **Trust Dependencies**: Avoid defensive programming for standard APIs. Exception: workarounds for component quirks should be clearly documented
+- **Dropdown Menus**: Should close when clicking outside, not just on toggle
 
 ### Source Organization
 
