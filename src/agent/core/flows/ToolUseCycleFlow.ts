@@ -107,6 +107,29 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
+function extractToolCallId(parsed: any): { id: string } | { error: string } {
+  const rawId =
+    parsed?.call_id ??
+    parsed?.id ??
+    parsed?.tool_use_id ??
+    parsed?.tool_call_id;
+
+  if (rawId === undefined || rawId === null) {
+    return {
+      error: `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`,
+    };
+  }
+
+  const trimmed = String(rawId).trim();
+  if (!trimmed) {
+    return {
+      error: `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`,
+    };
+  }
+
+  return { id: trimmed };
+}
+
 export interface ToolUseCycleState {
   messages: ProviderMessage[];
   toolState: ToolState;
@@ -151,14 +174,13 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
+    { state }: ToolUseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       debugContext: DebugContext;
       debugFileOptions: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { state } = _shared;
     if (prepRes.interrupted) {
       state.shouldStop = true;
       return 'complete';
@@ -413,6 +435,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
+    const interrupted = Boolean(await options.checkInterruption());
+    if (interrupted) {
+      state.shouldStop = true;
+      return { skipped: true };
+    }
+
     let parsed: any;
     try {
       parsed = JSON.parse(state.toolInfo);
@@ -434,29 +462,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const rawToolCallId =
-      parsed.call_id ?? parsed.id ?? parsed.tool_use_id ?? parsed.tool_call_id;
-    if (!rawToolCallId) {
-      const errorMsg = `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`;
-      const errorResult = toolResult({ error: errorMsg, isError: true });
-      const toolUseLog = {
-        tool: parsed.name || parsed.function?.name || 'unknown',
-        input: parsed,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info(
-        '',
-        state.groupId,
-        MESSAGE_TYPES.TOOL_USE,
-        toolUseLog,
-      );
-      state.shouldStop = true;
-      return { skipped: true };
-    }
-
-    const toolCallId = String(rawToolCallId).trim();
-    if (!toolCallId) {
-      const errorMsg = `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`;
+    const toolCallIdResult = extractToolCallId(parsed);
+    if ('error' in toolCallIdResult) {
+      const errorMsg = toolCallIdResult.error;
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: parsed.name || parsed.function?.name || 'unknown',
@@ -508,7 +516,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
-    return { parsed, name, input, toolCallId };
+    return { parsed, name, input, toolCallId: toolCallIdResult.id };
   }
 
   async post(
