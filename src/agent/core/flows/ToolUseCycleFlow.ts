@@ -107,7 +107,7 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
-function extractToolCallId(parsed: any): { id: string } | { error: string } {
+function extractToolCallId(parsed: any): string {
   const rawId =
     parsed?.call_id ??
     parsed?.id ??
@@ -115,19 +115,19 @@ function extractToolCallId(parsed: any): { id: string } | { error: string } {
     parsed?.tool_call_id;
 
   if (rawId === undefined || rawId === null) {
-    return {
-      error: `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`,
-    };
+    throw new Error(
+      `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`,
+    );
   }
 
   const trimmed = String(rawId).trim();
   if (!trimmed) {
-    return {
-      error: `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`,
-    };
+    throw new Error(
+      `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`,
+    );
   }
 
-  return { id: trimmed };
+  return trimmed;
 }
 
 export interface ToolUseCycleState {
@@ -462,9 +462,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const toolCallIdResult = extractToolCallId(parsed);
-    if ('error' in toolCallIdResult) {
-      const errorMsg = toolCallIdResult.error;
+    let toolCallId: string;
+    try {
+      toolCallId = extractToolCallId(parsed);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: parsed.name || parsed.function?.name || 'unknown',
@@ -516,7 +518,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
-    return { parsed, name, input, toolCallId: toolCallIdResult.id };
+    return { parsed, name, input, toolCallId };
   }
 
   async post(
