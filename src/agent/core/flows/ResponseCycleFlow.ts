@@ -150,7 +150,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    _shared: ResponseCycleShared<C>,
+    { cycle }: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -159,7 +159,6 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       debugFileOptions?: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { cycle } = _shared;
     if (prepRes.interrupted) {
       resetResponseCycleState(cycle);
       cycle.shouldStop = true;
@@ -225,6 +224,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
           ? `Model invocation failed: ${error.message}`
           : 'Model invocation failed with an unknown error';
       options.logger.error(message, cycle.roundGroupId);
+      cycle.shouldStop = true;
+      cycle.endTurn = false;
       throw error;
     } finally {
       options.setAbortController(null);
@@ -520,6 +521,11 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.stopReason || !cycle.processedResponse) {
       return { skipped: true };
+    }
+
+    const interrupted = Boolean(await options.checkInterruption());
+    if (interrupted) {
+      return { shouldEndTurn: false, shouldStop: true, shouldContinue: false };
     }
 
     const [shouldEndTurn, shouldStop] =
