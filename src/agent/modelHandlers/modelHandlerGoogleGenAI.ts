@@ -100,6 +100,49 @@ function findLastTextPart(
   return undefined;
 }
 
+const UNSUPPORTED_FUNCTION_CALL_KEYS = [
+  'call_id',
+  'tool_call_id',
+  'tool_use_id',
+];
+
+function sanitizeFunctionCallPart(part: Part): Part {
+  if (!part || typeof part !== 'object') {
+    return part;
+  }
+
+  const candidate = part as Part & {
+    functionCall?: Record<string, unknown>;
+  };
+
+  if (!candidate.functionCall) {
+    return part;
+  }
+
+  const sanitizedCall = {
+    ...candidate.functionCall,
+  } as Record<string, unknown>;
+
+  for (const key of UNSUPPORTED_FUNCTION_CALL_KEYS) {
+    if (key in sanitizedCall) {
+      delete sanitizedCall[key];
+    }
+  }
+
+  return {
+    ...candidate,
+    functionCall: sanitizedCall as Part['functionCall'],
+  };
+}
+
+function sanitizeFunctionCallParts(parts?: Part[]): Part[] {
+  if (!Array.isArray(parts)) {
+    return [];
+  }
+
+  return parts.map((part) => sanitizeFunctionCallPart(part));
+}
+
 type NormalizedFunctionCall = (FunctionCall & Record<string, unknown>) & {
   id: string;
   call_id: string;
@@ -179,18 +222,19 @@ function convertMessagesToGoogleContentHistory(
     }
 
     const parts = Array.isArray(message.parts) ? message.parts : [];
+    const sanitizedParts = sanitizeFunctionCallParts(parts);
     if (parts.length === 0) {
       return;
     }
 
     if (role === currentRole) {
-      currentParts.push(...parts);
+      currentParts.push(...sanitizedParts);
     } else {
       if (currentRole && currentParts.length > 0) {
         history.push({ role: currentRole, parts: [...currentParts] });
       }
       currentRole = role;
-      currentParts = [...parts];
+      currentParts = [...sanitizedParts];
     }
   });
 
@@ -374,7 +418,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger,
     );
 
-    const lastMessageParts = lastMessage?.parts ? [...lastMessage.parts] : [];
+    const lastMessageParts = sanitizeFunctionCallParts(lastMessage?.parts);
     if (lastMessageParts.length === 0) {
       this.logger.error('Could not extract valid parts from the last message.');
       throw new Error('Last message conversion resulted in empty parts.');
@@ -1095,7 +1139,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
-    const callMsg: Content = { role: 'model', parts: callParts };
+    const callMsg: Content = {
+      role: 'model',
+      parts: sanitizeFunctionCallParts(callParts),
+    };
     const resultMsg: Content = { role: 'user', parts: [resultPart] };
     return [callMsg, resultMsg];
   }

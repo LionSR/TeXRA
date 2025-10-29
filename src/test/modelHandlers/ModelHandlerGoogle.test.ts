@@ -2,7 +2,12 @@
 import { strict as assert } from 'assert';
 
 // Third-party imports
-import { FinishReason } from '@google/genai';
+import {
+  FinishReason,
+  GenerateContentResponse,
+  createPartFromText,
+} from '@google/genai';
+import type { Content } from '@google/genai';
 
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/AgentDataclass';
@@ -138,6 +143,89 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
       unknown
     >;
     assert.equal(functionCall.id, 'call-123');
+    assert.equal('call_id' in functionCall, false);
+    assert.equal('tool_call_id' in functionCall, false);
+    assert.equal('tool_use_id' in functionCall, false);
+  });
+});
+
+describe('ModelHandlerGoogleGenAI.createResponse', () => {
+  it('strips unsupported identifier fields before issuing chat history', async () => {
+    const handler = new ModelHandlerGoogleGenAI({
+      name: 'test-google-model',
+      fullName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 4096,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    });
+
+    (handler as any).capabilities.supportsTokenCounting = false;
+    (handler as any).logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      statistics: () => {},
+      getActiveGroupId: () => undefined,
+    };
+    (handler as any).getStreamingConfig = () => false;
+
+    const capturedHistory: Content[][] = [];
+    const fakeClient = {
+      chats: {
+        create: (params: any) => {
+          capturedHistory.push(params.history);
+          return {
+            sendMessage: async () => new GenerateContentResponse(),
+            sendMessageStream: async () => {
+              throw new Error('streaming not expected in unit test');
+            },
+          };
+        },
+      },
+      models: {},
+    } as any;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('Hello')] },
+      {
+        role: 'model',
+        parts: [
+          {
+            functionCall: {
+              name: 'ls',
+              args: {},
+              call_id: 'abc',
+              tool_call_id: 'abc',
+              tool_use_id: 'abc',
+            } as any,
+          },
+        ],
+      },
+      { role: 'user', parts: [createPartFromText('Continue?')] },
+    ];
+
+    await handler.createResponse(fakeClient, messages, 0);
+
+    assert.equal(
+      capturedHistory.length,
+      1,
+      'expected one chat history payload',
+    );
+    const history = capturedHistory[0];
+    assert.ok(Array.isArray(history), 'expected captured history array');
+    const modelEntry = history[1];
+    assert.ok(modelEntry, 'expected model entry in history');
+    assert.ok(Array.isArray(modelEntry.parts), 'expected parts array on model entry');
+    const callPart = (modelEntry.parts as any[]).find(
+      (part) => part && typeof part === 'object' && 'functionCall' in part,
+    );
+    assert.ok(callPart, 'expected function call part in model entry');
+    const functionCall = (callPart as any).functionCall as Record<string, unknown>;
     assert.equal('call_id' in functionCall, false);
     assert.equal('tool_call_id' in functionCall, false);
     assert.equal('tool_use_id' in functionCall, false);
