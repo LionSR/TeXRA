@@ -53,7 +53,7 @@ interface DebugFileOptions {
   outputFile: string;
 }
 
-async function saveDebugObjectIfConfigured(
+async function maybeSaveDebug(
   debugContext: DebugContext | undefined,
   debugFileOptions: DebugFileOptions | undefined,
   object: unknown,
@@ -71,16 +71,7 @@ async function saveDebugObjectIfConfigured(
   });
 }
 
-function resetResponseCycleState(cycle: ResponseCycleState): void {
-  cycle.shouldStop = false;
-  cycle.endTurn = false;
-  cycle.responseObject = undefined;
-  cycle.responseTime = undefined;
-  cycle.stopReason = undefined;
-  cycle.processedResponse = undefined;
-}
-
-export interface ResponseCycleState {
+export interface ResponseCycleInputState {
   messages: ProviderMessage[];
   stateRound: AgentStateRound;
   stateGlobal: AgentStateGlobal;
@@ -88,6 +79,9 @@ export interface ResponseCycleState {
   outputFile: string;
   roundGroupId?: string;
   executionId?: ExecutionId;
+}
+
+export interface ResponseCycleRuntimeState {
   endTurn: boolean;
   shouldStop: boolean;
   outputExists: boolean;
@@ -99,6 +93,18 @@ export interface ResponseCycleState {
   responseTime?: number;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
+}
+
+export type ResponseCycleState = ResponseCycleInputState &
+  ResponseCycleRuntimeState;
+
+function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
+  cycle.shouldStop = false;
+  cycle.endTurn = false;
+  cycle.responseObject = undefined;
+  cycle.responseTime = undefined;
+  cycle.stopReason = undefined;
+  cycle.processedResponse = undefined;
 }
 
 export interface ResponseCycleShared<C = unknown> {
@@ -174,7 +180,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.startTime = Date.now();
     resetResponseCycleState(cycle);
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       cycle.debugContext,
       cycle.debugFileOptions,
       cycle.messages,
@@ -254,7 +260,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.responseObject = execRes.response;
     cycle.responseTime = execRes.responseTime;
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       cycle.debugContext,
       cycle.debugFileOptions,
       execRes.response,
