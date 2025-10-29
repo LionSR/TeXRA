@@ -103,11 +103,6 @@ export interface ResponseCycleShared<C = unknown> {
   cycle: ResponseCycleState;
 }
 
-interface ResponseExecutionContext<C> {
-  options: ResponseCycleOptions<C>;
-  cycle: ResponseCycleState;
-}
-
 class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -184,17 +179,12 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
     const { options, cycle } = context;
     if (cycle.shouldStop) {
@@ -240,7 +230,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     _shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
@@ -289,17 +279,12 @@ interface ProcessResult {
 }
 
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<ProcessResult | { skipped: true }> {
     const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.responseObject) {
@@ -435,7 +420,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     _shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
@@ -503,17 +488,12 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<
     | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
     | { skipped: true }
@@ -548,7 +528,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes:
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
