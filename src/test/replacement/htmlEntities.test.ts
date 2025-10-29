@@ -32,4 +32,19 @@ describe('html entity replacements', () => {
 
     assert.strictEqual(result, expected);
   });
+
+  it('covers extended math and greek entities safely', () => {
+    const input =
+      'Angles &ne; 0 &alpha;&rArr;&infin; &sum;=1 45&deg; &quot;quoted&quot; &frac12;&nbsp;items &Delta;&theta;';
+    const expected =
+      'Angles \\neq 0 \\alpha\\Rightarrow\\infty \\sum=1 45^{\\circ} "quoted" \\frac{1}{2}~items \\Delta\\theta';
+
+    const result = applyReplacements(
+      input,
+      HTML_ENTITY_REPLACEMENTS,
+      { processMathUnicode: false },
+    );
+
+    assert.strictEqual(result, expected);
+  });
 });
