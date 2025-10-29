@@ -132,7 +132,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const dispose = bus.on('addLogMessage', (e) => events.push(e));
     const messages: ProviderMessage[] = [];
 
-    await runToolUseCycle(options, messages);
+    await runToolUseCycle({ options, messages });
     dispose();
 
     const toolEvents = events.filter(

@@ -341,8 +341,8 @@ describe('ResponseCycle background reasoning logs', () => {
     const stateGlobal = new AgentStateGlobal();
     const toolState = new ToolState();
 
-    await runResponseCycle(
-      {
+    await runResponseCycle({
+      options: {
         modelHandler: handler,
         agentSetting,
         agentConfig,
@@ -357,8 +357,8 @@ describe('ResponseCycle background reasoning logs', () => {
       stateRound,
       stateGlobal,
       toolState,
-      'output.txt',
-    );
+      outputFile: 'output.txt',
+    });
 
     const thinkingLogs = loggedEvents.filter(
       (event) =>
