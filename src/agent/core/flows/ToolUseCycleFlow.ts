@@ -101,6 +101,11 @@ export interface ToolUseCycleShared<C = unknown> {
   state: ToolUseCycleState;
 }
 
+interface ToolUseExecutionContext<C> {
+  options: ToolUseCycleOptions<C>;
+  state: ToolUseCycleState;
+}
+
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async prep(shared: ToolUseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -122,14 +127,14 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    _shared: ToolUseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       debugContext: DebugContext;
       debugFileOptions: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { state } = shared;
+    const { state } = _shared;
     if (prepRes.interrupted) {
       state.shouldStop = true;
       return 'complete';
@@ -154,8 +159,15 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      state: shared.state,
+    };
+  }
+
   async exec(
-    shared: ToolUseCycleShared<C>,
+    context: ToolUseExecutionContext<C>,
   ): Promise<
     | { skipped: true }
     | {
@@ -165,7 +177,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         debugFileOptions: DebugFileOptions;
       }
   > {
-    const { options, state } = shared;
+    const { options, state } = context;
     if (state.shouldStop) {
       return { skipped: true };
     }
@@ -206,8 +218,8 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
-    _prepRes: unknown,
+    _shared: ToolUseCycleShared<C>,
+    prepRes: ToolUseExecutionContext<C>,
     execRes:
       | { skipped: true }
       | {
@@ -215,9 +227,9 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           responseTime?: number;
           debugContext: DebugContext;
           debugFileOptions: DebugFileOptions;
-        },
+      },
   ): Promise<string | undefined> {
-    const { options, state } = shared;
+    const { options, state } = prepRes;
 
     if ('skipped' in execRes) {
       state.shouldStop = true;
@@ -244,8 +256,15 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      state: shared.state,
+    };
+  }
+
   async exec(
-    shared: ToolUseCycleShared<C>,
+    context: ToolUseExecutionContext<C>,
   ): Promise<
     | { skipped: true }
     | {
@@ -255,7 +274,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         endTurn: boolean;
       }
   > {
-    const { options, state } = shared;
+    const { options, state } = context;
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
@@ -327,7 +346,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    _shared: ToolUseCycleShared<C>,
     _prepRes: unknown,
     execRes:
       | { skipped: true }
@@ -352,12 +371,12 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async exec(
-    shared: ToolUseCycleShared<C>,
+    context: ToolUseExecutionContext<C>,
   ): Promise<
     | { skipped: true }
     | { parsed: any; name: string; input: any; toolCallId: string }
   > {
-    const { options, state } = shared;
+    const { options, state } = context;
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
     }
@@ -439,13 +458,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
-    _prepRes: unknown,
+    _shared: ToolUseCycleShared<C>,
+    prepRes: ToolUseExecutionContext<C>,
     execRes:
       | { skipped: true }
       | { parsed: any; name: string; input: any; toolCallId: string },
   ): Promise<string | undefined> {
-    const { options, state } = shared;
+    const { options, state } = prepRes;
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return 'complete';
