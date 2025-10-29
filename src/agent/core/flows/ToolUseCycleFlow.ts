@@ -11,6 +11,7 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 
 // Local imports - logging
@@ -38,6 +39,29 @@ interface DebugContext {
 interface DebugFileOptions {
   continuationCount: number;
   baseName: string;
+}
+
+async function saveDebugObjectIfConfigured(
+  debugContext: DebugContext,
+  debugFileOptions: DebugFileOptions,
+  object: unknown,
+  objectType: DebugObjectType,
+): Promise<void> {
+  await maybeSaveDebugObject({
+    object,
+    objectType,
+    context: debugContext,
+    fileOptions: debugFileOptions,
+  });
+}
+
+function resetToolUseState(state: ToolUseCycleState): void {
+  state.shouldStop = false;
+  state.response = undefined;
+  state.responseTime = undefined;
+  state.toolInfo = undefined;
+  state.text = undefined;
+  state.stopReason = undefined;
 }
 
 interface ToolValidationDiagnostics {
@@ -140,19 +164,14 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return 'complete';
     }
 
-    state.shouldStop = false;
-    state.response = undefined;
-    state.responseTime = undefined;
-    state.toolInfo = undefined;
-    state.text = undefined;
-    state.stopReason = undefined;
+    resetToolUseState(state);
 
-    await maybeSaveDebugObject({
-      object: state.messages,
-      objectType: 'messages',
-      context: prepRes.debugContext,
-      fileOptions: prepRes.debugFileOptions,
-    });
+    await saveDebugObjectIfConfigured(
+      prepRes.debugContext,
+      prepRes.debugFileOptions,
+      state.messages,
+      'messages',
+    );
 
     return undefined;
   }
@@ -239,12 +258,12 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     state.response = execRes.response;
     state.responseTime = execRes.responseTime;
 
-    await maybeSaveDebugObject({
-      object: execRes.response,
-      objectType: 'response',
-      context: execRes.debugContext,
-      fileOptions: execRes.debugFileOptions,
-    });
+    await saveDebugObjectIfConfigured(
+      execRes.debugContext,
+      execRes.debugFileOptions,
+      execRes.response,
+      'response',
+    );
 
     if (!execRes.response) {
       state.shouldStop = true;
@@ -370,6 +389,13 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      state: shared.state,
+    };
+  }
+
   async exec(
     context: ToolUseExecutionContext<C>,
   ): Promise<
@@ -417,7 +443,19 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const toolCallId = String(rawToolCallId);
+    const toolCallId = String(rawToolCallId).trim();
+    if (!toolCallId) {
+      const errorMsg = `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`;
+      const errorResult = toolResult({ error: errorMsg, isError: true });
+      const toolUseLog = {
+        tool: parsed.name || parsed.function?.name || 'unknown',
+        input: parsed,
+        output: sanitizeToolResultForLog(errorResult),
+      };
+      options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      state.shouldStop = true;
+      return { skipped: true };
+    }
 
     const name = parsed.name || parsed.function?.name;
     if (!name) {
