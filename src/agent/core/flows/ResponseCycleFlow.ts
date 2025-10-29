@@ -12,6 +12,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
@@ -47,6 +48,33 @@ interface DebugContext {
 interface DebugFileOptions {
   continuationCount: number;
   outputFile: string;
+}
+
+async function saveDebugObjectIfConfigured(
+  debugContext: DebugContext | undefined,
+  debugFileOptions: DebugFileOptions | undefined,
+  object: unknown,
+  objectType: DebugObjectType,
+): Promise<void> {
+  if (!debugContext || !debugFileOptions) {
+    return;
+  }
+
+  await maybeSaveDebugObject({
+    object,
+    objectType,
+    context: debugContext,
+    fileOptions: debugFileOptions,
+  });
+}
+
+function resetResponseCycleState(cycle: ResponseCycleState): void {
+  cycle.shouldStop = false;
+  cycle.endTurn = false;
+  cycle.responseObject = undefined;
+  cycle.responseTime = undefined;
+  cycle.stopReason = undefined;
+  cycle.processedResponse = undefined;
 }
 
 export interface ResponseCycleState {
@@ -137,26 +165,19 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return 'complete';
     }
 
-    cycle.shouldStop = false;
     cycle.outputExists = prepRes.exists;
     cycle.systemPrompt = prepRes.systemPrompt;
     cycle.debugContext = prepRes.debugContext;
     cycle.debugFileOptions = prepRes.debugFileOptions;
     cycle.startTime = Date.now();
-    cycle.endTurn = false;
-    cycle.responseObject = undefined;
-    cycle.responseTime = undefined;
-    cycle.stopReason = undefined;
-    cycle.processedResponse = undefined;
+    resetResponseCycleState(cycle);
 
-    if (prepRes.debugContext && prepRes.debugFileOptions) {
-      await maybeSaveDebugObject({
-        object: cycle.messages,
-        objectType: 'messages',
-        context: prepRes.debugContext,
-        fileOptions: prepRes.debugFileOptions,
-      });
-    }
+    await saveDebugObjectIfConfigured(
+      cycle.debugContext,
+      cycle.debugFileOptions,
+      cycle.messages,
+      'messages',
+    );
 
     return undefined;
   }
@@ -227,14 +248,12 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.responseObject = execRes.response;
     cycle.responseTime = execRes.responseTime;
 
-    if (cycle.debugContext && cycle.debugFileOptions) {
-      await maybeSaveDebugObject({
-        object: execRes.response,
-        objectType: 'response',
-        context: cycle.debugContext,
-        fileOptions: cycle.debugFileOptions,
-      });
-    }
+    await saveDebugObjectIfConfigured(
+      cycle.debugContext,
+      cycle.debugFileOptions,
+      execRes.response,
+      'response',
+    );
 
     if (!execRes.response) {
       options.logger.warn(
