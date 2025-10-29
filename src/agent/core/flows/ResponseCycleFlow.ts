@@ -75,6 +75,11 @@ export interface ResponseCycleShared<C = unknown> {
   cycle: ResponseCycleState;
 }
 
+interface ResponseExecutionContext<C> {
+  options: ResponseCycleOptions<C>;
+  cycle: ResponseCycleState;
+}
+
 class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -117,7 +122,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    _shared: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -126,7 +131,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       debugFileOptions?: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { cycle } = shared;
+    const { cycle } = _shared;
     if (prepRes.interrupted) {
       cycle.shouldStop = true;
       return 'complete';
@@ -158,10 +163,17 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      cycle: shared.cycle,
+    };
+  }
+
   async exec(
-    shared: ResponseCycleShared<C>,
+    context: ResponseExecutionContext<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
-    const { options, cycle } = shared;
+    const { options, cycle } = context;
     if (cycle.shouldStop) {
       return { skipped: true };
     }
@@ -202,11 +214,11 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
-    _prepRes: unknown,
+    _shared: ResponseCycleShared<C>,
+    prepRes: ResponseExecutionContext<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
-    const { options, cycle } = shared;
+    const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
       return 'complete';
@@ -252,10 +264,17 @@ interface ProcessResult {
 }
 
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      cycle: shared.cycle,
+    };
+  }
+
   async exec(
-    shared: ResponseCycleShared<C>,
+    context: ResponseExecutionContext<C>,
   ): Promise<ProcessResult | { skipped: true }> {
-    const { options, cycle } = shared;
+    const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.responseObject) {
       return { skipped: true };
     }
@@ -388,11 +407,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
-    _prepRes: unknown,
+    _shared: ResponseCycleShared<C>,
+    prepRes: ResponseExecutionContext<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = shared;
+    const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
       return 'complete';
@@ -455,13 +474,20 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+    return {
+      options: shared.options,
+      cycle: shared.cycle,
+    };
+  }
+
   async exec(
-    shared: ResponseCycleShared<C>,
+    context: ResponseExecutionContext<C>,
   ): Promise<
     | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
     | { skipped: true }
   > {
-    const { options, cycle } = shared;
+    const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.stopReason || !cycle.processedResponse) {
       return { skipped: true };
     }
@@ -486,12 +512,12 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     shared: ResponseCycleShared<C>,
-    _prepRes: unknown,
+    prepRes: ResponseExecutionContext<C>,
     execRes:
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = shared;
+    const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
       cycle.shouldStop = true;
