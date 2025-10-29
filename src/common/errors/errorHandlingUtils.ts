@@ -66,6 +66,41 @@ export function formatError(prefix: string, err: unknown): string {
 }
 
 /**
+ * Normalize any thrown value into a user-friendly error message string.
+ *
+ * Unlike {@link formatError}, this helper only returns the detail portion of
+ * the message, making it suitable for composing custom prefixes or structured
+ * payloads. Centralizing the coercion keeps error messaging consistent across
+ * flows and model handlers.
+ */
+export function toErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (err === undefined) {
+    return 'undefined';
+  }
+  if (err === null) {
+    return 'null';
+  }
+  return String(err);
+}
+
+/**
+ * Produce a consistent, human-readable description for JSON parsing failures.
+ *
+ * Centralising this logic keeps error messaging aligned across flow nodes and
+ * model handlers regardless of which SDK triggered the malformed payload. The
+ * helper strips redundant whitespace and guarantees a fallback message when the
+ * upstream error omits a detail string.
+ */
+export function normalizeJsonParseError(prefix: string, err: unknown): string {
+  const detail = toErrorMessage(err).trim();
+  const message = detail.length > 0 ? detail : 'Unknown JSON parsing error';
+  return `${prefix}: ${message}`;
+}
+
+/**
  * Log a formatted error message and return the formatted message.
  *
  * This function combines error formatting with logging. It:

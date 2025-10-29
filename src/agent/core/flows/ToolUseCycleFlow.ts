@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
+// Local imports - flow constants
+import { FlowTransition } from './FlowTransitions';
+
 // Local imports - agent components
 import { ToolState } from '@agent/core/ToolState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
@@ -20,6 +23,12 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
 import type { ToolDefinition } from '@model';
+
+// Local imports - error utilities
+import {
+  normalizeJsonParseError,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 
 // Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
@@ -41,7 +50,7 @@ interface DebugFileOptions {
   baseName: string;
 }
 
-async function saveDebugObjectIfConfigured(
+async function maybeSaveDebug(
   debugContext: DebugContext,
   debugFileOptions: DebugFileOptions,
   object: unknown,
@@ -55,7 +64,7 @@ async function saveDebugObjectIfConfigured(
   });
 }
 
-function resetToolUseState(state: ToolUseCycleState): void {
+function resetToolUseState(state: ToolUseCycleRuntimeState): void {
   state.shouldStop = false;
   state.response = undefined;
   state.responseTime = undefined;
@@ -107,10 +116,57 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
-export interface ToolUseCycleState {
+function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (result.summary !== undefined) payload.summary = result.summary;
+  if (result.output !== undefined) payload.output = result.output;
+  if (result.error !== undefined) payload.error = result.error;
+  if (result.base64Image !== undefined)
+    payload.base64Image = result.base64Image;
+  if (result.system !== undefined) payload.system = result.system;
+  if (result.isError) payload.isError = true;
+  if (result.diagnostics !== undefined)
+    payload.diagnostics = result.diagnostics;
+  if (result.files !== undefined) payload.files = result.files;
+  return payload;
+}
+
+function extractToolCallId(parsed: any): string {
+  const rawId =
+    parsed?.call_id ??
+    parsed?.id ??
+    parsed?.tool_use_id ??
+    parsed?.tool_call_id;
+
+  if (rawId === undefined || rawId === null) {
+    throw new Error(
+      `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`,
+    );
+  }
+
+  const trimmed =
+    typeof rawId === 'string' ? rawId.trim() : String(rawId).trim();
+  if (!trimmed) {
+    throw new Error(
+      `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`,
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Tool-use flows follow the same PocketFlow contract: a single state object is
+ * threaded through every node, allowing successive stages to hydrate runtime
+ * metadata (tool info, responses, etc.) on the same reference.
+ */
+export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
   toolState: ToolState;
   groupId?: string;
+}
+
+export interface ToolUseCycleRuntimeState {
   iteration: number;
   shouldStop: boolean;
   response?: unknown;
@@ -120,12 +176,19 @@ export interface ToolUseCycleState {
   stopReason?: ProviderStopReason;
 }
 
-export interface ToolUseCycleShared<C = unknown> {
-  options: ToolUseCycleOptions<C>;
-  state: ToolUseCycleState;
-}
+export type ToolUseCycleState = ToolUseCycleInputState &
+  ToolUseCycleRuntimeState;
 
-interface ToolUseExecutionContext<C> {
+type ToolDispatchErrorResult = {
+  handledError: true;
+  toolCallId?: string;
+  toolName: string;
+  result: ToolResult;
+  parsed?: any;
+  fallbackMessage?: string;
+};
+
+export interface ToolUseCycleShared<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
 }
@@ -151,22 +214,24 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
+    { state }: ToolUseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       debugContext: DebugContext;
       debugFileOptions: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { state } = _shared;
     if (prepRes.interrupted) {
       state.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
+    // Reset runtime fields at the top of each loop iteration so downstream nodes
+    // start from a clean slate while retaining the stable input slice of the state
+    // object (messages, tool registry references, etc.).
     resetToolUseState(state);
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       prepRes.debugContext,
       prepRes.debugFileOptions,
       state.messages,
@@ -178,16 +243,11 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
-  async exec(context: ToolUseExecutionContext<C>): Promise<
+  async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
         response: unknown;
@@ -238,7 +298,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
   async post(
     _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseExecutionContext<C>,
+    prepRes: ToolUseCycleShared<C>,
     execRes:
       | { skipped: true }
       | {
@@ -252,13 +312,13 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     if ('skipped' in execRes) {
       state.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     state.response = execRes.response;
     state.responseTime = execRes.responseTime;
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       execRes.debugContext,
       execRes.debugFileOptions,
       execRes.response,
@@ -267,7 +327,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     if (!execRes.response) {
       state.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     return undefined;
@@ -275,16 +335,11 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
-  async exec(context: ToolUseExecutionContext<C>): Promise<
+  async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
         toolInfo?: string;
@@ -377,11 +432,11 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         },
   ): Promise<string | undefined> {
     if ('skipped' in execRes) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     if (execRes.endTurn) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     return undefined;
@@ -389,23 +444,25 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ToolUseExecutionContext<C>,
+    context: ToolUseCycleShared<C>,
   ): Promise<
     | { skipped: true }
     | { parsed: any; name: string; input: any; toolCallId: string }
+    | ToolDispatchErrorResult
   > {
     const { options, state } = context;
     if (state.shouldStop || !state.toolInfo) {
+      return { skipped: true };
+    }
+
+    const interrupted = Boolean(await options.checkInterruption());
+    if (interrupted) {
+      state.shouldStop = true;
       return { skipped: true };
     }
 
@@ -413,7 +470,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     try {
       parsed = JSON.parse(state.toolInfo);
     } catch (err) {
-      const errorMsg = `Malformed tool JSON: ${err instanceof Error ? err.message : String(err)}`;
+      const errorMsg = normalizeJsonParseError('Malformed tool JSON', err);
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
@@ -426,14 +483,20 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
-      state.shouldStop = true;
-      return { skipped: true };
+      return {
+        handledError: true,
+        toolName: 'unknown',
+        result: errorResult,
+        fallbackMessage:
+          'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
+      };
     }
 
-    const rawToolCallId =
-      parsed.call_id ?? parsed.id ?? parsed.tool_use_id ?? parsed.tool_call_id;
-    if (!rawToolCallId) {
-      const errorMsg = `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`;
+    let toolCallId: string;
+    try {
+      toolCallId = extractToolCallId(parsed);
+    } catch (error) {
+      const errorMsg = toErrorMessage(error);
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: parsed.name || parsed.function?.name || 'unknown',
@@ -446,27 +509,14 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
-      state.shouldStop = true;
-      return { skipped: true };
-    }
-
-    const toolCallId = String(rawToolCallId).trim();
-    if (!toolCallId) {
-      const errorMsg = `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`;
-      const errorResult = toolResult({ error: errorMsg, isError: true });
-      const toolUseLog = {
-        tool: parsed.name || parsed.function?.name || 'unknown',
-        input: parsed,
-        output: sanitizeToolResultForLog(errorResult),
+      return {
+        handledError: true,
+        toolName: parsed.name || parsed.function?.name || 'unknown',
+        result: errorResult,
+        parsed,
+        fallbackMessage:
+          'The tool call is missing a valid identifier. Please include a non-empty call_id for each tool request.',
       };
-      options.logger.info(
-        '',
-        state.groupId,
-        MESSAGE_TYPES.TOOL_USE,
-        toolUseLog,
-      );
-      state.shouldStop = true;
-      return { skipped: true };
     }
 
     const name = parsed.name || parsed.function?.name;
@@ -484,8 +534,15 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
-      state.shouldStop = true;
-      return { skipped: true };
+      return {
+        handledError: true,
+        toolCallId,
+        toolName: 'unknown',
+        result: errorResult,
+        parsed,
+        fallbackMessage:
+          'The tool request did not specify which tool to call. Please provide a "name" field with the tool identifier.',
+      };
     }
 
     let input = parsed.input ?? parsed.args;
@@ -509,15 +566,58 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
   async post(
     _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseExecutionContext<C>,
+    prepRes: ToolUseCycleShared<C>,
     execRes:
       | { skipped: true }
-      | { parsed: any; name: string; input: any; toolCallId: string },
+      | { parsed: any; name: string; input: any; toolCallId: string }
+      | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
     if ('skipped' in execRes) {
       state.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
+    }
+
+    if ('handledError' in execRes) {
+      const { toolCallId, result, fallbackMessage, toolName, parsed } = execRes;
+
+      if (toolCallId) {
+        const followUpMessages =
+          await options.modelHandler.createToolUseFollowUpMessages(
+            options.client,
+            toolCallId,
+            toolName,
+            parsed,
+            buildToolResultPayload(result),
+            state.toolState,
+            state.text ?? '',
+          );
+
+        state.messages.push(...followUpMessages);
+        const fallback =
+          result.summary ??
+          result.output ??
+          result.error ??
+          fallbackMessage ??
+          '';
+        if (fallback) {
+          state.toolState.updateLastResponse(String(fallback));
+        }
+      } else if (fallbackMessage) {
+        const assistantMessage =
+          options.modelHandler.createAssistantMessage(fallbackMessage);
+        state.messages.push(assistantMessage);
+        state.toolState.updateLastResponse(fallbackMessage);
+      }
+
+      state.iteration += 1;
+      state.shouldStop = false;
+
+      if (fallbackMessage) {
+        options.logger.warn(fallbackMessage, state.groupId);
+      }
+
+      return FlowTransition.CONTINUE;
     }
 
     const tool = options.toolRegistry[execRes.name];
@@ -581,20 +681,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         execRes.toolCallId,
         execRes.name,
         execRes.parsed,
-        (() => {
-          const payload: Record<string, unknown> = {};
-          if (result.summary !== undefined) payload.summary = result.summary;
-          if (result.output !== undefined) payload.output = result.output;
-          if (result.error !== undefined) payload.error = result.error;
-          if (result.base64Image !== undefined)
-            payload.base64Image = result.base64Image;
-          if (result.system !== undefined) payload.system = result.system;
-          if (result.isError) payload.isError = true;
-          if (result.diagnostics !== undefined)
-            payload.diagnostics = result.diagnostics;
-          if (result.files !== undefined) payload.files = result.files;
-          return payload;
-        })(),
+        buildToolResultPayload(result),
         state.toolState,
         state.text ?? '',
       );
@@ -602,7 +689,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     state.messages.push(...followUpMsgs);
     state.iteration += 1;
 
-    return 'continue';
+    return FlowTransition.CONTINUE;
   }
 }
 
@@ -616,7 +703,7 @@ export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleShared<C>> {
   callNode.next(processNode);
   processNode.next(dispatchNode);
 
-  dispatchNode.on('continue', prepNode);
+  dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ToolUseCycleShared<C>>(prepNode);
 }

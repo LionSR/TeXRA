@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Prevent repeated-response suppression from mutating internal tool state so follow-up connectors stay aligned with written output.
+- Ensure Google Gemini tool calls synthesize stable identifiers so tool-use runs no longer spam "missing call_id" errors.
+- Normalize tool JSON error reporting and prevent Gemini dispatch cycles from silently skipping execution when orchestration passes an undefined context.
+
+### Improvements
+
+- Document the PocketFlow-style lifecycle for response and tool cycle state so each
+  node's hydration expectations are clear, and reuse a shared tool-result payload
+  helper to keep Gemini dispatch logs consistent across recovery paths.
+
 ## [0.34.1] - 2025-10-24
 
 ### Bug Fixes

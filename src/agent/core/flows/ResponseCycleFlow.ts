@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
+// Local imports - flow constants
+import { FlowTransition } from './FlowTransitions';
+
 // Local imports - agent components
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
@@ -50,7 +53,7 @@ interface DebugFileOptions {
   outputFile: string;
 }
 
-async function saveDebugObjectIfConfigured(
+async function maybeSaveDebug(
   debugContext: DebugContext | undefined,
   debugFileOptions: DebugFileOptions | undefined,
   object: unknown,
@@ -68,7 +71,7 @@ async function saveDebugObjectIfConfigured(
   });
 }
 
-function resetResponseCycleState(cycle: ResponseCycleState): void {
+function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   cycle.shouldStop = false;
   cycle.endTurn = false;
   cycle.responseObject = undefined;
@@ -77,7 +80,13 @@ function resetResponseCycleState(cycle: ResponseCycleState): void {
   cycle.processedResponse = undefined;
 }
 
-export interface ResponseCycleState {
+/**
+ * PocketFlow-style cycles pass a single mutable state object between nodes.
+ * Each node hydrates additional runtime metadata on the same reference rather
+ * than allocating new state, so callers should treat these properties as
+ * progressively populated throughout the flow execution.
+ */
+export interface ResponseCycleInputState {
   messages: ProviderMessage[];
   stateRound: AgentStateRound;
   stateGlobal: AgentStateGlobal;
@@ -85,6 +94,9 @@ export interface ResponseCycleState {
   outputFile: string;
   roundGroupId?: string;
   executionId?: ExecutionId;
+}
+
+export interface ResponseCycleRuntimeState {
   endTurn: boolean;
   shouldStop: boolean;
   outputExists: boolean;
@@ -98,16 +110,18 @@ export interface ResponseCycleState {
   processedResponse?: string;
 }
 
+export type ResponseCycleState = ResponseCycleInputState &
+  ResponseCycleRuntimeState;
+
 export interface ResponseCycleShared<C = unknown> {
   options: ResponseCycleOptions<C>;
   cycle: ResponseCycleState;
 }
 
-interface ResponseExecutionContext<C> {
-  options: ResponseCycleOptions<C>;
-  cycle: ResponseCycleState;
-}
-
+/**
+ * Prepares a response cycle by hydrating prompts, checking interruptions, and
+ * establishing debug metadata before invoking the model.
+ */
 class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -150,7 +164,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    _shared: ResponseCycleShared<C>,
+    { cycle }: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -159,10 +173,10 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       debugFileOptions?: DebugFileOptions;
     },
   ): Promise<string | undefined> {
-    const { cycle } = _shared;
     if (prepRes.interrupted) {
+      resetResponseCycleState(cycle);
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.outputExists = prepRes.exists;
@@ -170,9 +184,11 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.debugContext = prepRes.debugContext;
     cycle.debugFileOptions = prepRes.debugFileOptions;
     cycle.startTime = Date.now();
+    // The runtime portion of the cycle state is reused across iterations; clear
+    // it here so later nodes hydrate fresh data while preserving the input slice.
     resetResponseCycleState(cycle);
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       cycle.debugContext,
       cycle.debugFileOptions,
       cycle.messages,
@@ -183,18 +199,17 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 }
 
+/**
+ * Handles the actual model invocation step, storing the raw response payload and
+ * timing information for downstream processing.
+ */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
     const { options, cycle } = context;
     if (cycle.shouldStop) {
@@ -224,6 +239,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
           ? `Model invocation failed: ${error.message}`
           : 'Model invocation failed with an unknown error';
       options.logger.error(message, cycle.roundGroupId);
+      cycle.shouldStop = true;
+      cycle.endTurn = false;
       throw error;
     } finally {
       options.setAbortController(null);
@@ -238,19 +255,20 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     _shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
-      return 'complete';
+      cycle.endTurn = false;
+      return FlowTransition.COMPLETE;
     }
 
     cycle.responseObject = execRes.response;
     cycle.responseTime = execRes.responseTime;
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       cycle.debugContext,
       cycle.debugFileOptions,
       execRes.response,
@@ -262,8 +280,9 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         'Model response was aborted or returned no data; output may be incomplete.',
         cycle.roundGroupId,
       );
+      cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     return undefined;
@@ -284,18 +303,17 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
+/**
+ * Transforms the raw model response into output-ready text, updates usage metrics,
+ * and persists incremental tool-state derived from the result.
+ */
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<ProcessResult | { skipped: true }> {
     const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.responseObject) {
@@ -403,17 +421,20 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     let bestConnector: string | undefined;
     if (newResponse) {
       processedResponse = replacementEngine.applyAll(newResponse);
-      const connector = await bestConnectionMethod(
-        cycle.toolState.lastResponse.slice(-K_SLICE),
-        processedResponse.slice(0, K_SLICE),
-      );
-      bestConnector = connector.connector;
-      cycle.toolState.updateLastResponse(processedResponse);
-      cycle.toolState.updateAccumulatedOutput(
-        cycle.toolState.accumulatedOutput +
-          (bestConnector ?? '') +
-          processedResponse,
-      );
+
+      if (!repetitionResult.massiveRepetitionDetected) {
+        const connector = await bestConnectionMethod(
+          cycle.toolState.lastResponse.slice(-K_SLICE),
+          processedResponse.slice(0, K_SLICE),
+        );
+        bestConnector = connector.connector;
+        cycle.toolState.updateLastResponse(processedResponse);
+        cycle.toolState.updateAccumulatedOutput(
+          cycle.toolState.accumulatedOutput +
+            (bestConnector ?? '') +
+            processedResponse,
+        );
+      }
     }
 
     return {
@@ -431,21 +452,23 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     _shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
-      return 'complete';
+      cycle.endTurn = false;
+      return FlowTransition.COMPLETE;
     }
 
     cycle.stopReason = execRes.stopReason;
     cycle.processedResponse = execRes.processedResponse;
 
     if (execRes.repetitionDetected || !execRes.processedResponse) {
+      cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     if (!cycle.outputExists) {
@@ -496,18 +519,17 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 }
 
+/**
+ * Evaluates the processed response to decide whether the agent should end the turn,
+ * stop entirely, or enqueue a continuation request.
+ */
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(
-    shared: ResponseCycleShared<C>,
-  ): Promise<ResponseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      cycle: shared.cycle,
-    };
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ResponseExecutionContext<C>,
+    context: ResponseCycleShared<C>,
   ): Promise<
     | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
     | { skipped: true }
@@ -515,6 +537,11 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = context;
     if (cycle.shouldStop || !cycle.stopReason || !cycle.processedResponse) {
       return { skipped: true };
+    }
+
+    const interrupted = Boolean(await options.checkInterruption());
+    if (interrupted) {
+      return { shouldEndTurn: false, shouldStop: true, shouldContinue: false };
     }
 
     const [shouldEndTurn, shouldStop] =
@@ -537,7 +564,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     shared: ResponseCycleShared<C>,
-    prepRes: ResponseExecutionContext<C>,
+    prepRes: ResponseCycleShared<C>,
     execRes:
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
@@ -545,15 +572,16 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
+      cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.endTurn = execRes.shouldEndTurn;
     cycle.shouldStop = execRes.shouldStop;
 
     if (execRes.shouldStop) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.stateRound.incrementContinuation();
@@ -564,7 +592,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     );
 
     if (!execRes.shouldContinue) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     options.logger.debug(
@@ -590,7 +618,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       );
     }
 
-    return 'continue';
+    return FlowTransition.CONTINUE;
   }
 }
 
@@ -604,7 +632,7 @@ export function createResponseCycleFlow<C>(): Flow<ResponseCycleShared<C>> {
   invokeNode.next(processNode);
   processNode.next(continuationNode);
 
-  continuationNode.on('continue', prepNode);
+  continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ResponseCycleShared<C>>(prepNode);
 }

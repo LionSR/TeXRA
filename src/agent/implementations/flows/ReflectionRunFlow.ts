@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
+// Local imports - flow constants
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+
 // Local imports - agent components
 import type { AgentStateGlobal } from '@agent/core/AgentState';
 import type {
@@ -107,13 +110,13 @@ class ReflectionInitNode<C> extends BaseNode<ReflectionRunShared<C>> {
     if (execRes.error) {
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = execRes.error;
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     shared.lifecycle.phase = 'rounds';
     shared.lifecycle.status = 'running';
     shared.lifecycle.error = undefined;
-    return 'round';
+    return FlowTransition.ROUND;
   }
 }
 
@@ -155,9 +158,15 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
         result,
       };
     } catch (error) {
+      const contextualError =
+        error instanceof Error
+          ? new Error(`Round ${prepRes.roundIndex} failed: ${error.message}`, {
+              cause: error,
+            })
+          : new Error(`Round ${prepRes.roundIndex} failed: ${String(error)}`);
       return {
         ...prepRes,
-        error,
+        error: contextualError,
       };
     }
   }
@@ -168,7 +177,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     execRes: ReflectionRoundPrep<C> | ReflectionRoundExec<C>,
   ): Promise<string | undefined> {
     if (prepRes.shouldFinalize) {
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     const execResult = execRes as ReflectionRoundExec<C>;
@@ -176,7 +185,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     if (execResult.error) {
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = execResult.error;
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     const { result } = execResult;
@@ -184,7 +193,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       const missingResultError = new Error('Round result is missing.');
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = missingResultError;
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     shared.agent.roundStates.push(result.roundState);
@@ -196,18 +205,18 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     shared.state.globalState.incrementRounds();
 
     if (shared.agent.isInterruptionRequested()) {
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     if (shared.state.currentRound >= shared.state.totalRounds) {
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
     if (!shared.state.continueRounds) {
-      return 'finalize';
+      return FlowTransition.FINALIZE;
     }
 
-    return 'continue';
+    return FlowTransition.CONTINUE;
   }
 }
 
@@ -262,11 +271,11 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
   const finalizeNode = new ReflectionFinalizeNode<C>();
 
-  initNode.on('round', roundNode);
-  initNode.on('finalize', finalizeNode);
+  initNode.on(FlowTransition.ROUND, roundNode);
+  initNode.on(FlowTransition.FINALIZE, finalizeNode);
 
-  roundNode.on('continue', roundNode);
-  roundNode.on('finalize', finalizeNode);
+  roundNode.on(FlowTransition.CONTINUE, roundNode);
+  roundNode.on(FlowTransition.FINALIZE, finalizeNode);
 
   return new Flow<ReflectionRunShared<C>>(initNode);
 }
