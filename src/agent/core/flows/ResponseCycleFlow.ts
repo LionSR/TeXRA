@@ -106,6 +106,10 @@ export interface ResponseCycleShared<C = unknown> {
   cycle: ResponseCycleState;
 }
 
+/**
+ * Prepares a response cycle by hydrating prompts, checking interruptions, and
+ * establishing debug metadata before invoking the model.
+ */
 class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -181,6 +185,10 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 }
 
+/**
+ * Handles the actual model invocation step, storing the raw response payload and
+ * timing information for downstream processing.
+ */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
@@ -281,6 +289,10 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
+/**
+ * Transforms the raw model response into output-ready text, updates usage metrics,
+ * and persists incremental tool-state derived from the result.
+ */
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
@@ -395,17 +407,20 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     let bestConnector: string | undefined;
     if (newResponse) {
       processedResponse = replacementEngine.applyAll(newResponse);
-      const connector = await bestConnectionMethod(
-        cycle.toolState.lastResponse.slice(-K_SLICE),
-        processedResponse.slice(0, K_SLICE),
-      );
-      bestConnector = connector.connector;
-      cycle.toolState.updateLastResponse(processedResponse);
-      cycle.toolState.updateAccumulatedOutput(
-        cycle.toolState.accumulatedOutput +
-          (bestConnector ?? '') +
-          processedResponse,
-      );
+
+      if (!repetitionResult.massiveRepetitionDetected) {
+        const connector = await bestConnectionMethod(
+          cycle.toolState.lastResponse.slice(-K_SLICE),
+          processedResponse.slice(0, K_SLICE),
+        );
+        bestConnector = connector.connector;
+        cycle.toolState.updateLastResponse(processedResponse);
+        cycle.toolState.updateAccumulatedOutput(
+          cycle.toolState.accumulatedOutput +
+            (bestConnector ?? '') +
+            processedResponse,
+        );
+      }
     }
 
     return {
@@ -490,6 +505,10 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 }
 
+/**
+ * Evaluates the processed response to decide whether the agent should end the turn,
+ * stop entirely, or enqueue a continuation request.
+ */
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;

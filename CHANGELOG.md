@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Prevent repeated-response suppression from mutating internal tool state so follow-up connectors stay aligned with written output.
+
 ## [0.34.1] - 2025-10-24
 
 ### Bug Fixes
