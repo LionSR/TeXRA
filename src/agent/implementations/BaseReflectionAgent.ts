@@ -180,8 +180,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Calculates the total number of rounds to execute.
    * Returns the maximum of configured rounds and userRequest array length.
+   * Subclasses may override to simplify workflows (e.g., DirectAgent).
    */
-  private getTotalRounds(): number {
+  protected getTotalRounds(): number {
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
       : this.agentPrompt.userRequest

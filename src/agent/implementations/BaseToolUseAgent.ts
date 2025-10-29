@@ -174,6 +174,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           this.logger.warn(
             `Failed to hydrate tool state from snapshot: ${message}`,
           );
+          // Snapshot hydration can fail if the saved payload is corrupted or
+          // originates from an outdated schema. Reset to a clean ToolState so
+          // the agent can continue operating without crashing.
           this.toolState = new ToolState();
         }
         shouldSkipCycle = true;
