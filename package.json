@@ -606,6 +606,7 @@
                 "latex_xml",
                 "latex_document",
                 "unicode",
+                "html_entities",
                 "scratchpad_xml",
                 "latexdiff",
                 "gptness",
@@ -622,6 +623,7 @@
               "latex_xml",
               "latex_document",
               "unicode",
+              "html_entities",
               "scratchpad_xml",
               "latexdiff",
               "gptness"
