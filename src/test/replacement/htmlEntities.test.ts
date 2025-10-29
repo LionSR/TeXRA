@@ -24,11 +24,9 @@ describe('html entity replacements', () => {
     const input = 'Usage&nbsp;&amp;&nbsp;limits remain &le; 10';
     const expected = 'Usage~\\&~limits remain \\leq 10';
 
-    const result = applyReplacements(
-      input,
-      HTML_ENTITY_REPLACEMENTS,
-      { processMathUnicode: false },
-    );
+    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS, {
+      processMathUnicode: false,
+    });
 
     assert.strictEqual(result, expected);
   });
@@ -39,11 +37,9 @@ describe('html entity replacements', () => {
     const expected =
       'Angles \\neq 0 \\alpha\\Rightarrow\\infty \\sum=1 45^{\\circ} "quoted" \\frac{1}{2}~items \\Delta\\theta';
 
-    const result = applyReplacements(
-      input,
-      HTML_ENTITY_REPLACEMENTS,
-      { processMathUnicode: false },
-    );
+    const result = applyReplacements(input, HTML_ENTITY_REPLACEMENTS, {
+      processMathUnicode: false,
+    });
 
     assert.strictEqual(result, expected);
   });
