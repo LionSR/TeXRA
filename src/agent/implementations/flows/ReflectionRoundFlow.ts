@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
+// Local imports - flow constants
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+
 // Local imports - agent components
 import type { AgentStateRound } from '@agent/core/AgentState';
 import type { ToolState } from '@agent/core/ToolState';
@@ -76,7 +79,7 @@ class RoundPreparationNode extends BaseNode<ReflectionRoundShared> {
     shared.runtime.preparedMessages = execRes.preparedMessages;
     shared.runtime.prefill = execRes.prefill ?? '';
 
-    return execRes.skip ? 'skip' : 'execute';
+    return execRes.skip ? FlowTransition.SKIP : FlowTransition.EXECUTE;
   }
 }
 
@@ -139,8 +142,8 @@ export function createReflectionRoundFlow(): Flow<ReflectionRoundShared> {
   const roundSkip = new RoundSkipNode();
 
   toolPreparation.next(roundPreparation);
-  roundPreparation.on('execute', roundExecution);
-  roundPreparation.on('skip', roundSkip);
+  roundPreparation.on(FlowTransition.EXECUTE, roundExecution);
+  roundPreparation.on(FlowTransition.SKIP, roundSkip);
 
   return new Flow<ReflectionRoundShared>(toolPreparation);
 }
