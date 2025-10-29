@@ -220,12 +220,18 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     assert.ok(Array.isArray(history), 'expected captured history array');
     const modelEntry = history[1];
     assert.ok(modelEntry, 'expected model entry in history');
-    assert.ok(Array.isArray(modelEntry.parts), 'expected parts array on model entry');
+    assert.ok(
+      Array.isArray(modelEntry.parts),
+      'expected parts array on model entry',
+    );
     const callPart = (modelEntry.parts as any[]).find(
       (part) => part && typeof part === 'object' && 'functionCall' in part,
     );
     assert.ok(callPart, 'expected function call part in model entry');
-    const functionCall = (callPart as any).functionCall as Record<string, unknown>;
+    const functionCall = (callPart as any).functionCall as Record<
+      string,
+      unknown
+    >;
     assert.equal('call_id' in functionCall, false);
     assert.equal('tool_call_id' in functionCall, false);
     assert.equal('tool_use_id' in functionCall, false);
