@@ -184,7 +184,9 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+  async prep(
+    shared: ResponseCycleShared<C>,
+  ): Promise<ResponseExecutionContext<C>> {
     return {
       options: shared.options,
       cycle: shared.cycle,
@@ -283,7 +285,9 @@ interface ProcessResult {
 }
 
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+  async prep(
+    shared: ResponseCycleShared<C>,
+  ): Promise<ResponseExecutionContext<C>> {
     return {
       options: shared.options,
       cycle: shared.cycle,
@@ -493,7 +497,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 }
 
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseExecutionContext<C>> {
+  async prep(
+    shared: ResponseCycleShared<C>,
+  ): Promise<ResponseExecutionContext<C>> {
     return {
       options: shared.options,
       cycle: shared.cycle,
