@@ -5,6 +5,9 @@ import {
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 
+const EQUATION_ENVIRONMENT_PATTERN =
+  '(?:align\\*?|aligned\\*?|alignat\\*?|gather\\*?|multline\\*?|equation\\*?)';
+
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
   leadingBreak,
@@ -273,6 +276,10 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'g',
   patterns: {
+    // Collapse repeated blank lines after \begin for common equation environments
+    [String.raw`([ \t]*\\begin{${EQUATION_ENVIRONMENT_PATTERN}}[ \t]*\r?\n)(?:[ \t]*\r?\n)+`]: '$1',
+    // Collapse repeated blank lines before \end for common equation environments
+    [String.raw`([ \t]*\r?\n)(?:[ \t]*\r?\n)+([ \t]*\\end{${EQUATION_ENVIRONMENT_PATTERN}})`]: '$1$2',
     // Swap order of superscript and subscript in integrals/sums/products to ensure subscript comes first
     // Example: \int^{x}_{t} -> \int_{t}^{x}
     '(\\\\int|\\\\sum|\\\\prod)\\^\\{([^{}]+|\\{[^{}]*\\})\\}_\\{([^{}]+|\\{[^{}]*\\})\\}':
