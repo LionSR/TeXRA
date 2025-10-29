@@ -12,6 +12,10 @@ import { withLogGroup } from '@logger/logGroupUtils';
  * Extends BaseReflectionAgent with simplified output handling and no intermediate steps.
  */
 export class DirectAgent extends BaseReflectionAgent {
+  protected override getTotalRounds(): number {
+    return 1;
+  }
+
   /**
    * Generates output file name based on configuration and current round.
    * @param currRound Current round number in the conversation

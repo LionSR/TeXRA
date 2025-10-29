@@ -162,9 +162,23 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         }
         // Cast with confidence after validation
         this.messages = messages as ProviderMessage[];
-        this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
-          this.resumeSnapshot,
-        );
+        try {
+          this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
+            this.resumeSnapshot,
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Unknown error while hydrating tool state';
+          this.logger.warn(
+            `Failed to hydrate tool state from snapshot: ${message}`,
+          );
+          // Snapshot hydration can fail if the saved payload is corrupted or
+          // originates from an outdated schema. Reset to a clean ToolState so
+          // the agent can continue operating without crashing.
+          this.toolState = new ToolState();
+        }
         shouldSkipCycle = true;
         this.resumeSnapshot = null;
       } else {
@@ -191,6 +205,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         this.toolState = new ToolState();
       }
 
+      let toolState = this.toolState;
+      if (!toolState) {
+        this.logger.debug('Initializing fallback tool state instance.');
+        toolState = new ToolState();
+        this.toolState = toolState;
+      }
+
       const resolvedSetting = {
         ...this.agentSetting,
         tools: this.getTools(),
@@ -209,13 +230,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         setAbortController: (ctrl: AbortController | null) => {
           this.abortController = ctrl;
         },
-        toolState: this.toolState,
+        toolState,
         modelName: this.agentConfig.model,
       } as const;
 
       while (true) {
         if (!shouldSkipCycle) {
-          await runToolUseCycle(cycleOptions, this.messages);
+          await runToolUseCycle({
+            options: cycleOptions,
+            messages: this.messages,
+          });
         } else {
           shouldSkipCycle = false;
         }
