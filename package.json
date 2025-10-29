@@ -600,6 +600,7 @@
               "enum": [
                 "latex_spacing",
                 "equations",
+                "equation_macros",
                 "sections",
                 "latex_forbidden_commands",
                 "characters",
