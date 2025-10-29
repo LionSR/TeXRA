@@ -138,6 +138,44 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     ]);
   });
 
+  it('does not emit duplicate fileList logs while uploading media', async () => {
+    const clientStub = {
+      files: {
+        upload: async (params: UploadFileParameters) => {
+          return {
+            name: 'files/test-file',
+            uri: 'files/test-file',
+            mimeType: params.config?.mimeType ?? 'application/pdf',
+            displayName: params.config?.displayName ?? 'test.pdf',
+          } satisfies Partial<File> as File;
+        },
+      },
+    };
+
+    const handler = new GoogleHandlerTestDouble(
+      buildGoogleConfig(),
+      clientStub,
+    );
+    const { logger, stub } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const entry: MediaEntry = {
+      file_name: 'sample.pdf',
+      data: Buffer.from('%PDF-1.7').toString('base64'),
+      media_type: 'application/pdf',
+      media_category: 'image',
+      source_path: '/tmp/sample.pdf',
+    };
+
+    await handler.invokeUpload([entry]);
+
+    assert.equal(
+      stub.fileListEntries.length,
+      0,
+      'uploadMediaEntries should not emit fileList logs',
+    );
+  });
+
   it('prefers binary payloads when provided on media entries', async () => {
     let uploadInvocationCount = 0;
     const clientStub = {
