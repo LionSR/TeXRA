@@ -399,11 +399,15 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async exec(
-    context: ToolUseExecutionContext<C>,
+    context: ToolUseExecutionContext<C> | undefined,
   ): Promise<
     | { skipped: true }
     | { parsed: any; name: string; input: any; toolCallId: string }
   > {
+    if (!context) {
+      return { skipped: true };
+    }
+
     const { options, state } = context;
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
