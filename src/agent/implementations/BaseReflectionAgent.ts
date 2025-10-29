@@ -11,6 +11,17 @@ import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
+import {
+  createReflectionRunFlow,
+  type ReflectionRunHooks,
+  type ReflectionRunLifecycle,
+  type ReflectionRunShared,
+  type ReflectionRunState,
+} from '@agent/implementations/flows/ReflectionRunFlow';
+import {
+  createReflectionRoundFlow,
+  type ReflectionRoundShared,
+} from '@agent/implementations/flows/ReflectionRoundFlow';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
@@ -44,6 +55,31 @@ export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
   processGroupId?: string;
+}
+
+export interface ReflectionRoundContext {
+  roundIndex: number;
+  globalState: AgentStateGlobal;
+  messages: any[];
+}
+
+export interface ReflectionRoundResult {
+  roundState: AgentStateRound;
+  globalState: AgentStateGlobal;
+  messages: any[];
+  shouldContinue: boolean;
+  toolState: ToolState;
+}
+
+interface RoundPipelineContext {
+  roundIndex: number;
+  roundState: AgentStateRound;
+  globalState: AgentStateGlobal;
+  toolState: ToolState;
+  preparedMessages: any[];
+  prefill: string;
+  outputPath: string;
+  roundGroupId: string;
 }
 
 /**
@@ -133,11 +169,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return this.promptBuilder;
   }
 
+  protected resetPromptBuilder(): void {
+    this.promptBuilder = undefined;
+  }
+
+  public setCurrentRound(roundIndex: number): void {
+    this.userVars.CURRENT_ROUND = roundIndex;
+  }
+
   /**
    * Calculates the total number of rounds to execute.
    * Returns the maximum of configured rounds and userRequest array length.
+   * Subclasses may override to simplify workflows (e.g., DirectAgent).
    */
-  private getTotalRounds(): number {
+  protected getTotalRounds(): number {
     const requestArray = Array.isArray(this.agentPrompt.userRequest)
       ? this.agentPrompt.userRequest
       : this.agentPrompt.userRequest
@@ -241,16 +286,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param roundGroupId - Identifier for grouping related log and output operations.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
-  private async runRoundPipeline(
-    currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    toolState: ToolState,
-    preparedMessages: any[],
-    prefill: string,
-    outputPath: string,
-    roundGroupId: string,
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
+  private async runRoundPipeline({
+    roundIndex,
+    roundState,
+    globalState,
+    toolState,
+    preparedMessages,
+    prefill,
+    outputPath,
+    roundGroupId,
+  }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
@@ -263,73 +308,74 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       );
 
     if (!endTurn) {
-      const client = this.getClientInstance();
-      const options: ResponseCycleOptions<C> = {
-        modelHandler: this.modelHandler,
-        agentSetting: this.agentSetting,
-        agentConfig: this.agentConfig,
-        agentPrompt: this.agentPrompt,
-        userVars: this.userVars,
-        logger: this.logger,
-        client,
-        checkInterruption: () => this.checkInterruption(),
-        setAbortController: (ctrl) => {
-          this.abortController = ctrl;
-        },
-      };
-
-      const [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedToolState,
-        newEndTurn,
-      ] = await runResponseCycle(
-        options,
-        updatedMessages,
-        stateRound,
-        stateGlobal,
+      const cycleResult = await runResponseCycle({
+        options: this.createResponseCycleOptions(),
+        messages: updatedMessages,
+        stateRound: roundState,
+        stateGlobal: globalState,
         toolState,
-        outputPath,
+        outputFile: outputPath,
         roundGroupId,
-        this.executionId,
-      );
+        executionId: this.executionId,
+      });
 
-      // The round state is forwarded to handleRoundCompletion so subclasses can
-      // maintain a consistent signature even when this helper doesn't mutate it directly.
       await this.handleRoundCompletion(
-        currRound,
-        updatedStateRound,
-        updatedStateGlobal,
+        roundIndex,
+        cycleResult.stateRound,
+        cycleResult.stateGlobal,
         {
           outputFile: outputPath,
-          endTurn: newEndTurn,
+          endTurn: cycleResult.endTurn,
           processGroupId: roundGroupId,
         },
       );
 
-      if (currRound === 0) {
+      if (roundIndex === 0) {
         this.logger.debug(
-          `stateGlobal: ${JSON.stringify(updatedStateGlobal)}`,
+          `stateGlobal: ${JSON.stringify(cycleResult.stateGlobal)}`,
           roundGroupId,
         );
       }
 
-      return [
-        updatedStateRound,
-        updatedStateGlobal,
-        updatedMessages,
-        newEndTurn,
-        updatedToolState,
-      ];
+      return {
+        roundState: cycleResult.stateRound,
+        globalState: cycleResult.stateGlobal,
+        messages: updatedMessages,
+        shouldContinue: cycleResult.endTurn,
+        toolState: cycleResult.toolState,
+      };
     }
 
-    await this.handleRoundCompletion(currRound, stateRound, stateGlobal, {
+    await this.handleRoundCompletion(roundIndex, roundState, globalState, {
       outputFile: outputPath,
       endTurn,
       processGroupId: roundGroupId,
     });
 
-    return [stateRound, stateGlobal, updatedMessages, endTurn, toolState];
+    return {
+      roundState,
+      globalState,
+      messages: updatedMessages,
+      shouldContinue: endTurn,
+      toolState,
+    };
+  }
+
+  private createResponseCycleOptions(): ResponseCycleOptions<C> {
+    const client = this.getClientInstance();
+    return {
+      modelHandler: this.modelHandler,
+      agentSetting: this.agentSetting,
+      agentConfig: this.agentConfig,
+      agentPrompt: this.agentPrompt,
+      userVars: this.userVars,
+      logger: this.logger,
+      client,
+      checkInterruption: () => this.checkInterruption(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+    } as const;
   }
 
   private async prepareRoundContext(
@@ -483,44 +529,59 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
   }
 
-  private async executeRound(
-    currRound: number,
-    stateGlobal: AgentStateGlobal,
-    messages: any[],
-  ): Promise<[AgentStateRound, AgentStateGlobal, any[], boolean, ToolState]> {
-    this.logger.debug(`Processing round ${currRound}`);
+  public async runReflectionRound({
+    roundIndex,
+    globalState,
+    messages,
+  }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
+    this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new ToolState();
 
-    return this.withRoundGroup(`r${currRound}`, async (roundGroupId) => {
-      await this.prepareToolState(currRound, toolState, roundGroupId);
+    return this.withRoundGroup(`r${roundIndex}`, async (roundGroupId) => {
+      const shared: ReflectionRoundShared = {
+        runtime: {
+          toolState,
+        },
+        hooks: {
+          prepareToolState: () =>
+            this.prepareToolState(roundIndex, toolState, roundGroupId),
+          prepareRoundContext: () =>
+            this.prepareRoundContext(
+              roundIndex,
+              globalState,
+              messages,
+              toolState,
+              roundGroupId,
+            ),
+          runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
+            this.runRoundPipeline({
+              roundIndex,
+              roundState: stateRound,
+              globalState,
+              toolState,
+              preparedMessages,
+              prefill,
+              outputPath: this.outputFile[roundIndex],
+              roundGroupId,
+            }),
+          createSkipResult: (stateRound) => ({
+            roundState: stateRound,
+            globalState,
+            messages,
+            shouldContinue: true,
+            toolState,
+          }),
+        },
+      };
 
-      const {
-        stateRound,
-        preparedMessages,
-        prefill = '',
-        skip,
-      } = await this.prepareRoundContext(
-        currRound,
-        stateGlobal,
-        messages,
-        toolState,
-        roundGroupId,
-      );
+      const flow = createReflectionRoundFlow();
+      await flow.run(shared);
 
-      if (skip) {
-        return [stateRound, stateGlobal, messages, true, toolState];
+      if (!shared.runtime.result) {
+        throw new Error('Reflection round did not produce a result.');
       }
 
-      return this.runRoundPipeline(
-        currRound,
-        stateRound,
-        stateGlobal,
-        toolState,
-        preparedMessages,
-        prefill,
-        this.outputFile[currRound],
-        roundGroupId,
-      );
+      return shared.runtime.result;
     });
   }
 
@@ -528,44 +589,40 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
-    await this.startRunGroup();
+    const lifecycle: ReflectionRunLifecycle = {
+      phase: 'idle',
+      status: 'pending',
+      error: undefined,
+    };
 
-    try {
-      await this.init(this.runGroupId, { createGroup: true });
-      this.promptBuilder = undefined;
-      await this.initializeClient();
+    const hooks: ReflectionRunHooks = {
+      start: () => this.startRunGroup(),
+      init: (runGroupId) => this.init(runGroupId, { createGroup: true }),
+      resetPromptBuilder: () => this.resetPromptBuilder(),
+      initializeClient: () => this.initializeClient(),
+      end: (status) => this.endRunGroup(status),
+      cleanup: () => this.cleanup(),
+    };
 
-      let stateGlobal = new AgentStateGlobal();
-      let messages: any[] = [];
-      let continueRounds = true;
+    const totalRounds = this.getTotalRounds();
+    const shared: ReflectionRunShared<C> = {
+      agent: this,
+      state: {
+        totalRounds,
+        currentRound: 0,
+        continueRounds: true,
+        messages: [],
+        globalState: new AgentStateGlobal(),
+      } satisfies ReflectionRunState,
+      lifecycle,
+      hooks,
+    };
 
-      const totalRounds = this.getTotalRounds();
-      for (let currRound = 0; currRound < totalRounds; currRound++) {
-        if (this.isInterrupted) {
-          break;
-        }
+    const flow = createReflectionRunFlow<C>();
+    await flow.run(shared);
 
-        if (currRound > 0 && !continueRounds) {
-          break;
-        }
-
-        this.userVars.CURRENT_ROUND = currRound;
-        const [stateRound, updatedGlobal, newMessages, endTurn, usedToolState] =
-          await this.executeRound(currRound, stateGlobal, messages);
-        this.roundStates.push(stateRound);
-        this.toolStates.push(usedToolState);
-        stateGlobal = updatedGlobal;
-        messages = newMessages;
-        continueRounds = endTurn;
-        stateGlobal.incrementRounds();
-      }
-
-      this.endRunGroup('stopped');
-    } catch (error) {
-      this.endRunGroup('error');
-      throw error;
-    } finally {
-      this.cleanup();
+    if (shared.lifecycle.error) {
+      throw shared.lifecycle.error;
     }
   }
 }
