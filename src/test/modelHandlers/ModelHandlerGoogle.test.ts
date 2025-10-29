@@ -59,3 +59,46 @@ describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
     assert.equal(shouldContinue, false);
   });
 });
+
+describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
+  const handler = new ModelHandlerGoogleGenAI({
+    name: 'test-google-model',
+    fullName: 'google/test',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 4096,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+    openRouterOnly: false,
+  });
+
+  it('synthesizes tool call identifiers when missing', () => {
+    const response: any = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                functionCall: {
+                  name: 'read_file',
+                  args: { path: 'syk_v5.tex' },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const toolInfo = handler.extractToolUse(response);
+    assert.ok(toolInfo, 'expected tool info to be returned');
+
+    const parsed = JSON.parse(toolInfo as string);
+    assert.equal(typeof parsed.id, 'string');
+    assert.notEqual(parsed.id.trim(), '');
+    assert.equal(parsed.call_id, parsed.id);
+    assert.equal(parsed.tool_call_id, parsed.id);
+    assert.equal(parsed.tool_use_id, parsed.id);
+  });
+});
