@@ -5,6 +5,9 @@ import {
   FENCED_LATEX_BLOCK_PATTERN_MULTILINE,
 } from './constants';
 
+const EQUATION_ENVIRONMENT_PATTERN =
+  '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|split\\*?)';
+
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
   leadingBreak,
@@ -311,6 +314,14 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '(\\\\(?:cre[f]|re[f]|eqre[f])\\{[^{}]*?)\\\\(_)': '$1$2',
     // Pass 5: Using redundant grouping
     '(\\\\(?:(?:cref)|(?:ref)|(?:eqref))\\{[^{}]*?)\\\\(_)': '$1$2',
+
+    // Normalize blank lines immediately after equation environments begin
+    [`\\\\begin\\{(${EQUATION_ENVIRONMENT_PATTERN})\\}([ \t]*\\r?\\n)(?:[ \t]*\\r?\\n)+`]:
+      '\\begin{$1}$2',
+
+    // Normalize blank lines immediately before equation environments end
+    [`(\\r?\\n)(?:[ \t]*\\r?\\n)+([ \t]*\\\\end\\{(${EQUATION_ENVIRONMENT_PATTERN})\\})`]:
+      '$1$2',
 
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
