@@ -31,6 +31,7 @@ import {
   CHARACTER_REPLACEMENTS,
   FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
+  HTML_ENTITY_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   LATEX_XML_REPLACEMENTS,
   LATEX_DOCUMENT_REPLACEMENTS,
@@ -108,6 +109,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   CHARACTER_REPLACEMENTS,
   FONT_COMMAND_REPLACEMENTS,
   UNICODE_REPLACEMENTS,
+  HTML_ENTITY_REPLACEMENTS,
   LATEX_SPACING_REPLACEMENTS,
   // XML/Structural Formatting
   LATEX_XML_REPLACEMENTS,
@@ -147,6 +149,7 @@ export function getAllReplacements(): ReplacementCategory {
     'latex_xml',
     'latex_document',
     'unicode',
+    'html_entities',
     'scratchpad_xml',
     'gptness',
     'latexdiff',
