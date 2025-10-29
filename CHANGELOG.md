@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Bug Fixes
+
+- Prevent repeated-response suppression from mutating internal tool state so follow-up connectors stay aligned with written output.
+- Ensure Google Gemini tool calls synthesize stable identifiers so tool-use runs no longer spam "missing call_id" errors.
+- Strip unsupported Gemini tool-call identifiers from follow-up history and tighten tool dispatch context handling to prevent silent failures during tool runs.
+
 ## [0.34.1] - 2025-10-24
 
 ### Bug Fixes
