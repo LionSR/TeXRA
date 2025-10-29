@@ -178,16 +178,16 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+  async prep(
+    shared: ToolUseCycleShared<C>,
+  ): Promise<ToolUseExecutionContext<C>> {
     return {
       options: shared.options,
       state: shared.state,
     };
   }
 
-  async exec(
-    context: ToolUseExecutionContext<C>,
-  ): Promise<
+  async exec(context: ToolUseExecutionContext<C>): Promise<
     | { skipped: true }
     | {
         response: unknown;
@@ -246,7 +246,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           responseTime?: number;
           debugContext: DebugContext;
           debugFileOptions: DebugFileOptions;
-      },
+        },
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
 
@@ -275,16 +275,16 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+  async prep(
+    shared: ToolUseCycleShared<C>,
+  ): Promise<ToolUseExecutionContext<C>> {
     return {
       options: shared.options,
       state: shared.state,
     };
   }
 
-  async exec(
-    context: ToolUseExecutionContext<C>,
-  ): Promise<
+  async exec(context: ToolUseExecutionContext<C>): Promise<
     | { skipped: true }
     | {
         toolInfo?: string;
@@ -389,7 +389,9 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseExecutionContext<C>> {
+  async prep(
+    shared: ToolUseCycleShared<C>,
+  ): Promise<ToolUseExecutionContext<C>> {
     return {
       options: shared.options,
       state: shared.state,
@@ -438,7 +440,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.logger.info(
+        '',
+        state.groupId,
+        MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
+      );
       state.shouldStop = true;
       return { skipped: true };
     }
@@ -452,7 +459,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.logger.info(
+        '',
+        state.groupId,
+        MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
+      );
       state.shouldStop = true;
       return { skipped: true };
     }
