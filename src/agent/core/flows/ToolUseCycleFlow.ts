@@ -47,7 +47,7 @@ interface DebugFileOptions {
   baseName: string;
 }
 
-async function saveDebugObjectIfConfigured(
+async function maybeSaveDebug(
   debugContext: DebugContext,
   debugFileOptions: DebugFileOptions,
   object: unknown,
@@ -59,15 +59,6 @@ async function saveDebugObjectIfConfigured(
     context: debugContext,
     fileOptions: debugFileOptions,
   });
-}
-
-function resetToolUseState(state: ToolUseCycleState): void {
-  state.shouldStop = false;
-  state.response = undefined;
-  state.responseTime = undefined;
-  state.toolInfo = undefined;
-  state.text = undefined;
-  state.stopReason = undefined;
 }
 
 interface ToolValidationDiagnostics {
@@ -146,17 +137,32 @@ type ToolDispatchErrorResult = {
   fallbackMessage?: string;
 };
 
-export interface ToolUseCycleState {
+export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
   toolState: ToolState;
   groupId?: string;
   iteration: number;
+}
+
+export interface ToolUseCycleRuntimeState {
   shouldStop: boolean;
   response?: unknown;
   responseTime?: number;
   toolInfo?: string;
   text?: string;
   stopReason?: ProviderStopReason;
+}
+
+export type ToolUseCycleState = ToolUseCycleInputState &
+  ToolUseCycleRuntimeState;
+
+function resetToolUseState(state: ToolUseCycleRuntimeState): void {
+  state.shouldStop = false;
+  state.response = undefined;
+  state.responseTime = undefined;
+  state.toolInfo = undefined;
+  state.text = undefined;
+  state.stopReason = undefined;
 }
 
 export interface ToolUseCycleShared<C = unknown> {
@@ -199,7 +205,7 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     resetToolUseState(state);
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       prepRes.debugContext,
       prepRes.debugFileOptions,
       state.messages,
@@ -286,7 +292,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     state.response = execRes.response;
     state.responseTime = execRes.responseTime;
 
-    await saveDebugObjectIfConfigured(
+    await maybeSaveDebug(
       execRes.debugContext,
       execRes.debugFileOptions,
       execRes.response,
@@ -417,14 +423,14 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async exec(
-    context: ToolUseCycleShared<C> | undefined,
+    context: ToolUseCycleShared<C>,
   ): Promise<
     | { skipped: true }
     | { parsed: any; name: string; input: any; toolCallId: string }
     | ToolDispatchErrorResult
   > {
     if (!context) {
-      return { skipped: true };
+      throw new Error('ToolUseDispatchNode requires shared cycle context.');
     }
 
     const { options, state } = context;
