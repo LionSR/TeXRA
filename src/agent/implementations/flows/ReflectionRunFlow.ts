@@ -155,9 +155,15 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
         result,
       };
     } catch (error) {
+      const contextualError =
+        error instanceof Error
+          ? new Error(`Round ${prepRes.roundIndex} failed: ${error.message}`, {
+              cause: error,
+            })
+          : new Error(`Round ${prepRes.roundIndex} failed: ${String(error)}`);
       return {
         ...prepRes,
-        error,
+        error: contextualError,
       };
     }
   }
