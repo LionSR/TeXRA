@@ -244,7 +244,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
 
-    this.logMediaResults(uploadSummaries);
+    if (uploadSummaries.some((summary) => !summary.ok)) {
+      this.logger.warn(
+        'Some media files failed to upload via Google GenAI SDK',
+      );
+    }
     return uploadedParts;
   }
 
