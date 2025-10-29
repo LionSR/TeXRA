@@ -220,9 +220,7 @@ class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
     };
   }
 
-  async exec(
-    prepRes: ReflectionFinalizePrep,
-  ): Promise<ReflectionFinalizeExec> {
+  async exec(prepRes: ReflectionFinalizePrep): Promise<ReflectionFinalizeExec> {
     const status = prepRes.lifecycle.error ? 'error' : 'stopped';
     try {
       await Promise.resolve(prepRes.hooks.end(status));
