@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import { Buffer } from 'buffer';
+import { randomUUID } from 'crypto';
 
 // Third-party imports
 import {
@@ -97,6 +98,51 @@ function findLastTextPart(
     }
   }
   return undefined;
+}
+
+type NormalizedFunctionCall = (FunctionCall & Record<string, unknown>) & {
+  id: string;
+  call_id: string;
+};
+
+function toTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function ensureFunctionCallIdentifiers(call: FunctionCall): {
+  normalized: NormalizedFunctionCall;
+  synthesized: boolean;
+} {
+  const normalized = { ...call } as FunctionCall & Record<string, unknown>;
+  const existingId = toTrimmedString(normalized.id);
+  const existingCallId = toTrimmedString(normalized.call_id);
+  const existingToolCallId = toTrimmedString(normalized.tool_call_id);
+  const existingToolUseId = toTrimmedString(normalized.tool_use_id);
+
+  const fallbackId =
+    existingId || existingCallId || existingToolCallId || existingToolUseId;
+  const id = fallbackId || randomUUID();
+  normalized.id = id;
+
+  const callId =
+    existingCallId || existingToolCallId || existingToolUseId || id;
+  normalized.call_id = callId;
+
+  if (!toTrimmedString(normalized.tool_call_id)) {
+    normalized.tool_call_id = callId;
+  }
+  if (!toTrimmedString(normalized.tool_use_id)) {
+    normalized.tool_use_id = callId;
+  }
+
+  const synthesizedId = !fallbackId;
+  const synthesizedCallId =
+    !existingCallId && !existingToolCallId && !existingToolUseId;
+
+  return {
+    normalized: normalized as NormalizedFunctionCall,
+    synthesized: synthesizedId || synthesizedCallId,
+  };
 }
 
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
@@ -978,8 +1024,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
       const funcPart = parts.find((part) => part.functionCall);
-      if (funcPart) {
-        return JSON.stringify(funcPart.functionCall, null, 2);
+      if (funcPart?.functionCall) {
+        const { normalized, synthesized } = ensureFunctionCallIdentifiers(
+          funcPart.functionCall,
+        );
+        if (synthesized) {
+          const functionName = normalized.name ?? 'unknown';
+          this.logger.debug(
+            `Synthesized tool call identifier for Google function call '${functionName}'.`,
+          );
+        }
+        return JSON.stringify(normalized, null, 2);
       }
     }
     return null;
@@ -1007,9 +1062,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const callPart = createPartFromFunctionCall(functionName, args);
 
     // Use consistent ID for both call and result to ensure proper correlation
-    const callId = call?.id ?? id;
+    const callRecord = call as FunctionCall & Record<string, unknown>;
+    const callId =
+      toTrimmedString(callRecord?.id) ||
+      toTrimmedString(callRecord?.call_id) ||
+      toTrimmedString(callRecord?.tool_call_id) ||
+      toTrimmedString(callRecord?.tool_use_id) ||
+      id;
     if (callPart.functionCall) {
       callPart.functionCall.id = callId;
+      const partRecord = callPart.functionCall as Record<string, unknown>;
+      if (!toTrimmedString(partRecord.call_id)) {
+        partRecord.call_id = callId;
+      }
+      if (!toTrimmedString(partRecord.tool_call_id)) {
+        partRecord.tool_call_id = callId;
+      }
+      if (!toTrimmedString(partRecord.tool_use_id)) {
+        partRecord.tool_use_id = callId;
+      }
     }
 
     // Use the same ID for the result to maintain correlation
