@@ -161,6 +161,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   ): Promise<string | undefined> {
     const { cycle } = _shared;
     if (prepRes.interrupted) {
+      resetResponseCycleState(cycle);
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -244,6 +245,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
+      cycle.endTurn = false;
       return 'complete';
     }
 
@@ -262,6 +264,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         'Model response was aborted or returned no data; output may be incomplete.',
         cycle.roundGroupId,
       );
+      cycle.endTurn = false;
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -437,6 +440,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
+      cycle.endTurn = false;
       return 'complete';
     }
 
@@ -444,6 +448,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.processedResponse = execRes.processedResponse;
 
     if (execRes.repetitionDetected || !execRes.processedResponse) {
+      cycle.endTurn = false;
       cycle.shouldStop = true;
       return 'complete';
     }
@@ -545,6 +550,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, cycle } = prepRes;
 
     if ('skipped' in execRes) {
+      cycle.endTurn = false;
       cycle.shouldStop = true;
       return 'complete';
     }
