@@ -102,3 +102,44 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
     assert.equal(parsed.tool_use_id, parsed.id);
   });
 });
+
+describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
+  const handler = new ModelHandlerGoogleGenAI({
+    name: 'test-google-model',
+    fullName: 'google/test',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 4096,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+    openRouterOnly: false,
+  });
+
+  it('omits unsupported identifier fields on follow-up function call parts', async () => {
+    const messages = await handler.createToolUseFollowUpMessages(
+      undefined,
+      'call-123',
+      'read_file',
+      {
+        name: 'read_file',
+        args: { path: 'syk_v5.tex' },
+      } as any,
+      {},
+      undefined,
+    );
+
+    const callMessage = messages[0];
+    assert.ok(Array.isArray(callMessage.parts), 'expected call message parts');
+    const callPart = callMessage.parts.find((part) => part.functionCall);
+    assert.ok(callPart, 'expected a function call part');
+    const functionCall = (callPart as any).functionCall as Record<
+      string,
+      unknown
+    >;
+    assert.equal(functionCall.id, 'call-123');
+    assert.equal('call_id' in functionCall, false);
+    assert.equal('tool_call_id' in functionCall, false);
+    assert.equal('tool_use_id' in functionCall, false);
+  });
+});

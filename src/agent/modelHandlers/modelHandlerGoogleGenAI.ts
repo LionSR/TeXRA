@@ -1071,16 +1071,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       id;
     if (callPart.functionCall) {
       callPart.functionCall.id = callId;
-      const partRecord = callPart.functionCall as Record<string, unknown>;
-      if (!toTrimmedString(partRecord.call_id)) {
-        partRecord.call_id = callId;
-      }
-      if (!toTrimmedString(partRecord.tool_call_id)) {
-        partRecord.tool_call_id = callId;
-      }
-      if (!toTrimmedString(partRecord.tool_use_id)) {
-        partRecord.tool_use_id = callId;
-      }
+      // The Google GenAI Chat API rejects unknown fields on the function call
+      // payload, so avoid populating call_id/tool_call_id/tool_use_id here.
+      // The synthesized identifiers are still preserved via the follow-up
+      // result message and the normalized JSON stored in tool state.
     }
 
     // Use the same ID for the result to maintain correlation
