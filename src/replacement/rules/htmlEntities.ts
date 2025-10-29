@@ -15,7 +15,7 @@ export const HTML_ENTITY_REPLACEMENTS: ReplacementCategory = {
 
     // Quotes and spacing
     '&quot;': '"',
-    '&apos;': '\'',
+    '&apos;': "'",
     '&nbsp;': '~',
 
     // Basic comparison operators frequently appear in HTML-escaped math
