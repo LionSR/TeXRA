@@ -317,7 +317,7 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
       '$1\n\n$3',
 
     // Remove spaces inside formatting
-    '\\\\(?:textbf|textit|emph|underline|overbrace|underbrace|label|caption(?:\\*)?)\\{\\s+([^}]*)\\s+\\}':
+    '\\\\(?:textbf|textit|emph|underline|overbrace|underbrace|label)\\{\\s+([^}]*)\\s+\\}':
       '\\$1{$2}',
 
     // Fix space before closing braces in commands (nearly universal style)
@@ -338,8 +338,8 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Remove spaces inside label
     '\\\\label\\{\\s+([^}]*)\\s+\\}': '\\label{$1}',
     // Remove spaces inside caption
-    '\\\\caption\\{\\s+([^}]*)\\s+\\}': '\\caption{$1}',
+    '\\\\caption\\{[\\t ]+([^}]*)[\\t ]+\\}': '\\caption{$1}',
     // Remove spaces inside caption*
-    '\\\\caption\\*\\{\\s+([^}]*)\\s+\\}': '\\caption*{$1}',
+    '\\\\caption\\*\\{[\\t ]+([^}]*)[\\t ]+\\}': '\\caption*{$1}',
   },
 };
