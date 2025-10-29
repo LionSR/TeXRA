@@ -1,6 +1,9 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
+// Local imports - flow constants
+import { FlowTransition } from './FlowTransitions';
+
 // Local imports - agent components
 import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
@@ -157,7 +160,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (prepRes.interrupted) {
       resetResponseCycleState(cycle);
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.outputExists = prepRes.exists;
@@ -237,7 +240,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.responseObject = execRes.response;
@@ -257,7 +260,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       );
       cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     return undefined;
@@ -427,7 +430,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.stopReason = execRes.stopReason;
@@ -436,7 +439,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (execRes.repetitionDetected || !execRes.processedResponse) {
       cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     if (!cycle.outputExists) {
@@ -538,14 +541,14 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if ('skipped' in execRes) {
       cycle.endTurn = false;
       cycle.shouldStop = true;
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.endTurn = execRes.shouldEndTurn;
     cycle.shouldStop = execRes.shouldStop;
 
     if (execRes.shouldStop) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     cycle.stateRound.incrementContinuation();
@@ -556,7 +559,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     );
 
     if (!execRes.shouldContinue) {
-      return 'complete';
+      return FlowTransition.COMPLETE;
     }
 
     options.logger.debug(
@@ -582,7 +585,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       );
     }
 
-    return 'continue';
+    return FlowTransition.CONTINUE;
   }
 }
 
@@ -596,7 +599,7 @@ export function createResponseCycleFlow<C>(): Flow<ResponseCycleShared<C>> {
   invokeNode.next(processNode);
   processNode.next(continuationNode);
 
-  continuationNode.on('continue', prepNode);
+  continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ResponseCycleShared<C>>(prepNode);
 }
