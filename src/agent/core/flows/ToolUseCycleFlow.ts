@@ -24,6 +24,9 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { ToolResult, toolResult } from '@tools/result';
 import type { ToolDefinition } from '@model';
 
+// Local imports - error utilities
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
 
@@ -161,11 +164,6 @@ export interface ToolUseCycleShared<C = unknown> {
   state: ToolUseCycleState;
 }
 
-interface ToolUseExecutionContext<C> {
-  options: ToolUseCycleOptions<C>;
-  state: ToolUseCycleState;
-}
-
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async prep(shared: ToolUseCycleShared<C>): Promise<{
     interrupted: boolean;
@@ -213,16 +211,11 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
-  async exec(context: ToolUseExecutionContext<C>): Promise<
+  async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
         response: unknown;
@@ -273,7 +266,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
   async post(
     _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseExecutionContext<C>,
+    prepRes: ToolUseCycleShared<C>,
     execRes:
       | { skipped: true }
       | {
@@ -310,16 +303,11 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
-  async exec(context: ToolUseExecutionContext<C>): Promise<
+  async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
         toolInfo?: string;
@@ -424,17 +412,12 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 }
 
 class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(
-    shared: ToolUseCycleShared<C>,
-  ): Promise<ToolUseExecutionContext<C>> {
-    return {
-      options: shared.options,
-      state: shared.state,
-    };
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+    return shared;
   }
 
   async exec(
-    context: ToolUseExecutionContext<C> | undefined,
+    context: ToolUseCycleShared<C> | undefined,
   ): Promise<
     | { skipped: true }
     | { parsed: any; name: string; input: any; toolCallId: string }
@@ -459,9 +442,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     try {
       parsed = JSON.parse(state.toolInfo);
     } catch (err) {
-      const errorMsg = `Malformed tool JSON: ${
-        err instanceof Error ? err.message : String(err)
-      }`;
+      const errorMsg = `Malformed tool JSON: ${toErrorMessage(err)}`;
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: 'unknown',
@@ -487,7 +468,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     try {
       toolCallId = extractToolCallId(parsed);
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const errorMsg = toErrorMessage(error);
       const errorResult = toolResult({ error: errorMsg, isError: true });
       const toolUseLog = {
         tool: parsed.name || parsed.function?.name || 'unknown',
@@ -557,7 +538,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
   async post(
     _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseExecutionContext<C>,
+    prepRes: ToolUseCycleShared<C>,
     execRes:
       | { skipped: true }
       | { parsed: any; name: string; input: any; toolCallId: string }

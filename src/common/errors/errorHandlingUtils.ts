@@ -66,6 +66,27 @@ export function formatError(prefix: string, err: unknown): string {
 }
 
 /**
+ * Normalize any thrown value into a user-friendly error message string.
+ *
+ * Unlike {@link formatError}, this helper only returns the detail portion of
+ * the message, making it suitable for composing custom prefixes or structured
+ * payloads. Centralizing the coercion keeps error messaging consistent across
+ * flows and model handlers.
+ */
+export function toErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (err === undefined) {
+    return 'undefined';
+  }
+  if (err === null) {
+    return 'null';
+  }
+  return String(err);
+}
+
+/**
  * Log a formatted error message and return the formatted message.
  *
  * This function combines error formatting with logging. It:
