@@ -33,6 +33,18 @@ W = a
     assert.strictEqual(result, expected);
   });
 
+  it('handles trailing whitespace on macro lines', () => {
+    const input = String.raw`\be\u0020\u0020\u0020
+E = mc^2
+\ee\t`;
+    const expected = String.raw`\begin{equation}\u0020\u0020\u0020
+E = mc^2
+\end{equation}\t`;
+
+    const result = applyMacros(input);
+    assert.strictEqual(result, expected);
+  });
+
   it('converts extended macros without triggering partial matches', () => {
     const input = String.raw`\bea
 x = y
@@ -47,6 +59,18 @@ x = y
 
   it('leaves unrelated commands untouched', () => {
     const input = String.raw`\beta = 0`;
+    const result = applyMacros(input);
+    assert.strictEqual(result, input);
+  });
+
+  it('ignores inline macro mentions', () => {
+    const input = String.raw`Text before \be text after`;
+    const result = applyMacros(input);
+    assert.strictEqual(result, input);
+  });
+
+  it('is case sensitive to match legacy lowercase helpers only', () => {
+    const input = String.raw`\BE`;
     const result = applyMacros(input);
     assert.strictEqual(result, input);
   });

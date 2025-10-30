@@ -600,7 +600,6 @@
               "enum": [
                 "latex_spacing",
                 "equations",
-                "equation_macros",
                 "sections",
                 "latex_forbidden_commands",
                 "characters",
@@ -639,6 +638,7 @@
                 "parentheses",
                 "latexdiff_markup",
                 "equation_style",
+                "equation_macros",
                 "max_style_regex"
               ]
             },
