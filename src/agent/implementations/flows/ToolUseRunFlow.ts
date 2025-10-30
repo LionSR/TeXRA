@@ -149,7 +149,21 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   ): Promise<ToolUsePrepareExecResult<C>> {
     try {
       const prepared = await shared.hooks.prepareState();
+      if (!prepared) {
+        return {
+          error: new Error(
+            'Failed to prepare tool-use run: prepareState returned no result',
+          ),
+        };
+      }
       const cycleOptions = shared.hooks.buildCycleOptions(prepared.toolState);
+      if (!cycleOptions) {
+        return {
+          error: new Error(
+            'Failed to prepare tool-use run: buildCycleOptions returned no result',
+          ),
+        };
+      }
       return {
         result: {
           ...prepared,
@@ -169,9 +183,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     if (execRes.error || !execRes.result) {
       const error =
         execRes.error ??
-        new Error(
-          'Failed to prepare tool-use run: prepareState or buildCycleOptions returned no result',
-        );
+        new Error('Failed to prepare tool-use run: no result from prepare');
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = error;
       return FlowTransition.FINALIZE;
