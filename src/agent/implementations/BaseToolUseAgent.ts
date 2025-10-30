@@ -162,7 +162,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
     const hooks: ToolUseRunHooks<C> = {
       start: () => this.startRunGroup(),
-      init: (runGroupId) => this.init(runGroupId, { createGroup: true }),
+      init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
       initializeClient: () => this.initializeClient(),
       prepareState: () => this.prepareInitialSessionState(),
       buildCycleOptions: (toolState) => this.buildToolUseCycleOptions(toolState),
@@ -179,14 +179,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       markRunning: () => this.markRunning(),
       applyFollowUp: async (followUp, messages) => {
         this.logger.userMessage(followUp);
-        this.messages = await this.modelHandler.createUserFollowUpMessages(
+        const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
           messages,
           followUp,
         );
-        return this.messages;
+        this.messages = updatedMessages;
+        return updatedMessages;
       },
-      end: (status) => this.endRunGroup(status),
-      cleanup: () => this.cleanup(),
+      end: async (status) => {
+        this.endRunGroup(status);
+      },
+      cleanup: async () => {
+        this.cleanup();
+      },
     };
 
     const shared: ToolUseRunShared<C> = {
