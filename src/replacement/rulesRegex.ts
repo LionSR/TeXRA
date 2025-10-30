@@ -35,6 +35,49 @@ const convertFencedLatexBlock: ReplacementFunction = (
   return `${safeLeadingBreak}${safeIndent}\\begin{${safeEnvironment}}${newline}${emptyBodyPadding}${bodyWithTrailingBreak}${safeIndent}\\end{${safeEnvironment}}`;
 };
 
+const hasBalancedBraces = (value: string): boolean => {
+  let depth = 0;
+
+  for (const char of value) {
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      if (depth === 0) {
+        return false;
+      }
+
+      depth -= 1;
+    }
+  }
+
+  return depth === 0;
+};
+
+const createCaptionTrimmer = (
+  command: '\\caption' | '\\caption*',
+): ReplacementFunction => {
+  return (match, content) => {
+    if (typeof content !== 'string') {
+      return match;
+    }
+
+    if (!hasBalancedBraces(content) || /[\r\n]/.test(content)) {
+      return match;
+    }
+
+    const trimmed = content.replace(/^[\t ]+/, '').replace(/[\t ]+$/, '');
+
+    if (trimmed === content) {
+      return match;
+    }
+
+    return `${command}{${trimmed}}`;
+  };
+};
+
 // ===== Regex replacements =====
 
 export const FENCED_LATEX_BLOCK_REPLACEMENTS: ReplacementCategory = {
@@ -337,9 +380,9 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     '\\\\underbrace\\{\\s+([^}]*)\\s+\\}': '\\underbrace{$1}',
     // Remove spaces inside label
     '\\\\label\\{\\s+([^}]*)\\s+\\}': '\\label{$1}',
-    // Remove spaces inside caption
-    '\\\\caption\\{[\\t ]+([^}]*)[\\t ]+\\}': '\\caption{$1}',
+    // Remove spaces inside caption (only horizontal whitespace, preserving newlines for multi-line captions)
+    '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}': createCaptionTrimmer('\\caption'),
     // Remove spaces inside caption*
-    '\\\\caption\\*\\{[\\t ]+([^}]*)[\\t ]+\\}': '\\caption*{$1}',
+    '\\\\caption\\*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}': createCaptionTrimmer('\\caption*'),
   },
 };
