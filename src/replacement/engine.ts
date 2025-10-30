@@ -104,7 +104,6 @@ class ReplacementEngineImpl implements ReplacementEngine {
 const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
   // LaTeX Content Formatting
   EQUATION_REPLACEMENTS,
-  EQUATION_MACRO_REPLACEMENTS,
   SECTION_REPLACEMENTS,
   LATEX_FORBIDDEN_REPLACEMENTS,
   CHARACTER_REPLACEMENTS,
@@ -125,6 +124,7 @@ const NON_REGEX_CATEGORIES: ReplacementCategory[] = [
 
 // Define all available regex categories
 const REGEX_CATEGORIES: ReplacementCategory[] = [
+  EQUATION_MACRO_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
   INLINE_MATH_REPLACEMENTS,
   PARENTHESES_REPLACEMENTS,
