@@ -18,6 +18,7 @@ describe('MainViewState session transitions', () => {
   let persistedState: Record<string, unknown>;
   let mainViewState: any;
   let collectCurrentContext: any;
+  let fileListManager: any;
 
   beforeEach(async () => {
     dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
@@ -99,12 +100,18 @@ describe('MainViewState session transitions', () => {
     outputContainer.style.display = 'block';
     const outputList = document.createElement('div');
     outputList.id = ELEMENT_IDS.OUTPUT_FILES;
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-item';
-    fileItem.dataset.path = 'draft.pdf';
-    outputList.appendChild(fileItem);
     outputContainer.appendChild(outputList);
     fileSelectionGroup.appendChild(outputContainer);
+
+    const fileTemplate = document.createElement('template');
+    fileTemplate.id = 'fileListEntryTemplate';
+    fileTemplate.innerHTML = `
+      <div class="file-item" data-path="">
+        <span class="file-name"></span>
+        <button class="remove-button" type="button"></button>
+      </div>
+    `;
+    document.body.appendChild(fileTemplate);
 
     ['input', 'reference', 'auxiliary', 'media'].forEach((type) => {
       const single = document.createElement('input');
@@ -152,25 +159,18 @@ describe('MainViewState session transitions', () => {
       '@webview/modules/state/currentContext.js'
     );
     collectCurrentContext = contextModule.collectCurrentContext;
+    // @ts-ignore dynamic import without typings
+    const fileListModule = await import(
+      '@webview/modules/uiManagers/FileList.js'
+    );
+    fileListManager = fileListModule.fileList;
 
     mainViewState.setDefaults();
-
-    const refreshedOutputList = document.getElementById(
+    fileListManager.update(
       ELEMENT_IDS.OUTPUT_FILES,
+      ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
+      ['draft.pdf'],
     );
-    if (refreshedOutputList) {
-      refreshedOutputList.innerHTML = '';
-      const refreshedItem = document.createElement('div');
-      refreshedItem.className = 'file-item';
-      refreshedItem.dataset.path = 'draft.pdf';
-      refreshedOutputList.appendChild(refreshedItem);
-    }
-    const refreshedContainer = document.getElementById(
-      ELEMENT_IDS.OUTPUT_FILES_CONTAINER,
-    );
-    if (refreshedContainer) {
-      refreshedContainer.style.display = 'block';
-    }
   });
 
   afterEach(() => {
