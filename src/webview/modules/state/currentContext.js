@@ -48,9 +48,14 @@ function collectSingleFileSelections(singleFileTypes) {
   return selections;
 }
 
-function collectMultipleFileSelections(singleFiles, fileList) {
+function collectMultipleFileSelections(singleFiles, fileList, options = {}) {
+  const { excludedIds } = options;
+  const skippedIds = excludedIds instanceof Set ? excludedIds : undefined;
   const selections = {};
   MULTIPLE_SELECTIONS.forEach((id) => {
+    if (skippedIds?.has(id)) {
+      return;
+    }
     const container = safeGetElementById(`${id}Container`);
     const isActive = container?.style.display !== 'none';
     selections[`${id}Active`] = isActive;
@@ -92,14 +97,15 @@ export function collectCurrentContext(options = {}) {
   const sessionType = getSessionType();
   const agent = getAgent(sessionType);
   const singleFileSelections = collectSingleFileSelections(singleFileTypes);
+  const excludedMultipleIds =
+    sessionType === SESSION_TYPES.TOOL_USE
+      ? new Set([ELEMENT_IDS.OUTPUT_FILES])
+      : undefined;
   const multipleFileSelections = collectMultipleFileSelections(
     singleFileSelections,
     fileList,
+    { excludedIds: excludedMultipleIds },
   );
-  if (sessionType === SESSION_TYPES.TOOL_USE) {
-    delete multipleFileSelections[`${ELEMENT_IDS.OUTPUT_FILES}Active`];
-    delete multipleFileSelections[ELEMENT_IDS.OUTPUT_FILES];
-  }
   const checkboxValues = collectCheckboxValues();
 
   return {
