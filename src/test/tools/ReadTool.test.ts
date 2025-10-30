@@ -5,13 +5,22 @@ import { WorkspaceFS } from '@utils/files';
 
 suite('ReadFileTool', () => {
   let originalRead: typeof WorkspaceFS.read;
+  let originalExists: typeof WorkspaceFS.exists;
+  let originalStat: typeof WorkspaceFS.stat;
+  let originalReadFileBytes: typeof WorkspaceFS.readFileBytes;
 
   setup(() => {
     originalRead = WorkspaceFS.read;
+    originalExists = WorkspaceFS.exists;
+    originalStat = WorkspaceFS.stat;
+    originalReadFileBytes = WorkspaceFS.readFileBytes;
   });
 
   teardown(() => {
     WorkspaceFS.read = originalRead;
+    WorkspaceFS.exists = originalExists;
+    WorkspaceFS.stat = originalStat;
+    WorkspaceFS.readFileBytes = originalReadFileBytes;
   });
 
   test('truncates output when file exceeds maximum lines', async () => {
@@ -161,6 +170,35 @@ suite('ReadFileTool', () => {
 
     assert.strictEqual(result.summary, 'Read empty.txt (file is empty)');
     assert.strictEqual(result.output, '');
+  });
+
+  test('returns pdf as attachment without text rendering', async () => {
+    const tool = new ReadFileTool();
+
+    let readCalled = false;
+    WorkspaceFS.read = async () => {
+      readCalled = true;
+      throw new Error('Should not read PDF as text');
+    };
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.stat = async () =>
+      ({ size: 1024 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.readFileBytes = async () => Buffer.from('%PDF-1.7');
+
+    const result = await tool.call({ path: 'docs/sample.pdf' });
+
+    assert.strictEqual(readCalled, false, 'PDF read should bypass text reader');
+    assert.strictEqual(
+      result.summary,
+      'Attached PDF docs/sample.pdf.',
+    );
+    assert.ok(result.output?.includes('attachment'));
+    assert.ok(result.output?.includes('models'));
+
+    const attachment = result.files?.[0];
+    assert.ok(attachment, 'Expected PDF attachment');
+    assert.strictEqual(attachment.mimeType, 'application/pdf');
+    assert.ok(attachment.bytes instanceof Uint8Array);
   });
 
   test('defaults range end to start + 399 when only start provided', async () => {

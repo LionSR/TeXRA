@@ -7,9 +7,10 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
+import { buildFileAttachment } from '@tools/utils';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, getMimeType } from '@utils/files';
 
 export const READ_FILE_MAX_LINES = 400;
 
@@ -49,6 +50,10 @@ export class ReadFileTool extends defineTool({
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
+    if (this.isPdfPath(input.path)) {
+      return this.returnPdfAttachment(input);
+    }
+
     const content = await WorkspaceFS.read(input.path);
     const lines = content.split(/\r?\n/);
     if (lines.length > 0 && lines[lines.length - 1] === '') {
@@ -154,5 +159,39 @@ export class ReadFileTool extends defineTool({
     }
 
     return summary;
+  }
+
+  private isPdfPath(path: string): boolean {
+    const mimeType = getMimeType(path)?.toLowerCase();
+    if (mimeType === 'application/pdf') {
+      return true;
+    }
+    return path.toLowerCase().endsWith('.pdf');
+  }
+
+  private async returnPdfAttachment(input: ReadInput): Promise<ToolResult> {
+    const attachment = await buildFileAttachment({
+      filePath: input.path,
+      description: 'PDF returned by read_file tool.',
+    });
+
+    const summaryParts = [`Attached PDF ${attachment.path}.`];
+    if (input.range) {
+      summaryParts.push('Ignored requested line range because PDFs are binary.');
+    }
+
+    const outputParts: string[] = [];
+    if (input.range) {
+      outputParts.push('Line ranges are not supported when reading PDFs.');
+    }
+    outputParts.push(
+      'Returned the PDF as a file attachment. Some models may not display attachments; download the file if needed.',
+    );
+
+    return toolResult({
+      summary: summaryParts.join(' '),
+      output: outputParts.join(' '),
+      files: [attachment],
+    });
   }
 }
