@@ -31,7 +31,11 @@ export const EQUATION_MACRO_REPLACEMENTS: ReplacementCategory = {
   isRegex: true,
   flags: 'gm',
   patterns: {
-    '^(\\s*)\\([a-z]+)(\\s*)$': expandEquationMacro,
+    // Require macros to be on their own line so inline uses like "foo \\be bar"
+    // remain untouched. We only support lowercase helpers here for backwards
+    // compatibility with legacy documents that relied on these shorthands
+    // (including the deprecated eqnarray environment).
+    '^(\\s*)\\\\([a-z]+)(\\s*)$': expandEquationMacro,
   },
 };
 
