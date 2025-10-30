@@ -165,7 +165,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
       initializeClient: () => this.initializeClient(),
       prepareState: () => this.prepareInitialSessionState(),
-      buildCycleOptions: (toolState) => this.buildToolUseCycleOptions(toolState),
+      buildCycleOptions: (toolState) =>
+        this.buildToolUseCycleOptions(toolState),
       runCycle: (options, messages) =>
         runToolUseCycle({
           options,
@@ -179,10 +180,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       markRunning: () => this.markRunning(),
       applyFollowUp: async (followUp, messages) => {
         this.logger.userMessage(followUp);
-        const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
-          messages,
-          followUp,
-        );
+        const updatedMessages =
+          await this.modelHandler.createUserFollowUpMessages(
+            messages,
+            followUp,
+          );
         this.messages = updatedMessages;
         return updatedMessages;
       },
@@ -233,9 +235,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       let toolState: ToolState;
 
       try {
-        toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
-          snapshot,
-        );
+        toolState =
+          ToolUseSessionManager.hydrateToolStateFromSnapshot(snapshot);
       } catch (error) {
         const message =
           error instanceof Error

@@ -144,7 +144,9 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     return shared;
   }
 
-  async exec(shared: ToolUseRunShared<C>): Promise<ToolUsePrepareExecResult<C>> {
+  async exec(
+    shared: ToolUseRunShared<C>,
+  ): Promise<ToolUsePrepareExecResult<C>> {
     try {
       const prepared = await shared.hooks.prepareState();
       const cycleOptions = shared.hooks.buildCycleOptions(prepared.toolState);
@@ -175,7 +177,8 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    const { messages, toolState, shouldSkipCycle, cycleOptions } = execRes.result;
+    const { messages, toolState, shouldSkipCycle, cycleOptions } =
+      execRes.result;
     shared.state.messages = messages;
     shared.state.toolState = toolState;
     shared.state.shouldSkipCycle = shouldSkipCycle;

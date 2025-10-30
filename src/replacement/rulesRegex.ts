@@ -392,8 +392,10 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     // Remove spaces inside label
     '\\\\label\\{\\s+([^}]*)\\s+\\}': '\\label{$1}',
     // Remove spaces inside caption (only horizontal whitespace, preserving newlines for multi-line captions)
-    '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}': createCaptionTrimmer('\\caption'),
+    '\\\\caption\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
+      createCaptionTrimmer('\\caption'),
     // Remove spaces inside caption*
-    '\\\\caption\\*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}': createCaptionTrimmer('\\caption*'),
+    '\\\\caption\\*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}':
+      createCaptionTrimmer('\\caption*'),
   },
 };
