@@ -32,7 +32,12 @@ describe('caption spacing normalization', () => {
   });
 
   it('preserves multi-line captions', () => {
-    const input = ['\\caption{', '  This is a long caption', '  that spans multiple lines', '}'].join('\n');
+    const input = [
+      '\\caption{',
+      '  This is a long caption',
+      '  that spans multiple lines',
+      '}',
+    ].join('\n');
     const expected = input;
     const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
       processMathUnicode: false,
@@ -59,7 +64,9 @@ describe('caption spacing normalization', () => {
   });
 
   it('keeps captions with embedded newlines unchanged even with surrounding spaces', () => {
-    const input = ['\\caption{  ', '  First line', '  Second line', '  }'].join('\n');
+    const input = ['\\caption{  ', '  First line', '  Second line', '  }'].join(
+      '\n',
+    );
     const expected = input;
     const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
       processMathUnicode: false,

@@ -8,14 +8,10 @@ import {
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 
-// Local imports - agent configuration
-import type { AgentPrompt, AgentSetting } from './AgentDataclass';
-
-// Local imports - logging
-import type { AgentLogger } from '@logger/AgentLogger';
+// Local imports - option helpers
+import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
 // Local imports - model handlers
-import type { IModelHandler } from '@agent/modelHandlers';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - tools
@@ -24,16 +20,9 @@ import type { BaseTool } from '@tools/core/base';
 // Local imports - usage
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
-export interface ToolUseCycleOptions<C = unknown> {
-  modelHandler: IModelHandler<any, any, any, any, C>;
-  agentSetting: AgentSetting;
-  agentPrompt: AgentPrompt;
-  userVars: Record<string, any>;
-  logger: AgentLogger;
-  client: C;
+export interface ToolUseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
   toolRegistry: Record<string, BaseTool<any>>;
-  checkInterruption: () => Promise<boolean> | boolean;
-  setAbortController: (ctrl: AbortController | null) => void;
   toolState: ToolState;
   modelName?: string;
   executionId?: ExecutionId;
