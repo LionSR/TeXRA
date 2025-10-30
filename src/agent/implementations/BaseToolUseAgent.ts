@@ -161,7 +161,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
 
     const hooks: ToolUseRunHooks<C> = {
-      start: () => this.startRunGroup(),
+      start: async () => undefined,
       init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
       initializeClient: () => this.initializeClient(),
       prepareState: () => this.prepareInitialSessionState(),
@@ -193,6 +193,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       },
       cleanup: async () => {
         this.cleanup();
+      },
+      logFinalizeWarning: (message, error) => {
+        this.logger.warn(message, undefined, undefined, error);
       },
     };
 
