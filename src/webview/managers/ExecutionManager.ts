@@ -110,7 +110,7 @@ export class ExecutionManager {
   private composeBaseAgentConfig(
     message: any,
     session: AgentSessionDescriptor,
-  ): AgentConfig {
+  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles'> {
     const toolConfig: ToolConfig = {
       autoExtractFigure: message.autoExtractFigure,
       autoExtractTikzFigure: message.autoExtractTikzFigure,
@@ -131,7 +131,6 @@ export class ExecutionManager {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
-      useMultipleOutputs: false,
       inputFile: message.inputFile ?? '',
       inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
       referenceFile: message.referenceFile ?? null,
@@ -146,7 +145,6 @@ export class ExecutionManager {
               .filter((f: string | null): f is string => f !== null),
           )
         : null,
-      outputFiles: null,
       editedFile: null,
       toolConfig,
       agentType: session.agentType,
