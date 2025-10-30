@@ -112,6 +112,11 @@ export interface ResponseCycleShared<C = unknown> {
   cycle: ResponseCycleState;
 }
 
+// Each node in the response cycle progressively hydrates the shared cycle
+// object. Mutations performed in `prep`, `exec`, and `post` stages are
+// intentionally visible to downstream nodes so that debug metadata and model
+// results accumulate over the course of the flow.
+
 /**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
