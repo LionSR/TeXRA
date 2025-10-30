@@ -12,6 +12,7 @@ import type { IModelHandler } from '../modelHandlers';
 import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -95,6 +96,26 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       throw new Error('Model client has not been initialized.');
     }
     return this.client;
+  }
+
+  protected buildCycleBaseOptions<S extends AgentSetting>(params: {
+    agentSetting: S;
+    agentPrompt: AgentPrompt;
+    client: C;
+  }): AgentCycleBaseOptions<C> {
+    const { agentSetting, agentPrompt, client } = params;
+    return {
+      modelHandler: this.modelHandler,
+      agentSetting,
+      agentPrompt,
+      userVars: this.userVars,
+      logger: this.logger,
+      client,
+      checkInterruption: () => this.checkInterruption(),
+      setAbortController: (ctrl) => {
+        this.abortController = ctrl;
+      },
+    };
   }
 
   /** Compute the stream tab identifier for this agent execution. */
