@@ -37,10 +37,10 @@ suite('ReadFileTool', () => {
       READ_FILE_MAX_LINES + 1,
       'Output should include the limit and truncation marker line',
     );
-    assert.strictEqual(outputLines[0], 'line 1');
+    assert.strictEqual(outputLines[0], '1: line 1');
     assert.strictEqual(
       outputLines[READ_FILE_MAX_LINES - 1],
-      `line ${READ_FILE_MAX_LINES}`,
+      `${READ_FILE_MAX_LINES}: line ${READ_FILE_MAX_LINES}`,
     );
     assert.strictEqual(
       outputLines[READ_FILE_MAX_LINES],
@@ -62,7 +62,11 @@ suite('ReadFileTool', () => {
     const result = await tool.call({ path: 'short.txt' });
 
     assert.strictEqual(result.summary, 'Read short.txt');
-    assert.strictEqual(result.output, content);
+    const expectedOutput = Array.from(
+      { length: totalLines },
+      (_, index) => `${index + 1}: entry ${index + 1}`,
+    ).join('\n');
+    assert.strictEqual(result.output, expectedOutput);
   });
 
   test('reads requested range beyond 400th line', async () => {
@@ -84,8 +88,8 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.summary, 'Read lines 401-450 of paged.txt');
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, 50);
-    assert.strictEqual(outputLines[0], 'row 401');
-    assert.strictEqual(outputLines[outputLines.length - 1], 'row 450');
+    assert.strictEqual(outputLines[0], '401: row 401');
+    assert.strictEqual(outputLines[outputLines.length - 1], '450: row 450');
   });
 
   test('notes when requested range exceeds file length', async () => {
@@ -149,7 +153,7 @@ suite('ReadFileTool', () => {
     });
 
     assert.strictEqual(result.summary, 'Read line 5 of single.txt');
-    assert.strictEqual(result.output, 'line 5');
+    assert.strictEqual(result.output, '5: line 5');
   });
 
   test('handles empty file gracefully', async () => {
@@ -183,8 +187,8 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.summary, 'Read lines 100-499 of windowed.txt');
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, 400);
-    assert.strictEqual(outputLines[0], 'line 100');
-    assert.strictEqual(outputLines[399], 'line 499');
+    assert.strictEqual(outputLines[0], '100: line 100');
+    assert.strictEqual(outputLines[399], '499: line 499');
   });
 
   test('handles range starting at line 1 with end exceeding file length', async () => {
@@ -209,7 +213,7 @@ suite('ReadFileTool', () => {
     );
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, 50);
-    assert.strictEqual(outputLines[0], 'line 1');
-    assert.strictEqual(outputLines[49], 'line 50');
+    assert.strictEqual(outputLines[0], '1: line 1');
+    assert.strictEqual(outputLines[49], '50: line 50');
   });
 });

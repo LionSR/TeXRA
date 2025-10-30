@@ -82,7 +82,10 @@ export class ReadFileTool extends defineTool({
 
     const segments: string[] = [];
     if (visibleLines.length > 0) {
-      segments.push(visibleLines.join('\n'));
+      const numberedLines = visibleLines.map(
+        (text, index) => `${startIndex + index + 1}: ${text}`,
+      );
+      segments.push(numberedLines.join('\n'));
     }
     if (truncated) {
       segments.push(
