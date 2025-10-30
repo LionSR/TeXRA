@@ -85,8 +85,8 @@ export interface ToolUseRunHooks<C = unknown> {
     followUp: string,
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]>;
-  end(status: 'stopped' | 'error'): void | Promise<void>;
-  cleanup(): void | Promise<void>;
+  end(status: 'stopped' | 'error'): Promise<void>;
+  cleanup(): Promise<void>;
 }
 
 export interface ToolUseRunShared<C = unknown> {
@@ -137,10 +137,11 @@ class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
 }
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<void> {
+  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
     shared.lifecycle.phase = 'prepare';
     shared.lifecycle.status = 'running';
     shared.lifecycle.error = undefined;
+    return shared;
   }
 
   async exec(shared: ToolUseRunShared<C>): Promise<ToolUsePrepareExecResult<C>> {
@@ -160,11 +161,15 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: void,
+    _prepRes: ToolUseRunShared<C>,
     execRes: ToolUsePrepareExecResult<C>,
   ): Promise<string | undefined> {
     if (execRes.error || !execRes.result) {
-      const error = execRes.error ?? new Error('Failed to prepare tool-use run');
+      const error =
+        execRes.error ??
+        new Error(
+          'Failed to prepare tool-use run: prepareState or buildCycleOptions returned no result',
+        );
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = error;
       return FlowTransition.FINALIZE;
@@ -185,6 +190,13 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 }
 
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
+  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
+    shared.lifecycle.phase = 'cycle';
+    shared.lifecycle.status = 'running';
+    shared.lifecycle.error = undefined;
+    return shared;
+  }
+
   async exec(shared: ToolUseRunShared<C>): Promise<ToolUseCycleExecResult> {
     const { hooks, state } = shared;
 
@@ -230,12 +242,15 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async post(
     shared: ToolUseRunShared<C>,
-    _prepRes: unknown,
+    _prepRes: ToolUseRunShared<C>,
     execRes: ToolUseCycleExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
       shared.lifecycle.status = 'error';
       shared.lifecycle.error = execRes.error;
+    } else {
+      shared.lifecycle.status = 'running';
+      shared.lifecycle.error = undefined;
     }
 
     return FlowTransition.FINALIZE;
@@ -264,7 +279,7 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
     }
 
     try {
-      await Promise.resolve(prepRes.hooks.end(status));
+      await prepRes.hooks.end(status);
     } catch (error) {
       result.endError = error;
     }
@@ -288,8 +303,8 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
     }
 
     try {
-      await Promise.resolve(prepRes.hooks.cleanup());
-    } catch (cleanupError) {
+      await prepRes.hooks.cleanup();
+    } catch (cleanupError: unknown) {
       if (!error) {
         error = cleanupError;
       }
