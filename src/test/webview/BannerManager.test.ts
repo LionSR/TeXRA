@@ -86,7 +86,16 @@ class BannerManager {
 
   private _setupAgentConfigBanner(element: any, config: any) {
     const textSpan = element.querySelector('span');
+    const editButton = element.querySelector('#agentConfigEditButton');
     const dirButton = element.querySelector('#agentConfigDirButton');
+    const docButton = element.querySelector('#agentConfigDocButton');
+
+    if (!(textSpan || editButton || dirButton || docButton)) {
+      console.warn(
+        '[BannerManager] Agent config banner missing all expected elements',
+      );
+      return;
+    }
 
     if (textSpan && config.agentName) {
       textSpan.textContent = `Agent file for "${config.agentName}" is missing.`;
@@ -94,19 +103,53 @@ class BannerManager {
       textSpan.textContent = 'Agent configuration is missing.';
     }
 
-    if (dirButton) {
-      dirButton.textContent = config.customDirSet
-        ? 'Open Directory'
-        : 'Set Directory';
-    }
+    this._applyToolbarButtonLabel(editButton, 'Edit Agents', {
+      ariaLabel: 'Edit agents',
+      title: 'Edit agents',
+    });
 
-    if (!textSpan && !dirButton) {
-      console.warn(
-        '[BannerManager] Agent config banner missing all expected elements',
-      );
-    }
+    const dirLabel = config.customDirSet ? 'Open Directory' : 'Set Directory';
+    this._applyToolbarButtonLabel(dirButton, dirLabel, {
+      ariaLabel: dirLabel,
+      title: dirLabel,
+    });
+
+    this._applyToolbarButtonLabel(docButton, 'Docs', {
+      ariaLabel: 'Open documentation',
+      title: 'Open documentation',
+    });
 
     element.dataset.customDirSet = String(config.customDirSet || false);
+  }
+
+  private _applyToolbarButtonLabel(
+    button: HTMLElement | null,
+    label: string,
+    options: { ariaLabel?: string; title?: string } = {},
+  ) {
+    if (!button) {
+      return;
+    }
+
+    if (button.tagName === 'VSCODE-TOOLBAR-BUTTON') {
+      button.setAttribute('label', label);
+    } else {
+      button.textContent = label;
+    }
+
+    const resolvedAriaLabel = options.ariaLabel ?? label;
+    if (resolvedAriaLabel) {
+      button.setAttribute('aria-label', resolvedAriaLabel);
+    } else {
+      button.removeAttribute('aria-label');
+    }
+
+    const resolvedTitle = options.title ?? resolvedAriaLabel;
+    if (resolvedTitle) {
+      button.setAttribute('title', resolvedTitle);
+    } else if (options.title !== undefined) {
+      button.removeAttribute('title');
+    }
   }
 
   private _setupDependencyBanner(element: any, config: any) {
@@ -149,9 +192,13 @@ class BannerManager {
       ) as ToolbarButtonElement;
       recheckButton.id = 'dependencyRecheckButton';
       recheckButton.setAttribute('icon', 'refresh');
-      recheckButton.textContent = 'Re-check';
       actions.insertBefore(recheckButton, actions.firstChild);
     }
+
+    this._applyToolbarButtonLabel(recheckButton, 'Re-check', {
+      ariaLabel: 'Re-check dependencies',
+      title: 'Re-check dependencies',
+    });
   }
 
   private _addDependencyItem(container: any, label: string, tool: string) {
@@ -213,7 +260,11 @@ describe('BannerManager', () => {
       </div>
       <div id="agentConfigBanner" style="display: none;">
         <span></span>
-        <button id="agentConfigDirButton"></button>
+        <div class="actions">
+          <vscode-toolbar-button id="agentConfigEditButton"></vscode-toolbar-button>
+          <vscode-toolbar-button id="agentConfigDirButton"></vscode-toolbar-button>
+          <vscode-toolbar-button id="agentConfigDocButton"></vscode-toolbar-button>
+        </div>
       </div>
       <div id="dependencyBanner" style="display: none;">
         <span class="missing-tools"></span>
@@ -347,19 +398,37 @@ describe('BannerManager', () => {
     it('should set up generic agent config banner', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       const textSpan = banner.querySelector('span');
-      const dirButton = banner.querySelector('#agentConfigDirButton');
+      const dirButton = banner.querySelector(
+        '#agentConfigDirButton',
+      ) as HTMLElement;
+      const editButton = banner.querySelector(
+        '#agentConfigEditButton',
+      ) as HTMLElement;
+      const docButton = banner.querySelector(
+        '#agentConfigDocButton',
+      ) as HTMLElement;
 
       manager.showBanner('agentConfigBanner');
 
       assert.equal(textSpan.textContent, 'Agent configuration is missing.');
-      assert.equal(dirButton.textContent, 'Set Directory');
+      assert.equal(editButton.getAttribute('label'), 'Edit Agents');
+      assert.equal(editButton.getAttribute('aria-label'), 'Edit agents');
+      assert.equal(editButton.getAttribute('title'), 'Edit agents');
+      assert.equal(dirButton.getAttribute('label'), 'Set Directory');
+      assert.equal(dirButton.getAttribute('aria-label'), 'Set Directory');
+      assert.equal(dirButton.getAttribute('title'), 'Set Directory');
+      assert.equal(docButton.getAttribute('label'), 'Docs');
+      assert.equal(docButton.getAttribute('aria-label'), 'Open documentation');
+      assert.equal(docButton.getAttribute('title'), 'Open documentation');
       assert.equal(banner.dataset.customDirSet, 'false');
     });
 
     it('should set up agent-specific config banner', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
       const textSpan = banner.querySelector('span');
-      const dirButton = banner.querySelector('#agentConfigDirButton');
+      const dirButton = banner.querySelector(
+        '#agentConfigDirButton',
+      ) as HTMLElement;
 
       manager.showBanner('agentConfigBanner', {
         agentName: 'TestAgent',
@@ -370,20 +439,25 @@ describe('BannerManager', () => {
         textSpan.textContent,
         'Agent file for "TestAgent" is missing.',
       );
-      assert.equal(dirButton.textContent, 'Open Directory');
+      assert.equal(dirButton.getAttribute('label'), 'Open Directory');
+      assert.equal(dirButton.getAttribute('aria-label'), 'Open Directory');
+      assert.equal(dirButton.getAttribute('title'), 'Open Directory');
       assert.equal(banner.dataset.customDirSet, 'true');
     });
 
     it('should handle missing text span gracefully', () => {
       const banner = dom.window.document.getElementById('agentConfigBanner');
-      banner.innerHTML = '<button id="agentConfigDirButton"></button>';
+      banner.innerHTML =
+        '<vscode-toolbar-button id="agentConfigDirButton"></vscode-toolbar-button>';
 
       assert.doesNotThrow(() => {
         manager.showBanner('agentConfigBanner', { agentName: 'Test' });
       });
 
-      const dirButton = banner.querySelector('#agentConfigDirButton');
-      assert.equal(dirButton.textContent, 'Set Directory');
+      const dirButton = banner.querySelector(
+        '#agentConfigDirButton',
+      ) as HTMLElement;
+      assert.equal(dirButton.getAttribute('label'), 'Set Directory');
     });
 
     it('should warn when all elements are missing', () => {
@@ -457,9 +531,13 @@ describe('BannerManager', () => {
     it('should ensure re-check button exists', () => {
       const banner = dom.window.document.getElementById('dependencyBanner');
       manager.showBanner('dependencyBanner', { missingTools: [] });
-      const recheck = banner.querySelector('#dependencyRecheckButton');
+      const recheck = banner.querySelector(
+        '#dependencyRecheckButton',
+      ) as HTMLElement;
       assert.equal(recheck.tagName, 'VSCODE-TOOLBAR-BUTTON');
-      assert.equal(recheck.textContent, 'Re-check');
+      assert.equal(recheck.getAttribute('label'), 'Re-check');
+      assert.equal(recheck.getAttribute('aria-label'), 'Re-check dependencies');
+      assert.equal(recheck.getAttribute('title'), 'Re-check dependencies');
     });
   });
 
