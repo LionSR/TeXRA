@@ -251,6 +251,13 @@ export class MainViewState {
       state[id] = fileList.getSelected(elementDiv);
     });
 
+    const outputContainer = safeGetElementById(
+      ELEMENT_IDS.OUTPUT_FILES_CONTAINER,
+    );
+    state.outputFilesActive = Boolean(
+      outputContainer && outputContainer.style.display === 'block',
+    );
+
     const sessionTypeValue =
       state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
     const normalizedSessionType = normalizeSessionType(sessionTypeValue);
@@ -331,9 +338,32 @@ export class MainViewState {
       }
     });
 
+    if (isToolUseSession) {
+      this._resetOutputFilesForToolUse();
+    }
+
     if (!skipSave) {
       this.save();
     }
+  }
+
+  _resetOutputFilesForToolUse() {
+    fileList.empty(
+      ELEMENT_IDS.OUTPUT_FILES,
+      ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
+      false,
+    );
+
+    const container = safeGetElementById(ELEMENT_IDS.OUTPUT_FILES_CONTAINER);
+    if (container) {
+      container.style.display = 'none';
+    }
+
+    this.update({
+      outputFiles: [],
+      outputFilesVisible: false,
+      outputFilesActive: false,
+    });
   }
 }
 
