@@ -62,8 +62,8 @@ export interface ToolUseRunState<C = unknown> {
 }
 
 export interface ToolUseRunHooks<C = unknown> {
-  start(): Promise<string>;
-  init(runGroupId: string): Promise<void>;
+  start(): Promise<string | undefined>;
+  init(runGroupId: string | undefined): Promise<void>;
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];
@@ -87,6 +87,7 @@ export interface ToolUseRunHooks<C = unknown> {
   ): Promise<ProviderMessage[]>;
   end(status: 'stopped' | 'error'): Promise<void>;
   cleanup(): Promise<void>;
+  logFinalizeWarning?(message: string, error: unknown): void;
 }
 
 export interface ToolUseRunShared<C = unknown> {
@@ -214,15 +215,12 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
   async exec(shared: ToolUseRunShared<C>): Promise<ToolUseCycleExecResult> {
     const { hooks, state } = shared;
-
-    if (!state.cycleOptions) {
-      return { error: new Error('Tool-use cycle options are missing.') };
-    }
+    const cycleOptions = state.cycleOptions!;
 
     try {
       while (true) {
         if (!state.shouldSkipCycle) {
-          await hooks.runCycle(state.cycleOptions, state.messages);
+          await hooks.runCycle(cycleOptions, state.messages);
         } else {
           state.shouldSkipCycle = false;
         }
@@ -307,22 +305,38 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
     prepRes: ToolUseFinalizePrep<C>,
     execRes: ToolUseFinalizeExecResult,
   ): Promise<string | undefined> {
-    let error = shared.lifecycle.error;
+    const errors: unknown[] = [];
 
-    if (!error && execRes.snapshotError) {
-      error = execRes.snapshotError;
+    if (shared.lifecycle.error) {
+      errors.push(shared.lifecycle.error);
     }
 
-    if (!error && execRes.endError) {
-      error = execRes.endError;
+    if (execRes.snapshotError) {
+      errors.push(execRes.snapshotError);
     }
+
+    if (execRes.endError) {
+      errors.push(execRes.endError);
+    }
+
+    let error = errors[0];
 
     try {
       await prepRes.hooks.cleanup();
     } catch (cleanupError: unknown) {
+      errors.push(cleanupError);
       if (!error) {
         error = cleanupError;
       }
+    }
+
+    if (errors.length > 1) {
+      errors.slice(1).forEach((err) => {
+        prepRes.hooks.logFinalizeWarning?.(
+          'Additional finalize error encountered.',
+          err,
+        );
+      });
     }
 
     if (error) {
