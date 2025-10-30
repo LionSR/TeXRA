@@ -21,6 +21,13 @@ import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
 
 // Local imports - core
 import { BaseAgent } from './BaseAgent';
+import {
+  createToolUseRunFlow,
+  type ToolUseRunHooks,
+  type ToolUseRunLifecycle,
+  type ToolUseRunShared,
+  type ToolUseRunState,
+} from '@agent/implementations/flows/ToolUseRunFlow';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
@@ -147,128 +154,167 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public async run(): Promise<void> {
-    try {
-      await this.init(undefined, { createGroup: false });
-      await this.initializeClient();
+    const lifecycle: ToolUseRunLifecycle = {
+      phase: 'idle',
+      status: 'pending',
+      error: undefined,
+    };
 
-      let shouldSkipCycle = false;
-
-      if (this.resumeSnapshot) {
-        this.logger.debug('Resuming tool-use session from saved state.');
-        // Validate messages before hydrating
-        const messages = this.resumeSnapshot.messages ?? [];
-        if (!Array.isArray(messages)) {
-          throw new Error('Invalid snapshot: messages must be an array');
-        }
-        // Cast with confidence after validation
-        this.messages = messages as ProviderMessage[];
-        try {
-          this.toolState = ToolUseSessionManager.hydrateToolStateFromSnapshot(
-            this.resumeSnapshot,
-          );
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Unknown error while hydrating tool state';
-          this.logger.warn(
-            `Failed to hydrate tool state from snapshot: ${message}`,
-          );
-          // Snapshot hydration can fail if the saved payload is corrupted or
-          // originates from an outdated schema. Reset to a clean ToolState so
-          // the agent can continue operating without crashing.
-          this.toolState = new ToolState();
-        }
-        shouldSkipCycle = true;
-        this.resumeSnapshot = null;
-      } else {
-        const initialRequest = Array.isArray(this.agentPrompt.userRequest)
-          ? (this.agentPrompt.userRequest[0] ?? '')
-          : this.agentPrompt.userRequest;
-
-        const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-          getSystemPromptWithRules(
-            `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
-            this.userVars,
-          ),
-          renderPrompt(initialRequest, this.userVars),
-          renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-        ]);
-
-        this.messages = await this.modelHandler.initializeMessages(
-          userPrefix,
-          userRequest,
-          undefined,
-          systemPrompt,
-        );
-
-        this.toolState = new ToolState();
-      }
-
-      let toolState = this.toolState;
-      if (!toolState) {
-        this.logger.debug('Initializing fallback tool state instance.');
-        toolState = new ToolState();
-        this.toolState = toolState;
-      }
-
-      const resolvedSetting = {
-        ...this.agentSetting,
-        tools: this.getTools(),
-      };
-
-      const client = this.getClientInstance();
-      const cycleOptions: ToolUseCycleOptions<C> = {
-        modelHandler: this.modelHandler,
-        agentSetting: resolvedSetting,
-        agentPrompt: this.agentPrompt,
-        userVars: this.userVars,
-        logger: this.logger,
-        client,
-        toolRegistry: this.toolRegistry,
-        checkInterruption: () => this.checkInterruption(),
-        setAbortController: (ctrl: AbortController | null) => {
-          this.abortController = ctrl;
-        },
-        toolState,
-        modelName: this.agentConfig.model,
-      } as const;
-
-      while (true) {
-        if (!shouldSkipCycle) {
-          await runToolUseCycle({
-            options: cycleOptions,
-            messages: this.messages,
-          });
-        } else {
-          shouldSkipCycle = false;
-        }
-
-        if (this.checkInterruption()) break;
-
-        const hasQueuedFollowUp = this.followUpQueue.length > 0;
-        if (!hasQueuedFollowUp) {
-          await this.enterWaitingState();
-        } else {
-          await this.clearPersistedSnapshot();
-        }
-
-        const followUp = await this.waitForFollowUp();
-        if (!followUp || this.checkInterruption()) break;
-
-        await this.markRunning();
-        await this.clearPersistedSnapshot();
-
+    const hooks: ToolUseRunHooks<C> = {
+      start: async () => undefined,
+      init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
+      initializeClient: () => this.initializeClient(),
+      prepareState: () => this.prepareInitialSessionState(),
+      buildCycleOptions: (toolState) =>
+        this.buildToolUseCycleOptions(toolState),
+      runCycle: (options, messages) =>
+        runToolUseCycle({
+          options,
+          messages,
+        }),
+      checkInterruption: () => this.checkInterruption(),
+      hasQueuedFollowUp: () => this.followUpQueue.length > 0,
+      enterWaitingState: () => this.enterWaitingState(),
+      clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
+      waitForFollowUp: () => this.waitForFollowUp(),
+      markRunning: () => this.markRunning(),
+      applyFollowUp: async (followUp, messages) => {
         this.logger.userMessage(followUp);
-        this.messages = await this.modelHandler.createUserFollowUpMessages(
-          this.messages,
-          followUp,
-        );
-      }
-    } finally {
-      await this.clearPersistedSnapshot();
-      this.cleanup();
+        const updatedMessages =
+          await this.modelHandler.createUserFollowUpMessages(
+            messages,
+            followUp,
+          );
+        this.messages = updatedMessages;
+        return updatedMessages;
+      },
+      end: async (status) => {
+        this.endRunGroup(status);
+      },
+      cleanup: async () => {
+        this.cleanup();
+      },
+      logFinalizeWarning: (message, error) => {
+        this.logger.warn(message, undefined, undefined, error);
+      },
+    };
+
+    const shared: ToolUseRunShared<C> = {
+      agent: this,
+      state: {
+        messages: this.messages,
+        toolState: this.toolState,
+        cycleOptions: null,
+        shouldSkipCycle: false,
+      } satisfies ToolUseRunState<C>,
+      lifecycle,
+      hooks,
+    };
+
+    const flow = createToolUseRunFlow<C>();
+    await flow.run(shared);
+
+    if (shared.lifecycle.error) {
+      throw shared.lifecycle.error;
     }
+  }
+
+  private async prepareInitialSessionState(): Promise<{
+    messages: ProviderMessage[];
+    toolState: ToolState;
+    shouldSkipCycle: boolean;
+  }> {
+    if (this.resumeSnapshot) {
+      this.logger.debug('Resuming tool-use session from saved state.');
+      const snapshot = this.resumeSnapshot;
+      this.resumeSnapshot = null;
+
+      const rawMessages = snapshot.messages ?? [];
+      if (!Array.isArray(rawMessages)) {
+        throw new Error('Invalid snapshot: messages must be an array');
+      }
+
+      const messages = rawMessages as ProviderMessage[];
+      let toolState: ToolState;
+
+      try {
+        toolState =
+          ToolUseSessionManager.hydrateToolStateFromSnapshot(snapshot);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unknown error while hydrating tool state';
+        this.logger.warn(
+          `Failed to hydrate tool state from snapshot: ${message}`,
+        );
+        toolState = new ToolState();
+      }
+
+      this.messages = messages;
+      this.toolState = toolState;
+
+      return {
+        messages,
+        toolState,
+        shouldSkipCycle: true,
+      };
+    }
+
+    const initialRequest = Array.isArray(this.agentPrompt.userRequest)
+      ? (this.agentPrompt.userRequest[0] ?? '')
+      : this.agentPrompt.userRequest;
+
+    const [systemPrompt, userRequest, userPrefix] = await Promise.all([
+      getSystemPromptWithRules(
+        `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
+        this.userVars,
+      ),
+      renderPrompt(initialRequest, this.userVars),
+      renderPrompt(this.agentPrompt.userPrefix, this.userVars),
+    ]);
+
+    const messages = await this.modelHandler.initializeMessages(
+      userPrefix,
+      userRequest,
+      undefined,
+      systemPrompt,
+    );
+
+    const toolState = new ToolState();
+
+    this.messages = messages;
+    this.toolState = toolState;
+
+    return {
+      messages,
+      toolState,
+      shouldSkipCycle: false,
+    };
+  }
+
+  private buildToolUseCycleOptions(
+    toolState: ToolState,
+  ): ToolUseCycleOptions<C> {
+    const client = this.getClientInstance();
+    const resolvedSetting = {
+      ...this.agentSetting,
+      tools: this.getTools(),
+    };
+
+    const baseOptions = this.buildCycleBaseOptions({
+      agentSetting: resolvedSetting,
+      agentPrompt: this.agentPrompt,
+      client,
+    });
+
+    return {
+      ...baseOptions,
+      toolRegistry: this.toolRegistry,
+      toolState,
+      modelName: this.agentConfig.model,
+      executionId: this.executionId,
+    };
   }
 
   private async enterWaitingState(): Promise<void> {
