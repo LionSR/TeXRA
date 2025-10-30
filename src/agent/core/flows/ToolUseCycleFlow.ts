@@ -203,6 +203,8 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
+    // Reset at the start of each cycle so downstream nodes observe a clean
+    // runtime state before enriching it with model responses.
     resetToolUseState(state);
 
     await maybeSaveDebug(
@@ -214,6 +216,21 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     return undefined;
   }
+}
+
+function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (result.summary !== undefined) payload.summary = result.summary;
+  if (result.output !== undefined) payload.output = result.output;
+  if (result.error !== undefined) payload.error = result.error;
+  if (result.base64Image !== undefined)
+    payload.base64Image = result.base64Image;
+  if (result.system !== undefined) payload.system = result.system;
+  if (result.isError) payload.isError = true;
+  if (result.diagnostics !== undefined)
+    payload.diagnostics = result.diagnostics;
+  if (result.files !== undefined) payload.files = result.files;
+  return payload;
 }
 
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
@@ -429,10 +446,6 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     | { parsed: any; name: string; input: any; toolCallId: string }
     | ToolDispatchErrorResult
   > {
-    if (!context) {
-      throw new Error('ToolUseDispatchNode requires shared cycle context.');
-    }
-
     const { options, state } = context;
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
@@ -566,21 +579,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
             toolCallId,
             toolName,
             parsed,
-            (() => {
-              const payload: Record<string, unknown> = {};
-              if (result.summary !== undefined)
-                payload.summary = result.summary;
-              if (result.output !== undefined) payload.output = result.output;
-              if (result.error !== undefined) payload.error = result.error;
-              if (result.base64Image !== undefined)
-                payload.base64Image = result.base64Image;
-              if (result.system !== undefined) payload.system = result.system;
-              if (result.isError) payload.isError = true;
-              if (result.diagnostics !== undefined)
-                payload.diagnostics = result.diagnostics;
-              if (result.files !== undefined) payload.files = result.files;
-              return payload;
-            })(),
+            buildToolResultPayload(result),
             state.toolState,
             state.text ?? '',
           );
@@ -673,20 +672,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         execRes.toolCallId,
         execRes.name,
         execRes.parsed,
-        (() => {
-          const payload: Record<string, unknown> = {};
-          if (result.summary !== undefined) payload.summary = result.summary;
-          if (result.output !== undefined) payload.output = result.output;
-          if (result.error !== undefined) payload.error = result.error;
-          if (result.base64Image !== undefined)
-            payload.base64Image = result.base64Image;
-          if (result.system !== undefined) payload.system = result.system;
-          if (result.isError) payload.isError = true;
-          if (result.diagnostics !== undefined)
-            payload.diagnostics = result.diagnostics;
-          if (result.files !== undefined) payload.files = result.files;
-          return payload;
-        })(),
+        buildToolResultPayload(result),
         state.toolState,
         state.text ?? '',
       );
