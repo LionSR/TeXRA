@@ -11,3 +11,7 @@ declare module '@webview/modules/mainViewState.js' {
 declare module '@webview/modules/state/currentContext.js' {
   export function collectCurrentContext(options?: any): any;
 }
+
+declare module '@webview/modules/uiManagers/FileList.js' {
+  export const fileList: any;
+}
