@@ -96,6 +96,10 @@ export function collectCurrentContext(options = {}) {
     singleFileSelections,
     fileList,
   );
+  if (sessionType === SESSION_TYPES.TOOL_USE) {
+    delete multipleFileSelections[`${ELEMENT_IDS.OUTPUT_FILES}Active`];
+    delete multipleFileSelections[ELEMENT_IDS.OUTPUT_FILES];
+  }
   const checkboxValues = collectCheckboxValues();
 
   return {
