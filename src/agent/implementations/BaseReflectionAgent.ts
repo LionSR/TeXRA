@@ -363,19 +363,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private createResponseCycleOptions(): ResponseCycleOptions<C> {
     const client = this.getClientInstance();
-    return {
-      modelHandler: this.modelHandler,
+    const baseOptions = this.buildCycleBaseOptions({
       agentSetting: this.agentSetting,
-      agentConfig: this.agentConfig,
       agentPrompt: this.agentPrompt,
-      userVars: this.userVars,
-      logger: this.logger,
       client,
-      checkInterruption: () => this.checkInterruption(),
-      setAbortController: (ctrl) => {
-        this.abortController = ctrl;
-      },
-    } as const;
+    });
+
+    return {
+      ...baseOptions,
+      agentConfig: this.agentConfig,
+    };
   }
 
   private async prepareRoundContext(
