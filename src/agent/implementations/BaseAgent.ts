@@ -98,13 +98,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.client;
   }
 
-  protected buildCycleBaseOptions<S extends AgentSetting>(
-    params: {
-      agentSetting: S;
-      agentPrompt: AgentPrompt;
-      client: C;
-    },
-  ): AgentCycleBaseOptions<C> {
+  protected buildCycleBaseOptions<S extends AgentSetting>(params: {
+    agentSetting: S;
+    agentPrompt: AgentPrompt;
+    client: C;
+  }): AgentCycleBaseOptions<C> {
     const { agentSetting, agentPrompt, client } = params;
     return {
       modelHandler: this.modelHandler,
