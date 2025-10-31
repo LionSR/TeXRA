@@ -179,7 +179,7 @@ export async function handleFixLinterIssues(
 
     await executeAgent({
       agent: 'tex_linter_fix',
-      model: 'claude-3-7-sonnet-latest',
+      model: 'claude-4-5-sonnet-4-5-latest',
       inputFile: relativePath,
     });
   } catch (err) {
