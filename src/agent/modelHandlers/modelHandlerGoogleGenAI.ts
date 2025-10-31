@@ -17,10 +17,12 @@ import {
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
+  createFunctionResponsePartFromBase64,
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
   type UploadFileParameters,
+  type FunctionResponsePart,
 } from '@google/genai';
 
 // Local imports - agent
@@ -52,6 +54,7 @@ import type { ToolDefinition } from '@model';
 import {
   describeAttachments,
   extractToolAttachments,
+  loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
@@ -1127,16 +1130,62 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Use the same ID for the result to maintain correlation
     const { attachments, sanitizedResult } = extractToolAttachments(result);
+    let responseParts: FunctionResponsePart[] = [];
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to download them.`;
+        `Attachments available:\n${describeAttachments(attachments).join('\n')}`;
+
+      const encodedParts = await Promise.all(
+        attachments.map(async (attachment) => {
+          try {
+            const buffer = await loadAttachmentBuffer(attachment);
+            if (!buffer || buffer.length === 0) {
+              this.logger.warn(
+                `Skipping empty attachment '${attachment.path}' in Google function response.`,
+              );
+              return null;
+            }
+
+            const base64Payload = buffer.toString('base64');
+            if (!base64Payload) {
+              this.logger.warn(
+                `Skipping attachment '${attachment.path}' with no encodable payload.`,
+              );
+              return null;
+            }
+
+            const mimeType =
+              typeof attachment.mimeType === 'string' &&
+              attachment.mimeType.length > 0
+                ? attachment.mimeType
+                : 'application/octet-stream';
+
+            return createFunctionResponsePartFromBase64(
+              base64Payload,
+              mimeType,
+            );
+          } catch (attachmentError) {
+            const message =
+              attachmentError instanceof Error
+                ? attachmentError.message
+                : String(attachmentError);
+            this.logger.warn(
+              `Failed to encode attachment '${attachment.path}' for Google function response: ${message}`,
+            );
+            return null;
+          }
+        }),
+      );
+
+      responseParts = encodedParts.filter(
+        (part): part is FunctionResponsePart => Boolean(part),
+      );
     }
     const resultPart = createPartFromFunctionResponse(
       callId,
       functionName,
       sanitizedResult,
+      responseParts.length > 0 ? responseParts : undefined,
     );
     const callParts: Part[] = [];
     if (text) {
