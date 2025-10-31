@@ -12,6 +12,7 @@ import type { ProgressEventBusLike } from './types';
 
 // Local imports - logger
 import type { LogMessageUpdate } from '@logger/LogTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -46,6 +47,10 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         return;
       }
 
+      if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) {
+        return;
+      }
+
       state.streamTabs.addMessage(stream, logMessage);
 
       if (updater.isAvailable()) {
@@ -67,6 +72,13 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing) return;
+
+      if (
+        existing.messageType === MESSAGE_TYPES.INTERNAL ||
+        logMessage.messageType === MESSAGE_TYPES.INTERNAL
+      ) {
+        return;
+      }
 
       if (logMessage.text !== undefined) {
         existing.text = logMessage.text;
