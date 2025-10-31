@@ -12,14 +12,14 @@ import type {
   BetaMessage,
   BetaRequestDocumentBlock,
   BetaTextBlockParam,
+  MessageCountTokensParams,
+  MessageCreateParams,
   BetaToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
-import {
+import type {
   MessageParam,
   ContentBlock,
   ContentBlockParam,
-  MessageCreateParams,
-  MessageCountTokensParams,
   ToolUseBlock,
   TextBlockParam,
   ImageBlockParam,
@@ -96,16 +96,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
-
-// The new implicit prompt caching is worth checking out (can eliminate many controls of previous caching)
-type BetaMessageCreateParams = MessageCreateParams & {
-  betas?: AnthropicBeta[];
-  context_management?: BetaContextManagementConfig | null;
-};
-type BetaMessageCountTokensParams = MessageCountTokensParams & {
-  betas?: AnthropicBeta[];
-  context_management?: BetaContextManagementConfig | null;
-};
 
 const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
 const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
@@ -250,7 +240,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     let hasFileReference = documentAnalysis.hasFileSource;
 
     // Prepare options for the API call
-    const options: BetaMessageCreateParams = {
+    const options: MessageCreateParams = {
       model: this.config.fullName,
       max_tokens: this.config.maxOutputTokens,
       messages,
@@ -325,7 +315,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
         );
       } else {
-        const countTokensParams: BetaMessageCountTokensParams = {
+        const countTokensParams: MessageCountTokensParams = {
           model: this.config.fullName,
           system: systemPrompt,
           messages,
