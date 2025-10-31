@@ -21,7 +21,6 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - Return PDFs and common image formats from the `read_file` tool as native attachments with model guidance so binary files are no longer streamed as corrupted text.
-- Sanitize Google Gemini tool-call payloads by stripping unsupported identifiers and synthesizing missing call IDs, eliminating the "missing call_id" errors seen in follow-up runs.
 
 ## [0.34.1] - 2025-10-24
 
