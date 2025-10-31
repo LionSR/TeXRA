@@ -29,7 +29,7 @@ import {
   type ToolUseRunState,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
-import type { AgentRunBaseHooks } from '@agent/implementations/flows/common/types';
+import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
@@ -179,7 +179,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           shouldSkipCycle: false,
         }) satisfies ToolUseRunState<C>,
       createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunBaseHooks) => ({
+      extendHooks: (baseHooks: AgentRunHooks) => ({
         ...baseHooks,
         start: async () => undefined,
         init: (runGroupId) => this.init(runGroupId, { createGroup: false }),

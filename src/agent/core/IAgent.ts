@@ -43,4 +43,22 @@ export interface IAgent {
    * Return the most recent run group identifier for logging fallbacks.
    */
   getLastRunGroupId(): string | undefined;
+
+  /**
+   * Retrieve the hooks used to orchestrate an agent run.
+   *
+   * @param overrides - Optional overrides for default hook implementations.
+   */
+  getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
+}
+
+/**
+ * Core hook contract used to orchestrate agent runs.
+ */
+export interface AgentRunHooks {
+  start(): Promise<string | undefined>;
+  init(runGroupId: string | undefined): Promise<void>;
+  initializeClient(): Promise<void>;
+  end(status: 'stopped' | 'error'): void | Promise<void>;
+  cleanup(): void | Promise<void>;
 }

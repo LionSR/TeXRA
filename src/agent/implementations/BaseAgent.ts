@@ -7,7 +7,7 @@ import {
   resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
-import { IAgent } from '../core/IAgent';
+import { IAgent, type AgentRunHooks } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
@@ -295,6 +295,25 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected cleanup(): void {
     const streamTabId = this.getStreamTabId();
     this.unregisterRunningAgent(streamTabId);
+  }
+
+  public getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks {
+    const baseHooks: AgentRunHooks = {
+      start: () => this.startRunGroup(),
+      init: (runGroupId) => this.init(runGroupId),
+      initializeClient: () => this.initializeClient(),
+      end: (status) => this.endRunGroup(status),
+      cleanup: () => this.cleanup(),
+    };
+
+    return {
+      start: overrides?.start ?? baseHooks.start,
+      init: overrides?.init ?? baseHooks.init,
+      initializeClient:
+        overrides?.initializeClient ?? baseHooks.initializeClient,
+      end: overrides?.end ?? baseHooks.end,
+      cleanup: overrides?.cleanup ?? baseHooks.cleanup,
+    };
   }
 
   protected registerRunningAgent(streamTabId: StreamTabId): void {
