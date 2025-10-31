@@ -2,7 +2,12 @@
 import { strict as assert } from 'assert';
 
 // Third-party imports
-import type { File, Part, UploadFileParameters } from '@google/genai';
+import type {
+  File,
+  Part,
+  UploadFileParameters,
+  FunctionCall,
+} from '@google/genai';
 import { createPartFromUri } from '@google/genai';
 
 // Local imports - agent
@@ -360,5 +365,71 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     assert.equal(uploadedEntries.length, 1, 'uploads should run once');
     assert.equal(uploadedEntries[0][0].file_name, 'doc.pdf');
     assert.equal(stub.fileListEntries.length, 1, 'should log processed media');
+  });
+});
+
+describe('ModelHandlerGoogleGenAI tool attachments', () => {
+  it('embeds tool attachments into function response parts', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const attachmentBytes = new Uint8Array([1, 2, 3, 4]);
+    const toolResult: Record<string, unknown> = {
+      output: 'generated figures',
+      files: [
+        {
+          path: 'figures/plot.png',
+          mimeType: 'image/png',
+          bytes: attachmentBytes,
+          description: 'Plot preview',
+        },
+      ],
+    };
+
+    const functionCall: FunctionCall = {
+      name: 'extract_figures',
+      args: { source: 'doc.tex' },
+    };
+
+    const messages = await handler.createToolUseFollowUpMessages(
+      undefined,
+      'call-123',
+      'extract_figures',
+      functionCall,
+      toolResult,
+    );
+
+    assert.equal(messages.length, 2, 'should produce call and response messages');
+
+    const responseParts = messages[1].parts ?? [];
+    assert.equal(responseParts.length, 1, 'response should contain a single part');
+    const [responsePart] = responseParts;
+
+    const functionResponse = responsePart.functionResponse;
+    assert(functionResponse, 'response part should include functionResponse payload');
+
+    const sanitizedResponse = functionResponse.response as Record<string, unknown>;
+    const attachmentSummary = sanitizedResponse.attachmentSummary as string;
+    assert(attachmentSummary, 'attachment summary should be present on sanitized response');
+    assert(!attachmentSummary.includes('read_file'));
+
+    const files = sanitizedResponse.files as Array<Record<string, unknown>>;
+    assert.deepEqual(files, [
+      {
+        path: 'figures/plot.png',
+        mimeType: 'image/png',
+        description: 'Plot preview',
+      },
+    ]);
+
+    const functionResponseParts = functionResponse?.parts ?? [];
+    assert.equal(functionResponseParts.length, 1, 'should include encoded attachment');
+    const [attachmentPart] = functionResponseParts;
+    assert.equal(attachmentPart.inlineData?.mimeType, 'image/png');
+    assert.equal(
+      attachmentPart.inlineData?.data,
+      Buffer.from(attachmentBytes).toString('base64'),
+    );
   });
 });
