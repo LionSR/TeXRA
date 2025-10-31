@@ -4,16 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Bug Fixes
+- No changes yet.
 
-- Prevent repeated-response suppression from mutating internal tool state so follow-up connectors stay aligned with written output.
-- Ensure Google Gemini tool calls synthesize stable identifiers so tool-use runs no longer spam "missing call_id" errors.
-- Strip unsupported Gemini tool-call identifiers from follow-up history and fix tool dispatch context typing so orchestration errors surface immediately instead of silently skipping tool runs.
-- Return PDFs and common image formats from the `read_file` tool as native attachments with guidance for models that cannot display binary results, preventing corrupted text output.
+## [0.34.2] - 2025-10-27
+
+### Features
+
+- Redesigned the Progress Board with a resizable split layout, a persistent instruction panel with copy support, and inline follow-up controls for polishing, recording, clearing, or sending responses without leaving the log view.
+- Streamlined the main command view with toolbar-based file pickers, context-menu toggles that close when clicking elsewhere, and a radio-group session selector to switch between workflow and chat agents faster.
 
 ### Improvements
 
-- Format `read_file` text responses with `cat -n` style line numbers and update edit guidance so downstream tools can target exact content reliably.
+- Format `read_file` text responses with padded line numbers, extend ranged reads to 2,000 lines, and report when callers request windows beyond the file length for easier downstream edits.
+- Expand LaTeX cleanup to convert common HTML entities, remove invalid section endings, and expand legacy equation macros into full environments for cleaner compiled documents.
+
+### Bug Fixes
+
+- Return PDFs and common image formats from the `read_file` tool as native attachments with model guidance so binary files are no longer streamed as corrupted text.
+- Sanitize Google Gemini tool-call payloads by stripping unsupported identifiers and synthesizing missing call IDs, eliminating the "missing call_id" errors seen in follow-up runs.
 
 ## [0.34.1] - 2025-10-24
 
