@@ -225,11 +225,32 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
           const fullContentParts: string[] = [];
           const reasoningParts: string[] = [];
-          const aggregatedToolCalls: Array<{
-            id: string;
-            type?: string;
-            function?: { name?: string; arguments?: string };
-          }> = [];
+          const aggregatedToolCalls: ChatCompletionMessageToolCall[] = [];
+          type FunctionToolCall = Extract<
+            ChatCompletionMessageToolCall,
+            { type: 'function' }
+          >;
+          type ToolFunction = FunctionToolCall['function'];
+          const createEmptyToolFunction = (): ToolFunction => ({
+            name: '',
+            arguments: '',
+          });
+          const ensureFunctionToolCall = (
+            existing: ChatCompletionMessageToolCall | undefined,
+          ): FunctionToolCall => {
+            if (existing?.type === 'function') {
+              return existing;
+            }
+
+            return {
+              id: existing?.id ?? '',
+              type: 'function',
+              function: createEmptyToolFunction(),
+            };
+          };
+          const isFunctionToolCall = (
+            call: ChatCompletionMessageToolCall,
+          ): call is FunctionToolCall => call.type === 'function';
           let aggregatedFunctionCall: {
             name: string;
             arguments: string;
@@ -267,24 +288,16 @@ export class ModelHandlerOpenAI extends ModelHandler<
                     ? toolCallChunk.index
                     : 0;
                 while (aggregatedToolCalls.length <= index) {
-                  aggregatedToolCalls.push({
-                    id: '',
-                    type: 'function',
-                    function: { name: '', arguments: '' },
-                  });
+                  aggregatedToolCalls.push(ensureFunctionToolCall(undefined));
                 }
-                const target = aggregatedToolCalls[index];
+
+                const target = ensureFunctionToolCall(
+                  aggregatedToolCalls[index],
+                );
                 target.id = appendStringValue(target.id, toolCallChunk.id);
-                if (toolCallChunk.type) {
-                  target.type = toolCallChunk.type;
-                }
+
                 if (toolCallChunk.function) {
-                  const targetFunction =
-                    target.function ??
-                    (target.function = {
-                      name: '',
-                      arguments: '',
-                    });
+                  const targetFunction = target.function;
                   targetFunction.name = appendStringValue(
                     targetFunction.name,
                     toolCallChunk.function.name,
@@ -294,6 +307,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
                     toolCallChunk.function.arguments,
                   );
                 }
+
+                aggregatedToolCalls[index] = target;
               }
             }
 
@@ -320,13 +335,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
           const normalizedToolCalls = aggregatedToolCalls.filter((call) => {
             const hasId = typeof call.id === 'string' && call.id.length > 0;
-            const hasName =
-              typeof call.function?.name === 'string' &&
-              call.function.name.length > 0;
-            const hasArgs =
-              typeof call.function?.arguments === 'string' &&
-              call.function.arguments.length > 0;
-            return hasId || hasName || hasArgs;
+            if (isFunctionToolCall(call)) {
+              const hasName =
+                typeof call.function.name === 'string' &&
+                call.function.name.length > 0;
+              const hasArgs =
+                typeof call.function.arguments === 'string' &&
+                call.function.arguments.length > 0;
+              return hasId || hasName || hasArgs;
+            }
+
+            return hasId;
           });
 
           const finalMessage: Record<string, unknown> = {
