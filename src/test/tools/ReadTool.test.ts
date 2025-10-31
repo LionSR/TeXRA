@@ -93,10 +93,7 @@ suite('ReadFileTool', () => {
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, rangeEnd - rangeStart + 1);
     assert.strictEqual(outputLines[0], `row ${rangeStart}`);
-    assert.strictEqual(
-      outputLines[outputLines.length - 1],
-      `row ${rangeEnd}`,
-    );
+    assert.strictEqual(outputLines[outputLines.length - 1], `row ${rangeEnd}`);
   });
 
   test('notes when requested range exceeds file length', async () => {
