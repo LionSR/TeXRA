@@ -15,9 +15,6 @@ import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 // Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-// Local imports - identifier types
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-
 // Local imports - agent configuration
 import type { AgentConfig } from './AgentConfig';
 
@@ -33,8 +30,6 @@ export interface ResponseCycleContext<C = unknown> {
   stateGlobal: AgentStateGlobal;
   toolState: ToolState;
   outputFile: string;
-  roundGroupId?: string;
-  executionId?: ExecutionId;
 }
 
 export interface ResponseCycleResult {
@@ -55,8 +50,6 @@ export async function runResponseCycle<C = unknown>(
       stateGlobal: context.stateGlobal,
       toolState: context.toolState,
       outputFile: context.outputFile,
-      roundGroupId: context.roundGroupId,
-      executionId: context.executionId,
       endTurn: false,
       shouldStop: false,
       outputExists: false,
