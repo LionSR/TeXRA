@@ -225,7 +225,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
           const fullContentParts: string[] = [];
           const reasoningParts: string[] = [];
-          const aggregatedToolCalls: ChatCompletionMessageToolCall[] = [];
+          const aggregatedToolCalls: Array<
+            ChatCompletionMessageToolCall | undefined
+          > = [];
           type FunctionToolCall = Extract<
             ChatCompletionMessageToolCall,
             { type: 'function' }
@@ -249,8 +251,65 @@ export class ModelHandlerOpenAI extends ModelHandler<
             };
           };
           const isFunctionToolCall = (
-            call: ChatCompletionMessageToolCall,
-          ): call is FunctionToolCall => call.type === 'function';
+            call: ChatCompletionMessageToolCall | undefined,
+          ): call is FunctionToolCall => call?.type === 'function';
+          const mergeNonFunctionToolCall = (
+            existing: ChatCompletionMessageToolCall | undefined,
+            chunk: any,
+          ): ChatCompletionMessageToolCall | undefined => {
+            const prior =
+              existing && existing.type !== 'function' ? existing : undefined;
+            const merged: Record<string, unknown> = {
+              ...(prior ?? {}),
+            };
+
+            if (chunk && typeof chunk === 'object') {
+              for (const [key, value] of Object.entries(chunk)) {
+                if (key === 'index') {
+                  continue;
+                }
+                if (key === 'id') {
+                  const previousId =
+                    typeof merged.id === 'string' ? (merged.id as string) : '';
+                  merged.id = appendStringValue(previousId, value);
+                  continue;
+                }
+
+                merged[key] = value;
+              }
+            }
+
+            if (typeof merged.id !== 'string') {
+              const priorId = typeof prior?.id === 'string' ? prior.id : '';
+              const chunkId = typeof chunk?.id === 'string' ? chunk.id : '';
+              const combinedId = appendStringValue(priorId, chunkId);
+              if (combinedId.length > 0) {
+                merged.id = combinedId;
+              }
+            }
+
+            if (typeof merged.type !== 'string') {
+              if (typeof chunk?.type === 'string') {
+                merged.type = chunk.type;
+              } else if (typeof prior?.type === 'string') {
+                merged.type = prior.type;
+              }
+            }
+
+            if (merged.type !== 'function' && 'function' in merged) {
+              delete merged.function;
+            }
+
+            if (typeof merged.type !== 'string') {
+              return prior;
+            }
+
+            if (typeof merged.id !== 'string') {
+              merged.id = '';
+            }
+
+            return merged as unknown as ChatCompletionMessageToolCall;
+          };
           let aggregatedFunctionCall: {
             name: string;
             arguments: string;
@@ -288,27 +347,41 @@ export class ModelHandlerOpenAI extends ModelHandler<
                     ? toolCallChunk.index
                     : 0;
                 while (aggregatedToolCalls.length <= index) {
-                  aggregatedToolCalls.push(ensureFunctionToolCall(undefined));
+                  aggregatedToolCalls.push(undefined);
                 }
 
-                const target = ensureFunctionToolCall(
-                  aggregatedToolCalls[index],
-                );
-                target.id = appendStringValue(target.id, toolCallChunk.id);
+                const existingToolCall = aggregatedToolCalls[index];
+                if (
+                  toolCallChunk.type === 'function' ||
+                  isFunctionToolCall(existingToolCall)
+                ) {
+                  const target = ensureFunctionToolCall(existingToolCall);
+                  target.id = appendStringValue(target.id, toolCallChunk.id);
 
-                if (toolCallChunk.function) {
-                  const targetFunction = target.function;
-                  targetFunction.name = appendStringValue(
-                    targetFunction.name,
-                    toolCallChunk.function.name,
+                  if (toolCallChunk.function) {
+                    const targetFunction = target.function;
+                    targetFunction.name = appendStringValue(
+                      targetFunction.name,
+                      toolCallChunk.function.name,
+                    );
+                    targetFunction.arguments = appendStringValue(
+                      targetFunction.arguments,
+                      toolCallChunk.function.arguments,
+                    );
+                  }
+
+                  if (target !== existingToolCall) {
+                    aggregatedToolCalls[index] = target;
+                  }
+                } else {
+                  const mergedCall = mergeNonFunctionToolCall(
+                    existingToolCall,
+                    toolCallChunk,
                   );
-                  targetFunction.arguments = appendStringValue(
-                    targetFunction.arguments,
-                    toolCallChunk.function.arguments,
-                  );
+                  if (mergedCall) {
+                    aggregatedToolCalls[index] = mergedCall;
+                  }
                 }
-
-                aggregatedToolCalls[index] = target;
               }
             }
 
@@ -333,20 +406,26 @@ export class ModelHandlerOpenAI extends ModelHandler<
           const fullContent = fullContentParts.join('');
           const reasoning = reasoningParts.join('');
 
-          const normalizedToolCalls = aggregatedToolCalls.filter((call) => {
-            const hasId = typeof call.id === 'string' && call.id.length > 0;
-            if (isFunctionToolCall(call)) {
-              const hasName =
-                typeof call.function.name === 'string' &&
-                call.function.name.length > 0;
-              const hasArgs =
-                typeof call.function.arguments === 'string' &&
-                call.function.arguments.length > 0;
-              return hasId || hasName || hasArgs;
-            }
+          const normalizedToolCalls = aggregatedToolCalls.filter(
+            (call): call is ChatCompletionMessageToolCall => {
+              if (!call) {
+                return false;
+              }
 
-            return hasId;
-          });
+              const hasId = typeof call.id === 'string' && call.id.length > 0;
+              if (isFunctionToolCall(call)) {
+                const hasName =
+                  typeof call.function.name === 'string' &&
+                  call.function.name.length > 0;
+                const hasArgs =
+                  typeof call.function.arguments === 'string' &&
+                  call.function.arguments.length > 0;
+                return hasId || hasName || hasArgs;
+              }
+
+              return hasId;
+            },
+          );
 
           const finalMessage: Record<string, unknown> = {
             role: role ?? 'assistant',
