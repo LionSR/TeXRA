@@ -45,7 +45,6 @@ interface DebugContext {
   logger: ResponseCycleOptions['logger'];
   modelName: string;
   executionId?: ExecutionId;
-  groupId?: string;
 }
 
 interface DebugFileOptions {
@@ -77,8 +76,6 @@ export interface ResponseCycleInputState {
   stateGlobal: AgentStateGlobal;
   toolState: ToolState;
   outputFile: string;
-  roundGroupId?: string;
-  executionId?: ExecutionId;
 }
 
 export interface ResponseCycleRuntimeState {
@@ -142,8 +139,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       : {
           logger,
           modelName: agentConfig.model,
-          executionId: cycle.executionId,
-          groupId: cycle.roundGroupId,
+          executionId: options.executionId,
         };
 
     const debugFileOptions: DebugFileOptions | undefined = interrupted
@@ -218,6 +214,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.modelHandler.setOutputStreaming(false);
 
     let response: unknown;
+    const groupId = options.logger.getActiveGroupId();
+
     try {
       response = await options.modelHandler.createResponse(
         options.client,
@@ -235,7 +233,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         error instanceof Error
           ? `Model invocation failed: ${error.message}`
           : 'Model invocation failed with an unknown error';
-      options.logger.error(message, cycle.roundGroupId);
+      options.logger.error(message, groupId);
       cycle.shouldStop = true;
       cycle.endTurn = false;
       throw error;
@@ -256,6 +254,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
+    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
@@ -275,7 +274,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (!execRes.response) {
       options.logger.warn(
         'Model response was aborted or returned no data; output may be incomplete.',
-        cycle.roundGroupId,
+        groupId,
       );
       cycle.endTurn = false;
       cycle.shouldStop = true;
@@ -323,10 +322,12 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         options.agentSetting.endTag,
       );
 
+    const groupId = options.logger.getActiveGroupId();
+
     if (newResponse) {
       options.logger.debug(
         `Model response: ${newResponse.slice(0, 100)}`,
-        cycle.roundGroupId,
+        groupId,
       );
     }
 
@@ -334,19 +335,19 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       cycle.stateRound.updateResponseTime(cycle.responseTime);
       options.logger.debug(
         `Response time: ${cycle.responseTime.toFixed(2)}s`,
-        cycle.roundGroupId,
+        groupId,
       );
     }
 
-    options.logger.debug(`Stop reason: ${stopReason}`, cycle.roundGroupId);
+    options.logger.debug(`Stop reason: ${stopReason}`, groupId);
     options.logger.debug(
       `Token usage: ${JSON.stringify(responseUsage)}`,
-      cycle.roundGroupId,
+      groupId,
     );
 
     const thinkingContent = options.modelHandler.processThinkingBlock(
       cycle.responseObject,
-      cycle.roundGroupId,
+      groupId,
       cycle.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
@@ -356,7 +357,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       if (formatted.trim().length > 0) {
         options.logger.info(
           formatted,
-          cycle.roundGroupId,
+          groupId,
           MESSAGE_TYPES.THINKING,
         );
       }
@@ -369,7 +370,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (scratchpad) {
       options.logger.info(
         scratchpad,
-        cycle.roundGroupId,
+        groupId,
         MESSAGE_TYPES.SCRATCHPAD,
       );
     }
@@ -378,7 +379,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       const formattedResponse = await xmlUtils.formatContent(newResponse);
       options.logger.info(
         formattedResponse,
-        cycle.roundGroupId,
+        groupId,
         MESSAGE_TYPES.INTERNAL,
       );
     }
@@ -396,22 +397,22 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     );
 
     if (repetitionResult.massiveRepetitionDetected && newResponse) {
-      options.logger.error(
-        `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-        cycle.roundGroupId,
-      );
-      options.logger.error(
-        'Massive repetition detected - skipping this response',
-        cycle.roundGroupId,
-      );
-      options.logger.error(
-        'Message structure when repetition detected:',
-        cycle.roundGroupId,
-      );
-      options.logger.error(
-        JSON.stringify(messageToSkeleton(cycle.messages), null, 2),
-        cycle.roundGroupId,
-      );
+        options.logger.error(
+          `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
+          groupId,
+        );
+        options.logger.error(
+          'Massive repetition detected - skipping this response',
+          groupId,
+        );
+        options.logger.error(
+          'Message structure when repetition detected:',
+          groupId,
+        );
+        options.logger.error(
+          JSON.stringify(messageToSkeleton(cycle.messages), null, 2),
+          groupId,
+        );
     }
 
     let processedResponse: string | undefined;
@@ -453,6 +454,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
+    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
@@ -471,14 +473,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (!cycle.outputExists) {
       options.logger.debug(
         `Creating new file: ${cycle.outputFile}`,
-        cycle.roundGroupId,
+        groupId,
       );
       await WorkspaceFS.write(cycle.outputFile, execRes.processedResponse);
       cycle.outputExists = true;
     } else {
       options.logger.debug(
         `Appending to existing file: ${cycle.outputFile}`,
-        cycle.roundGroupId,
+        groupId,
       );
       await WorkspaceFS.appendFile(
         cycle.outputFile,
@@ -486,14 +488,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       );
     }
 
-    options.logger.debug('Response preview:', cycle.roundGroupId);
+    options.logger.debug('Response preview:', groupId);
     options.logger.debug(
       `First ${K_SLICE} chars:\n${execRes.processedResponse.slice(0, K_SLICE)}`,
-      cycle.roundGroupId,
+      groupId,
     );
     options.logger.debug(
       `Last ${K_SLICE} chars:\n${execRes.processedResponse.slice(-K_SLICE)}`,
-      cycle.roundGroupId,
+      groupId,
     );
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
@@ -567,6 +569,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       | { skipped: true },
   ): Promise<string | undefined> {
     const { options, cycle } = prepRes;
+    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
@@ -584,7 +587,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     cycle.stateRound.incrementContinuation();
     options.logger.info(
       `Starting continuation #${cycle.stateRound.continuationCount}`,
-      cycle.roundGroupId,
+      groupId,
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
@@ -594,7 +597,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     options.logger.debug(
       'Should continue - adding continuation message to conversation',
-      cycle.roundGroupId,
+      groupId,
     );
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {

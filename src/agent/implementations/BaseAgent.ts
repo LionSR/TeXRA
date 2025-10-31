@@ -115,6 +115,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       setAbortController: (ctrl) => {
         this.abortController = ctrl;
       },
+      executionId: this.executionId,
     };
   }
 
