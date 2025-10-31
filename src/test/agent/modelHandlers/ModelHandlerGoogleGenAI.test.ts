@@ -369,7 +369,7 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 });
 
 describe('ModelHandlerGoogleGenAI tool attachments', () => {
-  it('embeds tool attachments into function response parts', async () => {
+  it('appends tool attachments as inline data parts', async () => {
     const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
     const { logger } = createLoggerStub();
     handler.setLogger(logger);
@@ -409,10 +409,10 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
     const responseParts = messages[1].parts ?? [];
     assert.equal(
       responseParts.length,
-      1,
-      'response should contain a single part',
+      2,
+      'response should contain function response and attachment parts',
     );
-    const [responsePart] = responseParts;
+    const [responsePart, attachmentPart] = responseParts;
 
     const functionResponse = responsePart.functionResponse;
     assert(
@@ -440,13 +440,11 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       },
     ]);
 
-    const functionResponseParts = functionResponse?.parts ?? [];
-    assert.equal(
-      functionResponseParts.length,
-      1,
-      'should include encoded attachment',
+    assert(
+      !functionResponse?.parts,
+      'function response should not embed parts',
     );
-    const [attachmentPart] = functionResponseParts;
+
     assert.equal(attachmentPart.inlineData?.mimeType, 'image/png');
     assert.equal(
       attachmentPart.inlineData?.data,
