@@ -160,63 +160,62 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       error: undefined,
     };
 
-    const hooks: ToolUseRunHooks<C> = {
-      start: async () => undefined,
-      init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
-      initializeClient: () => this.initializeClient(),
-      prepareState: () => this.prepareInitialSessionState(),
-      buildCycleOptions: (toolState) =>
-        this.buildToolUseCycleOptions(toolState),
-      runCycle: (options, messages) =>
-        runToolUseCycle({
-          options,
-          messages,
-        }),
-      checkInterruption: () => this.checkInterruption(),
-      hasQueuedFollowUp: () => this.followUpQueue.length > 0,
-      enterWaitingState: () => this.enterWaitingState(),
-      clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-      waitForFollowUp: () => this.waitForFollowUp(),
-      markRunning: () => this.markRunning(),
-      applyFollowUp: async (followUp, messages) => {
-        this.logger.userMessage(followUp);
-        const updatedMessages =
-          await this.modelHandler.createUserFollowUpMessages(
-            messages,
-            followUp,
-          );
-        this.messages = updatedMessages;
-        return updatedMessages;
-      },
-      end: async (status) => {
-        this.endRunGroup(status);
-      },
-      cleanup: async () => {
-        this.cleanup();
-      },
-      logFinalizeWarning: (message, error) => {
-        this.logger.warn(message, undefined, undefined, error);
-      },
-    };
-
-    const shared: ToolUseRunShared<C> = {
+    await runAgentFlow<
+      BaseToolUseAgent<C>,
+      ToolUseRunState<C>,
+      ToolUseRunLifecycle,
+      ToolUseRunHooks<C>,
+      ToolUseRunShared<C>
+    >({
       agent: this,
-      state: {
-        messages: this.messages,
-        toolState: this.toolState,
-        cycleOptions: null,
-        shouldSkipCycle: false,
-      } satisfies ToolUseRunState<C>,
       lifecycle,
-      hooks,
-    };
-
-    const flow = createToolUseRunFlow<C>();
-    await flow.run(shared);
-
-    if (shared.lifecycle.error) {
-      throw shared.lifecycle.error;
-    }
+      createState: () =>
+        ({
+          messages: this.messages,
+          toolState: this.toolState,
+          cycleOptions: null,
+          shouldSkipCycle: false,
+        }) satisfies ToolUseRunState<C>,
+      createFlow: () => createToolUseRunFlow<C>(),
+      extendHooks: (baseHooks) => ({
+        ...baseHooks,
+        start: async () => undefined,
+        init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
+        prepareState: () => this.prepareInitialSessionState(),
+        buildCycleOptions: (toolState) =>
+          this.buildToolUseCycleOptions(toolState),
+        runCycle: (options, messages) =>
+          runToolUseCycle({
+            options,
+            messages,
+          }),
+        checkInterruption: () => this.checkInterruption(),
+        hasQueuedFollowUp: () => this.followUpQueue.length > 0,
+        enterWaitingState: () => this.enterWaitingState(),
+        clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
+        waitForFollowUp: () => this.waitForFollowUp(),
+        markRunning: () => this.markRunning(),
+        applyFollowUp: async (followUp, messages) => {
+          this.logger.userMessage(followUp);
+          const updatedMessages =
+            await this.modelHandler.createUserFollowUpMessages(
+              messages,
+              followUp,
+            );
+          this.messages = updatedMessages;
+          return updatedMessages;
+        },
+        end: async (status) => {
+          await Promise.resolve(baseHooks.end(status));
+        },
+        cleanup: async () => {
+          await Promise.resolve(baseHooks.cleanup());
+        },
+        logFinalizeWarning: (message, error) => {
+          this.logger.warn(message, undefined, undefined, error);
+        },
+      }),
+    });
   }
 
   private async prepareInitialSessionState(): Promise<{
