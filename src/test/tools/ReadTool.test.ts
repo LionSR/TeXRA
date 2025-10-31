@@ -211,6 +211,52 @@ suite('ReadFileTool', () => {
     assert.ok(attachment.bytes instanceof Uint8Array);
   });
 
+  test('ignores requested range when returning pdf attachment', async () => {
+    const tool = new ReadFileTool();
+
+    WorkspaceFS.read = async () => {
+      throw new Error('Should not read PDF as text');
+    };
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.stat = async () =>
+      ({ size: 2048 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.readFileBytes = async () => Buffer.from('%PDF-1.7');
+
+    const result = await tool.call({
+      path: 'docs/manual.PDF',
+      range: { start: 10, end: 20 },
+    });
+
+    assert.ok(result.summary, 'Summary should be present for PDF attachment');
+    assert.ok(result.summary?.includes('Ignored requested line range'));
+    assert.ok(result.output?.includes('Line ranges are not supported when reading PDFs.'));
+  });
+
+  test('returns image as attachment without text rendering', async () => {
+    const tool = new ReadFileTool();
+
+    let readCalled = false;
+    WorkspaceFS.read = async () => {
+      readCalled = true;
+      throw new Error('Should not read image as text');
+    };
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.stat = async () =>
+      ({ size: 512 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.readFileBytes = async () => Buffer.from('image-bytes');
+
+    const result = await tool.call({ path: 'figures/diagram.PNG' });
+
+    assert.strictEqual(readCalled, false, 'Image read should bypass text reader');
+    assert.strictEqual(result.summary, 'Attached image figures/diagram.PNG.');
+    assert.ok(result.output?.includes('Vision-capable models can analyze the visual content directly.'));
+
+    const attachment = result.files?.[0];
+    assert.ok(attachment, 'Expected image attachment');
+    assert.strictEqual(attachment.mimeType, 'image/png');
+    assert.strictEqual(attachment.description, 'Image returned by read_file tool.');
+  });
+
   test('defaults range end to start + limit - 1 when only start provided', async () => {
     const tool = new ReadFileTool();
 
