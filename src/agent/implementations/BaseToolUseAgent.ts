@@ -162,13 +162,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       error: undefined,
     };
 
-    await runAgentFlow<
-      BaseToolUseAgent<C>,
-      ToolUseRunState<C>,
-      ToolUseRunLifecycle,
-      ToolUseRunHooks<C>,
-      ToolUseRunShared<C>
-    >({
+    await runAgentFlow<ToolUseRunShared<C>>({
       agent: this,
       lifecycle,
       createState: () =>

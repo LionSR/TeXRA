@@ -10,6 +10,7 @@ import type { ToolState } from '@agent/core/ToolState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentRunShared } from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
   failLifecycle,
@@ -88,12 +89,12 @@ export interface ToolUseRunHooks<C = unknown> {
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 
-export interface ToolUseRunShared<C = unknown> {
-  agent: BaseToolUseAgent<C>;
-  state: ToolUseRunState<C>;
-  lifecycle: ToolUseRunLifecycle;
-  hooks: ToolUseRunHooks<C>;
-}
+export type ToolUseRunShared<C = unknown> = AgentRunShared<
+  BaseToolUseAgent<C>,
+  ToolUseRunState<C>,
+  ToolUseRunLifecycle,
+  ToolUseRunHooks<C>
+>;
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
