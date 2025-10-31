@@ -17,21 +17,16 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 // Local imports - tools
 import type { BaseTool } from '@tools/core/base';
 
-// Local imports - usage
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   toolRegistry: Record<string, BaseTool<any>>;
   toolState: ToolState;
   modelName?: string;
-  executionId?: ExecutionId;
 }
 
 export interface ToolUseCycleContext<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
-  groupId?: string;
 }
 
 export async function runToolUseCycle<C = unknown>(
@@ -42,7 +37,6 @@ export async function runToolUseCycle<C = unknown>(
     state: {
       messages: context.messages,
       toolState: context.options.toolState,
-      groupId: context.groupId,
       iteration: 0,
       shouldStop: false,
       response: undefined,

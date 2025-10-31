@@ -313,7 +313,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       toolState,
       modelName: this.agentConfig.model,
-      executionId: this.executionId,
     };
   }
 
