@@ -5,6 +5,9 @@ import { FileType } from 'vscode';
 import { ReadFileTool, READ_FILE_MAX_LINES } from '@tools/ReadTool';
 import { WorkspaceFS } from '@utils/files';
 
+const catFormat = (lineNumber: number, content: string): string =>
+  `${lineNumber.toString().padStart(6, ' ')}\t${content}`;
+
 suite('ReadFileTool', () => {
   let originalRead: typeof WorkspaceFS.read;
   let originalExists: typeof WorkspaceFS.exists;
@@ -51,10 +54,10 @@ suite('ReadFileTool', () => {
       READ_FILE_MAX_LINES + 1,
       'Output should include the limit and truncation marker line',
     );
-    assert.strictEqual(outputLines[0], 'line 1');
+    assert.strictEqual(outputLines[0], catFormat(1, 'line 1'));
     assert.strictEqual(
       outputLines[READ_FILE_MAX_LINES - 1],
-      `line ${READ_FILE_MAX_LINES}`,
+      catFormat(READ_FILE_MAX_LINES, `line ${READ_FILE_MAX_LINES}`),
     );
     assert.strictEqual(
       outputLines[READ_FILE_MAX_LINES],
@@ -76,7 +79,11 @@ suite('ReadFileTool', () => {
     const result = await tool.call({ path: 'short.txt' });
 
     assert.strictEqual(result.summary, 'Read short.txt');
-    assert.strictEqual(result.output, content);
+    const expected = content
+      .split('\n')
+      .map((line, index) => catFormat(index + 1, line))
+      .join('\n');
+    assert.strictEqual(result.output, expected);
   });
 
   test('reads requested range beyond default limit', async () => {
@@ -103,8 +110,14 @@ suite('ReadFileTool', () => {
     );
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, rangeEnd - rangeStart + 1);
-    assert.strictEqual(outputLines[0], `row ${rangeStart}`);
-    assert.strictEqual(outputLines[outputLines.length - 1], `row ${rangeEnd}`);
+    assert.strictEqual(
+      outputLines[0],
+      catFormat(rangeStart, `row ${rangeStart}`),
+    );
+    assert.strictEqual(
+      outputLines[outputLines.length - 1],
+      catFormat(rangeEnd, `row ${rangeEnd}`),
+    );
   });
 
   test('notes when requested range exceeds file length', async () => {
@@ -170,7 +183,7 @@ suite('ReadFileTool', () => {
     });
 
     assert.strictEqual(result.summary, 'Read line 5 of single.txt');
-    assert.strictEqual(result.output, 'line 5');
+    assert.strictEqual(result.output, catFormat(5, 'line 5'));
   });
 
   test('handles empty file gracefully', async () => {
@@ -308,10 +321,10 @@ suite('ReadFileTool', () => {
     );
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, READ_FILE_MAX_LINES);
-    assert.strictEqual(outputLines[0], 'line 100');
+    assert.strictEqual(outputLines[0], catFormat(100, 'line 100'));
     assert.strictEqual(
       outputLines[READ_FILE_MAX_LINES - 1],
-      `line ${expectedEnd}`,
+      catFormat(expectedEnd, `line ${expectedEnd}`),
     );
   });
 
@@ -337,7 +350,7 @@ suite('ReadFileTool', () => {
     );
     const outputLines = result.output?.split('\n') ?? [];
     assert.strictEqual(outputLines.length, 50);
-    assert.strictEqual(outputLines[0], 'line 1');
-    assert.strictEqual(outputLines[49], 'line 50');
+    assert.strictEqual(outputLines[0], catFormat(1, 'line 1'));
+    assert.strictEqual(outputLines[49], catFormat(50, 'line 50'));
   });
 });
