@@ -20,7 +20,7 @@ Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving 
 When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
 to keep mathematical discussions accurate.
 
-> **Heads up:** `read_file` returns at most the first 400 lines of a file so tool outputs stay readable.
+> **Heads up:** `read_file` returns at most the first 2,000 lines of a file and prefixes each line with a `cat -n` style line number so tool outputs stay readable.
 
 ### `ask`
 
