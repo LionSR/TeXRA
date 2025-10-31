@@ -64,22 +64,56 @@ export class ExecutionManager {
       return null;
     }
 
-    return this.composeAgentConfig(message, {
+    return this.composeWorkflowAgentConfig(message, {
       agentCategory: AgentCategory.Workflow,
     });
   }
 
   private buildToolUseCommandPayload(message: any): AgentConfig {
-    return this.composeAgentConfig(message, {
+    return this.composeToolUseAgentConfig(message, {
       agentType: AgentType.ToolUse,
       agentCategory: AgentCategory.ToolUse,
     });
   }
 
-  private composeAgentConfig(
+  private composeWorkflowAgentConfig(
     message: any,
     session: AgentSessionDescriptor,
   ): AgentConfig {
+    const baseConfig = this.composeBaseAgentConfig(message, session);
+    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
+    const useMultipleOutputs = Boolean(
+      message.outputFilesActive ||
+        (Array.isArray(outputFiles) && outputFiles.length > 1),
+    );
+
+    return {
+      ...baseConfig,
+      useMultipleOutputs,
+      outputFiles,
+    };
+  }
+
+  private composeToolUseAgentConfig(
+    message: any,
+    session: AgentSessionDescriptor,
+  ): AgentConfig {
+    const baseConfig = this.composeBaseAgentConfig(message, session);
+
+    return {
+      ...baseConfig,
+      // Tool-use runs intentionally stay single-output so the execution
+      // pipeline never attempts to resolve `_multiple` agent variants or
+      // manage output file selections that the UI disables for this mode.
+      useMultipleOutputs: false,
+      outputFiles: null,
+    };
+  }
+
+  private composeBaseAgentConfig(
+    message: any,
+    session: AgentSessionDescriptor,
+  ): Omit<AgentConfig, 'useMultipleOutputs' | 'outputFiles'> {
     const toolConfig: ToolConfig = {
       autoExtractFigure: message.autoExtractFigure,
       autoExtractTikzFigure: message.autoExtractTikzFigure,
@@ -96,17 +130,10 @@ export class ExecutionManager {
       return f;
     };
 
-    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
-    const useMultipleOutputs = Boolean(
-      message.outputFilesActive ||
-        (Array.isArray(outputFiles) && outputFiles.length > 1),
-    );
-
     return {
       agent: message.agent,
       model: message.model,
       instruction: message.instruction,
-      useMultipleOutputs,
       inputFile: message.inputFile ?? '',
       inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
       referenceFile: message.referenceFile ?? null,
@@ -121,7 +148,6 @@ export class ExecutionManager {
               .filter((f: string | null): f is string => f !== null),
           )
         : null,
-      outputFiles,
       editedFile: null,
       toolConfig,
       agentType: session.agentType,
