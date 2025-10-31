@@ -400,18 +400,35 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       toolResult,
     );
 
-    assert.equal(messages.length, 2, 'should produce call and response messages');
+    assert.equal(
+      messages.length,
+      2,
+      'should produce call and response messages',
+    );
 
     const responseParts = messages[1].parts ?? [];
-    assert.equal(responseParts.length, 1, 'response should contain a single part');
+    assert.equal(
+      responseParts.length,
+      1,
+      'response should contain a single part',
+    );
     const [responsePart] = responseParts;
 
     const functionResponse = responsePart.functionResponse;
-    assert(functionResponse, 'response part should include functionResponse payload');
+    assert(
+      functionResponse,
+      'response part should include functionResponse payload',
+    );
 
-    const sanitizedResponse = functionResponse.response as Record<string, unknown>;
+    const sanitizedResponse = functionResponse.response as Record<
+      string,
+      unknown
+    >;
     const attachmentSummary = sanitizedResponse.attachmentSummary as string;
-    assert(attachmentSummary, 'attachment summary should be present on sanitized response');
+    assert(
+      attachmentSummary,
+      'attachment summary should be present on sanitized response',
+    );
     assert(!attachmentSummary.includes('read_file'));
 
     const files = sanitizedResponse.files as Array<Record<string, unknown>>;
@@ -424,7 +441,11 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
     ]);
 
     const functionResponseParts = functionResponse?.parts ?? [];
-    assert.equal(functionResponseParts.length, 1, 'should include encoded attachment');
+    assert.equal(
+      functionResponseParts.length,
+      1,
+      'should include encoded attachment',
+    );
     const [attachmentPart] = functionResponseParts;
     assert.equal(attachmentPart.inlineData?.mimeType, 'image/png');
     assert.equal(
