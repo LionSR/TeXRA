@@ -251,12 +251,7 @@ export class MainViewState {
       state[id] = fileList.getSelected(elementDiv);
     });
 
-    const outputContainer = safeGetElementById(
-      ELEMENT_IDS.OUTPUT_FILES_CONTAINER,
-    );
-    state.outputFilesActive = Boolean(
-      outputContainer && outputContainer.style.display === 'block',
-    );
+    state.outputFilesActive = this._isOutputFilesActive();
 
     const sessionTypeValue =
       state.sessionType ?? safeGetElementValue(SESSION_TYPE_INPUT);
@@ -347,16 +342,32 @@ export class MainViewState {
     }
   }
 
-  _resetOutputFilesForToolUse() {
-    fileList.empty(
-      ELEMENT_IDS.OUTPUT_FILES,
-      ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
-      false,
-    );
+  _getOutputFilesContainer() {
+    return safeGetElementById(ELEMENT_IDS.OUTPUT_FILES_CONTAINER);
+  }
 
-    const container = safeGetElementById(ELEMENT_IDS.OUTPUT_FILES_CONTAINER);
+  _setOutputFilesContainerVisible(visible) {
+    const container = this._getOutputFilesContainer();
     if (container) {
-      container.style.display = 'none';
+      container.style.display = visible ? 'block' : 'none';
+    }
+  }
+
+  _isOutputFilesActive() {
+    const container = this._getOutputFilesContainer();
+    return Boolean(container && container.style.display === 'block');
+  }
+
+  _resetOutputFilesForToolUse() {
+    const wasActive = this._isOutputFilesActive();
+    if (wasActive) {
+      fileList.empty(
+        ELEMENT_IDS.OUTPUT_FILES,
+        ELEMENT_IDS.TOGGLE_OUTPUT_FILES,
+        false,
+      );
+
+      this._setOutputFilesContainerVisible(false);
     }
 
     this.update({
