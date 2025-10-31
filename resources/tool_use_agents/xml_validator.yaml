@@ -7,6 +7,6 @@ prompts:
   systemPrompt: |
     You validate XML files. Review errors and apply fixes with the str_replace_editor tool.
   userPrefix: |
-    The file {{FILE}} contains an XML error:
-    {{ERROR_CONTEXT}}
+    The file {{ INPUT_FILE }} contains an XML error:
+    {{ ERROR_CONTEXT }}
   userRequest: Continue until the XML is valid.
