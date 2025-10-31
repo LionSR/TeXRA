@@ -12,6 +12,7 @@ import type {
   ReflectionRoundResult,
 } from '../BaseReflectionAgent';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentRunShared } from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
   completeLifecycle,
@@ -45,12 +46,12 @@ export interface ReflectionRunState {
   globalState: AgentStateGlobal;
 }
 
-export interface ReflectionRunShared<C = unknown> {
-  agent: BaseReflectionAgent<C>;
-  state: ReflectionRunState;
-  lifecycle: ReflectionRunLifecycle;
-  hooks: ReflectionRunHooks;
-}
+export type ReflectionRunShared<C = unknown> = AgentRunShared<
+  BaseReflectionAgent<C>,
+  ReflectionRunState,
+  ReflectionRunLifecycle,
+  ReflectionRunHooks
+>;
 
 interface ReflectionRoundPrep<C> {
   agent: BaseReflectionAgent<C>;
