@@ -46,12 +46,13 @@ interface BuildSummaryParams {
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
-    'Read and return the contents of a workspace file. Optionally specify a line range to read specific sections.',
+    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
-    if (this.isPdfPath(input.path)) {
-      return this.returnPdfAttachment(input);
+    const attachmentConfig = this.getAttachmentConfig(input.path);
+    if (attachmentConfig) {
+      return this.returnBinaryAttachment(input, attachmentConfig);
     }
 
     const content = await WorkspaceFS.read(input.path);
@@ -161,31 +162,68 @@ export class ReadFileTool extends defineTool({
     return summary;
   }
 
-  private isPdfPath(path: string): boolean {
+  private getAttachmentConfig(
+    path: string,
+  ): { kind: 'pdf' | 'image'; label: string } | null {
     const mimeType = getMimeType(path)?.toLowerCase();
-    if (mimeType === 'application/pdf') {
-      return true;
+    const lowerPath = path.toLowerCase();
+
+    if (mimeType === 'application/pdf' || lowerPath.endsWith('.pdf')) {
+      return { kind: 'pdf', label: 'PDF' };
     }
-    return path.toLowerCase().endsWith('.pdf');
+
+    const imageExtensions = [
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.gif',
+      '.bmp',
+      '.webp',
+      '.tif',
+      '.tiff',
+      '.svg',
+    ];
+    const isImageMime = mimeType?.startsWith('image/');
+    if (isImageMime || imageExtensions.some((ext) => lowerPath.endsWith(ext))) {
+      return { kind: 'image', label: 'image' };
+    }
+
+    return null;
   }
 
-  private async returnPdfAttachment(input: ReadInput): Promise<ToolResult> {
+  private async returnBinaryAttachment(
+    input: ReadInput,
+    config: { kind: 'pdf' | 'image'; label: string },
+  ): Promise<ToolResult> {
     const attachment = await buildFileAttachment({
       filePath: input.path,
-      description: 'PDF returned by read_file tool.',
+      description:
+        config.kind === 'pdf'
+          ? 'PDF returned by read_file tool.'
+          : 'Image returned by read_file tool.',
     });
 
-    const summaryParts = [`Attached PDF ${attachment.path}.`];
+    const summaryParts = [`Attached ${config.label} ${attachment.path}.`];
     if (input.range) {
-      summaryParts.push('Ignored requested line range because PDFs are binary.');
+      summaryParts.push(
+        config.kind === 'pdf'
+          ? 'Ignored requested line range because PDFs are binary.'
+          : 'Ignored requested line range because images are binary.',
+      );
     }
 
     const outputParts: string[] = [];
     if (input.range) {
-      outputParts.push('Line ranges are not supported when reading PDFs.');
+      outputParts.push(
+        config.kind === 'pdf'
+          ? 'Line ranges are not supported when reading PDFs.'
+          : 'Line ranges are not supported when reading images.',
+      );
     }
     outputParts.push(
-      'Returned the PDF as a file attachment. Some models may not display attachments; download the file if needed.',
+      config.kind === 'pdf'
+        ? 'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context. Models without attachment support should download the file if needed.'
+        : 'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly. Models without attachment support should download the file if needed.',
     );
 
     return toolResult({
