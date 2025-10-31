@@ -102,6 +102,9 @@ export class ExecutionManager {
 
     return {
       ...baseConfig,
+      // Tool-use runs intentionally stay single-output so the execution
+      // pipeline never attempts to resolve `_multiple` agent variants or
+      // manage output file selections that the UI disables for this mode.
       useMultipleOutputs: false,
       outputFiles: null,
     };
