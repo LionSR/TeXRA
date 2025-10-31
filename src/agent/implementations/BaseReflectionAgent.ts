@@ -315,8 +315,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         stateGlobal: globalState,
         toolState,
         outputFile: outputPath,
-        roundGroupId,
-        executionId: this.executionId,
       });
 
       await this.handleRoundCompletion(
