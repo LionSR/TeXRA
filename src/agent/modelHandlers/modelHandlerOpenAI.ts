@@ -225,90 +225,77 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
           const fullContentParts: string[] = [];
           const reasoningParts: string[] = [];
-          const aggregatedToolCalls: Array<
-            ChatCompletionMessageToolCall | undefined
-          > = [];
           type FunctionToolCall = Extract<
             ChatCompletionMessageToolCall,
             { type: 'function' }
           >;
-          type ToolFunction = FunctionToolCall['function'];
-          const createEmptyToolFunction = (): ToolFunction => ({
-            name: '',
-            arguments: '',
+          type CustomToolCall = Extract<
+            ChatCompletionMessageToolCall,
+            { type: 'custom' }
+          >;
+          type MutableCustomToolPayload = CustomToolCall['custom'] &
+            Record<string, unknown>;
+          const getMutableCustomPayload = (
+            payload: CustomToolCall['custom'],
+          ): MutableCustomToolPayload =>
+            payload as unknown as MutableCustomToolPayload;
+          const aggregatedToolCalls: Array<
+            ChatCompletionMessageToolCall | undefined
+          > = [];
+          const createEmptyFunctionToolCall = (): FunctionToolCall => ({
+            id: '',
+            type: 'function',
+            function: {
+              name: '',
+              arguments: '',
+            },
           });
-          const ensureFunctionToolCall = (
+          const createEmptyCustomToolCall = (): CustomToolCall => ({
+            id: '',
+            type: 'custom',
+            custom: {
+              name: '',
+              input: '',
+            },
+          });
+          const resolveToolCallKind = (
+            chunk: unknown,
+            existing: ChatCompletionMessageToolCall | undefined,
+          ): ChatCompletionMessageToolCall['type'] | undefined => {
+            if (typeof chunk !== 'object' || !chunk) {
+              return existing?.type;
+            }
+
+            const chunkType = (chunk as { type?: unknown }).type;
+            if (chunkType === 'function' || chunkType === 'custom') {
+              return chunkType;
+            }
+            if (existing?.type) {
+              return existing.type;
+            }
+            if ('function' in (chunk as Record<string, unknown>)) {
+              return 'function';
+            }
+            if ('custom' in (chunk as Record<string, unknown>)) {
+              return 'custom';
+            }
+            return undefined;
+          };
+          const getFunctionToolCall = (
             existing: ChatCompletionMessageToolCall | undefined,
           ): FunctionToolCall => {
             if (existing?.type === 'function') {
               return existing;
             }
-
-            return {
-              id: existing?.id ?? '',
-              type: 'function',
-              function: createEmptyToolFunction(),
-            };
+            return createEmptyFunctionToolCall();
           };
-          const isFunctionToolCall = (
-            call: ChatCompletionMessageToolCall | undefined,
-          ): call is FunctionToolCall => call?.type === 'function';
-          const mergeNonFunctionToolCall = (
+          const getCustomToolCall = (
             existing: ChatCompletionMessageToolCall | undefined,
-            chunk: any,
-          ): ChatCompletionMessageToolCall | undefined => {
-            const prior =
-              existing && existing.type !== 'function' ? existing : undefined;
-            const merged: Record<string, unknown> = {
-              ...(prior ?? {}),
-            };
-
-            if (chunk && typeof chunk === 'object') {
-              for (const [key, value] of Object.entries(chunk)) {
-                if (key === 'index') {
-                  continue;
-                }
-                if (key === 'id') {
-                  const previousId =
-                    typeof merged.id === 'string' ? (merged.id as string) : '';
-                  merged.id = appendStringValue(previousId, value);
-                  continue;
-                }
-
-                merged[key] = value;
-              }
+          ): CustomToolCall => {
+            if (existing?.type === 'custom') {
+              return existing;
             }
-
-            if (typeof merged.id !== 'string') {
-              const priorId = typeof prior?.id === 'string' ? prior.id : '';
-              const chunkId = typeof chunk?.id === 'string' ? chunk.id : '';
-              const combinedId = appendStringValue(priorId, chunkId);
-              if (combinedId.length > 0) {
-                merged.id = combinedId;
-              }
-            }
-
-            if (typeof merged.type !== 'string') {
-              if (typeof chunk?.type === 'string') {
-                merged.type = chunk.type;
-              } else if (typeof prior?.type === 'string') {
-                merged.type = prior.type;
-              }
-            }
-
-            if (merged.type !== 'function' && 'function' in merged) {
-              delete merged.function;
-            }
-
-            if (typeof merged.type !== 'string') {
-              return prior;
-            }
-
-            if (typeof merged.id !== 'string') {
-              merged.id = '';
-            }
-
-            return merged as unknown as ChatCompletionMessageToolCall;
+            return createEmptyCustomToolCall();
           };
           let aggregatedFunctionCall: {
             name: string;
@@ -351,11 +338,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
                 }
 
                 const existingToolCall = aggregatedToolCalls[index];
-                if (
-                  toolCallChunk.type === 'function' ||
-                  isFunctionToolCall(existingToolCall)
-                ) {
-                  const target = ensureFunctionToolCall(existingToolCall);
+                const toolCallKind = resolveToolCallKind(
+                  toolCallChunk,
+                  existingToolCall,
+                );
+
+                if (toolCallKind === 'function') {
+                  const target = getFunctionToolCall(existingToolCall);
                   target.id = appendStringValue(target.id, toolCallChunk.id);
 
                   if (toolCallChunk.function) {
@@ -370,17 +359,45 @@ export class ModelHandlerOpenAI extends ModelHandler<
                     );
                   }
 
-                  if (target !== existingToolCall) {
-                    aggregatedToolCalls[index] = target;
+                  aggregatedToolCalls[index] = target;
+                  continue;
+                }
+
+                if (toolCallKind === 'custom') {
+                  const target = getCustomToolCall(existingToolCall);
+                  target.id = appendStringValue(target.id, toolCallChunk.id);
+
+                  if (
+                    toolCallChunk.custom &&
+                    typeof toolCallChunk.custom === 'object'
+                  ) {
+                    const customTarget = getMutableCustomPayload(
+                      target.custom,
+                    );
+                    for (const [key, value] of Object.entries(
+                      toolCallChunk.custom,
+                    )) {
+                      if (key === 'name' || key === 'input') {
+                        const existingValue =
+                          typeof customTarget[key] === 'string'
+                            ? (customTarget[key] as string)
+                            : '';
+                        customTarget[key] = appendStringValue(
+                          existingValue,
+                          value,
+                        );
+                      } else if (value !== undefined) {
+                        customTarget[key] = value;
+                      }
+                    }
                   }
-                } else {
-                  const mergedCall = mergeNonFunctionToolCall(
-                    existingToolCall,
-                    toolCallChunk,
-                  );
-                  if (mergedCall) {
-                    aggregatedToolCalls[index] = mergedCall;
-                  }
+
+                  aggregatedToolCalls[index] = target;
+                  continue;
+                }
+
+                if (existingToolCall) {
+                  aggregatedToolCalls[index] = existingToolCall;
                 }
               }
             }
@@ -406,26 +423,77 @@ export class ModelHandlerOpenAI extends ModelHandler<
           const fullContent = fullContentParts.join('');
           const reasoning = reasoningParts.join('');
 
-          const normalizedToolCalls = aggregatedToolCalls.filter(
-            (call): call is ChatCompletionMessageToolCall => {
+          const normalizedToolCalls = aggregatedToolCalls
+            .map((call) => {
               if (!call) {
-                return false;
+                return undefined;
               }
 
               const hasId = typeof call.id === 'string' && call.id.length > 0;
-              if (isFunctionToolCall(call)) {
-                const hasName =
-                  typeof call.function.name === 'string' &&
-                  call.function.name.length > 0;
-                const hasArgs =
-                  typeof call.function.arguments === 'string' &&
-                  call.function.arguments.length > 0;
-                return hasId || hasName || hasArgs;
+              if (call.type === 'function') {
+                const functionName =
+                  typeof call.function.name === 'string'
+                    ? call.function.name
+                    : '';
+                const functionArgs =
+                  typeof call.function.arguments === 'string'
+                    ? call.function.arguments
+                    : '';
+                const hasName = functionName.length > 0;
+                const hasArgs = functionArgs.length > 0;
+                if (!(hasId || hasName || hasArgs)) {
+                  return undefined;
+                }
+                return {
+                  id: hasId ? call.id : '',
+                  type: 'function',
+                  function: {
+                    name: hasName ? functionName : '',
+                    arguments: hasArgs ? functionArgs : '',
+                  },
+                } satisfies FunctionToolCall;
               }
 
-              return hasId;
-            },
-          );
+              if (call.type === 'custom') {
+                const customSource = getMutableCustomPayload(call.custom);
+                const rawName = customSource.name;
+                const rawInput = customSource.input;
+                const name =
+                  typeof rawName === 'string' ? rawName : '';
+                const input =
+                  typeof rawInput === 'string' ? rawInput : '';
+                let hasExtraFields = false;
+                const normalizedCustom: CustomToolCall = {
+                  id: hasId ? call.id : '',
+                  type: 'custom',
+                  custom: {
+                    name,
+                    input,
+                  },
+                };
+
+                for (const [key, value] of Object.entries(customSource)) {
+                  if (key === 'name' || key === 'input') {
+                    continue;
+                  }
+                  if (value !== undefined) {
+                    hasExtraFields = true;
+                    getMutableCustomPayload(normalizedCustom.custom)[key] = value;
+                  }
+                }
+
+                if (!(hasId || name.length > 0 || input.length > 0 || hasExtraFields)) {
+                  return undefined;
+                }
+
+                return normalizedCustom;
+              }
+
+              return undefined;
+            })
+            .filter(
+              (call): call is ChatCompletionMessageToolCall => Boolean(call),
+            );
 
           const finalMessage: Record<string, unknown> = {
             role: role ?? 'assistant',
