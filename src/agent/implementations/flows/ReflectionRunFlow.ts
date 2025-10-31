@@ -11,6 +11,14 @@ import type {
   ReflectionRoundContext,
   ReflectionRoundResult,
 } from '../BaseReflectionAgent';
+import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentRunShared } from '@agent/implementations/flows/common/types';
+import {
+  beginLifecyclePhase,
+  completeLifecycle,
+  failLifecycle,
+  setLifecyclePhase,
+} from '@agent/implementations/flows/common/lifecycle';
 
 type RunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 type RunStatus = 'pending' | 'running' | 'error' | 'completed';
@@ -38,22 +46,12 @@ export interface ReflectionRunState {
   globalState: AgentStateGlobal;
 }
 
-export interface ReflectionRunShared<C = unknown> {
-  agent: BaseReflectionAgent<C>;
-  state: ReflectionRunState;
-  lifecycle: ReflectionRunLifecycle;
-  hooks: ReflectionRunHooks;
-}
-
-interface ReflectionInitPrep<C> {
-  agent: BaseReflectionAgent<C>;
-  hooks: ReflectionRunHooks;
-  lifecycle: ReflectionRunLifecycle;
-}
-
-interface ReflectionInitExec {
-  error?: unknown;
-}
+export type ReflectionRunShared<C = unknown> = AgentRunShared<
+  BaseReflectionAgent<C>,
+  ReflectionRunState,
+  ReflectionRunLifecycle,
+  ReflectionRunHooks
+>;
 
 interface ReflectionRoundPrep<C> {
   agent: BaseReflectionAgent<C>;
@@ -76,48 +74,6 @@ interface ReflectionFinalizePrep {
 
 interface ReflectionFinalizeExec {
   endError?: unknown;
-}
-
-class ReflectionInitNode<C> extends BaseNode<ReflectionRunShared<C>> {
-  async prep(shared: ReflectionRunShared<C>): Promise<ReflectionInitPrep<C>> {
-    shared.lifecycle.phase = 'init';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
-    return {
-      agent: shared.agent,
-      hooks: shared.hooks,
-      lifecycle: shared.lifecycle,
-    };
-  }
-
-  async exec(prepRes: ReflectionInitPrep<C>): Promise<ReflectionInitExec> {
-    try {
-      const runGroupId = await prepRes.hooks.start();
-      await prepRes.hooks.init(runGroupId);
-      prepRes.hooks.resetPromptBuilder();
-      await prepRes.hooks.initializeClient();
-      return {};
-    } catch (error) {
-      return { error };
-    }
-  }
-
-  async post(
-    shared: ReflectionRunShared<C>,
-    _prepRes: ReflectionInitPrep<C>,
-    execRes: ReflectionInitExec,
-  ): Promise<string | undefined> {
-    if (execRes.error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = execRes.error;
-      return FlowTransition.FINALIZE;
-    }
-
-    shared.lifecycle.phase = 'rounds';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
-    return FlowTransition.ROUND;
-  }
 }
 
 class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
@@ -183,16 +139,14 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     const execResult = execRes as ReflectionRoundExec<C>;
 
     if (execResult.error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = execResult.error;
+      failLifecycle(shared.lifecycle, execResult.error);
       return FlowTransition.FINALIZE;
     }
 
     const { result } = execResult;
     if (!result) {
       const missingResultError = new Error('Round result is missing.');
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = missingResultError;
+      failLifecycle(shared.lifecycle, missingResultError);
       return FlowTransition.FINALIZE;
     }
 
@@ -222,7 +176,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
 class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
   async prep(shared: ReflectionRunShared<C>): Promise<ReflectionFinalizePrep> {
-    shared.lifecycle.phase = 'finalize';
+    setLifecyclePhase(shared.lifecycle, 'finalize');
     return {
       hooks: shared.hooks,
       lifecycle: shared.lifecycle,
@@ -255,11 +209,9 @@ class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
     }
 
     if (error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = error;
+      failLifecycle(shared.lifecycle, error);
     } else {
-      shared.lifecycle.status = 'completed';
-      shared.lifecycle.error = undefined;
+      completeLifecycle(shared.lifecycle);
     }
 
     return undefined;
@@ -267,7 +219,16 @@ class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
 }
 
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
-  const initNode = new ReflectionInitNode<C>();
+  const initNode = new AgentInitNode<ReflectionRunShared<C>>({
+    phase: 'init',
+    beforeInitialize: (shared) => {
+      shared.hooks.resetPromptBuilder();
+    },
+    onSuccess: (shared) => {
+      beginLifecyclePhase(shared.lifecycle, 'rounds');
+      return FlowTransition.ROUND;
+    },
+  });
   const roundNode = new ReflectionRoundNode<C>();
   const finalizeNode = new ReflectionFinalizeNode<C>();
 

@@ -9,6 +9,14 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ToolState } from '@agent/core/ToolState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentRunShared } from '@agent/implementations/flows/common/types';
+import {
+  beginLifecyclePhase,
+  failLifecycle,
+  setLifecyclePhase,
+  setLifecycleStatus,
+} from '@agent/implementations/flows/common/lifecycle';
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
@@ -19,15 +27,6 @@ interface ToolUsePrepareResult<C> {
 
 interface ToolUsePrepareExecResult<C> {
   result?: ToolUsePrepareResult<C>;
-  error?: unknown;
-}
-
-interface ToolUseInitPrep<C> {
-  hooks: ToolUseRunHooks<C>;
-  lifecycle: ToolUseRunLifecycle;
-}
-
-interface ToolUseInitExecResult {
   error?: unknown;
 }
 
@@ -90,58 +89,16 @@ export interface ToolUseRunHooks<C = unknown> {
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 
-export interface ToolUseRunShared<C = unknown> {
-  agent: BaseToolUseAgent<C>;
-  state: ToolUseRunState<C>;
-  lifecycle: ToolUseRunLifecycle;
-  hooks: ToolUseRunHooks<C>;
-}
-
-class ToolUseInitNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseInitPrep<C>> {
-    shared.lifecycle.phase = 'init';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
-    return {
-      hooks: shared.hooks,
-      lifecycle: shared.lifecycle,
-    };
-  }
-
-  async exec(prepRes: ToolUseInitPrep<C>): Promise<ToolUseInitExecResult> {
-    try {
-      const runGroupId = await prepRes.hooks.start();
-      await prepRes.hooks.init(runGroupId);
-      await prepRes.hooks.initializeClient();
-      return {};
-    } catch (error) {
-      return { error };
-    }
-  }
-
-  async post(
-    shared: ToolUseRunShared<C>,
-    _prepRes: ToolUseInitPrep<C>,
-    execRes: ToolUseInitExecResult,
-  ): Promise<string | undefined> {
-    if (execRes.error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = execRes.error;
-      return FlowTransition.FINALIZE;
-    }
-
-    shared.lifecycle.phase = 'prepare';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
-    return FlowTransition.EXECUTE;
-  }
-}
+export type ToolUseRunShared<C = unknown> = AgentRunShared<
+  BaseToolUseAgent<C>,
+  ToolUseRunState<C>,
+  ToolUseRunLifecycle,
+  ToolUseRunHooks<C>
+>;
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    shared.lifecycle.phase = 'prepare';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
+    beginLifecyclePhase(shared.lifecycle, 'prepare');
     return shared;
   }
 
@@ -185,8 +142,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       const error =
         execRes.error ??
         new Error('Failed to prepare tool-use run: no result from prepare');
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = error;
+      failLifecycle(shared.lifecycle, error);
       return FlowTransition.FINALIZE;
     }
 
@@ -197,9 +153,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
 
-    shared.lifecycle.phase = 'cycle';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
+    beginLifecyclePhase(shared.lifecycle, 'cycle');
 
     return FlowTransition.EXECUTE;
   }
@@ -207,9 +161,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
 class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseRunShared<C>> {
-    shared.lifecycle.phase = 'cycle';
-    shared.lifecycle.status = 'running';
-    shared.lifecycle.error = undefined;
+    beginLifecyclePhase(shared.lifecycle, 'cycle');
     return shared;
   }
 
@@ -259,11 +211,9 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     execRes: ToolUseCycleExecResult,
   ): Promise<string | undefined> {
     if (execRes.error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = execRes.error;
+      failLifecycle(shared.lifecycle, execRes.error);
     } else {
-      shared.lifecycle.status = 'running';
-      shared.lifecycle.error = undefined;
+      setLifecycleStatus(shared.lifecycle, 'running');
     }
 
     return FlowTransition.FINALIZE;
@@ -272,7 +222,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
 class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async prep(shared: ToolUseRunShared<C>): Promise<ToolUseFinalizePrep<C>> {
-    shared.lifecycle.phase = 'finalize';
+    setLifecyclePhase(shared.lifecycle, 'finalize');
     return {
       hooks: shared.hooks,
       lifecycle: shared.lifecycle,
@@ -340,11 +290,9 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
     }
 
     if (error) {
-      shared.lifecycle.status = 'error';
-      shared.lifecycle.error = error;
+      failLifecycle(shared.lifecycle, error);
     } else {
-      shared.lifecycle.status = 'completed';
-      shared.lifecycle.error = undefined;
+      setLifecycleStatus(shared.lifecycle, 'completed');
     }
 
     return undefined;
@@ -352,7 +300,13 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
 }
 
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
-  const initNode = new ToolUseInitNode<C>();
+  const initNode = new AgentInitNode<ToolUseRunShared<C>>({
+    phase: 'init',
+    onSuccess: (shared) => {
+      beginLifecyclePhase(shared.lifecycle, 'prepare');
+      return FlowTransition.EXECUTE;
+    },
+  });
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
   const finalizeNode = new ToolUseFinalizeNode<C>();
