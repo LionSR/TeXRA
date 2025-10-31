@@ -17,12 +17,11 @@ import {
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
-  createFunctionResponsePartFromBase64,
+  createPartFromBase64,
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
   type UploadFileParameters,
-  type FunctionResponsePart,
 } from '@google/genai';
 
 // Local imports - agent
@@ -1097,7 +1096,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private async buildAttachmentPart(
     attachment: ToolFileAttachment,
-  ): Promise<FunctionResponsePart | null> {
+  ): Promise<Part | null> {
     try {
       const buffer = await loadAttachmentBuffer(attachment);
       if (!buffer || buffer.length === 0) {
@@ -1113,10 +1112,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ? attachment.mimeType
           : DEFAULT_ATTACHMENT_MIME_TYPE;
 
-      return createFunctionResponsePartFromBase64(
-        buffer.toString('base64'),
-        mimeType,
-      );
+      return createPartFromBase64(buffer.toString('base64'), mimeType);
     } catch (attachmentError) {
       const message =
         attachmentError instanceof Error
@@ -1168,24 +1164,31 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Use the same ID for the result to maintain correlation
     const { attachments, sanitizedResult } = extractToolAttachments(result);
-    let responseParts: FunctionResponsePart[] = [];
+    let attachmentParts: Part[] = [];
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join('\n')}`;
+        `Attachments included in this response:\n${describeAttachments(
+          attachments,
+        ).join('\n')}`;
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) => this.buildAttachmentPart(attachment)),
       );
 
-      responseParts = encodedParts.filter(
-        (part): part is FunctionResponsePart => part !== null,
+      attachmentParts = encodedParts.filter(
+        (part): part is Part => part !== null,
       );
+
+      if (attachmentParts.length === 0) {
+        this.logger.warn(
+          `All attachments for Google function response '${functionName}' failed to encode.`,
+        );
+      }
     }
     const resultPart = createPartFromFunctionResponse(
       callId,
       functionName,
       sanitizedResult,
-      responseParts.length > 0 ? responseParts : undefined,
     );
     const callParts: Part[] = [];
     if (text) {
@@ -1196,7 +1199,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       role: 'model',
       parts: sanitizeFunctionCallParts(callParts),
     };
-    const resultMsg: Content = { role: 'user', parts: [resultPart] };
+    const resultParts: Part[] = [resultPart, ...attachmentParts];
+    const resultMsg: Content = { role: 'user', parts: resultParts };
     return [callMsg, resultMsg];
   }
 
