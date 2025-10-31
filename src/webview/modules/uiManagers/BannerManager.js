@@ -100,9 +100,11 @@ export class BannerManager extends BaseUIManager {
    */
   _setupAgentConfigBanner(element, config) {
     const textSpan = element.querySelector('span');
+    const editButton = element.querySelector('#agentConfigEditButton');
     const dirButton = element.querySelector('#agentConfigDirButton');
+    const docButton = element.querySelector('#agentConfigDocButton');
 
-    if (!textSpan && !dirButton) {
+    if (!(textSpan || editButton || dirButton || docButton)) {
       console.warn(
         '[BannerManager] Agent config banner missing all expected elements',
       );
@@ -115,13 +117,60 @@ export class BannerManager extends BaseUIManager {
         : 'Agent configuration is missing.';
     }
 
-    if (dirButton) {
-      dirButton.textContent = config?.customDirSet
-        ? 'Open Directory'
-        : 'Set Directory';
-    }
+    this._applyToolbarButtonLabel(editButton, 'Edit Agents', {
+      ariaLabel: 'Edit agents',
+      title: 'Edit agents',
+    });
+
+    const dirLabel = config?.customDirSet ? 'Open Directory' : 'Set Directory';
+    this._applyToolbarButtonLabel(dirButton, dirLabel, {
+      ariaLabel: dirLabel,
+      title: dirLabel,
+    });
+
+    this._applyToolbarButtonLabel(docButton, 'Docs', {
+      ariaLabel: 'Open documentation',
+      title: 'Open documentation',
+    });
 
     element.dataset.customDirSet = config?.customDirSet ? 'true' : 'false';
+  }
+
+  /**
+   * Apply toolbar button labels and accessibility attributes.
+   * @private
+   * @param {HTMLElement | null} button - Button element to update
+   * @param {string} label - Visible label text
+   * @param {object} [options] - Additional configuration options
+   * @param {string} [options.ariaLabel] - Accessible label override
+   * @param {string} [options.title] - Tooltip/title override
+   */
+  _applyToolbarButtonLabel(button, label, options = {}) {
+    if (!button) {
+      return;
+    }
+
+    const { ariaLabel, title } = options;
+
+    if (button.tagName === 'VSCODE-TOOLBAR-BUTTON') {
+      button.setAttribute('label', label);
+    } else {
+      button.textContent = label;
+    }
+
+    const resolvedAriaLabel = ariaLabel ?? label;
+    if (resolvedAriaLabel) {
+      button.setAttribute('aria-label', resolvedAriaLabel);
+    } else {
+      button.removeAttribute('aria-label');
+    }
+
+    const resolvedTitle = title ?? resolvedAriaLabel;
+    if (resolvedTitle) {
+      button.setAttribute('title', resolvedTitle);
+    } else if (title !== undefined) {
+      button.removeAttribute('title');
+    }
   }
 
   /**
@@ -169,9 +218,13 @@ export class BannerManager extends BaseUIManager {
       recheckButton = document.createElement('vscode-toolbar-button');
       recheckButton.id = 'dependencyRecheckButton';
       recheckButton.setAttribute('icon', 'refresh');
-      recheckButton.textContent = 'Re-check';
       actions.insertBefore(recheckButton, actions.firstChild);
     }
+
+    this._applyToolbarButtonLabel(recheckButton, 'Re-check', {
+      ariaLabel: 'Re-check dependencies',
+      title: 'Re-check dependencies',
+    });
   }
 
   /**

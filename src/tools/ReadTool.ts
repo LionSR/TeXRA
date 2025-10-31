@@ -12,7 +12,7 @@ import { buildFileAttachment } from '@tools/utils';
 // Local imports - utils
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
-export const READ_FILE_MAX_LINES = 400;
+export const READ_FILE_MAX_LINES = 2000;
 
 const ReadInputSchema = z.strictObject({
   path: z.string(),
