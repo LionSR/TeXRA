@@ -4,6 +4,8 @@ import type { ToolFileAttachment, ToolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
+export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
+
 export interface ExtractedToolAttachments {
   attachments: ToolFileAttachment[];
   sanitizedResult: Record<string, unknown>;
@@ -59,7 +61,7 @@ export function describeAttachments(
     const type =
       typeof file.mimeType === 'string' && file.mimeType.length > 0
         ? file.mimeType
-        : 'application/octet-stream';
+        : DEFAULT_ATTACHMENT_MIME_TYPE;
     return `- ${path} (${type})`;
   });
 }
