@@ -36,7 +36,10 @@ suite('ReadFileTool', () => {
 
     const result = await tool.call({ path: 'long.txt' });
 
-    assert.strictEqual(result.summary, 'Read lines 1-400 of long.txt');
+    assert.strictEqual(
+      result.summary,
+      `Read lines 1-${READ_FILE_MAX_LINES} of long.txt`,
+    );
 
     assert.ok(result.output, 'Expected tool output when truncating file');
 
@@ -74,10 +77,12 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.output, content);
   });
 
-  test('reads requested range beyond 400th line', async () => {
+  test('reads requested range beyond default limit', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 50;
+    const rangeStart = READ_FILE_MAX_LINES + 1;
+    const rangeEnd = rangeStart + 49;
     const content = Array.from(
       { length: totalLines },
       (_, index) => `row ${index + 1}`,
@@ -87,20 +92,25 @@ suite('ReadFileTool', () => {
 
     const result = await tool.call({
       path: 'paged.txt',
-      range: { start: 401, end: 450 },
+      range: { start: rangeStart, end: rangeEnd },
     });
 
-    assert.strictEqual(result.summary, 'Read lines 401-450 of paged.txt');
+    assert.strictEqual(
+      result.summary,
+      `Read lines ${rangeStart}-${rangeEnd} of paged.txt`,
+    );
     const outputLines = result.output?.split('\n') ?? [];
-    assert.strictEqual(outputLines.length, 50);
-    assert.strictEqual(outputLines[0], 'row 401');
-    assert.strictEqual(outputLines[outputLines.length - 1], 'row 450');
+    assert.strictEqual(outputLines.length, rangeEnd - rangeStart + 1);
+    assert.strictEqual(outputLines[0], `row ${rangeStart}`);
+    assert.strictEqual(outputLines[outputLines.length - 1], `row ${rangeEnd}`);
   });
 
   test('notes when requested range exceeds file length', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 50;
+    const rangeStart = READ_FILE_MAX_LINES + 1;
+    const requestedEnd = totalLines + 50;
     const content = Array.from(
       { length: totalLines },
       (_, index) => `row ${index + 1}`,
@@ -110,12 +120,12 @@ suite('ReadFileTool', () => {
 
     const result = await tool.call({
       path: 'clipped.txt',
-      range: { start: 401, end: totalLines + 50 },
+      range: { start: rangeStart, end: requestedEnd },
     });
 
     assert.strictEqual(
       result.summary,
-      `Read lines 401-450 of clipped.txt (requested end ${totalLines + 50} exceeds file length ${totalLines})`,
+      `Read lines ${rangeStart}-${totalLines} of clipped.txt (requested end ${requestedEnd} exceeds file length ${totalLines})`,
     );
   });
 
@@ -201,10 +211,10 @@ suite('ReadFileTool', () => {
     assert.ok(attachment.bytes instanceof Uint8Array);
   });
 
-  test('defaults range end to start + 399 when only start provided', async () => {
+  test('defaults range end to start + limit - 1 when only start provided', async () => {
     const tool = new ReadFileTool();
 
-    const totalLines = 1000;
+    const totalLines = READ_FILE_MAX_LINES + 1000;
     const content = Array.from(
       { length: totalLines },
       (_, index) => `line ${index + 1}`,
@@ -217,12 +227,20 @@ suite('ReadFileTool', () => {
       range: { start: 100 },
     });
 
-    // Should read lines 100-499 (400 lines)
-    assert.strictEqual(result.summary, 'Read lines 100-499 of windowed.txt');
+    const expectedEnd = 100 + READ_FILE_MAX_LINES - 1;
+
+    // Should read READ_FILE_MAX_LINES lines starting at 100
+    assert.strictEqual(
+      result.summary,
+      `Read lines 100-${expectedEnd} of windowed.txt`,
+    );
     const outputLines = result.output?.split('\n') ?? [];
-    assert.strictEqual(outputLines.length, 400);
+    assert.strictEqual(outputLines.length, READ_FILE_MAX_LINES);
     assert.strictEqual(outputLines[0], 'line 100');
-    assert.strictEqual(outputLines[399], 'line 499');
+    assert.strictEqual(
+      outputLines[READ_FILE_MAX_LINES - 1],
+      `line ${expectedEnd}`,
+    );
   });
 
   test('handles range starting at line 1 with end exceeding file length', async () => {
