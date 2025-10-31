@@ -19,6 +19,7 @@ import {
   type ReflectionRunState,
 } from '@agent/implementations/flows/ReflectionRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
+import type { AgentRunBaseHooks } from '@agent/implementations/flows/common/types';
 import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
@@ -613,10 +614,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           globalState: new AgentStateGlobal(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
-      extendHooks: (baseHooks) => {
+      extendHooks: (baseHooks: AgentRunBaseHooks) => {
         const baseStart = baseHooks.start;
         return {
           ...baseHooks,
+          init: async (runGroupId) => {
+            await this.init(runGroupId, { createGroup: true });
+          },
           start: async () => {
             const runGroupId = await baseStart();
             if (!runGroupId) {

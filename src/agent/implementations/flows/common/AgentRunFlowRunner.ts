@@ -9,16 +9,25 @@ import type {
 
 export type AgentRunHookOverrides = Partial<AgentRunBaseHooks>;
 
+type AgentRunInternals<A extends BaseAgent<any>> = A & {
+  startRunGroup: BaseAgent<any>['startRunGroup'];
+  initializeClient: BaseAgent<any>['initializeClient'];
+  endRunGroup: BaseAgent<any>['endRunGroup'];
+  cleanup: BaseAgent<any>['cleanup'];
+};
+
 export function createBaseRunHooks<A extends BaseAgent<any>>(
   agent: A,
   overrides?: AgentRunHookOverrides,
 ): AgentRunBaseHooks {
+  const agentInternals = agent as AgentRunInternals<A>;
+
   const baseHooks: AgentRunBaseHooks = {
-    start: () => agent.startRunGroup(),
+    start: () => agentInternals.startRunGroup(),
     init: (runGroupId) => agent.init(runGroupId),
-    initializeClient: () => agent.initializeClient(),
-    end: (status) => agent.endRunGroup(status),
-    cleanup: () => agent.cleanup(),
+    initializeClient: () => agentInternals.initializeClient(),
+    end: (status) => agentInternals.endRunGroup(status),
+    cleanup: () => agentInternals.cleanup(),
   };
 
   return {
@@ -61,12 +70,12 @@ export async function runAgentFlow<
     ? options.extendHooks(baseHooks)
     : (baseHooks as Hooks);
 
-  const shared: Shared = {
+  const shared = {
     agent: options.agent,
     state,
     lifecycle: options.lifecycle,
     hooks,
-  };
+  } as Shared;
 
   options.prepareShared?.(shared);
 
