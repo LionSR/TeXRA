@@ -100,8 +100,14 @@ export async function maybeSaveDebugObject({
         object,
       );
     }
-    logger.info(`Saved ${objectType} object to ${debugFilePath}`, activeGroupId);
+    logger.info(
+      `Saved ${objectType} object to ${debugFilePath}`,
+      activeGroupId,
+    );
   } catch (error) {
-    logger.error(`Failed to save ${objectType} object: ${error}`, activeGroupId);
+    logger.error(
+      `Failed to save ${objectType} object: ${error}`,
+      activeGroupId,
+    );
   }
 }
