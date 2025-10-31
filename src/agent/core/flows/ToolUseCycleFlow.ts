@@ -365,17 +365,10 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     );
 
     if (text) {
-      options.logger.debug(
-        `Model response: ${text.slice(0, 100)}`,
-        groupId,
-      );
+      options.logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
-        options.logger.info(
-          formatted,
-          groupId,
-          MESSAGE_TYPES.MODEL_RESPONSE,
-        );
+        options.logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
       }
     }
 
@@ -471,12 +464,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: state.toolInfo,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info(
-        '',
-        groupId,
-        MESSAGE_TYPES.TOOL_USE,
-        toolUseLog,
-      );
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       return {
         handledError: true,
         toolName: 'unknown',
@@ -497,12 +485,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info(
-        '',
-        groupId,
-        MESSAGE_TYPES.TOOL_USE,
-        toolUseLog,
-      );
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       return {
         handledError: true,
         toolName: parsed.name || parsed.function?.name || 'unknown',
@@ -522,12 +505,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info(
-        '',
-        groupId,
-        MESSAGE_TYPES.TOOL_USE,
-        toolUseLog,
-      );
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       return {
         handledError: true,
         toolCallId,
