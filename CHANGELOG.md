@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Strip unsupported Gemini tool-call identifiers from follow-up history and fix tool dispatch context typing so orchestration errors surface immediately instead of silently skipping tool runs.
 - Return PDFs and common image formats from the `read_file` tool as native attachments with guidance for models that cannot display binary results, preventing corrupted text output.
 
+### Improvements
+
+- Format `read_file` text responses with `cat -n` style line numbers and update edit guidance so downstream tools can target exact content reliably.
+
 ## [0.34.1] - 2025-10-24
 
 ### Bug Fixes

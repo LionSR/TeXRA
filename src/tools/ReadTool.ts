@@ -88,7 +88,11 @@ export class ReadFileTool extends defineTool({
 
     const segments: string[] = [];
     if (visibleLines.length > 0) {
-      segments.push(visibleLines.join('\n'));
+      const numberedLines = this.formatWithLineNumbers(
+        visibleLines,
+        startIndex + 1,
+      );
+      segments.push(numberedLines.join('\n'));
     }
     if (truncated) {
       segments.push(
@@ -116,6 +120,18 @@ export class ReadFileTool extends defineTool({
     return toolResult({
       summary,
       output: segments.join('\n'),
+    });
+  }
+
+  private formatWithLineNumbers(
+    lines: string[],
+    startingLine: number,
+  ): string[] {
+    const width = 6;
+    return lines.map((line, index) => {
+      const lineNumber = startingLine + index;
+      const prefix = lineNumber.toString().padStart(width, ' ');
+      return `${prefix}\t${line}`;
     });
   }
 
