@@ -18,6 +18,8 @@ import {
   type ReflectionRunShared,
   type ReflectionRunState,
 } from '@agent/implementations/flows/ReflectionRunFlow';
+import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
+import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
@@ -590,34 +592,39 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       error: undefined,
     };
 
-    const hooks: ReflectionRunHooks = {
-      start: () => this.startRunGroup(),
-      init: (runGroupId) => this.init(runGroupId, { createGroup: true }),
-      resetPromptBuilder: () => this.resetPromptBuilder(),
-      initializeClient: () => this.initializeClient(),
-      end: (status) => this.endRunGroup(status),
-      cleanup: () => this.cleanup(),
-    };
-
     const totalRounds = this.getTotalRounds();
-    const shared: ReflectionRunShared<C> = {
+
+    await runAgentFlow<ReflectionRunShared<C>>({
       agent: this,
-      state: {
-        totalRounds,
-        currentRound: 0,
-        continueRounds: true,
-        messages: [],
-        globalState: new AgentStateGlobal(),
-      } satisfies ReflectionRunState,
       lifecycle,
-      hooks,
-    };
-
-    const flow = createReflectionRunFlow<C>();
-    await flow.run(shared);
-
-    if (shared.lifecycle.error) {
-      throw shared.lifecycle.error;
-    }
+      createState: () =>
+        ({
+          totalRounds,
+          currentRound: 0,
+          continueRounds: true,
+          messages: [],
+          globalState: new AgentStateGlobal(),
+        }) satisfies ReflectionRunState,
+      createFlow: () => createReflectionRunFlow<C>(),
+      extendHooks: (baseHooks: AgentRunHooks) => {
+        const baseStart = baseHooks.start;
+        return {
+          ...baseHooks,
+          init: async (runGroupId) => {
+            await this.init(runGroupId, { createGroup: true });
+          },
+          start: async () => {
+            const runGroupId = await baseStart();
+            if (!runGroupId) {
+              throw new Error(
+                'Run group identifier is required for reflection runs.',
+              );
+            }
+            return runGroupId;
+          },
+          resetPromptBuilder: () => this.resetPromptBuilder(),
+        } satisfies ReflectionRunHooks;
+      },
+    });
   }
 }
