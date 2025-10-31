@@ -39,7 +39,7 @@ import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];
   modelName?: string;
-  groupId?: string;
+  executionId?: ToolUseCycleOptions['executionId'];
 }
 
 interface DebugFileOptions {
@@ -140,7 +140,6 @@ type ToolDispatchErrorResult = {
 export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
   toolState: ToolState;
-  groupId?: string;
   iteration: number;
 }
 
@@ -181,7 +180,7 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      groupId: state.groupId,
+      executionId: options.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -255,7 +254,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      groupId: state.groupId,
+      executionId: options.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -344,16 +343,18 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
+    const groupId = options.logger.getActiveGroupId();
+
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
-      state.groupId,
+      groupId,
       state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
-        options.logger.info(formatted, state.groupId, MESSAGE_TYPES.THINKING);
+        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
       }
     }
 
@@ -366,13 +367,13 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (text) {
       options.logger.debug(
         `Model response: ${text.slice(0, 100)}`,
-        state.groupId,
+        groupId,
       );
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
         options.logger.info(
           formatted,
-          state.groupId,
+          groupId,
           MESSAGE_TYPES.MODEL_RESPONSE,
         );
       }
@@ -389,7 +390,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         cost: normalized.cost,
         elapsedTime: normalized.responseTime,
       };
-      options.logger.statistics(stats, state.groupId);
+      options.logger.statistics(stats, groupId);
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
@@ -451,6 +452,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
+    const groupId = options.logger.getActiveGroupId();
+
     const interrupted = Boolean(await options.checkInterruption());
     if (interrupted) {
       state.shouldStop = true;
@@ -470,7 +473,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       };
       options.logger.info(
         '',
-        state.groupId,
+        groupId,
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
@@ -496,7 +499,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       };
       options.logger.info(
         '',
-        state.groupId,
+        groupId,
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
@@ -521,7 +524,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       };
       options.logger.info(
         '',
-        state.groupId,
+        groupId,
         MESSAGE_TYPES.TOOL_USE,
         toolUseLog,
       );
@@ -564,6 +567,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
+    const groupId = options.logger.getActiveGroupId();
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
@@ -605,7 +609,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       state.shouldStop = false;
 
       if (fallbackMessage) {
-        options.logger.warn(fallbackMessage, state.groupId);
+        options.logger.warn(fallbackMessage, groupId);
       }
 
       return FlowTransition.CONTINUE;
@@ -639,7 +643,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       input: execRes.input ?? execRes.parsed,
       output: sanitizeToolResultForLog(result),
     };
-    options.logger.info('', state.groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+    options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
     if (result.files && result.files.length > 0) {
       const existing = state.toolState.mediaFiles;
