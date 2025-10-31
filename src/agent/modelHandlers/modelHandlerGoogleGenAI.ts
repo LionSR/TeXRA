@@ -52,12 +52,16 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
+  DEFAULT_ATTACHMENT_MIME_TYPE,
   describeAttachments,
   extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
+
+// Local imports - tools
+import type { ToolFileAttachment } from '@tools/result';
 
 // Google finish reasons are re-exported from the SDK
 
@@ -281,7 +285,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     for (const entry of entries) {
       const fileName = entry.file_name || 'unnamed-file';
-      const mimeType = entry.media_type || 'application/octet-stream';
+      const mimeType = entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
       const uploadSource = this.getUploadSource(entry, mimeType);
 
       if (!uploadSource) {
@@ -379,7 +383,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (entry.media_type && entry.media_type.length > 0) {
       return entry.media_type;
     }
-    return 'application/octet-stream';
+    return DEFAULT_ATTACHMENT_MIME_TYPE;
   }
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
@@ -1091,6 +1095,40 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return null;
   }
 
+  private async buildAttachmentPart(
+    attachment: ToolFileAttachment,
+  ): Promise<FunctionResponsePart | null> {
+    try {
+      const buffer = await loadAttachmentBuffer(attachment);
+      if (!buffer || buffer.length === 0) {
+        this.logger.warn(
+          `Skipping empty attachment '${attachment.path}' in Google function response.`,
+        );
+        return null;
+      }
+
+      const mimeType =
+        typeof attachment.mimeType === 'string' &&
+        attachment.mimeType.length > 0
+          ? attachment.mimeType
+          : DEFAULT_ATTACHMENT_MIME_TYPE;
+
+      return createFunctionResponsePartFromBase64(
+        buffer.toString('base64'),
+        mimeType,
+      );
+    } catch (attachmentError) {
+      const message =
+        attachmentError instanceof Error
+          ? attachmentError.message
+          : String(attachmentError);
+      this.logger.warn(
+        `Failed to encode attachment '${attachment.path}' for Google function response: ${message}`,
+      );
+      return null;
+    }
+  }
+
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     id: string,
@@ -1136,49 +1174,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         `Attachments available:\n${describeAttachments(attachments).join('\n')}`;
 
       const encodedParts = await Promise.all(
-        attachments.map(async (attachment) => {
-          try {
-            const buffer = await loadAttachmentBuffer(attachment);
-            if (!buffer || buffer.length === 0) {
-              this.logger.warn(
-                `Skipping empty attachment '${attachment.path}' in Google function response.`,
-              );
-              return null;
-            }
-
-            const base64Payload = buffer.toString('base64');
-            if (!base64Payload) {
-              this.logger.warn(
-                `Skipping attachment '${attachment.path}' with no encodable payload.`,
-              );
-              return null;
-            }
-
-            const mimeType =
-              typeof attachment.mimeType === 'string' &&
-              attachment.mimeType.length > 0
-                ? attachment.mimeType
-                : 'application/octet-stream';
-
-            return createFunctionResponsePartFromBase64(
-              base64Payload,
-              mimeType,
-            );
-          } catch (attachmentError) {
-            const message =
-              attachmentError instanceof Error
-                ? attachmentError.message
-                : String(attachmentError);
-            this.logger.warn(
-              `Failed to encode attachment '${attachment.path}' for Google function response: ${message}`,
-            );
-            return null;
-          }
-        }),
+        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
       );
 
       responseParts = encodedParts.filter(
-        (part): part is FunctionResponsePart => Boolean(part),
+        (part): part is FunctionResponsePart => part !== null,
       );
     }
     const resultPart = createPartFromFunctionResponse(
