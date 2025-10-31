@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 import type {
   BetaBase64ImageSource,
+  BetaCacheControlEphemeral,
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
@@ -13,6 +14,7 @@ import type {
   BetaTextBlockParam,
   MessageCountTokensParams,
   MessageCreateParams,
+  BetaToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   MessageParam,
@@ -104,14 +106,17 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
-type CacheControlBlock = (ContentBlockParam | ContentBlock) & {
-  type: 'text' | 'tool_result';
-  cache_control?: { type: 'ephemeral' };
+type CacheControlEligibleBlock =
+  | (ContentBlockParam & BetaTextBlockParam)
+  | (ContentBlockParam & BetaToolResultBlockParam);
+
+const EPHEMERAL_CACHE_CONTROL: BetaCacheControlEphemeral = {
+  type: 'ephemeral',
 };
 
 const isCacheControlEligibleBlock = (
   block: ContentBlockParam | ContentBlock | undefined,
-): block is CacheControlBlock => {
+): block is CacheControlEligibleBlock => {
   if (!block || typeof block !== 'object') {
     return false;
   }
@@ -127,7 +132,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   ToolUseBlock,
   Anthropic
 > {
-  private cacheControlledBlock?: CacheControlBlock;
+  private cacheControlledBlock?: CacheControlEligibleBlock;
 
   protected override get supportsToolFileOutputs(): boolean {
     return true;
@@ -137,12 +142,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return true;
   }
 
-  private setCacheControlTarget(block: ContentBlockParam | ContentBlock): void {
+  private setCacheControlTarget(block: CacheControlEligibleBlock): void {
     if (!this.capabilities.supportsPromptCaching) {
-      return;
-    }
-
-    if (!isCacheControlEligibleBlock(block)) {
       return;
     }
 
@@ -150,7 +151,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       delete this.cacheControlledBlock.cache_control;
     }
 
-    block.cache_control = { type: 'ephemeral' };
+    block.cache_control = EPHEMERAL_CACHE_CONTROL;
     this.cacheControlledBlock = block;
   }
 
@@ -168,7 +169,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   private findCacheControlCandidate(
     content: (ContentBlockParam | ContentBlock)[] | undefined,
-  ): CacheControlBlock | undefined {
+  ): CacheControlEligibleBlock | undefined {
     if (!Array.isArray(content) || content.length === 0) {
       return undefined;
     }
@@ -1683,7 +1684,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const toolResultBlock = Array.isArray(resultMsg.content)
       ? resultMsg.content.at(-1)
       : undefined;
-    if (toolResultBlock) {
+    if (isCacheControlEligibleBlock(toolResultBlock)) {
       this.setCacheControlTarget(toolResultBlock);
     }
 

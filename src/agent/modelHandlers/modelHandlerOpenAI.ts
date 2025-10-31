@@ -3,6 +3,7 @@ import { countTokens } from 'gpt-tokenizer';
 import OpenAI from 'openai';
 import {
   ChatCompletionContentPart,
+  ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
   ChatCompletionToolMessageParam,
   ChatCompletionMessageParam,
@@ -641,6 +642,27 @@ export class ModelHandlerOpenAI extends ModelHandler<
         if (media.media_type.includes('/')) {
           audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
         }
+
+        type SupportedAudioFormat = 'wav' | 'mp3';
+        const normalizedAudioFormat = audioFormat.toLowerCase();
+        const supportedFormats = new Set<SupportedAudioFormat>(['wav', 'mp3']);
+        if (
+          !supportedFormats.has(normalizedAudioFormat as SupportedAudioFormat)
+        ) {
+          const errorMessage = `Unsupported audio format "${audioFormat}" for audio generation. Valid formats are: wav, mp3.`;
+          this.logger.error(errorMessage);
+          throw new Error(errorMessage);
+        }
+
+        const typedAudioFormat = normalizedAudioFormat as SupportedAudioFormat;
+
+        const audioContent: ChatCompletionContentPartInputAudio = {
+          type: 'input_audio',
+          input_audio: {
+            data: media.data,
+            format: typedAudioFormat,
+          },
+        };
         // actually, currently only mp3 and wav are supported
         // openai.BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Invalid audio format "m4a" for audio generation. Valid formats are: [wav, mp3]', 'status': 'INVALID_ARGUMENT'}}]
 
@@ -657,13 +679,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         // Let's adapt this to return the structured object expected within the message content array.
         return [
           { type: 'text', text: `Audio: ${media.file_name}` }, // Text description goes separately
-          {
-            type: 'input_audio' as any, // Cast as any to bypass strict OpenAI typing for now
-            input_audio: {
-              data: media.data,
-              format: audioFormat as any,
-            },
-          },
+          audioContent,
         ];
       } else if (media.media_category === 'audio') {
         this.logger.warn(
