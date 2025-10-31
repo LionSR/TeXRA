@@ -1,5 +1,5 @@
-// Third-party imports
 // Standard library imports
+import * as path from 'path';
 
 // Local imports - core
 import { z } from 'zod';
@@ -7,9 +7,10 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
+import { buildFileAttachment } from '@tools/utils';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, getMimeType } from '@utils/files';
 
 export const READ_FILE_MAX_LINES = 2000;
 
@@ -45,10 +46,15 @@ interface BuildSummaryParams {
 export class ReadFileTool extends defineTool({
   name: 'read_file',
   description:
-    'Read and return the contents of a workspace file. Optionally specify a line range to read specific sections.',
+    'Read and return workspace files. For text files you can supply an optional line range. PDFs (.pdf) and common image formats are returned as attachments so vision-capable models can inspect their pages or visual content.',
   schema: ReadInputSchema,
 }) {
   protected async execute(input: ReadInput): Promise<ToolResult> {
+    const attachmentConfig = this.getAttachmentConfig(input.path);
+    if (attachmentConfig) {
+      return this.returnBinaryAttachment(input, attachmentConfig);
+    }
+
     const content = await WorkspaceFS.read(input.path);
     const lines = content.split(/\r?\n/);
     if (lines.length > 0 && lines[lines.length - 1] === '') {
@@ -155,4 +161,91 @@ export class ReadFileTool extends defineTool({
 
     return summary;
   }
+
+  private getAttachmentConfig(
+    filePath: string,
+  ): { kind: 'pdf' | 'image'; label: string } | null {
+    const mimeType = getMimeType(filePath)?.toLowerCase();
+    const lowerPath = filePath.toLowerCase();
+    // Keep extension detection case-insensitive so users can reference files regardless of casing.
+    const extension = path.extname(lowerPath);
+
+    if (mimeType === 'application/pdf' || extension === '.pdf') {
+      return { kind: 'pdf', label: 'PDF' };
+    }
+
+    const isImageMime = mimeType?.startsWith('image/');
+    // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
+    // even though the underlying file is XML text.
+    if (isImageMime || (extension && IMAGE_EXTENSIONS.has(extension))) {
+      return { kind: 'image', label: 'image' };
+    }
+
+    return null;
+  }
+
+  private async returnBinaryAttachment(
+    input: ReadInput,
+    config: { kind: 'pdf' | 'image'; label: string },
+  ): Promise<ToolResult> {
+    const attachmentCopy = ATTACHMENT_COPY[config.kind];
+    const attachment = await buildFileAttachment({
+      filePath: input.path,
+      description:
+        config.kind === 'pdf'
+          ? 'PDF returned by read_file tool.'
+          : 'Image returned by read_file tool.',
+    });
+
+    const summaryParts = [`Attached ${config.label} ${attachment.path}.`];
+    if (input.range) {
+      summaryParts.push(attachmentCopy.rangeSummary);
+    }
+
+    const outputParts: string[] = [];
+    if (input.range) {
+      outputParts.push(attachmentCopy.rangeOutput);
+    }
+    outputParts.push(attachmentCopy.coreOutput);
+
+    return toolResult({
+      summary: summaryParts.join(' '),
+      output: outputParts.join(' '),
+      files: [attachment],
+    });
+  }
 }
+
+const IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.svg',
+]);
+
+const ATTACHMENT_COPY: Record<
+  'pdf' | 'image',
+  {
+    rangeSummary: string;
+    rangeOutput: string;
+    coreOutput: string;
+  }
+> = {
+  pdf: {
+    rangeSummary: 'Ignored requested line range because PDFs are binary.',
+    rangeOutput: 'Line ranges are not supported when reading PDFs.',
+    coreOutput:
+      'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context.',
+  },
+  image: {
+    rangeSummary: 'Ignored requested line range because images are binary.',
+    rangeOutput: 'Line ranges are not supported when reading images.',
+    coreOutput:
+      'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
+  },
+};
