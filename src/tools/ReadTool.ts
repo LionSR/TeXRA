@@ -1,5 +1,5 @@
-// Third-party imports
 // Standard library imports
+import * as path from 'path';
 
 // Local imports - core
 import { z } from 'zod';
@@ -163,28 +163,21 @@ export class ReadFileTool extends defineTool({
   }
 
   private getAttachmentConfig(
-    path: string,
+    filePath: string,
   ): { kind: 'pdf' | 'image'; label: string } | null {
-    const mimeType = getMimeType(path)?.toLowerCase();
-    const lowerPath = path.toLowerCase();
+    const mimeType = getMimeType(filePath)?.toLowerCase();
+    const lowerPath = filePath.toLowerCase();
+    // Keep extension detection case-insensitive so users can reference files regardless of casing.
+    const extension = path.extname(lowerPath);
 
-    if (mimeType === 'application/pdf' || lowerPath.endsWith('.pdf')) {
+    if (mimeType === 'application/pdf' || extension === '.pdf') {
       return { kind: 'pdf', label: 'PDF' };
     }
 
-    const imageExtensions = [
-      '.png',
-      '.jpg',
-      '.jpeg',
-      '.gif',
-      '.bmp',
-      '.webp',
-      '.tif',
-      '.tiff',
-      '.svg',
-    ];
     const isImageMime = mimeType?.startsWith('image/');
-    if (isImageMime || imageExtensions.some((ext) => lowerPath.endsWith(ext))) {
+    // Treat SVG as an image attachment so vision-capable models can inspect its rendered appearance
+    // even though the underlying file is XML text.
+    if (isImageMime || (extension && IMAGE_EXTENSIONS.has(extension))) {
       return { kind: 'image', label: 'image' };
     }
 
@@ -195,6 +188,7 @@ export class ReadFileTool extends defineTool({
     input: ReadInput,
     config: { kind: 'pdf' | 'image'; label: string },
   ): Promise<ToolResult> {
+    const attachmentCopy = ATTACHMENT_COPY[config.kind];
     const attachment = await buildFileAttachment({
       filePath: input.path,
       description:
@@ -205,26 +199,14 @@ export class ReadFileTool extends defineTool({
 
     const summaryParts = [`Attached ${config.label} ${attachment.path}.`];
     if (input.range) {
-      summaryParts.push(
-        config.kind === 'pdf'
-          ? 'Ignored requested line range because PDFs are binary.'
-          : 'Ignored requested line range because images are binary.',
-      );
+      summaryParts.push(attachmentCopy.rangeSummary);
     }
 
     const outputParts: string[] = [];
     if (input.range) {
-      outputParts.push(
-        config.kind === 'pdf'
-          ? 'Line ranges are not supported when reading PDFs.'
-          : 'Line ranges are not supported when reading images.',
-      );
+      outputParts.push(attachmentCopy.rangeOutput);
     }
-    outputParts.push(
-      config.kind === 'pdf'
-        ? 'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context. Models without attachment support should download the file if needed.'
-        : 'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly. Models without attachment support should download the file if needed.',
-    );
+    outputParts.push(attachmentCopy.coreOutput);
 
     return toolResult({
       summary: summaryParts.join(' '),
@@ -233,3 +215,37 @@ export class ReadFileTool extends defineTool({
     });
   }
 }
+
+const IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.svg',
+]);
+
+const ATTACHMENT_COPY: Record<
+  'pdf' | 'image',
+  {
+    rangeSummary: string;
+    rangeOutput: string;
+    coreOutput: string;
+  }
+> = {
+  pdf: {
+    rangeSummary: 'Ignored requested line range because PDFs are binary.',
+    rangeOutput: 'Line ranges are not supported when reading PDFs.',
+    coreOutput:
+      'Returned the PDF as a file attachment. Vision-capable models can analyze each page with text and visual context.',
+  },
+  image: {
+    rangeSummary: 'Ignored requested line range because images are binary.',
+    rangeOutput: 'Line ranges are not supported when reading images.',
+    coreOutput:
+      'Returned the image as a file attachment. Vision-capable models can analyze the visual content directly.',
+  },
+};

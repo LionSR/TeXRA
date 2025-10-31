@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 
+import { FileType } from 'vscode';
+
 import { ReadFileTool, READ_FILE_MAX_LINES } from '@tools/ReadTool';
 import { WorkspaceFS } from '@utils/files';
 
@@ -191,17 +193,18 @@ suite('ReadFileTool', () => {
       throw new Error('Should not read PDF as text');
     };
     WorkspaceFS.exists = async () => true;
-    WorkspaceFS.stat = async () =>
-      ({ size: 1024 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.stat = async () => ({
+      type: FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 1024,
+    });
     WorkspaceFS.readFileBytes = async () => Buffer.from('%PDF-1.7');
 
     const result = await tool.call({ path: 'docs/sample.pdf' });
 
     assert.strictEqual(readCalled, false, 'PDF read should bypass text reader');
-    assert.strictEqual(
-      result.summary,
-      'Attached PDF docs/sample.pdf.',
-    );
+    assert.strictEqual(result.summary, 'Attached PDF docs/sample.pdf.');
     assert.ok(result.output?.includes('attachment'));
     assert.ok(result.output?.includes('models'));
 
@@ -218,8 +221,12 @@ suite('ReadFileTool', () => {
       throw new Error('Should not read PDF as text');
     };
     WorkspaceFS.exists = async () => true;
-    WorkspaceFS.stat = async () =>
-      ({ size: 2048 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.stat = async () => ({
+      type: FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 2048,
+    });
     WorkspaceFS.readFileBytes = async () => Buffer.from('%PDF-1.7');
 
     const result = await tool.call({
@@ -229,7 +236,11 @@ suite('ReadFileTool', () => {
 
     assert.ok(result.summary, 'Summary should be present for PDF attachment');
     assert.ok(result.summary?.includes('Ignored requested line range'));
-    assert.ok(result.output?.includes('Line ranges are not supported when reading PDFs.'));
+    assert.ok(
+      result.output?.includes(
+        'Line ranges are not supported when reading PDFs.',
+      ),
+    );
   });
 
   test('returns image as attachment without text rendering', async () => {
@@ -241,20 +252,35 @@ suite('ReadFileTool', () => {
       throw new Error('Should not read image as text');
     };
     WorkspaceFS.exists = async () => true;
-    WorkspaceFS.stat = async () =>
-      ({ size: 512 } as Awaited<ReturnType<typeof originalStat>>);
+    WorkspaceFS.stat = async () => ({
+      type: FileType.File,
+      ctime: 0,
+      mtime: 0,
+      size: 512,
+    });
     WorkspaceFS.readFileBytes = async () => Buffer.from('image-bytes');
 
     const result = await tool.call({ path: 'figures/diagram.PNG' });
 
-    assert.strictEqual(readCalled, false, 'Image read should bypass text reader');
+    assert.strictEqual(
+      readCalled,
+      false,
+      'Image read should bypass text reader',
+    );
     assert.strictEqual(result.summary, 'Attached image figures/diagram.PNG.');
-    assert.ok(result.output?.includes('Vision-capable models can analyze the visual content directly.'));
+    assert.ok(
+      result.output?.includes(
+        'Vision-capable models can analyze the visual content directly.',
+      ),
+    );
 
     const attachment = result.files?.[0];
     assert.ok(attachment, 'Expected image attachment');
     assert.strictEqual(attachment.mimeType, 'image/png');
-    assert.strictEqual(attachment.description, 'Image returned by read_file tool.');
+    assert.strictEqual(
+      attachment.description,
+      'Image returned by read_file tool.',
+    );
   });
 
   test('defaults range end to start + limit - 1 when only start provided', async () => {
