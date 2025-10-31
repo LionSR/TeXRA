@@ -40,7 +40,7 @@ function countOccurrences(haystack: string, needle: string): number {
 export class EditFileTool extends defineTool({
   name: 'edit_file',
   description:
-    'Performs exact string replacements in workspace files using literal matching.',
+    'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,
 }) {
   protected async execute(input: EditInput): Promise<ToolResult> {
@@ -48,7 +48,7 @@ export class EditFileTool extends defineTool({
 
     if (old_string.length === 0) {
       throw new ToolError(
-        `old_string must not be empty for ${targetPath}. Provide the exact text to replace from read_file output.`,
+        `old_string must not be empty for ${targetPath}. Provide the exact text to replace from read_file output after the line-number prefix.`,
       );
     }
 
@@ -57,7 +57,7 @@ export class EditFileTool extends defineTool({
 
     if (occurrences === 0) {
       throw new ToolError(
-        `The provided old_string was not found in ${targetPath}. Ensure it matches the read_file output exactly.`,
+        `The provided old_string was not found in ${targetPath}. Ensure it matches the read_file output exactly after the line-number prefix.`,
       );
     }
 
