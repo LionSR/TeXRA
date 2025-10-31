@@ -522,15 +522,27 @@
         >
           <span>Agent configuration is missing.</span>
           <div class="actions">
-            <vscode-button id="agentConfigEditButton" icon="list-selection"
-              >Edit Agents</vscode-button
-            >
-            <vscode-button id="agentConfigDirButton" icon="folder-opened"
-              >Set Directory</vscode-button
-            >
-            <vscode-button id="agentConfigDocButton" icon="book"
-              >Docs</vscode-button
-            >
+            <vscode-toolbar-button
+              id="agentConfigEditButton"
+              icon="list-selection"
+              label="Edit Agents"
+              aria-label="Edit agents"
+              title="Edit agents"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
+              id="agentConfigDirButton"
+              icon="folder-opened"
+              label="Set Directory"
+              aria-label="Set directory"
+              title="Set directory"
+            ></vscode-toolbar-button>
+            <vscode-toolbar-button
+              id="agentConfigDocButton"
+              icon="book"
+              label="Docs"
+              aria-label="Open documentation"
+              title="Open documentation"
+            ></vscode-toolbar-button>
           </div>
         </div>
 
