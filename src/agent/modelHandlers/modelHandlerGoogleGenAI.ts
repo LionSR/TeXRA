@@ -17,6 +17,7 @@ import {
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
+  createPartFromBase64,
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
@@ -50,11 +51,16 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
+  DEFAULT_ATTACHMENT_MIME_TYPE,
   describeAttachments,
   extractToolAttachments,
+  loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
+
+// Local imports - tools
+import type { ToolFileAttachment } from '@tools/result';
 
 // Google finish reasons are re-exported from the SDK
 
@@ -278,7 +284,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     for (const entry of entries) {
       const fileName = entry.file_name || 'unnamed-file';
-      const mimeType = entry.media_type || 'application/octet-stream';
+      const mimeType = entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
       const uploadSource = this.getUploadSource(entry, mimeType);
 
       if (!uploadSource) {
@@ -376,7 +382,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (entry.media_type && entry.media_type.length > 0) {
       return entry.media_type;
     }
-    return 'application/octet-stream';
+    return DEFAULT_ATTACHMENT_MIME_TYPE;
   }
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
@@ -1088,6 +1094,37 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return null;
   }
 
+  private async buildAttachmentPart(
+    attachment: ToolFileAttachment,
+  ): Promise<Part | null> {
+    try {
+      const buffer = await loadAttachmentBuffer(attachment);
+      if (!buffer || buffer.length === 0) {
+        this.logger.warn(
+          `Skipping empty attachment '${attachment.path}' in Google function response.`,
+        );
+        return null;
+      }
+
+      const mimeType =
+        typeof attachment.mimeType === 'string' &&
+        attachment.mimeType.length > 0
+          ? attachment.mimeType
+          : DEFAULT_ATTACHMENT_MIME_TYPE;
+
+      return createPartFromBase64(buffer.toString('base64'), mimeType);
+    } catch (attachmentError) {
+      const message =
+        attachmentError instanceof Error
+          ? attachmentError.message
+          : String(attachmentError);
+      this.logger.warn(
+        `Failed to encode attachment '${attachment.path}' for Google function response: ${message}`,
+      );
+      return null;
+    }
+  }
+
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     id: string,
@@ -1127,11 +1164,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Use the same ID for the result to maintain correlation
     const { attachments, sanitizedResult } = extractToolAttachments(result);
+    let attachmentParts: Part[] = [];
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to download them.`;
+        `Attachments included in this response:\n${describeAttachments(
+          attachments,
+        ).join('\n')}`;
+
+      const encodedParts = await Promise.all(
+        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
+      );
+
+      attachmentParts = encodedParts.filter(
+        (part): part is Part => part !== null,
+      );
+
+      if (attachmentParts.length === 0) {
+        this.logger.warn(
+          `All attachments for Google function response '${functionName}' failed to encode.`,
+        );
+      }
     }
     const resultPart = createPartFromFunctionResponse(
       callId,
@@ -1147,7 +1199,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       role: 'model',
       parts: sanitizeFunctionCallParts(callParts),
     };
-    const resultMsg: Content = { role: 'user', parts: [resultPart] };
+    const resultParts: Part[] = [resultPart, ...attachmentParts];
+    const resultMsg: Content = { role: 'user', parts: resultParts };
     return [callMsg, resultMsg];
   }
 
