@@ -355,11 +355,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (thinkingContent && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinkingContent);
       if (formatted.trim().length > 0) {
-        options.logger.info(
-          formatted,
-          groupId,
-          MESSAGE_TYPES.THINKING,
-        );
+        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
       }
     }
 
@@ -368,20 +364,12 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       'scratchpad',
     );
     if (scratchpad) {
-      options.logger.info(
-        scratchpad,
-        groupId,
-        MESSAGE_TYPES.SCRATCHPAD,
-      );
+      options.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     if (newResponse && !useStreaming) {
       const formattedResponse = await xmlUtils.formatContent(newResponse);
-      options.logger.info(
-        formattedResponse,
-        groupId,
-        MESSAGE_TYPES.INTERNAL,
-      );
+      options.logger.info(formattedResponse, groupId, MESSAGE_TYPES.INTERNAL);
     }
 
     const apiUsage = options.modelHandler.computeResponseUsage(
@@ -397,22 +385,22 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     );
 
     if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        options.logger.error(
-          `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-          groupId,
-        );
-        options.logger.error(
-          'Massive repetition detected - skipping this response',
-          groupId,
-        );
-        options.logger.error(
-          'Message structure when repetition detected:',
-          groupId,
-        );
-        options.logger.error(
-          JSON.stringify(messageToSkeleton(cycle.messages), null, 2),
-          groupId,
-        );
+      options.logger.error(
+        `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
+        groupId,
+      );
+      options.logger.error(
+        'Massive repetition detected - skipping this response',
+        groupId,
+      );
+      options.logger.error(
+        'Message structure when repetition detected:',
+        groupId,
+      );
+      options.logger.error(
+        JSON.stringify(messageToSkeleton(cycle.messages), null, 2),
+        groupId,
+      );
     }
 
     let processedResponse: string | undefined;
@@ -471,10 +459,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     }
 
     if (!cycle.outputExists) {
-      options.logger.debug(
-        `Creating new file: ${cycle.outputFile}`,
-        groupId,
-      );
+      options.logger.debug(`Creating new file: ${cycle.outputFile}`, groupId);
       await WorkspaceFS.write(cycle.outputFile, execRes.processedResponse);
       cycle.outputExists = true;
     } else {
