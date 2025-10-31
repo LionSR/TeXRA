@@ -9,32 +9,21 @@ import {
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 
+// Local imports - option helpers
+import type { AgentCycleBaseOptions } from './AgentCycleOptions';
+
 // Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - identifier types
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
-// Local imports - logging
-import type { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - model handlers
-import type { IModelHandler } from '@agent/modelHandlers';
-
 // Local imports - agent configuration
 import type { AgentConfig } from './AgentConfig';
-import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
-export interface ResponseCycleOptions<C = unknown> {
-  modelHandler: IModelHandler<any, any, any, any, C>;
-  agentSetting: AgentSetting;
+export interface ResponseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
   agentConfig: AgentConfig;
-  agentPrompt: AgentPrompt;
-  userVars: Record<string, any>;
-  logger: AgentLogger;
-  client: C;
-  checkInterruption: () => Promise<boolean> | boolean;
-  setAbortController: (ctrl: AbortController | null) => void;
 }
 
 export interface ResponseCycleContext<C = unknown> {

@@ -640,6 +640,7 @@
                 "parentheses",
                 "latexdiff_markup",
                 "equation_style",
+                "equation_macros",
                 "max_style_regex"
               ]
             },
