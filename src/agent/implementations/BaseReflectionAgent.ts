@@ -596,13 +596,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     const totalRounds = this.getTotalRounds();
 
-    await runAgentFlow<
-      BaseReflectionAgent<C>,
-      ReflectionRunState,
-      ReflectionRunLifecycle,
-      ReflectionRunHooks,
-      ReflectionRunShared<C>
-    >({
+    await runAgentFlow<ReflectionRunShared<C>>({
       agent: this,
       lifecycle,
       createState: () =>
