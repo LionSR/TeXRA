@@ -518,9 +518,10 @@
         <div
           id="agentConfigBanner"
           class="agent-config-banner"
-          style="display: none"
+          style="${agentConfigBannerStyle}"
+          data-custom-dir-set="${agentConfigCustomDirSet}"
         >
-          <span>Agent configuration is missing.</span>
+          <span>${agentConfigBannerText}</span>
           <div class="actions">
             <vscode-toolbar-button
               id="agentConfigEditButton"

@@ -136,10 +136,16 @@ export class HistoryViewProvider
    */
   private async updateWebviewContent() {
     if (this._view) {
-      // Set the HTML content first
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
+      try {
+        // Set the HTML content first
+        this._view.webview.html = await this.contentProvider.getHtmlContent(
+          this._view.webview,
+        );
+      } catch (error) {
+        console.error('Error updating history view content', error);
+        this._view.webview.html =
+          '<html><body>Error loading content</body></html>';
+      }
       // Then send the history data after a short delay
       setTimeout(() => {
         if (this._view) {

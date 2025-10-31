@@ -43,7 +43,9 @@ export abstract class BaseViewContentProvider {
   /**
    * Optional: Override to provide additional template variables
    */
-  protected getTemplateVariables(): Record<string, any> {
+  protected getTemplateVariables():
+    | Record<string, any>
+    | Promise<Record<string, any>> {
     return {};
   }
 
@@ -108,13 +110,13 @@ export abstract class BaseViewContentProvider {
   /**
    * Standard implementation that subclasses can override if needed
    */
-  public getHtmlContent(webview: vscode.Webview): string {
+  public async getHtmlContent(webview: vscode.Webview): Promise<string> {
     try {
       const htmlPath = this.getWebviewPath('index.html');
       const commonUris = this.getCommonModuleUris(webview);
       const sharedUris = this.getSharedModuleUris(webview);
       const specificUris = this.getModuleUris(webview);
-      const templateVariables = this.getTemplateVariables();
+      const templateVariables = await this.getTemplateVariables();
 
       this.logger.debug(
         this.channel,

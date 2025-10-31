@@ -3,7 +3,6 @@ import {
   buildAgentOptionsPayload,
   DEFAULT_TOOL_USE_AGENT,
   DEFAULT_WORKFLOW_AGENT,
-  type AgentDirectoryMap,
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -45,14 +44,6 @@ export async function getAllAgents(): Promise<AgentNameBuckets> {
 /**
  * Get all agent directories.
  */
-async function getAgentDirectories(): Promise<AgentDirectoryMap> {
-  return {
-    custom: await agentDirectories.custom(),
-    builtIn: await agentDirectories.builtIn(),
-    builtInToolUse: await agentDirectories.builtInToolUse(),
-  };
-}
-
 /**
  * Compute agent <vscode-option> tags for the agent dropdown.
  * Agents missing a YAML definition are marked as disabled and cannot be selected.
@@ -62,7 +53,7 @@ async function getAgentDirectories(): Promise<AgentDirectoryMap> {
 export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   const { allAgents, toolUseAgents, defaultWorkflowAgent } =
     await getAllAgents();
-  const dirs = await getAgentDirectories();
+  const dirs = await agentDirectories.getDirectoryMap();
 
   return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
     workflowAgent: defaultWorkflowAgent,

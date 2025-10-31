@@ -93,9 +93,15 @@ export class MainViewProvider
 
   private async refreshOptionsAndView() {
     if (this._view) {
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
+      try {
+        this._view.webview.html = await this.contentProvider.getHtmlContent(
+          this._view.webview,
+        );
+      } catch (error) {
+        console.error('Error refreshing main view content', error);
+        this._view.webview.html =
+          '<html><body>Error loading content</body></html>';
+      }
     }
   }
 

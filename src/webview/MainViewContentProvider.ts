@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -12,6 +9,7 @@ import {
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
 import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 
 // Local imports - webview
 import {
@@ -19,7 +17,6 @@ import {
   ModuleDescriptor,
 } from '@common/webview/BaseViewContentProvider';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS } from '@utils/files';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
@@ -80,26 +77,33 @@ export class MainViewContentProvider extends BaseViewContentProvider {
     return this.buildUriRecord(webview, this.moduleDescriptors);
   }
 
-  protected getTemplateVariables(): Record<string, any> {
-    // Note: This uses synchronous approach for template generation
-    // Agent options with metadata are computed asynchronously via computeAgentOptions
+  protected override async getTemplateVariables(): Promise<
+    Record<string, any>
+  > {
     const configuredWorkflowAgents = getConfig<string[]>('agents', []);
     const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
-    const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
-    const builtInDir = GlobalStorageFS.fullPath('agents');
-    const configuredCustomDir = getConfig<string>(
-      'explorer.agentsDirectory',
-      '',
-    ).trim();
-    const customDir = path.isAbsolute(configuredCustomDir)
-      ? configuredCustomDir
-      : '';
 
-    const agentDirectories: AgentDirectoryMap = {
-      custom: customDir,
-      builtIn: builtInDir,
-      builtInToolUse: toolUseDir,
-    };
+    agentDirectories.initialize(this.context);
+
+    let directories: AgentDirectoryMap | undefined;
+    let shouldShowAgentBanner = false;
+    let bannerText = 'Agent configuration is missing.';
+
+    try {
+      directories = await agentDirectories.getDirectoryMap();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        this.channel,
+        `Failed to resolve agent directories: ${message}`,
+      );
+      shouldShowAgentBanner = true;
+      bannerText = 'Agent directories could not be loaded.';
+    }
+
+    const resolvedDirectories: AgentDirectoryMap = directories ?? {};
+    const customDirSet = Boolean(resolvedDirectories.custom);
+
     const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
     const workflowAgents = hasConfiguredWorkflowAgents
       ? Array.from(new Set(configuredWorkflowAgents))
@@ -117,7 +121,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       : (workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT);
     const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
       allAgents,
-      agentDirectories,
+      resolvedDirectories,
       toolUseAgents,
       {
         workflowAgent: defaultWorkflowAgent,
@@ -132,10 +136,18 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       )
       .join('\n');
 
+    const agentConfigBannerStyle = shouldShowAgentBanner
+      ? 'display: flex'
+      : 'display: none';
+    const agentConfigCustomDirSet = customDirSet ? 'true' : 'false';
+
     return {
       workflowAgentOptions: optionBuckets.workflow,
       toolUseAgentOptions: optionBuckets.toolUse,
       modelOptions,
+      agentConfigBannerStyle,
+      agentConfigBannerText: bannerText,
+      agentConfigCustomDirSet,
     };
   }
 }

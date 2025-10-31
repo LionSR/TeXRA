@@ -12,6 +12,9 @@ import { getConfig, updateConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
 import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
+// Local imports - agent utilities
+import type { AgentDirectoryMap } from '@agent/utils/agentOptionMetadata';
+
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
@@ -160,6 +163,18 @@ export class AgentDirectoryManager {
     await updateConfig('explorer.agentsDirectory', selectedPath);
 
     return selectedPath;
+  }
+
+  async getDirectoryMap(): Promise<AgentDirectoryMap> {
+    this.ensureInitialized();
+
+    const [builtIn, builtInToolUse, custom] = await Promise.all([
+      this.builtIn(),
+      this.builtInToolUse(),
+      this.custom(),
+    ]);
+
+    return { builtIn, builtInToolUse, custom };
   }
 }
 

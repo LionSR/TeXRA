@@ -11,7 +11,7 @@ export abstract class BaseWebviewProvider {
   protected _viewDisposables: vscode.Disposable[] = [];
 
   protected abstract contentProvider: {
-    getHtmlContent(webview: vscode.Webview): string;
+    getHtmlContent(webview: vscode.Webview): Promise<string>;
   };
   protected abstract messageHandler: {
     handleMessage(
@@ -36,9 +36,18 @@ export abstract class BaseWebviewProvider {
     this.cleanupView();
     this._view = webviewView;
 
-    webviewView.webview.html = this.contentProvider.getHtmlContent(
-      webviewView.webview,
-    );
+    this.contentProvider
+      .getHtmlContent(webviewView.webview)
+      .then((html) => {
+        if (this._view === webviewView) {
+          webviewView.webview.html = html;
+        }
+      })
+      .catch((error) => {
+        console.error('Error setting webview HTML', error);
+        webviewView.webview.html =
+          '<html><body>Error loading content</body></html>';
+      });
 
     this._viewDisposables.push(
       webviewView.webview.onDidReceiveMessage((message) =>
