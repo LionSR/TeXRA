@@ -56,6 +56,13 @@ export interface IAgent {
  * Core hook contract used to orchestrate agent runs.
  */
 export interface AgentRunHooks {
+  /**
+   * Begin an agent run and optionally create a logging group.
+   *
+   * @returns The identifier for the run group used by subsequent lifecycle hooks.
+   *          Return `undefined` to indicate that the lifecycle should reuse an
+   *          existing log group (for example, interactive tool-use sessions).
+   */
   start(): Promise<string | undefined>;
   init(runGroupId: string | undefined): Promise<void>;
   initializeClient(): Promise<void>;

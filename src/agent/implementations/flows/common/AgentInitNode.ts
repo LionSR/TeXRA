@@ -44,7 +44,22 @@ export class AgentInitNode<
       const runGroupId = await shared.hooks.start();
       await shared.hooks.init(runGroupId);
       if (this.config.beforeInitialize) {
-        await this.config.beforeInitialize(shared);
+        try {
+          await this.config.beforeInitialize(shared);
+        } catch (hookError) {
+          const contextualError =
+            hookError instanceof Error
+              ? new Error(
+                  `Agent initialization failed in beforeInitialize: ${hookError.message}`,
+                  { cause: hookError },
+                )
+              : new Error(
+                  `Agent initialization failed in beforeInitialize: ${String(
+                    hookError,
+                  )}`,
+                );
+          throw contextualError;
+        }
       }
       await shared.hooks.initializeClient();
       return {};
