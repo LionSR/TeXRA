@@ -28,6 +28,8 @@ import {
   type ToolUseRunShared,
   type ToolUseRunState,
 } from '@agent/implementations/flows/ToolUseRunFlow';
+import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
+import type { AgentRunBaseHooks } from '@agent/implementations/flows/common/types';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
@@ -177,7 +179,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           shouldSkipCycle: false,
         }) satisfies ToolUseRunState<C>,
       createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks) => ({
+      extendHooks: (baseHooks: AgentRunBaseHooks) => ({
         ...baseHooks,
         start: async () => undefined,
         init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
@@ -206,10 +208,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           return updatedMessages;
         },
         end: async (status) => {
-          await Promise.resolve(baseHooks.end(status));
+          await baseHooks.end(status);
         },
         cleanup: async () => {
-          await Promise.resolve(baseHooks.cleanup());
+          await baseHooks.cleanup();
         },
         logFinalizeWarning: (message, error) => {
           this.logger.warn(message, undefined, undefined, error);
