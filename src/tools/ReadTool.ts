@@ -11,7 +11,7 @@ import { ToolResult, toolResult } from '@tools/result';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-export const READ_FILE_MAX_LINES = 400;
+export const READ_FILE_MAX_LINES = 2000;
 
 const ReadInputSchema = z.strictObject({
   path: z.string(),
