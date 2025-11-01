@@ -9,11 +9,11 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local imports - store
-import {
-  ToolUseSnapshotStore,
-  type SaveToolUseSnapshotPayload,
-  type ToolUseSessionSnapshot,
-} from './ToolUseSnapshotStore';
+import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
+import type {
+  SaveToolUseSnapshotPayload,
+  ToolUseSessionSnapshot,
+} from './ToolUseSnapshotTypes';
 
 const CHANNEL = 'ToolUseSessionManager';
 const logger = new AgentLogger(CHANNEL);
@@ -205,5 +205,5 @@ export class ToolUseSessionManager {
   }
 }
 
-export type { ToolUseSessionSnapshot } from './ToolUseSnapshotStore';
-export type { SaveToolUseSnapshotPayload } from './ToolUseSnapshotStore';
+export type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
+export type { SaveToolUseSnapshotPayload } from './ToolUseSnapshotTypes';

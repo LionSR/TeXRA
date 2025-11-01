@@ -2,18 +2,11 @@
 import * as path from 'path';
 
 // Third-party imports
-import { z } from 'zod';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import {
-  AgentCategory,
-  AgentType,
-  resolveAgentSessionDescriptor,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { AgentType } from '@agent/core/AgentDataclass';
 import { ToolState } from '@agent/core/ToolState';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -24,7 +17,18 @@ import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
 } from '@utils/config';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import {
+  TOOL_USE_SNAPSHOT_VERSION,
+  ToolUseSessionSnapshotSchema,
+  normalizeSnapshot,
+  toToolStateSnapshot,
+  hydrateToolState,
+  type SaveToolUseSnapshotPayload,
+  type ToolUseSessionSnapshot,
+} from './ToolUseSnapshotTypes';
+
+const SNAPSHOT_VERSION = TOOL_USE_SNAPSHOT_VERSION;
 
 /**
  * Persists tool-use session snapshots to disk. Runtime queue state lives in
@@ -34,93 +38,6 @@ const CHANNEL = 'ToolUseSnapshotStore';
 const logger = new AgentLogger(CHANNEL);
 
 const STORAGE_DIR = 'toolUseSessions';
-const SNAPSHOT_VERSION = 1;
-
-const ToolStateSnapshotSchema = z.object({
-  texcountStats: z.string().nullable(),
-  lastResponse: z.string(),
-  accumulatedOutput: z.string(),
-  mediaFiles: z.array(z.string()),
-  thinkingBlocks: z.array(z.unknown()),
-  thinkingAdded: z.boolean(),
-});
-
-const SessionDescriptorSchema = z.strictObject({
-  agentType: z.enum(AgentType).optional(),
-  agentCategory: z.enum(AgentCategory),
-});
-
-const ToolUseSessionSnapshotSchema = z.strictObject({
-  version: z.literal(SNAPSHOT_VERSION),
-  executionId: z.string(),
-  streamId: z.string(),
-  agentName: z.string(),
-  model: z.string(),
-  agentSessionKind: z.enum(AgentCategory).optional(),
-  session: SessionDescriptorSchema.optional(),
-  messages: z.array(z.unknown()),
-  toolState: ToolStateSnapshotSchema,
-  lastUpdated: z.number(),
-});
-
-type ToolUseSessionSnapshotParsed = z.infer<
-  typeof ToolUseSessionSnapshotSchema
->;
-
-export type ToolUseSessionSnapshot = Omit<
-  ToolUseSessionSnapshotParsed,
-  'agentSessionKind' | 'session'
-> & {
-  session: Required<AgentSessionDescriptor>;
-};
-
-export interface SaveToolUseSnapshotPayload {
-  executionId: ExecutionId;
-  streamId: StreamTabId;
-  agentName: string;
-  model: string;
-  session: AgentSessionDescriptor;
-  messages: ProviderMessage[];
-  toolState: ToolState;
-}
-
-function toToolStateSnapshot(
-  state: ToolState,
-): ToolUseSessionSnapshot['toolState'] {
-  return ToolStateSnapshotSchema.parse(structuredClone(state));
-}
-
-function hydrateToolState(
-  snapshot: ToolUseSessionSnapshot['toolState'],
-): ToolState {
-  return Object.assign(new ToolState(), structuredClone(snapshot));
-}
-
-function normalizeSnapshot(
-  snapshot: ToolUseSessionSnapshotParsed,
-): ToolUseSessionSnapshot {
-  if (snapshot.session && !snapshot.agentSessionKind) {
-    return snapshot as ToolUseSessionSnapshot;
-  }
-
-  const descriptor =
-    snapshot.session ??
-    resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
-
-  const {
-    agentSessionKind: _legacyKind,
-    session: _legacySession,
-    ...rest
-  } = snapshot;
-
-  return {
-    ...rest,
-    session: {
-      agentType: descriptor.agentType ?? AgentType.ToolUse,
-      agentCategory: descriptor.agentCategory,
-    },
-  };
-}
 
 async function ensureStorageDir(): Promise<boolean> {
   try {
@@ -154,80 +71,71 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
-let migrationPromise: Promise<void> | null = null;
-let migrationCompleted = false;
+const migrationState: {
+  promise: Promise<void> | null;
+  completed: boolean;
+} = {
+  promise: null,
+  completed: false,
+};
 
 async function migrateLegacySnapshots(): Promise<void> {
-  if (migrationCompleted) {
+  if (migrationState.completed) {
     return;
   }
 
-  if (!migrationPromise) {
-    migrationPromise = (async () => {
-      try {
-        if (!(await ensureStorageDir())) {
-          return;
+  if (!migrationState.promise) {
+    migrationState.promise = (async () => {
+      if (!(await ensureStorageDir())) {
+        return;
+      }
+
+      const entries = await StorageFS.readDir(STORAGE_DIR).catch((error) => {
+        logger.debug(
+          `Unable to enumerate tool-use snapshots for migration: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return [] as [string, vscode.FileType][];
+      });
+
+      for (const [name, type] of entries) {
+        if (type !== vscode.FileType.File || !name.endsWith('.json')) {
+          continue;
         }
 
-        const entries = await StorageFS.readDir(STORAGE_DIR).catch((error) => {
+        const relativePath = path.join(STORAGE_DIR, name);
+        const stored = await StorageFS.readJson<unknown>(relativePath).catch((error) => {
           logger.debug(
-            `Unable to enumerate tool-use snapshots for migration: ${
+            `Skipping migration for ${name}: ${
               error instanceof Error ? error.message : String(error)
             }`,
           );
           return null;
         });
 
-        if (!entries) {
-          return;
+        if (typeof stored !== 'string') {
+          continue;
         }
 
-        for (const [name, type] of entries) {
-          if (type !== vscode.FileType.File || !name.endsWith('.json')) {
-            continue;
-          }
-
-          const relativePath = path.join(STORAGE_DIR, name);
-
-          try {
-            const stored = await StorageFS.readJson<unknown>(relativePath);
-            if (typeof stored !== 'string') {
-              continue;
-            }
-
-            const normalized = JSON.parse(stored);
-            const parsed = ToolUseSessionSnapshotSchema.safeParse(normalized);
-
-            if (!parsed.success) {
-              logger.debug(
-                `Skipping migration for ${name}: validation failed (${parsed.error.message})`,
-              );
-              continue;
-            }
-
-            await StorageFS.writeJson(relativePath, parsed.data);
-            logger.debug(`Migrated legacy snapshot ${name}`);
-          } catch (error) {
-            logger.debug(
-              `Skipping migration for ${name}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
-        }
-      } catch (error) {
+        const parsed = ToolUseSessionSnapshotSchema.parse(JSON.parse(stored));
+        await StorageFS.writeJson(relativePath, parsed);
+        logger.debug(`Migrated legacy snapshot ${name}`);
+      }
+    })()
+      .catch((error) => {
         logger.debug(
           `Legacy snapshot migration failed: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
-      } finally {
-        migrationCompleted = true;
-      }
-    })();
+      })
+      .finally(() => {
+        migrationState.completed = true;
+      });
   }
 
-  await migrationPromise;
+  await migrationState.promise;
 }
 
 export const ToolUseSnapshotStore = {
