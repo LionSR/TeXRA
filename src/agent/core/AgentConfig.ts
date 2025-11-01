@@ -3,7 +3,11 @@ import { z } from 'zod';
 
 // Local imports - agent
 // Local imports - agent components
-import { AgentCategory, AgentType, type AgentSessionDescriptor } from './AgentDataclass';
+import {
+  AgentCategory,
+  AgentType,
+  type AgentSessionDescriptor,
+} from './AgentDataclass';
 import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
