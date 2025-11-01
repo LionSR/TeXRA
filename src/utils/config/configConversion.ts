@@ -9,8 +9,9 @@ import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
 import { type TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
   AgentCategory,
-  type AgentType,
+  AgentType,
   type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -38,26 +39,61 @@ function createActiveFilesFromArrays(
   return active;
 }
 
-function createDescriptorFromLegacy(
-  obj: Record<string, any>,
-): AgentSessionDescriptor | undefined {
-  const category = obj.agentSessionKind as AgentCategory | undefined;
-  if (!category) {
-    return undefined;
-  }
-
+function coerceAgentType(value: unknown): AgentType | undefined {
   if (
-    category !== AgentCategory.Workflow &&
-    category !== AgentCategory.ToolUse
+    value === AgentType.CoT ||
+    value === AgentType.Direct ||
+    value === AgentType.ToolUse
   ) {
-    return undefined;
+    return value;
+  }
+  return undefined;
+}
+
+function coerceAgentCategory(value: unknown): AgentCategory | undefined {
+  if (value === AgentCategory.Workflow || value === AgentCategory.ToolUse) {
+    return value;
+  }
+  return undefined;
+}
+
+function resolveSessionDescriptor(
+  ...sources: Array<Record<string, any>>
+): AgentSessionDescriptor | undefined {
+  for (const source of sources) {
+    const rawSession = source.session;
+    if (isObjectRecord(rawSession)) {
+      const descriptor = rawSession as Partial<AgentSessionDescriptor> & {
+        agentCategory?: unknown;
+        agentType?: unknown;
+      };
+      const agentCategory = coerceAgentCategory(descriptor.agentCategory);
+      if (agentCategory) {
+        return {
+          agentCategory,
+          agentType: coerceAgentType(descriptor.agentType),
+        };
+      }
+    }
   }
 
-  const agentType = obj.agentType as AgentType | undefined;
-  return {
-    agentType,
-    agentCategory: category,
-  };
+  let agentType: AgentType | undefined;
+  let agentCategory: AgentCategory | undefined;
+
+  for (const source of sources) {
+    if (!agentType) {
+      agentType = coerceAgentType(source.agentType);
+    }
+    if (!agentCategory) {
+      agentCategory = coerceAgentCategory(source.agentSessionKind);
+    }
+  }
+
+  if (agentType || agentCategory) {
+    return resolveAgentSessionDescriptor(agentType, agentCategory);
+  }
+
+  return undefined;
 }
 
 /**
@@ -110,17 +146,17 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
 export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Check if this is already in the new format with nested agentConfig
   if (obj.agentConfig && typeof obj.agentConfig === 'object') {
-    const sessionDescriptor =
-      (obj.session as AgentSessionDescriptor | undefined) ??
-      createDescriptorFromLegacy(obj);
-    const configInput = sessionDescriptor
-      ? { ...obj.agentConfig, session: sessionDescriptor }
-      : obj.agentConfig;
+    const configSource = obj.agentConfig as Record<string, any>;
+    const sessionDescriptor = resolveSessionDescriptor(configSource, obj);
+    const configInput = {
+      ...configSource,
+      ...(sessionDescriptor ? { session: sessionDescriptor } : {}),
+    };
     const state = agentConfigToTaskState(parseAgentConfig(configInput));
 
     if (isWorkflowTaskState(state)) {
       state.activeFiles =
-        obj.activeFiles || createActiveFilesFromArrays(obj.agentConfig);
+        obj.activeFiles || createActiveFilesFromArrays(configSource);
     } else if (isObjectRecord(obj.toolSessionState)) {
       state.toolSessionState = { ...obj.toolSessionState };
     }
@@ -131,112 +167,53 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   // Old format: extract UI-specific and tool config fields for backward compatibility
   const {
     activeFiles,
+    agentSessionKind: _agentSessionKind,
     // Extract tool config fields that might be at top level in old format
     autoExtractFigure,
     autoExtractTikzFigure,
     autoCompileInputPdf,
     attachTeXCount,
-    reflect: _legacyReflect,
+    toolSessionState,
+    toolConfig: legacyToolConfig,
     ...agentConfigData
   } = obj;
 
-  void _legacyReflect;
+  void _agentSessionKind;
 
-  const legacyPrintInputPrompt = Object.prototype.hasOwnProperty.call(
-    obj,
-    'printInputPrompt',
-  )
-    ? obj.printInputPrompt
-    : undefined;
+  const baseToolConfig = isObjectRecord(legacyToolConfig)
+    ? (legacyToolConfig as Record<string, unknown>)
+    : {};
 
-  const nestedLegacyPrintInputPrompt =
-    isObjectRecord(agentConfigData.toolConfig) &&
-    Object.prototype.hasOwnProperty.call(
-      agentConfigData.toolConfig,
-      'printInputPrompt',
-    )
-      ? (agentConfigData.toolConfig as Record<string, unknown>)[
-          'printInputPrompt'
-        ]
-      : undefined;
-
-  // Build toolConfig from extracted fields (backward compatibility)
-  // Ensure toolConfig is an object, handling cases where it might be malformed
-  if (
-    !agentConfigData.toolConfig ||
-    typeof agentConfigData.toolConfig !== 'object'
-  ) {
-    agentConfigData.toolConfig = {};
-  }
-
-  if (
-    isObjectRecord(agentConfigData.toolConfig) &&
-    Object.prototype.hasOwnProperty.call(agentConfigData.toolConfig, 'reflect')
-  ) {
-    delete (agentConfigData.toolConfig as Record<string, unknown>).reflect;
-  }
-
-  // Merge top-level tool config fields into toolConfig
-  // Top-level fields take precedence for backward compatibility
-  agentConfigData.toolConfig = {
-    ...agentConfigData.toolConfig,
+  const mergedToolConfig: Record<string, unknown> = {
+    ...baseToolConfig,
     ...(autoExtractFigure !== undefined && { autoExtractFigure }),
     ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
     ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
     ...(attachTeXCount !== undefined && { attachTeXCount }),
   };
 
-  if (
-    legacyPrintInputPrompt !== undefined ||
-    nestedLegacyPrintInputPrompt !== undefined
-  ) {
-    console.warn(
-      'Ignoring legacy printInputPrompt setting. Enable texra.debug.saveInputPrompt instead.',
-    );
-    delete (agentConfigData.toolConfig as Record<string, unknown>)[
-      'printInputPrompt'
-    ];
+  const configInput: Record<string, unknown> = {
+    ...agentConfigData,
+    toolConfig: mergedToolConfig,
+  };
+
+  const sessionDescriptor = resolveSessionDescriptor(obj, configInput);
+  if (sessionDescriptor) {
+    configInput.session = sessionDescriptor;
   }
 
-  // Parse only AgentConfig-compatible fields
-  try {
-    const sessionDescriptor =
-      (obj.session as AgentSessionDescriptor | undefined) ??
-      createDescriptorFromLegacy(obj);
-    const configInput = sessionDescriptor
-      ? { ...agentConfigData, session: sessionDescriptor }
-      : agentConfigData;
-    const normalized = parseAgentConfig(configInput);
-    const taskState = agentConfigToTaskState(normalized);
+  const normalized = parseAgentConfig(configInput);
+  const taskState = agentConfigToTaskState(normalized);
 
-    if (isWorkflowTaskState(taskState)) {
-      if (activeFiles) {
-        taskState.activeFiles = activeFiles;
-      }
-    } else if (isObjectRecord(obj.toolSessionState)) {
-      taskState.toolSessionState = { ...obj.toolSessionState };
-    }
-
-    return taskState;
-  } catch (error) {
-    // If parsing fails, create a minimal valid state
-    console.error('Failed to parse task state, using defaults:', error);
-    const defaultConfig = parseAgentConfig({});
-    const taskState = agentConfigToTaskState(defaultConfig);
-
-    if (isWorkflowTaskState(taskState) && activeFiles) {
+  if (isWorkflowTaskState(taskState)) {
+    if (activeFiles) {
       taskState.activeFiles = activeFiles;
     }
-
-    if (
-      !isWorkflowTaskState(taskState) &&
-      isObjectRecord(obj.toolSessionState)
-    ) {
-      taskState.toolSessionState = { ...obj.toolSessionState };
-    }
-
-    return taskState;
+  } else if (isObjectRecord(toolSessionState)) {
+    taskState.toolSessionState = { ...toolSessionState };
   }
+
+  return taskState;
 }
 
 // normalizeSessionKind removed – canonical descriptor is now provided directly.
