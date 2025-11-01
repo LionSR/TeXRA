@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import {
   parseAgentConfig,
   } from '@agent/core/AgentConfig';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -25,6 +26,7 @@ export const executeCommand = {
     config: unknown,
     context: vscode.ExtensionContext,
   ) => {
+  executeCommand: async (config: unknown, context: vscode.ExtensionContext) => {
     try {
       // Save the agent configuration to history (silently)
       const normalizedConfig = parseAgentConfig(config);

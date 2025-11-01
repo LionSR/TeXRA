@@ -1,7 +1,5 @@
 // Standard library imports
-import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { Buffer } from 'buffer';
 
 // Third-party imports
 import { FinishReason } from '@google/genai';
@@ -21,12 +19,7 @@ import {
   MCP_STOP,
 } from './types/StopReasonTypes';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import {
-  getBase64EncodedMedia,
-  countPdfPages,
-  processPdf2Png,
-} from '@frontend/media/img';
+import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - events
@@ -44,7 +37,6 @@ import {
 import { getConfig } from '@utils/config';
 
 // Local imports - utilities
-import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { normalizeUrl } from '@utils/urlUtils';
 
 // Default continuation limits
@@ -84,8 +76,6 @@ interface MarkerFlags {
   encounterDocumentTag: boolean;
 }
 
-export type MediaFileResult = { path: string; ok: boolean };
-
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
  */
@@ -107,6 +97,7 @@ export abstract class ModelHandler<
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
   protected agentType?: AgentType;
+  protected mediaProcessor: MediaAttachmentProcessor;
 
   protected get supportsToolFileOutputs(): boolean {
     return false;
@@ -133,6 +124,10 @@ export abstract class ModelHandler<
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent
     this.logger = new AgentLogger('Agent');
+    this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
+      getCapabilities: () => this.capabilities,
+      isOpenAIProvider: () => this.isOpenai,
+    });
   }
 
   /**
@@ -140,6 +135,7 @@ export abstract class ModelHandler<
    */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
+    this.mediaProcessor.setLogger(logger);
   }
 
   /**
@@ -515,278 +511,17 @@ export abstract class ModelHandler<
     return effort;
   }
 
-  /** Determine if extension corresponds to an audio format. */
-  private isAudio(ext: string): boolean {
-    const mimeType = getMimeType(ext);
-    return mimeType !== null && mimeType.startsWith('audio/');
-  }
-
-  /**
-   * Process an image file for model ingestion.
-   * Handles PDFs and other common image formats.
-   */
-  protected async processImage(
-    mediaFile: string,
-    ext: string,
-  ): Promise<[string | string[], string, 'image']> {
-    let mediaType: string;
-    let mediaData: string | string[];
-
-    if (ext === '.pdf') {
-      const pageCount = await countPdfPages(mediaFile);
-      if (pageCount === 0) {
-        throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
-      }
-
-      if (this.capabilities.supportsNativePdf) {
-        this.logger.debug(
-          `Using native PDF for ${mediaFile}. Page count: ${pageCount}`,
-        );
-        mediaType = 'application/pdf';
-        mediaData = await getBase64EncodedMedia(mediaFile);
-        return [mediaData, mediaType, 'image'];
-      }
-
-      mediaType = 'image/png';
-      this.logger.debug(`Converting PDF to PNG: ${mediaFile}`);
-      const pdfResult = await processPdf2Png(mediaFile);
-      if (pdfResult === null) {
-        throw new Error(`Failed to process PDF file as image: ${mediaFile}`);
-      }
-      mediaData = pdfResult;
-    } else {
-      const mimeType = getMimeType(mediaFile);
-      if (mimeType && mimeType.startsWith('image/')) {
-        mediaType = mimeType;
-        this.logger.debug(
-          `Processing as image: ${mediaFile}, type: ${mediaType}`,
-        );
-        mediaData = await getBase64EncodedMedia(mediaFile);
-      } else {
-        throw new Error(
-          `Unsupported image extension: ${ext}. Image support: ${this.capabilities.supportsVision}`,
-        );
-      }
-    }
-
-    return [mediaData, mediaType, 'image'];
-  }
-
-  /** Process an audio file for models supporting native audio input. */
-  protected async processAudio(
-    mediaFile: string,
-    ext: string,
-  ): Promise<[string, string, 'audio']> {
-    const mimeType = getMimeType(mediaFile);
-    if (
-      !mimeType ||
-      !mimeType.startsWith('audio/') ||
-      !this.capabilities.supportsNativeAudio
-    ) {
-      throw new Error(
-        `Unsupported or disabled audio extension: ${ext}. Audio support: ${this.capabilities.supportsNativeAudio}`,
-      );
-    }
-
-    const mediaType = mimeType;
-    this.logger.debug(`Processing as audio: ${mediaFile}, type: ${mediaType}`);
-    let mediaData = await getBase64EncodedMedia(mediaFile);
-    if (Array.isArray(mediaData)) {
-      this.logger.warn(
-        `Audio file ${mediaFile} processed into multiple parts, using only the first.`,
-      );
-      mediaData = mediaData[0];
-    }
-    return [mediaData, mediaType, 'audio'];
-  }
-
-  /**
-   * Process image or audio for models.
-   * @param mediaFile Path to the media file
-   * @param fileExtension File extension (e.g. '.jpg', '.pdf', '.wav')
-   * @returns Tuple of [base64 encoded media data, media type, media category ('image' or 'audio')]
-   */
-  protected async processMedia(
-    mediaFile: string,
-    fileExtension: string,
-  ): Promise<[string | string[], string, 'image' | 'audio']> {
-    const ext = fileExtension.toLowerCase();
-    return this.isAudio(ext)
-      ? this.processAudio(mediaFile, ext)
-      : this.processImage(mediaFile, ext);
-  }
-
   /**
    * Create image/audio messages for the conversation.
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
    */
   public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
-    const { entries, results } = await this.buildMediaEntries(mediaFiles);
-    this.logMediaResults(results);
-    return this.createMediaContent(entries);
-  }
-
-  protected logMediaResults(results: MediaFileResult[]): void {
-    if (results.length === 0) {
-      return;
-    }
-    if (results.some((result) => !result.ok)) {
-      this.logger.warn('Some media files failed to load');
-    }
-    this.logger.fileList(results);
-  }
-
-  protected async buildMediaEntries(
-    mediaFiles: string[],
-  ): Promise<{ entries: MediaEntry[]; results: MediaFileResult[] }> {
-    const settledResults = await Promise.allSettled(
-      mediaFiles.map((mediaFile) => this.loadMediaEntry(mediaFile)),
+    const { entries, results } = await this.mediaProcessor.loadEntries(
+      mediaFiles,
     );
-
-    const entries: MediaEntry[] = [];
-    const results: MediaFileResult[] = [];
-
-    settledResults.forEach((settledResult, index) => {
-      if (settledResult.status === 'fulfilled') {
-        const { entry, result } = settledResult.value;
-        results.push(result);
-
-        if (result.ok && entry) {
-          const entryList = Array.isArray(entry) ? entry : [entry];
-          entries.push(...entryList);
-        }
-      } else {
-        const reason = settledResult.reason;
-        const mediaFile = mediaFiles[index];
-        this.logger.error(
-          `Failed to load media entry for ${mediaFile}: ${getSdkErrorMessage(reason)}`,
-          undefined,
-          undefined,
-          reason,
-        );
-        results.push({ path: mediaFile, ok: false });
-      }
-    });
-
-    return { entries, results };
-  }
-
-  protected async loadMediaEntry(
-    mediaFile: string,
-  ): Promise<{ entry?: MediaEntry | MediaEntry[]; result: MediaFileResult }> {
-    const absolutePath = path.isAbsolute(mediaFile)
-      ? mediaFile
-      : WorkspaceFS.fullPath(mediaFile);
-    const fileExistsResult = await AbsoluteFS.exists(absolutePath);
-
-    if (!fileExistsResult) {
-      this.logger.error(`File not found: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
-    }
-
-    let fileSize: number | null = null;
-    try {
-      const stats = await AbsoluteFS.stat(absolutePath);
-      fileSize = stats.size;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `Unable to read file info for ${mediaFile}: ${message}`,
-      );
-      return { result: { path: mediaFile, ok: false } };
-    }
-
-    if (fileSize === 0) {
-      this.logger.warn(`Skipping empty media file: ${mediaFile}`);
-      return { result: { path: mediaFile, ok: false } };
-    }
-
-    const fileExtension = path.extname(mediaFile).toLowerCase();
-
-    try {
-      const [mediaData, mediaType, mediaCategory] = await this.processMedia(
-        mediaFile,
-        fileExtension,
-      );
-      this.logger.debug(
-        `Processed ${mediaCategory}: ${mediaFile}, type: ${mediaType}`,
-      );
-
-      const isDerivedFromConversion =
-        fileExtension === '.pdf' && mediaType !== 'application/pdf';
-
-      const createEntry = (
-        fileName: string,
-        data: string,
-        matchesSource: boolean = !isDerivedFromConversion,
-      ): MediaEntry => {
-        const entry: MediaEntry = {
-          file_name: fileName,
-          data,
-          media_type: mediaType,
-          media_category: mediaCategory,
-          binary_data: Buffer.from(data, 'base64'),
-          bytes_match_source: matchesSource,
-        };
-
-        if (matchesSource) {
-          entry.source_path = absolutePath;
-        }
-
-        return entry;
-      };
-
-      if (
-        this.isOpenai &&
-        this.capabilities.supportsVision &&
-        this.capabilities.supportsNativePdf &&
-        mediaType === 'application/pdf'
-      ) {
-        const pdfEntry = createEntry(
-          path.basename(mediaFile),
-          Array.isArray(mediaData) ? mediaData[0] : mediaData,
-        );
-        this.logger.debug(`Added native PDF: ${mediaFile}`);
-        return {
-          entry: pdfEntry,
-          result: { path: mediaFile, ok: true },
-        };
-      }
-
-      if (!Array.isArray(mediaData)) {
-        this.logger.debug(
-          `Adding single part to the media contents: ${mediaFile}`,
-        );
-        return {
-          entry: createEntry(path.basename(mediaFile), mediaData),
-          result: { path: mediaFile, ok: true },
-        };
-      }
-
-      this.logger.debug(
-        `Adding ${mediaData.length} pages/parts to the media contents`,
-      );
-      const entryList = mediaData.map((data, index) =>
-        createEntry(
-          `${path.basename(mediaFile)}_page_${index + 1}`,
-          data,
-          false,
-        ),
-      );
-      return {
-        entry: entryList,
-        result: { path: mediaFile, ok: true },
-      };
-    } catch (err) {
-      this.logger.error(
-        `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
-        undefined,
-        undefined,
-        err,
-      );
-      return { result: { path: mediaFile, ok: false } };
-    }
+    this.mediaProcessor.logResults(results);
+    return this.createMediaContent(entries);
   }
 
   /** Calculates token-based stop flags. */
