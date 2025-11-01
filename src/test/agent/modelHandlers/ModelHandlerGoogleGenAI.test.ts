@@ -340,21 +340,21 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
     const handlerMediaProcessor = handler as unknown as {
       mediaProcessor: {
-        loadEntries: (
-          mediaFiles: string[],
-        ) => Promise<{
+        loadEntries: (mediaFiles: string[]) => Promise<{
           entries: MediaEntry[];
           results: Array<{ path: string; ok: boolean }>;
         }>;
         logResults: (results: Array<{ path: string; ok: boolean }>) => void;
       };
     };
-    const originalLoadEntries = handlerMediaProcessor.mediaProcessor.loadEntries.bind(
-      handlerMediaProcessor.mediaProcessor,
-    );
-    const originalLogResults = handlerMediaProcessor.mediaProcessor.logResults.bind(
-      handlerMediaProcessor.mediaProcessor,
-    );
+    const originalLoadEntries =
+      handlerMediaProcessor.mediaProcessor.loadEntries.bind(
+        handlerMediaProcessor.mediaProcessor,
+      );
+    const originalLogResults =
+      handlerMediaProcessor.mediaProcessor.logResults.bind(
+        handlerMediaProcessor.mediaProcessor,
+      );
 
     handlerMediaProcessor.mediaProcessor.loadEntries = async (
       mediaFiles: string[],
