@@ -14,12 +14,7 @@ import {
   resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
-// Local imports - logging
-import * as logger from '@logger/logUtils';
-
 import { FILE_TYPES, type FileType } from './constants';
-
-const CHANNEL = 'ConfigConversion';
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -101,55 +96,6 @@ function resolveSessionDescriptor(
   return undefined;
 }
 
-interface FallbackTaskStateOptions {
-  sessionDescriptor?: AgentSessionDescriptor;
-  activeFiles?: Record<FileType, boolean>;
-  toolSessionState?: Record<string, unknown>;
-  sourceForActiveFiles?: Record<string, any>;
-}
-
-function createFallbackTaskState({
-  sessionDescriptor,
-  activeFiles,
-  toolSessionState,
-  sourceForActiveFiles,
-}: FallbackTaskStateOptions): TaskState {
-  const fallbackInput: Record<string, unknown> = sessionDescriptor
-    ? { session: sessionDescriptor }
-    : {};
-
-  let fallbackConfig: AgentConfig;
-  try {
-    fallbackConfig = parseAgentConfig(fallbackInput);
-  } catch (error) {
-    logger.error(
-      CHANNEL,
-      'Failed to parse fallback agent configuration.',
-      undefined,
-      undefined,
-      false,
-      error,
-    );
-    fallbackConfig = parseAgentConfig({});
-  }
-
-  const fallbackState = agentConfigToTaskState(fallbackConfig);
-
-  if (isWorkflowTaskState(fallbackState)) {
-    if (activeFiles) {
-      fallbackState.activeFiles = activeFiles;
-    } else if (sourceForActiveFiles) {
-      fallbackState.activeFiles = createActiveFilesFromArrays(
-        sourceForActiveFiles,
-      );
-    }
-  } else if (isObjectRecord(toolSessionState)) {
-    fallbackState.toolSessionState = { ...toolSessionState };
-  }
-
-  return fallbackState;
-}
-
 /**
  * Converts an AgentConfig object to a TaskState object
  *
@@ -206,39 +152,16 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
       ...configSource,
       ...(sessionDescriptor ? { session: sessionDescriptor } : {}),
     };
-    try {
-      const state = agentConfigToTaskState(parseAgentConfig(configInput));
+    const state = agentConfigToTaskState(parseAgentConfig(configInput));
 
-      if (isWorkflowTaskState(state)) {
-        state.activeFiles =
-          obj.activeFiles || createActiveFilesFromArrays(configSource);
-      } else if (isObjectRecord(obj.toolSessionState)) {
-        state.toolSessionState = { ...obj.toolSessionState };
-      }
-
-      return state;
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        'Unable to normalize stored task state; using fallback defaults.',
-        undefined,
-        undefined,
-        false,
-        error,
-      );
-      const activeFiles = isObjectRecord(obj.activeFiles)
-        ? (obj.activeFiles as Record<FileType, boolean>)
-        : undefined;
-      const toolState = isObjectRecord(obj.toolSessionState)
-        ? obj.toolSessionState
-        : undefined;
-      return createFallbackTaskState({
-        sessionDescriptor,
-        activeFiles,
-        toolSessionState: toolState,
-        sourceForActiveFiles: configSource,
-      });
+    if (isWorkflowTaskState(state)) {
+      state.activeFiles =
+        obj.activeFiles || createActiveFilesFromArrays(configSource);
+    } else if (isObjectRecord(obj.toolSessionState)) {
+      state.toolSessionState = { ...obj.toolSessionState };
     }
+
+    return state;
   }
 
   // Old format: extract UI-specific and tool config fields for backward compatibility
@@ -286,36 +209,18 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     configInput.session = sessionDescriptor;
   }
 
-  try {
-    const normalized = parseAgentConfig(configInput);
-    const taskState = agentConfigToTaskState(normalized);
+  const normalized = parseAgentConfig(configInput);
+  const taskState = agentConfigToTaskState(normalized);
 
-    if (isWorkflowTaskState(taskState)) {
-      if (workflowActiveFiles) {
-        taskState.activeFiles = workflowActiveFiles;
-      }
-    } else if (legacyToolState) {
-      taskState.toolSessionState = { ...legacyToolState };
+  if (isWorkflowTaskState(taskState)) {
+    if (workflowActiveFiles) {
+      taskState.activeFiles = workflowActiveFiles;
     }
-
-    return taskState;
-  } catch (error) {
-    logger.warn(
-      CHANNEL,
-      'Unable to migrate legacy task state; using fallback defaults.',
-      undefined,
-      undefined,
-      false,
-      error,
-    );
-
-    return createFallbackTaskState({
-      sessionDescriptor,
-      activeFiles: workflowActiveFiles,
-      toolSessionState: legacyToolState,
-      sourceForActiveFiles: configInput,
-    });
+  } else if (legacyToolState) {
+    taskState.toolSessionState = { ...legacyToolState };
   }
+
+  return taskState;
 }
 
 // normalizeSessionKind removed – canonical descriptor is now provided directly.
