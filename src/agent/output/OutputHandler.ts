@@ -40,6 +40,10 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { replaceInputCommands, createFileMapping } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
+import {
+  extractMultipleTextFromTag,
+  extractTextFromTag,
+} from '@utils/text/xmlUtils';
 
 // Local imports - types
 
@@ -50,7 +54,10 @@ export class OutputHandler implements IOutputHandler {
   public logId: number;
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
+  private rawOutputs: { [key: number]: string | null };
+  private roundFileInfos: { [key: number]: OutputFileInfo[] };
   private roundMappings: { [key: number]: RoundFileMapping };
+  private roundXmlSummaries: { [key: number]: OutputXmlSummary };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -72,7 +79,10 @@ export class OutputHandler implements IOutputHandler {
     this.logId = logId;
     this.outputFiles = {};
     this.outputMappings = {};
+    this.rawOutputs = {};
+    this.roundFileInfos = {};
     this.roundMappings = {};
+    this.roundXmlSummaries = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -350,7 +360,9 @@ export class OutputHandler implements IOutputHandler {
   ): Promise<void> {
     const { endTurn, groupId } = options;
     this.ensureRound(currRound);
+    this.rawOutputs[currRound] = outputFile || null;
     const fileInfos = await this.gatherOutputFileInfo(currRound);
+    this.roundFileInfos[currRound] = fileInfos;
 
     if (endTurn) {
       try {
@@ -427,6 +439,11 @@ export class OutputHandler implements IOutputHandler {
           );
 
           this.setRoundOutputs(currRound, processedFiles, processedPairs);
+          await this.captureXmlSummary(
+            currRound,
+            outputFile,
+            processedPairs,
+          );
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -441,6 +458,7 @@ export class OutputHandler implements IOutputHandler {
             activeGroupId,
           );
           this.setRoundOutputs(currRound, [], []);
+          await this.captureXmlSummary(currRound, outputFile, []);
         }
       } catch (err) {
         this.logger.debug(
@@ -449,6 +467,7 @@ export class OutputHandler implements IOutputHandler {
           MESSAGE_TYPES.INTERNAL,
         );
         this.setRoundOutputs(currRound, [], []);
+        await this.captureXmlSummary(currRound, outputFile, []);
       }
     } else {
       // Single output file case
@@ -483,12 +502,14 @@ export class OutputHandler implements IOutputHandler {
           );
 
           this.setRoundOutputs(currRound, [processed.path], [processed]);
+          await this.captureXmlSummary(currRound, outputFile, [processed]);
         } else {
           this.logger.debug(
             `No processed file was generated from ${outputFile}`,
             activeGroupId,
           );
           this.setRoundOutputs(currRound, [], []);
+          await this.captureXmlSummary(currRound, outputFile, []);
         }
       } catch (err) {
         this.logger.debug(
@@ -507,22 +528,135 @@ export class OutputHandler implements IOutputHandler {
           filesByRound: { [currRound]: [] },
         });
         this.setRoundOutputs(currRound, [], []);
+        await this.captureXmlSummary(currRound, outputFile, []);
       }
     }
   }
-  /** Processes output files for current round. */
-  protected async handleOutput(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
-    outputFile: string,
-    endTurn: boolean,
-    currRound: number = 0,
-    roundGroupId?: string,
-  ): Promise<string[]> {
-    this.ensureRound(currRound);
-    return this.outputFiles[currRound];
+
+  public async getRoundArtifacts(
+    round: number,
+  ): Promise<RoundOutputArtifacts> {
+    const outputFiles = this.ensureRound(round).slice();
+    const processed = (this.outputMappings[round] || []).map((entry) => ({
+      ...entry,
+    }));
+    let fileInfos = this.roundFileInfos[round];
+    if (!fileInfos) {
+      fileInfos = await this.gatherOutputFileInfo(round);
+      this.roundFileInfos[round] = fileInfos;
+    }
+
+    return {
+      round,
+      rawOutputPath: this.rawOutputs[round] ?? null,
+      outputFiles,
+      processedFiles: processed,
+      fileInfos,
+      xmlSummary: this.getRoundXmlSummary(round),
+    };
+  }
+
+  public getRoundXmlSummary(round: number): OutputXmlSummary {
+    return (
+      this.roundXmlSummaries[round] ?? {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: null,
+      }
+    );
+  }
+
+  private async captureXmlSummary(
+    round: number,
+    rawOutputPath: string,
+    processed: NamedOutputFile[],
+  ): Promise<void> {
+    const singleFile = processed.length === 1 ? processed[0].path : null;
+
+    if (!rawOutputPath) {
+      this.roundXmlSummaries[round] = {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: singleFile,
+      };
+      return;
+    }
+
+    try {
+      const rawContent = await WorkspaceFS.read(rawOutputPath);
+      const tagContents: Record<string, string | string[]> = {};
+      const documents: string[] = [];
+
+      const documentTag = this.agentSetting.documentTag;
+      const documentEntries = extractMultipleTextFromTag(
+        rawContent,
+        documentTag,
+      );
+      if (documentEntries.length > 0) {
+        const trimmedDocuments = documentEntries.map((entry) =>
+          entry.content.trim(),
+        );
+        if (trimmedDocuments.length === 1) {
+          tagContents[documentTag] = trimmedDocuments[0];
+        } else {
+          tagContents[documentTag] = trimmedDocuments;
+        }
+
+        for (const entry of documentEntries) {
+          const nameAttr = entry.name ? ` name="${entry.name}"` : '';
+          const trimmed = entry.content.trim();
+          documents.push(
+            `<${documentTag}${nameAttr}>${trimmed}</${documentTag}>`,
+          );
+        }
+      } else {
+        const singleDocument = extractTextFromTag(rawContent, documentTag).trim();
+        if (singleDocument) {
+          tagContents[documentTag] = singleDocument;
+          documents.push(
+            `<${documentTag}>${singleDocument}</${documentTag}>`,
+          );
+        }
+      }
+
+      const scratchpadContent = extractTextFromTag(rawContent, 'scratchpad').trim();
+      if (scratchpadContent) {
+        tagContents.scratchpad = scratchpadContent;
+      }
+
+      this.roundXmlSummaries[round] = {
+        tagContents,
+        documents,
+        singleOutputFile: singleFile,
+      };
+    } catch (error) {
+      this.logger.debug(
+        `Failed to collect XML summary for round ${round}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+      this.roundXmlSummaries[round] = {
+        tagContents: {},
+        documents: [],
+        singleOutputFile: singleFile,
+      };
+    }
   }
 }
 
-export { NamedOutputFile };
-export { getOutputFileName } from '@agent/utils/outputFileUtils';
+export interface RoundOutputArtifacts {
+  round: number;
+  rawOutputPath: string | null;
+  outputFiles: string[];
+  processedFiles: NamedOutputFile[];
+  fileInfos: OutputFileInfo[];
+  xmlSummary: OutputXmlSummary;
+}
+
+export interface OutputXmlSummary {
+  tagContents: Record<string, string | string[]>;
+  documents: string[];
+  singleOutputFile: string | null;
+}
