@@ -517,9 +517,8 @@ export abstract class ModelHandler<
    * Individual providers can override if needed.
    */
   public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
-    const { entries, results } = await this.mediaProcessor.loadEntries(
-      mediaFiles,
-    );
+    const { entries, results } =
+      await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
     return this.createMediaContent(entries);
   }

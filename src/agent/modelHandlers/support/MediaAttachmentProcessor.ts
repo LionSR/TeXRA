@@ -304,9 +304,7 @@ export class MediaAttachmentProcessor {
     const entries = dataParts.map((data, index) => {
       const matchesSource = !derivedFromConversion && dataParts.length === 1;
       const fileName =
-        dataParts.length === 1
-          ? baseName
-          : `${baseName}_page_${index + 1}`;
+        dataParts.length === 1 ? baseName : `${baseName}_page_${index + 1}`;
       return this.createEntry(
         fileName,
         data,
