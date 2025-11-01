@@ -39,10 +39,8 @@ import {
 import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - agent components
-import {
-  ModelHandler,
-  type MediaFileResult,
-} from '@agent/modelHandlers/ModelHandler';
+import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -712,8 +710,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return [];
     }
 
-    const { entries, results } = await this.buildMediaEntries(mediaFiles);
-    this.logMediaResults(results);
+    const { entries, results } = await this.mediaProcessor.loadEntries(
+      mediaFiles,
+    );
+    this.mediaProcessor.logResults(results);
 
     if (entries.length === 0) {
       return [];

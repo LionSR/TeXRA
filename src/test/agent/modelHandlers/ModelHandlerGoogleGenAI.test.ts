@@ -314,7 +314,8 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
   it('builds media entries once and delegates upload inside createMediaMessage', async () => {
     const uploadedEntries: MediaEntry[][] = [];
-    const buildCalls: string[][] = [];
+    const loadCalls: string[][] = [];
+    const loggedResults: Array<Array<{ path: string; ok: boolean }>> = [];
 
     class RecordingHandler extends ModelHandlerGoogleGenAI {
       constructor(config: ModelConfig) {
@@ -323,25 +324,6 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
       override async getClient(): Promise<any> {
         throw new Error('getClient should not be called in this test');
-      }
-
-      override async buildMediaEntries(mediaFiles: string[]): Promise<{
-        entries: MediaEntry[];
-        results: Array<{ path: string; ok: boolean }>;
-      }> {
-        buildCalls.push(mediaFiles);
-        return {
-          entries: [
-            {
-              file_name: 'doc.pdf',
-              data: Buffer.from('%PDF-1.4').toString('base64'),
-              media_type: 'application/pdf',
-              media_category: 'image',
-              binary_data: Buffer.from('%PDF-1.4'),
-            },
-          ],
-          results: [{ path: 'doc.pdf', ok: true }],
-        };
       }
 
       override async uploadMediaEntries(
@@ -356,15 +338,60 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     const { logger, stub } = createLoggerStub();
     handler.setLogger(logger);
 
+    const handlerMediaProcessor = handler as unknown as {
+      mediaProcessor: {
+        loadEntries: (
+          mediaFiles: string[],
+        ) => Promise<{
+          entries: MediaEntry[];
+          results: Array<{ path: string; ok: boolean }>;
+        }>;
+        logResults: (results: Array<{ path: string; ok: boolean }>) => void;
+      };
+    };
+    const originalLoadEntries = handlerMediaProcessor.mediaProcessor.loadEntries.bind(
+      handlerMediaProcessor.mediaProcessor,
+    );
+    const originalLogResults = handlerMediaProcessor.mediaProcessor.logResults.bind(
+      handlerMediaProcessor.mediaProcessor,
+    );
+
+    handlerMediaProcessor.mediaProcessor.loadEntries = async (
+      mediaFiles: string[],
+    ) => {
+      loadCalls.push(mediaFiles);
+      return {
+        entries: [
+          {
+            file_name: 'doc.pdf',
+            data: Buffer.from('%PDF-1.4').toString('base64'),
+            media_type: 'application/pdf',
+            media_category: 'image',
+            binary_data: Buffer.from('%PDF-1.4'),
+          },
+        ],
+        results: [{ path: 'doc.pdf', ok: true }],
+      };
+    };
+
+    handlerMediaProcessor.mediaProcessor.logResults = (results) => {
+      loggedResults.push(results);
+      originalLogResults(results);
+    };
+
     const parts = await handler.createMediaMessage(['doc.pdf']);
 
+    assert.deepEqual(loadCalls, [['doc.pdf']]);
     assert.deepEqual(parts, [
       createPartFromUri('files/doc', 'application/pdf'),
     ]);
-    assert.deepEqual(buildCalls, [['doc.pdf']]);
     assert.equal(uploadedEntries.length, 1, 'uploads should run once');
     assert.equal(uploadedEntries[0][0].file_name, 'doc.pdf');
     assert.equal(stub.fileListEntries.length, 1, 'should log processed media');
+    assert.deepEqual(loggedResults, [[{ path: 'doc.pdf', ok: true }]]);
+
+    handlerMediaProcessor.mediaProcessor.loadEntries = originalLoadEntries;
+    handlerMediaProcessor.mediaProcessor.logResults = originalLogResults;
   });
 });
 

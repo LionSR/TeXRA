@@ -43,7 +43,7 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
     openRouterOnly: false,
   },
   gemini25f: {
-    name: 'geminif',
+    name: 'gemini25f',
     fullName: 'gemini-flash-latest',
     openrouterFullName: 'google/gemini-2.5-flash-preview-09-2025',
     provider: ModelProvider.GOOGLE,
