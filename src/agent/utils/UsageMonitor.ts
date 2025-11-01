@@ -14,9 +14,8 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 import { bus } from '@eventBus/ProgressEventBus';
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -24,15 +23,14 @@ import { AgentLogger } from '@logger/AgentLogger';
 export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
-    private readonly channel: string,
-    private readonly logger: AgentLogger,
+    private readonly context: AgentRunContext,
   ) {}
 
   async recordUsage(
     stateGlobal: AgentStateGlobal,
     groupId?: string,
   ): Promise<void> {
-    const statsGroupId = groupId ?? this.logger.getActiveGroupId();
+    const statsGroupId = groupId ?? this.context.logger.getActiveGroupId();
 
     try {
       let responseUsage:
@@ -103,7 +101,7 @@ export class UsageMonitor {
 
       if (statsGroupId) {
         bus.emit('updateGroupUsage', {
-          stream: this.channel,
+          stream: this.context.streamTabId,
           groupId: statsGroupId,
           usage: {
             inputTokens:
@@ -156,9 +154,12 @@ export class UsageMonitor {
         }),
       };
 
-      this.logger.statistics(payload, statsGroupId);
+      this.context.logger.statistics(payload, statsGroupId);
     } catch (error) {
-      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+      this.context.logger.error(
+        `Error printing statistics: ${error}`,
+        statsGroupId,
+      );
     }
   }
 }

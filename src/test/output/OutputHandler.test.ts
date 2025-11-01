@@ -8,19 +8,37 @@ import {
   AgentSetting,
   AgentType,
   AgentCategory,
+  type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
+
+const baseSession: AgentSessionDescriptor = {
+  agentType: AgentType.CoT,
+  agentCategory: AgentCategory.Workflow,
+};
+
+function createRunContext(label: string): AgentRunContext {
+  return {
+    streamTabId: label,
+    executionId: undefined,
+    agentName: 'test-agent',
+    model: 'test-model',
+    session: baseSession,
+    logger: new AgentLogger(label),
+  };
+}
 
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
 
   constructor(setting: AgentSetting, config: AgentConfig) {
-    super(setting, config, 0, [], new AgentLogger('TestOutputHandler'));
+    super(setting, config, 0, [], createRunContext('TestOutputHandler'));
   }
 
   public override async gatherOutputFileInfo(round: number) {
@@ -137,7 +155,7 @@ describe('OutputHandler.getRoundMapping', () => {
       baseConfig,
       0,
       [path.join('workspace', 'chapter.tex')],
-      new AgentLogger('TestOutputHandlerMapping'),
+      createRunContext('TestOutputHandlerMapping'),
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];

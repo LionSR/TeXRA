@@ -33,13 +33,14 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
 
@@ -53,19 +54,26 @@ export class OutputHandler implements IOutputHandler {
   private roundMappings: { [key: number]: RoundFileMapping };
   public baseFiles: string[];
   public processGroupId?: string;
-  protected logger: AgentLogger;
-  protected channel: string;
+  protected context: AgentRunContext;
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
+
+  protected get logger(): AgentLogger {
+    return this.context.logger;
+  }
+
+  protected get channel(): string {
+    return this.context.streamTabId;
+  }
 
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     logId: number,
     baseFiles: string[] = [],
-    logger?: AgentLogger,
+    context: AgentRunContext,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -74,20 +82,19 @@ export class OutputHandler implements IOutputHandler {
     this.outputMappings = {};
     this.roundMappings = {};
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
-    this.channel = this.logger.channelId;
+    this.context = context;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
       this.agentConfig,
-      this.logger,
+      this.context.logger,
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
       this.outputFiles,
       this.baseFiles,
-      this.logger,
-      this.channel,
+      this.context.logger,
+      this.context.streamTabId,
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();

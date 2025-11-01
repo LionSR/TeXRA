@@ -13,10 +13,12 @@ import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 
+// Local imports - runtime
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
+
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -31,8 +33,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected logger: AgentLogger;
-  protected usageMonitor: UsageMonitor;
+  protected logger!: AgentLogger;
+  protected usageMonitor!: UsageMonitor;
   protected runGroupId?: string;
   private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
@@ -40,6 +42,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;
+  private runContext?: AgentRunContext;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -61,24 +64,26 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
     this.agentSetting = agentSetting;
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
-    this.executionId = executionId;
+  }
 
-    const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
-    this.modelHandler.setLogger(this.logger);
+  public applyRunContext(context: AgentRunContext): void {
+    this.runContext = context;
+    this.executionId = context.executionId;
+    this.logger = context.logger;
+    this.modelHandler.setLogger(context.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
-    this.usageMonitor = new UsageMonitor(
-      this.modelHandler,
-      this.logger.channelId,
-      this.logger,
-    );
+    this.usageMonitor = new UsageMonitor(this.modelHandler, context);
+    this.onRunContextApplied(context);
+  }
+
+  protected onRunContextApplied(_context: AgentRunContext): void {
+    // Subclasses can override to perform setup that depends on the run context.
   }
 
   /** Initialize the API client. */
@@ -118,17 +123,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Compute the stream tab identifier for this agent execution. */
   public getStreamTabId(): StreamTabId {
-    const metadata = this.getSessionMetadata();
-    return buildStreamTabId(
-      this.agentConfig.agent,
-      this.agentConfig.model,
-      this.agentConfig.inputFile,
-      {
-        agentType: metadata.agentType,
-        executionId: this.executionId,
-        useMultipleOutputs: this.agentConfig.useMultipleOutputs,
-      },
-    );
+    if (!this.runContext) {
+      throw new Error('Agent run context has not been applied.');
+    }
+    return this.runContext.streamTabId;
   }
 
   /** Gather variables used for prompt rendering. */

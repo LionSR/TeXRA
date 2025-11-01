@@ -2,6 +2,8 @@
 import type { AgentConfig } from './AgentConfig';
 // Local imports - agent components
 import type { AgentSessionDescriptor } from './AgentDataclass';
+// Local imports - agent runtime
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -11,6 +13,9 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 export interface IAgent {
   /** Agent configuration used during execution. */
   readonly config: AgentConfig;
+
+  /** Apply the shared runtime context for this execution. */
+  applyRunContext(context: AgentRunContext): void;
 
   /**
    * Initialize the agent before running.

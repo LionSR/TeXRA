@@ -26,7 +26,7 @@ import {
 } from '@agent/implementations/flows/ReflectionRoundFlow';
 import type { IModelHandler } from '@agent/modelHandlers';
 import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -98,8 +98,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
   /** Handler for output file processing and validation. */
-  protected outputHandler: IOutputHandler;
-  protected latexMediaManager: LatexMediaManager;
+  protected outputHandler!: IOutputHandler;
+  protected latexMediaManager!: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
   public roundStates: AgentStateRound[] = [];
   public toolStates: ToolState[] = [];
@@ -110,17 +110,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
   ) {
     const workflowSetting = requireWorkflowSetting(agentSetting);
-    super(
-      modelHandler,
-      agentConfig,
-      workflowSetting,
-      agentPrompt,
-      agentPath,
-      executionId,
-    );
+    super(modelHandler, agentConfig, workflowSetting, agentPrompt, agentPath);
     this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
@@ -146,16 +138,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Initialize logging
     this.logId = 0;
+  }
 
+  protected override onRunContextApplied(context: AgentRunContext): void {
     this.outputHandler = new OutputHandler(
       this.agentSetting,
       this.agentConfig,
       this.logId,
       this.baseFiles,
-      this.logger,
+      context,
     );
-
-    this.latexMediaManager = new LatexMediaManager(this.logger);
+    this.latexMediaManager = new LatexMediaManager(context.logger);
   }
 
   protected getPromptBuilder(): PromptBuilder {

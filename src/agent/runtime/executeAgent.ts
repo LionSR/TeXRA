@@ -26,6 +26,7 @@ import {
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   AgentDirectorySource,
@@ -37,6 +38,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { withLogGroup } from '@logger/logGroupUtils';
+import { getStreamTabId as buildStreamTabId } from '@logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -75,7 +77,6 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
   ): IAgent;
 };
 
@@ -305,7 +306,6 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     agentSetting,
     agentPrompt,
     agentPathInfo.directory,
-    executionId,
   );
 
   return { agent: agent as T, agentType: agentSetting.agentType };
@@ -333,28 +333,48 @@ export async function executeAgentWithLogging<T extends IAgent>(
     const created = await createAgentFn();
     agent = created.agent;
     const { agentType } = created;
-    const sessionMetadata = agent.getSessionMetadata();
 
     if (executionId) {
       await ensureRunDir(executionId);
     }
 
-    // Get the full stream tab ID
     const config = agent.config;
     const metadata = config.session;
     if (!metadata) {
       throw new Error('Agent configuration is missing session metadata.');
     }
 
-    streamTabId = agent.getStreamTabId();
+    const resolvedStreamTabId = buildStreamTabId(
+      config.agent,
+      config.model,
+      config.inputFile,
+      {
+        agentType: metadata.agentType,
+        executionId,
+        useMultipleOutputs: config.useMultipleOutputs,
+      },
+    );
 
-    if (!streamTabId) {
+    if (!resolvedStreamTabId) {
       throw new Error('Failed to resolve stream tab ID for agent execution');
     }
 
-    const activeStreamId: StreamTabId = streamTabId;
+    const runContext: AgentRunContext = {
+      streamTabId: resolvedStreamTabId,
+      executionId,
+      agentName,
+      model: config.model,
+      session: metadata,
+      logger: new AgentLogger(resolvedStreamTabId, true),
+    };
 
-    agentStreamLogger = new AgentLogger(activeStreamId, true);
+    agent.applyRunContext(runContext);
+
+    streamTabId = resolvedStreamTabId;
+
+    const activeStreamId: StreamTabId = resolvedStreamTabId;
+
+    agentStreamLogger = runContext.logger;
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
