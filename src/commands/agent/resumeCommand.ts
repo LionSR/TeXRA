@@ -50,17 +50,15 @@ async function buildToolUseAgent(
 
   return { agent, agentType };
 }
+import {
+  resumeFromSnapshot,
+  type ResumeAgentResult,
+} from '@agent/toolUse/ToolUseFollowUpCoordinator';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 
 interface ResumeAgentCommandPayload {
   snapshot: ToolUseSessionSnapshot;
   followUp?: string;
-}
-
-const CHANNEL = 'resumeAgentCommand';
-
-export interface ResumeAgentResult {
-  success: boolean;
-  lostFollowUps?: number;
 }
 
 export function registerResumeAgentCommand(
@@ -72,95 +70,11 @@ export function registerResumeAgentCommand(
       payload: ResumeAgentCommandPayload | undefined,
     ): Promise<ResumeAgentResult> => {
       const snapshot = payload?.snapshot;
-      const followUp = payload?.followUp;
-      if (!snapshot || !ToolUseSessionManager.isPersistenceEnabled()) {
+      if (!snapshot) {
         return { success: false };
       }
 
-      const provider = ProgressViewProvider.getInstance();
-      if (!provider) {
-        return { success: false };
-      }
-
-      const streamId = snapshot.streamId as StreamTabId;
-      let queuedFollowUps: string[] = [];
-
-      try {
-        const executionId = snapshot.executionId as ExecutionId;
-        const existingStatus = provider.eventHandler.getStreamStatus(
-          snapshot.streamId,
-        );
-        if (
-          existingStatus === STATUS.RUNNING ||
-          existingStatus === STATUS.RESUMING
-        ) {
-          return { success: false };
-        }
-
-        provider.eventHandler.setStreamStatus(
-          snapshot.streamId,
-          STATUS.RESUMING,
-        );
-
-        const { agent, agentType } = await buildToolUseAgent(snapshot, context);
-
-        agent.resumeFromSnapshot(snapshot);
-        if (followUp !== undefined) {
-          agent.appendFollowUp(followUp);
-        }
-
-        queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(streamId);
-        for (const queuedFollowUp of queuedFollowUps) {
-          agent.appendFollowUp(queuedFollowUp);
-        }
-
-        await executeAgentWithLogging(
-          snapshot.agentName,
-          async () => ({
-            agent,
-            agentType,
-          }),
-          executionId,
-          { resume: true },
-        );
-
-        ToolUseSessionManager.clearResumingSession(streamId);
-        provider.eventHandler.setStreamStatus(
-          snapshot.streamId,
-          STATUS.WAITING,
-        );
-
-        return { success: true };
-      } catch (error) {
-        const lostFollowUps =
-          queuedFollowUps.length > 0
-            ? queuedFollowUps
-            : ToolUseSessionManager.drainQueuedFollowUps(streamId);
-
-        ToolUseSessionManager.clearResumingSession(streamId);
-        provider.eventHandler.setStreamStatus(
-          snapshot.streamId,
-          STATUS.WAITING,
-        );
-
-        const baseMessage = logErrorMessage(
-          CHANNEL,
-          'Failed to resume tool-use session',
-          error,
-        );
-        const lostCount = lostFollowUps.length;
-        const followUpSuffix =
-          lostCount > 0
-            ? ` ${lostCount} queued ${
-                lostCount === 1 ? 'follow-up was' : 'follow-ups were'
-              } lost.`
-            : '';
-        await vscode.window.showWarningMessage(
-          `${baseMessage}${followUpSuffix}`,
-        );
-
-        return { success: false, lostFollowUps: lostCount };
-      }
+      return resumeFromSnapshot(snapshot, payload?.followUp);
     },
   );
 }
