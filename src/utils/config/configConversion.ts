@@ -5,14 +5,12 @@
 // (none needed)
 
 // Local imports - models
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
 import { type TaskState, isWorkflowTaskState } from '@logger/TaskState';
 import {
   AgentCategory,
   type AgentType,
   type AgentSessionDescriptor,
-  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -68,22 +66,17 @@ function createDescriptorFromLegacy(
  * @param config The AgentConfig to convert
  * @returns A TaskState representing the same configuration
  */
-export function agentConfigToTaskState(
-  config: AgentConfig,
-  session?: AgentSessionDescriptor | AgentType,
-): TaskState {
-  // Single source of truth: prefer config.session, then provided session, then derive
-  const resolvedSession =
-    config.session ??
-    (typeof session === 'string'
-      ? resolveAgentSessionDescriptor(session)
-      : (session ?? resolveAgentSessionDescriptor(config.agentType)));
+export function agentConfigToTaskState(config: AgentConfig): TaskState {
+  const session = config.session;
+  if (!session) {
+    throw new Error('AgentConfig is missing canonical session metadata.');
+  }
 
-  if (resolvedSession.agentCategory === AgentCategory.ToolUse) {
+  if (session.agentCategory === AgentCategory.ToolUse) {
     const toolUseSession: AgentSessionDescriptor & {
       agentCategory: AgentCategory.ToolUse;
     } = {
-      ...resolvedSession,
+      ...session,
       agentCategory: AgentCategory.ToolUse,
     };
     return {
@@ -96,7 +89,7 @@ export function agentConfigToTaskState(
   const workflowSession: AgentSessionDescriptor & {
     agentCategory: AgentCategory.Workflow;
   } = {
-    ...resolvedSession,
+    ...session,
     agentCategory: AgentCategory.Workflow,
   };
 
@@ -120,10 +113,10 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     const sessionDescriptor =
       (obj.session as AgentSessionDescriptor | undefined) ??
       createDescriptorFromLegacy(obj);
-    const state = agentConfigToTaskState(
-      AgentConfigSchema.parse(obj.agentConfig),
-      sessionDescriptor,
-    );
+    const configInput = sessionDescriptor
+      ? { ...obj.agentConfig, session: sessionDescriptor }
+      : obj.agentConfig;
+    const state = agentConfigToTaskState(parseAgentConfig(configInput));
 
     if (isWorkflowTaskState(state)) {
       state.activeFiles =
@@ -207,11 +200,14 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
 
   // Parse only AgentConfig-compatible fields
   try {
-    const normalized = AgentConfigSchema.parse(agentConfigData);
     const sessionDescriptor =
       (obj.session as AgentSessionDescriptor | undefined) ??
       createDescriptorFromLegacy(obj);
-    const taskState = agentConfigToTaskState(normalized, sessionDescriptor);
+    const configInput = sessionDescriptor
+      ? { ...agentConfigData, session: sessionDescriptor }
+      : agentConfigData;
+    const normalized = parseAgentConfig(configInput);
+    const taskState = agentConfigToTaskState(normalized);
 
     if (isWorkflowTaskState(taskState)) {
       if (activeFiles) {
@@ -225,9 +221,8 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
   } catch (error) {
     // If parsing fails, create a minimal valid state
     console.error('Failed to parse task state, using defaults:', error);
-    const defaultConfig = AgentConfigSchema.parse({});
-    const agentType = obj.agentType as AgentType | undefined;
-    const taskState = agentConfigToTaskState(defaultConfig, agentType);
+    const defaultConfig = parseAgentConfig({});
+    const taskState = agentConfigToTaskState(defaultConfig);
 
     if (isWorkflowTaskState(taskState) && activeFiles) {
       taskState.activeFiles = activeFiles;

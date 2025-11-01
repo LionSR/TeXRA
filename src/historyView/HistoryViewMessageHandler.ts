@@ -88,10 +88,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
       const historyItem =
         await AgentHistoryManager.getHistoryItemById(historyId);
       if (historyItem) {
-        const taskState = agentConfigToTaskState(
-          historyItem.config,
-          historyItem.session,
-        );
+        const taskState = agentConfigToTaskState(historyItem.config);
         await vscode.commands.executeCommand('texra.restoreState', taskState);
       } else {
         await vscode.window.showErrorMessage('History item not found');

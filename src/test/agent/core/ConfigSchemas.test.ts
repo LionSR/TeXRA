@@ -2,7 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent core
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import { ToolConfigSchema } from '@agent/core/ToolConfig';
 
 describe('ToolConfigSchema', () => {
@@ -28,7 +29,7 @@ describe('ToolConfigSchema', () => {
 
 describe('AgentConfigSchema', () => {
   it('strips unknown properties for backward compatibility', () => {
-    const parsed = AgentConfigSchema.parse({
+    const parsed = parseAgentConfig({
       legacyFlag: 'remove-me',
       toolConfig: {
         reflect: true,
@@ -44,5 +45,13 @@ describe('AgentConfigSchema', () => {
       'usePrefillFromInput' in (parsed.toolConfig as Record<string, unknown>),
       false,
     );
+    assert.strictEqual(parsed.session?.agentCategory, AgentCategory.Workflow);
+  });
+
+  it('derives workflow metadata when session is omitted', () => {
+    const parsed = parseAgentConfig({});
+
+    assert.ok(parsed.session);
+    assert.strictEqual(parsed.session?.agentCategory, AgentCategory.Workflow);
   });
 });

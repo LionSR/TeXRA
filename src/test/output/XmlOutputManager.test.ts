@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 
 // Local imports
 import {
@@ -33,21 +33,12 @@ describe('XmlOutputManager markdown fallback', () => {
     tools: [],
   };
 
-  const config: AgentConfig = {
+  const config: AgentConfig = parseAgentConfig({
     model: 'test',
     agent: 'a',
     instruction: '',
     useMultipleOutputs: false,
     inputFile: 'input.tex',
-    inputFiles: null,
-    referenceFile: null,
-    referenceFiles: null,
-    auxiliaryFile: null,
-    auxiliaryFiles: null,
-    mediaFile: null,
-    mediaFiles: null,
-    outputFiles: null,
-    editedFile: null,
     toolConfig: {
       autoExtractFigure: false,
       autoExtractTikzFigure: false,
@@ -55,7 +46,7 @@ describe('XmlOutputManager markdown fallback', () => {
       attachDiagnostics: false,
       autoCompileInputPdf: false,
     },
-  };
+  });
 
   it('writes tex file from markdown fenced latex block', async () => {
     const logger = new AgentLogger('TestXmlOutput');
