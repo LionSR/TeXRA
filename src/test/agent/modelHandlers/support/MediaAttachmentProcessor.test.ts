@@ -129,12 +129,12 @@ describe('MediaAttachmentProcessor', () => {
     return createTempFile('fixture.pdf', Buffer.from(pdfBytes));
   }
 
-  function createSilenceWavBuffer(
-    durationMs = 250,
-    sampleRate = 8000,
-  ): Buffer {
+  function createSilenceWavBuffer(durationMs = 250, sampleRate = 8000): Buffer {
     const bytesPerSample = 2; // 16-bit mono audio
-    const sampleCount = Math.max(1, Math.floor((sampleRate * durationMs) / 1000));
+    const sampleCount = Math.max(
+      1,
+      Math.floor((sampleRate * durationMs) / 1000),
+    );
     const pcmData = Buffer.alloc(sampleCount * bytesPerSample);
 
     const header = Buffer.alloc(44);
@@ -185,7 +185,11 @@ describe('MediaAttachmentProcessor', () => {
 
     processor.logResults(results);
     assert.equal(stub.fileListEntries.length, 1, 'should log processed PDF');
-    assert.equal(stub.warnMessages.length, 0, 'no warnings expected for valid PDF');
+    assert.equal(
+      stub.warnMessages.length,
+      0,
+      'no warnings expected for valid PDF',
+    );
   });
 
   it('processes native audio fixtures into audio media entries', async () => {
