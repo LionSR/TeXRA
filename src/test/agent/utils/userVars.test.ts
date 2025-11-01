@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent components
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentType,
@@ -36,21 +36,12 @@ const basePrompt: AgentPrompt = {
   userRequest: '',
 };
 
-const baseConfig: AgentConfig = {
+const baseConfig: AgentConfig = parseAgentConfig({
   model: 'test',
   agent: 'agent',
   instruction: '',
   useMultipleOutputs: false,
   inputFile: 'input.tex',
-  inputFiles: null,
-  referenceFile: null,
-  referenceFiles: null,
-  auxiliaryFile: null,
-  auxiliaryFiles: null,
-  mediaFile: null,
-  mediaFiles: null,
-  outputFiles: null,
-  editedFile: null,
   toolConfig: {
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
@@ -58,7 +49,7 @@ const baseConfig: AgentConfig = {
     attachDiagnostics: false,
     autoCompileInputPdf: false,
   },
-};
+});
 
 describe('getToolFlags', () => {
   it('uses texra.debug.saveInputPrompt setting for PRINT_INPUT_PROMPT', () => {
