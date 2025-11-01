@@ -326,6 +326,46 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('limits cache control markers to the latest four blocks', () => {
+    const handler = createAnthropicHandler();
+    const messageContent: ContentBlockParam[] = [];
+
+    for (let idx = 0; idx < 5; idx += 1) {
+      messageContent.push({
+        type: 'text',
+        text: `block-${idx}`,
+        citations: null,
+        cache_control: { type: 'ephemeral' },
+      } as ContentBlockParam & { cache_control: { type: 'ephemeral' } });
+    }
+
+    const messages: MessageParam[] = [
+      { role: 'user', content: messageContent },
+    ];
+
+    (handler as any).enforceCacheControlLimit(messages);
+
+    const cacheControlledBlocks = messageContent.filter(
+      (block) =>
+        'cache_control' in block &&
+        (block as { cache_control?: unknown }).cache_control !== undefined,
+    );
+
+    assert.equal(cacheControlledBlocks.length, 4);
+    assert.equal(
+      (messageContent[0] as { cache_control?: unknown }).cache_control,
+      undefined,
+      'the earliest cache marker should be removed',
+    );
+    assert.deepEqual(
+      cacheControlledBlocks.map(
+        (block) => (block as { text?: string }).text,
+      ),
+      ['block-1', 'block-2', 'block-3', 'block-4'],
+      'the four most recent blocks should retain cache control markers',
+    );
+  });
+
   it('trims follow-up text and rejects empty follow-ups', async () => {
     const handler = createAnthropicHandler();
     const baseMessages = await handler.initializeMessages('prefix', 'request');
