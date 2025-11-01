@@ -16,6 +16,7 @@ import {
 } from '@utils/editor/activeFileGuards';
 
 // Local imports - core
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 const CHANNEL = 'LinterCommands';
@@ -177,11 +178,13 @@ export async function handleFixLinterIssues(
       `Found ${issues.length} linter issues in ${relativePath}`,
     );
 
-    await executeAgent({
+    const agentConfig = parseAgentConfig({
       agent: 'tex_linter_fix',
       model: 'claude-4-5-sonnet-4-5-latest',
       inputFile: relativePath,
     });
+
+    await executeAgent(agentConfig);
   } catch (err) {
     logger.error(
       CHANNEL,

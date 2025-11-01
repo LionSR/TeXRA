@@ -4,7 +4,6 @@ import {
   AgentPrompt,
   AgentSetting,
   type AgentSessionDescriptor,
-  resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
 import { IAgent, type AgentRunHooks } from '../core/IAgent';
@@ -49,13 +48,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   public getSessionMetadata(): AgentSessionDescriptor {
-    if (this.agentConfig.session) {
-      return this.agentConfig.session;
+    if (!this.agentConfig.session) {
+      throw new Error('Agent configuration is missing session metadata.');
     }
 
-    return resolveAgentSessionDescriptor(
-      this.agentConfig.agentType ?? this.agentSetting.agentType,
-    );
+    return this.agentConfig.session;
   }
 
   constructor(
