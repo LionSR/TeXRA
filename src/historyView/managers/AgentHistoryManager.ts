@@ -16,6 +16,10 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
+// Local imports - logging
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'AgentHistoryManager';
 
 /**
  * Represents a historical agent execution
@@ -41,7 +45,9 @@ export class AgentHistoryManager {
     const normalizedConfig = parseAgentConfig(config);
     const session = normalizedConfig.session;
     if (!session) {
-      throw new Error('Agent history cannot store configs without session metadata.');
+      throw new Error(
+        'Agent history cannot store configs without session metadata.',
+      );
     }
 
     const historyItem: AgentHistoryItem = {
@@ -122,7 +128,14 @@ export class AgentHistoryManager {
     try {
       normalizedConfig = parseAgentConfig(baseConfig);
     } catch (error) {
-      console.warn('Discarding malformed agent history entry', error);
+      logger.warn(
+        CHANNEL,
+        'Discarding malformed agent history entry',
+        undefined,
+        undefined,
+        false,
+        error,
+      );
       return null;
     }
 
