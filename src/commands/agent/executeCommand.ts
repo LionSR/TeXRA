@@ -2,7 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent components
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import {
+  parseAgentConfig,
+  } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -12,7 +14,7 @@ import { AgentHistoryManager } from '@historyView/managers';
 // Add the registration function
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
-    vscode.commands.registerCommand('texra.execute', (config: AgentConfig) =>
+    vscode.commands.registerCommand('texra.execute', (config: unknown) =>
       executeCommand.executeCommand(config, context),
     ),
   );
@@ -20,16 +22,17 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 
 export const executeCommand = {
   executeCommand: async (
-    config: AgentConfig,
+    config: unknown,
     context: vscode.ExtensionContext,
   ) => {
     try {
       // Save the agent configuration to history (silently)
+      const normalizedConfig = parseAgentConfig(config);
       const executionId: ExecutionId =
-        await AgentHistoryManager.addToHistory(config);
+        await AgentHistoryManager.addToHistory(normalizedConfig);
 
       // Run the agent directly, passing through the execution ID
-      await executeAgent(config, executionId);
+      await executeAgent(normalizedConfig, executionId);
     } catch (err) {
       throw err;
     }
