@@ -7,7 +7,7 @@ import type { StatePersistenceManager } from '@progressView/persistence/StatePer
 import { WorkspaceStateKey } from '@common/state/stateManager';
 
 // Local imports - agent
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 
 // Local imports - utils
@@ -44,7 +44,7 @@ describe('ProgressViewState.clearOutputState', () => {
       persistence as unknown as StatePersistenceManager,
     );
 
-    const config = AgentConfigSchema.parse({
+    const config = parseAgentConfig({
       model: 'test-model',
       agent: 'test-agent',
       instruction: 'Test instruction',
@@ -57,7 +57,7 @@ describe('ProgressViewState.clearOutputState', () => {
       useMultipleOutputs: true,
     });
 
-    const workflowState = agentConfigToTaskState(config, config.session);
+    const workflowState = agentConfigToTaskState(config);
     const streamId = 'stream-1';
     state.setTaskState(streamId, workflowState);
 
@@ -85,7 +85,7 @@ describe('ProgressViewState.clearOutputState', () => {
       persistence as unknown as StatePersistenceManager,
     );
 
-    const config = AgentConfigSchema.parse({
+    const config = parseAgentConfig({
       model: 'test-model',
       agent: 'test-agent',
       instruction: 'Test instruction',
@@ -96,7 +96,7 @@ describe('ProgressViewState.clearOutputState', () => {
       inputFile: 'main.tex',
     });
 
-    const workflowState = agentConfigToTaskState(config, config.session);
+    const workflowState = agentConfigToTaskState(config);
     const streamId = 'stream-2';
     state.setTaskState(streamId, workflowState);
 
@@ -114,7 +114,7 @@ describe('ProgressViewState.clearOutputState', () => {
       persistence as unknown as StatePersistenceManager,
     );
 
-    const config = AgentConfigSchema.parse({
+    const config = parseAgentConfig({
       model: 'test-model',
       agent: 'test-agent',
       instruction: 'Test instruction',
@@ -126,7 +126,7 @@ describe('ProgressViewState.clearOutputState', () => {
       outputFiles: undefined,
     });
 
-    const workflowState = agentConfigToTaskState(config, config.session);
+    const workflowState = agentConfigToTaskState(config);
     const streamId = 'stream-3';
     state.setTaskState(streamId, workflowState);
 
