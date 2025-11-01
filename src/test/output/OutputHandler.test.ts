@@ -10,17 +10,19 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
+import { createAgentRunContext } from '@agent/runtime/AgentRunContext';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
 
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
 
-  constructor(setting: AgentSetting, config: AgentConfig) {
-    super(setting, config, 0, [], new AgentLogger('TestOutputHandler'));
+  constructor(setting: AgentSetting, config: AgentConfig, context: AgentRunContext) {
+    super(setting, config, 0, [], context);
   }
 
   public override async gatherOutputFileInfo(round: number) {
@@ -86,9 +88,27 @@ const baseConfig: AgentConfig = {
   },
 };
 
+function createTestContext(name: string): AgentRunContext {
+  return createAgentRunContext({
+    streamTabId: name as StreamTabId,
+    executionId: undefined,
+    session: {
+      agentType: AgentType.CoT,
+      agentCategory: AgentCategory.Workflow,
+    },
+    agentName: 'test-agent',
+    model: baseConfig.model,
+    inputFile: baseConfig.inputFile,
+  });
+}
+
 describe('OutputHandler round helpers', () => {
   it('ensures round storage and returns the same reference', () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('round-helpers'),
+    );
     const roundOutputs = handler.ensureRound(2);
 
     assert.ok(Array.isArray(roundOutputs));
@@ -102,7 +122,11 @@ describe('OutputHandler round helpers', () => {
   });
 
   it('reflects whether rounds contain outputs', () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('round-has-output'),
+    );
 
     assert.strictEqual(handler.hasRoundOutputs(1), false);
 
@@ -113,7 +137,11 @@ describe('OutputHandler round helpers', () => {
   });
 
   it('ensureRound creates storage for uninitialized rounds', () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('ensure-round'),
+    );
     const outputs = handler.ensureRound(5);
 
     assert.ok(Array.isArray(outputs));
@@ -125,7 +153,11 @@ describe('OutputHandler round helpers', () => {
   });
 
   it('ensureRound returns existing outputs when called multiple times', () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('ensure-round-existing'),
+    );
     handler.ensureRound(2).push('existing.tex');
 
     const outputs = handler.ensureRound(2);
@@ -146,7 +178,7 @@ describe('OutputHandler.getRoundMapping', () => {
       baseConfig,
       0,
       [path.join('workspace', 'chapter.tex')],
-      new AgentLogger('TestOutputHandlerMapping'),
+      createTestContext('mapping'),
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
@@ -179,7 +211,11 @@ describe('OutputHandler.getRoundMapping', () => {
 
 describe('OutputHandler.finalizeRound', () => {
   it('emits addOutputFiles and validates when endTurn', async () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('finalize-end'),
+    );
     const events: any[] = [];
     const dispose = bus.on('addOutputFiles', (data) => events.push(data));
 
@@ -195,7 +231,11 @@ describe('OutputHandler.finalizeRound', () => {
   });
 
   it('skips validation when not endTurn', async () => {
-    const handler = new MockOutputHandler(baseSetting, baseConfig);
+    const handler = new MockOutputHandler(
+      baseSetting,
+      baseConfig,
+      createTestContext('finalize-skip'),
+    );
     const events: any[] = [];
     const dispose = bus.on('addOutputFiles', (data) => events.push(data));
 

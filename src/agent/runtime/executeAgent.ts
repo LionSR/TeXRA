@@ -33,12 +33,17 @@ import {
   AgentDirectorySource,
   type AgentPathResolution,
 } from './AgentPathTypes';
+import {
+  AgentRunContext,
+  createAgentRunContext,
+} from './AgentRunContext';
 
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { withLogGroup } from '@logger/logGroupUtils';
+import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -77,7 +82,6 @@ type AgentConstructor = {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
   ): IAgent;
 };
 
@@ -179,8 +183,6 @@ interface PrepareAgentInstanceParams {
   agentName: string;
   /** Partial agent configuration to merge with defaults */
   configPayload: Partial<AgentConfig>;
-  /** Optional execution ID for tracking and logging */
-  executionId?: ExecutionId;
   /** Optional agent class to use instead of automatic selection based on agent type */
   agentClassOverride?: AgentConstructor;
 }
@@ -225,7 +227,7 @@ interface PrepareAgentInstanceParams {
 export async function prepareAgentInstance<T extends IAgent = IAgent>(
   params: PrepareAgentInstanceParams,
 ): Promise<{ agent: T; agentType: AgentType }> {
-  const { agentName, configPayload, executionId, agentClassOverride } = params;
+  const { agentName, configPayload, agentClassOverride } = params;
 
   const configInput: Partial<AgentConfig> = {
     agent: agentName,
@@ -307,7 +309,6 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     agentSetting,
     agentPrompt,
     agentPathInfo.directory,
-    executionId,
   );
 
   return { agent: agent as T, agentType: agentSetting.agentType };
@@ -328,7 +329,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 ): Promise<void> {
   const isResume = options?.resume ?? false;
   let streamTabId: StreamTabId | undefined;
-  let agentStreamLogger: AgentLogger | undefined;
+  let runContext: AgentRunContext | undefined;
   let agent: T | undefined;
   try {
     // Create agent instance and extract its declared type
@@ -350,15 +351,33 @@ export async function executeAgentWithLogging<T extends IAgent>(
         sessionMetadata.agentCategory,
       );
 
-    streamTabId = agent.getStreamTabId();
+    streamTabId = buildStreamTabId(
+      config.agent,
+      config.model,
+      config.inputFile,
+      {
+        agentType: metadata.agentType,
+        executionId,
+        useMultipleOutputs: config.useMultipleOutputs,
+      },
+    );
 
     if (!streamTabId) {
       throw new Error('Failed to resolve stream tab ID for agent execution');
     }
 
-    const activeStreamId: StreamTabId = streamTabId;
+    runContext = createAgentRunContext({
+      streamTabId,
+      executionId,
+      session: metadata,
+      agentName,
+      model: config.model,
+      inputFile: config.inputFile,
+    });
 
-    agentStreamLogger = new AgentLogger(activeStreamId, true);
+    agent.applyRunContext(runContext);
+
+    const activeStreamId: StreamTabId = streamTabId;
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
@@ -559,22 +578,18 @@ export async function executeAgentWithLogging<T extends IAgent>(
       vscode.window.showErrorMessage(errorMsg);
     }
 
-    if (agentStreamLogger || streamTabId) {
-      if (!agentStreamLogger && streamTabId) {
-        agentStreamLogger = new AgentLogger(streamTabId, true);
-      }
-      if (agentStreamLogger) {
-        const fallbackGroupId =
-          agentStreamLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
-        if (fallbackGroupId) {
-          agentStreamLogger.error(errorMsg, fallbackGroupId);
-        } else {
-          const agentErrorGroupId = await agentStreamLogger.startGroup(
-            `Error: ${agentName}`,
-          );
-          agentStreamLogger.error(errorMsg, agentErrorGroupId);
-          agentStreamLogger.endGroup(agentErrorGroupId, 'error');
-        }
+    if (runContext) {
+      const agentLogger = runContext.logger;
+      const fallbackGroupId =
+        agentLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
+      if (fallbackGroupId) {
+        agentLogger.error(errorMsg, fallbackGroupId);
+      } else {
+        const agentErrorGroupId = await agentLogger.startGroup(
+          `Error: ${agentName}`,
+        );
+        agentLogger.error(errorMsg, agentErrorGroupId);
+        agentLogger.endGroup(agentErrorGroupId, 'error');
       }
     }
 
@@ -607,7 +622,6 @@ export async function executeAgent(
       const { agent, agentType } = await prepareAgentInstance({
         agentName: requestedAgentName,
         configPayload: agentConfig,
-        executionId,
       });
 
       const { outputFiles, useMultipleOutputs } = agent.config;

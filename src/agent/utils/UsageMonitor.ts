@@ -14,6 +14,7 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -24,9 +25,12 @@ import { AgentLogger } from '@logger/AgentLogger';
 export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
-    private readonly channel: string,
-    private readonly logger: AgentLogger,
+    private readonly context: AgentRunContext,
   ) {}
+
+  private get logger(): AgentLogger {
+    return this.context.logger;
+  }
 
   async recordUsage(
     stateGlobal: AgentStateGlobal,
@@ -103,7 +107,7 @@ export class UsageMonitor {
 
       if (statsGroupId) {
         bus.emit('updateGroupUsage', {
-          stream: this.channel,
+          stream: this.context.streamTabId,
           groupId: statsGroupId,
           usage: {
             inputTokens:

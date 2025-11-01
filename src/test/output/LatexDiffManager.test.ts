@@ -11,9 +11,9 @@ import {
 } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createAgentRunContext } from '@agent/runtime/AgentRunContext';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 describe('LatexDiffManager mapping reuse', () => {
   const baseSetting: AgentSetting = {
@@ -58,26 +58,37 @@ describe('LatexDiffManager mapping reuse', () => {
     },
   };
 
-  function createLogger(): AgentLogger {
-    const logger = new AgentLogger('LatexDiffManagerTest');
+  function createContext(name: string): AgentRunContext {
+    const context = createAgentRunContext({
+      streamTabId: name as StreamTabId,
+      executionId: undefined,
+      session: {
+        agentType: AgentType.CoT,
+        agentCategory: AgentCategory.Workflow,
+      },
+      agentName: 'agent',
+      model: baseConfig.model,
+      inputFile: baseConfig.inputFile,
+    });
     const noop = () => {};
-    (logger as any).debug = noop;
-    (logger as any).info = noop;
-    (logger as any).warn = noop;
-    (logger as any).error = noop;
-    (logger as any).latexDiff = noop;
-    return logger;
+    const logger = context.logger as any;
+    logger.debug = noop;
+    logger.info = noop;
+    logger.warn = noop;
+    logger.error = noop;
+    logger.latexDiff = noop;
+    return context;
   }
 
   it('uses shared base mapping for round diffs', async () => {
-    const logger = createLogger();
+    const context = createContext('latexdiff-round');
     const baseFiles = [path.join('workspace', 'chapter.tex')];
     const handler = new OutputHandler(
       baseSetting,
       baseConfig,
       0,
       baseFiles,
-      logger,
+      context,
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
@@ -94,16 +105,16 @@ describe('LatexDiffManager mapping reuse', () => {
       [];
     const aggregated: unknown[][] = [];
 
-    const testLogger = createLogger();
-    (testLogger as any).latexDiff = (entries: unknown[]) =>
+    const testContext = createContext('latexdiff-round-manager');
+    (testContext.logger as any).latexDiff = (entries: unknown[]) =>
       aggregated.push(entries);
 
     const manager = new LatexDiffManager(
       handler.agentSetting,
       handler.outputFiles,
       baseFiles,
-      testLogger,
-      'channel',
+      testContext.logger,
+      testContext.streamTabId,
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
@@ -133,14 +144,14 @@ describe('LatexDiffManager mapping reuse', () => {
   });
 
   it('uses shared previous mapping for between-round diffs', async () => {
-    const logger = createLogger();
+    const context = createContext('latexdiff-between');
     const baseFiles = [path.join('workspace', 'paper.tex')];
     const handler = new OutputHandler(
       baseSetting,
       baseConfig,
       0,
       baseFiles,
-      logger,
+      context,
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'paper_r0.tex')];
@@ -164,14 +175,14 @@ describe('LatexDiffManager mapping reuse', () => {
       [];
     const betweenPairs: Array<{ previous: string; current: string }> = [];
 
-    const testLogger = createLogger();
+    const testContext = createContext('latexdiff-between-manager');
 
     const manager = new LatexDiffManager(
       handler.agentSetting,
       handler.outputFiles,
       baseFiles,
-      testLogger,
-      'channel',
+      testContext.logger,
+      testContext.streamTabId,
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,

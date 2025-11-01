@@ -4,6 +4,7 @@ import type { AgentConfig } from './AgentConfig';
 import type { AgentSessionDescriptor } from './AgentDataclass';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 
 /**
  * Minimal interface implemented by all agent types.
@@ -50,6 +51,11 @@ export interface IAgent {
    * @param overrides - Optional overrides for default hook implementations.
    */
   getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
+
+  /**
+   * Apply the shared execution context that should be reused across all agent components.
+   */
+  applyRunContext(context: AgentRunContext): void;
 }
 
 /**

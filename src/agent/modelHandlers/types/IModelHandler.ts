@@ -11,6 +11,7 @@ import type { ProviderStopReason } from './StopReasonTypes';
 
 // Local imports - logging and model metadata
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 
 /**
@@ -59,6 +60,9 @@ export interface IModelHandler<
 
   /** Set the logger instance for the handler. */
   setLogger(logger: AgentLogger): void;
+
+  /** Apply the active agent run context to the handler. */
+  applyRunContext(context: AgentRunContext): void;
 
   /** Inform the handler about the active agent type. */
   setAgentType(agentType?: AgentType | null): void;

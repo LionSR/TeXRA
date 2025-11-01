@@ -46,6 +46,7 @@ import { getConfig } from '@utils/config';
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS, getMimeType } from '@utils/files';
 import { normalizeUrl } from '@utils/urlUtils';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -107,6 +108,7 @@ export abstract class ModelHandler<
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
   protected agentType?: AgentType;
+  protected runContext?: AgentRunContext;
 
   protected get supportsToolFileOutputs(): boolean {
     return false;
@@ -140,6 +142,11 @@ export abstract class ModelHandler<
    */
   public setLogger(logger: AgentLogger): void {
     this.logger = logger;
+  }
+
+  public applyRunContext(context: AgentRunContext): void {
+    this.runContext = context;
+    this.setLogger(context.logger);
   }
 
   /**

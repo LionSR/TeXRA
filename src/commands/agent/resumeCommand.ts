@@ -41,7 +41,6 @@ async function buildToolUseAgent(
   const { agent, agentType } = await prepareAgentInstance<BaseToolUseAgent>({
     agentName: fullConfig.agent,
     configPayload: fullConfig,
-    executionId: snapshot.executionId as ExecutionId,
   });
 
   if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {

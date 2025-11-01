@@ -35,6 +35,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { AgentRunContext } from '@agent/runtime/AgentRunContext';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
@@ -65,7 +66,7 @@ export class OutputHandler implements IOutputHandler {
     agentConfig: AgentConfig,
     logId: number,
     baseFiles: string[] = [],
-    logger?: AgentLogger,
+    context: AgentRunContext,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -74,8 +75,8 @@ export class OutputHandler implements IOutputHandler {
     this.outputMappings = {};
     this.roundMappings = {};
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
-    this.channel = this.logger.channelId;
+    this.logger = context.logger;
+    this.channel = context.streamTabId;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
