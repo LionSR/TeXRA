@@ -156,7 +156,10 @@ describe('ToolUseSnapshotStore', () => {
     assert.equal(writeJsonCalls.length, 1);
 
     const { relativePath, value } = writeJsonCalls[0];
-    assert.equal(relativePath, path.join('toolUseSessions', `${executionId}.json`));
+    assert.equal(
+      relativePath,
+      path.join('toolUseSessions', `${executionId}.json`),
+    );
     const stored = value as ReturnType<typeof buildSnapshot>;
     assert.equal(stored.session.agentType, AgentType.ToolUse);
     assert.notStrictEqual(stored.messages, payload.messages);
