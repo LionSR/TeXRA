@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
   AgentSetting,
@@ -34,21 +34,12 @@ describe('LatexDiffManager mapping reuse', () => {
     tools: [],
   };
 
-  const baseConfig: AgentConfig = {
+  const baseConfig: AgentConfig = parseAgentConfig({
     model: 'test',
     agent: 'agent',
     instruction: '',
     useMultipleOutputs: false,
     inputFile: 'input.tex',
-    inputFiles: null,
-    referenceFile: null,
-    referenceFiles: null,
-    auxiliaryFile: null,
-    auxiliaryFiles: null,
-    mediaFile: null,
-    mediaFiles: null,
-    outputFiles: null,
-    editedFile: null,
     toolConfig: {
       autoExtractFigure: false,
       autoExtractTikzFigure: false,
@@ -56,7 +47,7 @@ describe('LatexDiffManager mapping reuse', () => {
       attachDiagnostics: false,
       autoCompileInputPdf: false,
     },
-  };
+  });
 
   function createLogger(): AgentLogger {
     const logger = new AgentLogger('LatexDiffManagerTest');

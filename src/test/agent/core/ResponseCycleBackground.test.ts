@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
 import {
   AgentSetting,
@@ -312,21 +312,12 @@ describe('ResponseCycle background reasoning logs', () => {
       userRequest: 'Explain the process',
     };
 
-    const agentConfig: AgentConfig = {
+    const agentConfig: AgentConfig = parseAgentConfig({
       model: handlerConfig.name,
       agent: 'test-agent',
       instruction: '',
       useMultipleOutputs: false,
       inputFile: '',
-      inputFiles: null,
-      referenceFile: null,
-      referenceFiles: null,
-      auxiliaryFile: null,
-      auxiliaryFiles: null,
-      mediaFile: null,
-      mediaFiles: null,
-      outputFiles: null,
-      editedFile: null,
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
@@ -334,7 +325,7 @@ describe('ResponseCycle background reasoning logs', () => {
         attachDiagnostics: false,
         autoCompileInputPdf: false,
       },
-    };
+    });
 
     const messages: ProviderMessage[] = [];
     const stateRound = new AgentStateRound(1);
