@@ -14,7 +14,10 @@ import {
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
 import { clearToolUseAgents } from '@agent/toolUse/ToolUseAgentRegistry';
-import { sendFollowUp, resumeFromSnapshot } from '@agent/toolUse/ToolUseFollowUpCoordinator';
+import {
+  sendFollowUp,
+  resumeFromSnapshot,
+} from '@agent/toolUse/ToolUseFollowUpCoordinator';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - progress view
@@ -54,9 +57,7 @@ describe('ToolUseFollowUpCoordinator', () => {
     executionId: string;
     resume: boolean;
   }[];
-  let executeImplementation:
-    | (() => Promise<void>)
-    | undefined;
+  let executeImplementation: (() => Promise<void>) | undefined;
   let providerTaskState: TaskState | undefined;
 
   const originalShowWarningMessage = vscode.window.showWarningMessage;
@@ -65,7 +66,8 @@ describe('ToolUseFollowUpCoordinator', () => {
   const originalSetResuming = ToolUseSessionManager.setResumingSession;
   const originalClearResuming = ToolUseSessionManager.clearResumingSession;
   const originalDrainQueued = ToolUseSessionManager.drainQueuedFollowUps;
-  const originalConsumeSnapshot = ToolUseSessionManager.consumeSnapshotForStream;
+  const originalConsumeSnapshot =
+    ToolUseSessionManager.consumeSnapshotForStream;
   const originalGetSnapshot = ToolUseSessionManager.getSnapshotForStream;
   const originalIsResuming = ToolUseSessionManager.isResumingSession;
   const originalEnqueue = ToolUseSessionManager.enqueueFollowUpWhileResuming;
@@ -178,18 +180,22 @@ describe('ToolUseFollowUpCoordinator', () => {
       return false;
     };
 
-    (executeAgentModule as typeof executeAgentModule & {
-      prepareAgentInstance: typeof executeAgentModule.prepareAgentInstance;
-    }).prepareAgentInstance = (async (..._args: any[]) => {
+    (
+      executeAgentModule as typeof executeAgentModule & {
+        prepareAgentInstance: typeof executeAgentModule.prepareAgentInstance;
+      }
+    ).prepareAgentInstance = (async (..._args: any[]) => {
       if (!prepareAgentImplementation) {
         throw new Error('prepareAgentInstance was not stubbed');
       }
       return prepareAgentImplementation();
     }) as typeof executeAgentModule.prepareAgentInstance;
 
-    (executeAgentModule as typeof executeAgentModule & {
-      executeAgentWithLogging: typeof executeAgentModule.executeAgentWithLogging;
-    }).executeAgentWithLogging = (async (
+    (
+      executeAgentModule as typeof executeAgentModule & {
+        executeAgentWithLogging: typeof executeAgentModule.executeAgentWithLogging;
+      }
+    ).executeAgentWithLogging = (async (
       agentName: string,
       _factory: any,
       executionId: string,
@@ -205,9 +211,11 @@ describe('ToolUseFollowUpCoordinator', () => {
       }
     }) as typeof executeAgentModule.executeAgentWithLogging;
 
-    (ProgressViewProvider as typeof ProgressViewProvider & {
-      getInstance: typeof ProgressViewProvider.getInstance;
-    }).getInstance = () => {
+    (
+      ProgressViewProvider as typeof ProgressViewProvider & {
+        getInstance: typeof ProgressViewProvider.getInstance;
+      }
+    ).getInstance = () => {
       if (!providerTaskState) {
         return undefined as unknown as ProgressViewProvider;
       }
@@ -268,15 +276,21 @@ describe('ToolUseFollowUpCoordinator', () => {
         enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
       }
     ).enqueueFollowUpWhileResuming = originalEnqueue;
-    (executeAgentModule as typeof executeAgentModule & {
-      prepareAgentInstance: typeof executeAgentModule.prepareAgentInstance;
-    }).prepareAgentInstance = originalPrepareAgent;
-    (executeAgentModule as typeof executeAgentModule & {
-      executeAgentWithLogging: typeof executeAgentModule.executeAgentWithLogging;
-    }).executeAgentWithLogging = originalExecuteAgent;
-    (ProgressViewProvider as typeof ProgressViewProvider & {
-      getInstance: typeof ProgressViewProvider.getInstance;
-    }).getInstance = originalProgressGetInstance;
+    (
+      executeAgentModule as typeof executeAgentModule & {
+        prepareAgentInstance: typeof executeAgentModule.prepareAgentInstance;
+      }
+    ).prepareAgentInstance = originalPrepareAgent;
+    (
+      executeAgentModule as typeof executeAgentModule & {
+        executeAgentWithLogging: typeof executeAgentModule.executeAgentWithLogging;
+      }
+    ).executeAgentWithLogging = originalExecuteAgent;
+    (
+      ProgressViewProvider as typeof ProgressViewProvider & {
+        getInstance: typeof ProgressViewProvider.getInstance;
+      }
+    ).getInstance = originalProgressGetInstance;
   });
 
   function createSnapshot(streamId: StreamTabId): ToolUseSessionSnapshot {

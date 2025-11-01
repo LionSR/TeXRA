@@ -8,6 +8,7 @@ import {
   AgentType,
   type AgentSessionDescriptor,
 } from './AgentDataclass';
+import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
 /**
@@ -26,11 +27,6 @@ export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
  * Session descriptor schema for AgentConfig.
  * The session field is the canonical source of truth for agent classification.
  */
-const SessionDescriptorSchema = z.object({
-  agentType: z.enum(AgentType).optional(),
-  agentCategory: z.enum(AgentCategory),
-});
-
 /** Zod schema for validating AgentConfig objects */
 export const AgentConfigSchema = z
   .object({
@@ -42,7 +38,7 @@ export const AgentConfigSchema = z
     // Legacy field for backward compatibility - prefer session.agentType
     agentType: z.enum(AgentType).optional(),
     // Canonical session descriptor - single source of truth
-    session: SessionDescriptorSchema.optional(),
+    session: AgentSessionDescriptorSchema.optional(),
 
     inputFile: z.string().prefault(''),
     inputFiles: z.array(z.string()).nullable().prefault(null),
