@@ -39,6 +39,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { withLogGroup } from '@logger/logGroupUtils';
+import { runWithChannelGroup } from '@logger/logContext';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -377,29 +378,18 @@ export async function executeAgentWithLogging<T extends IAgent>(
           await withLogGroup(
             logger,
             `Task Details`,
-            async (taskDetailsGroupId) => {
-              if (!isResume && taskDetailsGroupId) {
-                logger.info(
-                  `Starting task execution for ${activeStreamId}`,
-                  taskDetailsGroupId,
-                );
-                logger.info(
-                  `Input file: ${config.inputFile}`,
-                  taskDetailsGroupId,
-                );
+            async () => {
+              if (!isResume) {
+                logger.info(`Starting task execution for ${activeStreamId}`);
+                logger.info(`Input file: ${config.inputFile}`);
               }
 
-              logger.debug(
-                `Creating stream with ID: ${activeStreamId}`,
-                taskDetailsGroupId,
-              );
+              logger.debug(`Creating stream with ID: ${activeStreamId}`);
               logger.debug(
                 `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
-                taskDetailsGroupId,
               );
               logger.debug(
                 `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-                taskDetailsGroupId,
               );
 
               // Switch to this stream and set its status to running
@@ -462,14 +452,8 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 }
 
                 // Store taskState
-                logger.debug(
-                  `Storing taskState for stream: ${activeStreamId}`,
-                  taskDetailsGroupId,
-                );
-                logger.debug(
-                  `Config for taskState: ${JSON.stringify(config)}`,
-                  taskDetailsGroupId,
-                );
+                logger.debug(`Storing taskState for stream: ${activeStreamId}`);
+                logger.debug(`Config for taskState: ${JSON.stringify(config)}`);
 
                 // Convert AgentConfig to TaskState using utility function
                 bus.emit('setTaskState', {
@@ -477,10 +461,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                   executionId,
                   taskState: agentConfigToTaskState(config, metadata),
                 });
-                logger.debug(
-                  `Task state stored for stream: ${activeStreamId}`,
-                  mainTaskGroupId,
-                );
+                logger.debug(`Task state stored for stream: ${activeStreamId}`);
               }
             },
             { parentGroupId: mainTaskGroupId, skip: isResume },
@@ -488,17 +469,13 @@ export async function executeAgentWithLogging<T extends IAgent>(
         } catch (err) {
           logger.error(
             `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
           );
           throw err;
         }
 
         try {
           // Run the agent
-          logger.info(
-            `Executing ${agentName} with model ${config.model}`,
-            mainTaskGroupId,
-          );
+          logger.info(`Executing ${agentName} with model ${config.model}`);
           if (!agent) {
             throw new Error('Agent instance was not initialized');
           }
@@ -506,7 +483,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           await agent.run();
           // await checkExpectedOutputs(config.outputFiles, agent);
           // Mark the task as completed successfully
-          logger.debug(`Task completed successfully`, mainTaskGroupId);
+          logger.debug(`Task completed successfully`);
           // Update status to stopped on successful completion
           bus.emit('updateStreamStatus', {
             stream: activeStreamId,
@@ -516,7 +493,6 @@ export async function executeAgentWithLogging<T extends IAgent>(
           // Mark the task as failed
           logger.error(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
           );
           // Update status to error if agent run fails
           bus.emit('updateStreamStatus', {
@@ -563,25 +539,34 @@ export async function executeAgentWithLogging<T extends IAgent>(
       if (!agentStreamLogger && streamTabId) {
         agentStreamLogger = new AgentLogger(streamTabId, true);
       }
-      if (agentStreamLogger) {
+      const loggerRef = agentStreamLogger;
+      if (loggerRef) {
         const fallbackGroupId =
-          agentStreamLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
+          loggerRef.getActiveGroupId() ?? agent?.getLastRunGroupId();
         if (fallbackGroupId) {
-          agentStreamLogger.error(errorMsg, fallbackGroupId);
+          runWithChannelGroup(loggerRef.channelId, fallbackGroupId, () => {
+            loggerRef.error(errorMsg);
+          });
         } else {
-          const agentErrorGroupId = await agentStreamLogger.startGroup(
+          await loggerRef.withGroup(
             `Error: ${agentName}`,
+            async () => {
+              loggerRef.error(errorMsg);
+            },
+            { successStatus: 'error' },
           );
-          agentStreamLogger.error(errorMsg, agentErrorGroupId);
-          agentStreamLogger.endGroup(agentErrorGroupId, 'error');
         }
       }
     }
 
     // Create a temporary error group if no active group exists
-    const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
-    logger.error(errorMsg, errorGroupId);
-    logger.endGroup(errorGroupId, 'error');
+    await logger.withGroup(
+      `Error: ${agentName}`,
+      async () => {
+        logger.error(errorMsg);
+      },
+      { successStatus: 'error' },
+    );
     throw new Error(errorMsg);
   }
 }

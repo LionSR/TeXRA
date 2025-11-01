@@ -119,26 +119,33 @@ export class OutputHandler implements IOutputHandler {
   }
 
   /**
-   * Starts a processing group for output handling.
-   * Creates a log group at the same level as ResponseCycle.
+   * Run processing logic within a scoped log group.
+   * Creates a log group at the same level as ResponseCycle and ensures
+   * asynchronous work inherits the processing context.
    * @param processName Name of the processing operation
-   * @param roundGroupId Parent round group ID
-   * @returns The created process group ID
+   * @param callback Work to execute while the processing group is active
+   * @param options.parentGroupId Optional parent round group ID
    */
-  async startProcessing(
+  async startProcessing<T>(
     processName: string,
-    roundGroupId?: string,
-  ): Promise<string> {
-    // Create a log group as a child of the round group if provided
-    const groupName = `OutputHandler: ${processName}`;
-    const groupId = await this.logger.startGroup(
-      groupName,
-      undefined,
-      roundGroupId,
+    callback: (groupId: string) => Promise<T>,
+    options: { parentGroupId?: string } = {},
+  ): Promise<T> {
+    return this.logger.withGroup(
+      `OutputHandler: ${processName}`,
+      async (groupId) => {
+        if (!groupId) {
+          throw new Error('Processing group identifier is required.');
+        }
+        this.processGroupId = groupId;
+        try {
+          return await callback(groupId);
+        } finally {
+          this.processGroupId = undefined;
+        }
+      },
+      { parentGroupId: options.parentGroupId },
     );
-    // Comment out this line as it creates confusing log order
-    // this.logger.info(`Starting ${processName}`, groupId);
-    return groupId;
   }
 
   /**

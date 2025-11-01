@@ -11,6 +11,7 @@ import { getConfig } from '@utils/config';
 import { TaskGroup, LogMessageData } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
 import { AgentLogger } from './AgentLogger';
+import { getContextGroupId } from './logContext';
 
 function isValidMessageType(type: unknown): type is MessageType {
   return Object.values(MESSAGE_TYPES).includes(type as MessageType);
@@ -363,9 +364,11 @@ function logWithGroup(
 ): void {
   const logger = getOrCreateLogger(channel, isAgent);
   const transport = channelTransports.get(channel);
+  const contextGroupId = getContextGroupId(channel);
 
-  // If no groupId provided, use the active group
-  const actualGroupId = groupId || transport?.getActiveGroupId();
+  // If no groupId provided, prefer the async context before falling back to the transport state
+  const actualGroupId =
+    groupId ?? contextGroupId ?? transport?.getActiveGroupId();
 
   // @ts-ignore - We're adding a custom property to the winston log
   logger[level](message, { groupId: actualGroupId, messageType, data });

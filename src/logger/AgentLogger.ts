@@ -3,6 +3,7 @@
 
 // Local imports - log
 import * as logger from './logUtils';
+import { runWithChannelGroup } from './logContext';
 import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
 import type {
@@ -27,6 +28,14 @@ export class AgentLogger {
     logger.initialize(this.channelId, this.isAgentLogger);
     this.channelId = channelId;
   }
+
+  /**
+   * Options used to control group lifecycle behaviour when using withGroup.
+   */
+  public static readonly defaultGroupStatus = {
+    success: 'stopped' as const,
+    error: 'error' as const,
+  };
 
   debug(
     message: string,
@@ -180,4 +189,48 @@ export class AgentLogger {
   setActiveGroupId(groupId: string | undefined): void {
     logger.setActiveGroupId(this.channelId, groupId);
   }
+
+  /**
+   * Run the provided callback within a log group scope, automatically handling
+   * start/end semantics and ensuring the group remains active for asynchronous
+   * work spawned by the callback.
+   */
+  async withGroup<T>(
+    groupName: string,
+    fn: (groupId?: string) => Promise<T>,
+    options: LoggerGroupOptions = {},
+  ): Promise<T> {
+    const {
+      parentGroupId,
+      skip = false,
+      successStatus = AgentLogger.defaultGroupStatus.success,
+      errorStatus = AgentLogger.defaultGroupStatus.error,
+    } = options;
+
+    if (skip) {
+      return fn(undefined);
+    }
+
+    const groupId = await this.startGroup(groupName, undefined, parentGroupId);
+
+    return runWithChannelGroup(this.channelId, groupId, async () => {
+      try {
+        const result = await fn(groupId);
+        this.endGroup(groupId, successStatus);
+        return result;
+      } catch (error) {
+        this.endGroup(groupId, errorStatus);
+        throw error;
+      }
+    });
+  }
+}
+
+type GroupStatus = Parameters<typeof logger.endGroup>[2];
+
+export interface LoggerGroupOptions {
+  parentGroupId?: string;
+  skip?: boolean;
+  successStatus?: GroupStatus;
+  errorStatus?: GroupStatus;
 }

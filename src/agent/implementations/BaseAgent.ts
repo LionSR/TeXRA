@@ -236,21 +236,18 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     groupLabel: string,
     callback: (groupId: string) => Promise<T>,
   ): Promise<T> {
-    const groupId = await this.logger.startGroup(
+    return this.logger.withGroup(
       groupLabel,
-      undefined,
-      this.runGroupId,
+      async (groupId) => {
+        if (!groupId) {
+          throw new Error(
+            'Round group identifier is required for round logging.',
+          );
+        }
+        return callback(groupId);
+      },
+      { parentGroupId: this.runGroupId },
     );
-
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await callback(groupId);
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      this.logger.endGroup(groupId, status);
-    }
   }
 
   /**
