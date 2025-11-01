@@ -114,6 +114,8 @@ const EPHEMERAL_CACHE_CONTROL: BetaCacheControlEphemeral = {
   type: 'ephemeral',
 };
 
+const MAX_CACHE_CONTROLLED_BLOCKS = 4;
+
 const isCacheControlEligibleBlock = (
   block: ContentBlockParam | ContentBlock | undefined,
 ): block is CacheControlEligibleBlock => {
@@ -235,6 +237,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const effectiveContextWindow = isAnthropic1MBetaActive
       ? ANTHROPIC_1M_CONTEXT_WINDOW
       : this.config.contextWindow;
+
+    this.enforceCacheControlLimit(messages);
 
     const documentAnalysis = this.analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -494,6 +498,53 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return response;
+  }
+
+  private enforceCacheControlLimit(messages: MessageParam[]): void {
+    if (!this.capabilities.supportsPromptCaching) {
+      return;
+    }
+
+    const cacheControlledBlocks: CacheControlEligibleBlock[] = [];
+
+    for (const message of messages) {
+      const content = message.content;
+      if (!Array.isArray(content) || content.length === 0) {
+        continue;
+      }
+
+      for (const block of content) {
+        if (!isCacheControlEligibleBlock(block)) {
+          if (
+            block &&
+            typeof block === 'object' &&
+            'cache_control' in block &&
+            (block as { cache_control?: unknown }).cache_control
+          ) {
+            delete (block as { cache_control?: unknown }).cache_control;
+          }
+          continue;
+        }
+
+        if (block.cache_control) {
+          cacheControlledBlocks.push(block);
+        }
+      }
+    }
+
+    if (cacheControlledBlocks.length <= MAX_CACHE_CONTROLLED_BLOCKS) {
+      this.cacheControlledBlock = cacheControlledBlocks.at(-1);
+      return;
+    }
+
+    const excess = cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS;
+    for (let idx = 0; idx < excess; idx += 1) {
+      const block = cacheControlledBlocks[idx];
+      delete block.cache_control;
+    }
+
+    const remainingBlocks = cacheControlledBlocks.slice(excess);
+    this.cacheControlledBlock = remainingBlocks.at(-1);
   }
 
   private async replaceDocumentDataWithUploads(
