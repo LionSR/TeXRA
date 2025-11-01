@@ -83,19 +83,13 @@ export async function sendFollowUp(
     try {
       agent.appendFollowUp(text);
     } catch (err) {
-      await showLoggedErrorMessage(
-        CHANNEL,
-        'Failed to send follow-up',
-        err,
-      );
+      await showLoggedErrorMessage(CHANNEL, 'Failed to send follow-up', err);
     }
     return;
   }
 
   if (ToolUseSessionManager.isResumingSession(streamId)) {
-    if (
-      ToolUseSessionManager.enqueueFollowUpWhileResuming(streamId, text)
-    ) {
+    if (ToolUseSessionManager.enqueueFollowUpWhileResuming(streamId, text)) {
       console.log(
         `[${CHANNEL}] queued follow-up while stream ${streamId} is resuming`,
       );
@@ -134,10 +128,7 @@ export async function resumeFromSnapshot(
     snapshot.streamId,
   );
 
-  if (
-    existingStatus === STATUS.RUNNING ||
-    existingStatus === STATUS.RESUMING
-  ) {
+  if (existingStatus === STATUS.RUNNING || existingStatus === STATUS.RESUMING) {
     return { success: false };
   }
 
