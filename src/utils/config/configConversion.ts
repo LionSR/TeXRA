@@ -108,6 +108,8 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     throw new Error('AgentConfig is missing canonical session metadata.');
   }
 
+  const sanitizedConfig: AgentConfig = { ...config };
+
   if (session.agentCategory === AgentCategory.ToolUse) {
     const toolUseSession: AgentSessionDescriptor & {
       agentCategory: AgentCategory.ToolUse;
@@ -116,7 +118,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
       agentCategory: AgentCategory.ToolUse,
     };
     return {
-      agentConfig: config,
+      agentConfig: sanitizedConfig,
       session: toolUseSession,
       toolSessionState: {},
     };
@@ -130,7 +132,7 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
   };
 
   return {
-    agentConfig: config,
+    agentConfig: sanitizedConfig,
     session: workflowSession,
     activeFiles: createActiveFilesFromArrays(config),
   };

@@ -14,6 +14,7 @@ import { OutputHandler } from '@agent/output';
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
+import { WorkspaceFS } from '@utils/files';
 
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
@@ -196,5 +197,92 @@ describe('OutputHandler.finalizeRound', () => {
     assert.strictEqual(handler.validateCalled, false);
     assert.equal(events.length, 1);
     dispose();
+  });
+});
+
+describe('OutputHandler XML summaries', () => {
+  const originalRead = WorkspaceFS.read;
+
+  afterEach(() => {
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      originalRead;
+  });
+
+  it('captures tag contents and scratchpad for single outputs', async () => {
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      [],
+      new AgentLogger('TestXmlSummarySingle'),
+    );
+
+    handler.indentLatexFile = async () => {};
+    handler.xmlManager.processSingleXmlOutput = async () => ({
+      source: 'input.tex',
+      path: 'output.tex',
+    });
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      async (filePath: string) => {
+        if (filePath === 'out.xml') {
+          return [
+            '<document>\\section{Results}</document>',
+            '<scratchpad>draft notes</scratchpad>',
+          ].join('');
+        }
+        return '';
+      };
+
+    await handler.processOutputFiles('out.xml', 0);
+
+    const summary = handler.getRoundXmlSummary(0);
+    assert.equal(summary.singleOutputFile, 'output.tex');
+    assert.equal(summary.tagContents.document, '\\section{Results}');
+    assert.equal(summary.tagContents.scratchpad, 'draft notes');
+    assert.deepEqual(summary.documents, [
+      '<document>\\section{Results}</document>',
+    ]);
+  });
+
+  it('captures multiple documents when present', async () => {
+    const multiConfig = parseAgentConfig({
+      ...baseConfig,
+      outputFiles: ['draft.tex', 'notes.tex'],
+    });
+    const handler = new OutputHandler(
+      baseSetting,
+      multiConfig,
+      0,
+      [],
+      new AgentLogger('TestXmlSummaryMulti'),
+    );
+
+    handler.indentLatexFiles = async () => {};
+    handler.xmlManager.processMultipleXmlOutputs = async () => [
+      { source: 'draft.tex', path: 'draft.tex' },
+      { source: 'notes.tex', path: 'notes.tex' },
+    ];
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      async (filePath: string) => {
+        if (filePath === 'out.xml') {
+          return [
+            '<document name="draft">First</document>',
+            '<document name="notes">Second</document>',
+          ].join('');
+        }
+        return '';
+      };
+
+    await handler.processOutputFiles('out.xml', 0);
+
+    const summary = handler.getRoundXmlSummary(0);
+    assert.deepEqual(summary.tagContents.document, ['First', 'Second']);
+    assert.deepEqual(summary.documents, [
+      '<document name="draft">First</document>',
+      '<document name="notes">Second</document>',
+    ]);
+    assert.equal(summary.singleOutputFile, null);
   });
 });
