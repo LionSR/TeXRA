@@ -69,7 +69,7 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
         await vscode.window.showInformationMessage(
           'Rerunning agent from history',
         );
-        await executeCommand.executeCommand(historyItem.config, this.context);
+        await executeCommand.executeCommand(historyItem.config);
       } else {
         await vscode.window.showErrorMessage('History item not found');
       }
