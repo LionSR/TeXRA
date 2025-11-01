@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentType } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -112,22 +111,21 @@ async function migrateLegacySnapshots(): Promise<void> {
           },
         );
 
-        if (typeof stored !== 'string') {
+        if (stored === null || stored === undefined) {
           continue;
         }
 
+        const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
+        if (!parsed.success) {
+          logger.debug(`Skipping migration for ${name}: validation failed`);
+          continue;
+        }
         try {
-          const raw = JSON.parse(stored);
-          const parsed = ToolUseSessionSnapshotSchema.safeParse(raw);
-          if (!parsed.success) {
-            logger.debug(`Skipping migration for ${name}: validation failed`);
-            continue;
-          }
           await StorageFS.writeJson(relativePath, parsed.data);
           logger.debug(`Migrated legacy snapshot ${name}`);
         } catch (e) {
           logger.debug(
-            `Skipping migration for ${name}: JSON parse failed: ${
+            `Skipping migration for ${name}: write failed: ${
               e instanceof Error ? e.message : String(e)
             }`,
           );
