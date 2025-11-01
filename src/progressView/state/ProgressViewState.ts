@@ -179,10 +179,7 @@ export class ProgressViewState {
 
   // Task state management
   setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
-    const normalizedState = agentConfigToTaskState(
-      taskState.agentConfig,
-      taskState.session,
-    );
+    const normalizedState = agentConfigToTaskState(taskState.agentConfig);
 
     if (
       isWorkflowTaskState(normalizedState) &&

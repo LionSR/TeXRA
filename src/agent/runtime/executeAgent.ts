@@ -6,13 +6,11 @@ import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent components
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
   AgentType,
-  resolveAgentSessionDescriptor,
   getAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
@@ -232,7 +230,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     ...configPayload,
   };
 
-  const fullConfig = AgentConfigSchema.parse(configInput);
+  const fullConfig = parseAgentConfig(configInput);
   const originalAgentName = fullConfig.agent;
   let resolvedAgentName = getAgentName(
     originalAgentName,
@@ -343,12 +341,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Get the full stream tab ID
     const config = agent.config;
-    const metadata =
-      config.session ??
-      resolveAgentSessionDescriptor(
-        config.agentType ?? agentType ?? sessionMetadata.agentType,
-        sessionMetadata.agentCategory,
-      );
+    const metadata = config.session;
+    if (!metadata) {
+      throw new Error('Agent configuration is missing session metadata.');
+    }
 
     streamTabId = agent.getStreamTabId();
 
@@ -475,7 +471,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 bus.emit('setTaskState', {
                   streamTabId: activeStreamId,
                   executionId,
-                  taskState: agentConfigToTaskState(config, metadata),
+                  taskState: agentConfigToTaskState(config),
                 });
                 logger.debug(
                   `Task state stored for stream: ${activeStreamId}`,

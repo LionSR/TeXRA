@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentPrompt,
@@ -140,21 +140,12 @@ describe('BaseToolUseAgent follow-up loop', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const config: AgentConfig = {
+    const config: AgentConfig = parseAgentConfig({
       model: 'dummy',
       agent: 'test',
       instruction: '',
       useMultipleOutputs: false,
       inputFile: '',
-      inputFiles: null,
-      referenceFile: null,
-      referenceFiles: null,
-      auxiliaryFile: null,
-      auxiliaryFiles: null,
-      mediaFile: null,
-      mediaFiles: null,
-      outputFiles: null,
-      editedFile: null,
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
@@ -162,7 +153,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
         attachDiagnostics: false,
         autoCompileInputPdf: false,
       },
-    };
+    });
     const agent = new TestAgent(handler, config, setting, prompt, '.');
     const logs: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => logs.push(e));
