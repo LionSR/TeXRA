@@ -710,9 +710,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       return [];
     }
 
-    const { entries, results } = await this.mediaProcessor.loadEntries(
-      mediaFiles,
-    );
+    const { entries, results } =
+      await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
 
     if (entries.length === 0) {
