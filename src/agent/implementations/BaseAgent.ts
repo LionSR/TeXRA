@@ -7,16 +7,20 @@ import {
   resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
 import { AgentStateGlobal } from '../core/AgentState';
-import { IAgent, type AgentRunHooks } from '../core/IAgent';
+import { IAgent } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
+import {
+  AgentLifecycleController,
+  type AgentLifecycleHooks,
+  type AgentRunHookOverrides,
+} from '@agent/implementations/flows/common/AgentLifecycleController';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
@@ -34,13 +38,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected agentPath: string;
   protected logger: AgentLogger;
   protected usageMonitor: UsageMonitor;
-  protected runGroupId?: string;
-  private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
   protected client: C | null = null;
-  protected isInterrupted = false;
-  protected abortController: AbortController | null = null;
   protected executionId?: ExecutionId;
+  protected readonly lifecycle: AgentLifecycleController;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -82,6 +83,19 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       this.logger.channelId,
       this.logger,
     );
+    this.lifecycle = this.createLifecycleController(streamTabId);
+  }
+
+  protected createLifecycleController(
+    streamTabId: StreamTabId,
+  ): AgentLifecycleController {
+    return new AgentLifecycleController({
+      logger: this.logger,
+      runLabel: `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
+      streamId: streamTabId,
+      onRegister: (id) => this.registerRunningAgent(id),
+      onUnregister: (id) => this.unregisterRunningAgent(id),
+    });
   }
 
   /** Initialize the API client. */
@@ -111,9 +125,9 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       userVars: this.userVars,
       logger: this.logger,
       client,
-      checkInterruption: () => this.checkInterruption(),
+      checkInterruption: () => this.lifecycle.checkInterruption(),
       setAbortController: (ctrl) => {
-        this.abortController = ctrl;
+        this.lifecycle.setAbortController(ctrl);
       },
       executionId: this.executionId,
     };
@@ -171,7 +185,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       );
 
       this.userVars = await this.getUserVars();
-      this.registerRunningAgent(this.getStreamTabId());
+      this.lifecycle.registerRunningAgent();
 
       if (createGroup && initGroupId) {
         this.logger.endGroup(initGroupId, 'stopped');
@@ -186,10 +200,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Interrupt the agent's execution. */
   public interrupt(): void {
-    this.isInterrupted = true;
-    if (this.abortController) {
-      this.abortController.abort();
-    }
+    this.lifecycle.requestInterruption();
     this.logger.error(
       'Agent execution interrupted by user. Active request aborted; partial output may remain.',
     );
@@ -197,19 +208,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Check if the agent should stop due to user interruption. */
   protected checkInterruption(): boolean {
-    if (this.isInterrupted) {
-      this.logger.info(
-        'Stopping due to user interruption',
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-      );
-      return true;
-    }
-    return false;
+    return this.lifecycle.checkInterruption();
   }
 
   public isInterruptionRequested(): boolean {
-    return this.isInterrupted;
+    return this.lifecycle.isInterruptionRequested();
   }
 
   public setExecutionId(id: ExecutionId): void {
@@ -239,7 +242,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     const groupId = await this.logger.startGroup(
       groupLabel,
       undefined,
-      this.runGroupId,
+      this.lifecycle.getCurrentRunGroupId(),
     );
 
     let status: 'stopped' | 'error' = 'stopped';
@@ -254,37 +257,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   /**
-   * Start a log group for this agent's run and store its ID.
-   * @param parentGroupId Optional parent group
-   * @returns The created group ID
-   */
-  protected async startRunGroup(parentGroupId?: string): Promise<string> {
-    this.runGroupId = await this.logger.startGroup(
-      `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
-      undefined,
-      parentGroupId,
-    );
-    this.lastRunGroupId = this.runGroupId;
-    return this.runGroupId;
-  }
-
-  /**
-   * End the current run group.
-   * @param status Status to mark for the group
-   */
-  protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
-    if (this.runGroupId) {
-      this.lastRunGroupId = this.runGroupId;
-      this.logger.endGroup(this.runGroupId, status);
-      this.runGroupId = undefined;
-    }
-  }
-
-  /**
    * Retrieve the most recently used run group identifier.
    */
   public getLastRunGroupId(): string | undefined {
-    return this.lastRunGroupId;
+    return this.lifecycle.getLastRunGroupId();
   }
 
   public static getRunningAgent(
@@ -293,28 +269,17 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return BaseAgent.runningAgents.get(streamTabId);
   }
 
-  protected cleanup(): void {
-    const streamTabId = this.getStreamTabId();
-    this.unregisterRunningAgent(streamTabId);
-  }
+  protected async onCleanup(): Promise<void> {}
 
-  public getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks {
-    const baseHooks: AgentRunHooks = {
-      start: () => this.startRunGroup(),
-      init: (runGroupId) => this.init(runGroupId),
-      initializeClient: () => this.initializeClient(),
-      end: (status) => this.endRunGroup(status),
-      cleanup: () => this.cleanup(),
-    };
-
-    return {
-      start: overrides?.start ?? baseHooks.start,
-      init: overrides?.init ?? baseHooks.init,
-      initializeClient:
-        overrides?.initializeClient ?? baseHooks.initializeClient,
-      end: overrides?.end ?? baseHooks.end,
-      cleanup: overrides?.cleanup ?? baseHooks.cleanup,
-    };
+  public getRunHooks(overrides?: AgentRunHookOverrides): AgentLifecycleHooks {
+    return this.lifecycle.createHooks(
+      {
+        init: (runGroupId) => this.init(runGroupId),
+        initializeClient: () => this.initializeClient(),
+        cleanup: () => this.onCleanup(),
+      },
+      overrides,
+    );
   }
 
   protected registerRunningAgent(streamTabId: StreamTabId): void {

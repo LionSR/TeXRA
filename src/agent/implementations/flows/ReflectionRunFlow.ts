@@ -12,6 +12,7 @@ import type {
   ReflectionRoundResult,
 } from '../BaseReflectionAgent';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentLifecycleHooks } from '@agent/implementations/flows/common/AgentLifecycleController';
 import type { AgentRunShared } from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
@@ -29,13 +30,8 @@ export interface ReflectionRunLifecycle {
   error?: unknown;
 }
 
-export interface ReflectionRunHooks {
-  start(): Promise<string>;
-  init(runGroupId: string): Promise<void>;
+export interface ReflectionRunHooks extends AgentLifecycleHooks {
   resetPromptBuilder(): void;
-  initializeClient(): Promise<void>;
-  end(status: 'stopped' | 'error'): void | Promise<void>;
-  cleanup(): void | Promise<void>;
 }
 
 export interface ReflectionRunState {

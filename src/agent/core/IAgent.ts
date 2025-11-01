@@ -2,6 +2,11 @@
 import type { AgentConfig } from './AgentConfig';
 // Local imports - agent components
 import type { AgentSessionDescriptor } from './AgentDataclass';
+// Local imports - agent lifecycle
+import type {
+  AgentLifecycleHooks,
+  AgentRunHookOverrides,
+} from '@agent/implementations/flows/common/AgentLifecycleController';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -49,23 +54,5 @@ export interface IAgent {
    *
    * @param overrides - Optional overrides for default hook implementations.
    */
-  getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks;
-}
-
-/**
- * Core hook contract used to orchestrate agent runs.
- */
-export interface AgentRunHooks {
-  /**
-   * Begin an agent run and optionally create a logging group.
-   *
-   * @returns The identifier for the run group used by subsequent lifecycle hooks.
-   *          Return `undefined` to indicate that the lifecycle should reuse an
-   *          existing log group (for example, interactive tool-use sessions).
-   */
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
-  initializeClient(): Promise<void>;
-  end(status: 'stopped' | 'error'): void | Promise<void>;
-  cleanup(): void | Promise<void>;
+  getRunHooks(overrides?: AgentRunHookOverrides): AgentLifecycleHooks;
 }

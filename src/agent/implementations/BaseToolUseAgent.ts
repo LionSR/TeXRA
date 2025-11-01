@@ -29,12 +29,14 @@ import {
   type ToolUseRunState,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import type {
+  AgentLifecycleHooks,
+  ToolUseLifecycleHooks,
+} from '@agent/implementations/flows/common/AgentLifecycleController';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-import { bus } from '@eventBus/ProgressEventBus';
 import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
@@ -46,13 +48,9 @@ import {
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
-  private followUpQueue: string[] = [];
-  private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
   private toolState: ToolState | null = null;
-  private resumeSnapshot: ToolUseSessionSnapshot | null = null;
-  private hasPersistedSnapshot = false;
-  private persistenceLock = false; // Lock to prevent race conditions during persistence
+  private readonly toolUseLifecycle: ToolUseLifecycleHooks;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -71,6 +69,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       executionId,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+    this.toolUseLifecycle = this.lifecycle.configureToolUseLifecycle({
+      getExecutionId: () => this.getExecutionId(),
+      getMessages: () => this.messages,
+      getToolState: () => this.toolState,
+      getSessionDescriptor: () => this.getSessionMetadata(),
+      getAgentIdentifier: () => ({
+        agentName: this.agentConfig.agent,
+        modelName: this.agentConfig.model,
+      }),
+    });
   }
 
   protected override registerRunningAgent(streamTabId: StreamTabId): void {
@@ -115,16 +123,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    * @param text - The follow-up message text
    */
   public appendFollowUp(text: string): void {
-    if (this.followUpResolver) {
-      this.followUpResolver(text);
-      this.followUpResolver = null;
-    } else {
-      this.followUpQueue.push(text);
-    }
-    // If we're in the middle of persisting, mark for cleanup
-    if (this.persistenceLock) {
-      this.hasPersistedSnapshot = true; // Will trigger cleanup in the next cycle
-    }
+    this.toolUseLifecycle.appendFollowUp(text);
   }
 
   /**
@@ -132,27 +131,12 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    * @param snapshot - The snapshot to resume from
    */
   public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
-    this.resumeSnapshot = snapshot;
-    this.hasPersistedSnapshot = true;
-  }
-
-  private async waitForFollowUp(): Promise<string | null> {
-    if (this.followUpQueue.length > 0) {
-      return this.followUpQueue.shift()!;
-    }
-    if (this.isInterrupted) return null;
-    return new Promise<string | null>((resolve) => {
-      this.followUpResolver = resolve;
-    });
+    this.toolUseLifecycle.resumeFromSnapshot(snapshot);
   }
 
   public override interrupt(): void {
     super.interrupt();
-    if (this.followUpResolver) {
-      this.followUpResolver(null);
-      this.followUpResolver = null;
-    }
-    void this.clearPersistedSnapshot();
+    void this.toolUseLifecycle.clearPersistedSnapshot();
   }
 
   public async run(): Promise<void> {
@@ -173,7 +157,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           shouldSkipCycle: false,
         }) satisfies ToolUseRunState<C>,
       createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => ({
+      extendHooks: (baseHooks: AgentLifecycleHooks) => ({
         ...baseHooks,
         start: async () => undefined,
         init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
@@ -185,12 +169,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
             options,
             messages,
           }),
-        checkInterruption: () => this.checkInterruption(),
-        hasQueuedFollowUp: () => this.followUpQueue.length > 0,
-        enterWaitingState: () => this.enterWaitingState(),
-        clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-        waitForFollowUp: () => this.waitForFollowUp(),
-        markRunning: () => this.markRunning(),
+        checkInterruption: () => this.lifecycle.checkInterruption(),
+        hasQueuedFollowUp: () => this.toolUseLifecycle.hasQueuedFollowUp(),
+        enterWaitingState: () => this.toolUseLifecycle.enterWaitingState(),
+        clearPersistedSnapshot: () =>
+          this.toolUseLifecycle.clearPersistedSnapshot(),
+        waitForFollowUp: () => this.toolUseLifecycle.waitForFollowUp(),
+        markRunning: () => this.toolUseLifecycle.markRunning(),
         applyFollowUp: async (followUp, messages) => {
           this.logger.userMessage(followUp);
           const updatedMessages =
@@ -219,12 +204,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     toolState: ToolState;
     shouldSkipCycle: boolean;
   }> {
-    if (this.resumeSnapshot) {
+    const resumeSnapshot = this.toolUseLifecycle.consumeResumeSnapshot();
+    if (resumeSnapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
-      const snapshot = this.resumeSnapshot;
-      this.resumeSnapshot = null;
-
-      const rawMessages = snapshot.messages ?? [];
+      const rawMessages = resumeSnapshot.messages ?? [];
       if (!Array.isArray(rawMessages)) {
         throw new Error('Invalid snapshot: messages must be an array');
       }
@@ -234,7 +217,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
       try {
         toolState =
-          ToolUseSessionManager.hydrateToolStateFromSnapshot(snapshot);
+          ToolUseSessionManager.hydrateToolStateFromSnapshot(resumeSnapshot);
       } catch (error) {
         const message =
           error instanceof Error
@@ -309,77 +292,5 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolState,
       modelName: this.agentConfig.model,
     };
-  }
-
-  private async enterWaitingState(): Promise<void> {
-    // Early check to avoid unnecessary work
-    if (this.followUpQueue.length > 0) {
-      return;
-    }
-
-    const stream = this.getStreamTabId();
-    const executionId = this.getExecutionId();
-    const state = this.toolState;
-
-    // Persist snapshot with lock to prevent race conditions
-    if (state && executionId && ToolUseSessionManager.isPersistenceEnabled()) {
-      // Acquire lock to prevent race conditions
-      this.persistenceLock = true;
-
-      try {
-        // Double-check queue is still empty under lock
-        if (this.followUpQueue.length === 0) {
-          await ToolUseSessionManager.saveSnapshot({
-            executionId,
-            streamId: stream,
-            agentName: this.agentConfig.agent,
-            model: this.agentConfig.model,
-            session: this.getSessionMetadata(),
-            messages: this.messages,
-            toolState: state,
-          });
-
-          // Final check after save completes
-          if (this.followUpQueue.length > 0) {
-            // A follow-up arrived while we were saving
-            await ToolUseSessionManager.deleteSnapshot(executionId);
-            this.hasPersistedSnapshot = false;
-          } else {
-            this.hasPersistedSnapshot = true;
-          }
-        }
-      } finally {
-        // Always release lock
-        this.persistenceLock = false;
-      }
-    }
-
-    bus.emit('updateStreamStatus', {
-      stream,
-      status: 'waiting', // Using string literal here as it's part of the bus event API
-    });
-  }
-
-  private async markRunning(): Promise<void> {
-    bus.emit('updateStreamStatus', {
-      stream: this.getStreamTabId(),
-      status: 'running', // Using string literal here as it's part of the bus event API
-    });
-  }
-
-  private async clearPersistedSnapshot(): Promise<void> {
-    if (!this.hasPersistedSnapshot) {
-      return;
-    }
-    const executionId = this.getExecutionId();
-    if (!executionId) {
-      this.hasPersistedSnapshot = false;
-      return;
-    }
-    try {
-      await ToolUseSessionManager.deleteSnapshot(executionId);
-    } finally {
-      this.hasPersistedSnapshot = false;
-    }
   }
 }

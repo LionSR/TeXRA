@@ -10,6 +10,7 @@ import type { ToolState } from '@agent/core/ToolState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+import type { AgentLifecycleHooks } from '@agent/implementations/flows/common/AgentLifecycleController';
 import type { AgentRunShared } from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
@@ -60,10 +61,7 @@ export interface ToolUseRunState<C = unknown> {
   shouldSkipCycle: boolean;
 }
 
-export interface ToolUseRunHooks<C = unknown> {
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
-  initializeClient(): Promise<void>;
+export interface ToolUseRunHooks<C = unknown> extends AgentLifecycleHooks {
   prepareState(): Promise<{
     messages: ProviderMessage[];
     toolState: ToolState;
@@ -84,8 +82,6 @@ export interface ToolUseRunHooks<C = unknown> {
     followUp: string,
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]>;
-  end(status: 'stopped' | 'error'): Promise<void>;
-  cleanup(): Promise<void>;
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 

@@ -2,19 +2,17 @@ import type { Flow } from '@agent/node';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
 import type {
-  AgentRunHooks,
-  AgentRunLifecycleBase,
-  AgentRunShared,
-} from './types';
-
-export type AgentRunHookOverrides = Partial<AgentRunHooks>;
+  AgentLifecycleHooks,
+  AgentRunHookOverrides,
+} from '@agent/implementations/flows/common/AgentLifecycleController';
+import type { AgentRunLifecycleBase, AgentRunShared } from './types';
 
 type AgentRunFlowOptionsBase<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 > = {
   agent: Shared['agent'];
@@ -30,10 +28,10 @@ type AgentRunFlowOptionsWithExtend<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 > = AgentRunFlowOptionsBase<Shared> & {
-  extendHooks: (baseHooks: AgentRunHooks) => Shared['hooks'];
+  extendHooks: (baseHooks: AgentLifecycleHooks) => Shared['hooks'];
 };
 
 type AgentRunFlowOptionsWithoutExtend<
@@ -41,10 +39,10 @@ type AgentRunFlowOptionsWithoutExtend<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 > =
-  Shared extends AgentRunShared<any, any, any, AgentRunHooks>
+  Shared extends AgentRunShared<any, any, any, AgentLifecycleHooks>
     ? AgentRunFlowOptionsBase<Shared> & { extendHooks?: undefined }
     : never;
 
@@ -53,7 +51,7 @@ export type AgentRunFlowOptions<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 > =
   | AgentRunFlowOptionsWithExtend<Shared>
@@ -64,7 +62,7 @@ function hasExtendHooks<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 >(
   options: AgentRunFlowOptions<Shared>,
@@ -80,7 +78,7 @@ async function runAgentFlowWithExtend<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 >(options: AgentRunFlowOptionsWithExtend<Shared>): Promise<Shared> {
   const state = options.createState();
@@ -111,7 +109,7 @@ async function runAgentFlowWithoutExtend<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 >(options: AgentRunFlowOptionsWithoutExtend<Shared>): Promise<Shared> {
   const state = options.createState();
@@ -141,7 +139,7 @@ export async function runAgentFlow<
     BaseAgent<any>,
     any,
     AgentRunLifecycleBase,
-    AgentRunHooks
+    AgentLifecycleHooks
   >,
 >(options: AgentRunFlowOptions<Shared>): Promise<Shared> {
   if (hasExtendHooks(options)) {

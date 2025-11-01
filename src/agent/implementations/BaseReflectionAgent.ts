@@ -19,7 +19,7 @@ import {
   type ReflectionRunState,
 } from '@agent/implementations/flows/ReflectionRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import type { AgentLifecycleHooks } from '@agent/implementations/flows/common/AgentLifecycleController';
 import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
@@ -606,7 +606,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           globalState: new AgentStateGlobal(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => {
+      extendHooks: (baseHooks: AgentLifecycleHooks) => {
         const baseStart = baseHooks.start;
         return {
           ...baseHooks,
