@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -96,7 +96,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -142,7 +142,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void {
     const lastMessage = messages.at(-1);
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
@@ -166,7 +166,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void {
     const lastMessage = messages.at(-1);
     if (lastMessage.role === 'user' || lastMessage.role === 'system') {

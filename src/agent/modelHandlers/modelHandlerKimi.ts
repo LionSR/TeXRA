@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -38,7 +38,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     if (!responseObject) {
       return null;

@@ -7,7 +7,7 @@ import {
   AgentCategory,
   resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
@@ -49,7 +49,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private followUpQueue: string[] = [];
   private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
-  private toolState: ToolState | null = null;
+  private toolState: ToolRuntimeStore | null = null;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
   private hasPersistedSnapshot = false;
   private persistenceLock = false; // Lock to prevent race conditions during persistence
@@ -216,7 +216,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareInitialSessionState(): Promise<{
     messages: ProviderMessage[];
-    toolState: ToolState;
+    toolState: ToolRuntimeStore;
     shouldSkipCycle: boolean;
   }> {
     if (this.resumeSnapshot) {
@@ -230,7 +230,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       }
 
       const messages = rawMessages as ProviderMessage[];
-      let toolState: ToolState;
+      let toolState: ToolRuntimeStore;
 
       try {
         toolState =
@@ -243,7 +243,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         this.logger.warn(
           `Failed to hydrate tool state from snapshot: ${message}`,
         );
-        toolState = new ToolState();
+        toolState = new ToolRuntimeStore();
       }
 
       this.messages = messages;
@@ -276,7 +276,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       systemPrompt,
     );
 
-    const toolState = new ToolState();
+    const toolState = new ToolRuntimeStore();
 
     this.messages = messages;
     this.toolState = toolState;
@@ -289,7 +289,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private buildToolUseCycleOptions(
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
     const resolvedSetting = {

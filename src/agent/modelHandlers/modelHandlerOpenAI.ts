@@ -16,13 +16,13 @@ import {
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound } from '../core/AgentState';
+import { RoundMetricsState } from '@agent/state';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 import { ModelHandler } from './ModelHandler';
 import {
   describeAttachments,
@@ -792,8 +792,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: any[],
-    _stateRound: AgentStateRound,
-    _toolState: ToolState,
+    _stateRound: RoundMetricsState,
+    _toolState: ToolRuntimeStore,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -804,8 +804,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: any[],
-    _stateRound: AgentStateRound,
-    toolState: ToolState,
+    _stateRound: RoundMetricsState,
+    toolState: ToolRuntimeStore,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -835,7 +835,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: any[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     outputFile: string,
     prefill: string,
     groupId?: string,
@@ -918,7 +918,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       toolState.updateAccumulatedOutput(prefill + fileContent);
       await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
     }
-    const state = new AgentStateRound(0);
+    const state = new RoundMetricsState(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
@@ -1011,7 +1011,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models with prefill support',
@@ -1051,7 +1051,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models without prefill support',
@@ -1138,7 +1138,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
     if (typeof reasoning !== 'string' || !reasoning.trim()) {
@@ -1247,7 +1247,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: ToolRuntimeStore,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);

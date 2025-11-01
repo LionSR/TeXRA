@@ -5,8 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentSharedStore } from '@agent/state';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
@@ -72,9 +71,7 @@ async function maybeSaveDebug(
 
 export interface ResponseCycleInputState {
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
+  sharedStore: AgentSharedStore;
   outputFile: string;
 }
 
@@ -145,7 +142,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const debugFileOptions: DebugFileOptions | undefined = interrupted
       ? undefined
       : {
-          continuationCount: cycle.stateRound.continuationCount,
+          continuationCount: cycle.sharedStore.roundMetrics.continuationCount,
           outputFile: cycle.outputFile,
         };
 
@@ -332,7 +329,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     }
 
     if (cycle.responseTime !== undefined) {
-      cycle.stateRound.updateResponseTime(cycle.responseTime);
+      cycle.sharedStore.roundMetrics.updateResponseTime(cycle.responseTime);
       options.logger.debug(
         `Response time: ${cycle.responseTime.toFixed(2)}s`,
         groupId,
@@ -348,7 +345,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const thinkingContent = options.modelHandler.processThinkingBlock(
       cycle.responseObject,
       groupId,
-      cycle.toolState,
+      cycle.sharedStore.toolRuntime,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
 
@@ -376,11 +373,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       responseUsage,
       cycle.responseTime ?? 0,
     );
-    cycle.stateRound.updateTokenCounts(apiUsage);
-    cycle.stateGlobal.updateFromCurrRound(cycle.stateRound);
+    cycle.sharedStore.roundMetrics.updateFromUsage(apiUsage);
+    cycle.sharedStore.runMetrics.updateFromRound(cycle.sharedStore.roundMetrics);
 
     const repetitionResult = checkForMassiveRepetition(
-      cycle.toolState.lastResponse,
+      cycle.sharedStore.toolRuntime.lastResponse,
       newResponse,
     );
 
@@ -410,13 +407,13 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
       if (!repetitionResult.massiveRepetitionDetected) {
         const connector = await bestConnectionMethod(
-          cycle.toolState.lastResponse.slice(-K_SLICE),
+          cycle.sharedStore.toolRuntime.lastResponse.slice(-K_SLICE),
           processedResponse.slice(0, K_SLICE),
         );
         bestConnector = connector.connector;
-        cycle.toolState.updateLastResponse(processedResponse);
-        cycle.toolState.updateAccumulatedOutput(
-          cycle.toolState.accumulatedOutput +
+        cycle.sharedStore.toolRuntime.updateLastResponse(processedResponse);
+        cycle.sharedStore.toolRuntime.updateAccumulatedOutput(
+          cycle.sharedStore.toolRuntime.accumulatedOutput +
             (bestConnector ?? '') +
             processedResponse,
         );
@@ -488,14 +485,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         cycle.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        cycle.toolState,
+        cycle.sharedStore.toolRuntime,
       );
     } else {
       options.modelHandler.updateMessageContentWithoutPrefill(
         cycle.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        cycle.toolState,
+        cycle.sharedStore.toolRuntime,
       );
     }
 
@@ -532,8 +529,8 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.modelHandler.checkStopConditions(
         cycle.stopReason,
         cycle.processedResponse,
-        cycle.stateRound,
-        cycle.stateGlobal,
+        cycle.sharedStore.roundMetrics,
+        cycle.sharedStore.runMetrics,
         options.agentSetting,
       );
 
@@ -569,9 +566,9 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    cycle.stateRound.incrementContinuation();
+    cycle.sharedStore.roundMetrics.incrementContinuation();
     options.logger.info(
-      `Starting continuation #${cycle.stateRound.continuationCount}`,
+      `Starting continuation #${cycle.sharedStore.roundMetrics.continuationCount}`,
       groupId,
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
@@ -588,16 +585,16 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
       options.modelHandler.addContinueMessageWithPrefill(
         cycle.messages,
-        cycle.stateRound,
-        cycle.toolState,
+        cycle.sharedStore.roundMetrics,
+        cycle.sharedStore.toolRuntime,
         options.agentSetting,
         options.agentConfig,
       );
     } else {
       options.modelHandler.addContinueMessageWithoutPrefill(
         cycle.messages,
-        cycle.stateRound,
-        cycle.toolState,
+        cycle.sharedStore.roundMetrics,
+        cycle.sharedStore.toolRuntime,
         options.agentSetting,
         options.agentConfig,
       );

@@ -14,7 +14,7 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 type DummyClient = Record<string, never>;
 
@@ -111,7 +111,7 @@ class DummyHandler extends ModelHandler<
     _name: string,
     _call: unknown,
     _result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: ToolRuntimeStore,
     _text?: string,
   ): Promise<ProviderMessage[]> {
     return [];

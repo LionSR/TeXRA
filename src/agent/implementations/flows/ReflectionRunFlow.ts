@@ -5,7 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
-import type { AgentStateGlobal } from '@agent/core/AgentState';
+import type { RunMetricsState } from '@agent/state';
 import type {
   BaseReflectionAgent,
   ReflectionRoundContext,
@@ -43,7 +43,7 @@ export interface ReflectionRunState {
   currentRound: number;
   continueRounds: boolean;
   messages: any[];
-  globalState: AgentStateGlobal;
+  globalState: RunMetricsState;
 }
 
 export type ReflectionRunShared<C = unknown> = AgentRunShared<
@@ -59,7 +59,7 @@ interface ReflectionRoundPrep<C> {
   shouldFinalize: boolean;
   roundIndex: number;
   messages: any[];
-  globalState: AgentStateGlobal;
+  globalState: RunMetricsState;
 }
 
 interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {

@@ -23,7 +23,7 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import { RunMetricsState, RoundMetricsState } from '@agent/state';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -512,8 +512,8 @@ export class OutputHandler implements IOutputHandler {
   }
   /** Processes output files for current round. */
   protected async handleOutput(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     outputFile: string,
     endTurn: boolean,
     currRound: number = 0,

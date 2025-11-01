@@ -6,7 +6,7 @@ import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
@@ -49,7 +49,7 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
   });
 
   function buildPayload(executionId: ExecutionId) {
-    const toolState = new ToolState();
+    const toolState = new ToolRuntimeStore();
     toolState.updateLastResponse('response');
     toolState.updateAccumulatedOutput('response');
 
@@ -97,7 +97,7 @@ suite('ToolUseSessionManager snapshot compatibility', () => {
 
     assert.ok(loaded, 'expected snapshot to be returned');
     assert.strictEqual(loaded?.executionId, executionId);
-    assert.strictEqual(loaded?.toolState.lastResponse, 'response');
+    assert.strictEqual(loaded?.toolState.scratchpad.lastResponse, 'response');
   });
 
   test('migrateLegacySnapshots rewrites stringified snapshots before load', async () => {

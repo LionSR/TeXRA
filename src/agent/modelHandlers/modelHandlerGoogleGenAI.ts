@@ -29,14 +29,14 @@ import { toGoogleTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '@agent/state';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - agent components
 import {
@@ -849,8 +849,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   addContinueMessageWithoutPrefill(
     messages: Content[],
-    _stateRound: AgentStateRound,
-    toolState: ToolState,
+    _stateRound: RoundMetricsState,
+    toolState: ToolRuntimeStore,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -876,7 +876,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void {
     this.logger.debug(
       'Updating message history for Google GenAI (no prefill).',
@@ -916,7 +916,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: Content[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     outputFile: string,
     prefill: string,
     groupId?: string,
@@ -988,7 +988,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
     toolState.updateAccumulatedOutput(fileContent);
     toolState.lastResponse = fileContent;
-    const state = new AgentStateRound(0);
+    const state = new RoundMetricsState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
@@ -1024,7 +1024,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   processThinkingBlock(
     responseObject: GenerateContentResponse,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     if (
       !responseObject ||
@@ -1131,7 +1131,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: ToolRuntimeStore,
     text?: string,
   ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility

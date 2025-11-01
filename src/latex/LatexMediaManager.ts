@@ -11,7 +11,7 @@ import { compileLatex2Pdf } from './texTools';
 import { getTeXCountStats } from './texcount';
 
 // Local imports - agent components
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { WorkspaceFS } from '@utils/files';
 
@@ -23,7 +23,7 @@ export class LatexMediaManager {
 
   private async attachTeXCount(
     files: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     cfg: ToolConfig,
   ): Promise<void> {
     if (cfg.attachTeXCount && files.length > 0) {
@@ -36,7 +36,7 @@ export class LatexMediaManager {
    */
   private async compilePdfs(
     files: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     groupId?: string,
   ): Promise<void> {
     const texFiles = files.filter((file) =>
@@ -92,7 +92,7 @@ export class LatexMediaManager {
 
   private async extractFiguresFromFiles(
     files: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     groupId?: string,
   ): Promise<void> {
     const figureResults = await Promise.allSettled(
@@ -116,7 +116,7 @@ export class LatexMediaManager {
 
   private async compileTikzFigures(
     files: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     logSummary: boolean,
     groupId?: string,
   ): Promise<void> {
@@ -142,7 +142,7 @@ export class LatexMediaManager {
 
   private async processFiles(
     files: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     cfg: ToolConfig,
     supportsVision: boolean,
     {
@@ -209,11 +209,11 @@ export class LatexMediaManager {
 
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs.
-   * Adds resulting media paths to the provided ToolState.
+   * Adds resulting media paths to the provided ToolRuntimeStore.
    */
   async processInputFiles(
     inputFiles: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: string[] = [],
@@ -234,7 +234,7 @@ export class LatexMediaManager {
    */
   async processOutputFiles(
     outputFiles: string[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     cfg: ToolConfig,
     supportsVision: boolean,
     groupId?: string,

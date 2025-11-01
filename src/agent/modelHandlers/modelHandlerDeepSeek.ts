@@ -12,7 +12,7 @@ import type {
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -71,7 +71,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -146,7 +146,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: ToolRuntimeStore,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);

@@ -57,6 +57,20 @@ sequenceDiagram
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
+## Shared Agent State
+
+TeXRA agents coordinate work through a typed [Pocket Flow](../pocketflow/index.md) shared store. The store is assembled by `AgentSharedStore` (`src/agent/state/AgentSharedStore.ts`) and splits runtime data into two focused areas:
+
+- **Metrics (`src/agent/state/AgentMetricsState.ts`)**
+  - `RunMetricsState` tracks aggregates across the entire execution (total tokens, elapsed time, and pricing data).
+  - `RoundMetricsState` captures the most recent round’s usage snapshot so response flows can surface precise numbers while they stream.
+- **Tool runtime (`src/agent/state/ToolRuntimeStore.ts`)**
+  - `scratchpad` keeps mutable response text (`accumulatedOutput`, `lastResponse`, and optional `texcount` statistics).
+  - `media` lists temporary files that should be persisted with the run directory.
+  - `reasoning` stores model “thinking” traces (including Anthropic’s signed blocks) so that follow-up prompts can resend them safely.
+
+All response and tool-use flows read and write through these slices instead of mutating ad-hoc dictionaries. When you add new nodes or extend existing handlers, prefer updating the relevant slice rather than reintroducing bespoke state. This keeps Pocket Flow runs resumable—`ToolUseSessionManager` snapshots the same structure—while making each responsibility (metrics, scratchpad, media, reasoning) easy to test in isolation.
+
 ### Prompt Composition and Message Flow
 
 TeXRA constructs the conversation by merging your agent's `systemPrompt`, the context-filled `userPrefix`, and the `userRequest`. Depending on settings, the extension may insert additional messages in between—for example the output of `texcount` when you enable **Attach TeX Count**, or encoded images and audio files selected in the file panel. The sequence is not a fixed "system–user–system" pattern: attachments or tool results can be inserted at any point before the LLM generates a single response containing `<scratchpad>` reasoning followed by the XML-wrapped output defined by `settings.documentTag`.

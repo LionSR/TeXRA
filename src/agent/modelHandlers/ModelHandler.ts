@@ -10,8 +10,8 @@ import { encode as encodeHtml } from 'he';
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { ToolState } from '../core/ToolState';
+import { RoundMetricsState, RunMetricsState } from '@agent/state';
+import { ToolRuntimeStore } from '@agent/state';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -791,8 +791,8 @@ export abstract class ModelHandler<
 
   /** Calculates token-based stop flags. */
   protected computeTokenFlags(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
   ): TokenFlags {
     const maxOutputTokens =
       stateGlobal.firstInputTokens > 0
@@ -833,8 +833,8 @@ export abstract class ModelHandler<
   public checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     agentSetting: AgentSetting,
   ): [boolean, boolean] {
     const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
@@ -937,8 +937,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: RoundMetricsState,
+    toolState: ToolRuntimeStore,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -949,8 +949,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: RoundMetricsState,
+    toolState: ToolRuntimeStore,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -963,7 +963,7 @@ export abstract class ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     outputFile: string,
     prefill: string,
     groupId?: string,
@@ -989,7 +989,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void;
 
   /**
@@ -1000,7 +1000,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
   ): void;
 
   /**
@@ -1023,7 +1023,7 @@ export abstract class ModelHandler<
   abstract processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null;
 
   /**
@@ -1044,7 +1044,7 @@ export abstract class ModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
     text?: string,
   ): Promise<M[]>;
 

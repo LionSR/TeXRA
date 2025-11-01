@@ -6,7 +6,7 @@ import {
   type AgentSessionDescriptor,
   resolveAgentSessionDescriptor,
 } from '../core/AgentDataclass';
-import { AgentStateGlobal } from '../core/AgentState';
+import { RunMetricsState } from '@agent/state';
 import { IAgent, type AgentRunHooks } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { UsageMonitor } from '../utils/UsageMonitor';
@@ -221,7 +221,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   }
 
   protected async trackRoundUsage(
-    stateGlobal: AgentStateGlobal,
+    stateGlobal: RunMetricsState,
     groupId?: string,
   ): Promise<void> {
     await this.usageMonitor.recordUsage(stateGlobal, groupId);

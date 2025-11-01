@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { RoundMetricsState, RunMetricsState, createAgentSharedStore } from '@agent/state';
 import {
   AgentSetting,
   AgentPrompt,
@@ -14,7 +14,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -337,10 +337,15 @@ describe('ResponseCycle background reasoning logs', () => {
     };
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new AgentStateRound(1);
-    const stateGlobal = new AgentStateGlobal();
-    const toolState = new ToolState();
+    const stateRound = new RoundMetricsState(1);
+    const stateGlobal = new RunMetricsState();
+    const toolState = new ToolRuntimeStore();
 
+    const sharedStore = createAgentSharedStore({
+      runMetrics: stateGlobal,
+      roundMetrics: stateRound,
+      toolRuntime: toolState,
+    });
     await runResponseCycle({
       options: {
         modelHandler: handler,
@@ -354,9 +359,7 @@ describe('ResponseCycle background reasoning logs', () => {
         setAbortController: () => {},
       },
       messages,
-      stateRound,
-      stateGlobal,
-      toolState,
+      sharedStore,
       outputFile: 'output.txt',
     });
 

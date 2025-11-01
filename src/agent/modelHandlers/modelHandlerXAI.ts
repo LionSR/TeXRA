@@ -4,7 +4,7 @@
 // Third-party imports
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -25,7 +25,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeStore,
   ): string | null {
     if (!responseObject) {
       return null;

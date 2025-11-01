@@ -11,7 +11,7 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore } from '@agent/state';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -126,7 +126,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new ToolState();
+    const toolState = new ToolRuntimeStore();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,

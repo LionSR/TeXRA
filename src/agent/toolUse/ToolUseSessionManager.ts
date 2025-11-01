@@ -12,7 +12,7 @@ import {
   resolveAgentSessionDescriptor,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeStore, type ToolRuntimeStoreSnapshot } from '@agent/state';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -33,13 +33,34 @@ const logger = new AgentLogger(CHANNEL);
 const STORAGE_DIR = 'toolUseSessions';
 const SNAPSHOT_VERSION = 1;
 
-const ToolStateSnapshotSchema = z.object({
+const ToolScratchpadSnapshotSchema = z.object({
+  texcountStats: z.string().nullable(),
+  lastResponse: z.string(),
+  accumulatedOutput: z.string(),
+});
+
+const ToolMediaSnapshotSchema = z.object({
+  mediaFiles: z.array(z.string()),
+});
+
+const ToolReasoningSnapshotSchema = z.object({
+  thinkingBlocks: z.array(z.unknown()),
+  thinkingAdded: z.boolean(),
+});
+
+const LegacyToolStateSnapshotSchema = z.object({
   texcountStats: z.string().nullable(),
   lastResponse: z.string(),
   accumulatedOutput: z.string(),
   mediaFiles: z.array(z.string()),
   thinkingBlocks: z.array(z.unknown()),
   thinkingAdded: z.boolean(),
+});
+
+const ToolRuntimeStoreSnapshotSchema = z.object({
+  scratchpad: ToolScratchpadSnapshotSchema,
+  media: ToolMediaSnapshotSchema,
+  reasoning: ToolReasoningSnapshotSchema,
 });
 
 const SessionDescriptorSchema = z.strictObject({
@@ -56,7 +77,7 @@ const ToolUseSessionSnapshotSchema = z.strictObject({
   agentSessionKind: z.enum(AgentCategory).optional(),
   session: SessionDescriptorSchema.optional(),
   messages: z.array(z.unknown()),
-  toolState: ToolStateSnapshotSchema,
+  toolState: z.union([ToolRuntimeStoreSnapshotSchema, LegacyToolStateSnapshotSchema]),
   lastUpdated: z.number(),
 });
 
@@ -69,6 +90,7 @@ export type ToolUseSessionSnapshot = Omit<
   'agentSessionKind' | 'session'
 > & {
   session: Required<AgentSessionDescriptor>;
+  toolState: ToolRuntimeStoreSnapshot;
 };
 
 interface SavePayload {
@@ -78,19 +100,37 @@ interface SavePayload {
   model: string;
   session: AgentSessionDescriptor;
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolRuntimeStore;
 }
 
 function toToolStateSnapshot(
-  state: ToolState,
-): ToolUseSessionSnapshot['toolState'] {
-  return ToolStateSnapshotSchema.parse(structuredClone(state));
+  state: ToolRuntimeStore,
+): ToolRuntimeStoreSnapshot {
+  return ToolRuntimeStoreSnapshotSchema.parse(state.toSnapshot());
 }
 
 function hydrateToolState(
   snapshot: ToolUseSessionSnapshot['toolState'],
-): ToolState {
-  return Object.assign(new ToolState(), structuredClone(snapshot));
+): ToolRuntimeStore {
+  const modern = ToolRuntimeStoreSnapshotSchema.safeParse(snapshot);
+  if (modern.success) {
+    return ToolRuntimeStore.fromSnapshot(modern.data);
+  }
+
+  const legacy = LegacyToolStateSnapshotSchema.parse(snapshot);
+  const converted: ToolRuntimeStoreSnapshot = {
+    scratchpad: {
+      texcountStats: legacy.texcountStats,
+      lastResponse: legacy.lastResponse,
+      accumulatedOutput: legacy.accumulatedOutput,
+    },
+    media: { mediaFiles: legacy.mediaFiles },
+    reasoning: {
+      thinkingBlocks: legacy.thinkingBlocks,
+      thinkingAdded: legacy.thinkingAdded,
+    },
+  };
+  return ToolRuntimeStore.fromSnapshot(converted);
 }
 
 async function ensureStorageDir(): Promise<boolean> {
@@ -144,8 +184,28 @@ function normalizeSnapshot(
     ...rest
   } = snapshot;
 
+  const toolState = ToolRuntimeStoreSnapshotSchema.safeParse(rest.toolState);
+  const normalizedToolState = toolState.success
+    ? toolState.data
+    : ((): ToolRuntimeStoreSnapshot => {
+        const legacy = LegacyToolStateSnapshotSchema.parse(rest.toolState);
+        return {
+          scratchpad: {
+            texcountStats: legacy.texcountStats,
+            lastResponse: legacy.lastResponse,
+            accumulatedOutput: legacy.accumulatedOutput,
+          },
+          media: { mediaFiles: legacy.mediaFiles },
+          reasoning: {
+            thinkingBlocks: legacy.thinkingBlocks,
+            thinkingAdded: legacy.thinkingAdded,
+          },
+        };
+      })();
+
   return {
     ...rest,
+    toolState: normalizedToolState,
     session: {
       agentType: descriptor.agentType ?? AgentType.ToolUse,
       agentCategory: descriptor.agentCategory,
@@ -466,13 +526,13 @@ export class ToolUseSessionManager {
   }
 
   /**
-   * Hydrates a ToolState object from a snapshot
+   * Hydrates a ToolRuntimeStore object from a snapshot
    * @param snapshot - The snapshot containing the tool state data
-   * @returns A new ToolState instance with the hydrated data
+   * @returns A new ToolRuntimeStore instance with the hydrated data
    */
   public static hydrateToolStateFromSnapshot(
     snapshot: ToolUseSessionSnapshot,
-  ): ToolState {
+  ): ToolRuntimeStore {
     return hydrateToolState(snapshot.toolState);
   }
 

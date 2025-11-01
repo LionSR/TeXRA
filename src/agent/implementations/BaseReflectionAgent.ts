@@ -6,10 +6,14 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import {
+  RoundMetricsState,
+  RunMetricsState,
+  ToolRuntimeStore,
+  createAgentSharedStore,
+} from '@agent/state';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import { ToolState } from '@agent/core/ToolState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
   createReflectionRunFlow,
@@ -61,23 +65,23 @@ export interface RoundOutputOptions {
 
 export interface ReflectionRoundContext {
   roundIndex: number;
-  globalState: AgentStateGlobal;
+  globalState: RunMetricsState;
   messages: any[];
 }
 
 export interface ReflectionRoundResult {
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
+  roundState: RoundMetricsState;
+  globalState: RunMetricsState;
   messages: any[];
   shouldContinue: boolean;
-  toolState: ToolState;
+  toolState: ToolRuntimeStore;
 }
 
 interface RoundPipelineContext {
   roundIndex: number;
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
-  toolState: ToolState;
+  roundState: RoundMetricsState;
+  globalState: RunMetricsState;
+  toolState: ToolRuntimeStore;
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
@@ -101,8 +105,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
-  public roundStates: AgentStateRound[] = [];
-  public toolStates: ToolState[] = [];
+  public roundStates: RoundMetricsState[] = [];
+  public toolStates: ToolRuntimeStore[] = [];
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -203,8 +207,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   private async handleRoundCompletion(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     options: RoundOutputOptions,
   ): Promise<void> {
     const { outputFile, endTurn, processGroupId } = options;
@@ -240,8 +244,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, processGroupId } = options;
@@ -310,19 +314,22 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       );
 
     if (!endTurn) {
+      const sharedStore = createAgentSharedStore({
+        runMetrics: globalState,
+        roundMetrics: roundState,
+        toolRuntime: toolState,
+      });
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
-        stateRound: roundState,
-        stateGlobal: globalState,
-        toolState,
+        sharedStore,
         outputFile: outputPath,
       });
 
       await this.handleRoundCompletion(
         roundIndex,
-        cycleResult.stateRound,
-        cycleResult.stateGlobal,
+        cycleResult.sharedStore.roundMetrics,
+        cycleResult.sharedStore.runMetrics,
         {
           outputFile: outputPath,
           endTurn: cycleResult.endTurn,
@@ -332,17 +339,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       if (roundIndex === 0) {
         this.logger.debug(
-          `stateGlobal: ${JSON.stringify(cycleResult.stateGlobal)}`,
+          `stateGlobal: ${JSON.stringify(cycleResult.sharedStore.runMetrics)}`,
           roundGroupId,
         );
       }
 
       return {
-        roundState: cycleResult.stateRound,
-        globalState: cycleResult.stateGlobal,
+        roundState: cycleResult.sharedStore.roundMetrics,
+        globalState: cycleResult.sharedStore.runMetrics,
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
-        toolState: cycleResult.toolState,
+        toolState: cycleResult.sharedStore.toolRuntime,
       };
     }
 
@@ -377,17 +384,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareRoundContext(
     currRound: number,
-    _stateGlobal: AgentStateGlobal,
+    _stateGlobal: RunMetricsState,
     messages: any[],
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     roundGroupId: string,
   ): Promise<{
-    stateRound: AgentStateRound;
+    stateRound: RoundMetricsState;
     preparedMessages: any[];
     prefill?: string;
     skip: boolean;
   }> {
-    const stateRound = new AgentStateRound(currRound);
+    const stateRound = new RoundMetricsState(currRound);
     const promptBuilder = this.getPromptBuilder();
 
     if (currRound === 0) {
@@ -470,7 +477,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareToolState(
     currRound: number,
-    toolState: ToolState,
+    toolState: ToolRuntimeStore,
     roundGroupId: string,
   ): Promise<void> {
     if (currRound === 0) {
@@ -532,7 +539,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     messages,
   }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
     this.logger.debug(`Processing round ${roundIndex}`);
-    const toolState = new ToolState();
+    const toolState = new ToolRuntimeStore();
 
     return this.withRoundGroup(`r${roundIndex}`, async (roundGroupId) => {
       const shared: ReflectionRoundShared = {
@@ -603,7 +610,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           currentRound: 0,
           continueRounds: true,
           messages: [],
-          globalState: new AgentStateGlobal(),
+          globalState: new RunMetricsState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => {

@@ -288,12 +288,13 @@ describe('followUpCommand', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: '',
-        accumulatedOutput: '',
-        mediaFiles: [],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        scratchpad: {
+          texcountStats: null,
+          lastResponse: '',
+          accumulatedOutput: '',
+        },
+        media: { mediaFiles: [] },
+        reasoning: { thinkingBlocks: [], thinkingAdded: false },
       },
       lastUpdated: Date.now(),
     };
