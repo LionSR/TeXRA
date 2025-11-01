@@ -233,8 +233,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       let toolState: ToolState;
 
       try {
-        toolState =
-          ToolUseSessionManager.hydrateToolStateFromSnapshot(snapshot);
+        toolState = Object.assign(
+          new ToolState(),
+          structuredClone(snapshot.toolState),
+        );
       } catch (error) {
         const message =
           error instanceof Error
