@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 
 // Local imports - agent metadata
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
   AgentType,
@@ -38,14 +38,16 @@ export class AgentHistoryManager {
    * Add a new agent execution to history
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
-    // Trust that config already has session (internal data from runtime)
-    const session =
-      config.session ?? resolveAgentSessionDescriptor(config.agentType);
+    const normalizedConfig = parseAgentConfig(config);
+    const session = normalizedConfig.session;
+    if (!session) {
+      throw new Error('Agent history cannot store configs without session metadata.');
+    }
 
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
-      config,
+      config: normalizedConfig,
       session,
     };
 
@@ -104,18 +106,35 @@ export class AgentHistoryManager {
     }
 
     // Derive session from the most canonical source available
-    const session =
-      candidate.session ??
-      candidate.config.session ??
-      resolveAgentSessionDescriptor(
-        candidate.agentType ?? candidate.config.agentType,
-        candidate.agentSessionKind,
-      );
+    const baseConfig = structuredClone(candidate.config);
+    if (!baseConfig.session) {
+      if (candidate.session) {
+        baseConfig.session = candidate.session;
+      } else if (candidate.agentType || candidate.agentSessionKind) {
+        baseConfig.session = resolveAgentSessionDescriptor(
+          candidate.agentType ?? baseConfig.agentType,
+          candidate.agentSessionKind,
+        );
+      }
+    }
+
+    let normalizedConfig: AgentConfig;
+    try {
+      normalizedConfig = parseAgentConfig(baseConfig);
+    } catch (error) {
+      console.warn('Discarding malformed agent history entry', error);
+      return null;
+    }
+
+    const session = normalizedConfig.session;
+    if (!session) {
+      return null;
+    }
 
     return {
       id: candidate.id,
       timestamp: candidate.timestamp,
-      config: candidate.config,
+      config: normalizedConfig,
       session,
     };
   }

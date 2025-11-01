@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
@@ -37,7 +37,7 @@ async function buildToolUseAgent(
     throw new Error('Saved task state is not a tool-use session.');
   }
 
-  const fullConfig = AgentConfigSchema.parse(taskState.agentConfig);
+  const fullConfig = parseAgentConfig(taskState.agentConfig);
   const { agent, agentType } = await prepareAgentInstance<BaseToolUseAgent>({
     agentName: fullConfig.agent,
     configPayload: fullConfig,
