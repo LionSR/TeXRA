@@ -21,6 +21,14 @@ import { WorkspaceFS } from '@utils/files';
 /**
  * Build all user variables needed for prompt rendering.
  */
+type LoadedFileEntry = {
+  path: string;
+  ok: boolean;
+  varName: string;
+  source: string;
+  internal?: boolean;
+};
+
 export async function buildUserVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
@@ -30,13 +38,7 @@ export async function buildUserVars(
   logger: AgentLogger,
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
-  const allLoadedFiles: {
-    path: string;
-    ok: boolean;
-    varName: string;
-    source: string;
-    internal?: boolean;
-  }[] = [];
+  const allLoadedFiles: LoadedFileEntry[] = [];
 
   Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
   Object.assign(userVars, await getFileVars(agentConfig));
@@ -146,22 +148,10 @@ async function getRequiredFileVars(
   logger: AgentLogger,
 ): Promise<{
   vars: Record<string, any>;
-  files: Array<{
-    path: string;
-    ok: boolean;
-    varName: string;
-    source: string;
-    internal?: boolean;
-  }>;
+  files: LoadedFileEntry[];
 }> {
   const userVars: Record<string, any> = {};
-  const files: {
-    path: string;
-    ok: boolean;
-    varName: string;
-    source: string;
-    internal?: boolean;
-  }[] = [];
+  const files: LoadedFileEntry[] = [];
 
   if (agentSetting.requiredFiles) {
     for (const [varName, filePath] of Object.entries(
@@ -212,22 +202,10 @@ async function getPatternBasedFileVars(
   logger: AgentLogger,
 ): Promise<{
   vars: Record<string, any>;
-  files: Array<{
-    path: string;
-    ok: boolean;
-    varName: string;
-    source: string;
-    internal?: boolean;
-  }>;
+  files: LoadedFileEntry[];
 }> {
   const userVars: Record<string, any> = {};
-  const files: {
-    path: string;
-    ok: boolean;
-    varName: string;
-    source: string;
-    internal?: boolean;
-  }[] = [];
+  const files: LoadedFileEntry[] = [];
 
   if (agentSetting.filePatternsContain) {
     for (const patternConfig of agentSetting.filePatternsContain) {
