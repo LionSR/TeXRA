@@ -7,6 +7,7 @@ import {
   AgentCategory,
   AgentType,
   type AgentSessionDescriptor,
+  resolveAgentSessionDescriptor,
 } from './AgentDataclass';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
@@ -32,8 +33,7 @@ const SessionDescriptorSchema = z.object({
 });
 
 /** Zod schema for validating AgentConfig objects */
-export const AgentConfigSchema = z
-  .object({
+const AgentConfigBaseSchema = z.object({
     model: z.string().prefault('gemini25p'),
     agent: z.string().prefault('correct'),
     instruction: z.string().prefault(''),
@@ -63,4 +63,26 @@ export const AgentConfigSchema = z
       'Number of output files must not be greater than the number of input files.',
   });
 
-export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {
+  const descriptor = resolveAgentSessionDescriptor(
+    config.session?.agentType ?? config.agentType,
+    config.session?.agentCategory,
+  );
+
+  return {
+    ...config,
+    agentType: descriptor.agentType,
+    session: descriptor,
+  };
+});
+
+export type AgentConfig = z.output<typeof AgentConfigSchema>;
+export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+
+/**
+ * Parse arbitrary input into a canonical {@link AgentConfig} instance.
+ */
+export function parseAgentConfig(input: unknown): AgentConfig {
+  const parsed = AgentConfigSchema.parse(input);
+  return parsed;
+}

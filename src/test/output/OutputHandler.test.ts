@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - test
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentType,
@@ -62,21 +62,12 @@ const baseSetting: AgentSetting = {
   tools: [],
 };
 
-const baseConfig: AgentConfig = {
+const baseConfig: AgentConfig = parseAgentConfig({
   model: 'test',
   agent: 'a',
   instruction: '',
   useMultipleOutputs: false,
   inputFile: 'input.tex',
-  inputFiles: null,
-  referenceFile: null,
-  referenceFiles: null,
-  auxiliaryFile: null,
-  auxiliaryFiles: null,
-  mediaFile: null,
-  mediaFiles: null,
-  outputFiles: null,
-  editedFile: null,
   toolConfig: {
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
@@ -84,7 +75,7 @@ const baseConfig: AgentConfig = {
     attachDiagnostics: false,
     autoCompileInputPdf: false,
   },
-};
+});
 
 describe('OutputHandler round helpers', () => {
   it('ensures round storage and returns the same reference', () => {
