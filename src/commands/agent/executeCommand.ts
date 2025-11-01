@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent components
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -19,10 +19,7 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 }
 
 export const executeCommand = {
-  executeCommand: async (
-    config: AgentConfig,
-    context: vscode.ExtensionContext,
-  ) => {
+  executeCommand: async (config: unknown, context: vscode.ExtensionContext) => {
     try {
       // Save the agent configuration to history (silently)
       const executionId: ExecutionId =
