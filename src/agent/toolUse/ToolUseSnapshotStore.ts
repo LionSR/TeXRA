@@ -28,8 +28,6 @@ import {
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
 
-const SNAPSHOT_VERSION = TOOL_USE_SNAPSHOT_VERSION;
-
 /**
  * Persists tool-use session snapshots to disk. Runtime queue state lives in
  * {@link ToolUseSessionManager}; add only filesystem/persistence helpers here.
@@ -105,22 +103,38 @@ async function migrateLegacySnapshots(): Promise<void> {
         }
 
         const relativePath = path.join(STORAGE_DIR, name);
-        const stored = await StorageFS.readJson<unknown>(relativePath).catch((error) => {
-          logger.debug(
-            `Skipping migration for ${name}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-          return null;
-        });
+        const stored = await StorageFS.readJson<unknown>(relativePath).catch(
+          (error) => {
+            logger.debug(
+              `Skipping migration for ${name}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+            return null;
+          },
+        );
 
         if (typeof stored !== 'string') {
           continue;
         }
 
-        const parsed = ToolUseSessionSnapshotSchema.parse(JSON.parse(stored));
-        await StorageFS.writeJson(relativePath, parsed);
-        logger.debug(`Migrated legacy snapshot ${name}`);
+        try {
+          const raw = JSON.parse(stored);
+          const parsed = ToolUseSessionSnapshotSchema.safeParse(raw);
+          if (!parsed.success) {
+            logger.debug(`Skipping migration for ${name}: validation failed`);
+            continue;
+          }
+          await StorageFS.writeJson(relativePath, parsed.data);
+          logger.debug(`Migrated legacy snapshot ${name}`);
+        } catch (e) {
+          logger.debug(
+            `Skipping migration for ${name}: JSON parse failed: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+          continue;
+        }
       }
     })()
       .catch((error) => {
@@ -168,7 +182,7 @@ export const ToolUseSnapshotStore = {
 
     try {
       const snapshot: ToolUseSessionSnapshot = {
-        version: SNAPSHOT_VERSION,
+        version: TOOL_USE_SNAPSHOT_VERSION,
         executionId: payload.executionId,
         streamId: payload.streamId,
         agentName: payload.agentName,
@@ -314,9 +328,7 @@ export const ToolUseSnapshotStore = {
     }
   },
 
-  hydrateToolStateFromSnapshot(
-    snapshot: ToolUseSessionSnapshot,
-  ): ToolState {
+  hydrateToolStateFromSnapshot(snapshot: ToolUseSessionSnapshot): ToolState {
     return hydrateToolState(snapshot.toolState);
   },
 
@@ -327,4 +339,3 @@ export const ToolUseSnapshotStore = {
     await migrateLegacySnapshots();
   },
 };
-
