@@ -33,7 +33,8 @@ const SessionDescriptorSchema = z.object({
 });
 
 /** Zod schema for validating AgentConfig objects */
-const AgentConfigBaseSchema = z.object({
+const AgentConfigBaseSchema = z
+  .object({
     model: z.string().prefault('gemini25p'),
     agent: z.string().prefault('correct'),
     instruction: z.string().prefault(''),
@@ -83,6 +84,5 @@ export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
  * Parse arbitrary input into a canonical {@link AgentConfig} instance.
  */
 export function parseAgentConfig(input: unknown): AgentConfig {
-  const parsed = AgentConfigSchema.parse(input);
-  return parsed;
+  return AgentConfigSchema.parse(input);
 }
