@@ -25,7 +25,11 @@ import {
   type ReflectionRoundShared,
 } from '@agent/implementations/flows/ReflectionRoundFlow';
 import type { IModelHandler } from '@agent/modelHandlers';
-import { OutputHandler, NamedOutputFile, IOutputHandler } from '@agent/output';
+import {
+  OutputHandler,
+  IOutputHandler,
+  type RoundOutputArtifacts,
+} from '@agent/output';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
@@ -71,6 +75,13 @@ export interface ReflectionRoundResult {
   messages: any[];
   shouldContinue: boolean;
   toolState: ToolState;
+  outputArtifacts: RoundOutputArtifacts | null;
+}
+
+export interface AgentRuntimeXmlExports {
+  tagContents: Record<string, string | string[]>;
+  documents: string[];
+  singleOutputFile: string | null;
 }
 
 interface RoundPipelineContext {
@@ -103,6 +114,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected promptBuilder?: PromptBuilder;
   public roundStates: AgentStateRound[] = [];
   public toolStates: ToolState[] = [];
+  public roundOutputArtifacts: RoundOutputArtifacts[] = [];
+  public runtimeXmlExports: AgentRuntimeXmlExports = {
+    tagContents: {},
+    documents: [],
+    singleOutputFile: null,
+  };
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -206,7 +223,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
-  ): Promise<void> {
+  ): Promise<RoundOutputArtifacts> {
     const { outputFile, endTurn, processGroupId } = options;
     try {
       // Instead of creating a new group, use the round group directly
@@ -226,6 +243,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       endTurn,
       groupId: processGroupId,
     });
+
+    const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
+    this.roundOutputArtifacts[currRound] = artifacts;
+    return artifacts;
   }
 
   /**
@@ -319,7 +340,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         outputFile: outputPath,
       });
 
-      await this.handleRoundCompletion(
+      const artifacts = await this.handleRoundCompletion(
         roundIndex,
         cycleResult.stateRound,
         cycleResult.stateGlobal,
@@ -343,14 +364,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
         toolState: cycleResult.toolState,
+        outputArtifacts: artifacts,
       };
     }
 
-    await this.handleRoundCompletion(roundIndex, roundState, globalState, {
-      outputFile: outputPath,
-      endTurn,
-      processGroupId: roundGroupId,
-    });
+    const artifacts = await this.handleRoundCompletion(
+      roundIndex,
+      roundState,
+      globalState,
+      {
+        outputFile: outputPath,
+        endTurn,
+        processGroupId: roundGroupId,
+      },
+    );
 
     return {
       roundState,
@@ -358,6 +385,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       messages: updatedMessages,
       shouldContinue: endTurn,
       toolState,
+      outputArtifacts: artifacts,
     };
   }
 
@@ -567,6 +595,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             messages,
             shouldContinue: true,
             toolState,
+            outputArtifacts: null,
           }),
         },
       };
@@ -586,6 +615,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
+    this.roundOutputArtifacts = [];
+    this.runtimeXmlExports = {
+      tagContents: {},
+      documents: [],
+      singleOutputFile: null,
+    };
     const lifecycle: ReflectionRunLifecycle = {
       phase: 'idle',
       status: 'pending',
@@ -626,5 +661,40 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         } satisfies ReflectionRunHooks;
       },
     });
+
+    this.runtimeXmlExports = this.computeRuntimeXmlExports();
+  }
+
+  protected computeRuntimeXmlExports(): AgentRuntimeXmlExports {
+    const summary: AgentRuntimeXmlExports = {
+      tagContents: {},
+      documents: [],
+      singleOutputFile: null,
+    };
+
+    if (this.roundOutputArtifacts.length === 0) {
+      return summary;
+    }
+
+    const lastWithSummary = [...this.roundOutputArtifacts]
+      .reverse()
+      .find((artifact) => {
+        const xml = artifact.xmlSummary;
+        return (
+          Object.keys(xml.tagContents).length > 0 ||
+          xml.documents.length > 0 ||
+          xml.singleOutputFile !== null
+        );
+      });
+
+    if (!lastWithSummary) {
+      return summary;
+    }
+
+    summary.tagContents = { ...lastWithSummary.xmlSummary.tagContents };
+    summary.documents = [...lastWithSummary.xmlSummary.documents];
+    summary.singleOutputFile = lastWithSummary.xmlSummary.singleOutputFile;
+
+    return summary;
   }
 }

@@ -9,7 +9,7 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
-import { getToolFlags } from '@agent/utils/userVars';
+import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
 import * as configModule from '@utils/config';
 
 const baseSetting: AgentSetting = {
@@ -97,3 +97,4 @@ describe('getToolFlags', () => {
     assert.equal(flags.ROUNDS, 3);
   });
 });
+
