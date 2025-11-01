@@ -80,9 +80,6 @@ When refactoring, aim for code that looks like it was designed correctly from th
 **Agent execution and tool-use**
 
 - Implement new agents against `IAgent` (`src/agent/core/IAgent.ts`) and compose them via the factories in `src/agent/runtime`.
-- Normalize UI payloads with `objectToTaskState` / `agentConfigToTaskState` from `@utils/config/configConversion`, which also derive `AgentSessionKind` metadata.
-- Build prompts with `PromptBuilder` and `getSystemPromptWithRules` (`src/agent/utils/PromptBuilder.ts`, `src/agent/utils/promptHelpers.ts`) instead of duplicating reflection logic.
-- Classify sessions using `AgentSessionKind` and compute stream identifiers with `getStreamTabId` (`src/agent/core/AgentDataclass.ts`, `src/logger/streamUtils.ts`) to keep workflow and tool-use tabs distinct.
 - Persist interactive runs with `ToolUseSessionManager` (`src/agent/toolUse/ToolUseSessionManager.ts`) and launch/resume executions via `executeAgentWithLogging` (`src/agent/runtime/executeAgent.ts`) so session filters, run directories, and resume actions stay synchronized.
 - Add new model handlers under `src/agent/modelHandlers/`, export them through the index, and register capabilities/pricing in `src/model/ModelRegistry.ts`.
 
