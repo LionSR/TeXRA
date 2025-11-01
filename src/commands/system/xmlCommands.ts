@@ -6,6 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import * as logger from '@logger/logUtils';
 
 // Local imports - core
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 
 // Local imports - utils
@@ -96,11 +97,13 @@ export async function handleValidateAndFixXml(
 
     logger.info(CHANNEL, `Starting XML validation for ${filePath}`);
 
-    await executeAgent({
+    const agentConfig = parseAgentConfig({
       agent: 'xml_validator',
       model: 'claude-3-7-sonnet-latest',
       inputFile: filePath,
     });
+
+    await executeAgent(agentConfig);
   } catch (err) {
     logger.error(
       CHANNEL,
