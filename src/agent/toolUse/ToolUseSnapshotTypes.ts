@@ -62,18 +62,6 @@ export interface SaveToolUseSnapshotPayload {
   toolState: ToolState;
 }
 
-export function toToolStateSnapshot(
-  state: ToolState,
-): ToolUseSessionSnapshot['toolState'] {
-  return ToolStateSnapshotSchema.parse(structuredClone(state));
-}
-
-export function hydrateToolState(
-  snapshot: ToolUseSessionSnapshot['toolState'],
-): ToolState {
-  return Object.assign(new ToolState(), structuredClone(snapshot));
-}
-
 export function normalizeSnapshot(
   snapshot: ToolUseSessionSnapshotParsed,
 ): ToolUseSessionSnapshot {
