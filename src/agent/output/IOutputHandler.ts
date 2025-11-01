@@ -3,7 +3,12 @@ import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - types
-import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
+import {
+  NamedOutputFile,
+  OutputFileInfo,
+  RoundFileMapping,
+  RoundOutputExport,
+} from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -43,6 +48,12 @@ export interface IOutputHandler {
 
   /** Retrieve the cached mapping metadata for a round. */
   getRoundMapping(currRound: number): RoundFileMapping;
+
+  /** Retrieve normalized export metadata for a round. */
+  getRoundExports(
+    currRound: number,
+    options?: { includeContent?: boolean },
+  ): Promise<RoundOutputExport[]>;
 
   /** Validate expected output files for the given round. */
   validateExpectedOutputs(

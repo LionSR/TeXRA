@@ -149,6 +149,7 @@ export class ExecutionManager {
           )
         : null,
       editedFile: null,
+      workflowContext: null,
       toolConfig,
       agentType: session.agentType,
       session,

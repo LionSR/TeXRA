@@ -327,6 +327,7 @@ describe('ResponseCycle background reasoning logs', () => {
       mediaFiles: null,
       outputFiles: null,
       editedFile: null,
+      workflowContext: null,
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,

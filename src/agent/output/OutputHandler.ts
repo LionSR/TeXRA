@@ -12,6 +12,7 @@ import type {
   NamedOutputFile,
   OutputFileInfo,
   RoundFileMapping,
+  RoundOutputExport,
 } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
@@ -51,6 +52,10 @@ export class OutputHandler implements IOutputHandler {
   public outputFiles: { [key: number]: string[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
   private roundMappings: { [key: number]: RoundFileMapping };
+  private roundExportCache: { [key: number]: RoundOutputExport[] };
+  private roundExportContentCache: {
+    [key: number]: Map<string, string | null>;
+  };
   public baseFiles: string[];
   public processGroupId?: string;
   protected logger: AgentLogger;
@@ -73,6 +78,8 @@ export class OutputHandler implements IOutputHandler {
     this.outputFiles = {};
     this.outputMappings = {};
     this.roundMappings = {};
+    this.roundExportCache = {};
+    this.roundExportContentCache = {};
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
@@ -251,13 +258,144 @@ export class OutputHandler implements IOutputHandler {
     return mapping;
   }
 
+  private buildRoundExports(round: number): RoundOutputExport[] {
+    const roundOutputs = this.outputFiles[round] ?? [];
+    if (roundOutputs.length === 0) {
+      const emptyExports: RoundOutputExport[] = [];
+      this.roundExportCache[round] = emptyExports;
+      return emptyExports;
+    }
+
+    const mapping = this.getRoundMapping(round);
+    const baseByOutput = new Map<string, string>();
+    const prevByOutput = new Map<string, string>();
+    for (const [base, output] of mapping.baseToOutput.entries()) {
+      baseByOutput.set(output, base);
+    }
+    for (const [prev, output] of mapping.prevToOutput.entries()) {
+      prevByOutput.set(output, prev);
+    }
+
+    const namedByPath = new Map<string, NamedOutputFile>();
+    for (const named of this.outputMappings[round] || []) {
+      namedByPath.set(named.path, named);
+    }
+
+    const usedIds = new Map<string, number>();
+    const exports = roundOutputs.map((filePath) => {
+      const named = namedByPath.get(filePath);
+      const exportId = this.resolveExportId(filePath, named, usedIds);
+      const source = named?.source ?? filePath;
+      const original =
+        mapping.originByOutput.get(filePath) ?? named?.source ?? null;
+      return {
+        exportId,
+        source,
+        path: filePath,
+        base: baseByOutput.get(filePath) ?? null,
+        prev: prevByOutput.get(filePath) ?? null,
+        original,
+      };
+    });
+
+    this.roundExportCache[round] = exports;
+    return exports;
+  }
+
+  private resolveExportId(
+    filePath: string,
+    named: NamedOutputFile | undefined,
+    usedIds: Map<string, number>,
+  ): string {
+    const candidates = [named?.exportId, named?.source, filePath];
+    for (const candidate of candidates) {
+      if (!candidate) {
+        continue;
+      }
+      const sanitized = this.sanitizeExportId(candidate);
+      if (!sanitized) {
+        continue;
+      }
+      const count = usedIds.get(sanitized);
+      if (!count) {
+        usedIds.set(sanitized, 1);
+        return sanitized;
+      }
+      const nextCount = count + 1;
+      usedIds.set(sanitized, nextCount);
+      return `${sanitized}_${nextCount}`;
+    }
+
+    const fallback = `output_${usedIds.size + 1}`;
+    usedIds.set(fallback, 1);
+    return fallback;
+  }
+
+  private sanitizeExportId(candidate: string): string {
+    const parsed = path.parse(candidate.trim());
+    const base = parsed.name || parsed.base || candidate;
+    const normalized = base
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+    return normalized;
+  }
+
+  public async getRoundExports(
+    currRound: number,
+    options: { includeContent?: boolean } = {},
+  ): Promise<RoundOutputExport[]> {
+    this.ensureRound(currRound);
+    const includeContent = options.includeContent ?? false;
+
+    const cached = this.roundExportCache[currRound] ?? null;
+    const exports = cached ?? this.buildRoundExports(currRound);
+
+    if (!includeContent) {
+      return exports.map((entry) => ({ ...entry }));
+    }
+
+    let contentCache = this.roundExportContentCache[currRound];
+    if (!contentCache) {
+      contentCache = new Map();
+      this.roundExportContentCache[currRound] = contentCache;
+    }
+
+    const results: RoundOutputExport[] = [];
+    for (const entry of exports) {
+      if (!contentCache.has(entry.path)) {
+        try {
+          const fileContent = await WorkspaceFS.read(entry.path);
+          contentCache.set(entry.path, fileContent);
+        } catch (error) {
+          this.logger.error(
+            `Failed to read output file ${entry.path}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          contentCache.set(entry.path, null);
+        }
+      }
+
+      results.push({ ...entry, content: contentCache.get(entry.path) ?? null });
+    }
+
+    return results;
+  }
+
   private invalidateRoundMapping(round: number): void {
     delete this.roundMappings[round];
+    this.clearRoundExports(round);
   }
 
   private invalidateMappingsFromRound(round: number): void {
     this.invalidateRoundMapping(round);
     this.invalidateRoundMapping(round + 1);
+  }
+
+  private clearRoundExports(round: number): void {
+    delete this.roundExportCache[round];
+    delete this.roundExportContentCache[round];
   }
 
   /**

@@ -54,6 +54,8 @@ export async function buildUserVars(
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting, agentPrompt));
 
+  applyWorkflowContext(userVars, agentConfig);
+
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
     logger.fileList(allLoadedFiles);
@@ -303,6 +305,23 @@ function getOutputFilesOrder(
     userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles.join(', ');
   }
   return userVars;
+}
+
+function applyWorkflowContext(
+  userVars: Record<string, any>,
+  agentConfig: AgentConfig,
+): void {
+  const context = agentConfig.workflowContext;
+  if (!context || typeof context !== 'object') {
+    return;
+  }
+
+  const existingWorkflow =
+    userVars.WORKFLOW && typeof userVars.WORKFLOW === 'object'
+      ? { ...userVars.WORKFLOW }
+      : {};
+
+  userVars.WORKFLOW = { ...existingWorkflow, ...context };
 }
 
 export function getToolFlags(

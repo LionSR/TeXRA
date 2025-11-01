@@ -48,6 +48,7 @@ describe('XmlOutputManager markdown fallback', () => {
     mediaFiles: null,
     outputFiles: null,
     editedFile: null,
+    workflowContext: null,
     toolConfig: {
       autoExtractFigure: false,
       autoExtractTikzFigure: false,

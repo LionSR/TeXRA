@@ -9,8 +9,9 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
-import { getToolFlags } from '@agent/utils/userVars';
+import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
 import * as configModule from '@utils/config';
+import { AgentLogger } from '@logger/AgentLogger';
 
 const baseSetting: AgentSetting = {
   agentType: AgentType.CoT,
@@ -51,6 +52,7 @@ const baseConfig: AgentConfig = {
   mediaFiles: null,
   outputFiles: null,
   editedFile: null,
+  workflowContext: null,
   toolConfig: {
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
@@ -104,5 +106,37 @@ describe('getToolFlags', () => {
 
     const flags = getToolFlags(baseConfig, setting, prompt);
     assert.equal(flags.ROUNDS, 3);
+  });
+});
+
+describe('buildUserVars', () => {
+  it('merges workflow context under WORKFLOW namespace', async () => {
+    const configWithContext: AgentConfig = {
+      ...baseConfig,
+      inputFile: '',
+      workflowContext: {
+        steps: {
+          derive: { summary: 'complete' },
+        },
+      },
+    };
+
+    const logger = new AgentLogger('WorkflowUserVarsTest');
+    const modelHandler: any = {
+      isOpenai: false,
+      isAnthropic: false,
+      isGoogle: false,
+    };
+
+    const userVars = await buildUserVars(
+      configWithContext,
+      baseSetting,
+      basePrompt,
+      __dirname,
+      modelHandler,
+      logger,
+    );
+
+    assert.deepEqual(userVars.WORKFLOW, configWithContext.workflowContext);
   });
 });

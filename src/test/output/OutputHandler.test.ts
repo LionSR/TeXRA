@@ -14,6 +14,7 @@ import { OutputHandler } from '@agent/output';
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
+import { WorkspaceFS } from '@utils/files';
 
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
@@ -77,6 +78,7 @@ const baseConfig: AgentConfig = {
   mediaFiles: null,
   outputFiles: null,
   editedFile: null,
+  workflowContext: null,
   toolConfig: {
     autoExtractFigure: false,
     autoExtractTikzFigure: false,
@@ -174,6 +176,80 @@ describe('OutputHandler.getRoundMapping', () => {
       first,
       'expected mapping to refresh after invalidation',
     );
+  });
+});
+
+describe('OutputHandler.getRoundExports', () => {
+  it('returns exports with optional content and caches reads', async () => {
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      [],
+      new AgentLogger('TestRoundExports'),
+    );
+
+    handler.outputFiles[0] = ['chapter_r0.tex'];
+    handler.outputMappings[0] = [
+      { source: 'chapter.tex', path: 'chapter_r0.tex' },
+    ];
+
+    const readCalls: string[] = [];
+    const originalRead = WorkspaceFS.read;
+    (WorkspaceFS as any).read = async (filePath: string) => {
+      readCalls.push(filePath);
+      return `content:${path.basename(filePath)}`;
+    };
+
+    try {
+      const metadataOnly = await handler.getRoundExports(0);
+      assert.equal(metadataOnly.length, 1);
+      assert.equal(metadataOnly[0].path, 'chapter_r0.tex');
+      assert.equal(metadataOnly[0].source, 'chapter.tex');
+      assert.ok(metadataOnly[0].exportId.length > 0);
+      assert.equal(metadataOnly[0].content, undefined);
+
+      const withContent = await handler.getRoundExports(0, {
+        includeContent: true,
+      });
+      assert.equal(readCalls.length, 1);
+      assert.equal(withContent[0].content, 'content:chapter_r0.tex');
+
+      const second = await handler.getRoundExports(0, {
+        includeContent: true,
+      });
+      assert.equal(readCalls.length, 1, 'expected content to be cached');
+      assert.equal(second[0].content, 'content:chapter_r0.tex');
+    } finally {
+      (WorkspaceFS as any).read = originalRead;
+    }
+  });
+
+  it('refreshes exports when round outputs change', async () => {
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      [],
+      new AgentLogger('TestRoundExportsRefresh'),
+    );
+
+    handler.outputFiles[0] = ['first_r0.tex'];
+    handler.outputMappings[0] = [{ source: 'first.tex', path: 'first_r0.tex' }];
+
+    await handler.getRoundExports(0);
+
+    (handler as any).setRoundOutputs(
+      0,
+      ['second_r0.tex'],
+      [{ source: 'second.tex', path: 'second_r0.tex' }],
+    );
+
+    const exports = await handler.getRoundExports(0);
+    assert.equal(exports.length, 1);
+    assert.equal(exports[0].path, 'second_r0.tex');
+    assert.equal(exports[0].source, 'second.tex');
+    assert.ok(exports[0].exportId.includes('second'));
   });
 });
 

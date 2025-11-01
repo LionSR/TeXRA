@@ -54,6 +54,11 @@ export const AgentConfigSchema = z
     mediaFiles: z.array(z.string()).nullable().prefault(null),
     outputFiles: z.array(z.string()).nullable().prefault(null),
     editedFile: z.string().nullable().prefault(null),
+    workflowContext: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .nullable()
+      .prefault(null),
 
     toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
   })

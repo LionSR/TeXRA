@@ -292,7 +292,11 @@ export class XmlOutputManager {
         currRound,
       );
       await WorkspaceFS.write(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
+      outputFiles.push({
+        source,
+        path: texFile,
+        exportId: this.normalizeExportId(source, texFile),
+      });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -316,9 +320,11 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
+    const fallbackSource = original || this.agentConfig.inputFile;
     return {
-      source: original || this.agentConfig.inputFile,
+      source: fallbackSource,
       path: processedOutputFile,
+      exportId: this.normalizeExportId(fallbackSource, processedOutputFile),
     };
   }
 
@@ -358,5 +364,22 @@ export class XmlOutputManager {
       }
     }
     await WorkspaceFS.write(filePath, content);
+  }
+
+  private normalizeExportId(
+    preferredName: string | undefined,
+    filePath: string,
+  ): string {
+    const candidate =
+      preferredName && preferredName.trim().length > 0
+        ? preferredName.trim()
+        : filePath;
+    const parsed = path.parse(candidate);
+    const base = parsed.name || parsed.base || 'output';
+    const normalized = base
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+    return normalized || 'output';
   }
 }

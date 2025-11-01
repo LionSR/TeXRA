@@ -155,6 +155,7 @@ describe('BaseToolUseAgent follow-up loop', () => {
       mediaFiles: null,
       outputFiles: null,
       editedFile: null,
+      workflowContext: null,
       toolConfig: {
         autoExtractFigure: false,
         autoExtractTikzFigure: false,
