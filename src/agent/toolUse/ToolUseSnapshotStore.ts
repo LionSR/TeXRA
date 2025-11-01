@@ -22,8 +22,6 @@ import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
   normalizeSnapshot,
-  toToolStateSnapshot,
-  hydrateToolState,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
@@ -153,12 +151,13 @@ async function migrateLegacySnapshots(): Promise<void> {
 }
 
 export const ToolUseSnapshotStore = {
-  isPersistenceEnabled(): boolean {
-    return getToolUsePersistenceEnabled();
-  },
-
+  /**
+   * Initializes snapshot persistence: ensures the storage directory exists,
+   * cleans up expired snapshots, and migrates legacy snapshot formats.
+   * Safe to call multiple times.
+   */
   async initialize(): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
+    if (!getToolUsePersistenceEnabled()) {
       return;
     }
     await ensureStorageDir();
@@ -166,8 +165,13 @@ export const ToolUseSnapshotStore = {
     await migrateLegacySnapshots();
   },
 
+  /**
+   * Persists a tool-use session snapshot for the given execution.
+   * Validates the payload and skips saving on validation failure.
+   * @param payload Snapshot data to persist.
+   */
   async save(payload: SaveToolUseSnapshotPayload): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
+    if (!getToolUsePersistenceEnabled()) {
       return;
     }
     if (!isValidExecutionId(payload.executionId)) {
@@ -181,7 +185,7 @@ export const ToolUseSnapshotStore = {
     }
 
     try {
-      const snapshot: ToolUseSessionSnapshot = {
+      const snapshot = {
         version: TOOL_USE_SNAPSHOT_VERSION,
         executionId: payload.executionId,
         streamId: payload.streamId,
@@ -192,9 +196,9 @@ export const ToolUseSnapshotStore = {
           agentCategory: payload.session.agentCategory,
         },
         messages: structuredClone(payload.messages),
-        toolState: toToolStateSnapshot(payload.toolState),
+        toolState: structuredClone(payload.toolState),
         lastUpdated: Date.now(),
-      };
+      } as const;
 
       const validationResult = ToolUseSessionSnapshotSchema.safeParse(snapshot);
       if (!validationResult.success) {
@@ -217,8 +221,14 @@ export const ToolUseSnapshotStore = {
     }
   },
 
+  /**
+   * Loads a snapshot by execution id.
+   * Returns null if not found or when validation fails.
+   * @param executionId Identifier of the execution to load.
+   * @returns Normalized snapshot or null.
+   */
   async load(executionId: ExecutionId): Promise<ToolUseSessionSnapshot | null> {
-    if (!this.isPersistenceEnabled() || !isValidExecutionId(executionId)) {
+    if (!getToolUsePersistenceEnabled() || !isValidExecutionId(executionId)) {
       return null;
     }
 
@@ -251,8 +261,13 @@ export const ToolUseSnapshotStore = {
     }
   },
 
+  /**
+   * Lists all valid snapshots currently stored.
+   * Invalid or unreadable entries are skipped.
+   * @returns Array of normalized snapshots (may be empty).
+   */
   async list(): Promise<ToolUseSessionSnapshot[]> {
-    if (!this.isPersistenceEnabled()) {
+    if (!getToolUsePersistenceEnabled()) {
       return [];
     }
     if (!(await ensureStorageDir())) {
@@ -288,6 +303,11 @@ export const ToolUseSnapshotStore = {
     }
   },
 
+  /**
+   * Deletes a snapshot for the given execution id.
+   * No-op for undefined/invalid ids or when the file does not exist.
+   * @param executionId Identifier of the snapshot to delete.
+   */
   async delete(executionId: ExecutionId | undefined): Promise<void> {
     if (!executionId || !isValidExecutionId(executionId)) {
       return;
@@ -309,8 +329,11 @@ export const ToolUseSnapshotStore = {
     }
   },
 
+  /**
+   * Deletes all stored snapshots when persistence is enabled.
+   */
   async deleteAll(): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
+    if (!getToolUsePersistenceEnabled()) {
       return;
     }
 
@@ -326,16 +349,5 @@ export const ToolUseSnapshotStore = {
         }`,
       );
     }
-  },
-
-  hydrateToolStateFromSnapshot(snapshot: ToolUseSessionSnapshot): ToolState {
-    return hydrateToolState(snapshot.toolState);
-  },
-
-  async migrateLegacySnapshots(): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
-      return;
-    }
-    await migrateLegacySnapshots();
   },
 };

@@ -2,7 +2,6 @@
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - agent
-import type { ToolState } from '@agent/core/ToolState';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - config
@@ -184,24 +183,12 @@ export class ToolUseSessionManager {
     return await ToolUseSnapshotStore.list();
   }
 
-  /** Hydrates a ToolState object from a snapshot. */
-  public static hydrateToolStateFromSnapshot(
-    snapshot: ToolUseSessionSnapshot,
-  ): ToolState {
-    return ToolUseSnapshotStore.hydrateToolStateFromSnapshot(snapshot);
-  }
-
   /** Deletes all persisted tool-use session snapshots. */
   public static async deleteAllSnapshots(): Promise<void> {
     if (!this.isPersistenceEnabled()) {
       return;
     }
     await ToolUseSnapshotStore.deleteAll();
-  }
-
-  /** Migrates any legacy snapshots stored on disk. */
-  public static async migrateLegacySnapshots(): Promise<void> {
-    await ToolUseSnapshotStore.migrateLegacySnapshots();
   }
 }
 
