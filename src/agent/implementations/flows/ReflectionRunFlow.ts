@@ -152,6 +152,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
     shared.agent.roundStates.push(result.roundState);
     shared.agent.toolStates.push(result.toolState);
+    if (result.outputArtifacts) {
+      shared.agent.roundOutputArtifacts[result.outputArtifacts.round] =
+        result.outputArtifacts;
+    }
     shared.state.globalState = result.globalState;
     shared.state.messages = result.messages;
     shared.state.continueRounds = result.shouldContinue;
