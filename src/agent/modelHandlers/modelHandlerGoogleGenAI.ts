@@ -1023,7 +1023,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   processThinkingBlock(
     responseObject: GenerateContentResponse,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (
@@ -1066,7 +1065,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (thoughtContent) {
       this.logger.debug(
         `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
-        groupId,
       );
     }
 

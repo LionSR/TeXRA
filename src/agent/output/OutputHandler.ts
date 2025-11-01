@@ -336,7 +336,7 @@ export class OutputHandler implements IOutputHandler {
         documentTag: this.agentSetting.documentTag,
       };
 
-      this.logger.missingOutputs(missingOutputsData, groupId);
+      this.logger.missingOutputs(missingOutputsData);
     }
 
     bus.emit('updateMissingOutputs', {
@@ -508,7 +508,7 @@ export class OutputHandler implements IOutputHandler {
           xmlFile: outputFile,
           documentTag: this.agentSetting.documentTag,
         };
-        this.logger.missingOutputs(missingOutputsData, activeGroupId);
+        this.logger.missingOutputs(missingOutputsData);
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
           filesByRound: { [currRound]: [] },

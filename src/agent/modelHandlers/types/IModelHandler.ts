@@ -185,7 +185,6 @@ export interface IModelHandler<
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null;
 

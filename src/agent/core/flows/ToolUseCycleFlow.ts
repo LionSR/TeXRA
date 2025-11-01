@@ -347,7 +347,6 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
-      groupId,
       state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
@@ -383,7 +382,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         cost: normalized.cost,
         elapsedTime: normalized.responseTime,
       };
-      options.logger.statistics(stats, groupId);
+      options.logger.statistics(stats);
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);

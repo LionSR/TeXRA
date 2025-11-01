@@ -37,64 +37,48 @@ export class AgentLogger {
     error: 'error' as const,
   };
 
-  debug(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
+  debug(message: string, ...args: unknown[]): void {
+    const { messageType, data } = AgentLogger.resolveLogArguments(args);
     logger.debug(
       this.channelId,
       message,
-      groupId,
+      undefined,
       messageType,
       this.isAgentLogger,
       data,
     );
   }
 
-  info(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
+  info(message: string, ...args: unknown[]): void {
+    const { messageType, data } = AgentLogger.resolveLogArguments(args);
     logger.info(
       this.channelId,
       message,
-      groupId,
+      undefined,
       messageType,
       this.isAgentLogger,
       data,
     );
   }
 
-  warn(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
+  warn(message: string, ...args: unknown[]): void {
+    const { messageType, data } = AgentLogger.resolveLogArguments(args);
     logger.warn(
       this.channelId,
       message,
-      groupId,
+      undefined,
       messageType,
       this.isAgentLogger,
       data,
     );
   }
 
-  error(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
+  error(message: string, ...args: unknown[]): void {
+    const { messageType, data } = AgentLogger.resolveLogArguments(args);
     logger.error(
       this.channelId,
       message,
-      groupId,
+      undefined,
       messageType,
       this.isAgentLogger,
       data,
@@ -104,42 +88,42 @@ export class AgentLogger {
   /**
    * Log a list of files that were processed.
    */
-  fileList(files: unknown[], groupId?: string): void {
+  fileList(files: unknown[]): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.info(summary, groupId, MESSAGE_TYPES.FILE_LIST, files);
+    this.info(summary, MESSAGE_TYPES.FILE_LIST, files);
   }
 
   /**
    * Log missing output information.
    */
-  missingOutputs(info: unknown, groupId?: string): void {
+  missingOutputs(info: unknown): void {
     const missing = (info as any).missing as unknown[] | undefined;
     const count = missing ? missing.length : 0;
     const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
-    this.info(summary, groupId, MESSAGE_TYPES.MISSING_OUTPUTS, info);
+    this.info(summary, MESSAGE_TYPES.MISSING_OUTPUTS, info);
   }
 
   /**
    * Log latexdiff results.
    */
-  latexDiff(results: unknown[], groupId?: string): void {
+  latexDiff(results: unknown[]): void {
     const summary = `Latexdiff results: ${results.length}`;
-    this.info(summary, groupId, MESSAGE_TYPES.LATEXDIFF, results);
+    this.info(summary, MESSAGE_TYPES.LATEXDIFF, results);
   }
 
   /**
    * Log statistics information (only shown in debug mode).
    */
-  statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
+  statistics(stats: ExtendedTokenUsageStats): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.debug(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
+    this.debug(summary, MESSAGE_TYPES.STATISTICS, stats);
   }
 
   /**
    * Log a user follow-up message.
    */
-  userMessage(message: string, groupId?: string): void {
-    this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
+  userMessage(message: string): void {
+    this.info(message, MESSAGE_TYPES.USER_MESSAGE);
   }
 
   /**
@@ -223,6 +207,42 @@ export class AgentLogger {
         throw error;
       }
     });
+  }
+
+  private static resolveLogArguments(args: unknown[]): {
+    messageType?: MessageType;
+    data?: unknown;
+  } {
+    if (args.length === 0) {
+      return {};
+    }
+
+    const [first, second, third] = args;
+
+    if (AgentLogger.isMessageType(first)) {
+      return { messageType: first, data: second };
+    }
+
+    if (AgentLogger.isMessageType(second)) {
+      return { messageType: second, data: third };
+    }
+
+    if (args.length === 1) {
+      return { data: first };
+    }
+
+    if (args.length === 2) {
+      return { data: second };
+    }
+
+    return { data: third };
+  }
+
+  private static isMessageType(value: unknown): value is MessageType {
+    return (
+      typeof value === 'string' &&
+      Object.values(MESSAGE_TYPES).includes(value as MessageType)
+    );
   }
 }
 

@@ -95,7 +95,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   // Implementation for processing thinking blocks in OpenRouter responses
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (!responseObject) {
@@ -110,13 +109,12 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       responseObject.choices[0].message.reasoning
     ) {
       const reasoning = responseObject.choices[0].message.reasoning;
-      this.logger.debug(`OpenRouter reasoning found`, groupId);
+      this.logger.debug(`OpenRouter reasoning found`);
 
       // Log preview of reasoning content
       if (typeof reasoning === 'string') {
         this.logger.debug(
           `Reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
-          groupId,
         );
         return reasoning;
       } else {
@@ -124,7 +122,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         const reasoningStr = JSON.stringify(reasoning);
         this.logger.debug(
           `Reasoning preview: ${reasoningStr.substring(0, K_SLICE)}...`,
-          groupId,
         );
         return reasoningStr;
       }

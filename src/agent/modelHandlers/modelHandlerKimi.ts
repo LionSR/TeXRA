@@ -31,13 +31,11 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   /**
    * Process thinking blocks for Moonshot models
    * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (!responseObject) {
@@ -59,7 +57,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         reasoningContent = message.thinking_content;
         this.logger.debug(
           'Found thinking_content in choices[0].message.thinking_content',
-          groupId,
         );
 
         // If toolState is provided and we have reasoning content,
@@ -84,7 +81,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     // Log preview of thinking content
     this.logger.debug(
       `Kimi thinking content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-      groupId,
     );
 
     return reasoningContent;

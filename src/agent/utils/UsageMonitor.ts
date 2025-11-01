@@ -156,7 +156,7 @@ export class UsageMonitor {
         }),
       };
 
-      this.logger.statistics(payload, statsGroupId);
+      this.logger.statistics(payload);
     } catch (error) {
       this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
     }

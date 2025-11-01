@@ -357,7 +357,8 @@ function logWithGroup(
   channel: string,
   level: string,
   message: string,
-  groupId?: string,
+  // Deprecated: groupId is ignored now that async context handles scoping
+  _groupId?: string,
   messageType?: MessageType,
   isAgent = false,
   data?: unknown,
@@ -367,8 +368,7 @@ function logWithGroup(
   const contextGroupId = getContextGroupId(channel);
 
   // If no groupId provided, prefer the async context before falling back to the transport state
-  const actualGroupId =
-    groupId ?? contextGroupId ?? transport?.getActiveGroupId();
+  const actualGroupId = contextGroupId ?? transport?.getActiveGroupId();
 
   // @ts-ignore - We're adding a custom property to the winston log
   logger[level](message, { groupId: actualGroupId, messageType, data });

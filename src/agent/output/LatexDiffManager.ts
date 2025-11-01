@@ -228,7 +228,7 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.latexDiff(aggregated, diffProcessGroupId);
+        this.logger.latexDiff(aggregated);
       } else {
         this.logger.debug('No latexdiff results to report', diffProcessGroupId);
       }

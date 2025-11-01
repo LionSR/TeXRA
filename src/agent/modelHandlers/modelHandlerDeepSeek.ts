@@ -64,13 +64,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   /**
    * Process thinking blocks for DeepSeek models
    * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: ToolState,
   ): string | null {
     if (!responseObject) {
@@ -94,7 +92,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
         reasoningContent = message.reasoning_content;
         this.logger.debug(
           'Found reasoning_content in choices[0].message.reasoning_content',
-          groupId,
         );
 
         // If toolState is provided and we have reasoning content,
@@ -108,7 +105,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
 
           toolState.thinkingBlocks = [thinkingBlock];
           toolState.thinkingAdded = true;
-          // this.logger.debug('Added reasoning content to toolState', groupId);
+          // this.logger.debug('Added reasoning content to toolState');
         }
         // For deepseek mode thinking content should not be attached back to the message as a content item.
         // Nevertheless one can include one in a bare way...
@@ -121,7 +118,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     // Log preview of thinking content (assuming it's a string)
     this.logger.debug(
       `DeepSeek reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-      groupId,
     );
 
     // Return the reasoning content (already a string for DeepSeek)
