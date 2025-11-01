@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- No changes yet.
+### Features
+
+- Capture XML output summaries (detected tag contents, serialized `<document>` elements, and single-output paths) so orchestrated workflows can reuse generated artifacts without re-selecting files.
 
 ## [0.34.2] - 2025-10-31
 

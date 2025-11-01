@@ -3,7 +3,12 @@ import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - types
-import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
+import {
+  NamedOutputFile,
+  OutputFileInfo,
+  RoundFileMapping,
+} from './types';
+import type { OutputXmlSummary, RoundOutputArtifacts } from './OutputHandler';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -60,4 +65,7 @@ export interface IOutputHandler {
       groupId?: string;
     },
   ): Promise<void>;
+
+  getRoundArtifacts(round: number): Promise<RoundOutputArtifacts>;
+  getRoundXmlSummary(round: number): OutputXmlSummary;
 }

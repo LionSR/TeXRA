@@ -139,6 +139,7 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 
 - Files specified in `requiredFiles` or `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
 - Files matched by `filePatternsContain` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ BIBLIOGRAPHY_CONTENT }}`).
+- When agents finish, TeXRA automatically captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
 
 **Example Usage in `userPrefix`:**
 
@@ -163,6 +164,19 @@ userPrefix: |
 - **Multiple Outputs:** If your agent needs to generate multiple distinct files, ensure your prompts generate the required XML structure. See the [Handling Multiple Files](./multiple-output.md) guide.
 - **Start Simple:** Begin with basic settings/prompts and add complexity incrementally.
 - **Test Iteratively:** Test frequently and review logs in the ProgressBoard.
+
+### Runtime XML exports
+
+Reflection-style agents automatically collect a lightweight summary of the XML they generate. The summary is exposed as
+`runtimeXmlExports` on the agent instance so pipeline orchestrators can forward the results to follow-up steps.
+
+The structure includes three simple fields:
+
+- `tagContents`: a dictionary of detected XML tags. For `<document>` outputs this contains either a single string or an array of strings (when the model generated multiple named documents). A `<scratchpad>` tag is captured when present.
+- `documents`: a list of serialized `<document>` elements suitable for pasting directly into the next prompt.
+- `singleOutputFile`: the processed output path when the agent produced exactly one LaTeX document.
+
+Because this data lives alongside the run state, orchestrators can choose how to apply it—for example, by inserting the serialized documents straight into the next request or by handing off the processed file path to a critique step.
 
 ### Tool-Use Agents
 
