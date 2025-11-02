@@ -141,7 +141,7 @@ const REGEX_CATEGORIES: ReplacementCategory[] = [
  * These replacements are subject to user configuration via enabledReplacements.
  */
 export function getAllReplacements(): ReplacementCategory {
-  const enabledCategoryNames = getConfig('latex.enabledReplacements', [
+  const enabledCategoryNames = getConfig('texra.latex.enabledReplacements', [
     'latex_spacing',
     'equations',
     'sections',
@@ -156,7 +156,7 @@ export function getAllReplacements(): ReplacementCategory {
     'gptness',
     'latexdiff',
   ]);
-  const customReplacements = getConfig('latex.customReplacements', {});
+  const customReplacements = getConfig('texra.latex.customReplacements', {});
 
   // Filter predefined categories based on user configuration
   const enabledCategories = NON_REGEX_CATEGORIES.filter((category) =>
@@ -186,7 +186,7 @@ export function getAllReplacements(): ReplacementCategory {
  * Also includes custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getConfig('latex.enabledReplacementsRegex', [
+  const enabledCategoryNames = getConfig('texra.latex.enabledReplacementsRegex', [
     'fenced_latex_blocks',
     'inline_math',
     'tikz',
@@ -195,7 +195,7 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
     'equation_style',
     'personal_style_contextual',
   ]);
-  const customReplacements = getConfig('latex.customReplacementsRegex', {});
+  const customReplacements = getConfig('texra.latex.customReplacementsRegex', {});
 
   // Filter predefined categories based on user configuration
   let enabledCategories = REGEX_CATEGORIES.filter((category) =>

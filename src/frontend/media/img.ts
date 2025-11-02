@@ -24,7 +24,7 @@ logger.initialize(CHANNEL);
  * @returns Maximum image dimension (defaults to 2000)
  */
 function getMaxImageDimension(): number {
-  return getConfig<number>('maxImageDimension', 2000);
+  return getConfig<number>('texra.maxImageDimension', 2000);
 }
 
 // Define the temporary directory path

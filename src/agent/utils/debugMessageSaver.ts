@@ -69,7 +69,7 @@ export async function maybeSaveDebugObject({
   context,
   fileOptions = {},
 }: SaveDebugParams): Promise<void> {
-  const shouldSave = getConfig<boolean>('debug.saveDebugObjects', false);
+  const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
   if (!shouldSave) {
     return;
   }
