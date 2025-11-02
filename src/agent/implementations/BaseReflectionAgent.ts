@@ -39,7 +39,6 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { LatexMediaManager } from '@latex';
 
 // Local imports - logging
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - model definitions
 import type { ToolDefinition } from '@model';
@@ -55,12 +54,10 @@ import { WorkspaceFS } from '@utils/files';
  *
  * @property outputFile - The path to the file where the round's output will be saved.
  * @property endTurn - A flag indicating whether the current turn should be ended after processing.
- * @property processGroupId - (Optional) An identifier for grouping related processes, useful for tracking or managing outputs.
  */
 export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
-  processGroupId?: string;
 }
 
 export interface ReflectionRoundContext {
@@ -92,7 +89,6 @@ interface RoundPipelineContext {
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
-  roundGroupId: string;
 }
 
 /**
@@ -225,24 +221,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
-    const { outputFile, endTurn, processGroupId } = options;
+    const { outputFile, endTurn } = options;
+    const activeGroupId = this.logger.getActiveGroupId();
     try {
-      // Instead of creating a new group, use the round group directly
-      // this.logger.debug(
-      //   `State global: ${JSON.stringify(stateGlobal)}`,
-      //   processGroupId,
-      // );
-
       await this.handleOutput(currRound, stateRound, stateGlobal, options);
 
-      this.logger.debug(`Completed round ${currRound}`, processGroupId);
+      this.logger.debug(`Completed round ${currRound}`, activeGroupId);
     } catch (error) {
       throw error;
     }
 
     await this.outputHandler.finalizeRound(outputFile, currRound, {
       endTurn,
-      groupId: processGroupId,
     });
 
     const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
@@ -266,9 +256,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
+    const { outputFile, endTurn } = options;
+    const activeGroupId = this.logger.getActiveGroupId();
     // Record usage statistics at the end of each round
-    await this.trackRoundUsage(stateGlobal, processGroupId);
+    await this.trackRoundUsage(stateGlobal);
 
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
@@ -282,12 +273,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         await this.outputHandler.diffManager.handleLatexdiffofOutput(
           currRound,
           mapping,
-          processGroupId,
         );
       } else {
         this.logger.debug(
           `Skipping latexdiff for round ${currRound} - base files missing`,
-          processGroupId,
+          activeGroupId,
         );
       }
     }
@@ -307,7 +297,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param preparedMessages - Messages prepared for the model before execution.
    * @param prefill - Initial text inserted into the model response buffer.
    * @param outputPath - Filesystem path where model output for this round is stored.
-   * @param roundGroupId - Identifier for grouping related log and output operations.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
   private async runRoundPipeline({
@@ -318,7 +307,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     preparedMessages,
     prefill,
     outputPath,
-    roundGroupId,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
@@ -328,7 +316,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         toolState,
         outputPath,
         prefill,
-        roundGroupId,
       );
 
     if (!endTurn) {
@@ -348,14 +335,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         {
           outputFile: outputPath,
           endTurn: cycleResult.endTurn,
-          processGroupId: roundGroupId,
         },
       );
 
       if (roundIndex === 0) {
         this.logger.debug(
           `stateGlobal: ${JSON.stringify(cycleResult.stateGlobal)}`,
-          roundGroupId,
         );
       }
 
@@ -376,7 +361,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       {
         outputFile: outputPath,
         endTurn,
-        processGroupId: roundGroupId,
       },
     );
 
@@ -409,7 +393,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     _stateGlobal: AgentStateGlobal,
     messages: any[],
     toolState: ToolState,
-    roundGroupId: string,
   ): Promise<{
     stateRound: AgentStateRound;
     preparedMessages: any[];
@@ -441,11 +424,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           this.agentConfig.agent,
           this.executionId,
         );
-        this.logger.info(
-          `Saved input prompt to ${promptPath}`,
-          roundGroupId,
-          MESSAGE_TYPES.DEFAULT,
-        );
+        this.logger.info(`Saved input prompt to ${promptPath}`);
       }
 
       const initialMessages = await this.modelHandler.initializeMessages(
@@ -500,7 +479,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private async prepareToolState(
     currRound: number,
     toolState: ToolState,
-    roundGroupId: string,
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
@@ -527,7 +505,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.agentConfig.toolConfig,
         this.modelHandler.capabilities.supportsVision,
         extraMedia,
-        roundGroupId,
       );
       return;
     }
@@ -549,7 +526,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       toolState,
       this.agentConfig.toolConfig,
       this.modelHandler.capabilities.supportsVision,
-      roundGroupId,
     );
   }
 
@@ -561,21 +537,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new ToolState();
 
-    return this.withRoundGroup(`r${roundIndex}`, async (roundGroupId) => {
+    return this.withRoundGroup(`r${roundIndex}`, async (_roundGroupId) => {
       const shared: ReflectionRoundShared = {
         runtime: {
           toolState,
         },
         hooks: {
           prepareToolState: () =>
-            this.prepareToolState(roundIndex, toolState, roundGroupId),
+            this.prepareToolState(roundIndex, toolState),
           prepareRoundContext: () =>
             this.prepareRoundContext(
               roundIndex,
               globalState,
               messages,
               toolState,
-              roundGroupId,
             ),
           runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
             this.runRoundPipeline({
@@ -586,7 +561,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               preparedMessages,
               prefill,
               outputPath: this.outputFile[roundIndex],
-              roundGroupId,
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,
