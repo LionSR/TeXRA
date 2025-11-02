@@ -118,7 +118,7 @@ export class OutputHandler implements IOutputHandler {
     if (!this.roundFileInfos[round]) {
       this.roundFileInfos[round] = [];
     }
-    if (!Object.prototype.hasOwnProperty.call(this.rawOutputs, round)) {
+    if (!(round in this.rawOutputs)) {
       this.rawOutputs[round] = null;
     }
     return this.outputFiles[round];

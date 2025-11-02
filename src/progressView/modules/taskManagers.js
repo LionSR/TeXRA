@@ -133,26 +133,12 @@ export class TaskGroupDomManager {
    * @param {string} endTime - End time (optional)
    */
   updateGroup(update) {
-    if (!update || typeof update !== 'object') {
-      return;
-    }
-
-    const { groupId, updates = {} } = update;
-    if (!groupId) {
-      return;
-    }
-
+    const { groupId, updates = {} } = update ?? {};
     const group = progressViewState.taskGroups.get(groupId);
     if (!group) return;
 
-    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'status',
-    );
-    const hasEndTimeUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'endTime',
-    );
+    const hasStatusUpdate = 'status' in updates;
+    const hasEndTimeUpdate = 'endTime' in updates;
 
     if (hasStatusUpdate && updates.status) {
       group.status = updates.status;

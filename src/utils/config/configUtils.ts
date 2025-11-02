@@ -86,19 +86,19 @@ export async function updateConfig<T>(
 export const setConfig = updateConfig;
 
 /**
- * Register a listener for configuration changes on the given keys.
+ * Register a listener for configuration changes on the given key(s).
  *
  * @param context Extension context used to dispose the listener
- * @param keys Configuration keys to watch
+ * @param keys Configuration key or array of keys to watch
  * @param callback Callback executed when any watched key changes
  * @returns Disposable for the registered listener
  */
 export function watchConfig(
   context: vscode.ExtensionContext,
-  keys: string | string[],
+  keys: string | readonly string[],
   callback: () => void,
 ): vscode.Disposable {
-  const keyArray = Array.isArray(keys) ? keys : [keys];
+  const keyArray = [keys].flat();
 
   const disposable = vscode.workspace.onDidChangeConfiguration((e) => {
     if (keyArray.some((key) => e.affectsConfiguration(key))) {

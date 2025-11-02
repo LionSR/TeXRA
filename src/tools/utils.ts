@@ -114,11 +114,11 @@ export function formatToolOutput(
   content: string | string[] | null,
   noMatchesText: string = '(no entries)',
 ): string {
-  if (!content || (Array.isArray(content) && content.length === 0)) {
+  const lines = Array.isArray(content) ? content : content ? [content] : [];
+  if (lines.length === 0) {
     return `${header}\n${noMatchesText}`;
   }
-  const lines = Array.isArray(content) ? content.join('\n') : content;
-  return `${header}\n${lines}`;
+  return `${header}\n${lines.join('\n')}`;
 }
 
 /**

@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
@@ -61,6 +64,26 @@ async function maybeSaveDebug(
   });
 }
 
+// Zod schemas for tool call validation
+const ToolCallIdSchema = z.string().min(1, 'Tool call ID cannot be empty');
+
+const ToolCallSchema = z.object({
+  call_id: z.string().optional(),
+  id: z.string().optional(),
+  tool_use_id: z.string().optional(),
+  tool_call_id: z.string().optional(),
+  name: z.string().optional(),
+  input: z.any().optional(),
+  args: z.any().optional(),
+  arguments: z.any().optional(),
+  function: z
+    .object({
+      name: z.string().optional(),
+      arguments: z.any().optional(),
+    })
+    .optional(),
+});
+
 interface ToolValidationDiagnostics {
   type: 'validation_error';
   issues: any;
@@ -79,14 +102,14 @@ function normalizeToolCallError(
 ): { message: string; diagnostics?: ToolValidationDiagnostics } {
   if (error && typeof error === 'object' && 'issues' in error) {
     const zodError = error as { issues?: any[] };
-    const issues = Array.isArray(zodError.issues) ? zodError.issues : [];
+    const issues = [zodError.issues].flat().filter(Boolean);
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: 'validation_error',
         issues,
         formatted: issues.map((issue) => ({
-          path: Array.isArray(issue.path) ? issue.path.join('.') : '',
+          path: [issue?.path].flat().join('.'),
           message: issue.message,
           expected: issue.expected,
           received: issue.received,
@@ -105,27 +128,20 @@ function normalizeToolCallError(
 }
 
 function extractToolCallId(parsed: any): string {
+  const validated = ToolCallSchema.parse(parsed);
   const rawId =
-    parsed?.call_id ??
-    parsed?.id ??
-    parsed?.tool_use_id ??
-    parsed?.tool_call_id;
+    validated.call_id ??
+    validated.id ??
+    validated.tool_use_id ??
+    validated.tool_call_id;
 
-  if (rawId === undefined || rawId === null) {
+  if (!rawId) {
     throw new Error(
       `Tool JSON missing call identifier: ${JSON.stringify(parsed)}`,
     );
   }
 
-  const trimmed =
-    typeof rawId === 'string' ? rawId.trim() : String(rawId).trim();
-  if (!trimmed) {
-    throw new Error(
-      `Tool JSON contains blank call identifier: ${JSON.stringify(parsed)}`,
-    );
-  }
-
-  return trimmed;
+  return ToolCallIdSchema.parse(rawId);
 }
 
 type ToolDispatchErrorResult = {

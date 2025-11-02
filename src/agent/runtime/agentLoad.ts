@@ -254,16 +254,14 @@ export async function loadAgentSettingAndPrompts(
 
     // Normalize legacy userReflect field by merging into userRequest
     if ('userReflect' in prompts && prompts.userReflect) {
-      const userRequest = Array.isArray(prompts.userRequest)
-        ? prompts.userRequest
-        : prompts.userRequest
-          ? [prompts.userRequest]
-          : [];
-      const userReflect = Array.isArray(prompts.userReflect)
-        ? prompts.userReflect
-        : [prompts.userReflect];
+      const userRequest = [prompts.userRequest]
+        .flat()
+        .filter((x): x is string => Boolean(x));
+      const userReflect = [prompts.userReflect]
+        .flat()
+        .filter((x): x is string => Boolean(x));
 
-      prompts.userRequest = [...userRequest, ...userReflect].filter(Boolean);
+      prompts.userRequest = [...userRequest, ...userReflect];
       delete (prompts as any).userReflect;
 
       // Show warning for legacy userReflect field

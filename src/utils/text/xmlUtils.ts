@@ -292,8 +292,7 @@ export function filterTagsFromText(
   content: string,
   tags: string | string[],
 ): string {
-  const tagArray = typeof tags === 'string' ? [tags] : tags;
-  return tagArray.reduce((result, tag) => {
+  return [tags].flat().reduce((result, tag) => {
     const pattern = new RegExp(`<${tag}>.*?</${tag}>\\s*`, 'gs');
     return result.replace(pattern, '');
   }, content);
@@ -307,28 +306,14 @@ export function extractContentFromXMLbyTag(
   root: Record<string, any>,
   documentTag: string,
 ): string | null {
-  if (!root || typeof root !== 'object') {
-    logger.error(
-      CHANNEL,
-      `Invalid root object. Structure: ${getObjectStructure(root)}`,
-    );
-    return null;
+  const content = root?.[documentTag];
+  if (typeof content === 'string') {
+    return content.trim();
   }
-
-  if (documentTag in root) {
-    const content = root[documentTag];
-    if (typeof content === 'string') {
-      return content.trim();
-    }
-    logger.error(
-      CHANNEL,
-      `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
-    );
-  }
-
+  
   logger.error(
     CHANNEL,
-    `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
+    `No valid ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
   );
   return null;
 }
@@ -342,33 +327,12 @@ export function extractContentFromXMLbyTagMultiple(
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
-    if (!root || typeof root !== 'object') {
-      logger.error(
-        CHANNEL,
-        `Invalid root object. Structure: ${getObjectStructure(root)}`,
-      );
-      return null;
-    }
-
-    if (documentTag in root) {
-      const container = root[documentTag];
-      if (
-        container &&
-        typeof container === 'object' &&
-        'document' in container
-      ) {
-        const documents = container.document;
-        if (Array.isArray(documents)) {
-          return documents.map((doc) => ({
-            content: doc.content?.trim() || '',
-            name: doc.name,
-          }));
-        }
-        logger.error(
-          CHANNEL,
-          `Document property is not an array in multiple document case. Structure: ${getObjectStructure(container)}`,
-        );
-      }
+    const documents = root?.[documentTag]?.document;
+    if (Array.isArray(documents)) {
+      return documents.map((doc) => ({
+        content: doc?.content?.trim() ?? '',
+        name: doc?.name ?? '',
+      }));
     }
 
     logger.error(

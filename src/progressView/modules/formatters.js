@@ -482,11 +482,10 @@ export class LogEntryFormatter {
       typeof content === 'string' && content.length > 0
         ? decodeHtml(content)
         : '';
-    const hasStructuredData =
-      structuredData &&
-      typeof structuredData === 'object' &&
-      !Array.isArray(structuredData);
-    let parsed = hasStructuredData ? structuredData : null;
+    let parsed =
+      structuredData && typeof structuredData === 'object' && !Array.isArray(structuredData)
+        ? structuredData
+        : null;
 
     if (!parsed && rawContent) {
       try {
@@ -526,12 +525,7 @@ export class LogEntryFormatter {
       return element;
     }
 
-    const toolName =
-      typeof parsed.tool === 'string'
-        ? parsed.tool.trim()
-        : typeof parsed.name === 'string'
-          ? parsed.name.trim()
-          : '';
+    const toolName = (parsed.tool ?? parsed.name)?.trim?.() ?? '';
 
     const outputCandidate =
       parsed.output &&
@@ -544,33 +538,20 @@ export class LogEntryFormatter {
           ? parsed.result
           : {};
 
-    const summaryText =
-      typeof outputCandidate.summary === 'string' &&
-      outputCandidate.summary.trim()
-        ? outputCandidate.summary.trim()
-        : typeof parsed.summary === 'string' && parsed.summary.trim()
-          ? parsed.summary.trim()
-          : '';
+    const summaryText = (outputCandidate.summary ?? parsed.summary)?.trim?.() ?? '';
 
     const errorText =
-      typeof outputCandidate.error === 'string'
-        ? outputCandidate.error
-        : typeof parsed.error === 'string'
-          ? parsed.error
-          : '';
+      typeof (outputCandidate.error ?? parsed.error) === 'string'
+        ? (outputCandidate.error ?? parsed.error)
+        : '';
 
-    let outputText = '';
-    if (typeof outputCandidate.output === 'string') {
-      outputText = outputCandidate.output;
-    } else if (typeof parsed.output === 'string') {
-      outputText = parsed.output;
-    }
+    const outputText =
+      typeof (outputCandidate.output ?? parsed.output) === 'string'
+        ? (outputCandidate.output ?? parsed.output)
+        : '';
 
     const isError = Boolean(
-      (typeof outputCandidate.isError === 'boolean' &&
-        outputCandidate.isError) ||
-        (typeof parsed.isError === 'boolean' && parsed.isError) ||
-        (typeof errorText === 'string' && errorText.trim().length > 0),
+      outputCandidate.isError ?? parsed.isError ?? errorText?.trim?.(),
     );
 
     const headerSummary =
@@ -664,7 +645,7 @@ export class LogEntryFormatter {
       `);
     }
 
-    if (outputCandidate && typeof outputCandidate.system === 'string') {
+    if (outputCandidate?.system) {
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -675,7 +656,7 @@ export class LogEntryFormatter {
       `);
     }
 
-    if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
+    if (outputCandidate?.base64Image) {
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -1162,9 +1143,7 @@ export class LogEntryFormatter {
 
     const textElem = element.querySelector('.native-status-text');
     if (textElem) {
-      const decodedContent =
-        typeof content === 'string' ? decodeHtml(content) : '';
-      textElem.textContent = decodedContent;
+      textElem.textContent = decodeHtml(content ?? '');
     }
 
     return element;
@@ -1186,9 +1165,7 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.user-message-content');
     if (contentElem) {
-      const decodedContent =
-        typeof content === 'string' ? decodeHtml(content) : '';
-      contentElem.textContent = decodedContent;
+      contentElem.textContent = decodeHtml(content ?? '');
       if (logId) contentElem.dataset.logId = logId;
     }
 

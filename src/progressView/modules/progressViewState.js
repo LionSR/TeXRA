@@ -1,6 +1,20 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
+
+// Zod schema for toggle state entries
+const ToggleStateEntrySchema = z.tuple([z.string(), z.boolean()]);
+const ToggleStatesSchema = z.array(ToggleStateEntrySchema);
+
+// Zod schema for task group updates
+const TaskGroupUpdateSchema = z.object({
+  status: z.string().optional(),
+  endTime: z.number().nullable().optional(),
+  usage: z.any().optional(),
+});
 
 /**
  * Manages task groups in the progress view.
@@ -12,22 +26,11 @@ class TaskGroups {
   }
 
   get(id) {
-    if (!id) {
-      console.error('TaskGroups.get: id is required');
-      return null;
-    }
-    return this.groups.get(id);
+    return this.groups.get(id) ?? null;
   }
 
   set(id, group) {
-    if (!id) {
-      console.error('TaskGroups.set: id is required');
-      return;
-    }
-    if (!group || typeof group !== 'object') {
-      console.error('TaskGroups.set: group must be an object');
-      return;
-    }
+    if (!id || !group) return;
     this.groups.set(id, group);
     this._cachedTotals = null; // Invalidate cache
   }
@@ -46,43 +49,28 @@ class TaskGroups {
    * @param {{ groupId: string, updates?: Object }} payload
    */
   update(payload) {
-    if (!payload || typeof payload !== 'object') {
-      console.error('TaskGroups.update: payload must be an object');
-      return;
-    }
-
-    const { groupId, updates = {} } = payload;
-    if (!groupId) {
-      console.error('TaskGroups.update: groupId is required');
-      return;
-    }
-
+    const { groupId, updates = {} } = payload ?? {};
     const group = this.groups.get(groupId);
-    if (!group) {
-      console.error(`TaskGroups.update: group not found for id ${groupId}`);
-      return;
-    }
+    if (!group) return;
 
-    const hasStatusUpdate = Object.prototype.hasOwnProperty.call(
-      updates,
-      'status',
-    );
-    if (hasStatusUpdate && updates.status) {
-      group.status = updates.status;
-    }
-    if (
-      Object.prototype.hasOwnProperty.call(updates, 'endTime') &&
-      updates.endTime !== undefined &&
-      updates.endTime !== null
-    ) {
-      group.endTime = updates.endTime;
-    }
-    if (Object.prototype.hasOwnProperty.call(updates, 'usage')) {
-      group.usage = updates.usage;
-    }
+    try {
+      const validated = TaskGroupUpdateSchema.parse(updates);
+      
+      if (validated.status) {
+        group.status = validated.status;
+      }
+      if (validated.endTime !== undefined && validated.endTime !== null) {
+        group.endTime = validated.endTime;
+      }
+      if (validated.usage !== undefined) {
+        group.usage = validated.usage;
+      }
 
-    this.groups.set(groupId, group);
-    this._cachedTotals = null; // Invalidate cache
+      this.groups.set(groupId, group);
+      this._cachedTotals = null;
+    } catch (error) {
+      console.error('Invalid task group update:', error);
+    }
   }
 }
 
@@ -96,18 +84,9 @@ class ToggleStates {
   }
 
   set(id, collapsed) {
-    if (!id) {
-      console.error('ToggleStates.set: id is required');
-      return;
-    }
-    if (typeof collapsed !== 'boolean') {
-      console.error('ToggleStates.set: collapsed must be a boolean');
-      return;
-    }
+    if (!id || typeof collapsed !== 'boolean') return;
     this.states.set(id, collapsed);
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    this.saveCallback?.();
   }
 
   get(id) {
@@ -115,25 +94,13 @@ class ToggleStates {
   }
 
   clearSelection(ids) {
-    if (!Array.isArray(ids)) {
-      console.error('ToggleStates.clearSelection: ids must be an array');
-      return;
-    }
-    ids.forEach((id) => {
-      if (id) {
-        this.states.delete(id);
-      }
-    });
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    [ids].flat().filter(Boolean).forEach((id) => this.states.delete(id));
+    this.saveCallback?.();
   }
 
   clearAll() {
     this.states.clear();
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    this.saveCallback?.();
   }
 
   /** Get all entries for serialization */
@@ -160,25 +127,13 @@ class StreamStatuses {
   }
 
   set(stream, status) {
-    if (!stream) {
-      console.error('StreamStatuses.set: stream is required');
-      return;
-    }
-    if (!status) {
-      console.error('StreamStatuses.set: status is required');
-      return;
-    }
-    if (typeof status !== 'string') {
-      console.error('StreamStatuses.set: status must be a string');
-      return;
-    }
-    if (status !== 'ready') {
+    if (stream && status && typeof status === 'string' && status !== 'ready') {
       this.statuses.set(stream, status);
     }
   }
 
   delete(stream) {
-    this.statuses.delete(stream);
+    if (stream) this.statuses.delete(stream);
   }
 }
 
@@ -191,11 +146,7 @@ class ExecutionIdAvailability {
   }
 
   setAvailable(stream, hasExecutionId) {
-    if (!stream) {
-      console.error('ExecutionIdAvailability.setAvailable: stream is required');
-      return;
-    }
-    this.availability.set(stream, Boolean(hasExecutionId));
+    if (stream) this.availability.set(stream, Boolean(hasExecutionId));
   }
 
   hasExecutionId(stream) {
@@ -203,10 +154,7 @@ class ExecutionIdAvailability {
   }
 
   delete(stream) {
-    if (!stream) {
-      return;
-    }
-    this.availability.delete(stream);
+    if (stream) this.availability.delete(stream);
   }
 
   clear() {
@@ -251,51 +199,23 @@ export class ProgressViewState {
   /** Load saved state from VS Code storage. */
   load() {
     const previous = this.stateManager.getState();
-    if (previous.groupToggleStates) {
+    if (!previous.groupToggleStates) return;
+
+    try {
+      // Handle legacy string format
       let data = previous.groupToggleStates;
-      if (!Array.isArray(data) && typeof data === 'string') {
-        try {
-          const parsed = JSON.parse(data);
-          if (Array.isArray(parsed)) {
-            data = parsed;
-          } else {
-            console.error(
-              'Failed to restore group toggle states: parsed data is not an array',
-            );
-            return;
-          }
-        } catch (error) {
-          console.error(
-            'Failed to restore group toggle states: could not parse legacy string data',
-            error,
-          );
-          return;
-        }
+      if (typeof data === 'string') {
+        data = JSON.parse(data);
       }
 
-      if (!Array.isArray(data)) {
-        console.error(
-          'Failed to restore group toggle states: data is not an array',
-        );
-        return;
-      }
-
-      const hasValidEntries = data.every((entry) => {
-        if (!Array.isArray(entry) || entry.length !== 2) {
-          return false;
-        }
-        const [id, collapsed] = entry;
-        return typeof id === 'string' && typeof collapsed === 'boolean';
-      });
-
-      if (!hasValidEntries) {
-        console.error(
-          'Failed to restore group toggle states: invalid entry format',
-        );
-        return;
-      }
-
-      this.toggleStates.load(data);
+      // Validate with Zod
+      const validated = ToggleStatesSchema.parse(data);
+      this.toggleStates.load(validated);
+    } catch (error) {
+      console.error(
+        'Failed to restore group toggle states:',
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
