@@ -186,16 +186,22 @@ export function getAllReplacements(): ReplacementCategory {
  * Also includes custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getConfig('texra.latex.enabledReplacementsRegex', [
-    'fenced_latex_blocks',
-    'inline_math',
-    'tikz',
-    'parentheses',
-    'latexdiff_markup',
-    'equation_style',
-    'personal_style_contextual',
-  ]);
-  const customReplacements = getConfig('texra.latex.customReplacementsRegex', {});
+  const enabledCategoryNames = getConfig(
+    'texra.latex.enabledReplacementsRegex',
+    [
+      'fenced_latex_blocks',
+      'inline_math',
+      'tikz',
+      'parentheses',
+      'latexdiff_markup',
+      'equation_style',
+      'personal_style_contextual',
+    ],
+  );
+  const customReplacements = getConfig(
+    'texra.latex.customReplacementsRegex',
+    {},
+  );
 
   // Filter predefined categories based on user configuration
   let enabledCategories = REGEX_CATEGORIES.filter((category) =>
