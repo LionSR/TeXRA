@@ -38,7 +38,8 @@ export class ModelFactory {
   static createHandler(config: ModelConfig): ModelHandler {
     // Use OpenRouter if model requires it or if explicitly configured in toolConfig
     const useOpenRouter =
-      config.openRouterOnly || getConfig<boolean>('model.useOpenRouter', false);
+      config.openRouterOnly ||
+      getConfig<boolean>('texra.model.useOpenRouter', false);
 
     if (useOpenRouter) {
       // Set OpenRouter model name if not provided
@@ -55,7 +56,7 @@ export class ModelFactory {
 
     // Check for OpenAI Responses API usage
     const useOpenAIResponsesAPI = getConfig<boolean>(
-      'model.useOpenAIResponsesAPI',
+      'texra.model.useOpenAIResponsesAPI',
       false,
     );
     if (
