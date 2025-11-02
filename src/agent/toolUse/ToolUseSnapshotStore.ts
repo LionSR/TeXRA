@@ -132,7 +132,7 @@ export const ToolUseSnapshotStore = {
    * Initializes snapshot persistence: ensures the storage directory exists,
    * cleans up expired snapshots, and migrates legacy snapshot formats.
    * Safe to call multiple times.
-  */
+   */
   async initialize(): Promise<void> {
     await ensureInitialized();
   },
@@ -166,10 +166,7 @@ export const ToolUseSnapshotStore = {
     } as const;
 
     const validated = ToolUseSessionSnapshotSchema.parse(snapshot);
-    await StorageFS.writeJson(
-      getSnapshotPath(payload.executionId),
-      validated,
-    );
+    await StorageFS.writeJson(getSnapshotPath(payload.executionId), validated);
   },
 
   /**

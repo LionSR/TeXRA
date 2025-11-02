@@ -31,7 +31,9 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     // Get latexindent config from settings
-    const latexindentConfig = getConfig<string>('texra.latex.latexindentConfig');
+    const latexindentConfig = getConfig<string>(
+      'texra.latex.latexindentConfig',
+    );
 
     // Build command array - note we're using -w (overwrite) and -s (silent)
     const args = ['-w', '-s'];
