@@ -4,7 +4,7 @@ import { StatePersistenceManager } from '../persistence/StatePersistenceManager'
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Types
@@ -21,13 +21,13 @@ export class OutputFilesManager extends PersistentMapManager<
 > {
   private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
     new Map();
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
   private totalFilesProcessed = 0;
   private totalFilesRemoved = 0;
 
   constructor(persistence: StatePersistenceManager) {
     super(persistence, WorkspaceStateKey.OUTPUT_FILES);
-    this.logger = new AgentLogger('OutputFilesManager');
+    this.logger = createChannelLogger('OutputFilesManager');
   }
 
   /** Add output files for a stream and round */

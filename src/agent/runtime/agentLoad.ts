@@ -125,6 +125,13 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   return settings;
 }
 
+function mergeAgentBlocks<T>(
+  base: Partial<T>,
+  override: Partial<T>,
+): Partial<T> {
+  return deepmerge(base, override, { arrayMerge: (_dest, source) => source });
+}
+
 export async function loadAgentSettingAndPrompts(
   resolution: AgentPathResolution,
   options?: LoadAgentOptions,
@@ -152,8 +159,6 @@ export async function loadAgentSettingAndPrompts(
     let prompts: Partial<AgentPrompt> = {};
 
     if (parent) {
-      // Load parent settings and prompts recursively
-      // Note: The 'name' of the parent agent isn't directly used to override the current agent's settings block structure.
       const parentResolution = await resolveAgentDefinitionInDirectory(
         resolution.directory,
         resolution.source,
@@ -166,26 +171,11 @@ export async function loadAgentSettingAndPrompts(
       }
       const [parentSettings, parentPrompts] =
         await loadAgentSettingAndPrompts(parentResolution);
-
-      // Get current agent's specific settings and prompts from its YAML
-      const agentOwnSettings = config.settings;
-      const agentOwnPrompts = config.prompts;
-
-      // Merge with parent settings and prompts
-      settings = deepmerge(parentSettings, agentOwnSettings, {
-        arrayMerge: (_d, s) => s,
-      });
-      prompts = deepmerge(parentPrompts, agentOwnPrompts, {
-        arrayMerge: (_d, s) => s,
-      });
+      settings = mergeAgentBlocks(parentSettings, config.settings);
+      prompts = mergeAgentBlocks(parentPrompts, config.prompts);
     } else {
-      // No inheritance, just take own settings and prompts
-      settings = deepmerge({}, config.settings, {
-        arrayMerge: (_d, s) => s,
-      });
-      prompts = deepmerge({}, config.prompts, {
-        arrayMerge: (_d, s) => s,
-      });
+      settings = mergeAgentBlocks({}, config.settings);
+      prompts = mergeAgentBlocks({}, config.prompts);
     }
 
     ensureAgentTypeForSource(settings, resolution.source);

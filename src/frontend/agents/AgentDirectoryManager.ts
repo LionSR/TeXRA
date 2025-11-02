@@ -3,21 +3,31 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { getConfig, updateConfig } from '@utils/config';
+import { getConfig, updateConfig, watchConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
-import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';
 logger.initialize(CHANNEL);
 const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
+const CustomAgentDirectorySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine(path.isAbsolute, {
+    message: 'Custom agents directory must be an absolute path.',
+  });
+
 export class AgentDirectoryManager {
   private context: vscode.ExtensionContext | undefined;
+  private cachedCustomDir: string | undefined;
+  private hasLoadedCustomDir = false;
 
   /**
    * Ensure a built-in agents directory exists and return its path.
@@ -37,6 +47,10 @@ export class AgentDirectoryManager {
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
     StorageFS.initialize(context);
+    watchConfig(context, 'texra.explorer.agentsDirectory', () => {
+      void this.refreshCustomDirectory();
+    });
+    void this.refreshCustomDirectory();
   }
 
   private ensureInitialized(): vscode.ExtensionContext {
@@ -61,18 +75,7 @@ export class AgentDirectoryManager {
   private async ensureDefaultCustomDir(): Promise<string> {
     this.ensureInitialized();
 
-    try {
-      await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.error(
-        CHANNEL,
-        `Failed to create default custom agents directory: ${message}`,
-      );
-      throw new Error(
-        'Unable to create custom agents directory. Please check permissions.',
-      );
-    }
+    await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
 
     const defaultPath = GlobalStorageFS.fullPath(
       DEFAULT_CUSTOM_AGENTS_DIR_NAME,
@@ -84,59 +87,60 @@ export class AgentDirectoryManager {
     return defaultPath;
   }
 
-  private async resolveConfiguredCustomDir(
-    configuredPath: string,
-  ): Promise<string | undefined> {
-    if (!configuredPath) {
-      return undefined;
+  private async refreshCustomDirectory(): Promise<void> {
+    if (!this.context) {
+      return;
     }
 
-    if (!path.isAbsolute(configuredPath)) {
-      logger.error(
-        CHANNEL,
-        `Custom agents directory must be an absolute path: ${configuredPath}`,
-      );
-      await showLoggedMessageWithDocs(
-        CHANNEL,
-        'Custom agents directory must be an absolute path',
-        'custom-agents',
-      );
-      return undefined;
+    const configured = getConfig<string | undefined>(
+      'texra.explorer.agentsDirectory',
+    );
+    const parsed = CustomAgentDirectorySchema.safeParse(configured ?? '');
+
+    if (!parsed.success) {
+      if (configured && configured.trim().length > 0) {
+        logger.warn(
+          CHANNEL,
+          `Ignoring invalid custom agents directory: ${configured}`,
+        );
+      }
+      this.cachedCustomDir = undefined;
+      this.hasLoadedCustomDir = true;
+      return;
     }
 
-    const parentDir = path.dirname(configuredPath);
+    const resolvedPath = parsed.data;
+    const parentDir = path.dirname(resolvedPath);
     const parentExists = await AbsoluteFS.exists(parentDir);
+
     if (!parentExists) {
-      logger.error(
+      logger.warn(
         CHANNEL,
-        `Parent directory does not exist for custom agents directory: ${parentDir}`,
+        `Ignoring custom agents directory because parent is missing: ${parentDir}`,
       );
-      await showLoggedMessageWithDocs(
-        CHANNEL,
-        'Parent directory for custom agents directory does not exist',
-        'custom-agents',
-      );
-      return undefined;
+      this.cachedCustomDir = undefined;
+      this.hasLoadedCustomDir = true;
+      return;
     }
 
-    await AbsoluteFS.ensureDir(configuredPath);
+    await AbsoluteFS.ensureDir(resolvedPath);
+    this.cachedCustomDir = resolvedPath;
+    this.hasLoadedCustomDir = true;
     logger.debug(
       CHANNEL,
-      `Using custom agents directory from setting: ${configuredPath}`,
+      `Using custom agents directory from setting: ${resolvedPath}`,
     );
-    return configuredPath;
   }
 
   async custom(): Promise<string> {
     this.ensureInitialized();
-    const configuredPath = getConfig<string>(
-      'texra.explorer.agentsDirectory',
-      '',
-    ).trim();
 
-    const resolvedPath = await this.resolveConfiguredCustomDir(configuredPath);
-    if (resolvedPath) {
-      return resolvedPath;
+    if (!this.hasLoadedCustomDir) {
+      await this.refreshCustomDirectory();
+    }
+
+    if (this.cachedCustomDir) {
+      return this.cachedCustomDir;
     }
 
     return this.ensureDefaultCustomDir();

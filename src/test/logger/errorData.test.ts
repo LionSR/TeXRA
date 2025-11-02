@@ -3,11 +3,11 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 
-describe('AgentLogger error data', () => {
+describe('ChannelLogger error data', () => {
   it('emits error data with stack', () => {
-    const logger = new AgentLogger('TestErrorLogger');
+    const logger = createChannelLogger('TestErrorLogger');
     const err = new Error('test failure');
     let captured: any;
     const off = bus.on('addLogMessage', (payload) => {

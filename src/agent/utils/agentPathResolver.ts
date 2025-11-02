@@ -38,16 +38,6 @@ const BASE_GLOB_OPTIONS: GlobOptionsWithFileTypesFalse = {
   nodir: true,
 };
 
-type AsyncFetcher = (
-  pattern: string,
-  options: GlobOptionsWithFileTypesFalse,
-) => Promise<string[]>;
-
-type SyncFetcher = (
-  pattern: string,
-  options: GlobOptionsWithFileTypesFalse,
-) => string[];
-
 function cleanDirectory(value?: string): string | undefined {
   if (!value) {
     return undefined;
@@ -118,29 +108,51 @@ function createResolution(
   } satisfies AgentPathResolution;
 }
 
-async function resolveWithAsyncFetcher(
+function* iterateSearchPatterns(
   agentName: string,
+  preferMultiple: boolean,
   candidates: AgentDirectoryCandidate[],
-  options: AgentDefinitionSearchOptions | undefined,
-  fetcher: AsyncFetcher,
-): Promise<AgentPathResolution | undefined> {
-  const preferMultiple = options?.preferMultiple ?? false;
+) {
   const candidateNames = buildCandidateNames(agentName, preferMultiple);
-
   for (const candidateName of candidateNames) {
     const pattern = `**/${candidateName}${YAML_EXTENSION}`;
     for (const candidate of candidates) {
-      const matches = await fetcher(pattern, {
-        ...BASE_GLOB_OPTIONS,
-        cwd: candidate.directory,
-      });
-      const match = matches[0];
-      if (match) {
-        const absolute = path.isAbsolute(match)
-          ? match
-          : path.join(candidate.directory, match);
-        return createResolution(absolute, candidate, preferMultiple);
-      }
+      yield { candidate, pattern } as const;
+    }
+  }
+}
+
+function normalizeMatch(
+  match: string,
+  candidate: AgentDirectoryCandidate,
+): string {
+  return path.isAbsolute(match) ? match : path.join(candidate.directory, match);
+}
+
+async function resolveWithFetcher(
+  agentName: string,
+  candidates: AgentDirectoryCandidate[],
+  options: AgentDefinitionSearchOptions | undefined,
+  fetcher: (
+    pattern: string,
+    options: GlobOptionsWithFileTypesFalse,
+  ) => Promise<string[]>,
+): Promise<AgentPathResolution | undefined> {
+  const preferMultiple = options?.preferMultiple ?? false;
+
+  for (const { candidate, pattern } of iterateSearchPatterns(
+    agentName,
+    preferMultiple,
+    candidates,
+  )) {
+    const matches = await fetcher(pattern, {
+      ...BASE_GLOB_OPTIONS,
+      cwd: candidate.directory,
+    });
+    const match = matches[0];
+    if (match) {
+      const absolute = normalizeMatch(match, candidate);
+      return createResolution(absolute, candidate, preferMultiple);
     }
   }
 
@@ -151,25 +163,26 @@ function resolveWithSyncFetcher(
   agentName: string,
   candidates: AgentDirectoryCandidate[],
   options: AgentDefinitionSearchOptions | undefined,
-  fetcher: SyncFetcher,
+  fetcher: (
+    pattern: string,
+    options: GlobOptionsWithFileTypesFalse,
+  ) => string[],
 ): AgentPathResolution | undefined {
   const preferMultiple = options?.preferMultiple ?? false;
-  const candidateNames = buildCandidateNames(agentName, preferMultiple);
 
-  for (const candidateName of candidateNames) {
-    const pattern = `**/${candidateName}${YAML_EXTENSION}`;
-    for (const candidate of candidates) {
-      const matches = fetcher(pattern, {
-        ...BASE_GLOB_OPTIONS,
-        cwd: candidate.directory,
-      });
-      const match = matches[0];
-      if (match) {
-        const absolute = path.isAbsolute(match)
-          ? match
-          : path.join(candidate.directory, match);
-        return createResolution(absolute, candidate, preferMultiple);
-      }
+  for (const { candidate, pattern } of iterateSearchPatterns(
+    agentName,
+    preferMultiple,
+    candidates,
+  )) {
+    const matches = fetcher(pattern, {
+      ...BASE_GLOB_OPTIONS,
+      cwd: candidate.directory,
+    });
+    const match = matches[0];
+    if (match) {
+      const absolute = normalizeMatch(match, candidate);
+      return createResolution(absolute, candidate, preferMultiple);
     }
   }
 
@@ -181,11 +194,8 @@ export async function resolveAgentDefinition(
   candidates: AgentDirectoryCandidate[],
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution | undefined> {
-  return resolveWithAsyncFetcher(
-    agentName,
-    candidates,
-    options,
-    (pattern, opts) => glob(pattern, opts),
+  return resolveWithFetcher(agentName, candidates, options, (pattern, opts) =>
+    glob(pattern, opts),
   );
 }
 

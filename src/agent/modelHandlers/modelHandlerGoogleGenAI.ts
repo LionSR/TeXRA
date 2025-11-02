@@ -45,7 +45,7 @@ import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
@@ -192,7 +192,10 @@ function ensureFunctionCallIdentifiers(call: FunctionCall): {
   };
 }
 
-function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
+function toGoogleRole(
+  role?: string,
+  logger?: ChannelLogger,
+): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
     return 'model';
   }
@@ -210,7 +213,7 @@ function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
 
 function convertMessagesToGoogleContentHistory(
   messages: Content[],
-  logger: AgentLogger,
+  logger: ChannelLogger,
 ): Content[] {
   const history: Content[] = [];
   let currentRole: GoogleRole | null = null;

@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - latex utils
 import { extractFigurePathsFromLatex } from './extractFigure';
@@ -19,7 +19,7 @@ import { WorkspaceFS } from '@utils/files';
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
-  constructor(private readonly logger: AgentLogger) {}
+  constructor(private readonly logger: ChannelLogger) {}
 
   private async attachTeXCount(
     files: string[],
@@ -52,37 +52,37 @@ export class LatexMediaManager {
           buildDir,
           true,
         );
-          if (compiled) {
-            const pdfFile = path.join(
-              buildDir,
-              path.basename(file).replace(/\.tex$/, '.pdf'),
-            );
-            if (await WorkspaceFS.exists(pdfFile)) {
-              try {
-                const stats = await WorkspaceFS.stat(pdfFile);
-                if (stats.size === 0) {
-                  this.logger.warn(
-                    `Compiled PDF is empty for ${file}: ${pdfFile}`,
-                    activeGroupId,
-                  );
-                  return undefined;
-                }
-              } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                this.logger.error(
-                  `Failed to stat compiled PDF ${pdfFile}: ${message}`,
+        if (compiled) {
+          const pdfFile = path.join(
+            buildDir,
+            path.basename(file).replace(/\.tex$/, '.pdf'),
+          );
+          if (await WorkspaceFS.exists(pdfFile)) {
+            try {
+              const stats = await WorkspaceFS.stat(pdfFile);
+              if (stats.size === 0) {
+                this.logger.warn(
+                  `Compiled PDF is empty for ${file}: ${pdfFile}`,
                   activeGroupId,
                 );
                 return undefined;
               }
-
-              this.logger.info(
-                `Compiled PDF for ${file}: ${pdfFile}`,
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              this.logger.error(
+                `Failed to stat compiled PDF ${pdfFile}: ${message}`,
                 activeGroupId,
               );
-              return pdfFile;
+              return undefined;
             }
+
+            this.logger.info(
+              `Compiled PDF for ${file}: ${pdfFile}`,
+              activeGroupId,
+            );
+            return pdfFile;
           }
+        }
         return undefined;
       }),
     );
@@ -195,11 +195,7 @@ export class LatexMediaManager {
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
-      await this.compileTikzFigures(
-        existingFiles,
-        toolState,
-        logTikzSummary,
-      );
+      await this.compileTikzFigures(existingFiles, toolState, logTikzSummary);
     }
 
     if (includePdfCompilation && cfg.autoCompileInputPdf) {

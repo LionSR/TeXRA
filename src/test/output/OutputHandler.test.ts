@@ -13,7 +13,7 @@ import { OutputHandler } from '@agent/output';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 class MockOutputHandler extends OutputHandler {
@@ -21,7 +21,7 @@ class MockOutputHandler extends OutputHandler {
   public validateCalled = false;
 
   constructor(setting: AgentSetting, config: AgentConfig) {
-    super(setting, config, 0, [], new AgentLogger('TestOutputHandler'));
+    super(setting, config, 0, [], createChannelLogger('TestOutputHandler'));
   }
 
   public override async gatherOutputFileInfo(round: number) {
@@ -138,7 +138,7 @@ describe('OutputHandler.getRoundMapping', () => {
       baseConfig,
       0,
       [path.join('workspace', 'chapter.tex')],
-      new AgentLogger('TestOutputHandlerMapping'),
+      createChannelLogger('TestOutputHandlerMapping'),
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
@@ -214,7 +214,7 @@ describe('OutputHandler XML summaries', () => {
       baseConfig,
       0,
       [],
-      new AgentLogger('TestXmlSummarySingle'),
+      createChannelLogger('TestXmlSummarySingle'),
     );
 
     handler.indentLatexFile = async () => {};
@@ -256,7 +256,7 @@ describe('OutputHandler XML summaries', () => {
       multiConfig,
       0,
       [],
-      new AgentLogger('TestXmlSummaryMulti'),
+      createChannelLogger('TestXmlSummaryMulti'),
     );
 
     handler.indentLatexFiles = async () => {};

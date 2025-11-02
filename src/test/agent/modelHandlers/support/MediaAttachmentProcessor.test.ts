@@ -13,14 +13,14 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelCapabilities,
 } from '@model/ModelConfig';
 import { AbsoluteFS } from '@utils/files';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<ChannelLogger> {
   channelId: string;
   debugMessages: string[];
   warnMessages: string[];
@@ -28,7 +28,7 @@ interface LoggerStub extends Partial<AgentLogger> {
   fileListEntries: MediaFileResult[][];
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: ChannelLogger; stub: LoggerStub } {
   const stub: LoggerStub = {
     channelId: 'media-test',
     debugMessages: [],
@@ -53,7 +53,7 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     getActiveGroupId: () => undefined,
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as ChannelLogger, stub };
 }
 
 describe('MediaAttachmentProcessor', () => {
@@ -94,7 +94,7 @@ describe('MediaAttachmentProcessor', () => {
   });
 
   function createProcessor(
-    logger: AgentLogger,
+    logger: ChannelLogger,
     capabilities: Partial<ModelCapabilities>,
     isOpenAIProvider: boolean = true,
   ): MediaAttachmentProcessor {

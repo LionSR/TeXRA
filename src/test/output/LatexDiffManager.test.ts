@@ -13,7 +13,7 @@ import { OutputHandler } from '@agent/output';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 
 describe('LatexDiffManager mapping reuse', () => {
   const baseSetting: AgentSetting = {
@@ -49,8 +49,8 @@ describe('LatexDiffManager mapping reuse', () => {
     },
   });
 
-  function createLogger(): AgentLogger {
-    const logger = new AgentLogger('LatexDiffManagerTest');
+  function createLogger(): ChannelLogger {
+    const logger = createChannelLogger('LatexDiffManagerTest');
     const noop = () => {};
     (logger as any).debug = noop;
     (logger as any).info = noop;

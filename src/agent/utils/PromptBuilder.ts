@@ -5,7 +5,7 @@ import type {
 } from '@agent/core/AgentDataclass';
 
 // Local imports - log
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - utilities
 import { getSystemPromptWithRules } from './promptHelpers';
@@ -32,7 +32,7 @@ export class PromptBuilder {
     private readonly agentPrompt: AgentPrompt,
     private readonly agentSetting: AgentWorkflowSetting,
     private readonly userVars: Record<string, any>,
-    private readonly logger?: AgentLogger,
+    private readonly logger?: ChannelLogger,
   ) {}
 
   /**

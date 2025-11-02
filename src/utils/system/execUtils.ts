@@ -28,6 +28,28 @@ function truncateOutput(
   return text;
 }
 
+function normalizeCommand(command: string | string[]): [string, string[]] {
+  if (Array.isArray(command)) {
+    if (command.length === 0) {
+      throw new Error('Invalid command: no executable found');
+    }
+    const [cmd, ...args] = command;
+    return [cmd, args];
+  }
+
+  const parsedArgs = shellParse(command);
+  const stringArgs = parsedArgs.filter(
+    (arg): arg is string => typeof arg === 'string',
+  );
+
+  if (stringArgs.length === 0) {
+    throw new Error('Invalid command: no executable found');
+  }
+
+  const [cmd, ...args] = stringArgs;
+  return [cmd, args];
+}
+
 /**
  * Execute external command with output handling and workspace path management.
  */
@@ -66,46 +88,17 @@ export async function executeCommand(
       reject: false,
     };
 
-    let stdout: string;
-    let stderr: string;
-    let exitCode: number;
-    let timedOut: boolean;
+    const [cmd, args] = normalizeCommand(command);
+    logger.debug(
+      options.channel ?? CHANNEL,
+      `Running command: ${cmd} ${args.join(' ')}`,
+    );
 
-    if (Array.isArray(command)) {
-      // Use execa directly with argument array to avoid shell injection
-      const [cmd, ...args] = command;
-      logger.debug(
-        options.channel ?? CHANNEL,
-        `Running command: ${cmd} ${args.join(' ')}`,
-      );
-      const result = await execa(cmd, args, execaOptions);
-      stdout = (result.stdout as string) ?? '';
-      stderr = (result.stderr as string) ?? '';
-      exitCode = result.exitCode ?? 1;
-      timedOut = result.timedOut ?? false;
-    } else {
-      // Parse string command into arguments using shell-quote to handle quoted arguments
-      const parsedArgs = shellParse(command);
-      // Filter out non-string elements (shell-quote can return objects for operators)
-      const stringArgs = parsedArgs.filter(
-        (arg): arg is string => typeof arg === 'string',
-      );
-
-      if (stringArgs.length === 0) {
-        throw new Error('Invalid command: no executable found');
-      }
-
-      const [cmd, ...args] = stringArgs;
-      logger.debug(
-        options.channel ?? CHANNEL,
-        `Running command: ${cmd} ${args.join(' ')}`,
-      );
-      const result = await execa(cmd, args, execaOptions);
-      stdout = (result.stdout as string) ?? '';
-      stderr = (result.stderr as string) ?? '';
-      exitCode = result.exitCode ?? 1;
-      timedOut = result.timedOut ?? false;
-    }
+    const result = await execa(cmd, args, execaOptions);
+    const stdout = (result.stdout as string) ?? '';
+    const stderr = (result.stderr as string) ?? '';
+    const exitCode = result.exitCode ?? 1;
+    const timedOut = result.timedOut ?? false;
 
     const shouldTruncate = options.truncate ?? false;
     const processOutput = (output: string | null) =>

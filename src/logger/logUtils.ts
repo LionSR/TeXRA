@@ -10,7 +10,6 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { getConfig } from '@utils/config';
 import { TaskGroup, LogMessageData } from './LogTypes';
 import { MESSAGE_TYPES, type MessageType } from './messageTypes';
-import { AgentLogger } from './AgentLogger';
 
 function isValidMessageType(type: unknown): type is MessageType {
   return Object.values(MESSAGE_TYPES).includes(type as MessageType);
@@ -69,6 +68,7 @@ class VSCodeTransport extends Transport {
   private isAgentChannel: boolean;
   private groups: Map<string, TaskGroup> = new Map();
   private activeGroupId?: string;
+  private debugMode: boolean;
 
   constructor(
     channel: vscode.OutputChannel,
@@ -80,6 +80,7 @@ class VSCodeTransport extends Transport {
     this.channel = channel;
     this.streamName = streamName;
     this.isAgentChannel = isAgentChannel;
+    this.debugMode = getCachedDebugMode();
   }
 
   log(info: any, callback: () => void) {
@@ -117,10 +118,7 @@ class VSCodeTransport extends Transport {
     const formattedMessage = `${emoji} [${timestamp}] ${channelPrefix}${message}`;
     this.channel.appendLine(formattedMessage);
 
-    if (
-      structuredData !== undefined &&
-      getConfig<boolean>('texra.logger.debugMode', false)
-    ) {
+    if (structuredData !== undefined && this.debugMode) {
       const dataString =
         typeof structuredData === 'string'
           ? structuredData
@@ -133,10 +131,7 @@ class VSCodeTransport extends Transport {
     level: string,
     messageType?: MessageType,
   ): boolean {
-    if (
-      level === 'debug' &&
-      !getConfig<boolean>('texra.logger.debugMode', false)
-    ) {
+    if (level === 'debug' && !this.debugMode) {
       return false;
     }
     if (messageType === MESSAGE_TYPES.INTERNAL) {
@@ -160,7 +155,7 @@ class VSCodeTransport extends Transport {
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
       : MESSAGE_TYPES.DEFAULT;
-    const isVerbose = getConfig<boolean>('texra.logger.debugMode', false);
+    const isVerbose = this.debugMode;
     const id = randomUUID();
     const numericTimestamp = new Date(timestamp).getTime();
     const logMessage = {
@@ -258,10 +253,20 @@ class VSCodeTransport extends Transport {
     }
   }
 
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+  }
+
   // Get a group by ID
   getGroup(groupId: string): TaskGroup | undefined {
     return this.groups.get(groupId);
   }
+}
+
+let cachedDebugMode = getConfig<boolean>('texra.logger.debugMode', false);
+
+function getCachedDebugMode(): boolean {
+  return cachedDebugMode;
 }
 
 // Map to store loggers for different categories
@@ -426,6 +431,167 @@ function getOrCreateLogger(channel: string, isAgent = false): winston.Logger {
   return channelLoggers.get(channel)!;
 }
 
+function summarizeFiles(files: unknown[]): string {
+  const count = files.length;
+  return `Loaded ${count} file${count === 1 ? '' : 's'}`;
+}
+
+function summarizeMissing(info: unknown): string {
+  const missing = (info as { missing?: unknown[] } | undefined)?.missing ?? [];
+  const count = Array.isArray(missing) ? missing.length : 0;
+  return `${count} output file${count === 1 ? '' : 's'} missing`;
+}
+
+function summarizeLatexDiff(results: unknown[]): string {
+  return `Latexdiff results: ${results.length}`;
+}
+
+function summarizeUsage(stats: {
+  inputTokens?: number;
+  outputTokens?: number;
+}): string {
+  return `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
+}
+
+export interface ChannelLogger {
+  readonly channelId: string;
+  readonly isAgentLogger: boolean;
+  debug(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+  info(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+  warn(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+  error(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+  fileList(files: unknown[], groupId?: string): void;
+  missingOutputs(info: unknown, groupId?: string): void;
+  latexDiff(results: unknown[], groupId?: string): void;
+  statistics(
+    stats: { inputTokens?: number; outputTokens?: number },
+    groupId?: string,
+  ): void;
+  userMessage(message: string, groupId?: string): void;
+  startGroup(
+    groupName: string,
+    id?: string,
+    parentGroupId?: string,
+  ): Promise<string>;
+  endGroup(groupId: string, status?: 'error' | 'stopped'): void;
+  getActiveGroupId(): string | undefined;
+  setActiveGroupId(groupId: string | undefined): void;
+}
+
+export function createChannelLogger(
+  channelId: string,
+  options: { isAgent?: boolean } = {},
+): ChannelLogger {
+  const { isAgent = false } = options;
+  initialize(channelId, isAgent);
+
+  const invoke = (
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ) => {
+    logWithGroup(
+      channelId,
+      level,
+      message,
+      groupId,
+      messageType,
+      isAgent,
+      data,
+    );
+  };
+
+  return {
+    channelId,
+    isAgentLogger: isAgent,
+    debug(message, groupId, messageType, data) {
+      invoke('debug', message, groupId, messageType, data);
+    },
+    info(message, groupId, messageType, data) {
+      invoke('info', message, groupId, messageType, data);
+    },
+    warn(message, groupId, messageType, data) {
+      invoke('warn', message, groupId, messageType, data);
+    },
+    error(message, groupId, messageType, data) {
+      invoke('error', message, groupId, messageType, data);
+    },
+    fileList(files, groupId) {
+      invoke(
+        'info',
+        summarizeFiles(files),
+        groupId,
+        MESSAGE_TYPES.FILE_LIST,
+        files,
+      );
+    },
+    missingOutputs(info, groupId) {
+      invoke(
+        'info',
+        summarizeMissing(info),
+        groupId,
+        MESSAGE_TYPES.MISSING_OUTPUTS,
+        info,
+      );
+    },
+    latexDiff(results, groupId) {
+      invoke(
+        'info',
+        summarizeLatexDiff(results),
+        groupId,
+        MESSAGE_TYPES.LATEXDIFF,
+        results,
+      );
+    },
+    statistics(stats, groupId) {
+      invoke(
+        'debug',
+        summarizeUsage(stats),
+        groupId,
+        MESSAGE_TYPES.STATISTICS,
+        stats,
+      );
+    },
+    userMessage(message, groupId) {
+      invoke('info', message, groupId, MESSAGE_TYPES.USER_MESSAGE);
+    },
+    async startGroup(groupName, id, parentGroupId) {
+      return startGroup(channelId, groupName, id, parentGroupId, isAgent);
+    },
+    endGroup(groupId, status = 'stopped') {
+      endGroup(channelId, groupId, status);
+    },
+    getActiveGroupId() {
+      return getActiveGroupId(channelId);
+    },
+    setActiveGroupId(groupId) {
+      setActiveGroupId(channelId, groupId);
+    },
+  };
+}
+
 export function getTimestamp(): string {
   return new Date()
     .toLocaleString('en-US', {
@@ -439,4 +605,11 @@ export function getTimestamp(): string {
       second: '2-digit',
     })
     .replace(',', '');
+}
+
+export function setLoggerDebugMode(enabled: boolean): void {
+  cachedDebugMode = enabled;
+  for (const transport of channelTransports.values()) {
+    transport.setDebugMode(enabled);
+  }
 }

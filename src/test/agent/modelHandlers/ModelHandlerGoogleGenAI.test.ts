@@ -13,7 +13,7 @@ import { createPartFromUri } from '@google/genai';
 // Local imports - agent
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - model config
 import {
@@ -23,12 +23,12 @@ import {
   ModelProvider,
 } from '@model/ModelConfig';
 
-interface LoggerStub extends Partial<AgentLogger> {
+interface LoggerStub extends Partial<ChannelLogger> {
   channelId: string;
   fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
 }
 
-function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
+function createLoggerStub(): { logger: ChannelLogger; stub: LoggerStub } {
   const stub: LoggerStub = {
     channelId: 'test-channel',
     fileListEntries: [],
@@ -50,7 +50,7 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     getActiveGroupId: () => undefined,
   };
 
-  return { logger: stub as unknown as AgentLogger, stub };
+  return { logger: stub as unknown as ChannelLogger, stub };
 }
 
 function buildGoogleConfig(

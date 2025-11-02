@@ -11,7 +11,7 @@ import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -60,7 +60,7 @@ describe('Progress event modules', () => {
     warn: () => {},
     debug: () => {},
     error: () => {},
-  } as unknown as AgentLogger;
+  } as unknown as ChannelLogger;
   const stateStub = {} as ProgressViewState;
   const updaterStub = {} as WebviewUpdater;
 

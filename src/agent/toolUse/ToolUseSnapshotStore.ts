@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { AgentType } from '@agent/core/AgentDataclass';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 
 // Local imports - utilities
 import { StorageFS, isValidExecutionId } from '@utils/files';
@@ -30,7 +30,7 @@ import {
  * {@link ToolUseSessionManager}; add only filesystem/persistence helpers here.
  */
 const CHANNEL = 'ToolUseSnapshotStore';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 const STORAGE_DIR = 'toolUseSessions';
 

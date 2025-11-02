@@ -5,7 +5,7 @@ import { StatePersistenceManager } from '../persistence/StatePersistenceManager'
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 
 // Local imports - types
 import { TaskGroup } from '@logger/LogTypes';
@@ -24,11 +24,11 @@ export class TaskGroupManager extends PersistentMapManager<
   StreamTabId,
   Map<string, TaskGroup>
 > {
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(persistence: StatePersistenceManager) {
     super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
-    this.logger = new AgentLogger('TaskGroupManager');
+    this.logger = createChannelLogger('TaskGroupManager');
   }
 
   /**

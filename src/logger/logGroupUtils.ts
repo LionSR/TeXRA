@@ -1,7 +1,7 @@
 // Local imports - log
-import type { AgentLogger } from './AgentLogger';
+import type { ChannelLogger } from './logUtils';
 
-type GroupStatus = Parameters<AgentLogger['endGroup']>[1];
+type GroupStatus = Parameters<ChannelLogger['endGroup']>[1];
 
 interface WithLogGroupOptions {
   parentGroupId?: string;
@@ -14,7 +14,7 @@ interface WithLogGroupOptions {
  * Utility helper to start a log group, run a function, and automatically end the group.
  */
 export async function withLogGroup<T>(
-  logger: AgentLogger,
+  logger: ChannelLogger,
   groupName: string,
   fn: (groupId?: string) => Promise<T>,
   options: WithLogGroupOptions = {},

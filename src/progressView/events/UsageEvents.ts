@@ -10,7 +10,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
 
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 export interface UsageEventsModule {
   register(
@@ -21,7 +21,7 @@ export interface UsageEventsModule {
 }
 
 interface UsageEventsShared {
-  logger: AgentLogger;
+  logger: ChannelLogger;
 }
 
 export function createUsageEvents(

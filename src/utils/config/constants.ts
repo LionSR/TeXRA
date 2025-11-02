@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - config utils
 import { getConfig } from './configUtils';
 
@@ -51,23 +54,41 @@ export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 
 /** Determine whether tool-use session persistence is enabled. */
+const ToolUsePersistenceSettingsSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    ttlHours: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS),
+  })
+  .partial()
+  .transform((settings) => ({
+    enabled: settings.enabled ?? true,
+    ttlHours: settings.ttlHours ?? DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
+  }));
+
+function readToolUsePersistenceSettings(): {
+  enabled: boolean;
+  ttlHours: number;
+} {
+  const raw = {
+    enabled: getConfig<boolean | undefined>(
+      'texra.toolUse.persistence.enabled',
+    ),
+    ttlHours: getConfig<number | string | undefined>(
+      'texra.toolUse.persistence.ttlHours',
+    ),
+  };
+  return ToolUsePersistenceSettingsSchema.parse(raw);
+}
+
 export function getToolUsePersistenceEnabled(): boolean {
-  return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
+  return readToolUsePersistenceSettings().enabled;
 }
 
 /** Resolve the configured TTL (in hours) for persisted tool-use sessions. */
 export function getToolUsePersistenceTtlHours(): number {
-  const value = getConfig<number>(
-    'texra.toolUse.persistence.ttlHours',
-    DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
-  );
-  const hours = Number(value);
-  if (!Number.isFinite(hours) || hours < 1) {
-    // Log a warning when invalid configuration is detected
-    console.warn(
-      `Invalid tool-use persistence TTL value: ${value}. Using default of ${DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS} hours.`,
-    );
-    return DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS;
-  }
-  return hours;
+  return readToolUsePersistenceSettings().ttlHours;
 }

@@ -15,10 +15,10 @@ import type { LogMessageUpdate } from '@logger/LogTypes';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 interface LogEventsShared {
-  logger: AgentLogger;
+  logger: ChannelLogger;
 }
 
 export interface LogEventsModule {

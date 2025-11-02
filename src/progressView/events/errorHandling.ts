@@ -1,8 +1,8 @@
 // Local imports - logger
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 export function createErrorBoundary(
-  logger: AgentLogger,
+  logger: ChannelLogger,
   moduleName: string,
 ): (context: string, fn: () => void) => void {
   return (context: string, fn: () => void): void => {

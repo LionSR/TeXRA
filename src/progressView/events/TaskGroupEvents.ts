@@ -10,11 +10,11 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
 
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import type { TaskGroup } from '@logger/LogTypes';
 
 interface TaskGroupEventsShared {
-  logger: AgentLogger;
+  logger: ChannelLogger;
   initializeStreamForTaskGroup(stream: string): void;
 }
 

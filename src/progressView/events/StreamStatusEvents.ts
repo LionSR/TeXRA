@@ -20,10 +20,10 @@ import type {
   StreamStatusType,
   StreamStatusOrReadyType,
 } from './types';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 export interface StreamStatusEventShared {
-  logger: AgentLogger;
+  logger: ChannelLogger;
   streamStatus: Map<string, StreamStatusType>;
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
   sendInstructionUpdate(stream: StreamTabId | ''): void;

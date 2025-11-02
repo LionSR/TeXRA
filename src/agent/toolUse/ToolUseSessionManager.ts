@@ -1,5 +1,5 @@
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 
 // Local imports - agent
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -15,7 +15,7 @@ import type {
 } from './ToolUseSnapshotTypes';
 
 const CHANNEL = 'ToolUseSessionManager';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 interface SnapshotBackend {
   save(payload: SaveToolUseSnapshotPayload): Promise<void>;

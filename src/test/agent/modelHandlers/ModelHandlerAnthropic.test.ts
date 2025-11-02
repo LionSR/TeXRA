@@ -11,7 +11,7 @@ import type {
 
 // Local imports - agent
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 // Local imports - model config
 import {
@@ -398,7 +398,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [
@@ -479,7 +479,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [
@@ -553,7 +553,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [
@@ -631,7 +631,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [
@@ -705,7 +705,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [
@@ -779,7 +779,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       fileList: () => {},
       getActiveGroupId: () => undefined,
     };
-    handler.setLogger(loggerStub as unknown as AgentLogger);
+    handler.setLogger(loggerStub as unknown as ChannelLogger);
     (handler as any).getStreamingConfig = () => false;
 
     const messages: MessageParam[] = [

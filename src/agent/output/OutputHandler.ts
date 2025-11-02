@@ -33,7 +33,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
@@ -59,7 +59,7 @@ export class OutputHandler implements IOutputHandler {
   private roundMappings: { [key: number]: RoundFileMapping };
   private roundXmlSummaries: { [key: number]: OutputXmlSummary };
   public baseFiles: string[];
-  protected logger: AgentLogger;
+  protected logger: ChannelLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
   public readonly diffManager: LatexDiffManager;
@@ -71,7 +71,7 @@ export class OutputHandler implements IOutputHandler {
     agentConfig: AgentConfig,
     logId: number,
     baseFiles: string[] = [],
-    logger?: AgentLogger,
+    logger?: ChannelLogger,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -83,7 +83,7 @@ export class OutputHandler implements IOutputHandler {
     this.roundMappings = {};
     this.roundXmlSummaries = {};
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
+    this.logger = logger || createChannelLogger('OutputHandler');
     this.channel = this.logger.channelId;
 
     this.xmlManager = new XmlOutputManager(

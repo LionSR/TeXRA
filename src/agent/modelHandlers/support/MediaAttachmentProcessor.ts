@@ -10,7 +10,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@frontend/media/img';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import type { ModelCapabilities } from '@model/ModelConfig';
 import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
 
@@ -37,11 +37,11 @@ interface MediaAttachmentProcessorOptions {
 
 export class MediaAttachmentProcessor {
   constructor(
-    private logger: AgentLogger,
+    private logger: ChannelLogger,
     private readonly options: MediaAttachmentProcessorOptions,
   ) {}
 
-  public setLogger(logger: AgentLogger): void {
+  public setLogger(logger: ChannelLogger): void {
     this.logger = logger;
   }
 

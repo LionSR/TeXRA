@@ -8,7 +8,7 @@ import { StatePersistenceManager } from '../persistence/StatePersistenceManager'
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { LogMessageData } from '@logger/LogTypes';
 
 /**
@@ -20,11 +20,11 @@ export class StreamTabsManager extends PersistentMapManager<
   LogMessageData[]
 > {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(persistence: StatePersistenceManager) {
     super(persistence, WorkspaceStateKey.STREAM_TABS, 'texra.logStreams');
-    this.logger = new AgentLogger('StreamTabsManager');
+    this.logger = createChannelLogger('StreamTabsManager');
   }
 
   /**

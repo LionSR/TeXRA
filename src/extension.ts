@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 // Local imports - core
 import * as logger from '@logger/logUtils';
+import { setLoggerDebugMode } from '@logger/logUtils';
 import { watchConfig, getConfig } from '@utils/config';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
@@ -98,6 +99,8 @@ export async function activate(context: vscode.ExtensionContext) {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   initializeStateManagers(context);
   FileLister.initialize(context);
+
+  setLoggerDebugMode(getConfig<boolean>('texra.logger.debugMode', false));
 
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
@@ -202,6 +205,10 @@ export async function activate(context: vscode.ExtensionContext) {
   watchConfig(context, 'texra.explorer.agentsDirectory', () => {
     watcherManager.setup();
     folderExplorer.refresh();
+  });
+
+  watchConfig(context, 'texra.logger.debugMode', () => {
+    setLoggerDebugMode(getConfig<boolean>('texra.logger.debugMode', false));
   });
 
   const welcomeKey = 'texra.welcomeShown';

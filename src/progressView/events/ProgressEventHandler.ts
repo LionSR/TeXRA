@@ -16,7 +16,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Types
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import {
   createStreamStatusEvents,
   type StreamStatusEventModule,
@@ -42,7 +42,7 @@ import type {
  * by delegating to the state manager and webview updater.
  */
 export class ProgressEventHandler {
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
   private _streamStatus: Map<string, StreamStatusType> = new Map();
   private readonly streamStatusEvents: StreamStatusEventModule;
   private readonly outputEvents: OutputEventsModule;
@@ -54,7 +54,7 @@ export class ProgressEventHandler {
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
   ) {
-    this.logger = new AgentLogger('ProgressEventHandler');
+    this.logger = createChannelLogger('ProgressEventHandler');
     this.streamStatusEvents = createStreamStatusEvents({
       logger: this.logger,
       streamStatus: this._streamStatus,

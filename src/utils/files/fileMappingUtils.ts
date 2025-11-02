@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports
 import { WorkspaceFS } from './workspaceFS';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -88,7 +88,7 @@ export function createFileMapping(
 export async function replaceInputCommands(
   baseFiles: string[],
   outputFiles: string[],
-  logger?: AgentLogger,
+  logger?: ChannelLogger,
 ): Promise<void> {
   if (!baseFiles?.length || !outputFiles?.length) {
     logger?.debug('No files to process for input command replacement');

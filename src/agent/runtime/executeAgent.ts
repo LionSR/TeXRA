@@ -34,7 +34,7 @@ import {
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { withLogGroup } from '@logger/logGroupUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -49,7 +49,7 @@ import {
 } from '@agent/utils/agentPathResolver';
 
 const CHANNEL = 'executeAgent';
-const logger = new AgentLogger(CHANNEL);
+const logger = createChannelLogger(CHANNEL);
 
 /**
  * Constructor signature for any agent implementation.
@@ -287,6 +287,228 @@ interface ExecuteAgentOptions {
   resume?: boolean;
 }
 
+interface AgentExecutionSetup<T extends IAgent> {
+  agent: T;
+  config: AgentConfig;
+  streamTabId: StreamTabId;
+  metadata: NonNullable<AgentConfig['session']>;
+  agentLogger: ChannelLogger;
+  provider?: ProgressViewProvider;
+}
+
+async function prepareExecutionContext<T extends IAgent>(
+  createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
+  executionId: ExecutionId | undefined,
+  isResume: boolean,
+): Promise<AgentExecutionSetup<T>> {
+  const created = await createAgentFn();
+  const agent = created.agent;
+
+  if (executionId) {
+    await ensureRunDir(executionId);
+  }
+
+  const config = agent.config;
+  const metadata = config.session;
+  if (!metadata) {
+    throw new Error('Agent configuration is missing session metadata.');
+  }
+
+  const streamTabId = agent.getStreamTabId();
+  if (!streamTabId) {
+    throw new Error('Failed to resolve stream tab ID for agent execution');
+  }
+
+  const provider = ProgressViewProvider.getInstance();
+  const currentStatus = provider?.eventHandler.getStreamStatus(streamTabId);
+  if (!isResume && currentStatus === 'running') {
+    throw new Error(
+      `Task "${streamTabId}" is already running. Please wait for it to complete or stop it first.`,
+    );
+  }
+
+  const agentLogger = createChannelLogger(streamTabId, { isAgent: true });
+
+  return { agent, config, streamTabId, metadata, agentLogger, provider };
+}
+
+async function initializeExecution<T extends IAgent>(
+  setup: AgentExecutionSetup<T>,
+  agentName: string,
+  executionId: ExecutionId | undefined,
+  isResume: boolean,
+  mainGroupId?: string,
+): Promise<void> {
+  const { config, streamTabId, metadata, provider } = setup;
+
+  await withLogGroup(
+    logger,
+    `Task Details`,
+    async (taskDetailsGroupId) => {
+      if (!isResume && taskDetailsGroupId) {
+        logger.info(
+          `Starting task execution for ${streamTabId}`,
+          taskDetailsGroupId,
+        );
+        logger.info(`Input file: ${config.inputFile}`, taskDetailsGroupId);
+      }
+
+      logger.debug(
+        `Creating stream with ID: ${streamTabId}`,
+        taskDetailsGroupId,
+      );
+      logger.debug(
+        `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
+        taskDetailsGroupId,
+      );
+      logger.debug(
+        `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
+        taskDetailsGroupId,
+      );
+
+      bus.emit('setActiveStream', {
+        stream: streamTabId,
+        session: metadata,
+      });
+      bus.emit('updateStreamStatus', {
+        stream: streamTabId,
+        status: 'running',
+      });
+
+      if (!isResume) {
+        const viewVisible = provider?.isViewVisible() ?? false;
+        if (!viewVisible) {
+          const inputFileName = config.inputFile
+            ? path.basename(config.inputFile)
+            : 'selected files';
+          const outputInfo = (() => {
+            if (config.useMultipleOutputs) {
+              const outputs = config.outputFiles ?? [];
+              const [firstOutput] = outputs;
+              return firstOutput
+                ? `to ${path.basename(firstOutput)}`
+                : 'for multiple outputs';
+            }
+
+            const [singleOutput] = config.outputFiles ?? [];
+            return singleOutput ? `to ${path.basename(singleOutput)}` : '';
+          })();
+
+          void vscode.window
+            .showInformationMessage(
+              `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
+              {
+                modal: false,
+                detail:
+                  'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
+              },
+              'Show ProgressBoard',
+            )
+            .then((selection) => {
+              if (selection === 'Show ProgressBoard') {
+                vscode.commands.executeCommand('texra.showProgressView');
+              }
+            });
+        }
+      }
+
+      logger.debug(
+        `Storing taskState for stream: ${streamTabId}`,
+        taskDetailsGroupId,
+      );
+      logger.debug(
+        `Config for taskState: ${JSON.stringify(config)}`,
+        taskDetailsGroupId,
+      );
+
+      bus.emit('setTaskState', {
+        streamTabId,
+        executionId,
+        taskState: agentConfigToTaskState(config),
+      });
+      logger.debug(`Task state stored for stream: ${streamTabId}`, mainGroupId);
+    },
+    { parentGroupId: mainGroupId, skip: isResume },
+  );
+}
+
+async function runAgentTask<T extends IAgent>(
+  setup: AgentExecutionSetup<T>,
+  agentName: string,
+  mainGroupId?: string,
+): Promise<void> {
+  const { agent, config, streamTabId } = setup;
+
+  logger.info(`Executing ${agentName} with model ${config.model}`, mainGroupId);
+
+  await agent.run();
+
+  logger.debug(`Task completed successfully`, mainGroupId);
+  bus.emit('updateStreamStatus', {
+    stream: streamTabId,
+    status: 'stopped',
+  });
+}
+
+async function handleAgentFailure<T extends IAgent>(
+  agentName: string,
+  error: unknown,
+  setup: AgentExecutionSetup<T> | undefined,
+): Promise<string> {
+  const errorMsg = `Error executing agent ${agentName}: ${error instanceof Error ? error.message : String(error)}`;
+
+  if (
+    errorMsg.includes('Missing API key') ||
+    errorMsg.includes('API key not found')
+  ) {
+    const setKey = 'Set API Key';
+    const openGuide = 'Open Settings Guide';
+    await showInstructionWithSuppress(
+      'missingApiKey',
+      'API key not found. Set your API key in the extension settings and run again.',
+      [
+        {
+          title: setKey,
+          callback: () => vscode.commands.executeCommand('texra.setApiKey'),
+        },
+        {
+          title: openGuide,
+          callback: () =>
+            vscode.commands.executeCommand('texra.openDoc', 'configuration'),
+        },
+      ],
+      false,
+    );
+  } else {
+    vscode.window.showErrorMessage(errorMsg);
+  }
+
+  if (setup) {
+    const { agentLogger, agent, streamTabId } = setup;
+    bus.emit('updateStreamStatus', {
+      stream: streamTabId,
+      status: 'error',
+    });
+    const fallbackGroupId =
+      agentLogger.getActiveGroupId() ?? agent.getLastRunGroupId();
+    if (fallbackGroupId) {
+      agentLogger.error(errorMsg, fallbackGroupId);
+    } else {
+      const agentErrorGroupId = await agentLogger.startGroup(
+        `Error: ${agentName}`,
+      );
+      agentLogger.error(errorMsg, agentErrorGroupId);
+      agentLogger.endGroup(agentErrorGroupId, 'error');
+    }
+  }
+
+  const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
+  logger.error(errorMsg, errorGroupId);
+  logger.endGroup(errorGroupId, 'error');
+
+  return errorMsg;
+}
+
 export async function executeAgentWithLogging<T extends IAgent>(
   agentName: string,
   createAgentFn: () => Promise<{ agent: T; agentType?: AgentType }>,
@@ -294,260 +516,27 @@ export async function executeAgentWithLogging<T extends IAgent>(
   options?: ExecuteAgentOptions,
 ): Promise<void> {
   const isResume = options?.resume ?? false;
-  let streamTabId: StreamTabId | undefined;
-  let agentStreamLogger: AgentLogger | undefined;
-  let agent: T | undefined;
+  let setup: AgentExecutionSetup<T> | undefined;
   try {
-    // Create agent instance and extract its declared type
-    const created = await createAgentFn();
-    agent = created.agent;
-    const { agentType } = created;
-    const sessionMetadata = agent.getSessionMetadata();
-
-    if (executionId) {
-      await ensureRunDir(executionId);
-    }
-
-    // Get the full stream tab ID
-    const config = agent.config;
-    const metadata = config.session;
-    if (!metadata) {
-      throw new Error('Agent configuration is missing session metadata.');
-    }
-
-    streamTabId = agent.getStreamTabId();
-
-    if (!streamTabId) {
-      throw new Error('Failed to resolve stream tab ID for agent execution');
-    }
-
-    const activeStreamId: StreamTabId = streamTabId;
-
-    agentStreamLogger = new AgentLogger(activeStreamId, true);
-
-    // Check if this stream is already running
-    const provider = ProgressViewProvider.getInstance();
-    const currentStatus =
-      provider?.eventHandler.getStreamStatus(activeStreamId);
-    if (!isResume && currentStatus === 'running') {
-      const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
-      throw new Error(errorMsg);
-    }
-
+    setup = await prepareExecutionContext(createAgentFn, executionId, isResume);
     await withLogGroup(
       logger,
-      `Task: ${agentName}@${config.model}`,
+      `Task: ${agentName}@${setup.config.model}`,
       async (mainTaskGroupId) => {
-        try {
-          await withLogGroup(
-            logger,
-            `Task Details`,
-            async (taskDetailsGroupId) => {
-              if (!isResume && taskDetailsGroupId) {
-                logger.info(
-                  `Starting task execution for ${activeStreamId}`,
-                  taskDetailsGroupId,
-                );
-                logger.info(
-                  `Input file: ${config.inputFile}`,
-                  taskDetailsGroupId,
-                );
-              }
-
-              logger.debug(
-                `Creating stream with ID: ${activeStreamId}`,
-                taskDetailsGroupId,
-              );
-              logger.debug(
-                `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
-                taskDetailsGroupId,
-              );
-              logger.debug(
-                `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-                taskDetailsGroupId,
-              );
-
-              // Switch to this stream and set its status to running
-              bus.emit('setActiveStream', {
-                stream: activeStreamId,
-                session: metadata,
-              });
-              bus.emit('updateStreamStatus', {
-                stream: activeStreamId,
-                status: 'running',
-              });
-
-              if (!isResume) {
-                const viewVisible = provider?.isViewVisible() ?? false;
-                if (!viewVisible) {
-                  await vscode.commands.executeCommand(
-                    'texra.showProgressView',
-                  );
-                }
-
-                if (!provider?.isViewVisible()) {
-                  const inputFileName = config.inputFile
-                    ? path.basename(config.inputFile)
-                    : 'selected input';
-                  const outputInfo = (() => {
-                    if (config.useMultipleOutputs) {
-                      const outputs = config.outputFiles ?? [];
-                      if (outputs.length > 1) {
-                        return `to ${outputs.length} files`;
-                      }
-                      const [firstOutput] = outputs;
-                      return firstOutput
-                        ? `to ${path.basename(firstOutput)}`
-                        : 'for multiple outputs';
-                    }
-
-                    const [singleOutput] = config.outputFiles ?? [];
-                    return singleOutput
-                      ? `to ${path.basename(singleOutput)}`
-                      : '';
-                  })();
-
-                  vscode.window
-                    .showInformationMessage(
-                      `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-                      {
-                        modal: false,
-                        detail:
-                          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-                      },
-                      'Show ProgressBoard',
-                    )
-                    .then((selection) => {
-                      if (selection === 'Show ProgressBoard') {
-                        vscode.commands.executeCommand(
-                          'texra.showProgressView',
-                        );
-                      }
-                    });
-                }
-
-                // Store taskState
-                logger.debug(
-                  `Storing taskState for stream: ${activeStreamId}`,
-                  taskDetailsGroupId,
-                );
-                logger.debug(
-                  `Config for taskState: ${JSON.stringify(config)}`,
-                  taskDetailsGroupId,
-                );
-
-                // Convert AgentConfig to TaskState using utility function
-                bus.emit('setTaskState', {
-                  streamTabId: activeStreamId,
-                  executionId,
-                  taskState: agentConfigToTaskState(config),
-                });
-                logger.debug(
-                  `Task state stored for stream: ${activeStreamId}`,
-                  mainTaskGroupId,
-                );
-              }
-            },
-            { parentGroupId: mainTaskGroupId, skip: isResume },
-          );
-        } catch (err) {
-          logger.error(
-            `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
-          );
-          throw err;
-        }
-
-        try {
-          // Run the agent
-          logger.info(
-            `Executing ${agentName} with model ${config.model}`,
-            mainTaskGroupId,
-          );
-          if (!agent) {
-            throw new Error('Agent instance was not initialized');
-          }
-
-          await agent.run();
-          // await checkExpectedOutputs(config.outputFiles, agent);
-          // Mark the task as completed successfully
-          logger.debug(`Task completed successfully`, mainTaskGroupId);
-          // Update status to stopped on successful completion
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'stopped',
-          });
-        } catch (err) {
-          // Mark the task as failed
-          logger.error(
-            `Task failed: ${err instanceof Error ? err.message : String(err)}`,
-            mainTaskGroupId,
-          );
-          // Update status to error if agent run fails
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'error',
-          });
-          throw err;
-        }
+        await initializeExecution(
+          setup!,
+          agentName,
+          executionId,
+          isResume,
+          mainTaskGroupId,
+        );
+        await runAgentTask(setup!, agentName, mainTaskGroupId);
       },
       { skip: isResume },
     );
   } catch (err) {
-    const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
-
-    // Check if the error is related to missing API key
-    if (
-      errorMsg.includes('Missing API key') ||
-      errorMsg.includes('API key not found')
-    ) {
-      const setKey = 'Set API Key';
-      const openGuide = 'Open Settings Guide';
-      await showInstructionWithSuppress(
-        'missingApiKey',
-        'API key not found. Set your API key in the extension settings and run again.',
-        [
-          {
-            title: setKey,
-            callback: () => vscode.commands.executeCommand('texra.setApiKey'),
-          },
-          {
-            title: openGuide,
-            callback: () =>
-              vscode.commands.executeCommand('texra.openDoc', 'configuration'),
-          },
-        ],
-        false,
-      );
-    } else {
-      // Show regular error message for other errors
-      vscode.window.showErrorMessage(errorMsg);
-    }
-
-    if (agentStreamLogger || streamTabId) {
-      if (!agentStreamLogger && streamTabId) {
-        agentStreamLogger = new AgentLogger(streamTabId, true);
-      }
-      if (agentStreamLogger) {
-        const fallbackGroupId =
-          agentStreamLogger.getActiveGroupId() ?? agent?.getLastRunGroupId();
-        if (fallbackGroupId) {
-          agentStreamLogger.error(errorMsg, fallbackGroupId);
-        } else {
-          const agentErrorGroupId = await agentStreamLogger.startGroup(
-            `Error: ${agentName}`,
-          );
-          agentStreamLogger.error(errorMsg, agentErrorGroupId);
-          agentStreamLogger.endGroup(agentErrorGroupId, 'error');
-        }
-      }
-    }
-
-    // Create a temporary error group if no active group exists
-    const errorGroupId = await logger.startGroup(`Error: ${agentName}`);
-    logger.error(errorMsg, errorGroupId);
-    logger.endGroup(errorGroupId, 'error');
-    throw new Error(errorMsg);
+    const formatted = await handleAgentFailure(agentName, err, setup);
+    throw new Error(formatted);
   }
 }
 
@@ -555,7 +544,6 @@ export async function executeAgent(
   agentConfig: Partial<AgentConfig>,
   executionId?: ExecutionId,
 ): Promise<void> {
-  // Ensure required fields
   if (!agentConfig.model || !agentConfig.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
@@ -592,10 +580,6 @@ export async function executeAgent(
     { resume: false },
   );
 }
-
-/**
- * Run merge agent to handle file merging operations.
- */
 export async function executeMergeAgent(
   model: string,
   inputFile: string,

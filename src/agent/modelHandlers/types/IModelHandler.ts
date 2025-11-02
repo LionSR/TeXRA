@@ -10,7 +10,7 @@ import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 // Local imports - logging and model metadata
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 
 /**
@@ -58,7 +58,7 @@ export interface IModelHandler<
   readonly isOpenaiCompatible: boolean;
 
   /** Set the logger instance for the handler. */
-  setLogger(logger: AgentLogger): void;
+  setLogger(logger: ChannelLogger): void;
 
   /** Inform the handler about the active agent type. */
   setAgentType(agentType?: AgentType | null): void;

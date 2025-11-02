@@ -2,7 +2,7 @@
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 /**
  * Reads a file and populates user variable fields with its path and content.
@@ -20,7 +20,7 @@ export async function setVarFromFile(
   filePath: string,
   varName: string,
   userVars: Record<string, any>,
-  logger: AgentLogger,
+  logger: ChannelLogger,
   source: string,
   absolute: boolean = false,
 ): Promise<boolean> {

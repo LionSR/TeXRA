@@ -22,7 +22,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import { OPENAI_CHAT_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - logging
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 
 // Local imports - model configuration
@@ -266,7 +266,7 @@ describe('ResponseCycle background reasoning logs', () => {
       endGroup() {},
       getActiveGroupId: () => undefined,
       setActiveGroupId() {},
-    } as unknown as AgentLogger;
+    } as unknown as ChannelLogger;
 
     const handlerConfig: ModelConfig = {
       name: 'openai-response-test',
@@ -388,7 +388,7 @@ describe('ResponseCycle background reasoning logs', () => {
       endGroup() {},
       getActiveGroupId: () => undefined,
       setActiveGroupId() {},
-    } as unknown as AgentLogger;
+    } as unknown as ChannelLogger;
 
     const handlerConfig: ModelConfig = {
       name: 'openai-response-test',

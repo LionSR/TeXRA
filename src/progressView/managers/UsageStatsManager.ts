@@ -7,7 +7,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 
 /**
  * Manages usage statistics collection with persistence.
@@ -17,11 +17,11 @@ export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
   TokenUsageStats
 > {
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(persistence: StatePersistenceManager) {
     super(persistence, WorkspaceStateKey.USAGE_STATS);
-    this.logger = new AgentLogger('UsageStatsManager');
+    this.logger = createChannelLogger('UsageStatsManager');
   }
 
   /**

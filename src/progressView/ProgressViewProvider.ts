@@ -22,7 +22,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 // Types
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { LogMessageData } from '@logger/LogTypes';
 
 // Type aliases for status values
@@ -59,7 +59,7 @@ export class ProgressViewProvider
   private _webviewReady = false;
   private _pendingUpdate = false;
   private _hasResolved = false;
-  private readonly logger: AgentLogger;
+  private readonly logger: ChannelLogger;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -68,7 +68,7 @@ export class ProgressViewProvider
     super(context);
     this._extensionUri = context.extensionUri;
     this._viewTitle = title;
-    this.logger = new AgentLogger('ProgressViewProvider');
+    this.logger = createChannelLogger('ProgressViewProvider');
 
     // Initialize new modular architecture
     const persistenceManager = new StatePersistenceManager(

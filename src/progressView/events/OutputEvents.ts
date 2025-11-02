@@ -13,7 +13,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
-import type { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 
 export interface OutputEventsModule {
   register(
@@ -24,7 +24,7 @@ export interface OutputEventsModule {
 }
 
 interface OutputEventsShared {
-  logger: AgentLogger;
+  logger: ChannelLogger;
 }
 
 type FilesByRound<T> = { [key: number]: T[] };

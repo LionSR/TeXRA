@@ -26,7 +26,7 @@ import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES, MessageType } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
@@ -92,7 +92,7 @@ export abstract class ModelHandler<
   public continueLimit: number;
   public inputTokenLimit: number;
   public maxOutputTokensFactor: number;
-  protected logger: AgentLogger;
+  protected logger: ChannelLogger;
   protected outputStreaming = false;
   protected backgroundModeSupported = false;
   protected progressViewEnabled = true;
@@ -114,7 +114,7 @@ export abstract class ModelHandler<
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
     // Initialize with default channel, will be overwritten by agent
-    this.logger = new AgentLogger('Agent');
+    this.logger = createChannelLogger('Agent');
     this.mediaProcessor = new MediaAttachmentProcessor(this.logger, {
       getCapabilities: () => this.capabilities,
       isOpenAIProvider: () => this.isOpenai,
@@ -124,7 +124,7 @@ export abstract class ModelHandler<
   /**
    * Updates the logger instance.
    */
-  public setLogger(logger: AgentLogger): void {
+  public setLogger(logger: ChannelLogger): void {
     this.logger = logger;
     this.mediaProcessor.setLogger(logger);
   }

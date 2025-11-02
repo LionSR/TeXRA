@@ -5,7 +5,7 @@ import * as path from 'path';
 // Local imports - agent
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 
 // Local imports
@@ -17,7 +17,7 @@ import { getRunDir } from '@utils/files/taskRunStorage';
  */
 export interface DebugContext {
   /** Logger instance for the operation */
-  logger: AgentLogger;
+  logger: ChannelLogger;
   /** Model name being used */
   modelName?: string;
   /** Execution ID if part of a task run */

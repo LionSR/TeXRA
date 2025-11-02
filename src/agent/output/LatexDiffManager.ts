@@ -5,7 +5,7 @@ import * as path from 'path';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { AgentLogger } from '@logger/AgentLogger';
+import type { ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
@@ -32,7 +32,7 @@ export class LatexDiffManager {
     private readonly agentSetting: AgentWorkflowSetting,
     private readonly outputFiles: { [key: number]: string[] },
     private readonly baseFiles: string[],
-    private readonly logger: AgentLogger,
+    private readonly logger: ChannelLogger,
     private readonly channel: string,
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
@@ -191,10 +191,7 @@ export class LatexDiffManager {
             prevOutputFile,
             currOutputFile,
           );
-          this.logLatexdiffResult(
-            result,
-            'between-rounds-diff',
-          );
+          this.logLatexdiffResult(result, 'between-rounds-diff');
           aggregated.push({
             base: prevOutputFile,
             revised: currOutputFile,

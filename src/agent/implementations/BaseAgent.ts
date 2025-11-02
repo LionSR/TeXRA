@@ -14,7 +14,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger, type ChannelLogger } from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
@@ -31,7 +31,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
-  protected logger: AgentLogger;
+  protected logger: ChannelLogger;
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
   private lastRunGroupId?: string;
@@ -71,7 +71,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     this.executionId = executionId;
 
     const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
+    this.logger = createChannelLogger(streamTabId, { isAgent: true });
     this.modelHandler.setLogger(this.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
     this.usageMonitor = new UsageMonitor(

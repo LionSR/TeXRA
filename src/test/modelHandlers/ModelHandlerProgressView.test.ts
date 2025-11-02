@@ -8,7 +8,7 @@ import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogle
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { createChannelLogger } from '@logger/logUtils';
 
 // Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
@@ -40,7 +40,7 @@ describe('ModelHandler progress view flag', () => {
 
   beforeEach(() => {
     handler = new TestModelHandlerGoogleGenAI(handlerConfig);
-    handler.setLogger(new AgentLogger('ProgressViewTest'));
+    handler.setLogger(createChannelLogger('ProgressViewTest'));
 
     // Flush any buffered events from other tests
     const flushAdd = bus.on('addLogMessage', () => {});
