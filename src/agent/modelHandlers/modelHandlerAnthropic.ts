@@ -169,6 +169,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     this.cacheControlledBlock = undefined;
   }
 
+  private getMutableBetas(options: MessageCreateParams): AnthropicBeta[] {
+    if (!options.betas) {
+      options.betas = [];
+    }
+    return options.betas;
+  }
+
+  private appendBeta(options: MessageCreateParams, beta: AnthropicBeta): void {
+    const betas = this.getMutableBetas(options);
+    if (!betas.includes(beta)) {
+      betas.push(beta);
+    }
+  }
+
   private findCacheControlCandidate(
     content: (ContentBlockParam | ContentBlock)[] | undefined,
   ): CacheControlEligibleBlock | undefined {
@@ -258,10 +272,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       if (this.config.capabilities.supportsInterleavedThinking) {
-        const existingBetas = options.betas ?? [];
-        if (!existingBetas.includes(INTERLEAVED_THINKING_BETA)) {
-          options.betas = [...existingBetas, INTERLEAVED_THINKING_BETA];
-        }
+        this.appendBeta(options, INTERLEAVED_THINKING_BETA);
       }
     }
 
@@ -302,7 +313,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // useStreaming = true; should consider to be true by default
       // temperature already deleted above for reasoning models
 
-      options.betas = [SONNET_37_OUTPUT_BETA];
+      const sonnetBetas = this.getMutableBetas(options);
+      sonnetBetas.length = 0;
+      sonnetBetas.push(SONNET_37_OUTPUT_BETA);
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -310,7 +323,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Opt-in beta for 1M context window on Claude Sonnet 4 family
     if (isAnthropic1MBetaActive) {
-      options.betas = [...(options.betas ?? []), CONTEXT_1M_BETA];
+      this.appendBeta(options, CONTEXT_1M_BETA);
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -394,17 +407,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (hasFileReference) {
-      const existingBetas = options.betas ?? [];
-      if (!existingBetas.includes(FILES_API_BETA)) {
-        options.betas = [...existingBetas, FILES_API_BETA];
-      }
+      this.appendBeta(options, FILES_API_BETA);
     }
 
     if (this.agentType === AgentType.ToolUse) {
-      const existingBetas = options.betas ?? [];
-      if (!existingBetas.includes(CONTEXT_MANAGEMENT_BETA)) {
-        options.betas = [...existingBetas, CONTEXT_MANAGEMENT_BETA];
-      }
+      this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
 
       const contextManagementEdits = [
         ...(options.context_management?.edits ?? []),

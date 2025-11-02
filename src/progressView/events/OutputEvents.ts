@@ -68,11 +68,12 @@ const registerOutputFileListeners = (
     withErrorBoundary('failed to handle addOutputFiles', () => {
       state.outputFiles.addFiles(stream, filesByRound);
       const files = state.outputFiles.getFiles(stream);
-      const updates: { files?: FilesByRound<OutputFileInfo> } = {};
-      if (files !== undefined) {
-        updates.files = files;
-      }
-      updateActiveStreamOutputs({ state, updater, stream, updates });
+      updateActiveStreamOutputs({
+        state,
+        updater,
+        stream,
+        updates: { files },
+      });
     });
   });
 
@@ -82,11 +83,12 @@ const registerOutputFileListeners = (
       withErrorBoundary('failed to handle updateMissingOutputs', () => {
         state.outputFiles.updateMissingOutputs(stream, filesByRound);
         const missing = state.outputFiles.getMissingOutputs(stream);
-        const updates: { missing?: FilesByRound<string> } = {};
-        if (missing !== undefined) {
-          updates.missing = missing;
-        }
-        updateActiveStreamOutputs({ state, updater, stream, updates });
+        updateActiveStreamOutputs({
+          state,
+          updater,
+          stream,
+          updates: { missing },
+        });
       });
     },
   );
