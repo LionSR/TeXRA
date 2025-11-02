@@ -58,7 +58,7 @@ export async function runCleanSingle(
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-  const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
+  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
   const filePatterns = getFilePatterns(
     baseName,
     model,
