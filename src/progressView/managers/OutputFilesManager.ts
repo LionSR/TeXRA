@@ -35,9 +35,13 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): void {
-    const existing = this.get(stream) || {};
-    const merged = { ...existing, ...filesByRound };
-    this.add(stream, merged);
+    const existing = this.ensureStreamFiles(stream);
+
+    for (const [round, files] of Object.entries(filesByRound)) {
+      existing[Number(round)] = files;
+    }
+
+    this.save();
   }
 
   /** Update missing outputs for a stream */
@@ -45,11 +49,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     filesByRound: { [key: number]: string[] },
   ): void {
-    if (!this._missingOutputs.has(stream)) {
-      this._missingOutputs.set(stream, {});
-    }
-
-    const streamMissing = this._missingOutputs.get(stream)!;
+    const streamMissing = this.ensureMissingOutputs(stream);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = parseInt(round, 10);
@@ -60,17 +60,21 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Get output files for a stream */
-  getFiles(
-    stream: StreamTabId,
-  ): { [key: number]: OutputFileInfo[] } | undefined {
-    return this.get(stream);
+  getFiles(stream: StreamTabId): { [key: number]: OutputFileInfo[] } {
+    const files = this.items.get(stream);
+    if (files) {
+      return files;
+    }
+    return {};
   }
 
   /** Get missing outputs for a stream */
-  getMissingOutputs(
-    stream: StreamTabId,
-  ): { [key: number]: string[] } | undefined {
-    return this._missingOutputs.get(stream);
+  getMissingOutputs(stream: StreamTabId): { [key: number]: string[] } {
+    const missing = this._missingOutputs.get(stream);
+    if (missing) {
+      return missing;
+    }
+    return {};
   }
 
   /** Clear output files for a stream */
@@ -80,7 +84,9 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Clear missing outputs for a stream */
   clearMissingOutputs(stream: StreamTabId): void {
-    this._missingOutputs.delete(stream);
+    if (!this._missingOutputs.delete(stream)) {
+      return;
+    }
     this.saveMissingOutputs();
   }
 
@@ -161,6 +167,28 @@ export class OutputFilesManager extends PersistentMapManager<
   saveMissingOutputs(): void {
     const obj = Object.fromEntries(this._missingOutputs.entries());
     this.persistence.save(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+  }
+
+  private ensureStreamFiles(stream: StreamTabId): {
+    [key: number]: OutputFileInfo[];
+  } {
+    let files = this.items.get(stream);
+    if (!files) {
+      files = {};
+      this.items.set(stream, files);
+    }
+    return files;
+  }
+
+  private ensureMissingOutputs(stream: StreamTabId): {
+    [key: number]: string[];
+  } {
+    let missing = this._missingOutputs.get(stream);
+    if (!missing) {
+      missing = {};
+      this._missingOutputs.set(stream, missing);
+    }
+    return missing;
   }
 
   /** Validate and normalize loaded output files */

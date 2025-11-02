@@ -37,11 +37,7 @@ export class StreamTabsManager extends PersistentMapManager<
    * Add a log message to a stream
    */
   addMessage(stream: StreamTabId, message: LogMessageData): void {
-    if (!this.has(stream)) {
-      this.items.set(stream, []);
-    }
-
-    const messages = this.get(stream)!;
+    const messages = this.ensureMessages(stream);
 
     // Ensure message has required fields
     if (!message.id) {
@@ -66,7 +62,8 @@ export class StreamTabsManager extends PersistentMapManager<
    */
   ensureStream(stream: StreamTabId): void {
     if (!this.has(stream)) {
-      super.add(stream, []);
+      this.ensureMessages(stream);
+      this.save();
     }
   }
 
@@ -88,11 +85,26 @@ export class StreamTabsManager extends PersistentMapManager<
    * Clear content of a specific stream (but keep the stream)
    */
   clearContent(stream: StreamTabId): void {
-    if (this.has(stream)) {
-      const arr = this.get(stream)!;
-      arr.length = 0;
-      this.save();
+    if (!this.has(stream)) {
+      return;
     }
+
+    const messages = this.ensureMessages(stream);
+    messages.length = 0;
+    this.save();
+  }
+
+  getMessages(stream: StreamTabId): LogMessageData[] {
+    return this.ensureMessages(stream);
+  }
+
+  private ensureMessages(stream: StreamTabId): LogMessageData[] {
+    let messages = this.items.get(stream);
+    if (!messages) {
+      messages = [];
+      this.items.set(stream, messages);
+    }
+    return messages;
   }
 
   /**

@@ -46,11 +46,6 @@ export function validateAgentYamlContent(
 ): AgentYamlValidationResult {
   const raw = typeof content === 'string' ? yaml.parse(content) : content;
   const data = AgentDefinitionSchema.parse(raw);
-
-  if (!data.settings || !data.prompts) {
-    throw new Error('missing settings or prompts block');
-  }
-
   const settingsBlock = parseAgentSetting(data.settings);
   const promptsBlock = AgentPromptSchema.parse(data.prompts);
   const rootName = typeof data.name === 'string' ? data.name.trim() : '';
@@ -216,8 +211,8 @@ export async function loadAgentSettingAndPrompts(
       );
 
       // Get current agent's specific settings and prompts from its YAML
-      const agentOwnSettings = config.settings ?? {};
-      const agentOwnPrompts = config.prompts ?? {};
+      const agentOwnSettings = config.settings;
+      const agentOwnPrompts = config.prompts;
 
       // Merge with parent settings and prompts
       settings = deepmerge(parentSettings, agentOwnSettings, {
@@ -228,10 +223,10 @@ export async function loadAgentSettingAndPrompts(
       });
     } else {
       // No inheritance, just take own settings and prompts
-      settings = deepmerge({}, config.settings ?? {}, {
+      settings = deepmerge({}, config.settings, {
         arrayMerge: (_d, s) => s,
       });
-      prompts = deepmerge({}, config.prompts ?? {}, {
+      prompts = deepmerge({}, config.prompts, {
         arrayMerge: (_d, s) => s,
       });
     }

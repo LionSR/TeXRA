@@ -19,7 +19,6 @@ import type {
   ResponseInputImage,
   ResponseInputText,
   ResponseStreamEvent,
-  ResponseOutputText,
 } from 'openai/resources/responses/responses';
 import type { Reasoning } from 'openai/resources/shared';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
@@ -35,6 +34,7 @@ import {
   type ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
 import { ToolState } from '../core/ToolState';
+import { z } from 'zod';
 
 // Local imports - base handler
 import { ModelHandler } from './ModelHandler';
@@ -61,6 +61,59 @@ import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
+const ResponseOutputPartSchema = z
+  .object({
+    type: z.string(),
+    text: z.string().optional(),
+  })
+  .passthrough();
+
+const ResponseOutputItemSchema = z
+  .object({
+    type: z.string(),
+    content: z.array(ResponseOutputPartSchema).optional().default([]),
+  })
+  .passthrough();
+
+const ResponseUsageDetailsSchema = z
+  .object({
+    cached_tokens: z.number().int().nonnegative().default(0),
+  })
+  .passthrough()
+  .default({ cached_tokens: 0 });
+
+const ResponseOutputDetailsSchema = z
+  .object({
+    reasoning_tokens: z.number().int().nonnegative().default(0),
+  })
+  .passthrough()
+  .default({ reasoning_tokens: 0 });
+
+const ResponseUsageSchema = z
+  .object({
+    input_tokens: z.number().int().nonnegative(),
+    output_tokens: z.number().int().nonnegative(),
+    total_tokens: z.number().int().nonnegative(),
+    input_tokens_details: ResponseUsageDetailsSchema,
+    output_tokens_details: ResponseOutputDetailsSchema,
+  })
+  .passthrough();
+
+const ResponseEnvelopeSchema = z
+  .object({
+    status: z.string(),
+    usage: ResponseUsageSchema,
+    output_text: z
+      .string()
+      .optional()
+      .transform((value) => (value ?? '').trim()),
+    output: z
+      .array(ResponseOutputItemSchema)
+      .optional()
+      .transform((value) => value ?? []),
+  })
+  .passthrough();
+
 interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;
   fileId: string;
@@ -75,7 +128,7 @@ interface UploadedOpenAIResponseAttachment {
  */
 export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
-  ResponseUsage | undefined,
+  ResponseUsage,
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
@@ -613,32 +666,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   extractResponse(
     responseObject: Response,
     endTag: string,
-  ): [string, ResponseUsage | undefined, ProviderStopReason] {
-    const usage = responseObject.usage ?? {
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      input_tokens_details: { cached_tokens: 0 },
-      output_tokens_details: { reasoning_tokens: 0 },
-    };
+  ): [string, ResponseUsage, ProviderStopReason] {
+    const parsed = ResponseEnvelopeSchema.parse(responseObject);
+    const usage = parsed.usage;
 
-    const rawOutputText = responseObject.output_text;
-    let newResponse =
-      typeof rawOutputText === 'string' ? rawOutputText.trim() : '';
+    let newResponse = parsed.output_text;
 
     if (!newResponse) {
-      const fallbackSegments =
-        responseObject.output?.flatMap((item) => {
-          if (item.type !== 'message') {
-            return [];
-          }
+      const fallbackSegments: string[] = [];
 
-          return item.content
-            .filter(
-              (part): part is ResponseOutputText => part.type === 'output_text',
-            )
-            .map((part) => part.text);
-        }) ?? [];
+      for (const item of parsed.output) {
+        if (item.type !== 'message') {
+          continue;
+        }
+
+        for (const part of item.content) {
+          if (part.type === 'output_text' && typeof part.text === 'string') {
+            fallbackSegments.push(part.text);
+          }
+        }
+      }
+
       const fallbackText = fallbackSegments.join('').trim();
       if (fallbackText) {
         newResponse = fallbackText;
@@ -646,7 +694,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const stopReason =
-      responseObject.status === 'completed'
+      parsed.status === 'completed'
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
@@ -662,11 +710,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /** Price computation adapted for Responses API token fields. */
-  computePrice(responseUsage: ResponseUsage | undefined): number {
-    if (!responseUsage) {
-      return 0.0;
-    }
-
+  computePrice(responseUsage: ResponseUsage): number {
     const promptTokens = responseUsage.input_tokens ?? 0;
     const completionTokens = responseUsage.output_tokens ?? 0;
 
@@ -697,28 +741,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   /** Map usage fields and create usage statistics object. */
   computeResponseUsage(
-    responseUsage: ResponseUsage | undefined,
+    responseUsage: ResponseUsage,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    if (!responseUsage) {
-      const emptyUsage: ExtendedCompletionUsage = {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        prompt_tokens_details: { cached_tokens: 0 },
-        completion_tokens_details: {
-          reasoning_tokens: 0,
-          accepted_prediction_tokens: undefined,
-          rejected_prediction_tokens: undefined,
-        },
-      };
-      return ResponseUsageFactory.fromOpenAIResponse(
-        emptyUsage,
-        this.computePrice(responseUsage),
-        responseTime,
-      );
-    }
-
     const mapped: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage.input_tokens ?? 0,
       completion_tokens: responseUsage.output_tokens ?? 0,

@@ -26,6 +26,14 @@ export const ToolStateSnapshotSchema = z
   })
   .strict();
 
+const ProviderMessageSchema = z.custom<ProviderMessage>(
+  (value): value is ProviderMessage =>
+    typeof value === 'object' && value !== null,
+  {
+    message: 'messages must contain provider message objects',
+  },
+);
+
 export const ToolUseSessionSnapshotSchema = z
   .object({
     version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
@@ -35,7 +43,7 @@ export const ToolUseSessionSnapshotSchema = z
     model: z.string(),
     agentSessionKind: z.enum(AgentCategory).optional(),
     session: AgentSessionDescriptorSchema.optional(),
-    messages: z.array(z.unknown()),
+    messages: z.array(ProviderMessageSchema),
     toolState: ToolStateSnapshotSchema,
     lastUpdated: z.number(),
   })
