@@ -97,4 +97,3 @@ describe('getToolFlags', () => {
     assert.equal(flags.ROUNDS, 3);
   });
 });
-

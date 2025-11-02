@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from './AgentState';
+import { RunMetricsState, RoundMetricsState } from './AgentState';
 import { ToolState } from './ToolState';
 
 // Local imports - flow orchestration
@@ -26,15 +26,15 @@ export interface ResponseCycleOptions<C = unknown>
 export interface ResponseCycleContext<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
+  stateRound: RoundMetricsState;
+  stateGlobal: RunMetricsState;
   toolState: ToolState;
   outputFile: string;
 }
 
 export interface ResponseCycleResult {
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
+  stateRound: RoundMetricsState;
+  stateGlobal: RunMetricsState;
   toolState: ToolState;
   endTurn: boolean;
 }

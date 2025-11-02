@@ -16,7 +16,7 @@ import {
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound } from '../core/AgentState';
+import { RoundMetricsState } from '../core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -792,7 +792,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: any[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     _toolState: ToolState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -804,7 +804,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: any[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -918,7 +918,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       toolState.updateAccumulatedOutput(prefill + fileContent);
       await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
     }
-    const state = new AgentStateRound(0);
+    const state = new RoundMetricsState(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,

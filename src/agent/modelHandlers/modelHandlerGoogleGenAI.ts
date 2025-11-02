@@ -29,7 +29,7 @@ import { toGoogleTools } from './toolConversion';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -848,7 +848,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   addContinueMessageWithoutPrefill(
     messages: Content[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -987,7 +987,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
     toolState.updateAccumulatedOutput(fileContent);
     toolState.lastResponse = fileContent;
-    const state = new AgentStateRound(0);
+    const state = new RoundMetricsState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
       state,

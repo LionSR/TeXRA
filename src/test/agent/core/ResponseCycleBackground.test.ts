@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '@agent/core/AgentState';
 import {
   AgentSetting,
   AgentPrompt,
@@ -328,8 +328,8 @@ describe('ResponseCycle background reasoning logs', () => {
     });
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new AgentStateRound(1);
-    const stateGlobal = new AgentStateGlobal();
+    const stateRound = new RoundMetricsState(1);
+    const stateGlobal = new RunMetricsState();
     const toolState = new ToolState();
 
     await runResponseCycle({

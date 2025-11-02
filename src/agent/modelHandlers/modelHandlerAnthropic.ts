@@ -63,7 +63,7 @@ import {
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateRound } from '@agent/core/AgentState';
+import { RoundMetricsState } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
@@ -379,7 +379,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           }
         }
-        // in the future we log this in firstInputTokens of the AgentStateGlobal
+        // in the future we log this in firstInputTokens of the RunMetricsState
       }
     }
 
@@ -1043,7 +1043,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     _toolState: ToolState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -1055,7 +1055,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -1193,7 +1193,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = new AgentStateRound(0);
+      const state = new RoundMetricsState(0);
       this.addContinueMessageWithoutPrefill(
         messages,
         state,

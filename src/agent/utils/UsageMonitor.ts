@@ -2,7 +2,7 @@
 import { ResponseUsage } from 'openai/resources/responses/responses';
 
 // Local imports - agent
-import { AgentStateGlobal } from '@agent/core/AgentState';
+import { RunMetricsState } from '@agent/core/AgentState';
 import {
   ExtendedCompletionUsage,
   AnthropicUsage,
@@ -29,7 +29,7 @@ export class UsageMonitor {
   ) {}
 
   async recordUsage(
-    stateGlobal: AgentStateGlobal,
+    stateGlobal: RunMetricsState,
     groupId?: string,
   ): Promise<void> {
     const statsGroupId = groupId ?? this.logger.getActiveGroupId();

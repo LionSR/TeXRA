@@ -8,7 +8,7 @@ import { encode as encodeHtml } from 'he';
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '../core/AgentState';
 import { ToolState } from '../core/ToolState';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
@@ -525,8 +525,8 @@ export abstract class ModelHandler<
 
   /** Calculates token-based stop flags. */
   protected computeTokenFlags(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
   ): TokenFlags {
     const maxOutputTokens =
       stateGlobal.firstInputTokens > 0
@@ -567,8 +567,8 @@ export abstract class ModelHandler<
   public checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     agentSetting: AgentSetting,
   ): [boolean, boolean] {
     const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
@@ -671,7 +671,7 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
+    stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
@@ -683,7 +683,7 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
+    stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,

@@ -10,36 +10,86 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);
 
+/** Snapshot of usage metrics that a single round contributes to a run. */
+export interface RoundUsageMetricsSnapshot {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  reasoningTokens: number;
+  toolUseTokens: number;
+  firstInputTokenContribution: number;
+}
+
 /** Interface for tracking state within a single conversation round. */
-export interface IAgentStateRound {
+export interface IRoundMetricsState {
   currRound: number;
   continuationCount: number;
   responseTime: number;
-  outputFile: string;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
+  metrics: RoundUsageMetricsSnapshot | null;
+}
+
+function createEmptyMetrics(): RoundUsageMetricsSnapshot {
+  return {
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+    reasoningTokens: 0,
+    toolUseTokens: 0,
+    firstInputTokenContribution: 0,
+  };
 }
 
 /** Manages state and metrics for a single conversation round. */
-export class AgentStateRound implements IAgentStateRound {
+export class RoundMetricsState implements IRoundMetricsState {
   currRound: number;
   continuationCount: number;
   responseTime: number;
-  outputFile: string;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
+  private usageMetrics: RoundUsageMetricsSnapshot;
+  private hasUsageMetrics: boolean;
 
   constructor(currRound: number) {
     this.currRound = currRound;
     this.continuationCount = 0;
     this.responseTime = 0;
-    this.outputFile = '';
-    this.APIUsage = null;
+    this.usageMetrics = createEmptyMetrics();
+    this.hasUsageMetrics = false;
   }
 
   /** Updates token usage metrics from model API response. */
-  updateTokenCounts(
+  updateUsageMetrics(
     responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,
   ): void {
-    this.APIUsage = responseUsage;
+    const metrics = createEmptyMetrics();
+    metrics.totalInputTokens = responseUsage.totalInputTokens;
+    metrics.totalOutputTokens = responseUsage.totalOutputTokens;
+    metrics.firstInputTokenContribution = responseUsage.totalInputTokens;
+
+    if ('cache_read_input_tokens' in responseUsage) {
+      metrics.cacheReadInputTokens = responseUsage.cache_read_input_tokens ?? 0;
+      metrics.cacheCreationInputTokens =
+        responseUsage.cache_creation_input_tokens ?? 0;
+      metrics.firstInputTokenContribution +=
+        metrics.cacheReadInputTokens + metrics.cacheCreationInputTokens;
+    } else if ('cached_tokens' in responseUsage) {
+      metrics.cacheReadInputTokens = responseUsage.cached_tokens ?? 0;
+    }
+
+    if ('reasoning_tokens' in responseUsage) {
+      metrics.reasoningTokens = responseUsage.reasoning_tokens ?? 0;
+    }
+
+    if (
+      'tool_use_tokens' in responseUsage &&
+      responseUsage.tool_use_tokens !== null &&
+      responseUsage.tool_use_tokens !== undefined
+    ) {
+      metrics.toolUseTokens = responseUsage.tool_use_tokens;
+    }
+
+    this.usageMetrics = metrics;
+    this.hasUsageMetrics = true;
   }
 
   /** Adds response time in milliseconds to the round total. */
@@ -52,37 +102,38 @@ export class AgentStateRound implements IAgentStateRound {
     this.continuationCount += 1;
   }
 
+  /** Returns a copy of the usage metrics captured for this round. */
+  get metrics(): RoundUsageMetricsSnapshot | null {
+    return this.hasUsageMetrics ? { ...this.usageMetrics } : null;
+  }
+
   /** Converts state to a serializable object for persistence. */
   toObject(): Record<string, any> {
-    const stateObj = {
+    return {
       currRound: this.currRound,
       continuationCount: this.continuationCount,
       responseTime: this.responseTime,
-      outputFile: this.outputFile,
-      APIUsage: this.APIUsage,
+      metrics: this.metrics,
     };
-    return stateObj;
   }
 }
 
 /** Interface for tracking aggregate metrics across all conversation rounds. */
-export interface IAgentStateGlobal {
+export interface IRunMetricsState {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
 /** Manages global state and aggregates metrics across conversation rounds. */
-export class AgentStateGlobal implements IAgentStateGlobal {
+export class RunMetricsState implements IRunMetricsState {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
   public totalCacheReadInputTokens: number = 0;
   public totalCacheCreationInputTokens: number = 0;
   public totalReasoningTokens: number = 0;
@@ -94,78 +145,34 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
     this.totalRounds = 0;
-    this.APIUsage = null;
   }
 
   /** Updates global metrics by incorporating round state data. */
-  updateFromCurrRound(stateRound: AgentStateRound): void {
-    if (stateRound.APIUsage) {
+  updateFromRoundMetrics(
+    roundMetrics: RoundUsageMetricsSnapshot | null,
+    responseTime: number,
+  ): void {
+    if (roundMetrics) {
       if (this.firstInputTokens === 0) {
-        this.firstInputTokens = stateRound.APIUsage.totalInputTokens;
+        this.firstInputTokens = roundMetrics.firstInputTokenContribution;
       }
 
-      // For Anthropic models, handle cache tokens directly from response
-      if ('cache_read_input_tokens' in stateRound.APIUsage) {
-        const cacheRead = stateRound.APIUsage.cache_read_input_tokens ?? 0;
-        const cacheCreation =
-          stateRound.APIUsage.cache_creation_input_tokens ?? 0;
-        this.totalCacheReadInputTokens += cacheRead;
-        this.totalCacheCreationInputTokens += cacheCreation;
-        this.firstInputTokens += cacheRead + cacheCreation;
-      }
-      // For OpenAI models with auto prompt caching, handle cache tokens from prompt_tokens_details
-      else if (
-        'prompt_tokens_details' in stateRound.APIUsage &&
-        stateRound.APIUsage.prompt_tokens_details
-      ) {
-        const promptDetails = stateRound.APIUsage.prompt_tokens_details as {
-          cached_tokens?: number;
-        };
-        if ('cached_tokens' in promptDetails) {
-          this.totalCacheReadInputTokens += promptDetails.cached_tokens ?? 0;
-        }
-      }
-
-      // For OpenAI models, handle reasoning tokens from completion_tokens_details
-      if (
-        'completion_tokens_details' in stateRound.APIUsage &&
-        stateRound.APIUsage.completion_tokens_details
-      ) {
-        const completionDetails = stateRound.APIUsage
-          .completion_tokens_details as { reasoning_tokens?: number };
-        if ('reasoning_tokens' in completionDetails) {
-          this.totalReasoningTokens += completionDetails.reasoning_tokens ?? 0;
-        }
-      }
-      // For older OpenAI models, handle reasoning tokens directly
-      else if ('reasoning_tokens' in stateRound.APIUsage) {
-        this.totalReasoningTokens += stateRound.APIUsage.reasoning_tokens ?? 0;
-      }
-
-      // Track tokens used for tool calls
-      // Note: Only Google models provide tool_use_tokens (as toolUsePromptTokenCount)
-      // OpenAI and Anthropic don't provide this information in their API responses
-      if (
-        'tool_use_tokens' in stateRound.APIUsage &&
-        stateRound.APIUsage.tool_use_tokens !== null &&
-        stateRound.APIUsage.tool_use_tokens !== undefined
-      ) {
-        this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens;
-      }
-
-      // Update global totals
-      this.totalInputTokens += stateRound.APIUsage.totalInputTokens;
-      this.totalOutputTokens += stateRound.APIUsage.totalOutputTokens;
+      this.totalInputTokens += roundMetrics.totalInputTokens;
+      this.totalOutputTokens += roundMetrics.totalOutputTokens;
+      this.totalCacheReadInputTokens += roundMetrics.cacheReadInputTokens;
+      this.totalCacheCreationInputTokens +=
+        roundMetrics.cacheCreationInputTokens;
+      this.totalReasoningTokens += roundMetrics.reasoningTokens;
+      this.totalToolUseTokens += roundMetrics.toolUseTokens;
     }
 
-    this.totalResponseTime += stateRound.responseTime;
+    this.totalResponseTime += responseTime;
   }
 
   incrementRounds(): void {
     this.totalRounds += 1;
   }
 
-  // are the following two methods needed?
   /** Converts global state to a serializable object for persistence. */
   toObject(): Record<string, any> {
     return {
@@ -174,7 +181,6 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       totalInputTokens: this.totalInputTokens,
       totalOutputTokens: this.totalOutputTokens,
       totalRounds: this.totalRounds,
-      APIUsage: this.APIUsage,
       totalCacheReadInputTokens: this.totalCacheReadInputTokens,
       totalCacheCreationInputTokens: this.totalCacheCreationInputTokens,
       totalReasoningTokens: this.totalReasoningTokens,
@@ -182,19 +188,18 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     };
   }
 
-  /** Creates an AgentStateGlobal instance from a persisted state object. */
-  static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
+  /** Creates a RunMetricsState instance from a persisted state object. */
+  static fromObject(stateObj: Record<string, any> | null): RunMetricsState {
     if (!stateObj) {
-      return new AgentStateGlobal();
+      return new RunMetricsState();
     }
 
-    const state = new AgentStateGlobal();
+    const state = new RunMetricsState();
     state.firstInputTokens = stateObj.firstInputTokens ?? 0;
     state.totalResponseTime = stateObj.totalResponseTime ?? 0;
     state.totalInputTokens = stateObj.totalInputTokens ?? 0;
     state.totalOutputTokens = stateObj.totalOutputTokens ?? 0;
     state.totalRounds = stateObj.totalRounds ?? 0;
-    state.APIUsage = stateObj.APIUsage ?? null;
     state.totalCacheReadInputTokens = stateObj.totalCacheReadInputTokens ?? 0;
     state.totalCacheCreationInputTokens =
       stateObj.totalCacheCreationInputTokens ?? 0;

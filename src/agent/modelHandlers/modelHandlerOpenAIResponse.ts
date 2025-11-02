@@ -28,7 +28,7 @@ import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { AgentConfig } from '../core/AgentConfig';
 import type { AgentSetting } from '../core/AgentDataclass';
 import { hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound } from '../core/AgentState';
+import { RoundMetricsState } from '../core/AgentState';
 import {
   ResponseUsageFactory,
   type OpenAIAPIResponseUsage,
@@ -744,7 +744,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Models with prefill support do not require additional continuation messages. */
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     _toolState: ToolState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -1010,7 +1010,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Adds continuation instructions for models without prefill support. */
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
-    _stateRound: AgentStateRound,
+    _stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
@@ -1094,7 +1094,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
     }
 
-    const state = new AgentStateRound(0);
+    const state = new RoundMetricsState(0);
     toolState.lastResponse = toolState.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,

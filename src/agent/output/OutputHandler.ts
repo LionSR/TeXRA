@@ -23,7 +23,6 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -439,11 +438,7 @@ export class OutputHandler implements IOutputHandler {
           );
 
           this.setRoundOutputs(currRound, processedFiles, processedPairs);
-          await this.captureXmlSummary(
-            currRound,
-            outputFile,
-            processedPairs,
-          );
+          await this.captureXmlSummary(currRound, outputFile, processedPairs);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -533,9 +528,7 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  public async getRoundArtifacts(
-    round: number,
-  ): Promise<RoundOutputArtifacts> {
+  public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
     const outputFiles = this.ensureRound(round).slice();
     const processed = (this.outputMappings[round] || []).map((entry) => ({
       ...entry,
@@ -610,16 +603,20 @@ export class OutputHandler implements IOutputHandler {
           );
         }
       } else {
-        const singleDocument = extractTextFromTag(rawContent, documentTag).trim();
+        const singleDocument = extractTextFromTag(
+          rawContent,
+          documentTag,
+        ).trim();
         if (singleDocument) {
           tagContents[documentTag] = singleDocument;
-          documents.push(
-            `<${documentTag}>${singleDocument}</${documentTag}>`,
-          );
+          documents.push(`<${documentTag}>${singleDocument}</${documentTag}>`);
         }
       }
 
-      const scratchpadContent = extractTextFromTag(rawContent, 'scratchpad').trim();
+      const scratchpadContent = extractTextFromTag(
+        rawContent,
+        'scratchpad',
+      ).trim();
       if (scratchpadContent) {
         tagContents.scratchpad = scratchpadContent;
       }

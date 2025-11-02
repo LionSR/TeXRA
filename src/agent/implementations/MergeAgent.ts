@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '../core/AgentState';
 import { RoundOutputOptions } from './BaseReflectionAgent';
 
 // Local imports - agent components
@@ -139,8 +139,8 @@ export class MergeAgent extends DirectAgent {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, processGroupId } = options;

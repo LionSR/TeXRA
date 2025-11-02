@@ -6,7 +6,7 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '@agent/core/AgentState';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { ToolState } from '@agent/core/ToolState';
@@ -65,13 +65,13 @@ export interface RoundOutputOptions {
 
 export interface ReflectionRoundContext {
   roundIndex: number;
-  globalState: AgentStateGlobal;
+  globalState: RunMetricsState;
   messages: any[];
 }
 
 export interface ReflectionRoundResult {
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
+  roundState: RoundMetricsState;
+  globalState: RunMetricsState;
   messages: any[];
   shouldContinue: boolean;
   toolState: ToolState;
@@ -86,8 +86,8 @@ export interface AgentRuntimeXmlExports {
 
 interface RoundPipelineContext {
   roundIndex: number;
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
+  roundState: RoundMetricsState;
+  globalState: RunMetricsState;
   toolState: ToolState;
   preparedMessages: any[];
   prefill: string;
@@ -112,7 +112,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
-  public roundStates: AgentStateRound[] = [];
+  public roundStates: RoundMetricsState[] = [];
   public toolStates: ToolState[] = [];
   public roundOutputArtifacts: RoundOutputArtifacts[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
@@ -220,8 +220,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   private async handleRoundCompletion(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
     const { outputFile, endTurn, processGroupId } = options;
@@ -261,8 +261,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, processGroupId } = options;
@@ -405,17 +405,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareRoundContext(
     currRound: number,
-    _stateGlobal: AgentStateGlobal,
+    _stateGlobal: RunMetricsState,
     messages: any[],
     toolState: ToolState,
     roundGroupId: string,
   ): Promise<{
-    stateRound: AgentStateRound;
+    stateRound: RoundMetricsState;
     preparedMessages: any[];
     prefill?: string;
     skip: boolean;
   }> {
-    const stateRound = new AgentStateRound(currRound);
+    const stateRound = new RoundMetricsState(currRound);
     const promptBuilder = this.getPromptBuilder();
 
     if (currRound === 0) {
@@ -638,7 +638,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           currentRound: 0,
           continueRounds: true,
           messages: [],
-          globalState: new AgentStateGlobal(),
+          globalState: new RunMetricsState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => {

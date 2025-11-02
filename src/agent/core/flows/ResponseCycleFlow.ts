@@ -5,7 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import { RunMetricsState, RoundMetricsState } from '@agent/core/AgentState';
 import { ToolState } from '@agent/core/ToolState';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -72,8 +72,8 @@ async function maybeSaveDebug(
 
 export interface ResponseCycleInputState {
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
+  stateRound: RoundMetricsState;
+  stateGlobal: RunMetricsState;
   toolState: ToolState;
   outputFile: string;
 }
@@ -376,8 +376,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       responseUsage,
       cycle.responseTime ?? 0,
     );
-    cycle.stateRound.updateTokenCounts(apiUsage);
-    cycle.stateGlobal.updateFromCurrRound(cycle.stateRound);
+    cycle.stateRound.updateUsageMetrics(apiUsage);
+    cycle.stateGlobal.updateFromRoundMetrics(
+      cycle.stateRound.metrics,
+      cycle.stateRound.responseTime,
+    );
 
     const repetitionResult = checkForMassiveRepetition(
       cycle.toolState.lastResponse,

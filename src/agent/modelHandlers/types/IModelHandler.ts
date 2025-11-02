@@ -1,7 +1,7 @@
 // Local imports - agent components
 import type { AgentConfig } from '../../core/AgentConfig';
 import { AgentSetting, AgentType } from '../../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
+import { RoundMetricsState, RunMetricsState } from '../../core/AgentState';
 import { ToolState } from '../../core/ToolState';
 import type { MediaEntry } from '../../utils/mediaTypes';
 
@@ -115,7 +115,7 @@ export interface IModelHandler<
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
+    stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
@@ -124,7 +124,7 @@ export interface IModelHandler<
   /** Handle continuation for models without prefill. */
   addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
+    stateRound: RoundMetricsState,
     toolState: ToolState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
@@ -177,8 +177,8 @@ export interface IModelHandler<
   checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: RunMetricsState,
     agentSetting: AgentSetting,
   ): [boolean, boolean];
 
