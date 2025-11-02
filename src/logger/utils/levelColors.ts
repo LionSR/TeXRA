@@ -14,4 +14,3 @@ const EMOJI_BY_LEVEL: Record<string, string> = {
 export function getColorForLevel(level: string): string {
   return EMOJI_BY_LEVEL[level.toLowerCase()] ?? '•';
 }
-
