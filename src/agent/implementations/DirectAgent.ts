@@ -4,9 +4,6 @@ import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
 
-// Local imports - logging
-import { withLogGroup } from '@logger/logGroupUtils';
-
 /**
  * Direct agent implementation that processes requests in a single pass.
  * Extends BaseReflectionAgent with simplified output handling and no intermediate steps.
@@ -43,61 +40,31 @@ export class DirectAgent extends BaseReflectionAgent {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
+    const { outputFile, endTurn } = options;
+    try {
+      this.outputHandler.ensureRound(currRound);
 
-    const runOutputHandling = async (groupId?: string): Promise<string[]> => {
-      const effectiveGroupId = groupId ?? this.logger.getActiveGroupId();
+      if (endTurn) {
+        this.logger.debug(`Processing output for round ${currRound}`);
 
-      try {
-        this.outputHandler.ensureRound(currRound);
-
-        if (endTurn) {
-          this.logger.debug(
-            `Processing output for round ${currRound}`,
-            effectiveGroupId,
-          );
-
-          if (this.useScratchpad) {
-            await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-              outputFile,
-              this.agentSetting.documentTag,
-            );
-          }
-
-          await this.outputHandler.processOutputFiles(
+        if (this.useScratchpad) {
+          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
             outputFile,
-            currRound,
-            effectiveGroupId,
-          );
-          this.logger.debug(
-            `Output files processed for round ${currRound}`,
-            effectiveGroupId,
+            this.agentSetting.documentTag,
           );
         }
 
-        return super.handleOutput(currRound, stateRound, stateGlobal, {
-          outputFile,
-          endTurn,
-          processGroupId: effectiveGroupId,
-        });
-      } catch (error) {
-        this.logger.error(
-          `Error in DirectAgent.handleOutput: ${error}`,
-          effectiveGroupId,
-        );
-        throw error;
+        await this.outputHandler.processOutputFiles(outputFile, currRound);
+        this.logger.debug(`Output files processed for round ${currRound}`);
       }
-    };
 
-    if (processGroupId) {
-      return runOutputHandling(processGroupId);
+      return super.handleOutput(currRound, stateRound, stateGlobal, {
+        outputFile,
+        endTurn,
+      });
+    } catch (error) {
+      this.logger.error(`Error in DirectAgent.handleOutput: ${error}`);
+      throw error;
     }
-
-    return withLogGroup(
-      this.logger,
-      `OutputProcessing-Round${currRound}`,
-      runOutputHandling,
-      { parentGroupId: this.logger.getActiveGroupId() },
-    );
   }
 }

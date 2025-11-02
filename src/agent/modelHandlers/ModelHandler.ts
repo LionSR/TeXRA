@@ -697,7 +697,6 @@ export abstract class ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, M[]]>;
 
   /**
