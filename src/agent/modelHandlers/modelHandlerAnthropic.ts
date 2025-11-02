@@ -1285,6 +1285,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           text: bestConnector + newResponse,
         };
         lastMessage.content.push(newMessage);
+        this.assignCacheControlToLatest(lastMessage.content);
       } else {
         lastMessage.content = [
           {
@@ -1292,9 +1293,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
             text: toolState.accumulatedOutput,
           } as ContentBlockParam,
         ];
-      }
-
-      if (Array.isArray(lastMessage.content)) {
         this.assignCacheControlToLatest(lastMessage.content);
       }
     }
@@ -1330,13 +1328,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // So the second last message must be an assistant message
 
       if (secondLastMessage && secondLastMessage.role === 'assistant') {
+        // Ensure content is an array
+        if (!Array.isArray(secondLastMessage.content)) {
+          secondLastMessage.content = [];
+        }
+
         // Preserve any thinking blocks that might exist in the content array
-        const thinkingBlocks = Array.isArray(secondLastMessage.content)
-          ? secondLastMessage.content.filter(
-              (item) =>
-                item.type === 'thinking' || item.type === 'redacted_thinking',
-            )
-          : [];
+        const thinkingBlocks = secondLastMessage.content.filter(
+          (item) =>
+            item.type === 'thinking' || item.type === 'redacted_thinking',
+        );
 
         // Text blocks filtering removed - was unused
 
@@ -1347,56 +1348,47 @@ export class ModelHandlerAnthropic extends ModelHandler<
           this.logger.debug(
             `Using ${thinkingBlocks.length} existing thinking blocks from previous message`,
           );
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            } as ContentBlockParam);
-          }
-        } else {
-          if (Array.isArray(secondLastMessage.content)) {
-            secondLastMessage.content.push({
-              type: 'text',
-              text: bestConnector + newResponse,
-            } as ContentBlockParam);
-          }
-          // Add the updated text content
-          // If there are existing text blocks, update with new content
-          // Otherwise create a new text block with the new returned thinking block if it is not after cut off
-          // we should not add the new thinking block if it is after cut off
-          // but we still need to add at least somewhere...
-
-          // let newThinkingContent: any[] = [];
-
-          // if (toolState.thinkingAdded && toolState.thinkingBlocks.length > 0) {
-          //   // if we have thinking blocks, then we use them
-          //   this.logger.debug(
-          //     `Using ${toolState.thinkingBlocks.length} existing thinking blocks from previous message`,
-          //   );
-          //   newThinkingContent = [...toolState.thinkingBlocks];
-          // }
-
-          // let newContent: any[] = [];
-
-          // if (textBlocks.length > 0) {
-          //   newContent = [...newThinkingContent, ...textBlocks];
-          // } else {
-          //   newContent = [
-          //     ...newThinkingContent,
-          //     {
-          //       type: 'text',
-          //       text: toolState.accumulatedOutput,
-          //     },
-          //   ];
-          // }
-
-          // Replace the content of the second last message with our new content array
-          // secondLastMessage.content = newContent;
         }
 
-        if (Array.isArray(secondLastMessage.content)) {
-          this.assignCacheControlToLatest(secondLastMessage.content);
-        }
+        secondLastMessage.content.push({
+          type: 'text',
+          text: bestConnector + newResponse,
+        } as ContentBlockParam);
+
+        // Add the updated text content
+        // If there are existing text blocks, update with new content
+        // Otherwise create a new text block with the new returned thinking block if it is not after cut off
+        // we should not add the new thinking block if it is after cut off
+        // but we still need to add at least somewhere...
+
+        // let newThinkingContent: any[] = [];
+
+        // if (toolState.thinkingAdded && toolState.thinkingBlocks.length > 0) {
+        //   // if we have thinking blocks, then we use them
+        //   this.logger.debug(
+        //     `Using ${toolState.thinkingBlocks.length} existing thinking blocks from previous message`,
+        //   );
+        //   newThinkingContent = [...toolState.thinkingBlocks];
+        // }
+
+        // let newContent: any[] = [];
+
+        // if (textBlocks.length > 0) {
+        //   newContent = [...newThinkingContent, ...textBlocks];
+        // } else {
+        //   newContent = [
+        //     ...newThinkingContent,
+        //     {
+        //       type: 'text',
+        //       text: toolState.accumulatedOutput,
+        //     },
+        //   ];
+        // }
+
+        // Replace the content of the second last message with our new content array
+        // secondLastMessage.content = newContent;
+
+        this.assignCacheControlToLatest(secondLastMessage.content);
 
         // Remove the user continuation prompt to keep the conversation clean
         if (messages.at(-1)?.role === 'user') {
@@ -1412,36 +1404,32 @@ export class ModelHandlerAnthropic extends ModelHandler<
         'Last message is a request message rather than a ask to continue after cut off',
       );
       // Create a new assistant message with the response
-      const assistantMessage: MessageParam = {
-        role: 'assistant',
-        content: [],
-      };
+      const content: ContentBlockParam[] = [];
 
       // Include all thinking blocks from toolState if available
       if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
         this.logger.debug(
           `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
-        if (Array.isArray(assistantMessage.content)) {
-          assistantMessage.content.push(...toolState.thinkingBlocks);
-        }
+        content.push(...toolState.thinkingBlocks);
         // Clear cached thinking so the next response can store fresh blocks
         toolState.resetThinkingCache();
       }
 
       // Add the text content
-      if (Array.isArray(assistantMessage.content)) {
-        assistantMessage.content.push({
-          type: 'text',
-          text: toolState.accumulatedOutput,
-        } as ContentBlockParam);
-      }
+      content.push({
+        type: 'text',
+        text: toolState.accumulatedOutput,
+      } as ContentBlockParam);
+
+      const assistantMessage: MessageParam = {
+        role: 'assistant',
+        content,
+      };
 
       messages.push(assistantMessage);
 
-      if (Array.isArray(assistantMessage.content)) {
-        this.assignCacheControlToLatest(assistantMessage.content);
-      }
+      this.assignCacheControlToLatest(content);
 
       this.logger.debug('Added a new assistant message');
     }

@@ -81,7 +81,7 @@ export class InstructionManager {
     active: boolean,
     files?: string[],
   ): void {
-    if (active && files && Array.isArray(files) && files.length > 0) {
+    if (active && files?.length) {
       (context as any)[contextKey] = files;
     }
   }

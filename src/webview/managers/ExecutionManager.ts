@@ -26,14 +26,6 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
-  if (!Array.isArray(files)) {
-    return [];
-  }
-
-  return files;
-}
-
 export class ExecutionManager {
   constructor() {}
 
@@ -82,7 +74,7 @@ export class ExecutionManager {
     session: AgentSessionDescriptor,
   ): AgentConfig {
     const baseConfig = this.composeBaseAgentConfig(message, session);
-    const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
+    const outputFiles = message.outputFiles ?? [];
     const useMultipleOutputs = Boolean(
       message.outputFilesActive || outputFiles.length > 1,
     );
@@ -135,17 +127,16 @@ export class ExecutionManager {
       model: message.model,
       instruction: message.instruction,
       inputFile: message.inputFile ?? '',
-      inputFiles: getFilesIfNotEmpty<string>(message.inputFiles),
+      inputFiles: message.inputFiles ?? [],
       referenceFile: message.referenceFile ?? null,
-      referenceFiles: getFilesIfNotEmpty<string>(message.referenceFiles),
+      referenceFiles: message.referenceFiles ?? [],
       auxiliaryFile: message.auxiliaryFile ?? null,
-      auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
+      auxiliaryFiles: message.auxiliaryFiles ?? [],
       mediaFile: mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: getFilesIfNotEmpty<string>(
+      mediaFiles:
         (message.mediaFiles ?? [])
           .map(mapMediaPath)
-          .filter((f: string | null): f is string => f !== null),
-      ),
+          .filter((f: string | null): f is string => f !== null) ?? [],
       editedFile: null,
       toolConfig,
       agentType: session.agentType,
@@ -191,9 +182,7 @@ export class ExecutionManager {
     const operation = message.command.startsWith('pack')
       ? 'Packing'
       : 'Cleaning';
-    const outputFilesStr = Array.isArray(message.outputFiles)
-      ? message.outputFiles.join(', ')
-      : '';
+    const outputFilesStr = message.outputFiles?.join(', ') ?? '';
 
     logger.info(
       CHANNEL,
