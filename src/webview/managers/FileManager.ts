@@ -180,9 +180,7 @@ export class FileManager {
     try {
       const agentPath = await getAgentPath(agent);
       const [settings] = await loadAgentSettingAndPrompts(agentPath);
-      const files = Array.isArray(settings?.defaultOutputFiles)
-        ? settings.defaultOutputFiles
-        : [];
+      const files = settings?.defaultOutputFiles ?? [];
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files,

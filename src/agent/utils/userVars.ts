@@ -265,15 +265,9 @@ function getOutputFilesOrder(
   agentSetting: AgentSetting,
 ): Record<string, any> {
   const userVars: Record<string, any> = {};
-  if (
-    Array.isArray(agentConfig.outputFiles) &&
-    agentConfig.outputFiles.length > 0
-  ) {
+  if (agentConfig.outputFiles.length > 0) {
     userVars.OUTPUT_FILES_ORDER = agentConfig.outputFiles.join(', ');
-  } else if (
-    Array.isArray(agentSetting.defaultOutputFiles) &&
-    agentSetting.defaultOutputFiles.length > 0
-  ) {
+  } else if (agentSetting.defaultOutputFiles.length > 0) {
     agentConfig.outputFiles = agentSetting.defaultOutputFiles;
     userVars.OUTPUT_FILES_ORDER = agentSetting.defaultOutputFiles.join(', ');
   }
