@@ -1,12 +1,13 @@
 // Standard library imports
 // (none needed)
 
-// Third-party imports
-// (none needed)
-
 // Local imports - models
 import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
-import { type TaskState, isWorkflowTaskState } from '@logger/TaskState';
+import {
+  type TaskState,
+  isWorkflowTaskState,
+  isToolUseTaskState,
+} from '@logger/TaskState';
 import {
   AgentCategory,
   AgentType,
@@ -146,80 +147,30 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
  * @returns A TaskState representing the same configuration
  */
 export function objectToTaskState(obj: Record<string, any>): TaskState {
-  // Check if this is already in the new format with nested agentConfig
-  if (obj.agentConfig && typeof obj.agentConfig === 'object') {
-    const configSource = obj.agentConfig as Record<string, any>;
-    const sessionDescriptor = resolveSessionDescriptor(configSource, obj);
-    const configInput = {
-      ...configSource,
-      ...(sessionDescriptor ? { session: sessionDescriptor } : {}),
-    };
-    const state = agentConfigToTaskState(parseAgentConfig(configInput));
+  const nestedConfig = isObjectRecord(obj.agentConfig)
+    ? (obj.agentConfig as Record<string, unknown>)
+    : null;
 
-    if (isWorkflowTaskState(state)) {
-      state.activeFiles =
-        obj.activeFiles || createActiveFilesFromArrays(configSource);
-    } else if (isObjectRecord(obj.toolSessionState)) {
-      state.toolSessionState = { ...obj.toolSessionState };
-    }
-
-    return state;
-  }
-
-  // Old format: extract UI-specific and tool config fields for backward compatibility
-  const {
-    activeFiles,
-    agentSessionKind: _agentSessionKind,
-    // Extract tool config fields that might be at top level in old format
-    autoExtractFigure,
-    autoExtractTikzFigure,
-    autoCompileInputPdf,
-    attachTeXCount,
-    toolSessionState,
-    toolConfig: legacyToolConfig,
-    ...agentConfigData
-  } = obj;
-
-  void _agentSessionKind;
-
-  const workflowActiveFiles = isObjectRecord(activeFiles)
-    ? (activeFiles as Record<FileType, boolean>)
-    : undefined;
-  const legacyToolState = isObjectRecord(toolSessionState)
-    ? toolSessionState
-    : undefined;
-
-  const baseToolConfig = isObjectRecord(legacyToolConfig)
-    ? (legacyToolConfig as Record<string, unknown>)
-    : {};
-
-  const mergedToolConfig: Record<string, unknown> = {
-    ...baseToolConfig,
-    ...(autoExtractFigure !== undefined && { autoExtractFigure }),
-    ...(autoExtractTikzFigure !== undefined && { autoExtractTikzFigure }),
-    ...(autoCompileInputPdf !== undefined && { autoCompileInputPdf }),
-    ...(attachTeXCount !== undefined && { attachTeXCount }),
-  };
+  const configSource = nestedConfig ?? obj;
+  const sessionDescriptor = resolveSessionDescriptor(configSource, obj);
 
   const configInput: Record<string, unknown> = {
-    ...agentConfigData,
-    toolConfig: mergedToolConfig,
+    ...configSource,
+    ...(sessionDescriptor ? { session: sessionDescriptor } : {}),
   };
 
-  const sessionDescriptor = resolveSessionDescriptor(obj, configInput);
-  if (sessionDescriptor) {
-    configInput.session = sessionDescriptor;
-  }
-
-  const normalized = parseAgentConfig(configInput);
-  const taskState = agentConfigToTaskState(normalized);
+  const normalizedConfig = parseAgentConfig(configInput);
+  const taskState = agentConfigToTaskState(normalizedConfig);
 
   if (isWorkflowTaskState(taskState)) {
-    if (workflowActiveFiles) {
-      taskState.activeFiles = workflowActiveFiles;
+    if (isObjectRecord(obj.activeFiles)) {
+      taskState.activeFiles = obj.activeFiles as Record<FileType, boolean>;
     }
-  } else if (legacyToolState) {
-    taskState.toolSessionState = { ...legacyToolState };
+  } else if (
+    isToolUseTaskState(taskState) &&
+    isObjectRecord(obj.toolSessionState)
+  ) {
+    taskState.toolSessionState = { ...obj.toolSessionState };
   }
 
   return taskState;
