@@ -142,18 +142,18 @@ export class ProgressEventHandler {
 
     const { updateInstruction = true } = options;
 
-    const messages = this.state.streamTabs.get(stream) || [];
+    const messages = this.state.streamTabs.getMessages(stream);
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
     this.webviewUpdater.updateLogContent(stream, messages, groups);
 
     // Send output files for current stream
-    const files = this.state.outputFiles.getFiles(stream) || {};
+    const files = this.state.outputFiles.getFiles(stream);
     this.webviewUpdater.updateFiles(stream, files);
 
     // Send missing outputs for current stream
-    const missing = this.state.outputFiles.getMissingOutputs(stream) || {};
+    const missing = this.state.outputFiles.getMissingOutputs(stream);
     this.webviewUpdater.updateMissingOutputs(stream, missing);
 
     // Send usage for current stream

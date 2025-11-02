@@ -205,16 +205,18 @@ export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
  * Includes the root name, optional inheritance target,
  * settings block and prompt configuration.
  */
+const DefinitionBlockSchema = z.record(z.string(), z.unknown()).default({});
+
 export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
   inherits: z.string().optional(),
-  settings: z.record(z.string(), z.unknown()).optional(),
-  prompts: z.record(z.string(), z.unknown()).optional(),
+  settings: DefinitionBlockSchema,
+  prompts: DefinitionBlockSchema,
 });
 
 export type AgentDefinition = z.infer<typeof AgentDefinitionSchema>;
 
 /** Parses a settings block into an {@link AgentSetting}. */
 export function parseAgentSetting(settings: unknown): AgentSetting {
-  return AgentSettingSchema.parse(settings ?? {});
+  return AgentSettingSchema.parse(settings);
 }

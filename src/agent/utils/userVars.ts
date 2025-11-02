@@ -84,15 +84,15 @@ async function getFileVars(
 
   const allInputFiles = [
     agentConfig.inputFile,
-    ...(agentConfig.inputFiles || []),
+    ...agentConfig.inputFiles,
   ].filter(Boolean) as string[];
   const allReferenceFiles = [
     agentConfig.referenceFile,
-    ...(agentConfig.referenceFiles || []),
+    ...agentConfig.referenceFiles,
   ].filter(Boolean) as string[];
   const allAuxiliaryFiles = [
     agentConfig.auxiliaryFile,
-    ...(agentConfig.auxiliaryFiles || []),
+    ...agentConfig.auxiliaryFiles,
   ].filter(Boolean) as string[];
 
   const singleFileMappings = {
@@ -109,17 +109,14 @@ async function getFileVars(
       : null;
   }
 
-  const collectionMappings: Record<string, [string[] | undefined, string[]]> = {
-    INPUT: [
-      agentConfig.inputFiles?.filter(Boolean) as string[] | undefined,
-      allInputFiles,
-    ],
+  const collectionMappings: Record<string, [string[], string[]]> = {
+    INPUT: [agentConfig.inputFiles.filter(Boolean) as string[], allInputFiles],
     REFERENCE: [
-      agentConfig.referenceFiles?.filter(Boolean) as string[] | undefined,
+      agentConfig.referenceFiles.filter(Boolean) as string[],
       allReferenceFiles,
     ],
     AUXILIARY: [
-      agentConfig.auxiliaryFiles?.filter(Boolean) as string[] | undefined,
+      agentConfig.auxiliaryFiles.filter(Boolean) as string[],
       allAuxiliaryFiles,
     ],
   };
@@ -127,16 +124,16 @@ async function getFileVars(
   for (const [prefix, [additionalFiles, allFiles]] of Object.entries(
     collectionMappings,
   )) {
-    const additionalXml = additionalFiles
-      ? await getXmlFormatFromFiles(additionalFiles as string[])
-      : null;
-    const allXml = allFiles
-      ? await getXmlFormatFromFiles(allFiles as string[])
-      : null;
+    const additionalXml =
+      additionalFiles.length > 0
+        ? await getXmlFormatFromFiles(additionalFiles)
+        : null;
+    const allXml =
+      allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
 
     userVars[`ADDITIONAL_${prefix}S`] = additionalXml;
     userVars[`ALL_${prefix}S`] = allXml;
-    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles as string[]);
+    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
   }
 
   return userVars;

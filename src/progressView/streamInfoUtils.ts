@@ -57,12 +57,11 @@ export function buildStreamInfos(
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
     const taskState = state.getTaskState(id);
     const sessionKindHint = state.getSessionKindHint(id);
-    const logs = state.streamTabs.get(id);
+    const logs = state.streamTabs.getMessages(id);
     const lastTimestamp =
-      logs && logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
-    const creationTimestamp =
-      logs && logs.length > 0 ? logs[0].timestamp : undefined;
-    const outputs = taskState?.agentConfig.outputFiles || [];
+      logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
+    const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
+    const outputs = taskState?.agentConfig.outputFiles ?? [];
     const inputFile = taskState?.agentConfig.inputFile || '';
     const agentName = taskState?.agentConfig.agent || id.split('@')[0];
     let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
@@ -94,7 +93,7 @@ export function buildStreamInfos(
         sessionKind: sessionCategory,
         isToolAgent,
       },
-      hasMultipleOutputs: Array.isArray(outputs) && outputs.length > 1,
+      hasMultipleOutputs: outputs.length > 1,
       lastTimestamp,
       inputFile,
       creationTimestamp,
