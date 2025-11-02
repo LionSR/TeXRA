@@ -34,4 +34,3 @@ export interface LogEventSink {
   handleGroupStarted(event: LogGroupStartedEvent): void;
   handleGroupFinished(event: LogGroupFinishedEvent): void;
 }
-

@@ -155,4 +155,3 @@ export class VSCodeTransport extends Transport {
     this.sink?.handleGroupFinished(event);
   }
 }
-
