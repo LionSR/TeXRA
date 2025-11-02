@@ -191,10 +191,7 @@ export class LatexDiffManager {
             prevOutputFile,
             currOutputFile,
           );
-          this.logLatexdiffResult(
-            result,
-            'between-rounds-diff',
-          );
+          this.logLatexdiffResult(result, 'between-rounds-diff');
           aggregated.push({
             base: prevOutputFile,
             revised: currOutputFile,

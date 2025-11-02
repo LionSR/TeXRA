@@ -4,6 +4,9 @@ import {
   AnthropicAPIResponseUsage,
 } from './ResponseUsage';
 
+// Local imports - new state modules
+import { RoundMetricsState, RunMetricsState } from '@agent/state';
+
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
@@ -19,20 +22,55 @@ export interface IAgentStateRound {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-/** Manages state and metrics for a single conversation round. */
+/**
+ * Manages state and metrics for a single conversation round.
+ *
+ * @deprecated This class is maintained for backward compatibility. New code should
+ * use RoundMetricsState from @agent/state which stores only distilled metrics
+ * (not raw API response objects) and doesn't track outputFile (which is managed
+ * by flows). This aligns with Pocket Flow's separation of shared data and compute.
+ *
+ * Internally, this class now delegates to RoundMetricsState for metric storage.
+ */
 export class AgentStateRound implements IAgentStateRound {
-  currRound: number;
-  continuationCount: number;
-  responseTime: number;
+  /** Internal metrics state using new focused structure */
+  private _metrics: RoundMetricsState;
+
+  /** Stored for backward compatibility - flows should track this separately */
   outputFile: string;
+
+  /** Stored for backward compatibility - raw API response */
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 
   constructor(currRound: number) {
-    this.currRound = currRound;
-    this.continuationCount = 0;
-    this.responseTime = 0;
+    this._metrics = new RoundMetricsState(currRound);
     this.outputFile = '';
     this.APIUsage = null;
+  }
+
+  // Proxy properties to internal metrics
+  get currRound(): number {
+    return this._metrics.currRound;
+  }
+
+  set currRound(value: number) {
+    this._metrics.currRound = value;
+  }
+
+  get continuationCount(): number {
+    return this._metrics.continuationCount;
+  }
+
+  set continuationCount(value: number) {
+    this._metrics.continuationCount = value;
+  }
+
+  get responseTime(): number {
+    return this._metrics.responseTime;
+  }
+
+  set responseTime(value: number) {
+    this._metrics.responseTime = value;
   }
 
   /** Updates token usage metrics from model API response. */
@@ -40,16 +78,65 @@ export class AgentStateRound implements IAgentStateRound {
     responseUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage,
   ): void {
     this.APIUsage = responseUsage;
+
+    // Convert to distilled metrics
+    const metrics: any = {
+      totalInputTokens: responseUsage.totalInputTokens,
+      totalOutputTokens: responseUsage.totalOutputTokens,
+    };
+
+    // Extract cache tokens based on provider
+    if ('cache_read_input_tokens' in responseUsage) {
+      metrics.cacheReadInputTokens = responseUsage.cache_read_input_tokens ?? 0;
+      metrics.cacheCreationInputTokens =
+        responseUsage.cache_creation_input_tokens ?? 0;
+    } else if (
+      'prompt_tokens_details' in responseUsage &&
+      responseUsage.prompt_tokens_details
+    ) {
+      const promptDetails = responseUsage.prompt_tokens_details as {
+        cached_tokens?: number;
+      };
+      if ('cached_tokens' in promptDetails) {
+        metrics.cacheReadInputTokens = promptDetails.cached_tokens ?? 0;
+      }
+    }
+
+    // Extract reasoning tokens
+    if (
+      'completion_tokens_details' in responseUsage &&
+      responseUsage.completion_tokens_details
+    ) {
+      const completionDetails = responseUsage.completion_tokens_details as {
+        reasoning_tokens?: number;
+      };
+      if ('reasoning_tokens' in completionDetails) {
+        metrics.reasoningTokens = completionDetails.reasoning_tokens ?? 0;
+      }
+    } else if ('reasoning_tokens' in responseUsage) {
+      metrics.reasoningTokens = responseUsage.reasoning_tokens ?? 0;
+    }
+
+    // Extract tool use tokens
+    if (
+      'tool_use_tokens' in responseUsage &&
+      responseUsage.tool_use_tokens !== null &&
+      responseUsage.tool_use_tokens !== undefined
+    ) {
+      metrics.toolUseTokens = responseUsage.tool_use_tokens;
+    }
+
+    this._metrics.updateTokenMetrics(metrics);
   }
 
   /** Adds response time in milliseconds to the round total. */
   updateResponseTime(responseTime: number): void {
-    this.responseTime += responseTime;
+    this._metrics.updateResponseTime(responseTime);
   }
 
   /** Increments the continuation counter for tracking multi-turn responses. */
   incrementContinuation(): void {
-    this.continuationCount += 1;
+    this._metrics.incrementContinuation();
   }
 
   /** Converts state to a serializable object for persistence. */
@@ -63,6 +150,24 @@ export class AgentStateRound implements IAgentStateRound {
     };
     return stateObj;
   }
+
+  /**
+   * Gets the internal RoundMetricsState for code that wants to use the new structure.
+   * @internal
+   */
+  getMetrics(): RoundMetricsState {
+    return this._metrics;
+  }
+
+  /**
+   * Creates an AgentStateRound from an existing RoundMetricsState.
+   * @internal
+   */
+  static fromMetrics(metrics: RoundMetricsState): AgentStateRound {
+    const state = new AgentStateRound(metrics.currRound);
+    state._metrics = metrics;
+    return state;
+  }
 }
 
 /** Interface for tracking aggregate metrics across all conversation rounds. */
@@ -75,97 +180,110 @@ export interface IAgentStateGlobal {
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-/** Manages global state and aggregates metrics across conversation rounds. */
+/**
+ * Manages global state and aggregates metrics across conversation rounds.
+ *
+ * @deprecated This class is maintained for backward compatibility. New code should
+ * use RunMetricsState from @agent/state which stores only aggregated metrics
+ * (not raw API response objects). The APIUsage field in this class was never updated
+ * and remained null, highlighting the confusion of storing raw responses here.
+ *
+ * Internally, this class now delegates to RunMetricsState for metric aggregation.
+ */
 export class AgentStateGlobal implements IAgentStateGlobal {
-  firstInputTokens: number;
-  totalResponseTime: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalRounds: number;
+  /** Internal run metrics using new focused structure */
+  private _metrics: RunMetricsState;
+
+  /** Stored for backward compatibility - never updated, always null */
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
-  public totalCacheReadInputTokens: number = 0;
-  public totalCacheCreationInputTokens: number = 0;
-  public totalReasoningTokens: number = 0;
-  public totalToolUseTokens: number = 0;
 
   constructor() {
-    this.firstInputTokens = 0;
-    this.totalResponseTime = 0;
-    this.totalInputTokens = 0;
-    this.totalOutputTokens = 0;
-    this.totalRounds = 0;
+    this._metrics = new RunMetricsState();
     this.APIUsage = null;
+  }
+
+  // Proxy properties to internal metrics
+  get firstInputTokens(): number {
+    return this._metrics.firstInputTokens;
+  }
+
+  set firstInputTokens(value: number) {
+    this._metrics.firstInputTokens = value;
+  }
+
+  get totalResponseTime(): number {
+    return this._metrics.totalResponseTime;
+  }
+
+  set totalResponseTime(value: number) {
+    this._metrics.totalResponseTime = value;
+  }
+
+  get totalInputTokens(): number {
+    return this._metrics.totalInputTokens;
+  }
+
+  set totalInputTokens(value: number) {
+    this._metrics.totalInputTokens = value;
+  }
+
+  get totalOutputTokens(): number {
+    return this._metrics.totalOutputTokens;
+  }
+
+  set totalOutputTokens(value: number) {
+    this._metrics.totalOutputTokens = value;
+  }
+
+  get totalRounds(): number {
+    return this._metrics.totalRounds;
+  }
+
+  set totalRounds(value: number) {
+    this._metrics.totalRounds = value;
+  }
+
+  get totalCacheReadInputTokens(): number {
+    return this._metrics.totalCacheReadInputTokens;
+  }
+
+  set totalCacheReadInputTokens(value: number) {
+    this._metrics.totalCacheReadInputTokens = value;
+  }
+
+  get totalCacheCreationInputTokens(): number {
+    return this._metrics.totalCacheCreationInputTokens;
+  }
+
+  set totalCacheCreationInputTokens(value: number) {
+    this._metrics.totalCacheCreationInputTokens = value;
+  }
+
+  get totalReasoningTokens(): number {
+    return this._metrics.totalReasoningTokens;
+  }
+
+  set totalReasoningTokens(value: number) {
+    this._metrics.totalReasoningTokens = value;
+  }
+
+  get totalToolUseTokens(): number {
+    return this._metrics.totalToolUseTokens;
+  }
+
+  set totalToolUseTokens(value: number) {
+    this._metrics.totalToolUseTokens = value;
   }
 
   /** Updates global metrics by incorporating round state data. */
   updateFromCurrRound(stateRound: AgentStateRound): void {
-    if (stateRound.APIUsage) {
-      if (this.firstInputTokens === 0) {
-        this.firstInputTokens = stateRound.APIUsage.totalInputTokens;
-      }
-
-      // For Anthropic models, handle cache tokens directly from response
-      if ('cache_read_input_tokens' in stateRound.APIUsage) {
-        const cacheRead = stateRound.APIUsage.cache_read_input_tokens ?? 0;
-        const cacheCreation =
-          stateRound.APIUsage.cache_creation_input_tokens ?? 0;
-        this.totalCacheReadInputTokens += cacheRead;
-        this.totalCacheCreationInputTokens += cacheCreation;
-        this.firstInputTokens += cacheRead + cacheCreation;
-      }
-      // For OpenAI models with auto prompt caching, handle cache tokens from prompt_tokens_details
-      else if (
-        'prompt_tokens_details' in stateRound.APIUsage &&
-        stateRound.APIUsage.prompt_tokens_details
-      ) {
-        const promptDetails = stateRound.APIUsage.prompt_tokens_details as {
-          cached_tokens?: number;
-        };
-        if ('cached_tokens' in promptDetails) {
-          this.totalCacheReadInputTokens += promptDetails.cached_tokens ?? 0;
-        }
-      }
-
-      // For OpenAI models, handle reasoning tokens from completion_tokens_details
-      if (
-        'completion_tokens_details' in stateRound.APIUsage &&
-        stateRound.APIUsage.completion_tokens_details
-      ) {
-        const completionDetails = stateRound.APIUsage
-          .completion_tokens_details as { reasoning_tokens?: number };
-        if ('reasoning_tokens' in completionDetails) {
-          this.totalReasoningTokens += completionDetails.reasoning_tokens ?? 0;
-        }
-      }
-      // For older OpenAI models, handle reasoning tokens directly
-      else if ('reasoning_tokens' in stateRound.APIUsage) {
-        this.totalReasoningTokens += stateRound.APIUsage.reasoning_tokens ?? 0;
-      }
-
-      // Track tokens used for tool calls
-      // Note: Only Google models provide tool_use_tokens (as toolUsePromptTokenCount)
-      // OpenAI and Anthropic don't provide this information in their API responses
-      if (
-        'tool_use_tokens' in stateRound.APIUsage &&
-        stateRound.APIUsage.tool_use_tokens !== null &&
-        stateRound.APIUsage.tool_use_tokens !== undefined
-      ) {
-        this.totalToolUseTokens += stateRound.APIUsage.tool_use_tokens;
-      }
-
-      // Update global totals
-      this.totalInputTokens += stateRound.APIUsage.totalInputTokens;
-      this.totalOutputTokens += stateRound.APIUsage.totalOutputTokens;
-    }
-
-    this.totalResponseTime += stateRound.responseTime;
+    this._metrics.updateFromRoundMetrics(stateRound.getMetrics());
   }
 
   incrementRounds(): void {
-    this.totalRounds += 1;
+    this._metrics.incrementRounds();
   }
 
-  // are the following two methods needed?
   /** Converts global state to a serializable object for persistence. */
   toObject(): Record<string, any> {
     return {
@@ -200,6 +318,24 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       stateObj.totalCacheCreationInputTokens ?? 0;
     state.totalReasoningTokens = stateObj.totalReasoningTokens ?? 0;
     state.totalToolUseTokens = stateObj.totalToolUseTokens ?? 0;
+    return state;
+  }
+
+  /**
+   * Gets the internal RunMetricsState for code that wants to use the new structure.
+   * @internal
+   */
+  getMetrics(): RunMetricsState {
+    return this._metrics;
+  }
+
+  /**
+   * Creates an AgentStateGlobal from an existing RunMetricsState.
+   * @internal
+   */
+  static fromMetrics(metrics: RunMetricsState): AgentStateGlobal {
+    const state = new AgentStateGlobal();
+    state._metrics = metrics;
     return state;
   }
 }
