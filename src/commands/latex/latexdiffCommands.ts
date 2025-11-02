@@ -71,7 +71,7 @@ async function promptForLatexdiffMathMarkup(): Promise<
   MathMarkupOption | undefined
 > {
   const configuredMode = getConfig<string>(
-    'latexdiff.mathMarkup',
+    'texra.latexdiff.mathMarkup',
     DEFAULT_MATH_MARKUP,
   );
   const items: (vscode.QuickPickItem & { value: MathMarkupOption })[] =
@@ -359,7 +359,7 @@ async function handleRunLatexdiff(config: any) {
     );
 
     const generateBetweenRoundDiffs = getConfig<boolean>(
-      'latexdiff.generateBetweenRoundDiffs',
+      'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
     logger.debug(

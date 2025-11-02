@@ -286,7 +286,7 @@ export function getToolFlags(
   agentPrompt: AgentPrompt,
 ): Record<string, any> {
   const shouldSaveInputPrompt = getConfig<boolean>(
-    'debug.saveInputPrompt',
+    'texra.debug.saveInputPrompt',
     false,
   );
   const flags: Record<string, any> = {

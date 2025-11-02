@@ -424,7 +424,7 @@ export class ProgressViewState {
   }
 
   private async loadStreamSortOrder(): Promise<void> {
-    const configDefault = getConfig('progressBoard.streamSortOrder', 'time');
+    const configDefault = getConfig('texra.progressBoard.streamSortOrder', 'time');
     this._streamSortOrder = await this.persistence.load(
       WorkspaceStateKey.STREAM_SORT_ORDER,
       configDefault,

@@ -73,7 +73,7 @@ export class LatexDiffManager {
   ): Promise<void> {
     const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
     const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
-      'latexdiff.generateBetweenRoundDiffs',
+      'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
     const aggregated: Array<{
