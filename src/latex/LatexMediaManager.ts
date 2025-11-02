@@ -37,8 +37,8 @@ export class LatexMediaManager {
   private async compilePdfs(
     files: string[],
     toolState: ToolState,
-    groupId?: string,
   ): Promise<void> {
+    const activeGroupId = this.logger.getActiveGroupId();
     const texFiles = files.filter((file) =>
       file.toLowerCase().endsWith('.tex'),
     );
@@ -52,34 +52,37 @@ export class LatexMediaManager {
           buildDir,
           true,
         );
-        if (compiled) {
-          const pdfFile = path.join(
-            buildDir,
-            path.basename(file).replace(/\.tex$/, '.pdf'),
-          );
-          if (await WorkspaceFS.exists(pdfFile)) {
-            try {
-              const stats = await WorkspaceFS.stat(pdfFile);
-              if (stats.size === 0) {
-                this.logger.warn(
-                  `Compiled PDF is empty for ${file}: ${pdfFile}`,
-                  groupId,
+          if (compiled) {
+            const pdfFile = path.join(
+              buildDir,
+              path.basename(file).replace(/\.tex$/, '.pdf'),
+            );
+            if (await WorkspaceFS.exists(pdfFile)) {
+              try {
+                const stats = await WorkspaceFS.stat(pdfFile);
+                if (stats.size === 0) {
+                  this.logger.warn(
+                    `Compiled PDF is empty for ${file}: ${pdfFile}`,
+                    activeGroupId,
+                  );
+                  return undefined;
+                }
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                this.logger.error(
+                  `Failed to stat compiled PDF ${pdfFile}: ${message}`,
+                  activeGroupId,
                 );
                 return undefined;
               }
-            } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
-              this.logger.error(
-                `Failed to stat compiled PDF ${pdfFile}: ${message}`,
-                groupId,
-              );
-              return undefined;
-            }
 
-            this.logger.info(`Compiled PDF for ${file}: ${pdfFile}`, groupId);
-            return pdfFile;
+              this.logger.info(
+                `Compiled PDF for ${file}: ${pdfFile}`,
+                activeGroupId,
+              );
+              return pdfFile;
+            }
           }
-        }
         return undefined;
       }),
     );
@@ -93,8 +96,8 @@ export class LatexMediaManager {
   private async extractFiguresFromFiles(
     files: string[],
     toolState: ToolState,
-    groupId?: string,
   ): Promise<void> {
+    const activeGroupId = this.logger.getActiveGroupId();
     const figureResults = await Promise.allSettled(
       files.map((file) => extractFigurePathsFromLatex(file)),
     );
@@ -107,7 +110,7 @@ export class LatexMediaManager {
         const file = files[idx];
         this.logger.debug(
           `Extracted ${result.value.length} figures from ${file}`,
-          groupId,
+          activeGroupId,
         );
         toolState.addMediaFiles(result.value);
       }
@@ -118,8 +121,8 @@ export class LatexMediaManager {
     files: string[],
     toolState: ToolState,
     logSummary: boolean,
-    groupId?: string,
   ): Promise<void> {
+    const activeGroupId = this.logger.getActiveGroupId();
     const tikzResults = await Promise.allSettled(
       files.map((file) => tikzPictureManager.compile(file)),
     );
@@ -135,7 +138,7 @@ export class LatexMediaManager {
     if (logSummary) {
       this.logger.debug(
         `Extracted ${tikzResults.length} TikZ figures`,
-        groupId,
+        activeGroupId,
       );
     }
   }
@@ -151,14 +154,12 @@ export class LatexMediaManager {
       includePdfCompilation,
       extraMediaFiles = [],
       logTikzSummary = false,
-      groupId,
     }: {
       includeFigureExtraction: boolean;
       includeTikzCompilation: boolean;
       includePdfCompilation: boolean;
       extraMediaFiles?: string[];
       logTikzSummary?: boolean;
-      groupId?: string;
     },
   ): Promise<void> {
     if (!files || files.length === 0) {
@@ -190,7 +191,7 @@ export class LatexMediaManager {
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
-      await this.extractFiguresFromFiles(existingFiles, toolState, groupId);
+      await this.extractFiguresFromFiles(existingFiles, toolState);
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
@@ -198,12 +199,11 @@ export class LatexMediaManager {
         existingFiles,
         toolState,
         logTikzSummary,
-        groupId,
       );
     }
 
     if (includePdfCompilation && cfg.autoCompileInputPdf) {
-      await this.compilePdfs(existingFiles, toolState, groupId);
+      await this.compilePdfs(existingFiles, toolState);
     }
   }
 
@@ -217,7 +217,6 @@ export class LatexMediaManager {
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: string[] = [],
-    groupId?: string,
   ): Promise<void> {
     await this.processFiles(inputFiles, toolState, cfg, supportsVision, {
       includeFigureExtraction: true,
@@ -225,7 +224,6 @@ export class LatexMediaManager {
       includePdfCompilation: true,
       extraMediaFiles,
       logTikzSummary: true,
-      groupId,
     });
   }
 
@@ -237,13 +235,11 @@ export class LatexMediaManager {
     toolState: ToolState,
     cfg: ToolConfig,
     supportsVision: boolean,
-    groupId?: string,
   ): Promise<void> {
     await this.processFiles(outputFiles, toolState, cfg, supportsVision, {
       includeFigureExtraction: false,
       includeTikzCompilation: true,
       includePdfCompilation: true,
-      groupId,
     });
   }
 }

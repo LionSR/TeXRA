@@ -143,12 +143,9 @@ export class MergeAgent extends DirectAgent {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
+    const { outputFile, endTurn } = options;
     if (endTurn) {
-      this.logger.debug(
-        `Processing merge output for round ${currRound}`,
-        processGroupId,
-      );
+      this.logger.debug(`Processing merge output for round ${currRound}`);
       const files = await super.handleOutput(
         currRound,
         stateRound,
@@ -156,10 +153,9 @@ export class MergeAgent extends DirectAgent {
         {
           outputFile,
           endTurn,
-          processGroupId,
         },
       );
-      this.logger.info(`Merge output file: ${outputFile}`, processGroupId);
+      this.logger.info(`Merge output file: ${outputFile}`);
       return files;
     }
     return [];

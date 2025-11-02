@@ -918,7 +918,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, Content[]]> {
     let endTurn = false;
     this.logger.debug(
@@ -961,7 +960,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);

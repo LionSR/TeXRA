@@ -1064,7 +1064,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
@@ -1096,7 +1095,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);
