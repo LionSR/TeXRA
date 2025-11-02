@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Third-party imports
-import { glob } from 'glob';
 import * as vscode from 'vscode';
 
 // Local imports - agent components
@@ -42,28 +41,15 @@ import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import {
+  createCandidate,
+  resolveAgentDefinition,
+  type AgentDefinitionSearchOptions,
+  type AgentDirectoryCandidate,
+} from '@agent/utils/agentPathResolver';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
-
-type AgentDirectoryCandidate = {
-  dir: string;
-  source: AgentDirectorySource;
-};
-
-async function findAgentYaml(
-  agentName: string,
-  searchDir: string,
-): Promise<string | undefined> {
-  const matches = await glob(`**/${agentName}.yaml`, {
-    cwd: searchDir,
-    dot: false,
-    nodir: true,
-    absolute: false,
-  });
-
-  return matches[0];
-}
 
 /**
  * Constructor signature for any agent implementation.
@@ -84,6 +70,7 @@ type AgentConstructor = {
  */
 export async function getAgentPath(
   agentName: string,
+  options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
@@ -92,32 +79,23 @@ export async function getAgentPath(
       agentDirectories.builtInToolUse(),
     ]);
 
-    const candidateDirectories = [
-      customDir && { dir: customDir, source: AgentDirectorySource.Custom },
-      builtInDir && { dir: builtInDir, source: AgentDirectorySource.BuiltIn },
-      builtInToolUseDir && {
-        dir: builtInToolUseDir,
-        source: AgentDirectorySource.BuiltInToolUse,
-      },
-    ].filter((candidate): candidate is AgentDirectoryCandidate =>
-      Boolean(candidate),
-    );
+    const candidates = [
+      customDir && createCandidate(customDir, AgentDirectorySource.Custom),
+      builtInDir && createCandidate(builtInDir, AgentDirectorySource.BuiltIn),
+      builtInToolUseDir &&
+        createCandidate(builtInToolUseDir, AgentDirectorySource.BuiltInToolUse),
+    ].filter(Boolean) as AgentDirectoryCandidate[];
 
-    for (const candidate of candidateDirectories) {
-      const match = await findAgentYaml(agentName, candidate.dir);
-      if (match) {
-        return {
-          directory: path.join(candidate.dir, path.dirname(match)),
-          source: candidate.source,
-        };
-      }
-    }
-
-    if (candidateDirectories.length === 0) {
+    if (candidates.length === 0) {
       throw new Error('No agent directories available for lookup');
     }
 
-    const customDirSet = candidateDirectories.some(
+    const resolution = await resolveAgentDefinition(agentName, candidates, options);
+    if (resolution) {
+      return resolution;
+    }
+
+    const customDirSet = candidates.some(
       (candidate) => candidate.source === AgentDirectorySource.Custom,
     );
 
@@ -232,32 +210,19 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const fullConfig = parseAgentConfig(configInput);
   const originalAgentName = fullConfig.agent;
-  let resolvedAgentName = getAgentName(
-    originalAgentName,
-    fullConfig.useMultipleOutputs,
-  );
-
-  let agentPathInfo: AgentPathResolution;
-  try {
-    agentPathInfo = await getAgentPath(resolvedAgentName);
-  } catch (err) {
-    if (resolvedAgentName !== originalAgentName) {
-      resolvedAgentName = originalAgentName;
-      agentPathInfo = await getAgentPath(originalAgentName);
-    } else {
-      throw err;
-    }
-  }
+  const resolution = await getAgentPath(originalAgentName, {
+    preferMultiple: fullConfig.useMultipleOutputs,
+  });
+  const resolvedAgentName = resolution.resolvedName;
 
   const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
-    agentPathInfo,
-    resolvedAgentName,
+    resolution,
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
   const agentSetting = ensureAgentTypeForSource(
     loadedAgentSetting,
-    agentPathInfo.source,
+    resolution.source,
   );
 
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
@@ -304,7 +269,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     agentConfig,
     agentSetting,
     agentPrompt,
-    agentPathInfo.directory,
+    resolution.directory,
     executionId,
   );
 

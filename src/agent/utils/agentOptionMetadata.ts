@@ -1,6 +1,5 @@
 // Third-party imports
 import { encode as encodeHtml } from 'he';
-import { globSync } from 'glob';
 import * as yaml from 'yaml';
 
 // Local imports - agent core
@@ -13,12 +12,13 @@ import {
 
 // Local imports - filesystem
 import { AbsoluteFS } from '@utils/files';
+import {
+  mapToCandidates,
+  resolveAgentDefinitionSync,
+  type AgentDirectoryMap,
+} from '@agent/utils/agentPathResolver';
 
-export interface AgentDirectoryMap {
-  custom?: string;
-  builtIn?: string;
-  builtInToolUse?: string;
-}
+export type { AgentDirectoryMap } from '@agent/utils/agentPathResolver';
 
 export interface AgentOptionMetadata {
   hasDefinition: boolean;
@@ -40,53 +40,8 @@ export interface AgentOptionDefaults {
 export const DEFAULT_WORKFLOW_AGENT = 'correct';
 export const DEFAULT_TOOL_USE_AGENT = 'chat';
 
-const DIRECTORY_KEYS: (keyof AgentDirectoryMap)[] = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-];
-const YAML_EXTENSION = '.yaml';
 const MULTIPLE_SUFFIX = '_multiple';
 const TOOL_USE_AGENT_TYPE = AgentType.ToolUse;
-
-function normalizeDirectory(dir?: string): string | undefined {
-  if (!dir) {
-    return undefined;
-  }
-  if (!/\S/.test(dir)) {
-    return undefined;
-  }
-  const trimmed = dir.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function findAgentYaml(
-  agentName: string,
-  directories: AgentDirectoryMap,
-  suffix = '',
-): string | undefined {
-  const fileName = `${agentName}${suffix}${YAML_EXTENSION}`;
-  for (const key of DIRECTORY_KEYS) {
-    const baseDir = normalizeDirectory(directories[key]);
-    if (!baseDir) {
-      continue;
-    }
-    try {
-      const matches = globSync(`**/${fileName}`, {
-        cwd: baseDir,
-        nodir: true,
-        dot: false,
-        absolute: true,
-      });
-      if (matches.length > 0) {
-        return matches[0];
-      }
-    } catch {
-      // Ignore filesystem errors so dropdown rendering continues.
-    }
-  }
-  return undefined;
-}
 
 function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   if (!yamlPath) {
@@ -115,13 +70,24 @@ export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
-  const definitionPath = findAgentYaml(agentName, directories);
-  const multiplePath = findAgentYaml(agentName, directories, MULTIPLE_SUFFIX);
-  const definition = readAgentDefinition(definitionPath);
+  const candidates = mapToCandidates(directories);
+  const definitionResolution = resolveAgentDefinitionSync(
+    agentName,
+    candidates,
+  );
+  const multipleResolution = resolveAgentDefinitionSync(agentName, candidates, {
+    preferMultiple: true,
+  });
+  const definition = readAgentDefinition(definitionResolution?.definitionPath);
   const isMultipleOutput = getMultipleOutputFlag(definition);
+  const hasMultipleSibling = Boolean(
+    multipleResolution &&
+      !multipleResolution.usedFallback &&
+      multipleResolution.resolvedName.endsWith(MULTIPLE_SUFFIX),
+  );
   return {
-    hasDefinition: Boolean(definitionPath),
-    hasMultipleSibling: Boolean(multiplePath),
+    hasDefinition: Boolean(definitionResolution),
+    hasMultipleSibling,
     isMultipleOutput,
     isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
   };

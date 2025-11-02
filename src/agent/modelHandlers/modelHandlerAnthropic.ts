@@ -240,7 +240,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
     const useAnthropic1MBeta = getConfig<boolean>(
-      'model.useAnthropic1MBeta',
+      'texra.model.useAnthropic1MBeta',
       false,
     );
     const isAnthropic1MBetaEligibleModel =

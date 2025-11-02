@@ -10,7 +10,7 @@ logger.initialize(CHANNEL);
 
 export async function runTexFmt(filePath: string): Promise<boolean> {
   try {
-    const texfmtConfig = getConfig<string>('latex.texfmtConfig');
+    const texfmtConfig = getConfig<string>('texra.latex.texfmtConfig');
 
     const args: string[] = [];
     if (texfmtConfig) {

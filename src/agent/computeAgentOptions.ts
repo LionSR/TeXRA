@@ -21,8 +21,14 @@ export interface AgentNameBuckets {
 }
 
 export async function getAllAgents(): Promise<AgentNameBuckets> {
-  const configuredWorkflowAgents = getConfig<string[]>('agents', []);
-  const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
+  const configuredWorkflowAgents = getConfig<string[]>(
+    'texra.agents',
+    [],
+  );
+  const configuredToolUseAgents = getConfig<string[]>(
+    'texra.toolUseAgents',
+    [],
+  );
 
   const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
   const workflowAgents = hasConfiguredWorkflowAgents
