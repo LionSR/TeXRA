@@ -211,12 +211,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       const snapshot = this.resumeSnapshot;
       this.resumeSnapshot = null;
 
-      const rawMessages = snapshot.messages ?? [];
-      if (!Array.isArray(rawMessages)) {
-        throw new Error('Invalid snapshot: messages must be an array');
-      }
-
-      const messages = rawMessages as ProviderMessage[];
+      const messages = snapshot.messages;
       let toolState: ToolState;
 
       try {

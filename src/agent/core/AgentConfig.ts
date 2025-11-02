@@ -16,12 +16,17 @@ import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
  * Checks that the number of output files does not exceed the number of input files.
  * Extracted as a separate function for clarity and reusability.
  */
-export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
-  if (cfg.outputFiles) {
-    const inputs = [cfg.inputFile, ...(cfg.inputFiles || [])];
-    return cfg.outputFiles.length <= inputs.length;
+export const validateOutputFiles = (cfg: {
+  inputFile: string;
+  inputFiles: string[];
+  outputFiles: string[];
+}): boolean => {
+  if (cfg.outputFiles.length === 0) {
+    return true;
   }
-  return true;
+
+  const inputs = [cfg.inputFile, ...cfg.inputFiles];
+  return cfg.outputFiles.length <= inputs.length;
 };
 
 /**
@@ -29,6 +34,12 @@ export const validateOutputFiles = (cfg: Record<string, any>): boolean => {
  * The session field is the canonical source of truth for agent classification.
  */
 /** Zod schema for validating AgentConfig objects */
+const stringArrayField = () =>
+  z
+    .array(z.string())
+    .nullish()
+    .transform((value) => value ?? []);
+
 const AgentConfigBaseSchema = z
   .object({
     model: z.string().prefault('gemini25p'),
@@ -42,22 +53,33 @@ const AgentConfigBaseSchema = z
     session: AgentSessionDescriptorSchema.optional(),
 
     inputFile: z.string().prefault(''),
-    inputFiles: z.array(z.string()).nullable().prefault(null),
+    inputFiles: stringArrayField(),
     referenceFile: z.string().nullable().prefault(null),
-    referenceFiles: z.array(z.string()).nullable().prefault(null),
+    referenceFiles: stringArrayField(),
     auxiliaryFile: z.string().nullable().prefault(null),
-    auxiliaryFiles: z.array(z.string()).nullable().prefault(null),
+    auxiliaryFiles: stringArrayField(),
     mediaFile: z.string().nullable().prefault(null),
-    mediaFiles: z.array(z.string()).nullable().prefault(null),
-    outputFiles: z.array(z.string()).nullable().prefault(null),
+    mediaFiles: stringArrayField(),
+    outputFiles: stringArrayField(),
     editedFile: z.string().nullable().prefault(null),
 
     toolConfig: ToolConfigSchema.prefault(DEFAULT_TOOL_CONFIG),
   })
-  .refine(validateOutputFiles, {
-    path: ['outputFiles'],
-    error:
-      'Number of output files must not be greater than the number of input files.',
+  .superRefine((config, ctx) => {
+    if (
+      !validateOutputFiles({
+        inputFile: config.inputFile,
+        inputFiles: config.inputFiles,
+        outputFiles: config.outputFiles,
+      })
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['outputFiles'],
+        message:
+          'Number of output files must not be greater than the number of input files.',
+      });
+    }
   });
 
 export const AgentConfigSchema = AgentConfigBaseSchema.transform((config) => {

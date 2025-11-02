@@ -21,7 +21,7 @@ import { WorkspaceFS } from '@utils/files';
 
 const LsInputSchema = z.strictObject({
   path: z.string(),
-  ignore: z.array(z.string()).optional(),
+  ignore: z.array(z.string()).default([]),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;
@@ -65,10 +65,9 @@ export class LsTool extends defineTool({
       throw new ToolError(`Path not found: ${display} (${message})`);
     }
 
-    const ignorePatterns = input.ignore ?? [];
-    const ignoreMatchers = ignorePatterns.map(createGlobMatcher);
+    const ignoreMatchers = input.ignore.map(createGlobMatcher);
     const matchesCustomIgnore =
-      ignorePatterns.length === 0
+      input.ignore.length === 0
         ? () => false
         : (entryPath: string) =>
             ignoreMatchers.some((matcher) => matcher(entryPath));
