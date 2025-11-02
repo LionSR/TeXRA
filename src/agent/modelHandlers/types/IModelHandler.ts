@@ -1,8 +1,11 @@
 // Local imports - agent components
 import type { AgentConfig } from '../../core/AgentConfig';
 import { AgentSetting, AgentType } from '../../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../../core/AgentState';
-import { ToolState } from '../../core/ToolState';
+import {
+  RoundMetricsState,
+  SessionUsageState,
+  type ToolResponseState,
+} from '../../core/AgentState';
 import type { MediaEntry } from '../../utils/mediaTypes';
 
 // Local imports - provider types
@@ -115,8 +118,8 @@ export interface IModelHandler<
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: RoundMetricsState,
+    toolState: ToolResponseState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -124,8 +127,8 @@ export interface IModelHandler<
   /** Handle continuation for models without prefill. */
   addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: RoundMetricsState,
+    toolState: ToolResponseState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -135,7 +138,7 @@ export interface IModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: ToolState,
+    toolState: ToolResponseState,
     outputFile: string,
     prefill: string,
     groupId?: string,
@@ -152,7 +155,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolResponseState,
   ): void;
 
   /** Update messages when prefill is not supported. */
@@ -160,7 +163,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolResponseState,
   ): void;
 
   /** Determine whether generation should continue. */
@@ -177,8 +180,8 @@ export interface IModelHandler<
   checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: RoundMetricsState,
+    stateGlobal: SessionUsageState,
     agentSetting: AgentSetting,
   ): [boolean, boolean];
 
@@ -186,7 +189,7 @@ export interface IModelHandler<
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolResponseState,
   ): string | null;
 
   /** Extract tool-use details from a provider response. */
@@ -207,7 +210,7 @@ export interface IModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: ToolState,
+    toolState?: ToolResponseState,
     text?: string,
   ): Promise<M[]>;
 

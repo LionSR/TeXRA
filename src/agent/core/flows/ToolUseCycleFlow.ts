@@ -5,7 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { ToolState } from '@agent/core/ToolState';
+import type { ToolResponseState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - model handler types
@@ -139,7 +139,7 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolResponseState;
   iteration: number;
 }
 
@@ -388,11 +388,11 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
-    if (!toolInfo || endTurn) {
-      if (text) {
-        state.messages.push(options.modelHandler.createAssistantMessage(text));
-        state.toolState.updateLastResponse(text);
-      }
+      if (!toolInfo || endTurn) {
+        if (text) {
+          state.messages.push(options.modelHandler.createAssistantMessage(text));
+          state.toolState.updateLastResponse(text);
+        }
       state.shouldStop = true;
       return { stopReason, text, endTurn: true };
     }

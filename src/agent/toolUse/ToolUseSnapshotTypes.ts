@@ -8,21 +8,42 @@ import {
   resolveAgentSessionDescriptor,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import {
+  ToolResponseState,
+  toolResponseStateToSnapshot,
+} from '@agent/core/ToolState';
 import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-export const ToolStateSnapshotSchema = z
+const DocumentAssetSnapshotSchema = z
   .object({
     texcountStats: z.string().nullable(),
+    mediaFiles: z.array(z.string()),
+  })
+  .strict();
+
+const ResponseDraftSnapshotSchema = z
+  .object({
     lastResponse: z.string(),
     accumulatedOutput: z.string(),
-    mediaFiles: z.array(z.string()),
+  })
+  .strict();
+
+const ReasoningTraceSnapshotSchema = z
+  .object({
     thinkingBlocks: z.array(z.unknown()),
     thinkingAdded: z.boolean(),
+  })
+  .strict();
+
+export const ToolStateSnapshotSchema = z
+  .object({
+    document: DocumentAssetSnapshotSchema,
+    draft: ResponseDraftSnapshotSchema,
+    reasoning: ReasoningTraceSnapshotSchema,
   })
   .strict();
 
@@ -67,7 +88,7 @@ export interface SaveToolUseSnapshotPayload {
   model: string;
   session: AgentSessionDescriptor;
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolResponseState;
 }
 
 export function normalizeSnapshot(

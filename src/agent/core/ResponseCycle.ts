@@ -1,12 +1,15 @@
-// Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from './AgentState';
-import { ToolState } from './ToolState';
+// Local imports - agent state
+import {
+  RoundMetricsState,
+  SessionUsageState,
+  type ToolResponseState,
+  createResponseCycleStore,
+} from './AgentState';
 
 // Local imports - flow orchestration
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
-  type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 
 // Local imports - option helpers
@@ -26,51 +29,42 @@ export interface ResponseCycleOptions<C = unknown>
 export interface ResponseCycleContext<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
+  stateRound: RoundMetricsState;
+  stateGlobal: SessionUsageState;
+  toolState: ToolResponseState;
   outputFile: string;
 }
 
 export interface ResponseCycleResult {
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
+  stateRound: RoundMetricsState;
+  stateGlobal: SessionUsageState;
+  toolState: ToolResponseState;
   endTurn: boolean;
 }
 
 export async function runResponseCycle<C = unknown>(
   context: ResponseCycleContext<C>,
 ): Promise<ResponseCycleResult> {
+  const store = createResponseCycleStore({
+    messages: context.messages,
+    outputFile: context.outputFile,
+    round: context.stateRound,
+    session: context.stateGlobal,
+    toolState: context.toolState,
+  });
+
   const shared: ResponseCycleShared<C> = {
     options: context.options,
-    cycle: {
-      messages: context.messages,
-      stateRound: context.stateRound,
-      stateGlobal: context.stateGlobal,
-      toolState: context.toolState,
-      outputFile: context.outputFile,
-      endTurn: false,
-      shouldStop: false,
-      outputExists: false,
-      systemPrompt: undefined,
-      debugContext: undefined,
-      debugFileOptions: undefined,
-      startTime: undefined,
-      responseObject: undefined,
-      responseTime: undefined,
-      stopReason: undefined,
-      processedResponse: undefined,
-    } satisfies ResponseCycleState,
+    store,
   };
 
   const flow = createResponseCycleFlow<C>();
   await flow.run(shared);
 
   return {
-    stateRound: shared.cycle.stateRound,
-    stateGlobal: shared.cycle.stateGlobal,
-    toolState: shared.cycle.toolState,
-    endTurn: shared.cycle.endTurn,
+    stateRound: shared.store.round,
+    stateGlobal: shared.store.session,
+    toolState: shared.store.tool,
+    endTurn: shared.store.runtime.endTurn,
   };
 }

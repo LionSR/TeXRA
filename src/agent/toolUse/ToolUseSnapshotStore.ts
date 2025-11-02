@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentType } from '@agent/core/AgentDataclass';
+import { toolResponseStateToSnapshot } from '@agent/core/ToolState';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -194,7 +195,7 @@ export const ToolUseSnapshotStore = {
           agentCategory: payload.session.agentCategory,
         },
         messages: structuredClone(payload.messages),
-        toolState: structuredClone(payload.toolState),
+        toolState: toolResponseStateToSnapshot(payload.toolState),
         lastUpdated: Date.now(),
       } as const;
 

@@ -37,12 +37,9 @@ describe('ToolUseSessionManager queue handling', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: '',
-        accumulatedOutput: '',
-        mediaFiles: [],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        document: { texcountStats: null, mediaFiles: [] },
+        draft: { lastResponse: '', accumulatedOutput: '' },
+        reasoning: { thinkingBlocks: [], thinkingAdded: false },
       },
       lastUpdated: Date.now(),
     };

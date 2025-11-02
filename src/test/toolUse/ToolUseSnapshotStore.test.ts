@@ -84,12 +84,9 @@ describe('ToolUseSnapshotStore', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: 'last',
-        accumulatedOutput: 'all',
-        mediaFiles: ['media.png'],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        document: { texcountStats: null, mediaFiles: ['media.png'] },
+        draft: { lastResponse: 'last', accumulatedOutput: 'all' },
+        reasoning: { thinkingBlocks: [], thinkingAdded: false },
       },
       lastUpdated: Date.now(),
     };
@@ -163,7 +160,7 @@ describe('ToolUseSnapshotStore', () => {
     const stored = value as ReturnType<typeof buildSnapshot>;
     assert.equal(stored.session.agentType, AgentType.ToolUse);
     assert.notStrictEqual(stored.messages, payload.messages);
-    assert.equal(stored.toolState.lastResponse, 'last');
+    assert.equal(stored.toolState.draft.lastResponse, 'last');
   });
 
   it('list triggers TTL cleanup and filters invalid snapshots', async () => {

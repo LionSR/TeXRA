@@ -6,7 +6,11 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import {
+  RoundMetricsState,
+  SessionUsageState,
+  createToolResponseState,
+} from '@agent/core/AgentState';
 import {
   AgentSetting,
   AgentPrompt,
@@ -14,7 +18,6 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
-import { ToolState } from '@agent/core/ToolState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -328,9 +331,9 @@ describe('ResponseCycle background reasoning logs', () => {
     });
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new AgentStateRound(1);
-    const stateGlobal = new AgentStateGlobal();
-    const toolState = new ToolState();
+    const stateRound = new RoundMetricsState(1);
+    const stateGlobal = new SessionUsageState();
+    const toolState = createToolResponseState();
 
     await runResponseCycle({
       options: {
