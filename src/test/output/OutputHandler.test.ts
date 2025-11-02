@@ -223,16 +223,17 @@ describe('OutputHandler XML summaries', () => {
       path: 'output.tex',
     });
 
-    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
-      async (filePath: string) => {
-        if (filePath === 'out.xml') {
-          return [
-            '<document>\\section{Results}</document>',
-            '<scratchpad>draft notes</scratchpad>',
-          ].join('');
-        }
-        return '';
-      };
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (
+      filePath: string,
+    ) => {
+      if (filePath === 'out.xml') {
+        return [
+          '<document>\\section{Results}</document>',
+          '<scratchpad>draft notes</scratchpad>',
+        ].join('');
+      }
+      return '';
+    };
 
     await handler.processOutputFiles('out.xml', 0);
 
@@ -264,16 +265,17 @@ describe('OutputHandler XML summaries', () => {
       { source: 'notes.tex', path: 'notes.tex' },
     ];
 
-    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
-      async (filePath: string) => {
-        if (filePath === 'out.xml') {
-          return [
-            '<document name="draft">First</document>',
-            '<document name="notes">Second</document>',
-          ].join('');
-        }
-        return '';
-      };
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (
+      filePath: string,
+    ) => {
+      if (filePath === 'out.xml') {
+        return [
+          '<document name="draft">First</document>',
+          '<document name="notes">Second</document>',
+        ].join('');
+      }
+      return '';
+    };
 
     await handler.processOutputFiles('out.xml', 0);
 

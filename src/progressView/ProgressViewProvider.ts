@@ -325,7 +325,7 @@ export class ProgressViewProvider
     }
 
     // Update only log content and groups (focused responsibility)
-    const messages = this.state.streamTabs.get(stream) || [];
+    const messages = this.state.streamTabs.getMessages(stream);
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );

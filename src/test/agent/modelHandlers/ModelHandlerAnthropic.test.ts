@@ -358,9 +358,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       'the earliest cache marker should be removed',
     );
     assert.deepEqual(
-      cacheControlledBlocks.map(
-        (block) => (block as { text?: string }).text,
-      ),
+      cacheControlledBlocks.map((block) => (block as { text?: string }).text),
       ['block-1', 'block-2', 'block-3', 'block-4'],
       'the four most recent blocks should retain cache control markers',
     );
