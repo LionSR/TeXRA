@@ -162,7 +162,7 @@ export class AgentLogger {
    * @param status Status to set for the group ('error' or 'stopped')
    */
   endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
-    logger.endGroup(this.channelId, groupId, status);
+    logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
   /**
@@ -170,7 +170,7 @@ export class AgentLogger {
    * @returns The active group ID, or undefined if no active group
    */
   getActiveGroupId(): string | undefined {
-    return logger.getActiveGroupId(this.channelId);
+    return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
   }
 
   /**
@@ -178,6 +178,6 @@ export class AgentLogger {
    * @param groupId The group ID to set as active, or undefined to clear
    */
   setActiveGroupId(groupId: string | undefined): void {
-    logger.setActiveGroupId(this.channelId, groupId);
+    logger.setActiveGroupId(this.channelId, groupId, this.isAgentLogger);
   }
 }
