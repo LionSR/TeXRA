@@ -17,7 +17,7 @@ import { INSTRUCTION_PREFIX, globalSM } from '@common/state/stateManager';
 export async function showInstructionWithSuppress(
   key: string,
   message: string,
-  actions?: { title: string; callback: () => Thenable<void> | void }[],
+  actions: { title: string; callback: () => Thenable<void> | void }[] = [],
   showSuppress = true,
 ): Promise<void> {
   if (showSuppress) {
@@ -28,7 +28,7 @@ export async function showInstructionWithSuppress(
   }
 
   const never = 'Never remind again';
-  const buttons = actions?.map((a) => a.title) ?? [];
+  const buttons = actions.map((a) => a.title);
   const choice = await vscode.window.showInformationMessage(
     message,
     ...buttons,
@@ -38,7 +38,7 @@ export async function showInstructionWithSuppress(
   if (showSuppress && choice === never) {
     await globalSM.update(`${INSTRUCTION_PREFIX}${key}`, true);
   } else if (choice) {
-    const action = actions?.find((a) => a.title === choice);
+    const action = actions.find((a) => a.title === choice);
     await action?.callback();
   }
 }

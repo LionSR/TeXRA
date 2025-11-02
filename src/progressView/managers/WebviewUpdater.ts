@@ -286,18 +286,18 @@ export class WebviewUpdater {
 
     if (activeStream) {
       // Update log content for active stream
-      const messages = state.streamTabs.get(activeStream) || [];
+      const messages = state.streamTabs.getMessages(activeStream);
       const groups = Array.from(
         state.taskGroups.getStreamGroups(activeStream).values(),
       );
       this.updateLogContent(activeStream, messages, groups);
 
       // Update files for active stream
-      const files = state.outputFiles.getFiles(activeStream) || {};
+      const files = state.outputFiles.getFiles(activeStream);
       this.updateFiles(activeStream, files);
 
       // Update missing outputs for active stream
-      const missing = state.outputFiles.getMissingOutputs(activeStream) || {};
+      const missing = state.outputFiles.getMissingOutputs(activeStream);
       this.updateMissingOutputs(activeStream, missing);
 
       // Update usage for active stream

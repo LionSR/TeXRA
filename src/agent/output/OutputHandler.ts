@@ -115,6 +115,12 @@ export class OutputHandler implements IOutputHandler {
     if (!this.outputMappings[round]) {
       this.outputMappings[round] = [];
     }
+    if (!this.roundFileInfos[round]) {
+      this.roundFileInfos[round] = [];
+    }
+    if (!Object.prototype.hasOwnProperty.call(this.rawOutputs, round)) {
+      this.rawOutputs[round] = null;
+    }
     return this.outputFiles[round];
   }
 
@@ -249,7 +255,7 @@ export class OutputHandler implements IOutputHandler {
           )
         : new Map<string, string>();
     const originByOutput = new Map(
-      (this.outputMappings[currRound] || []).map((p) => [p.path, p.source]),
+      this.getNamedOutputs(currRound).map((p) => [p.path, p.source]),
     );
 
     const mapping: RoundFileMapping = {
@@ -259,6 +265,13 @@ export class OutputHandler implements IOutputHandler {
     };
     this.roundMappings[currRound] = mapping;
     return mapping;
+  }
+
+  private getNamedOutputs(round: number): NamedOutputFile[] {
+    if (!this.outputMappings[round]) {
+      this.outputMappings[round] = [];
+    }
+    return this.outputMappings[round];
   }
 
   private invalidateRoundMapping(round: number): void {
@@ -439,11 +452,7 @@ export class OutputHandler implements IOutputHandler {
           );
 
           this.setRoundOutputs(currRound, processedFiles, processedPairs);
-          await this.captureXmlSummary(
-            currRound,
-            outputFile,
-            processedPairs,
-          );
+          await this.captureXmlSummary(currRound, outputFile, processedPairs);
 
           if (this.baseFiles && this.baseFiles.length > 0) {
             await replaceInputCommands(
@@ -533,11 +542,9 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  public async getRoundArtifacts(
-    round: number,
-  ): Promise<RoundOutputArtifacts> {
+  public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
     const outputFiles = this.ensureRound(round).slice();
-    const processed = (this.outputMappings[round] || []).map((entry) => ({
+    const processed = this.getNamedOutputs(round).map((entry) => ({
       ...entry,
     }));
     let fileInfos = this.roundFileInfos[round];
@@ -610,16 +617,20 @@ export class OutputHandler implements IOutputHandler {
           );
         }
       } else {
-        const singleDocument = extractTextFromTag(rawContent, documentTag).trim();
+        const singleDocument = extractTextFromTag(
+          rawContent,
+          documentTag,
+        ).trim();
         if (singleDocument) {
           tagContents[documentTag] = singleDocument;
-          documents.push(
-            `<${documentTag}>${singleDocument}</${documentTag}>`,
-          );
+          documents.push(`<${documentTag}>${singleDocument}</${documentTag}>`);
         }
       }
 
-      const scratchpadContent = extractTextFromTag(rawContent, 'scratchpad').trim();
+      const scratchpadContent = extractTextFromTag(
+        rawContent,
+        'scratchpad',
+      ).trim();
       if (scratchpadContent) {
         tagContents.scratchpad = scratchpadContent;
       }

@@ -67,8 +67,11 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     withErrorBoundary('failed to handle updateLogMessage', () => {
       const { stream, logMessage } = data;
 
-      const messages = state.streamTabs.get(stream);
-      if (!messages) return;
+      if (!state.streamTabs.has(stream)) {
+        return;
+      }
+
+      const messages = state.streamTabs.getMessages(stream);
 
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing) return;

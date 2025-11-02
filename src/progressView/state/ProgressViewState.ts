@@ -150,9 +150,7 @@ export class ProgressViewState {
       return false;
     }
 
-    const hasPersistedOutputs =
-      Array.isArray(taskState.agentConfig.outputFiles) &&
-      taskState.agentConfig.outputFiles.length > 0;
+    const hasPersistedOutputs = taskState.agentConfig.outputFiles.length > 0;
     const usesMultipleOutputs = taskState.agentConfig.useMultipleOutputs;
     const outputFlagEnabled = taskState.activeFiles.output;
 
