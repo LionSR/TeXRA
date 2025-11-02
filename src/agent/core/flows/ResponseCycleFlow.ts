@@ -125,16 +125,6 @@ export interface ResponseCycleSharedStore {
   model: ModelInteractionSlice;
 }
 
-// Legacy type aliases for backward compatibility
-export type ResponseCycleInputState = PersistentStateSlice;
-export type ResponseCycleRuntimeState = RuntimeControlSlice &
-  DebugStateSlice &
-  ModelInteractionSlice;
-export type ResponseCycleState = PersistentStateSlice &
-  RuntimeControlSlice &
-  DebugStateSlice &
-  ModelInteractionSlice;
-
 /**
  * Resets transient runtime and model state between continuation attempts.
  * Part of Pocket Flow architecture - manipulates specific slices only.
@@ -148,16 +138,6 @@ function resetRuntimeState(store: ResponseCycleSharedStore): void {
   store.model.processedResponse = undefined;
 }
 
-// Legacy helper for backward compatibility
-function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
-  cycle.shouldStop = false;
-  cycle.endTurn = false;
-  cycle.responseObject = undefined;
-  cycle.responseTime = undefined;
-  cycle.stopReason = undefined;
-  cycle.processedResponse = undefined;
-}
-
 /**
  * Shared context passed to all nodes in the response cycle flow.
  * Part of Pocket Flow architecture - explicitly structured shared store instead of flat state blob.
@@ -165,9 +145,15 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 export interface ResponseCycleShared<C = unknown> {
   options: ResponseCycleOptions<C>;
   store: ResponseCycleSharedStore;
-  // Legacy accessor for backward compatibility
-  cycle: ResponseCycleState;
 }
+
+// Legacy type aliases for backward compatibility with external code
+export type ResponseCycleInputState = PersistentStateSlice;
+export type ResponseCycleRuntimeState = RuntimeControlSlice &
+  DebugStateSlice &
+  ModelInteractionSlice;
+export type ResponseCycleState = PersistentStateSlice &
+  ResponseCycleRuntimeState;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -220,7 +206,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    { store }: ResponseCycleShared<C>,
+    shared: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -229,6 +215,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       debugFileOptions?: DebugFileOptions;
     },
   ): Promise<string | undefined> {
+    const { store } = shared;
     if (prepRes.interrupted) {
       resetRuntimeState(store);
       store.runtime.shouldStop = true;
@@ -259,10 +246,6 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
  * Part of Pocket Flow architecture - reads from persistent/debug slices, writes to model slice.
  */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
-  }
-
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
@@ -311,11 +294,10 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    _shared: ResponseCycleShared<C>,
-    prepRes: ResponseCycleShared<C>,
+    shared: ResponseCycleShared<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
-    const { options, store } = prepRes;
+    const { options, store } = shared;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
@@ -367,10 +349,6 @@ interface ProcessResult {
  * Part of Pocket Flow architecture - reads model slice, updates persistent slice (metrics, toolState).
  */
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
-  }
-
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<ProcessResult | { skipped: true }> {
@@ -502,11 +480,10 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    _shared: ResponseCycleShared<C>,
-    prepRes: ResponseCycleShared<C>,
+    shared: ResponseCycleShared<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, store } = prepRes;
+    const { options, store } = shared;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
@@ -580,10 +557,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
  * Part of Pocket Flow architecture - reads model slice, updates runtime control and persistent slices.
  */
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
-  }
-
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<
@@ -624,12 +597,11 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async post(
     shared: ResponseCycleShared<C>,
-    prepRes: ResponseCycleShared<C>,
     execRes:
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, store } = prepRes;
+    const { options, store } = shared;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
