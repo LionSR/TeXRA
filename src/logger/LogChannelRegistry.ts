@@ -32,18 +32,18 @@ export class LogChannelRegistry {
     return this.getOrCreate(channel, options).logger;
   }
 
-  getTransport(channel: string): VSCodeTransport | undefined {
-    return this.channels.get(channel)?.transport;
+  getTransport(
+    channel: string,
+    options?: ChannelOptions,
+  ): VSCodeTransport | undefined {
+    const key = this.getKey(channel, options?.isAgent ?? false);
+    return this.channels.get(key)?.transport;
   }
 
   private getOrCreate(channel: string, options: ChannelOptions): ChannelEntry {
-    const existing = this.channels.get(channel);
+    const key = this.getKey(channel, options.isAgent);
+    const existing = this.channels.get(key);
     if (existing) {
-      if (existing.options.isAgent !== options.isAgent) {
-        throw new Error(
-          `Channel ${channel} already registered with isAgent=${existing.options.isAgent}, cannot reuse with isAgent=${options.isAgent}.`,
-        );
-      }
       return existing;
     }
 
@@ -81,7 +81,7 @@ export class LogChannelRegistry {
     });
 
     const entry: ChannelEntry = { logger, transport, options };
-    this.channels.set(channel, entry);
+    this.channels.set(key, entry);
     return entry;
   }
 
@@ -90,6 +90,10 @@ export class LogChannelRegistry {
       this.mainOutputChannel = vscode.window.createOutputChannel('TeXRA');
     }
     return this.mainOutputChannel;
+  }
+
+  private getKey(channel: string, isAgent: boolean): string {
+    return `${channel}::${isAgent ? 'agent' : 'shared'}`;
   }
 }
 
