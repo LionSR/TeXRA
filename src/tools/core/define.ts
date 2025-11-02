@@ -10,11 +10,11 @@ export function defineTool<T>(def: {
   const baseDefinition: ToolDefinition = {
     name: def.name,
     description: def.description,
-    parameters: toJSONSchema(def.schema, {
+    inputSchema: toJSONSchema(def.schema, {
       target: 'openapi-3.0',
       unrepresentable: 'any',
       io: 'input',
-    }) as Record<string, unknown>,
+    }) as ToolDefinition['inputSchema'],
   };
 
   abstract class GeneratedTool extends BaseTool<T> {

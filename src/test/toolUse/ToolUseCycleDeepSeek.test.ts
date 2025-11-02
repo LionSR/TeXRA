@@ -30,7 +30,18 @@ import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {
   constructor() {
-    super({ name: 'echo' }, z.object({ value: z.string() }));
+    super(
+      {
+        name: 'echo',
+        description: 'Echo value',
+        inputSchema: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+        },
+      },
+      z.object({ value: z.string() }),
+    );
   }
   protected async execute(input: { value: string }): Promise<ToolResult> {
     return toolResult({ output: input.value });
@@ -107,7 +118,7 @@ describe('runToolUseCycle DeepSeek', () => {
       requiredFilesInternal: {},
       defaultOutputFiles: [],
       filePatternsContain: [],
-      tools: [{ name: 'echo' }],
+      tools: [{ ...toolRegistry.echo.definition }],
     };
     const prompt: AgentPrompt = {
       systemPrompt: '',

@@ -80,19 +80,28 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       ? this.agentSetting.tools
       : [];
     const tools: ToolDefinition[] = [];
-    for (const t of cfg) {
-      const def = typeof t === 'string' ? { name: t } : t;
-      if (!this.toolRegistry[def.name]) {
-        this.logger.warn(`Tool "${def.name}" not found in registry`);
+    for (const entry of cfg) {
+      const toolName = typeof entry === 'string' ? entry : entry.name;
+      const tool = this.toolRegistry[toolName];
+      if (!tool) {
+        this.logger.warn(`Tool "${toolName}" not found in registry`);
         continue;
       }
-      tools.push(def);
+      const baseDefinition = tool.definition;
+      const definition =
+        typeof entry === 'string'
+          ? { ...baseDefinition }
+          : { ...baseDefinition, ...entry };
+      tools.push(definition);
     }
     if (
       this.agentConfig.toolConfig.attachDiagnostics &&
       !tools.some((t) => t.name === 'diagnostics')
     ) {
-      tools.push({ name: 'diagnostics' });
+      const diagnosticsTool = this.toolRegistry.diagnostics;
+      if (diagnosticsTool) {
+        tools.push({ ...diagnosticsTool.definition });
+      }
     }
     return tools;
   }

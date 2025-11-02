@@ -1,27 +1,43 @@
 // Third-party imports
 import { z } from 'zod';
-// Third-party imports - provider tool definitions
-import type { FunctionDefinition } from 'openai/resources/shared';
-import type { Tool as AnthropicTool } from '@anthropic-ai/sdk/resources/messages/messages';
-import type { Schema as GeminiSchema } from '@google/genai/dist/genai';
+import type { Tool } from '@modelcontextprotocol/sdk/types';
 
-/** Zod schema describing a tool/function that a provider can execute. */
-export const ToolDefinitionSchema = z.strictObject({
-  /** Name of the tool or function */
-  name: z.string(),
-  /** Optional description for the model */
-  description: z.string().optional(),
-  /** Parameter schema or provider specific metadata */
-  parameters: z.record(z.string(), z.unknown()).optional(),
-});
+const JsonSchemaObject = z
+  .object({
+    type: z.literal('object'),
+    properties: z.record(z.string(), z.unknown()).optional(),
+    required: z.array(z.string()).optional(),
+    additionalProperties: z.boolean().optional(),
+  })
+  .passthrough();
 
-/**
- * Generic tool definition used across model providers. The parameters field
- * aligns with OpenAI, Anthropic and Google Gemini function schemas.
- */
-export type ToolDefinition = z.infer<typeof ToolDefinitionSchema> & {
-  parameters?:
-    | FunctionDefinition['parameters']
-    | AnthropicTool['input_schema']
-    | GeminiSchema;
-};
+const ToolAnnotationsSchema = z
+  .object({
+    title: z.string().optional(),
+    readOnlyHint: z.boolean().optional(),
+    destructiveHint: z.boolean().optional(),
+    singletonHint: z.boolean().optional(),
+    parallelizableHint: z.boolean().optional(),
+    progressSchema: JsonSchemaObject.optional(),
+    documentation: z.string().optional(),
+    legalHint: z.string().optional(),
+    openWorldHint: z.boolean().optional(),
+  })
+  .passthrough();
+
+const ToolDefinitionSchemaInternal = z
+  .object({
+    name: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    inputSchema: JsonSchemaObject,
+    outputSchema: JsonSchemaObject.optional(),
+    annotations: ToolAnnotationsSchema.optional(),
+  })
+  .passthrough();
+
+export const ToolDefinitionSchema =
+  ToolDefinitionSchemaInternal as z.ZodType<Tool>;
+
+/** Shared tool definition type aligned with the MCP SDK. */
+export type ToolDefinition = Tool;

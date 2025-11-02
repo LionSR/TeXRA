@@ -32,7 +32,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
     function: {
       name: d.name,
       description: d.description,
-      parameters: d.parameters,
+      parameters: d.inputSchema as Record<string, unknown> | undefined,
     },
   }));
 }
@@ -40,7 +40,7 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
 /** Convert generic ToolDefinition objects to OpenAI Responses FunctionTool format. */
 export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
   return defs.map((d) => {
-    const params = (d.parameters ?? null) as Record<string, unknown> | null;
+    const params = (d.inputSchema ?? null) as Record<string, unknown> | null;
     return {
       type: 'function',
       name: d.name,
@@ -65,7 +65,7 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
       } as ToolUnion;
     }
 
-    const params = d.parameters as AnthropicTool['input_schema'] | undefined;
+    const params = d.inputSchema as AnthropicTool['input_schema'] | undefined;
     return {
       name: d.name,
       description: d.description,
@@ -83,7 +83,7 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
-    parameters: d.parameters as Schema | undefined,
+    parameters: d.inputSchema as unknown as Schema | undefined,
   }));
 
   return [
