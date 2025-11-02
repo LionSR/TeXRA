@@ -108,16 +108,7 @@ export abstract class ModelHandler<
   }
 
   constructor(config: ModelConfig) {
-    this.config = {
-      ...config,
-      toolConfig: config.toolConfig || {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        attachTeXCount: false,
-        attachDiagnostics: false,
-        autoCompileInputPdf: false,
-      },
-    };
+    this.config = { ...config };
     this.capabilities = cloneCapabilities(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;

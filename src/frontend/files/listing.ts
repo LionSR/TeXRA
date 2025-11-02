@@ -42,6 +42,43 @@ function containsExcludedDirectory(
   );
 }
 
+interface ListingOptions {
+  includeExtensions?: string[];
+  excludeExtensions?: string[];
+  excludeDirectories?: string[];
+  excludeKeywords?: string[];
+  excludeFiles?: string[];
+}
+
+interface NormalizedListingOptions {
+  includeExt: string[];
+  excludeExt: string[];
+  excludeKeywords: string[];
+  excludeDirs: string[];
+  excludeFiles: string[];
+  excludePattern?: vscode.RelativePattern;
+}
+
+function normalizeListingOptions(
+  patternRoot: string,
+  options: ListingOptions,
+): NormalizedListingOptions {
+  const includeExtensions = options.includeExtensions ?? [];
+  const excludeExtensions = options.excludeExtensions ?? [];
+  const excludeDirectories = options.excludeDirectories ?? [];
+  const excludeKeywords = options.excludeKeywords ?? [];
+  const excludeFiles = options.excludeFiles ?? [];
+
+  return {
+    includeExt: includeExtensions.map((ext) => ext.toLowerCase()),
+    excludeExt: excludeExtensions.map((ext) => ext.toLowerCase()),
+    excludeKeywords: excludeKeywords.map((keyword) => keyword.toLowerCase()),
+    excludeDirs: excludeDirectories.map((dir) => dir.toLowerCase()),
+    excludeFiles: excludeFiles.map((file) => file.toLowerCase()),
+    excludePattern: createExcludePattern(patternRoot, excludeDirectories),
+  };
+}
+
 export async function getFilesInDirectory(
   dir: string,
   includeExtensions: string[] = [],
@@ -49,33 +86,32 @@ export async function getFilesInDirectory(
   excludeDirectories: string[] = [],
   excludeKeywords: string[] = [],
 ): Promise<string[]> {
-  const normalizedIncludeExt = includeExtensions.map((e) => e.toLowerCase());
-  const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
-  const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
-  const normalizedExcludeDirs = excludeDirectories.map((d) => d.toLowerCase());
-  const excludePattern = createExcludePattern(dir, excludeDirectories);
+  const filters = normalizeListingOptions(dir, {
+    includeExtensions,
+    excludeExtensions,
+    excludeDirectories,
+    excludeKeywords,
+  });
   const files = await vscode.workspace.findFiles(
     new vscode.RelativePattern(dir, '*'),
-    excludePattern,
+    filters.excludePattern,
   );
 
   return files
     .filter((uri) => {
       // Check if the file is inside an excluded directory (for symlinks, case-insensitive)
       const relativePath = path.relative(dir, uri.fsPath);
-      return !containsExcludedDirectory(relativePath, normalizedExcludeDirs);
+      return !containsExcludedDirectory(relativePath, filters.excludeDirs);
     })
     .map((uri) => path.basename(uri.fsPath))
     .filter((name) => {
       const nameLower = name.toLowerCase();
       return (
         !name.startsWith('.') &&
-        (normalizedIncludeExt.length === 0 ||
-          normalizedIncludeExt.some((ext) => nameLower.endsWith(ext))) &&
-        !normalizedExcludeExt.some((ext) => nameLower.endsWith(ext)) &&
-        !normalizedExcludeKeywords.some((keyword) =>
-          nameLower.includes(keyword),
-        )
+        (filters.includeExt.length === 0 ||
+          filters.includeExt.some((ext) => nameLower.endsWith(ext))) &&
+        !filters.excludeExt.some((ext) => nameLower.endsWith(ext)) &&
+        !filters.excludeKeywords.some((keyword) => nameLower.includes(keyword))
       );
     });
 }
@@ -89,15 +125,16 @@ export async function getFilesRecursively(
   excludeKeywords: string[] = [],
   excludeFiles: string[] = [],
 ): Promise<string[]> {
-  const normalizedIncludeExt = includeExtensions.map((e) => e.toLowerCase());
-  const normalizedExcludeExt = excludeExtensions.map((e) => e.toLowerCase());
-  const normalizedExcludeKeywords = excludeKeywords.map((k) => k.toLowerCase());
-  const normalizedExcludeFiles = excludeFiles.map((f) => f.toLowerCase());
-  const normalizedExcludeDirs = excludeDirectories.map((d) => d.toLowerCase());
-  const excludePattern = createExcludePattern(root, excludeDirectories);
+  const filters = normalizeListingOptions(root, {
+    includeExtensions,
+    excludeExtensions,
+    excludeDirectories,
+    excludeKeywords,
+    excludeFiles,
+  });
   const files = await vscode.workspace.findFiles(
     new vscode.RelativePattern(dir, '**/*'),
-    excludePattern,
+    filters.excludePattern,
   );
 
   return files
@@ -112,7 +149,7 @@ export async function getFilesRecursively(
       }
 
       // Check if any segment of the path matches an excluded directory
-      if (containsExcludedDirectory(relativePath, normalizedExcludeDirs)) {
+      if (containsExcludedDirectory(relativePath, filters.excludeDirs)) {
         return false;
       }
 
@@ -120,13 +157,13 @@ export async function getFilesRecursively(
       const fileNameLower = fileName.toLowerCase();
 
       return (
-        (normalizedIncludeExt.length === 0 ||
-          normalizedIncludeExt.some((ext) => fileNameLower.endsWith(ext))) &&
-        !normalizedExcludeExt.some((ext) => fileNameLower.endsWith(ext)) &&
-        !normalizedExcludeKeywords.some((keyword) =>
+        (filters.includeExt.length === 0 ||
+          filters.includeExt.some((ext) => fileNameLower.endsWith(ext))) &&
+        !filters.excludeExt.some((ext) => fileNameLower.endsWith(ext)) &&
+        !filters.excludeKeywords.some((keyword) =>
           fileNameLower.includes(keyword),
         ) &&
-        !normalizedExcludeFiles.includes(fileNameLower)
+        !filters.excludeFiles.includes(fileNameLower)
       );
     });
 }
