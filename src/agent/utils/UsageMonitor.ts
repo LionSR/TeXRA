@@ -28,11 +28,8 @@ export class UsageMonitor {
     private readonly logger: AgentLogger,
   ) {}
 
-  async recordUsage(
-    stateGlobal: AgentStateGlobal,
-    groupId?: string,
-  ): Promise<void> {
-    const statsGroupId = groupId ?? this.logger.getActiveGroupId();
+  async recordUsage(stateGlobal: AgentStateGlobal): Promise<void> {
+    const statsGroupId = this.logger.getActiveGroupId();
 
     try {
       let responseUsage:
