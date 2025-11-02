@@ -14,12 +14,8 @@ function getOrCreateTransport(
   channel: string,
   isAgent: boolean,
 ): VSCodeTransport {
-  registry.ensure(channel, { isAgent });
-  const transport = getTransport(channel);
-  if (!transport) {
-    throw new Error(`Failed to initialise logger transport for channel ${channel}`);
-  }
-  return transport;
+  const entry = registry.ensure(channel, { isAgent });
+  return entry.transport;
 }
 
 function logWithGroup(
@@ -31,12 +27,11 @@ function logWithGroup(
   isAgent = false,
   data?: unknown,
 ): void {
-  const logger = registry.getLogger(channel, { isAgent });
-  const transport = getTransport(channel);
-  const activeGroupId = groupId ?? transport?.getActiveGroupId();
+  const entry = registry.ensure(channel, { isAgent });
+  const { logger, transport } = entry;
+  const activeGroupId = groupId ?? transport.getActiveGroupId();
 
-  // @ts-expect-error - winston logger exposes dynamic level helpers
-  logger[level](message, { groupId: activeGroupId, messageType, data });
+  logger.log(level, message, { groupId: activeGroupId, messageType, data });
 }
 
 export function initialize(channel: string, isAgent = false): void {
@@ -134,4 +129,3 @@ export function getTimestamp(): string {
     })
     .replace(',', '');
 }
-
