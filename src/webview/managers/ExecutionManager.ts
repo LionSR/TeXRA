@@ -26,10 +26,11 @@ import {
 const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
-function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] | null {
-  if (!Array.isArray(files) || files.length === 0) {
-    return null;
+function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
+  if (!Array.isArray(files)) {
+    return [];
   }
+
   return files;
 }
 
@@ -83,8 +84,7 @@ export class ExecutionManager {
     const baseConfig = this.composeBaseAgentConfig(message, session);
     const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
     const useMultipleOutputs = Boolean(
-      message.outputFilesActive ||
-        (Array.isArray(outputFiles) && outputFiles.length > 1),
+      message.outputFilesActive || outputFiles.length > 1,
     );
 
     return {
@@ -106,7 +106,7 @@ export class ExecutionManager {
       // pipeline never attempts to resolve `_multiple` agent variants or
       // manage output file selections that the UI disables for this mode.
       useMultipleOutputs: false,
-      outputFiles: null,
+      outputFiles: [],
     };
   }
 
@@ -141,13 +141,11 @@ export class ExecutionManager {
       auxiliaryFile: message.auxiliaryFile ?? null,
       auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
       mediaFile: mapMediaPath(message.mediaFile ?? null),
-      mediaFiles: message.mediaFiles
-        ? getFilesIfNotEmpty<string>(
-            message.mediaFiles
-              .map(mapMediaPath)
-              .filter((f: string | null): f is string => f !== null),
-          )
-        : null,
+      mediaFiles: getFilesIfNotEmpty<string>(
+        (message.mediaFiles ?? [])
+          .map(mapMediaPath)
+          .filter((f: string | null): f is string => f !== null),
+      ),
       editedFile: null,
       toolConfig,
       agentType: session.agentType,
