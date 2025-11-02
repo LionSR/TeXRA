@@ -503,21 +503,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
     const generated = this.provider.state.outputFiles.getFiles(stream);
-    const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
-    if (generated) {
-      for (const [round, infos] of Object.entries(generated)) {
-        if (!Array.isArray(infos)) {
-          this.logger.warn(
-            `Skipping invalid output metadata for stream ${stream}, round ${round}`,
-          );
-          continue;
-        }
+    const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
 
-        for (const info of infos) {
-          allFiles.add(info.path);
-          if (info.original) {
-            allFiles.add(info.original);
-          }
+    for (const [round, infos] of Object.entries(generated)) {
+      if (!Array.isArray(infos)) {
+        this.logger.warn(
+          `Skipping invalid output metadata for stream ${stream}, round ${round}`,
+        );
+        continue;
+      }
+
+      for (const info of infos) {
+        allFiles.add(info.path);
+        if (info.original) {
+          allFiles.add(info.original);
         }
       }
     }
