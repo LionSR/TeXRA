@@ -49,98 +49,76 @@ export class XmlOutputManager {
     outputContent: string,
     documentTag: string,
   ): string | null {
-    try {
-      const documents = xmlUtils.extractMultipleTextFromTag(outputContent);
-      if (documents && documents.length > 0) {
-        const filename = path.basename(this.agentConfig.inputFile);
-        const match = documents.find((doc) => doc.name === filename);
-        if (match && match.content) {
+    const filename = path.basename(this.agentConfig.inputFile);
+    const result = xmlUtils.extractDocument(
+      outputContent,
+      documentTag,
+      filename,
+    );
+
+    if (result.content) {
+      switch (result.method) {
+        case 'named':
           this.logger.info(
             `Recovered ${documentTag} from named document tag`,
             undefined,
             MESSAGE_TYPES.INTERNAL,
           );
-          return match.content;
-        }
+          break;
+        case 'simple':
+          this.logger.info(
+            `Successfully extracted ${documentTag} using fallback method`,
+            undefined,
+            MESSAGE_TYPES.INTERNAL,
+          );
+          break;
+        case 'markdown':
+          this.logger.info(
+            `Recovered ${documentTag} from markdown code block`,
+            undefined,
+            MESSAGE_TYPES.INTERNAL,
+          );
+          break;
+        case 'latex':
+          this.logger.info(
+            `Recovered ${documentTag} from \\documentclass block`,
+            undefined,
+            MESSAGE_TYPES.INTERNAL,
+          );
+          break;
       }
-      const fallbackContent = xmlUtils.extractTextFromTag(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackContent) {
-        this.logger.info(
-          `Successfully extracted ${documentTag} using fallback method`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        return fallbackContent;
-      }
-      const markdownFallback = xmlUtils.extractLatexFromMarkdown(outputContent);
-      if (markdownFallback) {
-        this.logger.info(
-          `Recovered ${documentTag} from markdown code block`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        return markdownFallback;
-      }
-      const latexFallback =
-        xmlUtils.extractLatexBetweenDocumentClass(outputContent);
-      if (latexFallback) {
-        this.logger.info(
-          `Recovered ${documentTag} from \\documentclass block`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        return latexFallback;
-      }
-      this.logger.debug(
-        `No ${documentTag} found in output file using fallback method`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
-      return null;
-    } catch (fallbackErr) {
-      this.logger.debug(
-        `Failed fallback extraction: ${fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
-      return null;
+      return result.content;
     }
+
+    this.logger.debug(
+      `No ${documentTag} found in output file using fallback method`,
+      undefined,
+      MESSAGE_TYPES.INTERNAL,
+    );
+    return null;
   }
 
   private extractMultipleDocumentsbyRegex(
     outputContent: string,
     documentTag: string,
   ): Array<{ content: string; name: string }> | null {
-    try {
-      const fallbackDocuments = xmlUtils.extractMultipleTextFromTag(
-        outputContent,
-        documentTag,
-      );
-      if (fallbackDocuments && fallbackDocuments.length > 0) {
-        this.logger.info(
-          `Successfully extracted multiple ${documentTag} using fallback method`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        return fallbackDocuments;
-      }
-      this.logger.error(
-        `No ${documentTag} found in output file using fallback method`,
+    const result = xmlUtils.extractDocuments(outputContent, documentTag);
+
+    if (result.documents) {
+      this.logger.info(
+        `Successfully extracted multiple ${documentTag} using fallback method`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
-      return null;
-    } catch (err) {
-      this.logger.error(
-        `Failed fallback extraction: ${err instanceof Error ? err.message : String(err)}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
-      return null;
+      return result.documents;
     }
+
+    this.logger.error(
+      `No ${documentTag} found in output file using fallback method`,
+      undefined,
+      MESSAGE_TYPES.INTERNAL,
+    );
+    return null;
   }
 
   async splitScratchpadOutputXml(

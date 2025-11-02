@@ -431,6 +431,86 @@ export async function extractScratchpad(
   return extractedContent ? await formatContent(extractedContent) : null;
 }
 
+/**
+ * Result of single document extraction with method indicator
+ */
+export interface ExtractionResult {
+  content: string | null;
+  method: 'named' | 'simple' | 'markdown' | 'latex' | 'none';
+}
+
+/**
+ * Result of multiple document extraction with method indicator
+ */
+export interface MultipleExtractionResult {
+  documents: Array<{ content: string; name: string }> | null;
+  method: 'simple' | 'none';
+}
+
+/**
+ * Extract document content using a consolidated cascade of fallback methods.
+ * Tries in order: named document -> simple tag -> markdown block -> latex document
+ *
+ * @param outputContent The raw output content to extract from
+ * @param documentTag The XML tag to look for
+ * @param preferredName Optional filename to match against named documents
+ * @returns Extraction result with content and method used
+ */
+export function extractDocument(
+  outputContent: string,
+  documentTag: string,
+  preferredName?: string,
+): ExtractionResult {
+  // Try named document extraction first (if preferredName provided)
+  if (preferredName) {
+    const documents = extractMultipleTextFromTag(outputContent);
+    if (documents && documents.length > 0) {
+      const match = documents.find((doc) => doc.name === preferredName);
+      if (match && match.content) {
+        return { content: match.content, method: 'named' };
+      }
+    }
+  }
+
+  // Try simple tag extraction
+  const fallbackContent = extractTextFromTag(outputContent, documentTag);
+  if (fallbackContent) {
+    return { content: fallbackContent, method: 'simple' };
+  }
+
+  // Try markdown code block
+  const markdownFallback = extractLatexFromMarkdown(outputContent);
+  if (markdownFallback) {
+    return { content: markdownFallback, method: 'markdown' };
+  }
+
+  // Try LaTeX document class extraction
+  const latexFallback = extractLatexBetweenDocumentClass(outputContent);
+  if (latexFallback) {
+    return { content: latexFallback, method: 'latex' };
+  }
+
+  return { content: null, method: 'none' };
+}
+
+/**
+ * Extract multiple documents from XML content with fallback support
+ *
+ * @param outputContent The raw output content to extract from
+ * @param documentTag The container tag to look for documents within
+ * @returns Extraction result with documents array and method used
+ */
+export function extractDocuments(
+  outputContent: string,
+  documentTag: string,
+): MultipleExtractionResult {
+  const documents = extractMultipleTextFromTag(outputContent, documentTag);
+  if (documents && documents.length > 0) {
+    return { documents, method: 'simple' };
+  }
+  return { documents: null, method: 'none' };
+}
+
 export const xmlUtils = {
   addCdataToTags,
   addCdataToTagsMultiple,
@@ -443,6 +523,8 @@ export const xmlUtils = {
   extractContentFromXMLbyTagMultiple,
   formatContent,
   extractScratchpad,
+  extractDocument,
+  extractDocuments,
 };
 
 export default xmlUtils;
