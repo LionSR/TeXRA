@@ -34,13 +34,13 @@ export async function compileLatex2Pdf(
 
     // Get TikZ input directory from configuration
     const tikzInputDirectory = getConfig<string>(
-      'latex.tikzInputDirectory',
+      'texra.latex.tikzInputDirectory',
       '',
     );
 
     // Check if workspace path should be included
     const includeWorkspace = getConfig<boolean>(
-      'latex.includeWorkspaceInTexinputs',
+      'texra.latex.includeWorkspaceInTexinputs',
       true,
     );
 

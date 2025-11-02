@@ -34,13 +34,15 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = getConfig<string>('latex.formatter', 'latexindent');
+  const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
   if (formatter === 'none') {
     logger.debug(CHANNEL, 'LaTeX formatter disabled; skipping indentation');
     return 0;
   }
   const configKey =
-    formatter === 'tex-fmt' ? 'latex.texfmtConfig' : 'latex.latexindentConfig';
+    formatter === 'tex-fmt'
+      ? 'texra.latex.texfmtConfig'
+      : 'texra.latex.latexindentConfig';
   const config = getConfig<string>(configKey, '');
   logger.debug(CHANNEL, `Formatter: ${formatter}, Config: ${config}`);
 

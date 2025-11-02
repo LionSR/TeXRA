@@ -70,7 +70,7 @@ export async function promptToAddAgentToConfig(
   autoAdd = false,
   variant: AgentVariantMetadata = {},
 ): Promise<void> {
-  const current = getConfig<string[]>('agents', []);
+  const current = getConfig<string[]>('texra.agents', []);
 
   const skipReason = getAgentRegistrationSkipReason(
     agentName,
@@ -98,7 +98,7 @@ export async function promptToAddAgentToConfig(
 
   if (autoAdd) {
     current.push(agentName);
-    await updateConfig('agents', current);
+    await updateConfig('texra.agents', current, { prefix: false });
     vscode.window.showInformationMessage(
       `Added "${agentName}" to texra.agents`,
     );
@@ -114,7 +114,7 @@ export async function promptToAddAgentToConfig(
 
   if (choice === addButton) {
     current.push(agentName);
-    await updateConfig('agents', current);
+    await updateConfig('texra.agents', current, { prefix: false });
     vscode.window.showInformationMessage(
       `Added "${agentName}" to texra.agents`,
     );
@@ -154,7 +154,7 @@ export async function validateYamlAndPromptAdd(
     return;
   }
 
-  const configuredAgents = getConfig<string[]>('agents', []);
+  const configuredAgents = getConfig<string[]>('texra.agents', []);
   if (!configuredAgents.includes(filenameBase)) {
     const settings = validationResult.settings;
     const workflowSettings = asWorkflowSetting(settings);

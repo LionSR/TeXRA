@@ -30,7 +30,7 @@ export class TikzPictureManager {
    */
   private getTikzTemplate(): string {
     return getConfig<string>(
-      'latex.tikzTemplate',
+      'texra.latex.tikzTemplate',
       `
   \\documentclass[tikz,border=10pt]{standalone}
   \\usepackage{tikz}

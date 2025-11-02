@@ -11,10 +11,6 @@ class TestRelativeFS extends RelativeFS {
   protected static override getBasePath(): string {
     return BASE_DIR;
   }
-
-  protected static override getChannel(): string {
-    return 'TestRelativeFS';
-  }
 }
 
 suite('RelativeFS JSON helpers', () => {

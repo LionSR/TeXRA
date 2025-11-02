@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 
 describe('ToolUseSessionManager queue handling', () => {
@@ -92,7 +92,7 @@ describe('ToolUseSessionManager queue handling', () => {
     const snapshot = createSnapshot();
     ToolUseSessionManager.registerPendingSnapshots([snapshot]);
 
-    const deleteCalls: (string | undefined)[] = [];
+    const deleteCalls: ExecutionId[] = [];
     storeMutable.delete = async (executionId) => {
       deleteCalls.push(executionId);
     };
