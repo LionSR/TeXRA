@@ -138,7 +138,6 @@ export interface IModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, M[]]>;
 
   /** Compute the cost for a response. */

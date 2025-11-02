@@ -59,7 +59,6 @@ export class OutputHandler implements IOutputHandler {
   private roundMappings: { [key: number]: RoundFileMapping };
   private roundXmlSummaries: { [key: number]: OutputXmlSummary };
   public baseFiles: string[];
-  public processGroupId?: string;
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
@@ -167,10 +166,6 @@ export class OutputHandler implements IOutputHandler {
   ): void {
     if (groupId) {
       this.logger.endGroup(groupId, status);
-    } else if (this.processGroupId) {
-      // this.logger.info(`Completed output processing`, this.processGroupId);
-      this.logger.endGroup(this.processGroupId, status);
-      this.processGroupId = undefined;
     }
   }
 
@@ -302,8 +297,8 @@ export class OutputHandler implements IOutputHandler {
   public async validateExpectedOutputs(
     outputFile: string,
     currRound: number,
-    groupId?: string,
   ): Promise<void> {
+    const activeGroupId = this.logger.getActiveGroupId();
     const expected = this.agentConfig.outputFiles;
     if (!expected || expected.length === 0) {
       bus.emit('updateMissingOutputs', {
@@ -352,7 +347,7 @@ export class OutputHandler implements IOutputHandler {
         documentTag: this.agentSetting.documentTag,
       };
 
-      this.logger.missingOutputs(missingOutputsData, groupId);
+      this.logger.missingOutputs(missingOutputsData, activeGroupId);
     }
 
     bus.emit('updateMissingOutputs', {
@@ -369,9 +364,10 @@ export class OutputHandler implements IOutputHandler {
   public async finalizeRound(
     outputFile: string,
     currRound: number,
-    options: { endTurn: boolean; groupId?: string },
+    options: { endTurn: boolean },
   ): Promise<void> {
-    const { endTurn, groupId } = options;
+    const { endTurn } = options;
+    const activeGroupId = this.logger.getActiveGroupId();
     this.ensureRound(currRound);
     this.rawOutputs[currRound] = outputFile || null;
     const fileInfos = await this.gatherOutputFileInfo(currRound);
@@ -379,17 +375,17 @@ export class OutputHandler implements IOutputHandler {
 
     if (endTurn) {
       try {
-        await this.validateExpectedOutputs(outputFile, currRound, groupId);
+        await this.validateExpectedOutputs(outputFile, currRound);
         this.logger.debug(
           `Expected outputs validated for round ${currRound}`,
-          groupId,
+          activeGroupId,
         );
       } catch (error) {
         this.logger.error(
           `Expected output validation failed after round ${currRound}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          groupId,
+          activeGroupId,
         );
       }
     }
@@ -412,7 +408,7 @@ export class OutputHandler implements IOutputHandler {
           `Failed to open output file ${filePath}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          groupId,
+          activeGroupId,
         );
       }
     }
@@ -424,9 +420,8 @@ export class OutputHandler implements IOutputHandler {
   public async processOutputFiles(
     outputFile: string,
     currRound: number,
-    groupId?: string,
   ): Promise<void> {
-    const activeGroupId = groupId || this.logger.getActiveGroupId();
+    const activeGroupId = this.logger.getActiveGroupId();
     this.ensureRound(currRound);
 
     if (
