@@ -5,9 +5,7 @@ import * as path from 'path';
 import fsExtra, { type CopyOptions } from 'fs-extra';
 
 // Local imports - fs
-import { RelativeFS } from './relativeFS';
-
-type FileSystem = Pick<typeof RelativeFS, 'ensureDir' | 'fullPath'>;
+import { BaseFS } from './baseFS';
 
 /**
  * Recursively copy a directory from an absolute source path to a relative
@@ -21,7 +19,7 @@ type FileSystem = Pick<typeof RelativeFS, 'ensureDir' | 'fullPath'>;
 export async function copyDirToFS(
   sourcePath: string,
   destRelativePath: string,
-  destFS: FileSystem,
+  destFS: typeof BaseFS,
   options: CopyOptions = {},
 ): Promise<void> {
   if (!path.isAbsolute(sourcePath)) {

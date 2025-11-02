@@ -11,12 +11,12 @@ export type FileType =
   | 'edited';
 
 const INCLUDED_EXTENSION_KEYS: Record<FileType, string> = {
-  input: 'files.included.inputExtensions',
-  reference: 'files.included.referenceExtensions',
-  auxiliary: 'files.included.auxiliaryExtensions',
-  media: 'files.included.mediaExtensions',
-  audio: 'files.included.audioExtensions',
-  edited: 'files.included.editedExtensions',
+  input: 'texra.files.included.inputExtensions',
+  reference: 'texra.files.included.referenceExtensions',
+  auxiliary: 'texra.files.included.auxiliaryExtensions',
+  media: 'texra.files.included.mediaExtensions',
+  audio: 'texra.files.included.audioExtensions',
+  edited: 'texra.files.included.editedExtensions',
 };
 
 /**
