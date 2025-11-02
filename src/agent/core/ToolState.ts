@@ -1,22 +1,30 @@
-/** Interface for managing tool-specific runtime state within a conversation round. */
+// Local imports - state holders
+import { DocumentState, type IDocumentState } from './DocumentState';
+import { ResponseState, type IResponseState } from './ResponseState';
+import { ReasoningState, type IReasoningState } from './ReasoningState';
+
+/**
+ * Unified interface for tool-specific runtime state within a conversation round.
+ * Part of Pocket Flow architecture - composes separate state concerns.
+ */
 export interface IToolState {
-  /** Statistics about TeX document structure */
+  /** Document metadata holder */
+  document: IDocumentState;
+
+  /** Response assembly holder */
+  response: IResponseState;
+
+  /** Reasoning/thinking cache holder */
+  reasoning: IReasoningState;
+
+  // Legacy accessors for backward compatibility (with setters for direct assignment)
   texcountStats: string | null;
-
-  /** Most recent model response */
   lastResponse: string;
-
-  /** Combined output from all responses */
   accumulatedOutput: string;
-
-  /** Paths to figure files */
-  mediaFiles: string[];
-
-  /** Collection of all thinking blocks from the response (used for Anthropic models) */
+  readonly mediaFiles: string[];
   thinkingBlocks: any[];
-
-  /** Whether the thinking block has been added to the accumulated output */
   thinkingAdded: boolean;
+  readonly thinkingBlock: any;
 
   updateLastResponse(response: string): void;
   updateAccumulatedOutput(output: string): void;
@@ -24,30 +32,68 @@ export interface IToolState {
   resetThinkingCache(): void;
 }
 
-/** Manages tool-specific runtime state and operations within a conversation round. */
+/**
+ * Manages tool-specific runtime state through composition of focused state holders.
+ * Part of Pocket Flow architecture - clearly separates document, response, and reasoning concerns.
+ */
 export class ToolState implements IToolState {
-  texcountStats: string | null;
-  lastResponse: string;
-  accumulatedOutput: string;
-  mediaFiles: string[];
-  thinkingBlocks: any[];
-  thinkingAdded: boolean;
+  /** Document metadata holder */
+  public document: DocumentState;
 
-  /**
-   * Returns the first thinking block from thinkingBlocks array
-   * @returns The first thinking block or null if none exists
-   */
-  get thinkingBlock(): any {
-    return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
-  }
+  /** Response assembly holder */
+  public response: ResponseState;
+
+  /** Reasoning/thinking cache holder */
+  public reasoning: ReasoningState;
 
   constructor() {
-    this.texcountStats = null;
-    this.lastResponse = '';
-    this.accumulatedOutput = '';
-    this.mediaFiles = [];
-    this.thinkingBlocks = [];
-    this.thinkingAdded = false;
+    this.document = new DocumentState();
+    this.response = new ResponseState();
+    this.reasoning = new ReasoningState();
+  }
+
+  // Legacy accessors for backward compatibility
+  get texcountStats(): string | null {
+    return this.document.texcountStats;
+  }
+  set texcountStats(value: string | null) {
+    this.document.texcountStats = value;
+  }
+
+  get lastResponse(): string {
+    return this.response.lastResponse;
+  }
+  set lastResponse(value: string) {
+    this.response.lastResponse = value;
+  }
+
+  get accumulatedOutput(): string {
+    return this.response.accumulatedOutput;
+  }
+  set accumulatedOutput(value: string) {
+    this.response.accumulatedOutput = value;
+  }
+
+  get mediaFiles(): string[] {
+    return this.document.mediaFiles;
+  }
+
+  get thinkingBlocks(): any[] {
+    return this.reasoning.thinkingBlocks;
+  }
+  set thinkingBlocks(value: any[]) {
+    this.reasoning.thinkingBlocks = value;
+  }
+
+  get thinkingAdded(): boolean {
+    return this.reasoning.thinkingAdded;
+  }
+  set thinkingAdded(value: boolean) {
+    this.reasoning.thinkingAdded = value;
+  }
+
+  get thinkingBlock(): any {
+    return this.reasoning.thinkingBlock;
   }
 
   /**
@@ -55,7 +101,7 @@ export class ToolState implements IToolState {
    * @param response New response text from the model
    */
   updateLastResponse(response: string): void {
-    this.lastResponse = response;
+    this.response.updateLastResponse(response);
   }
 
   /**
@@ -63,7 +109,7 @@ export class ToolState implements IToolState {
    * @param output New content to store as accumulated output
    */
   updateAccumulatedOutput(output: string): void {
-    this.accumulatedOutput = output;
+    this.response.updateAccumulatedOutput(output);
   }
 
   /**
@@ -71,11 +117,7 @@ export class ToolState implements IToolState {
    * @param files Array of paths to new figure files
    */
   addMediaFiles(files: string[]): void {
-    for (const file of files) {
-      if (!this.mediaFiles.includes(file)) {
-        this.mediaFiles.push(file);
-      }
-    }
+    this.document.addMediaFiles(files);
   }
 
   /**
@@ -83,7 +125,28 @@ export class ToolState implements IToolState {
    * Used to ensure fresh thinking blocks for subsequent responses.
    */
   resetThinkingCache(): void {
-    this.thinkingBlocks = [];
-    this.thinkingAdded = false;
+    this.reasoning.resetThinkingCache();
+  }
+
+  /** Converts tool state to a serializable object for persistence. */
+  toObject(): Record<string, any> {
+    return {
+      document: this.document.toObject(),
+      response: this.response.toObject(),
+      reasoning: this.reasoning.toObject(),
+    };
+  }
+
+  /** Creates a ToolState instance from a persisted state object. */
+  static fromObject(stateObj: Record<string, any> | null): ToolState {
+    if (!stateObj) {
+      return new ToolState();
+    }
+
+    const state = new ToolState();
+    state.document = DocumentState.fromObject(stateObj.document ?? null);
+    state.response = ResponseState.fromObject(stateObj.response ?? null);
+    state.reasoning = ReasoningState.fromObject(stateObj.reasoning ?? null);
+    return state;
   }
 }

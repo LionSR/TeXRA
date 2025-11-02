@@ -10,28 +10,28 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'Agent';
 logger.initialize(CHANNEL);
 
-/** Interface for tracking state within a single conversation round. */
-export interface IAgentStateRound {
+/** Interface for tracking metrics within a single conversation round. */
+export interface IRoundMetrics {
   currRound: number;
   continuationCount: number;
   responseTime: number;
-  outputFile: string;
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 }
 
-/** Manages state and metrics for a single conversation round. */
-export class AgentStateRound implements IAgentStateRound {
+/**
+ * Manages per-round metrics tracking token usage, timing, and continuation count.
+ * Part of Pocket Flow architecture - stores only round-scoped metrics.
+ */
+export class RoundMetrics implements IRoundMetrics {
   currRound: number;
   continuationCount: number;
   responseTime: number;
-  outputFile: string;
   APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
 
   constructor(currRound: number) {
     this.currRound = currRound;
     this.continuationCount = 0;
     this.responseTime = 0;
-    this.outputFile = '';
     this.APIUsage = null;
   }
 
@@ -52,37 +52,45 @@ export class AgentStateRound implements IAgentStateRound {
     this.continuationCount += 1;
   }
 
-  /** Converts state to a serializable object for persistence. */
+  /** Converts metrics to a serializable object for persistence. */
   toObject(): Record<string, any> {
     const stateObj = {
       currRound: this.currRound,
       continuationCount: this.continuationCount,
       responseTime: this.responseTime,
-      outputFile: this.outputFile,
       APIUsage: this.APIUsage,
     };
     return stateObj;
   }
 }
 
-/** Interface for tracking aggregate metrics across all conversation rounds. */
-export interface IAgentStateGlobal {
+/** Legacy alias for backward compatibility - use RoundMetrics instead. */
+export class AgentStateRound extends RoundMetrics {}
+export type IAgentStateRound = IRoundMetrics;
+
+/** Interface for tracking session-wide usage metrics across all conversation rounds. */
+export interface ISessionUsageMetrics {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
+  totalCacheReadInputTokens: number;
+  totalCacheCreationInputTokens: number;
+  totalReasoningTokens: number;
+  totalToolUseTokens: number;
 }
 
-/** Manages global state and aggregates metrics across conversation rounds. */
-export class AgentStateGlobal implements IAgentStateGlobal {
+/**
+ * Manages session-wide usage metrics aggregated across all conversation rounds.
+ * Part of Pocket Flow architecture - stores only session-scoped usage totals.
+ */
+export class SessionUsageMetrics implements ISessionUsageMetrics {
   firstInputTokens: number;
   totalResponseTime: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalRounds: number;
-  APIUsage: OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null;
   public totalCacheReadInputTokens: number = 0;
   public totalCacheCreationInputTokens: number = 0;
   public totalReasoningTokens: number = 0;
@@ -94,11 +102,10 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
     this.totalRounds = 0;
-    this.APIUsage = null;
   }
 
-  /** Updates global metrics by incorporating round state data. */
-  updateFromCurrRound(stateRound: AgentStateRound): void {
+  /** Updates global metrics by incorporating round metrics. */
+  updateFromCurrRound(stateRound: RoundMetrics): void {
     if (stateRound.APIUsage) {
       if (this.firstInputTokens === 0) {
         this.firstInputTokens = stateRound.APIUsage.totalInputTokens;
@@ -165,8 +172,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     this.totalRounds += 1;
   }
 
-  // are the following two methods needed?
-  /** Converts global state to a serializable object for persistence. */
+  /** Converts session metrics to a serializable object for persistence. */
   toObject(): Record<string, any> {
     return {
       firstInputTokens: this.firstInputTokens,
@@ -174,7 +180,6 @@ export class AgentStateGlobal implements IAgentStateGlobal {
       totalInputTokens: this.totalInputTokens,
       totalOutputTokens: this.totalOutputTokens,
       totalRounds: this.totalRounds,
-      APIUsage: this.APIUsage,
       totalCacheReadInputTokens: this.totalCacheReadInputTokens,
       totalCacheCreationInputTokens: this.totalCacheCreationInputTokens,
       totalReasoningTokens: this.totalReasoningTokens,
@@ -182,19 +187,18 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     };
   }
 
-  /** Creates an AgentStateGlobal instance from a persisted state object. */
-  static fromObject(stateObj: Record<string, any> | null): AgentStateGlobal {
+  /** Creates a SessionUsageMetrics instance from a persisted state object. */
+  static fromObject(stateObj: Record<string, any> | null): SessionUsageMetrics {
     if (!stateObj) {
-      return new AgentStateGlobal();
+      return new SessionUsageMetrics();
     }
 
-    const state = new AgentStateGlobal();
+    const state = new SessionUsageMetrics();
     state.firstInputTokens = stateObj.firstInputTokens ?? 0;
     state.totalResponseTime = stateObj.totalResponseTime ?? 0;
     state.totalInputTokens = stateObj.totalInputTokens ?? 0;
     state.totalOutputTokens = stateObj.totalOutputTokens ?? 0;
     state.totalRounds = stateObj.totalRounds ?? 0;
-    state.APIUsage = stateObj.APIUsage ?? null;
     state.totalCacheReadInputTokens = stateObj.totalCacheReadInputTokens ?? 0;
     state.totalCacheCreationInputTokens =
       stateObj.totalCacheCreationInputTokens ?? 0;
@@ -203,3 +207,7 @@ export class AgentStateGlobal implements IAgentStateGlobal {
     return state;
   }
 }
+
+/** Legacy alias for backward compatibility - use SessionUsageMetrics instead. */
+export class AgentStateGlobal extends SessionUsageMetrics {}
+export type IAgentStateGlobal = ISessionUsageMetrics;
