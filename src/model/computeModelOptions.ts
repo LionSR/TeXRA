@@ -29,7 +29,7 @@ function formatCost(inputPrice?: number, outputPrice?: number): string {
  * webview can handle API key setup prompts.
  */
 export async function computeModelOptions(): Promise<string> {
-  const models = getConfig<string[]>('models', []);
+  const models = getConfig<string[]>('texra.models', []);
   const hasOpenRouter = await SecretManager.apiKeyExists('openRouter');
 
   const optionTags = await Promise.all(

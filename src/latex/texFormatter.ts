@@ -6,7 +6,7 @@ import { runTexFmt } from './formatter/texfmt';
 import { getConfig } from '@utils/config';
 
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
-  const formatter = getConfig<string>('latex.formatter', 'latexindent');
+  const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
   if (formatter === 'none') {
     return true;
   }
