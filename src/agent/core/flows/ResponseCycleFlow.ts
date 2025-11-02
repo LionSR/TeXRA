@@ -40,6 +40,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - identifier types
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { AgentLogScope } from '@logger/AgentLogger';
 
 interface DebugContext {
   logger: ResponseCycleOptions['logger'];
@@ -107,6 +108,7 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 export interface ResponseCycleShared<C = unknown> {
   options: ResponseCycleOptions<C>;
   cycle: ResponseCycleState;
+  logScope: AgentLogScope;
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle
@@ -204,7 +206,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
-    const { options, cycle } = context;
+    const { options, cycle, logScope } = context;
     if (cycle.shouldStop) {
       return { skipped: true };
     }
@@ -214,7 +216,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.modelHandler.setOutputStreaming(false);
 
     let response: unknown;
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = logScope.groupId;
 
     try {
       response = await options.modelHandler.createResponse(
@@ -253,8 +255,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     prepRes: ResponseCycleShared<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const { options, cycle, logScope } = prepRes;
+    const groupId = logScope.groupId;
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
@@ -311,7 +313,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<ProcessResult | { skipped: true }> {
-    const { options, cycle } = context;
+    const { options, cycle, logScope } = context;
     if (cycle.shouldStop || !cycle.responseObject) {
       return { skipped: true };
     }
@@ -322,7 +324,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         options.agentSetting.endTag,
       );
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = logScope.groupId;
 
     if (newResponse) {
       options.logger.debug(
@@ -441,8 +443,8 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     prepRes: ResponseCycleShared<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const { options, cycle, logScope } = prepRes;
+    const groupId = logScope.groupId;
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;
@@ -553,8 +555,8 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const { options, cycle, logScope } = prepRes;
+    const groupId = logScope.groupId;
 
     if ('skipped' in execRes) {
       cycle.endTurn = false;

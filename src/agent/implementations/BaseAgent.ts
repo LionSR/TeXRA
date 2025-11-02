@@ -14,7 +14,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, AgentLogScope } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
@@ -219,8 +219,9 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   protected async trackRoundUsage(
     stateGlobal: AgentStateGlobal,
+    scope?: AgentLogScope,
   ): Promise<void> {
-    await this.usageMonitor.recordUsage(stateGlobal);
+    await this.usageMonitor.recordUsage(stateGlobal, scope);
   }
 
   /**
@@ -230,23 +231,13 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    */
   protected async withRoundGroup<T>(
     groupLabel: string,
-    callback: (groupId: string) => Promise<T>,
+    callback: (scope: AgentLogScope) => Promise<T>,
   ): Promise<T> {
-    const groupId = await this.logger.startGroup(
+    return this.logger.withGroup(
       groupLabel,
-      undefined,
-      this.runGroupId,
+      async (scope) => await callback(scope),
+      { parentGroupId: this.runGroupId },
     );
-
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await callback(groupId);
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      this.logger.endGroup(groupId, status);
-    }
   }
 
   /**

@@ -39,6 +39,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { LatexMediaManager } from '@latex';
 
 // Local imports - logging
+import { AgentLogScope } from '@logger/AgentLogger';
 
 // Local imports - model definitions
 import type { ToolDefinition } from '@model';
@@ -89,6 +90,7 @@ interface RoundPipelineContext {
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
+  scope: AgentLogScope;
 }
 
 /**
@@ -220,13 +222,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
+    scope: AgentLogScope,
   ): Promise<RoundOutputArtifacts> {
     const { outputFile, endTurn } = options;
-    const activeGroupId = this.logger.getActiveGroupId();
     try {
-      await this.handleOutput(currRound, stateRound, stateGlobal, options);
+      await this.handleOutput(currRound, stateRound, stateGlobal, options, scope);
 
-      this.logger.debug(`Completed round ${currRound}`, activeGroupId);
+      scope.logger.debug(`Completed round ${currRound}`);
     } catch (error) {
       throw error;
     }
@@ -255,11 +257,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
+    scope: AgentLogScope,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
-    const activeGroupId = this.logger.getActiveGroupId();
     // Record usage statistics at the end of each round
-    await this.trackRoundUsage(stateGlobal);
+    await this.trackRoundUsage(stateGlobal, scope);
 
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
@@ -275,9 +277,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           mapping,
         );
       } else {
-        this.logger.debug(
+        scope.logger.debug(
           `Skipping latexdiff for round ${currRound} - base files missing`,
-          activeGroupId,
         );
       }
     }
@@ -307,6 +308,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     preparedMessages,
     prefill,
     outputPath,
+    scope,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
@@ -326,6 +328,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         stateGlobal: globalState,
         toolState,
         outputFile: outputPath,
+        scope,
       });
 
       const artifacts = await this.handleRoundCompletion(
@@ -336,6 +339,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           outputFile: outputPath,
           endTurn: cycleResult.endTurn,
         },
+        scope,
       );
 
       if (roundIndex === 0) {
@@ -362,6 +366,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         outputFile: outputPath,
         endTurn,
       },
+      scope,
     );
 
     return {
@@ -393,6 +398,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     _stateGlobal: AgentStateGlobal,
     messages: any[],
     toolState: ToolState,
+    scope: AgentLogScope,
   ): Promise<{
     stateRound: AgentStateRound;
     preparedMessages: any[];
@@ -404,7 +410,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     if (currRound === 0) {
       const { systemPrompt, userRequest, userPrefix } =
-        await promptBuilder.buildInitialPrompts();
+        await promptBuilder.buildInitialPrompts(scope);
 
       let prefixWithStats = userPrefix;
       if (toolState.texcountStats) {
@@ -434,7 +440,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         systemPrompt,
       );
 
-      const prefill = await promptBuilder.buildPrefill(currRound);
+      const prefill = await promptBuilder.buildPrefill(currRound, scope);
       toolState.updateAccumulatedOutput(prefill);
 
       return {
@@ -445,7 +451,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       };
     }
 
-    const userRequest = await promptBuilder.buildUserRequest(currRound);
+    const userRequest = await promptBuilder.buildUserRequest(currRound, scope);
     let userMessage = userRequest ? `${userRequest}\n` : '';
     if (toolState.texcountStats) {
       userMessage = `${toolState.texcountStats}${userMessage}`;
@@ -465,7 +471,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       toolState.mediaFiles,
     );
 
-    const prefill = await promptBuilder.buildPrefill(currRound);
+    const prefill = await promptBuilder.buildPrefill(currRound, scope);
     toolState.updateAccumulatedOutput(prefill);
 
     return {
@@ -537,7 +543,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new ToolState();
 
-    return this.withRoundGroup(`r${roundIndex}`, async (_roundGroupId) => {
+    return this.withRoundGroup(`r${roundIndex}`, async (roundScope) => {
       const shared: ReflectionRoundShared = {
         runtime: {
           toolState,
@@ -551,6 +557,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               globalState,
               messages,
               toolState,
+              roundScope,
             ),
           runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
             this.runRoundPipeline({
@@ -561,6 +568,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               preparedMessages,
               prefill,
               outputPath: this.outputFile[roundIndex],
+              scope: roundScope,
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,

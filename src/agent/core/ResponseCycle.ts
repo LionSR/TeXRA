@@ -17,6 +17,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Local imports - agent configuration
 import type { AgentConfig } from './AgentConfig';
+import { AgentLogScope } from '@logger/AgentLogger';
 
 export interface ResponseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
@@ -30,6 +31,7 @@ export interface ResponseCycleContext<C = unknown> {
   stateGlobal: AgentStateGlobal;
   toolState: ToolState;
   outputFile: string;
+  scope?: AgentLogScope;
 }
 
 export interface ResponseCycleResult {
@@ -42,6 +44,9 @@ export interface ResponseCycleResult {
 export async function runResponseCycle<C = unknown>(
   context: ResponseCycleContext<C>,
 ): Promise<ResponseCycleResult> {
+  const logScope =
+    context.scope ?? new AgentLogScope(context.options.logger, context.options.logger.getActiveGroupId());
+
   const shared: ResponseCycleShared<C> = {
     options: context.options,
     cycle: {
@@ -62,6 +67,7 @@ export async function runResponseCycle<C = unknown>(
       stopReason: undefined,
       processedResponse: undefined,
     } satisfies ResponseCycleState,
+    logScope,
   };
 
   const flow = createResponseCycleFlow<C>();

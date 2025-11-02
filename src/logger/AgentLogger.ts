@@ -3,6 +3,7 @@
 
 // Local imports - log
 import * as logger from './logUtils';
+import { withLogGroup, type WithLogGroupOptions } from './logGroupUtils';
 import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
 import type {
@@ -179,5 +180,59 @@ export class AgentLogger {
    */
   setActiveGroupId(groupId: string | undefined): void {
     logger.setActiveGroupId(this.channelId, groupId);
+  }
+
+  /**
+   * Run a callback within a managed log group.
+   * Automatically sets and restores the active group for this logger.
+   */
+  async withGroup<T>(
+    groupName: string,
+    fn: (scope: AgentLogScope) => Promise<T>,
+    options: WithLogGroupOptions = {},
+  ): Promise<T> {
+    const previousGroupId = this.getActiveGroupId();
+    const parentGroupId =
+      options.parentGroupId !== undefined ? options.parentGroupId : previousGroupId;
+
+    return withLogGroup(
+      this,
+      groupName,
+      async (groupId) => {
+        const scope = new AgentLogScope(this, groupId ?? parentGroupId);
+
+        if (groupId) {
+          this.setActiveGroupId(groupId);
+        }
+
+        try {
+          return await fn(scope);
+        } finally {
+          if (groupId) {
+            this.setActiveGroupId(previousGroupId);
+          }
+        }
+      },
+      { ...options, parentGroupId },
+    );
+  }
+}
+
+export class AgentLogScope {
+  constructor(
+    public readonly logger: AgentLogger,
+    public readonly groupId?: string,
+  ) {}
+
+  withGroup<T>(
+    groupName: string,
+    fn: (scope: AgentLogScope) => Promise<T>,
+    options: WithLogGroupOptions = {},
+  ): Promise<T> {
+    const mergedOptions: WithLogGroupOptions = { ...options };
+    if (mergedOptions.parentGroupId === undefined) {
+      mergedOptions.parentGroupId = this.groupId;
+    }
+    return this.logger.withGroup(groupName, fn, mergedOptions);
   }
 }

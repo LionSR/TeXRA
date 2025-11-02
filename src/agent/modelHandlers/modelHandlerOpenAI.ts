@@ -177,10 +177,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const stream = client.chat.completions.stream(kwargs as any, {
           signal,
         });
-        const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
+        const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
+          ? this.createOutputStream()
           : undefined;
 
         if (this.config.fullName.includes('deepseek')) {

@@ -19,6 +19,7 @@ import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachm
 
 // Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { AgentLogScope } from '@logger/AgentLogger';
 
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
@@ -167,6 +168,7 @@ function resetToolUseState(state: ToolUseCycleRuntimeState): void {
 export interface ToolUseCycleShared<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
+  logScope: AgentLogScope;
 }
 
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
@@ -246,7 +248,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         debugFileOptions: DebugFileOptions;
       }
   > {
-    const { options, state } = context;
+    const { options, state, logScope } = context;
     if (state.shouldStop) {
       return { skipped: true };
     }
@@ -338,12 +340,12 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         endTurn: boolean;
       }
   > {
-    const { options, state } = context;
+    const { options, state, logScope } = context;
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = logScope.groupId;
 
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
@@ -440,12 +442,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     | { parsed: any; name: string; input: any; toolCallId: string }
     | ToolDispatchErrorResult
   > {
-    const { options, state } = context;
+    const { options, state, logScope } = context;
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = logScope.groupId;
 
     const interrupted = Boolean(await options.checkInterruption());
     if (interrupted) {
@@ -544,8 +546,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | { parsed: any; name: string; input: any; toolCallId: string }
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
-    const { options, state } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const { options, state, logScope } = prepRes;
+    const groupId = logScope.groupId;
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;

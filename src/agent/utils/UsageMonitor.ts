@@ -16,7 +16,7 @@ import type {
 } from '@agent/types/UsageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, AgentLogScope } from '@logger/AgentLogger';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -28,8 +28,11 @@ export class UsageMonitor {
     private readonly logger: AgentLogger,
   ) {}
 
-  async recordUsage(stateGlobal: AgentStateGlobal): Promise<void> {
-    const statsGroupId = this.logger.getActiveGroupId();
+  async recordUsage(
+    stateGlobal: AgentStateGlobal,
+    scope?: AgentLogScope,
+  ): Promise<void> {
+    const statsGroupId = scope?.groupId ?? this.logger.getActiveGroupId();
 
     try {
       let responseUsage:
@@ -153,9 +156,12 @@ export class UsageMonitor {
         }),
       };
 
-      this.logger.statistics(payload, statsGroupId);
+      (scope?.logger ?? this.logger).statistics(payload, statsGroupId);
     } catch (error) {
-      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+      (scope?.logger ?? this.logger).error(
+        `Error printing statistics: ${error}`,
+        statsGroupId,
+      );
     }
   }
 }

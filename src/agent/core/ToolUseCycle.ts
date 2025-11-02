@@ -16,6 +16,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Local imports - tools
 import type { BaseTool } from '@tools/core/base';
+import { AgentLogScope } from '@logger/AgentLogger';
 
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
@@ -27,11 +28,15 @@ export interface ToolUseCycleOptions<C = unknown>
 export interface ToolUseCycleContext<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
+  scope?: AgentLogScope;
 }
 
 export async function runToolUseCycle<C = unknown>(
   context: ToolUseCycleContext<C>,
 ): Promise<void> {
+  const logScope =
+    context.scope ?? new AgentLogScope(context.options.logger, context.options.logger.getActiveGroupId());
+
   const shared: ToolUseCycleShared<C> = {
     options: context.options,
     state: {
@@ -45,6 +50,7 @@ export async function runToolUseCycle<C = unknown>(
       text: undefined,
       stopReason: undefined,
     } satisfies ToolUseCycleState,
+    logScope,
   };
 
   const flow = createToolUseCycleFlow<C>();

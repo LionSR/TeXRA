@@ -33,7 +33,7 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, AgentLogScope } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
@@ -140,34 +140,22 @@ export class OutputHandler implements IOutputHandler {
    * @param roundGroupId Parent round group ID
    * @returns The created process group ID
    */
-  async startProcessing(
+  async startProcessing<T>(
     processName: string,
-    roundGroupId?: string,
-  ): Promise<string> {
-    // Create a log group as a child of the round group if provided
-    const groupName = `OutputHandler: ${processName}`;
-    const groupId = await this.logger.startGroup(
-      groupName,
-      undefined,
-      roundGroupId,
+    roundScope: AgentLogScope | undefined,
+    fn: (scope: AgentLogScope) => Promise<T>,
+  ): Promise<T> {
+    return this.logger.withGroup(
+      `OutputHandler: ${processName}`,
+      fn,
+      { parentGroupId: roundScope?.groupId },
     );
-    // Comment out this line as it creates confusing log order
-    // this.logger.info(`Starting ${processName}`, groupId);
-    return groupId;
   }
 
   /**
-   * Ends the current processing group.
-   * @param status Status of the processing (error or stopped)
+   * @deprecated Processing groups are automatically closed via startProcessing.
    */
-  endProcessing(
-    status: 'error' | 'stopped' = 'stopped',
-    groupId?: string,
-  ): void {
-    if (groupId) {
-      this.logger.endGroup(groupId, status);
-    }
-  }
+  endProcessing(): void {}
 
   /**
    * Indents a LaTeX file for better readability

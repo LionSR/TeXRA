@@ -176,6 +176,7 @@ export abstract class ModelHandler<
     const id = randomUUID();
     let buffer = '';
     let isFirstUpdate = true;
+    const resolvedGroupId = groupId ?? this.logger.getActiveGroupId();
 
     return {
       append: (text: string) => {
@@ -195,7 +196,7 @@ export abstract class ModelHandler<
               text: encodeHtml(buffer),
               level: 'info',
               timestamp: Date.now(),
-              groupId,
+              groupId: resolvedGroupId,
               messageType: type,
             },
           });
@@ -206,7 +207,7 @@ export abstract class ModelHandler<
             logMessage: {
               id,
               text: encodeHtml(buffer),
-              groupId,
+              groupId: resolvedGroupId,
               messageType: type,
             },
           });
@@ -218,7 +219,7 @@ export abstract class ModelHandler<
         }
 
         if (!this.progressViewEnabled) {
-          this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
+          this.logger.debug(`Final ${type} length: ${buffer.length}`, resolvedGroupId);
           return buffer;
         }
 
@@ -231,7 +232,7 @@ export abstract class ModelHandler<
               text: encodeHtml(buffer),
               level: 'info',
               timestamp: Date.now(),
-              groupId,
+              groupId: resolvedGroupId,
               messageType: type,
             },
           });
@@ -241,13 +242,13 @@ export abstract class ModelHandler<
             logMessage: {
               id,
               text: encodeHtml(buffer),
-              groupId,
+              groupId: resolvedGroupId,
               messageType: type,
             },
           });
         }
 
-        this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
+        this.logger.debug(`Final ${type} length: ${buffer.length}`, resolvedGroupId);
         return buffer;
       },
     };

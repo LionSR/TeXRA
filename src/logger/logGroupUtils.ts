@@ -3,7 +3,7 @@ import type { AgentLogger } from './AgentLogger';
 
 type GroupStatus = Parameters<AgentLogger['endGroup']>[1];
 
-interface WithLogGroupOptions {
+export interface WithLogGroupOptions {
   parentGroupId?: string;
   skip?: boolean;
   successStatus?: GroupStatus;

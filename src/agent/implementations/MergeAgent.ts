@@ -6,6 +6,7 @@ import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { RoundOutputOptions } from './BaseReflectionAgent';
+import { AgentLogScope } from '@logger/AgentLogger';
 
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
@@ -142,6 +143,7 @@ export class MergeAgent extends DirectAgent {
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
+    scope: AgentLogScope,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
     if (endTurn) {
@@ -154,6 +156,7 @@ export class MergeAgent extends DirectAgent {
           outputFile,
           endTurn,
         },
+        scope,
       );
       this.logger.info(`Merge output file: ${outputFile}`);
       return files;

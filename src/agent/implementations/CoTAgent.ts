@@ -1,6 +1,7 @@
 // Local imports - agent components
 import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
+import { AgentLogScope } from '@logger/AgentLogger';
 import { getOutputFileName } from '@agent/output';
 
 /**
@@ -38,6 +39,7 @@ export class CoTAgent extends BaseReflectionAgent {
     stateRound: AgentStateRound,
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
+    scope: AgentLogScope,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
 
@@ -55,10 +57,16 @@ export class CoTAgent extends BaseReflectionAgent {
         await this.outputHandler.processOutputFiles(outputFile, currRound);
       }
 
-      return super.handleOutput(currRound, stateRound, stateGlobal, {
-        outputFile,
-        endTurn,
-      });
+      return super.handleOutput(
+        currRound,
+        stateRound,
+        stateGlobal,
+        {
+          outputFile,
+          endTurn,
+        },
+        scope,
+      );
     } catch (error) {
       this.logger.error(
         `Error in handleOutput for round ${currRound}: ${error}`,
