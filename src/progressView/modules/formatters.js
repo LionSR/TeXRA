@@ -645,7 +645,7 @@ export class LogEntryFormatter {
       `);
     }
 
-    if (outputCandidate?.system) {
+    if (outputCandidate && typeof outputCandidate.system === 'string') {
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -656,7 +656,7 @@ export class LogEntryFormatter {
       `);
     }
 
-    if (outputCandidate?.base64Image) {
+    if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
