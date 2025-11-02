@@ -6,8 +6,11 @@ import { registry } from './LogChannelRegistry';
 import type { MessageType } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 
-function getTransport(channel: string): VSCodeTransport | undefined {
-  return registry.getTransport(channel);
+function getTransport(
+  channel: string,
+  isAgent = false,
+): VSCodeTransport | undefined {
+  return registry.getTransport(channel, { isAgent });
 }
 
 function getOrCreateTransport(
@@ -54,21 +57,26 @@ export function endGroup(
   channel: string,
   groupId: string,
   status: 'error' | 'stopped' = 'stopped',
+  isAgent = false,
 ): void {
-  const transport = getTransport(channel);
+  const transport = getTransport(channel, isAgent);
   transport?.endGroup(groupId, status);
 }
 
-export function getActiveGroupId(channel: string): string | undefined {
-  const transport = getTransport(channel);
+export function getActiveGroupId(
+  channel: string,
+  isAgent = false,
+): string | undefined {
+  const transport = getTransport(channel, isAgent);
   return transport?.getActiveGroupId();
 }
 
 export function setActiveGroupId(
   channel: string,
   groupId: string | undefined,
+  isAgent = false,
 ): void {
-  const transport = getTransport(channel);
+  const transport = getTransport(channel, isAgent);
   transport?.setActiveGroupId(groupId);
 }
 
