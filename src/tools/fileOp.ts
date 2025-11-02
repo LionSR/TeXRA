@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
+import {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+} from '@tools/approval/toolEditApproval';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 
@@ -39,6 +43,25 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
+        const originalContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+
+        const approval = await requestToolEditApproval({
+          path,
+          originalContent,
+          proposedContent: content,
+          sourceTool: 'file_op:write',
+        });
+
+        if (!approval.accepted) {
+          return buildApprovalRejectedResult(
+            path,
+            'file_op:write',
+            approval.userMessage,
+          );
+        }
+
         await WorkspaceFS.write(path, content);
         return toolResult({
           summary: `Wrote ${path}`,
@@ -52,7 +75,27 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
-        await WorkspaceFS.appendFile(path, content);
+        const originalContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+        const proposedContent = `${originalContent}${content}`;
+
+        const approval = await requestToolEditApproval({
+          path,
+          originalContent,
+          proposedContent,
+          sourceTool: 'file_op:append',
+        });
+
+        if (!approval.accepted) {
+          return buildApprovalRejectedResult(
+            path,
+            'file_op:append',
+            approval.userMessage,
+          );
+        }
+
+        await WorkspaceFS.write(path, proposedContent);
         return toolResult({
           summary: `Appended to ${path}`,
           output: 'appended',

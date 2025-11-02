@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
+import {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+} from '@tools/approval/toolEditApproval';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
@@ -72,6 +76,21 @@ export class EditFileTool extends defineTool({
     const updatedContent = replace_all
       ? currentContent.replaceAll(old_string, new_string)
       : currentContent.replace(old_string, new_string);
+
+    const approval = await requestToolEditApproval({
+      path: targetPath,
+      originalContent: currentContent,
+      proposedContent: updatedContent,
+      sourceTool: 'edit_file',
+    });
+
+    if (!approval.accepted) {
+      return buildApprovalRejectedResult(
+        targetPath,
+        'edit_file',
+        approval.userMessage,
+      );
+    }
 
     await WorkspaceFS.write(targetPath, updatedContent);
 
