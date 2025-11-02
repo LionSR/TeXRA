@@ -6,12 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent metadata
 import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentCategory,
-  AgentType,
-  type AgentSessionDescriptor,
-  resolveAgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
@@ -80,13 +75,13 @@ export class AgentHistoryManager {
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
     const history = workspaceSM.get<unknown[]>(storageKey, []);
-    return history.reduce<AgentHistoryItem[]>((acc, item) => {
-      const normalized = this.normalizeHistoryItem(item);
-      if (normalized) {
-        acc.push(normalized);
-      }
-      return acc;
-    }, []);
+    const { normalized, mutated } = this.sanitizeHistoryEntries(history);
+
+    if (mutated) {
+      await this.saveHistory(normalized);
+    }
+
+    return normalized;
   }
 
   /**
@@ -97,59 +92,63 @@ export class AgentHistoryManager {
     await workspaceSM.update(storageKey, history);
   }
 
-  private static normalizeHistoryItem(item: unknown): AgentHistoryItem | null {
-    const candidate = item as Partial<{
-      id: ExecutionId;
-      timestamp: string;
-      config: AgentConfig;
-      session?: AgentSessionDescriptor;
-      agentType?: AgentType;
-      agentSessionKind?: AgentCategory;
-    }>;
+  private static sanitizeHistoryEntries(entries: unknown[]): {
+    normalized: AgentHistoryItem[];
+    mutated: boolean;
+  } {
+    let mutated = false;
+    const normalized: AgentHistoryItem[] = [];
 
-    if (!candidate.id || !candidate.timestamp || !candidate.config) {
-      return null;
-    }
-
-    // Derive session from the most canonical source available
-    const baseConfig = structuredClone(candidate.config);
-    if (!baseConfig.session) {
-      if (candidate.session) {
-        baseConfig.session = candidate.session;
-      } else if (candidate.agentType || candidate.agentSessionKind) {
-        baseConfig.session = resolveAgentSessionDescriptor(
-          candidate.agentType ?? baseConfig.agentType,
-          candidate.agentSessionKind,
-        );
+    for (const rawEntry of entries) {
+      if (!rawEntry || typeof rawEntry !== 'object') {
+        mutated = true;
+        continue;
       }
+
+      const candidate = rawEntry as Partial<AgentHistoryItem> & {
+        config?: AgentConfig;
+      };
+
+      if (!candidate.id || !candidate.timestamp || !candidate.config) {
+        mutated = true;
+        continue;
+      }
+
+      let normalizedConfig: AgentConfig;
+      try {
+        normalizedConfig = parseAgentConfig(candidate.config);
+      } catch (error) {
+        mutated = true;
+        logger.warn(
+          CHANNEL,
+          'Discarding malformed agent history entry',
+          undefined,
+          undefined,
+          false,
+          error,
+        );
+        continue;
+      }
+
+      const session = normalizedConfig.session;
+      if (!session) {
+        mutated = true;
+        continue;
+      }
+
+      normalized.push({
+        id: candidate.id,
+        timestamp: candidate.timestamp,
+        config: normalizedConfig,
+        session,
+      });
     }
 
-    let normalizedConfig: AgentConfig;
-    try {
-      normalizedConfig = parseAgentConfig(baseConfig);
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        'Discarding malformed agent history entry',
-        undefined,
-        undefined,
-        false,
-        error,
-      );
-      return null;
+    if (normalized.length !== entries.length) {
+      mutated = true;
     }
 
-    const session = normalizedConfig.session;
-    if (!session) {
-      return null;
-    }
-
-    return {
-      id: candidate.id,
-      timestamp: candidate.timestamp,
-      config: normalizedConfig,
-      session,
-    };
+    return { normalized, mutated };
   }
 
   /**
