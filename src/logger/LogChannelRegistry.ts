@@ -13,6 +13,7 @@ import type { LogEventSink } from './types/LogEventSink';
 interface ChannelEntry {
   logger: winston.Logger;
   transport: VSCodeTransport;
+  options: ChannelOptions;
 }
 
 interface ChannelOptions {
@@ -23,8 +24,8 @@ export class LogChannelRegistry {
   private mainOutputChannel: vscode.OutputChannel | null = null;
   private readonly channels = new Map<string, ChannelEntry>();
 
-  ensure(channel: string, options: ChannelOptions): void {
-    this.getOrCreate(channel, options);
+  ensure(channel: string, options: ChannelOptions): ChannelEntry {
+    return this.getOrCreate(channel, options);
   }
 
   getLogger(channel: string, options: ChannelOptions): winston.Logger {
@@ -38,6 +39,11 @@ export class LogChannelRegistry {
   private getOrCreate(channel: string, options: ChannelOptions): ChannelEntry {
     const existing = this.channels.get(channel);
     if (existing) {
+      if (existing.options.isAgent !== options.isAgent) {
+        throw new Error(
+          `Channel ${channel} already registered with isAgent=${existing.options.isAgent}, cannot reuse with isAgent=${options.isAgent}.`,
+        );
+      }
       return existing;
     }
 
@@ -74,7 +80,7 @@ export class LogChannelRegistry {
       transports: [transport],
     });
 
-    const entry: ChannelEntry = { logger, transport };
+    const entry: ChannelEntry = { logger, transport, options };
     this.channels.set(channel, entry);
     return entry;
   }
@@ -88,4 +94,3 @@ export class LogChannelRegistry {
 }
 
 export const registry = new LogChannelRegistry();
-
