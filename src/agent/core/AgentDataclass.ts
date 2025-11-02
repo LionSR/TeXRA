@@ -1,7 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
 
@@ -192,10 +191,13 @@ export function hasEndTag(
 }
 
 /** Zod schema for AgentPrompt validation */
+const promptEntrySchema = z.union([z.string(), z.array(z.string())]);
+
 export const AgentPromptSchema = z.object({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
-  userRequest: z.union([z.string(), z.array(z.string())]).prefault(''),
+  userRequest: promptEntrySchema.prefault(''),
+  userReflect: z.string().optional(),
 });
 
 export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
