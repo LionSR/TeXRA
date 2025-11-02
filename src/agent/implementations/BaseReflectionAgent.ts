@@ -543,8 +543,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           toolState,
         },
         hooks: {
-          prepareToolState: () =>
-            this.prepareToolState(roundIndex, toolState),
+          prepareToolState: () => this.prepareToolState(roundIndex, toolState),
           prepareRoundContext: () =>
             this.prepareRoundContext(
               roundIndex,

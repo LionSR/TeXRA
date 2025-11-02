@@ -133,10 +133,9 @@ export class ExecutionManager {
       auxiliaryFile: message.auxiliaryFile ?? null,
       auxiliaryFiles: message.auxiliaryFiles ?? [],
       mediaFile: mapMediaPath(message.mediaFile ?? null),
-      mediaFiles:
-        (message.mediaFiles ?? [])
-          .map(mapMediaPath)
-          .filter((f: string | null): f is string => f !== null) ?? [],
+      mediaFiles: (message.mediaFiles ?? [])
+        .map(mapMediaPath)
+        .filter((f: string | null): f is string => f !== null),
       editedFile: null,
       toolConfig,
       agentType: session.agentType,
