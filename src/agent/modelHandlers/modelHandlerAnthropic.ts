@@ -1097,7 +1097,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, MessageParam[]]> {
     const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
@@ -1146,7 +1145,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);
