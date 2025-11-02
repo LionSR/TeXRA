@@ -197,73 +197,32 @@ export class OutputFilesManager extends PersistentMapManager<
     streamId: StreamTabId,
   ): Promise<{ [key: number]: OutputFileInfo[] }> {
     if (!data || typeof data !== 'object') {
-      this.logger.warn(
-        `Invalid output files payload for stream ${streamId}; resetting entry`,
-      );
       return {};
     }
 
     const rounds = data as Record<string, unknown>;
     const roundMap: { [key: number]: OutputFileInfo[] } = {};
-    const streamFilesProcessed = Object.values(rounds).reduce<number>(
-      (sum, value) => {
-        if (Array.isArray(value)) {
-          return sum + value.length;
-        }
-        return sum;
-      },
-      0,
-    );
-    this.totalFilesProcessed += streamFilesProcessed;
 
-    for (const [roundStr, value] of Object.entries(rounds)) {
-      const roundNum = parseInt(roundStr, 10);
-      if (Number.isNaN(roundNum)) {
-        this.logger.warn(
-          `Skipping non-numeric round key "${roundStr}" for stream ${streamId}`,
-        );
-        continue;
-      }
-
-      if (!Array.isArray(value)) {
-        this.logger.warn(
-          `Skipping invalid output metadata for stream ${streamId}, round ${roundNum}`,
-        );
+    for (const [roundKey, value] of Object.entries(rounds)) {
+      const round = Number.parseInt(roundKey, 10);
+      if (Number.isNaN(round) || !Array.isArray(value)) {
         continue;
       }
 
       const infos = value as OutputFileInfo[];
-      this.logger.debug(
-        `Checking ${infos.length} files in stream ${streamId}, round ${roundNum}`,
-      );
+      this.totalFilesProcessed += infos.length;
 
       try {
         const filtered = await WorkspaceFS.filterExistingFiles(infos);
-        const removedCount = infos.length - filtered.length;
-
-        if (removedCount > 0) {
-          this.logger.debug(
-            `Removed ${removedCount} missing file(s) from stream ${streamId}, round ${roundNum}`,
-          );
-          this.totalFilesRemoved += removedCount;
-          const removedFiles = infos.filter(
-            (info) => !filtered.find((f) => f.path === info.path),
-          );
-          removedFiles.forEach((file) => {
-            this.logger.debug(`  - Removed missing file: ${file.path}`);
-          });
+        const removed = infos.length - filtered.length;
+        if (removed > 0) {
+          this.totalFilesRemoved += removed;
         }
-
-        if (infos.length > 0) {
-          roundMap[roundNum] = filtered;
+        if (filtered.length > 0) {
+          roundMap[round] = filtered;
         }
-      } catch (error) {
-        this.logger.warn(
-          `Error checking files in stream ${streamId}, round ${roundNum}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-        roundMap[roundNum] = infos;
+      } catch {
+        roundMap[round] = infos;
       }
     }
 
