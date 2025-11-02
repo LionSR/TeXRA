@@ -52,7 +52,7 @@ async function refreshApiKeyStatus() {
   }
 
   // Check if reminders are enabled
-  const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
+  const showReminders = getConfig<boolean>('texra.ui.showApiKeyReminders', true);
 
   if (!showReminders) {
     apiKeyStatusBarItem.hide();

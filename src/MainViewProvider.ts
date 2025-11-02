@@ -168,7 +168,7 @@ export class MainViewProvider
 
     // Check for missing core dependencies and display banner if needed
     const showDependencyReminders = getConfig<boolean>(
-      'ui.showDependencyReminders',
+      'texra.ui.showDependencyReminders',
       true,
     );
     if (showDependencyReminders) {

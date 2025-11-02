@@ -53,7 +53,7 @@ export async function startRecording(
     }
 
     // Determine sox path from configuration or auto-detection
-    const configuredPath = getConfig<string>('audio.soxPath', '');
+    const configuredPath = getConfig<string>('texra.audio.soxPath', '');
     const soxPath =
       configuredPath && AbsoluteFS.existsSync(configuredPath)
         ? configuredPath
