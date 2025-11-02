@@ -113,7 +113,7 @@ export class XmlOutputManager {
       return result.documents;
     }
 
-    this.logger.error(
+    this.logger.debug(
       `No ${documentTag} found in output file using fallback method`,
       undefined,
       MESSAGE_TYPES.INTERNAL,
