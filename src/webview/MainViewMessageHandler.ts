@@ -374,7 +374,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     if (!webviewView) {
       return;
     }
-    const debugMode = getConfig<boolean>('logger.debugMode', false);
+    const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
     webviewView.webview.postMessage({
       command: MAIN_VIEW_COMMANDS.DEBUG_MODE_SET,
       debugMode,
@@ -411,7 +411,10 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         options: modelOptions,
       });
 
-      const showReminders = getConfig<boolean>('ui.showApiKeyReminders', true);
+      const showReminders = getConfig<boolean>(
+        'texra.ui.showApiKeyReminders',
+        true,
+      );
       if (showReminders) {
         const hasAnyApiKey = await SecretManager.anyApiKeyExists();
         if (!hasAnyApiKey) {

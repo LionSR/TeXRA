@@ -119,7 +119,7 @@ class VSCodeTransport extends Transport {
 
     if (
       structuredData !== undefined &&
-      getConfig<boolean>('logger.debugMode', false)
+      getConfig<boolean>('texra.logger.debugMode', false)
     ) {
       const dataString =
         typeof structuredData === 'string'
@@ -133,7 +133,10 @@ class VSCodeTransport extends Transport {
     level: string,
     messageType?: MessageType,
   ): boolean {
-    if (level === 'debug' && !getConfig<boolean>('logger.debugMode', false)) {
+    if (
+      level === 'debug' &&
+      !getConfig<boolean>('texra.logger.debugMode', false)
+    ) {
       return false;
     }
     if (messageType === MESSAGE_TYPES.INTERNAL) {
@@ -157,7 +160,7 @@ class VSCodeTransport extends Transport {
     const msgType: MessageType = isValidMessageType(messageType)
       ? messageType
       : MESSAGE_TYPES.DEFAULT;
-    const isVerbose = getConfig<boolean>('logger.debugMode', false);
+    const isVerbose = getConfig<boolean>('texra.logger.debugMode', false);
     const id = randomUUID();
     const numericTimestamp = new Date(timestamp).getTime();
     const logMessage = {

@@ -151,7 +151,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   public override getStreamingConfig(): boolean {
     const useBackgroundResponses = getConfig<boolean>(
-      'model.useBackgroundResponses',
+      'texra.model.useBackgroundResponses',
       false,
     );
     if (useBackgroundResponses) {
@@ -497,7 +497,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
-      'model.useBackgroundResponses',
+      'texra.model.useBackgroundResponses',
       false,
     );
     if (backgroundToggleEnabled && !this.backgroundModeSupported) {
@@ -558,7 +558,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
-        !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
+        !isGpt5 ||
+        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
       const reasoning: Reasoning = {};
       if (includeSummary) {
         reasoning.summary = 'auto';

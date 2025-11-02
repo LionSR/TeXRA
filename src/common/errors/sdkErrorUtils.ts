@@ -43,7 +43,7 @@ import { getConfig } from '@utils/config';
  * Otherwise, returns a graceful, user-friendly message.
  */
 export function getSdkErrorMessage(err: unknown): string {
-  const isDebugMode = getConfig<boolean>('logger.debugMode', false);
+  const isDebugMode = getConfig<boolean>('texra.logger.debugMode', false);
 
   // In debug mode, always show the full error message
   if (isDebugMode) {
