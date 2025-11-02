@@ -67,22 +67,31 @@ async function maybeSaveDebug(
 // Zod schemas for tool call validation
 const ToolCallIdSchema = z.string().min(1, 'Tool call ID cannot be empty');
 
-const ToolCallSchema = z.object({
-  call_id: z.string().optional(),
-  id: z.string().optional(),
-  tool_use_id: z.string().optional(),
-  tool_call_id: z.string().optional(),
-  name: z.string().optional(),
-  input: z.any().optional(),
-  args: z.any().optional(),
-  arguments: z.any().optional(),
-  function: z
-    .object({
-      name: z.string().optional(),
-      arguments: z.any().optional(),
-    })
-    .optional(),
-});
+const ToolCallSchema = z
+  .object({
+    call_id: z.string().optional(),
+    id: z.string().optional(),
+    tool_use_id: z.string().optional(),
+    tool_call_id: z.string().optional(),
+    name: z.string().optional(),
+    input: z.any().optional(),
+    args: z.any().optional(),
+    arguments: z.any().optional(),
+    function: z
+      .object({
+        name: z.string().optional(),
+        arguments: z.any().optional(),
+      })
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.call_id || data.id || data.tool_use_id || data.tool_call_id,
+    {
+      message:
+        'Tool call must have at least one ID field (call_id, id, tool_use_id, or tool_call_id)',
+    },
+  );
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -102,18 +111,18 @@ function normalizeToolCallError(
 ): { message: string; diagnostics?: ToolValidationDiagnostics } {
   if (error && typeof error === 'object' && 'issues' in error) {
     const zodError = error as { issues?: any[] };
-    const issues = [zodError.issues].flat().filter(Boolean);
+    const issues = Array.isArray(zodError.issues) ? zodError.issues : [];
     return {
       message: `${toolName}: Invalid parameters provided`,
       diagnostics: {
         type: 'validation_error',
         issues,
         formatted: issues.map((issue) => ({
-          path: [issue?.path].flat().join('.'),
-          message: issue.message,
-          expected: issue.expected,
-          received: issue.received,
-          code: issue.code,
+          path: Array.isArray(issue?.path) ? issue.path.join('.') : '',
+          message: issue?.message ?? '',
+          expected: issue?.expected,
+          received: issue?.received,
+          code: issue?.code,
         })),
       },
     };

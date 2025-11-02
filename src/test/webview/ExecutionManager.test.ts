@@ -58,6 +58,6 @@ describe('ExecutionManager', () => {
     const config = executed[0]?.payload;
     assert.ok(config, 'Expected payload to be provided');
     assert.strictEqual(config.useMultipleOutputs, false);
-    assert.strictEqual(config.outputFiles, null);
+    assert.deepStrictEqual(config.outputFiles, []);
   });
 });
