@@ -12,6 +12,7 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { OutputFileInfo } from '@agent/output/types';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -114,9 +115,9 @@ describe('Progress event modules', () => {
     const state = {
       outputFiles: {
         addFiles: () => {},
-        getFiles: () => undefined,
+        getFiles: () => ({} as Record<number, OutputFileInfo[]>),
         updateMissingOutputs: () => {},
-        getMissingOutputs: () => undefined,
+        getMissingOutputs: () => ({} as Record<number, string[]>),
         clearMissingOutputs: () => {},
         clearFiles: () => {},
       },
@@ -151,6 +152,50 @@ describe('Progress event modules', () => {
 
     disposables.forEach((disposable) => disposable.dispose());
     assert.deepStrictEqual(bus.disposed, bus.events);
+  });
+
+  it('sends empty output updates when no files exist', () => {
+    const bus = new FakeBus();
+    const module = createOutputEvents({
+      logger: loggerStub,
+    });
+
+    const filesUpdates: Record<number, OutputFileInfo[]>[] = [];
+    const missingUpdates: Record<number, string[]>[] = [];
+
+    const state = {
+      outputFiles: {
+        addFiles: () => {},
+        getFiles: () => ({} as Record<number, OutputFileInfo[]>),
+        updateMissingOutputs: () => {},
+        getMissingOutputs: () => ({} as Record<number, string[]>),
+        clearMissingOutputs: () => {},
+        clearFiles: () => {},
+      },
+      clearOutputState: () => {},
+      activeStream: 'stream-1',
+    } as unknown as ProgressViewState;
+
+    const updater = {
+      isAvailable: () => true,
+      updateFiles: (_stream: string, files: Record<number, OutputFileInfo[]>) => {
+        filesUpdates.push(files);
+      },
+      updateMissingOutputs: (
+        _stream: string,
+        files: Record<number, string[]>,
+      ) => {
+        missingUpdates.push(files);
+      },
+    } as unknown as WebviewUpdater;
+
+    module.register(bus as any, state, updater);
+
+    bus.trigger('addOutputFiles', { stream: 'stream-1', filesByRound: {} });
+    bus.trigger('updateMissingOutputs', { stream: 'stream-1', filesByRound: {} });
+
+    assert.deepStrictEqual(filesUpdates, [{}]);
+    assert.deepStrictEqual(missingUpdates, [{}]);
   });
 
   it('registers log handlers and disposes them', () => {

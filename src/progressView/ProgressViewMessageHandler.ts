@@ -504,7 +504,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles || []);
-    if (generated) {
+    if (Object.keys(generated).length > 0) {
       for (const [round, infos] of Object.entries(generated)) {
         if (!Array.isArray(infos)) {
           this.logger.warn(

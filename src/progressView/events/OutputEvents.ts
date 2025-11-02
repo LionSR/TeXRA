@@ -27,7 +27,7 @@ interface OutputEventsShared {
   logger: AgentLogger;
 }
 
-type FilesByRound<T> = { [key: number]: T[] };
+type FilesByRound<T> = Record<number, T[]>;
 
 interface ActiveStreamOutputUpdate {
   state: ProgressViewState;
@@ -50,11 +50,11 @@ const updateActiveStreamOutputs = ({
   }
 
   if (updates.files !== undefined) {
-    updater.updateFiles(stream, updates.files ?? {});
+    updater.updateFiles(stream, updates.files);
   }
 
   if (updates.missing !== undefined) {
-    updater.updateMissingOutputs(stream, updates.missing ?? {});
+    updater.updateMissingOutputs(stream, updates.missing);
   }
 };
 
@@ -68,10 +68,9 @@ const registerOutputFileListeners = (
     withErrorBoundary('failed to handle addOutputFiles', () => {
       state.outputFiles.addFiles(stream, filesByRound);
       const files = state.outputFiles.getFiles(stream);
-      const updates: { files?: FilesByRound<OutputFileInfo> } = {};
-      if (files !== undefined) {
-        updates.files = files;
-      }
+      const updates: { files?: FilesByRound<OutputFileInfo> } = {
+        files,
+      };
       updateActiveStreamOutputs({ state, updater, stream, updates });
     });
   });
@@ -82,10 +81,9 @@ const registerOutputFileListeners = (
       withErrorBoundary('failed to handle updateMissingOutputs', () => {
         state.outputFiles.updateMissingOutputs(stream, filesByRound);
         const missing = state.outputFiles.getMissingOutputs(stream);
-        const updates: { missing?: FilesByRound<string> } = {};
-        if (missing !== undefined) {
-          updates.missing = missing;
-        }
+        const updates: { missing?: FilesByRound<string> } = {
+          missing,
+        };
         updateActiveStreamOutputs({ state, updater, stream, updates });
       });
     },

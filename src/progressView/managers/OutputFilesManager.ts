@@ -33,9 +33,9 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Add output files for a stream and round */
   addFiles(
     stream: StreamTabId,
-    filesByRound: { [key: number]: OutputFileInfo[] },
+    filesByRound: Record<number, OutputFileInfo[]>,
   ): void {
-    const existing = this.get(stream) || {};
+    const existing = this.getFiles(stream);
     const merged = { ...existing, ...filesByRound };
     this.add(stream, merged);
   }
@@ -60,17 +60,13 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Get output files for a stream */
-  getFiles(
-    stream: StreamTabId,
-  ): { [key: number]: OutputFileInfo[] } | undefined {
-    return this.get(stream);
+  getFiles(stream: StreamTabId): Record<number, OutputFileInfo[]> {
+    return this.get(stream) ?? {};
   }
 
   /** Get missing outputs for a stream */
-  getMissingOutputs(
-    stream: StreamTabId,
-  ): { [key: number]: string[] } | undefined {
-    return this._missingOutputs.get(stream);
+  getMissingOutputs(stream: StreamTabId): Record<number, string[]> {
+    return this._missingOutputs.get(stream) ?? {};
   }
 
   /** Clear output files for a stream */
