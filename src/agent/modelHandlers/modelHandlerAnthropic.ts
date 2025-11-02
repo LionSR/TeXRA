@@ -1016,7 +1016,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     if (
       this.capabilities.supportsReasoning &&
-      Array.isArray(responseObject.content) &&
       responseObject.content.length > 0
     ) {
       // Handle text blocks in Claude 3.7 Sonnet responses
@@ -1026,7 +1025,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
         // We don't include thinking blocks in the response text
       }
-    } else if (responseObject.content && responseObject.content.length > 0) {
+    } else if (responseObject.content.length > 0) {
       // Handle regular text responses
       const firstBlock = responseObject.content[0];
       if (firstBlock.type === 'text') {
