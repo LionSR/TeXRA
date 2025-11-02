@@ -4,14 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - fs
 import { RelativeFS } from './relativeFS';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'storageFS';
-const GLOBAL_CHANNEL = 'globalStorageFS';
-logger.initialize(CHANNEL);
-logger.initialize(GLOBAL_CHANNEL);
-
 /**
  * StorageFS provides a unified interface for VS Code extension storage operations.
  * Supports both workspace storage (per-workspace) and global storage (shared across workspaces).
@@ -50,10 +42,6 @@ export class StorageFS extends RelativeFS {
     return this.context.globalStorageUri.fsPath;
   }
 
-  protected static override getChannel(): string {
-    return CHANNEL;
-  }
-
   // Inherit file operations from RelativeFS
 }
 
@@ -64,9 +52,6 @@ export class StorageFS extends RelativeFS {
 export class GlobalStorageFS extends RelativeFS {
   protected static override getBasePath(): string {
     return StorageFS.getGlobalPath();
-  }
-  protected static override getChannel(): string {
-    return GLOBAL_CHANNEL;
   }
 }
 
