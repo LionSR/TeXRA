@@ -147,9 +147,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     for (let i = 0; i < numRounds; i++) {
       this.outputFiles[i] = [];
     }
-    this.baseFiles = this.agentConfig.outputFiles || [
-      this.agentConfig.inputFile,
-    ];
+    this.baseFiles =
+      this.agentConfig.outputFiles.length > 0
+        ? [...this.agentConfig.outputFiles]
+        : [this.agentConfig.inputFile];
 
     // Check scratchpad usage
     // this is not so neat
@@ -504,7 +505,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     if (currRound === 0) {
       const inputFiles = [
         this.agentConfig.inputFile,
-        ...(this.agentConfig.inputFiles || []),
+        ...this.agentConfig.inputFiles,
       ];
       const extraMedia: string[] = [];
 
@@ -515,7 +516,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         ) {
           extraMedia.push(this.agentConfig.mediaFile);
         }
-        if (this.agentConfig.mediaFiles) {
+        if (this.agentConfig.mediaFiles.length > 0) {
           extraMedia.push(...this.agentConfig.mediaFiles);
         }
       }
@@ -531,10 +532,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       return;
     }
 
-    let outputFiles: string[] = [];
-    if (this.agentConfig.outputFiles) {
-      outputFiles = [...this.agentConfig.outputFiles];
-    } else {
+    let outputFiles = [...this.agentConfig.outputFiles];
+    if (outputFiles.length === 0) {
       const previousRoundFiles = this.outputHandler.ensureRound(currRound - 1);
       if (previousRoundFiles.length > 0) {
         outputFiles = [previousRoundFiles[0]];

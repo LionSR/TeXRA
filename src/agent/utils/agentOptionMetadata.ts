@@ -6,6 +6,7 @@ import * as yaml from 'yaml';
 // Local imports - agent core
 import {
   AgentType,
+  AgentDefinitionSchema,
   parseAgentSetting,
   type AgentSetting,
 } from '@agent/core/AgentDataclass';
@@ -93,8 +94,8 @@ function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
   }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
-    const parsed = yaml.parse(fileContent) as { settings?: unknown };
-    return parseAgentSetting(parsed?.settings ?? {});
+    const parsed = AgentDefinitionSchema.parse(yaml.parse(fileContent));
+    return parseAgentSetting(parsed.settings);
   } catch {
     return undefined;
   }

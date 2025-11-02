@@ -77,24 +77,21 @@ export function buildFileContextFromTaskState(
     }
   };
 
-  const assignArray = (
-    value: string[] | null | undefined,
-    key: keyof FileContext,
-  ) => {
-    if (Array.isArray(value) && value.length > 0) {
+  const assignArray = (value: string[], key: keyof FileContext) => {
+    if (value.length > 0) {
       (context[key] as string[]) = value;
     }
   };
 
   assignString(agentConfig.inputFile, 'inputFile');
-  assignArray(agentConfig.inputFiles ?? undefined, 'inputFiles');
+  assignArray(agentConfig.inputFiles, 'inputFiles');
   assignString(agentConfig.referenceFile, 'referenceFile');
-  assignArray(agentConfig.referenceFiles ?? undefined, 'referenceFiles');
+  assignArray(agentConfig.referenceFiles, 'referenceFiles');
   assignString(agentConfig.auxiliaryFile, 'auxiliaryFile');
-  assignArray(agentConfig.auxiliaryFiles ?? undefined, 'auxiliaryFiles');
+  assignArray(agentConfig.auxiliaryFiles, 'auxiliaryFiles');
   assignString(agentConfig.mediaFile, 'mediaFile');
-  assignArray(agentConfig.mediaFiles ?? undefined, 'mediaFiles');
-  assignArray(agentConfig.outputFiles ?? undefined, 'outputFiles');
+  assignArray(agentConfig.mediaFiles, 'mediaFiles');
+  assignArray(agentConfig.outputFiles, 'outputFiles');
 
   return context;
 }
