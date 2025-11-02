@@ -3,9 +3,6 @@ import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
 
-// Local imports - logging
-import { withLogGroup } from '@logger/logGroupUtils';
-
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
@@ -42,55 +39,31 @@ export class CoTAgent extends BaseReflectionAgent {
     stateGlobal: AgentStateGlobal,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn, processGroupId } = options;
+    const { outputFile, endTurn } = options;
 
-    const runOutputHandling = async (groupId?: string): Promise<string[]> => {
-      const effectiveGroupId = groupId ?? this.logger.getActiveGroupId();
+    try {
+      this.outputHandler.ensureRound(currRound);
 
-      try {
-        this.outputHandler.ensureRound(currRound);
+      if (endTurn) {
+        this.logger.debug(`Processing output for round ${currRound}`);
 
-        if (endTurn) {
-          this.logger.debug(
-            `Processing output for round ${currRound}`,
-            effectiveGroupId,
-          );
-
-          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-            outputFile,
-            this.agentSetting.documentTag,
-          );
-
-          await this.outputHandler.processOutputFiles(
-            outputFile,
-            currRound,
-            effectiveGroupId,
-          );
-        }
-
-        return super.handleOutput(currRound, stateRound, stateGlobal, {
+        await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
           outputFile,
-          endTurn,
-          processGroupId: effectiveGroupId,
-        });
-      } catch (error) {
-        this.logger.error(
-          `Error in handleOutput for round ${currRound}: ${error}`,
-          effectiveGroupId,
+          this.agentSetting.documentTag,
         );
-        throw error;
+
+        await this.outputHandler.processOutputFiles(outputFile, currRound);
       }
-    };
 
-    if (processGroupId) {
-      return runOutputHandling(processGroupId);
+      return super.handleOutput(currRound, stateRound, stateGlobal, {
+        outputFile,
+        endTurn,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Error in handleOutput for round ${currRound}: ${error}`,
+      );
+      throw error;
     }
-
-    return withLogGroup(
-      this.logger,
-      `OutputProcessing-Round${currRound}`,
-      runOutputHandling,
-      { parentGroupId: this.logger.getActiveGroupId() },
-    );
   }
 }
