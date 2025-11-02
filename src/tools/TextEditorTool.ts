@@ -10,6 +10,12 @@ import { defineTool } from './core/define';
 import { ToolResult, ToolError, cliResult, toolResult } from './result';
 import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
+// Local imports - approval helpers
+import {
+  buildApprovalRejectedResult,
+  requestToolEditApproval,
+} from '@tools/approval/toolEditApproval';
+
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
@@ -298,6 +304,21 @@ export class TextEditorTool extends defineTool({
    */
   private async create(filePath: string, content: string): Promise<ToolResult> {
     try {
+      const approval = await requestToolEditApproval({
+        path: filePath,
+        originalContent: '',
+        proposedContent: content,
+        sourceTool: 'text_editor:create',
+      });
+
+      if (!approval.accepted) {
+        return buildApprovalRejectedResult(
+          filePath,
+          'text_editor:create',
+          approval.userMessage,
+        );
+      }
+
       // Create parent directories if they don't exist
       const dirPath = path.dirname(filePath);
       if (dirPath !== '.') {
@@ -360,14 +381,29 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Save current content to history
-      this.addToHistory(filePath, fileContent);
-
       // Perform replacement
       const newFileContent = expandedFileContent.replace(
         expandedOldStr,
         expandedNewStr,
       );
+
+      const approval = await requestToolEditApproval({
+        path: filePath,
+        originalContent: fileContent,
+        proposedContent: newFileContent,
+        sourceTool: 'text_editor:str_replace',
+      });
+
+      if (!approval.accepted) {
+        return buildApprovalRejectedResult(
+          filePath,
+          'text_editor:str_replace',
+          approval.userMessage,
+        );
+      }
+
+      // Save current content to history
+      this.addToHistory(filePath, fileContent);
       await WorkspaceFS.write(filePath, newFileContent);
 
       // Create a snippet of the edited section
@@ -434,9 +470,6 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Save current content to history
-      this.addToHistory(filePath, fileContent);
-
       // Insert new text
       const newStrLines = expandedNewStr.split('\n');
       const newFileLines = [
@@ -454,6 +487,24 @@ export class TextEditorTool extends defineTool({
 
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
+
+      const approval = await requestToolEditApproval({
+        path: filePath,
+        originalContent: fileContent,
+        proposedContent: newFileContent,
+        sourceTool: 'text_editor:insert',
+      });
+
+      if (!approval.accepted) {
+        return buildApprovalRejectedResult(
+          filePath,
+          'text_editor:insert',
+          approval.userMessage,
+        );
+      }
+
+      // Save current content to history
+      this.addToHistory(filePath, fileContent);
       await WorkspaceFS.write(filePath, newFileContent);
 
       // Prepare success message
@@ -494,8 +545,26 @@ export class TextEditorTool extends defineTool({
       }
 
       // Restore previous content
-      const oldContent = history.pop()!;
-      await WorkspaceFS.write(filePath, oldContent);
+      const previousContent = history[history.length - 1]!;
+      const currentContent = await WorkspaceFS.read(filePath);
+
+      const approval = await requestToolEditApproval({
+        path: filePath,
+        originalContent: currentContent,
+        proposedContent: previousContent,
+        sourceTool: 'text_editor:undo_edit',
+      });
+
+      if (!approval.accepted) {
+        return buildApprovalRejectedResult(
+          filePath,
+          'text_editor:undo_edit',
+          approval.userMessage,
+        );
+      }
+
+      history.pop();
+      await WorkspaceFS.write(filePath, previousContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {
@@ -504,7 +573,7 @@ export class TextEditorTool extends defineTool({
 
       return cliResult({
         summary: `Undid edit on ${filePath}`,
-        output: `Last edit to ${filePath} undone successfully. ${this.makeOutput(oldContent, filePath)}`,
+        output: `Last edit to ${filePath} undone successfully. ${this.makeOutput(previousContent, filePath)}`,
       });
     } catch (error) {
       if (error instanceof ToolError) {
