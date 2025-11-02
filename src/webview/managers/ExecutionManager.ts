@@ -30,6 +30,7 @@ function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
   if (!Array.isArray(files) || files.length === 0) {
     return [];
   }
+
   return files;
 }
 
@@ -83,8 +84,7 @@ export class ExecutionManager {
     const baseConfig = this.composeBaseAgentConfig(message, session);
     const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
     const useMultipleOutputs = Boolean(
-      message.outputFilesActive ||
-        (Array.isArray(outputFiles) && outputFiles.length > 1),
+      message.outputFilesActive || outputFiles.length > 1,
     );
 
     return {
