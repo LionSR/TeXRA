@@ -23,7 +23,10 @@ export abstract class BaseFS {
   }
 
   /** Allow subclasses to enforce additional invariants on resolved paths. */
-  protected static validateResolvedPath(_resolvedPath: string, _original: string): void {
+  protected static validateResolvedPath(
+    _resolvedPath: string,
+    _original: string,
+  ): void {
     // Default implementation performs no validation.
   }
 
@@ -39,7 +42,10 @@ export abstract class BaseFS {
 
   // ===== Async Methods =====
 
-  public static async exists(this: typeof BaseFS, target: PathInput): Promise<boolean> {
+  public static async exists(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<boolean> {
     try {
       await vscode.workspace.fs.stat(this.toUri(target));
       return true;
@@ -48,12 +54,18 @@ export abstract class BaseFS {
     }
   }
 
-  public static async read(this: typeof BaseFS, target: PathInput): Promise<string> {
+  public static async read(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<string> {
     const content = await vscode.workspace.fs.readFile(this.toUri(target));
     return Buffer.from(content).toString('utf-8');
   }
 
-  public static async readBytes(this: typeof BaseFS, target: PathInput): Promise<Buffer> {
+  public static async readBytes(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<Buffer> {
     const content = await vscode.workspace.fs.readFile(this.toUri(target));
     return Buffer.from(content);
   }
@@ -63,7 +75,8 @@ export abstract class BaseFS {
     target: PathInput,
     content: string | Uint8Array,
   ): Promise<void> {
-    const data = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+    const data =
+      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
     await vscode.workspace.fs.writeFile(this.toUri(target), data);
   }
 
@@ -75,12 +88,22 @@ export abstract class BaseFS {
     await vscode.workspace.fs.delete(this.toUri(target), options);
   }
 
-  public static async createDir(this: typeof BaseFS, target: PathInput): Promise<void> {
+  public static async createDir(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<void> {
     await vscode.workspace.fs.createDirectory(this.toUri(target));
   }
 
-  public static async ensureDir(this: typeof BaseFS, target: PathInput): Promise<void> {
-    await ensureDirCommon(target, this.exists.bind(this), this.createDir.bind(this));
+  public static async ensureDir(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<void> {
+    await ensureDirCommon(
+      target,
+      this.exists.bind(this),
+      this.createDir.bind(this),
+    );
   }
 
   public static async readDir(
@@ -90,7 +113,10 @@ export abstract class BaseFS {
     return vscode.workspace.fs.readDirectory(this.toUri(target));
   }
 
-  public static async stat(this: typeof BaseFS, target: PathInput): Promise<vscode.FileStat> {
+  public static async stat(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<vscode.FileStat> {
     return vscode.workspace.fs.stat(this.toUri(target));
   }
 
@@ -100,7 +126,11 @@ export abstract class BaseFS {
     destination: PathInput,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await vscode.workspace.fs.copy(this.toUri(source), this.toUri(destination), options);
+    await vscode.workspace.fs.copy(
+      this.toUri(source),
+      this.toUri(destination),
+      options,
+    );
   }
 
   public static async rename(
@@ -109,10 +139,17 @@ export abstract class BaseFS {
     destination: PathInput,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await vscode.workspace.fs.rename(this.toUri(source), this.toUri(destination), options);
+    await vscode.workspace.fs.rename(
+      this.toUri(source),
+      this.toUri(destination),
+      options,
+    );
   }
 
-  public static async isDir(this: typeof BaseFS, target: PathInput): Promise<boolean> {
+  public static async isDir(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
       return stats.type === vscode.FileType.Directory;
@@ -121,7 +158,10 @@ export abstract class BaseFS {
     }
   }
 
-  public static async isFile(this: typeof BaseFS, target: PathInput): Promise<boolean> {
+  public static async isFile(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
       return stats.type === vscode.FileType.File;
@@ -136,7 +176,10 @@ export abstract class BaseFS {
   ): Promise<boolean> {
     try {
       const stats = await this.stat(target);
-      return (stats.type & vscode.FileType.SymbolicLink) === vscode.FileType.SymbolicLink;
+      return (
+        (stats.type & vscode.FileType.SymbolicLink) ===
+        vscode.FileType.SymbolicLink
+      );
     } catch {
       return false;
     }

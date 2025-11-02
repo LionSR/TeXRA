@@ -30,7 +30,10 @@ export abstract class RelativeFS extends BaseFS {
     return JSON.parse(raw) as T;
   }
 
-  public static async cleanupOldFiles(target: string, maxAgeMs: number): Promise<void> {
+  public static async cleanupOldFiles(
+    target: string,
+    maxAgeMs: number,
+  ): Promise<void> {
     const entries = await this.readDir(target);
     const cutoff = Date.now() - maxAgeMs;
 

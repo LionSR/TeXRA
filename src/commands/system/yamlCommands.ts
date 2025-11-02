@@ -98,9 +98,8 @@ export async function handleTestAgentLoading(
     if (!baseResolution) {
       throw new Error('Base agent definition not found for testing.');
     }
-    const [baseSettings, basePrompts] = await loadAgentSettingAndPrompts(
-      baseResolution,
-    );
+    const [baseSettings, basePrompts] =
+      await loadAgentSettingAndPrompts(baseResolution);
     logger.info(CHANNEL, 'Base agent settings loaded:');
     logger.info(CHANNEL, JSON.stringify(baseSettings, null, 2));
     logger.info(CHANNEL, 'Base agent prompts loaded:');
@@ -122,9 +121,8 @@ export async function handleTestAgentLoading(
     if (!childResolution) {
       throw new Error('Child agent definition not found for testing.');
     }
-    const [childSettings, childPrompts] = await loadAgentSettingAndPrompts(
-      childResolution,
-    );
+    const [childSettings, childPrompts] =
+      await loadAgentSettingAndPrompts(childResolution);
     logger.info(
       CHANNEL,
       'Child agent settings loaded (should inherit from base):',
