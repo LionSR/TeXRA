@@ -90,7 +90,11 @@ export async function getAgentPath(
       throw new Error('No agent directories available for lookup');
     }
 
-    const resolution = await resolveAgentDefinition(agentName, candidates, options);
+    const resolution = await resolveAgentDefinition(
+      agentName,
+      candidates,
+      options,
+    );
     if (resolution) {
       return resolution;
     }

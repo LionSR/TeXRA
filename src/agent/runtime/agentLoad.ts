@@ -72,7 +72,10 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-export function notifyYamlLoadFailure(absolutePath: string, error: unknown): void {
+export function notifyYamlLoadFailure(
+  absolutePath: string,
+  error: unknown,
+): void {
   const moreInfo = 'More Info';
   const openFile = 'Open File';
 
@@ -161,9 +164,8 @@ export async function loadAgentSettingAndPrompts(
           `Unable to locate parent agent "${parent}" in ${resolution.directory}.`,
         );
       }
-      const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
-        parentResolution,
-      );
+      const [parentSettings, parentPrompts] =
+        await loadAgentSettingAndPrompts(parentResolution);
 
       // Get current agent's specific settings and prompts from its YAML
       const agentOwnSettings = config.settings;

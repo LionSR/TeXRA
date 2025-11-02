@@ -69,7 +69,9 @@ function sourceForKey(key: keyof AgentDirectoryMap): AgentDirectorySource {
   }
 }
 
-export function mapToCandidates(map: AgentDirectoryMap): AgentDirectoryCandidate[] {
+export function mapToCandidates(
+  map: AgentDirectoryMap,
+): AgentDirectoryCandidate[] {
   return DIRECTORY_ORDER.reduce<AgentDirectoryCandidate[]>((acc, key) => {
     const directory = cleanDirectory(map[key]);
     if (directory) {
@@ -86,7 +88,10 @@ export function createCandidate(
   return { directory, source };
 }
 
-function buildCandidateNames(agentName: string, preferMultiple: boolean): string[] {
+function buildCandidateNames(
+  agentName: string,
+  preferMultiple: boolean,
+): string[] {
   const names = new Set<string>();
   if (preferMultiple) {
     const multiple = agentName.endsWith('_multiple')
@@ -176,8 +181,11 @@ export async function resolveAgentDefinition(
   candidates: AgentDirectoryCandidate[],
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution | undefined> {
-  return resolveWithAsyncFetcher(agentName, candidates, options, (pattern, opts) =>
-    glob(pattern, opts),
+  return resolveWithAsyncFetcher(
+    agentName,
+    candidates,
+    options,
+    (pattern, opts) => glob(pattern, opts),
   );
 }
 
@@ -186,8 +194,11 @@ export function resolveAgentDefinitionSync(
   candidates: AgentDirectoryCandidate[],
   options?: AgentDefinitionSearchOptions,
 ): AgentPathResolution | undefined {
-  return resolveWithSyncFetcher(agentName, candidates, options, (pattern, opts) =>
-    globSync(pattern, opts),
+  return resolveWithSyncFetcher(
+    agentName,
+    candidates,
+    options,
+    (pattern, opts) => globSync(pattern, opts),
   );
 }
 
@@ -197,7 +208,11 @@ export async function resolveAgentDefinitionInDirectory(
   agentName: string,
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution | undefined> {
-  return resolveAgentDefinition(agentName, [createCandidate(directory, source)], options);
+  return resolveAgentDefinition(
+    agentName,
+    [createCandidate(directory, source)],
+    options,
+  );
 }
 
 export function resolveAgentDefinitionInDirectorySync(
@@ -206,5 +221,9 @@ export function resolveAgentDefinitionInDirectorySync(
   agentName: string,
   options?: AgentDefinitionSearchOptions,
 ): AgentPathResolution | undefined {
-  return resolveAgentDefinitionSync(agentName, [createCandidate(directory, source)], options);
+  return resolveAgentDefinitionSync(
+    agentName,
+    [createCandidate(directory, source)],
+    options,
+  );
 }
