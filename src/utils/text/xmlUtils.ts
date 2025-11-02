@@ -453,7 +453,8 @@ export interface MultipleExtractionResult {
  *
  * @param outputContent The raw output content to extract from
  * @param documentTag The XML tag to look for
- * @param preferredName Optional filename to match against named documents
+ * @param preferredName Optional filename to match against named documents. When provided,
+ * the extractor prioritizes named document matches before other fallbacks.
  * @returns Extraction result with content and method used
  */
 export function extractDocument(
