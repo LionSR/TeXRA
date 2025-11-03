@@ -1425,7 +1425,6 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@cfworker/json-schema": "^4.1.1",
     "@stylistic/eslint-plugin": "^5.4.0",
     "@types/diff-match-patch": "^1.0.36",
     "@types/difflib": "^0.2.7",
