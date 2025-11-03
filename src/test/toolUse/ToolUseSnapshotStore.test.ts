@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 
@@ -52,10 +52,10 @@ describe('ToolUseSnapshotStore', () => {
   const streamId = 'stream-1' as StreamTabId;
 
   function buildPayload() {
-    const toolState = new ToolState();
-    toolState.updateLastResponse('last');
-    toolState.updateAccumulatedOutput('all');
-    toolState.addMediaFiles(['media.png']);
+    const toolState = new ToolRuntimeState();
+    toolState.assembly.updateLastResponse('last');
+    toolState.assembly.updateAccumulatedOutput('all');
+    toolState.media.addMediaFiles(['media.png']);
 
     return {
       executionId,
@@ -84,12 +84,20 @@ describe('ToolUseSnapshotStore', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: 'last',
-        accumulatedOutput: 'all',
-        mediaFiles: ['media.png'],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        assembly: {
+          lastResponse: 'last',
+          accumulatedOutput: 'all',
+        },
+        media: {
+          files: ['media.png'],
+        },
+        reasoning: {
+          thinkingBlocks: [],
+          thinkingAdded: false,
+        },
+        document: {
+          texcountStats: null,
+        },
       },
       lastUpdated: Date.now(),
     };
@@ -163,7 +171,7 @@ describe('ToolUseSnapshotStore', () => {
     const stored = value as ReturnType<typeof buildSnapshot>;
     assert.equal(stored.session.agentType, AgentType.ToolUse);
     assert.notStrictEqual(stored.messages, payload.messages);
-    assert.equal(stored.toolState.lastResponse, 'last');
+    assert.equal(stored.toolState.assembly.lastResponse, 'last');
   });
 
   it('list triggers TTL cleanup and filters invalid snapshots', async () => {

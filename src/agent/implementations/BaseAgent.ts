@@ -5,13 +5,16 @@ import {
   AgentSetting,
   type AgentSessionDescriptor,
 } from '../core/AgentDataclass';
-import { AgentStateGlobal } from '../core/AgentState';
+import { AgentRunState } from '../core/AgentState';
 import { IAgent, type AgentRunHooks } from '../core/IAgent';
 import type { IModelHandler } from '../modelHandlers';
 import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
+import type {
+  AgentCycleBaseOptions,
+  AgentUserVarChannels,
+} from '@agent/core/AgentCycleOptions';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - logging
@@ -37,6 +40,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected runGroupId?: string;
   private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
+  protected userVarChannels: AgentUserVarChannels = {
+    input: Object.freeze({}),
+    transient: {},
+    output: {},
+  };
   protected client: C | null = null;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
@@ -88,6 +96,15 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     await sleep(SHORT_SLEEP_MS);
   }
 
+  protected resetTransientUserVars(overrides?: Record<string, any>): void {
+    const nextTransient = {
+      ...this.userVarChannels.input,
+      ...(overrides ?? {}),
+    };
+    this.userVarChannels.transient = nextTransient;
+    this.userVars = this.userVarChannels.transient;
+  }
+
   /** Retrieve the initialized client instance. */
   protected getClientInstance(): C {
     if (this.client === null) {
@@ -106,7 +123,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       modelHandler: this.modelHandler,
       agentSetting,
       agentPrompt,
-      userVars: this.userVars,
+      userVars: this.userVarChannels.transient,
+      userVarChannels: this.userVarChannels,
       logger: this.logger,
       client,
       checkInterruption: () => this.checkInterruption(),
@@ -147,7 +165,13 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
         `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
       );
 
-      this.userVars = await this.getUserVars();
+      const baseVars = await this.getUserVars();
+      this.userVarChannels = {
+        input: Object.freeze({ ...baseVars }),
+        transient: {},
+        output: {},
+      };
+      this.resetTransientUserVars();
       this.registerRunningAgent(this.getStreamTabId());
     };
 
@@ -200,9 +224,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.executionId;
   }
 
-  protected async trackRoundUsage(
-    stateGlobal: AgentStateGlobal,
-  ): Promise<void> {
+  protected async trackRoundUsage(stateGlobal: AgentRunState): Promise<void> {
     await this.usageMonitor.recordUsage(stateGlobal);
   }
 

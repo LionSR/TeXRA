@@ -27,13 +27,13 @@ import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { AgentConfig } from '../core/AgentConfig';
 import type { AgentSetting } from '../core/AgentDataclass';
 import { hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound } from '../core/AgentState';
+import { ConversationRoundState } from '../core/AgentState';
 import {
   ResponseUsageFactory,
   type OpenAIAPIResponseUsage,
   type ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeState } from '../core/ToolRuntimeState';
 import { z } from 'zod';
 
 // Local imports - base handler
@@ -770,8 +770,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Models with prefill support do not require additional continuation messages. */
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
-    _stateRound: AgentStateRound,
-    _toolState: ToolState,
+    _stateRound: ConversationRoundState,
+    _toolState: ToolRuntimeState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1036,12 +1036,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Adds continuation instructions for models without prefill support. */
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
-    _stateRound: AgentStateRound,
-    toolState: ToolState,
+    _stateRound: ConversationRoundState,
+    toolState: ToolRuntimeState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
+    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -1062,7 +1062,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
-    toolState: ToolState,
+    toolState: ToolRuntimeState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
@@ -1113,14 +1113,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'Output file exists but no end tag found - continuing from file',
     );
     if (fileContent.includes(prefill)) {
-      toolState.updateAccumulatedOutput(fileContent);
+      toolState.assembly.updateAccumulatedOutput(fileContent);
     } else {
-      toolState.updateAccumulatedOutput(prefill + fileContent);
-      await WorkspaceFS.write(outputFile, toolState.accumulatedOutput);
+      toolState.assembly.updateAccumulatedOutput(prefill + fileContent);
+      await WorkspaceFS.write(outputFile, toolState.assembly.accumulatedOutput);
     }
 
-    const state = new AgentStateRound(0);
-    toolState.lastResponse = toolState.accumulatedOutput;
+    const state = new ConversationRoundState(0);
+    toolState.assembly.lastResponse = toolState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
@@ -1138,7 +1138,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models with prefill support',
@@ -1152,7 +1152,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return;
     }
 
-    messages.push(this.createAssistantMessage(toolState.accumulatedOutput));
+    messages.push(
+      this.createAssistantMessage(toolState.assembly.accumulatedOutput),
+    );
   }
 
   /** Updates message content for models without prefill support. */
@@ -1160,7 +1162,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: ToolRuntimeState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models without prefill support',
@@ -1195,7 +1197,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           messages.pop();
         } else if (!appended) {
           messages.push(
-            this.createAssistantMessage(toolState.accumulatedOutput),
+            this.createAssistantMessage(toolState.assembly.accumulatedOutput),
           );
         }
       }
@@ -1203,7 +1205,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.debug(
         'Last message is a request message rather than a continuation request',
       );
-      messages.push(this.createAssistantMessage(toolState.accumulatedOutput));
+      messages.push(
+        this.createAssistantMessage(toolState.assembly.accumulatedOutput),
+      );
     }
   }
 
@@ -1223,7 +1227,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   processThinkingBlock(
     responseObject: Response,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeState,
   ): string | null {
     const outputArr = responseObject?.output;
     if (!Array.isArray(outputArr)) {
@@ -1239,12 +1243,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const thoughtContent = summaryParts.map((part) => part.text).join('\n\n'); // to make the thinking markdown rendering more readable
 
-    if (toolState && !toolState.thinkingAdded) {
-      toolState.thinkingBlocks = summaryParts.map((part) => ({
+    if (toolState && !toolState.reasoning.thinkingAdded) {
+      toolState.reasoning.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
         thinking: part.text,
       }));
-      toolState.thinkingAdded = true;
+      toolState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {
@@ -1273,7 +1277,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     name: string,
     call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: ToolRuntimeState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
