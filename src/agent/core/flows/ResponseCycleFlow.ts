@@ -6,8 +6,8 @@ import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { UsageProvider } from '@agent/core/RunUsageAccumulator';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
+import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - model handler types
@@ -50,21 +50,6 @@ interface DebugContext {
 interface DebugFileOptions {
   continuationCount: number;
   outputFile: string;
-}
-
-function resolveUsageProvider(
-  handler: ResponseCycleOptions['modelHandler'],
-): UsageProvider {
-  if (handler.isAnthropic) {
-    return 'anthropic';
-  }
-  if (handler.isGoogle) {
-    return 'google';
-  }
-  if (handler.isOpenai || handler.isOpenaiCompatible) {
-    return 'openai';
-  }
-  return 'unknown';
 }
 
 async function maybeSaveDebug(

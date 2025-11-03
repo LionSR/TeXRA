@@ -10,14 +10,20 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 /**
  * Handles recording usage statistics to the log and progress view.
  */
+type UsageMonitorRunKind = 'workflow' | 'tool-use';
+
 export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
     private readonly context: AgentExecutionContext,
   ) {}
 
-  async recordUsage(stateGlobal: AgentRunState): Promise<void> {
+  async recordUsage(
+    stateGlobal: AgentRunState,
+    options?: { runKind?: UsageMonitorRunKind },
+  ): Promise<void> {
     const { logger, usageReporter } = this.context;
+    const runKind: UsageMonitorRunKind = options?.runKind ?? 'workflow';
 
     try {
       const totals = stateGlobal.usageAccumulator.getTotals();
@@ -25,15 +31,17 @@ export class UsageMonitor {
         stateGlobal.usageAccumulator.getNativeUsageSnapshots();
 
       let cost = 0;
-      for (const snapshot of nativeSnapshots) {
-        try {
-          cost += this.modelHandler.computePrice(snapshot.payload as any);
-        } catch (error) {
-          logger.debug(
-            `Failed to compute cost for usage snapshot in round ${snapshot.round}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+      if (runKind === 'workflow') {
+        for (const snapshot of nativeSnapshots) {
+          try {
+            cost += this.modelHandler.computePrice(snapshot.payload as any);
+          } catch (error) {
+            logger.debug(
+              `Failed to compute cost for usage snapshot in round ${snapshot.round}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
         }
       }
 
