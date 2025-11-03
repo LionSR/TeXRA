@@ -49,20 +49,6 @@ interface DebugFileOptions {
   baseName: string;
 }
 
-async function maybeSaveDebug(
-  debugContext: DebugContext,
-  debugFileOptions: DebugFileOptions,
-  object: unknown,
-  objectType: DebugObjectType,
-): Promise<void> {
-  await maybeSaveDebugObject({
-    object,
-    objectType,
-    context: debugContext,
-    fileOptions: debugFileOptions,
-  });
-}
-
 interface ToolValidationDiagnostics {
   type: 'validation_error';
   issues: any;
@@ -210,12 +196,12 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     // runtime state before enriching it with model responses.
     resetToolUseState(state);
 
-    await maybeSaveDebug(
-      prepRes.debugContext,
-      prepRes.debugFileOptions,
-      state.messages,
-      'messages',
-    );
+    await maybeSaveDebugObject({
+      context: prepRes.debugContext,
+      fileOptions: prepRes.debugFileOptions,
+      object: state.messages,
+      objectType: 'messages',
+    });
 
     return undefined;
   }
@@ -313,12 +299,12 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     state.response = execRes.response;
     state.responseTime = execRes.responseTime;
 
-    await maybeSaveDebug(
-      execRes.debugContext,
-      execRes.debugFileOptions,
-      execRes.response,
-      'response',
-    );
+    await maybeSaveDebugObject({
+      context: execRes.debugContext,
+      fileOptions: execRes.debugFileOptions,
+      object: execRes.response,
+      objectType: 'response',
+    });
 
     if (!execRes.response) {
       state.shouldStop = true;

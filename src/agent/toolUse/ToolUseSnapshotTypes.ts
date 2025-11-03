@@ -61,21 +61,14 @@ const ToolRuntimeStateSnapshotLegacySchema = z
     },
   }));
 
-export type ToolRuntimeStateSnapshot = z.infer<
-  typeof ToolRuntimeStateSnapshotStrictSchema
->;
+export const ToolRuntimeStateSnapshotSchema = z.union([
+  ToolRuntimeStateSnapshotStrictSchema,
+  ToolRuntimeStateSnapshotLegacySchema,
+]);
 
-export const ToolRuntimeStateSnapshotSchema = z
-  .union([
-    ToolRuntimeStateSnapshotStrictSchema,
-    ToolRuntimeStateSnapshotLegacySchema,
-  ])
-  .transform((value): ToolRuntimeStateSnapshot => {
-    if ('assembly' in value) {
-      return value;
-    }
-    return value as ToolRuntimeStateSnapshot;
-  });
+export type ToolRuntimeStateSnapshot = z.infer<
+  typeof ToolRuntimeStateSnapshotSchema
+>;
 
 const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
