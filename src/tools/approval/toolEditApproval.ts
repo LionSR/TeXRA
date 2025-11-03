@@ -749,22 +749,17 @@ export function buildApprovalRejectedResult(
   userMessage?: string,
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
-  // If the user provides a note on rejection, treat it as explicit
-  // instructions for the next round instead of an error. This avoids
-  // noisy error logs like "Error: Stop" and ensures the model receives
-  // the guidance as a user message.
-  if (userMessage && userMessage.trim().length > 0) {
-    return toolResult({
-      summary: baseMessage,
-      system: userMessage, // passed through to create a user follow-up message
-      isError: false,
-    });
-  }
-
-  // Otherwise, surface a plain error without extra instructions
-  return toolResult({
+  // Always mark rejections as errors so logs, status, and tests reflect failure,
+  // while still forwarding any user note as explicit instruction for the model.
+  const note = userMessage?.trim();
+  const result: ToolResult = {
     summary: baseMessage,
-    error: baseMessage,
+    error: note && note.length > 0 ? note : baseMessage,
     isError: true,
-  });
+    ...(note && note.length > 0 ? { userInstruction: note } : {}),
+  };
+
+  // No file attachments for user notes; treated purely as guidance via fields.
+
+  return toolResult(result);
 }

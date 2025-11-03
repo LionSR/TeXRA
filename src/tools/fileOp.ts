@@ -15,6 +15,8 @@ import {
 } from '@tools/approval/toolEditApproval';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
+import replacementEngine from '@replacement/engine';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),
@@ -50,10 +52,14 @@ export class FileOpTool extends defineTool({
           ? await WorkspaceFS.read(path)
           : '';
 
+        const proposed = isTexFile(path)
+          ? replacementEngine.applyAll(content)
+          : content;
+
         const approval = await requestToolEditApproval({
           path,
           originalContent,
-          proposedContent: content,
+          proposedContent: proposed,
           sourceTool: 'file_op:write',
         });
 
@@ -65,7 +71,7 @@ export class FileOpTool extends defineTool({
           );
         }
 
-        const finalContent = getApprovedContent(approval, content);
+        const finalContent = getApprovedContent(approval, proposed);
         const { appliedContent } = await writeApprovedContent(
           path,
           originalContent,
