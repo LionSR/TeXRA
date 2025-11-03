@@ -164,7 +164,9 @@ describe('LogEntryFormatter DOM', () => {
 
     const inputPre = el.querySelector('.tool-use-section pre');
     assert.ok(inputPre);
-    assert.ok(inputPre.textContent?.includes('/tmp/example.tex'));
+    const inputContent = inputPre?.textContent ?? '';
+    assert.ok(inputContent.includes('path: /tmp/example.tex'));
+    assert.ok(!inputContent.includes('{'));
 
     const outputFull = el.querySelector('.tool-output-full');
     assert.ok(outputFull);
