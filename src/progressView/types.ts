@@ -38,3 +38,14 @@ export interface InstructionUpdate {
   text: string;
   metadata?: InstructionMetadata;
 }
+
+export interface ToolEditApprovalPrompt {
+  requestId: string;
+  path: string;
+  relativePath: string;
+  sourceTool: string;
+  allowBypass: boolean;
+  streamId: string;
+  addedLines: number;
+  removedLines: number;
+}

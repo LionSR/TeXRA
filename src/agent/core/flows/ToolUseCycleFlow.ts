@@ -224,7 +224,8 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   if (result.error !== undefined) payload.error = result.error;
   if (result.base64Image !== undefined)
     payload.base64Image = result.base64Image;
-  if (result.system !== undefined) payload.system = result.system;
+  if (result.userInstruction !== undefined)
+    payload.userInstruction = result.userInstruction;
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
@@ -602,7 +603,18 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       });
     } else {
       try {
-        result = await tool.call(execRes.input);
+        const { withToolEditApprovalContext } = await import(
+          '@tools/approval/toolEditApprovalContext'
+        );
+
+        result = await withToolEditApprovalContext(
+          {
+            streamId: options.logger.channelId,
+            executionId: options.executionId,
+            toolCallId: execRes.toolCallId,
+          },
+          () => tool.call(execRes.input),
+        );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
           execRes.name,
@@ -660,6 +672,18 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       );
 
     state.messages.push(...followUpMsgs);
+    // If the tool result includes a user-provided instruction (e.g., from
+    // rejecting an edit with a note like "Stop"), append it as a user message
+    // so the model treats it as explicit guidance.
+    if (
+      typeof result.userInstruction === 'string' &&
+      result.userInstruction.trim().length > 0
+    ) {
+      await options.modelHandler.createUserFollowUpMessages(
+        state.messages,
+        result.userInstruction,
+      );
+    }
     state.iteration += 1;
 
     return FlowTransition.CONTINUE;

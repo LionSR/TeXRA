@@ -1,9 +1,5 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
 // Third-party imports
 import { FinishReason } from '@google/genai';
-import { encode as encodeHtml } from 'he';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -22,12 +18,9 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
-// Local imports - events
-import { bus } from '@eventBus/ProgressEventBus';
-
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES, MessageType } from '@logger/messageTypes';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import {
   ModelConfig,
@@ -165,106 +158,23 @@ export abstract class ModelHandler<
   }
 
   /**
-   * Creates a log stream for progressive updates to the Progress view.
-   *
-   * @param type Message type for the stream.
-   * @param groupId Optional log group identifier.
-   * @returns Object with `append` and `finalize` helpers.
-   */
-  protected createLogStream(type: MessageType, groupId?: string) {
-    const streamId = this.logger.channelId;
-    const id = randomUUID();
-    let buffer = '';
-    let isFirstUpdate = true;
-
-    return {
-      append: (text: string) => {
-        if (!text) return;
-        buffer += text;
-
-        if (!this.progressViewEnabled) {
-          return;
-        }
-
-        // Use addLogMessage for the first update, updateLogMessage for subsequent ones
-        if (isFirstUpdate) {
-          bus.emit('addLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: encodeHtml(buffer),
-              level: 'info',
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-            },
-          });
-          isFirstUpdate = false;
-        } else {
-          bus.emit('updateLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: encodeHtml(buffer),
-              groupId,
-              messageType: type,
-            },
-          });
-        }
-      },
-      finalize: (finalText?: string) => {
-        if (typeof finalText === 'string') {
-          buffer = finalText;
-        }
-
-        if (!this.progressViewEnabled) {
-          this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
-          return buffer;
-        }
-
-        // If we never appended anything, create the initial entry
-        if (isFirstUpdate) {
-          bus.emit('addLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: encodeHtml(buffer),
-              level: 'info',
-              timestamp: Date.now(),
-              groupId,
-              messageType: type,
-            },
-          });
-        } else {
-          bus.emit('updateLogMessage', {
-            stream: streamId,
-            logMessage: {
-              id,
-              text: encodeHtml(buffer),
-              groupId,
-              messageType: type,
-            },
-          });
-        }
-
-        this.logger.debug(`Final ${type} length: ${buffer.length}`, groupId);
-        return buffer;
-      },
-    };
-  }
-
-  /**
    * Convenience wrapper for thinking streams.
    */
   protected createThinkingStream(groupId?: string) {
-    return this.createLogStream(MESSAGE_TYPES.THINKING, groupId);
+    return this.logger.createStream(MESSAGE_TYPES.THINKING, {
+      groupId,
+      progressViewEnabled: this.progressViewEnabled,
+    });
   }
 
   /**
    * Convenience wrapper for output streams.
    */
   protected createOutputStream(groupId?: string) {
-    return this.createLogStream(MESSAGE_TYPES.MODEL_RESPONSE, groupId);
+    return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+      groupId,
+      progressViewEnabled: this.progressViewEnabled,
+    });
   }
 
   /**
