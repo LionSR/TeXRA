@@ -19,6 +19,10 @@ workflows).
 Whenever an agent proposes a workspace edit, TeXRA opens VS Code's native diff
 view so you can review and approve (or reject with feedback) before the change
 touches disk.
+
+You can disable this approval checkpoint through the
+`texra.toolUse.requireEditApproval` setting if you prefer edits to apply
+immediately.
 Use the `glob`, `grep`, and `ls` tools to explore the workspace without leaving the sandbox.
 When derivations are required, it presents steps inside `\begin{aligned} ... \end{aligned}` blocks
 to keep mathematical discussions accurate.
