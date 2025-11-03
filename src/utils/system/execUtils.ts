@@ -1,6 +1,6 @@
 // Third-party imports
 import { execa, type Options, ExecaError } from 'execa';
-import { parse as shellParse } from 'shell-quote';
+import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -74,9 +74,10 @@ export async function executeCommand(
     if (Array.isArray(command)) {
       // Use execa directly with argument array to avoid shell injection
       const [cmd, ...args] = command;
+      const commandForLog = shellQuote([cmd, ...args]);
       logger.debug(
         options.channel ?? CHANNEL,
-        `Running command: ${cmd} ${args.join(' ')}`,
+        `Running command: ${commandForLog}`,
       );
       const result = await execa(cmd, args, execaOptions);
       stdout = (result.stdout as string) ?? '';
@@ -84,23 +85,11 @@ export async function executeCommand(
       exitCode = result.exitCode ?? 1;
       timedOut = result.timedOut ?? false;
     } else {
-      // Parse string command into arguments using shell-quote to handle quoted arguments
-      const parsedArgs = shellParse(command);
-      // Filter out non-string elements (shell-quote can return objects for operators)
-      const stringArgs = parsedArgs.filter(
-        (arg): arg is string => typeof arg === 'string',
-      );
-
-      if (stringArgs.length === 0) {
-        throw new Error('Invalid command: no executable found');
-      }
-
-      const [cmd, ...args] = stringArgs;
-      logger.debug(
-        options.channel ?? CHANNEL,
-        `Running command: ${cmd} ${args.join(' ')}`,
-      );
-      const result = await execa(cmd, args, execaOptions);
+      logger.debug(options.channel ?? CHANNEL, `Running command: ${command}`);
+      const result = await execa(command, {
+        ...execaOptions,
+        shell: true,
+      });
       stdout = (result.stdout as string) ?? '';
       stderr = (result.stderr as string) ?? '';
       exitCode = result.exitCode ?? 1;
