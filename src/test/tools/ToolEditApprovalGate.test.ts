@@ -14,12 +14,14 @@ suite('Tool edit approval gating', () => {
   let originalExists: typeof WorkspaceFS.exists;
   let originalRead: typeof WorkspaceFS.read;
   let originalWrite: typeof WorkspaceFS.write;
+  let originalAppend: typeof WorkspaceFS.appendFile;
   let originalGetConfig: typeof configModule.getConfig;
 
   setup(() => {
     originalExists = WorkspaceFS.exists;
     originalRead = WorkspaceFS.read;
     originalWrite = WorkspaceFS.write;
+    originalAppend = WorkspaceFS.appendFile;
     originalGetConfig = configModule.getConfig;
     setToolEditApprovalSessionBypass(false);
   });
@@ -28,6 +30,7 @@ suite('Tool edit approval gating', () => {
     WorkspaceFS.exists = originalExists;
     WorkspaceFS.read = originalRead;
     WorkspaceFS.write = originalWrite;
+    WorkspaceFS.appendFile = originalAppend;
     (configModule as { getConfig: typeof originalGetConfig }).getConfig =
       originalGetConfig;
     setToolEditApprovalHandler();
@@ -62,12 +65,12 @@ suite('Tool edit approval gating', () => {
 
   test('file_op append aborts when change is rejected', async () => {
     const tool = new FileOpTool();
-    let writeCalled = false;
+    let appendCalled = false;
 
     WorkspaceFS.exists = async () => true;
     WorkspaceFS.read = async () => 'base';
-    WorkspaceFS.write = async () => {
-      writeCalled = true;
+    WorkspaceFS.appendFile = async () => {
+      appendCalled = true;
     };
 
     setToolEditApprovalHandler(async () => ({
@@ -81,7 +84,7 @@ suite('Tool edit approval gating', () => {
       content: ' new text',
     });
 
-    assert.strictEqual(writeCalled, false);
+    assert.strictEqual(appendCalled, false);
     assert.strictEqual(result.isError, true);
     assert.strictEqual(result.error, 'Rejected by user');
   });

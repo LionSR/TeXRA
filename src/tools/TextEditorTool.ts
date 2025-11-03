@@ -410,10 +410,16 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Save current content to history
-      this.addToHistory(filePath, fileContent);
-      const finalContent = getApprovedContent(approval, newFileContent);
-      await writeApprovedContent(filePath, fileContent, finalContent);
+      const approvedContent = getApprovedContent(approval, newFileContent);
+      const { appliedContent, baseContent } = await writeApprovedContent(
+        filePath,
+        fileContent,
+        approvedContent,
+      );
+      if (appliedContent !== baseContent) {
+        this.addToHistory(filePath, baseContent);
+      }
+      const finalContent = appliedContent;
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -512,10 +518,16 @@ export class TextEditorTool extends defineTool({
         );
       }
 
-      // Save current content to history
-      this.addToHistory(filePath, fileContent);
-      const finalContent = getApprovedContent(approval, newFileContent);
-      await writeApprovedContent(filePath, fileContent, finalContent);
+      const approvedContent = getApprovedContent(approval, newFileContent);
+      const { appliedContent, baseContent } = await writeApprovedContent(
+        filePath,
+        fileContent,
+        approvedContent,
+      );
+      if (appliedContent !== baseContent) {
+        this.addToHistory(filePath, baseContent);
+      }
+      const finalContent = appliedContent;
 
       // Prepare success message
       const previewLines = finalContent.split('\n');
@@ -591,9 +603,14 @@ export class TextEditorTool extends defineTool({
         );
       }
 
+      const approvedContent = getApprovedContent(approval, previousContent);
+      const { appliedContent } = await writeApprovedContent(
+        filePath,
+        currentContent,
+        approvedContent,
+      );
       history.pop();
-      const finalContent = getApprovedContent(approval, previousContent);
-      await writeApprovedContent(filePath, currentContent, finalContent);
+      const finalContent = appliedContent;
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {

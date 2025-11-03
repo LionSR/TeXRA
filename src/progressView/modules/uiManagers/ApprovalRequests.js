@@ -125,12 +125,12 @@ export class ApprovalRequests {
         >Reject</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="shield"
-          label="Approve &amp; auto-approve this session"
+          label="Approve &amp; Yolo this session"
           data-action="approveAll"
           data-request-id="${request.requestId}"
           data-toggle-action="resumeApprovals"
           toggleable
-        >Approve &amp; auto-approve this session</vscode-toolbar-button>
+        >Approve &amp; Yolo this session</vscode-toolbar-button>
       </vscode-toolbar-container>
     `;
     this._updateRequestElement(element, request);
@@ -146,9 +146,60 @@ export class ApprovalRequests {
       pathElem.textContent = request.relativePath || request.path || '';
     }
     if (metaElem) {
-      metaElem.textContent = request.sourceTool
+      const toolSummary = request.sourceTool
         ? `Requested by ${request.sourceTool}`
         : '';
+      const added = Number.isFinite(request.addedLines)
+        ? Math.max(0, Number(request.addedLines))
+        : 0;
+      const removed = Number.isFinite(request.removedLines)
+        ? Math.max(0, Number(request.removedLines))
+        : 0;
+
+      metaElem.textContent = '';
+
+      if (toolSummary) {
+        metaElem.append(document.createTextNode(toolSummary));
+      }
+
+      const diffContainer = document.createElement('span');
+      diffContainer.className = 'approval-request__diff';
+
+      const summaryParts = [];
+      if (added > 0) {
+        const addedSpan = document.createElement('span');
+        addedSpan.className = 'approval-request__diff-added';
+        addedSpan.textContent = `+${added}`;
+        diffContainer.appendChild(addedSpan);
+        summaryParts.push(`+${added}`);
+      }
+
+      if (removed > 0) {
+        const removedSpan = document.createElement('span');
+        removedSpan.className = 'approval-request__diff-removed';
+        removedSpan.textContent = `-${removed}`;
+        diffContainer.appendChild(removedSpan);
+        summaryParts.push(`-${removed}`);
+      }
+
+      const total = added + removed;
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'approval-request__diff-label';
+      labelSpan.textContent = `${total} ${total === 1 ? 'line' : 'lines'}`;
+      diffContainer.appendChild(labelSpan);
+
+      diffContainer.title =
+        summaryParts.length > 0
+          ? `${summaryParts.join(' / ')} ${
+              total === 1 ? 'line' : 'lines'
+            } changed`
+          : 'No line changes';
+
+      if (toolSummary && diffContainer.childElementCount > 0) {
+        metaElem.append(document.createTextNode(' • '));
+      }
+
+      metaElem.appendChild(diffContainer);
     }
     if (bypassButton) {
       const allowBypass = request.allowBypass !== false;
