@@ -30,20 +30,21 @@ export class UsageMonitor {
       const nativeSnapshots =
         stateGlobal.usageAccumulator.getNativeUsageSnapshots();
 
-      let cost = 0;
-      if (runKind === 'workflow') {
-        for (const snapshot of nativeSnapshots) {
-          try {
-            cost += this.modelHandler.computePrice(snapshot.payload as any);
-          } catch (error) {
-            logger.debug(
-              `Failed to compute cost for usage snapshot in round ${snapshot.round}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-          }
+      const cost = nativeSnapshots.reduce((runningTotal, snapshot) => {
+        try {
+          return (
+            runningTotal +
+            this.modelHandler.computePrice(snapshot.payload as any)
+          );
+        } catch (error) {
+          logger.debug(
+            `Failed to compute ${runKind} cost for round ${snapshot.round}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return runningTotal;
         }
-      }
+      }, 0);
 
       const cachingStats =
         this.modelHandler.capabilities.supportsPromptCaching ||
