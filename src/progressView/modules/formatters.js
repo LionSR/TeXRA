@@ -16,6 +16,7 @@ import markdownItKatex from '@vscode/markdown-it-katex';
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
+import { stringify as yamlStringify } from 'yaml';
 
 // Local imports - progress view
 import { STATUS, GROUP_DOM_IDS } from './constants.js';
@@ -57,6 +58,21 @@ const TIME_FORMAT_OPTIONS = {
   minute: '2-digit',
   second: '2-digit',
   hour12: false,
+};
+
+const toYamlString = (value) => {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    const yamlValue = yamlStringify(value);
+    return typeof yamlValue === 'string'
+      ? yamlValue.replace(/\n$/, '')
+      : String(yamlValue);
+  } catch (error) {
+    return String(value);
+  }
 };
 
 /**
@@ -503,15 +519,7 @@ export class LogEntryFormatter {
 
       let fallbackContent = rawContent;
       if (!fallbackContent && structuredData !== undefined) {
-        if (typeof structuredData === 'string') {
-          fallbackContent = structuredData;
-        } else {
-          try {
-            fallbackContent = JSON.stringify(structuredData, null, 2);
-          } catch (error) {
-            fallbackContent = String(structuredData);
-          }
-        }
+        fallbackContent = toYamlString(structuredData);
       }
 
       contentElem.innerHTML = `
@@ -593,10 +601,7 @@ export class LogEntryFormatter {
     const sections = [];
 
     if (parsed.input !== undefined) {
-      const inputValue =
-        typeof parsed.input === 'string'
-          ? parsed.input
-          : JSON.stringify(parsed.input, null, 2);
+      const inputValue = toYamlString(parsed.input);
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -649,11 +654,7 @@ export class LogEntryFormatter {
     }
 
     if (outputCandidate && outputCandidate.diagnostics !== undefined) {
-      const diagnosticsJson = JSON.stringify(
-        outputCandidate.diagnostics,
-        null,
-        2,
-      );
+      const diagnosticsJson = toYamlString(outputCandidate.diagnostics);
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -687,14 +688,8 @@ export class LogEntryFormatter {
     }
 
     if (sections.length === 0) {
-      const fallbackJson = (() => {
-        try {
-          return JSON.stringify(parsed, null, 2);
-        } catch (error) {
-          return rawContent;
-        }
-      })();
-      contentElem.innerHTML = `<pre>${encodeHtml(fallbackJson || '')}</pre>`;
+      const fallbackYaml = toYamlString(parsed) || rawContent;
+      contentElem.innerHTML = `<pre>${encodeHtml(fallbackYaml || '')}</pre>`;
     } else {
       contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
     }
