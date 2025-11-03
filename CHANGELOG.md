@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - Capture XML output summaries (detected tag contents, serialized `<document>` elements, and single-output paths) so orchestrated workflows can reuse generated artifacts without re-selecting files.
 
+### Improvements
+
+- Render approval “User adjustments” as line-numbered unified diffs using a native line diff (difflib). This replaces raw percent-encoded patch text with clean `diff` code blocks that show hunk ranges and readable `+`/`-` lines.
+
 ## [0.34.2] - 2025-10-31
 
 ### Features

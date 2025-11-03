@@ -856,6 +856,12 @@
       {
         "title": "Tool Use Agents",
         "properties": {
+          "texra.toolUse.requireEditApproval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
+            "scope": "resource"
+          },
           "texra.toolUse.persistence.enabled": {
             "type": "boolean",
             "default": true,
@@ -1436,8 +1442,8 @@
     "@typescript-eslint/parser": "^8.46.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.37.0",
-    "globals": "^16.4.0",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
     "jsdom": "^27.1.0",
     "node-loader": "^2.1.0",
     "nunjucks": "^3.2.4",
@@ -1482,7 +1488,7 @@
     "@anthropic-ai/sdk": "^0.68.0",
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.28.0",
-    "@modelcontextprotocol/sdk": "^1.20.2",
+    "@modelcontextprotocol/sdk": "^1.21.0",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.41",
     "@vscode/markdown-it-katex": "^1.1.2",
@@ -1492,7 +1498,7 @@
     "difflib": "^0.2.4",
     "dotenv": "^17.2.3",
     "execa": "^9.6.0",
-    "fast-xml-parser": "^5.3.0",
+    "fast-xml-parser": "^5.3.1",
     "fs-extra": "^11.3.2",
     "glob": "^11.0.3",
     "gpt-tokenizer": "^3.2.0",
