@@ -83,12 +83,15 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   protected getTemplateVariables(): Record<string, any> {
     // Note: This uses synchronous approach for template generation
     // Agent options with metadata are computed asynchronously via computeAgentOptions
-    const configuredWorkflowAgents = getConfig<string[]>('agents', []);
-    const configuredToolUseAgents = getConfig<string[]>('toolUseAgents', []);
+    const configuredWorkflowAgents = getConfig<string[]>('texra.agents', []);
+    const configuredToolUseAgents = getConfig<string[]>(
+      'texra.toolUseAgents',
+      [],
+    );
     const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
     const builtInDir = GlobalStorageFS.fullPath('agents');
     const configuredCustomDir = getConfig<string>(
-      'explorer.agentsDirectory',
+      'texra.explorer.agentsDirectory',
       '',
     ).trim();
     const customDir = path.isAbsolute(configuredCustomDir)
@@ -125,7 +128,7 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       },
     );
 
-    const models = getConfig<string[]>('models', []);
+    const models = getConfig<string[]>('texra.models', []);
     const modelOptions = models
       .map(
         (model) => `<vscode-option value="${model}">${model}</vscode-option>`,

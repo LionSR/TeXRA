@@ -57,7 +57,7 @@ export async function runPackSingle(
   );
 
   const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-  const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
+  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
   const filePatterns = [
     ...getFilePatterns(baseName, model, agentFirstNameChunk, maxRounds),
     baseName,
@@ -215,7 +215,10 @@ export async function runPackMultiple(
 
     // Pack additional XML files
     const agentFirstNameChunk = getAgentFirstNameChunk(agent);
-    const maxRounds = getConfig<number>('agent.rounds', DEFAULT_MAX_ROUNDS);
+    const maxRounds = getConfig<number>(
+      'texra.agent.rounds',
+      DEFAULT_MAX_ROUNDS,
+    );
     const additionalPatterns: string[] = [];
     for (let i = 0; i < maxRounds; i++) {
       additionalPatterns.push(

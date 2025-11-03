@@ -30,6 +30,7 @@ function getFilesIfNotEmpty<T>(files: T[] | undefined | null): T[] {
   if (!Array.isArray(files) || files.length === 0) {
     return [];
   }
+
   return files;
 }
 
@@ -141,7 +142,7 @@ export class ExecutionManager {
       auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
       mediaFile: mapMediaPath(message.mediaFile ?? null),
       mediaFiles: getFilesIfNotEmpty<string>(
-        (Array.isArray(message.mediaFiles) ? message.mediaFiles : [])
+        (message.mediaFiles ?? [])
           .map(mapMediaPath)
           .filter((f: string | null): f is string => f !== null),
       ),

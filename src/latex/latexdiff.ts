@@ -61,7 +61,7 @@ export class LaTeXdiffService {
 
   private getLatexdiffTimeout(): number {
     return getConfig<number>(
-      'latexdiff.timeoutMs',
+      'texra.latexdiff.timeoutMs',
       DEFAULT_LATEXDIFF_TIMEOUT_MS,
     );
   }

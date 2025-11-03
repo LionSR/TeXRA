@@ -52,13 +52,13 @@ export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
-  return getConfig<boolean>('toolUse.persistence.enabled', true);
+  return getConfig<boolean>('texra.toolUse.persistence.enabled', true);
 }
 
 /** Resolve the configured TTL (in hours) for persisted tool-use sessions. */
 export function getToolUsePersistenceTtlHours(): number {
   const value = getConfig<number>(
-    'toolUse.persistence.ttlHours',
+    'texra.toolUse.persistence.ttlHours',
     DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS,
   );
   const hours = Number(value);
