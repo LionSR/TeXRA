@@ -6,8 +6,17 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
+import {
+  buildApprovalRejectedResult,
+  formatUnifiedApprovalUserDiff,
+  getApprovedContent,
+  requestToolEditApproval,
+  writeApprovedContent,
+} from '@tools/approval/toolEditApproval';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
+import replacementEngine from '@replacement/engine';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),
@@ -39,10 +48,44 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
-        await WorkspaceFS.write(path, content);
+        const originalContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+
+        const proposed = isTexFile(path)
+          ? replacementEngine.applyAll(content)
+          : content;
+
+        const approval = await requestToolEditApproval({
+          path,
+          originalContent,
+          proposedContent: proposed,
+          sourceTool: 'file_op:write',
+        });
+
+        if (!approval.accepted) {
+          return buildApprovalRejectedResult(
+            path,
+            'file_op:write',
+            approval.userMessage,
+          );
+        }
+
+        const finalContent = getApprovedContent(approval, proposed);
+        const { appliedContent } = await writeApprovedContent(
+          path,
+          originalContent,
+          finalContent,
+        );
+        const userDiffNote = formatUnifiedApprovalUserDiff(
+          path,
+          finalContent,
+          appliedContent,
+        );
+
         return toolResult({
           summary: `Wrote ${path}`,
-          output: 'written',
+          output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
         });
       }
       case 'append': {
@@ -52,10 +95,58 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
-        await WorkspaceFS.appendFile(path, content);
+        const originalContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+        const proposedContent = `${originalContent}${content}`;
+
+        const approval = await requestToolEditApproval({
+          path,
+          originalContent,
+          proposedContent,
+          sourceTool: 'file_op:append',
+        });
+
+        if (!approval.accepted) {
+          return buildApprovalRejectedResult(
+            path,
+            'file_op:append',
+            approval.userMessage,
+          );
+        }
+
+        const finalContent = getApprovedContent(approval, proposedContent);
+        if (!finalContent.startsWith(originalContent)) {
+          throw new ToolError(
+            `Append aborted: approved changes for ${path} modified existing content.`,
+          );
+        }
+
+        const currentContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+
+        if (currentContent !== originalContent) {
+          throw new ToolError(
+            `Append aborted: ${path} changed while the edit was pending approval.`,
+          );
+        }
+
+        const appendedSegment = finalContent.slice(originalContent.length);
+        if (appendedSegment.length > 0) {
+          await WorkspaceFS.appendFile(path, appendedSegment);
+        }
+        // Report the actual applied content after append
+        const appliedContent = await WorkspaceFS.read(path);
+        const userDiffNote = formatUnifiedApprovalUserDiff(
+          path,
+          finalContent,
+          appliedContent,
+        );
+
         return toolResult({
           summary: `Appended to ${path}`,
-          output: 'appended',
+          output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
         });
       }
       default:

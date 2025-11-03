@@ -17,6 +17,7 @@ export class FollowUpInputManager {
   constructor(vscode) {
     this.vscode = vscode;
     this.textarea = null;
+    this.approvalBypassButton = null;
     this.recordingButton = new RecordingButtonManager(vscode, {
       buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
       startCommand: COMMANDS.START_RECORDING,
@@ -33,6 +34,9 @@ export class FollowUpInputManager {
     }
 
     this.textarea = target;
+    this.approvalBypassButton = safeGetElementById(
+      ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN,
+    );
 
     const applySetup = () => {
       const { textarea } = resolveTextareaTarget(target);
@@ -62,6 +66,14 @@ export class FollowUpInputManager {
       addEventListenerSafely(ELEMENT_IDS.CLEAR_FOLLOW_UP_BTN, 'click', () => {
         this._clearFollowUp();
       });
+
+      addEventListenerSafely(
+        ELEMENT_IDS.RESET_APPROVAL_BYPASS_BTN,
+        'click',
+        () => {
+          this._resetApprovalBypass();
+        },
+      );
 
       this.recordingButton.setup();
     };
@@ -126,6 +138,12 @@ export class FollowUpInputManager {
     this.textarea.focus();
   }
 
+  _resetApprovalBypass() {
+    this.vscode.postMessage({
+      command: COMMANDS.RESET_TOOL_EDIT_APPROVAL_BYPASS,
+    });
+  }
+
   setRecording(recording) {
     this.recordingButton.setRecording(recording);
   }
@@ -154,5 +172,16 @@ export class FollowUpInputManager {
 
     insertTextAtCursor(this.textarea, text);
     this.textarea.focus();
+  }
+
+  setApprovalBypassState(isBypassed) {
+    const button = this.approvalBypassButton;
+    if (!button) {
+      return;
+    }
+
+    const showButton = Boolean(isBypassed);
+    button.toggleAttribute('hidden', !showButton);
+    button.toggleAttribute('disabled', !showButton);
   }
 }

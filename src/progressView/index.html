@@ -130,6 +130,13 @@
               ></vscode-textarea>
             </div>
           </div>
+          <div id="approvalRequests" class="approval-requests" hidden>
+            <div class="approval-requests__header">
+              <i class="codicon codicon-diff"></i>
+              <span>Pending approvals</span>
+            </div>
+            <div class="approval-requests__list"></div>
+          </div>
           <vscode-scrollable
             id="logContent"
             class="log-container"
@@ -152,6 +159,12 @@
                 id="polishFollowUpProgressContainer"
                 style="display: none; width: 16px; height: 16px"
               ></vscode-progress-ring>
+              <vscode-toolbar-button
+                id="resetApprovalBypassBtn"
+                icon="shield"
+                label="Resume approval prompts"
+                hidden
+              ></vscode-toolbar-button>
               <vscode-toolbar-button
                 id="recordFollowUpBtn"
                 icon="mic"
