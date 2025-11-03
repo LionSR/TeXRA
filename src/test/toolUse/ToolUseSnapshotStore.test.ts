@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 
@@ -52,10 +52,10 @@ describe('ToolUseSnapshotStore', () => {
   const streamId = 'stream-1' as StreamTabId;
 
   function buildPayload() {
-    const toolState = new ToolState();
-    toolState.updateLastResponse('last');
-    toolState.updateAccumulatedOutput('all');
-    toolState.addMediaFiles(['media.png']);
+    const toolState = new AgentWorkspaceState();
+    toolState.assembly.updateLastResponse('last');
+    toolState.assembly.updateAccumulatedOutput('all');
+    toolState.media.addMediaFiles(['media.png']);
 
     return {
       executionId,
@@ -84,12 +84,20 @@ describe('ToolUseSnapshotStore', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: 'last',
-        accumulatedOutput: 'all',
-        mediaFiles: ['media.png'],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        assembly: {
+          lastResponse: 'last',
+          accumulatedOutput: 'all',
+        },
+        media: {
+          files: ['media.png'],
+        },
+        reasoning: {
+          thinkingBlocks: [],
+          thinkingAdded: false,
+        },
+        document: {
+          texcountStats: null,
+        },
       },
       lastUpdated: Date.now(),
     };
@@ -163,7 +171,7 @@ describe('ToolUseSnapshotStore', () => {
     const stored = value as ReturnType<typeof buildSnapshot>;
     assert.equal(stored.session.agentType, AgentType.ToolUse);
     assert.notStrictEqual(stored.messages, payload.messages);
-    assert.equal(stored.toolState.lastResponse, 'last');
+    assert.equal(stored.toolState.assembly.lastResponse, 'last');
   });
 
   it('list triggers TTL cleanup and filters invalid snapshots', async () => {
@@ -188,6 +196,45 @@ describe('ToolUseSnapshotStore', () => {
 
     assert.equal(snapshots.length, 1);
     assert.equal(snapshots[0].executionId, executionId);
+  });
+
+  it('load normalizes legacy toolState shape', async () => {
+    const legacySnapshot = {
+      version: 1,
+      executionId,
+      streamId,
+      agentName: 'demo-agent',
+      model: 'demo-model',
+      session: {
+        agentType: AgentType.ToolUse,
+        agentCategory: AgentCategory.ToolUse,
+      },
+      messages: [],
+      toolState: {
+        lastResponse: 'legacy-last',
+        accumulatedOutput: 'legacy-all',
+        mediaFiles: ['legacy-media.png'],
+        thinkingBlocks: [{ kind: 'legacy' }],
+        thinkingAdded: true,
+        texcountStats: 'legacy',
+      },
+      lastUpdated: Date.now(),
+    } as const;
+
+    const snapshotPath = path.join('toolUseSessions', `${executionId}.json`);
+    readJsonResponses.set(snapshotPath, legacySnapshot);
+
+    const loaded = await ToolUseSnapshotStore.load(executionId);
+
+    assert.ok(loaded);
+    assert.equal(loaded.toolState.assembly.lastResponse, 'legacy-last');
+    assert.equal(loaded.toolState.assembly.accumulatedOutput, 'legacy-all');
+    assert.deepEqual(loaded.toolState.media.files, ['legacy-media.png']);
+    assert.deepEqual(loaded.toolState.reasoning.thinkingBlocks, [
+      { kind: 'legacy' },
+    ]);
+    assert.equal(loaded.toolState.reasoning.thinkingAdded, true);
+    assert.equal(loaded.toolState.document.texcountStats, 'legacy');
   });
 
   it('load returns null when persistence disabled', async () => {

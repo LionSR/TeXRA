@@ -26,6 +26,8 @@ We model the LLM workflow as a **Graph + Shared Store**:
 - [Batch](./core_abstraction/batch.md) nodes/flows allow for data-intensive tasks.
 - [Async](./core_abstraction/async.md) nodes/flows allow waiting for asynchronous tasks.
 - [(Advanced) Parallel](./core_abstraction/parallel.md) nodes/flows handle I/O-bound tasks.
+- [TeXRA state architecture](./state_architecture.md) shows how the shared store
+  is applied inside the extension.
 
 <div align="center">
   <img src="https://github.com/the-pocket/.github/raw/main/assets/abstraction.png" alt="Pocket Flow – Core Abstraction" width="700"/>

@@ -5,7 +5,9 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { ToolState } from '@agent/core/ToolState';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { ConversationRoundState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - model handler types
@@ -33,8 +35,8 @@ import { WorkspaceFS } from '@utils/files';
 // Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
 
-// Local imports - usage types
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+// Local imports - usage helpers
+import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];
@@ -45,20 +47,6 @@ interface DebugContext {
 interface DebugFileOptions {
   continuationCount: number;
   baseName: string;
-}
-
-async function maybeSaveDebug(
-  debugContext: DebugContext,
-  debugFileOptions: DebugFileOptions,
-  object: unknown,
-  objectType: DebugObjectType,
-): Promise<void> {
-  await maybeSaveDebugObject({
-    object,
-    objectType,
-    context: debugContext,
-    fileOptions: debugFileOptions,
-  });
 }
 
 interface ToolValidationDiagnostics {
@@ -139,7 +127,7 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: AgentWorkspaceState;
   iteration: number;
 }
 
@@ -167,6 +155,7 @@ function resetToolUseState(state: ToolUseCycleRuntimeState): void {
 export interface ToolUseCycleShared<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
+  store: AgentSharedStore;
 }
 
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
@@ -175,7 +164,8 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     debugContext: DebugContext;
     debugFileOptions: DebugFileOptions;
   }> {
-    const { options, state } = shared;
+    const { options, state, store } = shared;
+    state.iteration = store.round.roundIndex;
     const interrupted = Boolean(await options.checkInterruption());
     const debugContext: DebugContext = {
       logger: options.logger,
@@ -206,12 +196,12 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     // runtime state before enriching it with model responses.
     resetToolUseState(state);
 
-    await maybeSaveDebug(
-      prepRes.debugContext,
-      prepRes.debugFileOptions,
-      state.messages,
-      'messages',
-    );
+    await maybeSaveDebugObject({
+      context: prepRes.debugContext,
+      fileOptions: prepRes.debugFileOptions,
+      object: state.messages,
+      objectType: 'messages',
+    });
 
     return undefined;
   }
@@ -310,12 +300,12 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     state.response = execRes.response;
     state.responseTime = execRes.responseTime;
 
-    await maybeSaveDebug(
-      execRes.debugContext,
-      execRes.debugFileOptions,
-      execRes.response,
-      'response',
-    );
+    await maybeSaveDebugObject({
+      context: execRes.debugContext,
+      fileOptions: execRes.debugFileOptions,
+      object: execRes.response,
+      objectType: 'response',
+    });
 
     if (!execRes.response) {
       state.shouldStop = true;
@@ -340,7 +330,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         endTurn: boolean;
       }
   > {
-    const { options, state } = context;
+    const { options, state, store } = context;
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
@@ -374,18 +364,23 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
+    if (state.responseTime !== undefined) {
+      store.round.addResponseTime(state.responseTime);
+    }
+
     if (usage) {
-      const normalized = options.modelHandler.computeResponseUsage(
+      const provider = resolveUsageProvider(options.modelHandler);
+      const summary = options.modelHandler.computeResponseUsage(
         usage,
         state.responseTime ?? 0,
       );
-      const stats: ExtendedTokenUsageStats = {
-        inputTokens: normalized.totalInputTokens,
-        outputTokens: normalized.totalOutputTokens,
-        cost: normalized.cost,
-        elapsedTime: normalized.responseTime,
-      };
-      options.logger.statistics(stats, groupId);
+      store.round.setUsage({
+        summary,
+        nativeUsage: usage,
+        provider,
+      });
+    } else {
+      store.round.clearUsage();
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
@@ -393,7 +388,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (!toolInfo || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
-        state.toolState.updateLastResponse(text);
+        state.toolState.assembly.updateLastResponse(text);
       }
       state.shouldStop = true;
       return { stopReason, text, endTurn: true };
@@ -407,7 +402,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared<C>,
     _prepRes: unknown,
     execRes:
       | { skipped: true }
@@ -418,14 +413,35 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           endTurn: boolean;
         },
   ): Promise<string | undefined> {
+    const { options, state, store } = shared;
+
     if ('skipped' in execRes) {
+      store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
+
+    const completedRound = store.round;
+    store.finalizeRound();
+    store.run.incrementRounds();
+
+    await Promise.resolve(
+      options.onUsageRecorded?.({
+        run: store.run,
+        round: completedRound,
+        endTurn: execRes.endTurn,
+      }),
+    );
+
+    const nextRoundIndex = completedRound.roundIndex + 1;
 
     if (execRes.endTurn) {
+      state.shouldStop = true;
+      state.stopReason = execRes.stopReason;
+      store.setRound(new ConversationRoundState(nextRoundIndex));
       return FlowTransition.COMPLETE;
     }
 
+    store.setRound(new ConversationRoundState(nextRoundIndex));
     return undefined;
   }
 }
@@ -576,13 +592,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           fallbackMessage ??
           '';
         if (fallback) {
-          state.toolState.updateLastResponse(String(fallback));
+          state.toolState.assembly.updateLastResponse(String(fallback));
         }
       } else if (fallbackMessage) {
         const assistantMessage =
           options.modelHandler.createAssistantMessage(fallbackMessage);
         state.messages.push(assistantMessage);
-        state.toolState.updateLastResponse(fallbackMessage);
+        state.toolState.assembly.updateLastResponse(fallbackMessage);
       }
 
       state.iteration += 1;
@@ -637,7 +653,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
     if (result.files && result.files.length > 0) {
-      const existing = state.toolState.mediaFiles;
+      const existing = state.toolState.media.files;
       const toAdd: string[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
@@ -657,7 +673,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         }
       }
       if (toAdd.length > 0) {
-        state.toolState.addMediaFiles(toAdd);
+        state.toolState.media.addMediaFiles(toAdd);
       }
     }
 

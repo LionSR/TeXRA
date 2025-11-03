@@ -1,7 +1,8 @@
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
-import { ToolState } from '../core/ToolState';
+import { AgentRunState } from '../core/AgentState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
@@ -44,7 +45,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private followUpQueue: string[] = [];
   private followUpResolver: ((v: string | null) => void) | null = null;
   private messages: ProviderMessage[] = [];
-  private toolState: ToolState | null = null;
+  private toolState: AgentWorkspaceState | null = null;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
   private hasPersistedSnapshot = false;
   private persistenceLock = false; // Lock to prevent race conditions during persistence
@@ -159,6 +160,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           toolState: this.toolState,
           cycleOptions: null,
           shouldSkipCycle: false,
+          store: null,
+          runState: new AgentRunState(),
+          nextRoundIndex: 0,
         }) satisfies ToolUseRunState<C>,
       createFlow: () => createToolUseRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => ({
@@ -168,10 +172,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         prepareState: () => this.prepareInitialSessionState(),
         buildCycleOptions: (toolState) =>
           this.buildToolUseCycleOptions(toolState),
-        runCycle: (options, messages) =>
+        runCycle: (options, messages, store) =>
           runToolUseCycle({
             options,
             messages,
+            store,
           }),
         checkInterruption: () => this.checkInterruption(),
         hasQueuedFollowUp: () => this.followUpQueue.length > 0,
@@ -204,7 +209,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareInitialSessionState(): Promise<{
     messages: ProviderMessage[];
-    toolState: ToolState;
+    toolState: AgentWorkspaceState;
     shouldSkipCycle: boolean;
   }> {
     if (this.resumeSnapshot) {
@@ -213,13 +218,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       this.resumeSnapshot = null;
 
       const messages = snapshot.messages;
-      let toolState: ToolState;
+      let toolState: AgentWorkspaceState;
 
       try {
-        toolState = Object.assign(
-          new ToolState(),
-          structuredClone(snapshot.toolState),
-        );
+        toolState = AgentWorkspaceState.fromJSON(snapshot.toolState);
       } catch (error) {
         const message =
           error instanceof Error
@@ -228,7 +230,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         this.logger.warn(
           `Failed to hydrate tool state from snapshot: ${message}`,
         );
-        toolState = new ToolState();
+        toolState = new AgentWorkspaceState();
       }
 
       this.messages = messages;
@@ -261,7 +263,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       systemPrompt,
     );
 
-    const toolState = new ToolState();
+    const toolState = new AgentWorkspaceState();
 
     this.messages = messages;
     this.toolState = toolState;
@@ -274,7 +276,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private buildToolUseCycleOptions(
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
     const resolvedSetting = {
@@ -293,6 +295,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       toolState,
       modelName: this.agentConfig.model,
+      onUsageRecorded: async ({ run }) => {
+        await this.trackRoundUsage(run, { runKind: 'tool-use' });
+      },
     };
   }
 

@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import {
   AgentSetting,
   AgentPrompt,
@@ -14,7 +14,8 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -328,9 +329,20 @@ describe('ResponseCycle background reasoning logs', () => {
     });
 
     const messages: ProviderMessage[] = [];
-    const stateRound = new AgentStateRound(1);
-    const stateGlobal = new AgentStateGlobal();
-    const toolState = new ToolState();
+    const stateRound = new ConversationRoundState(1);
+    const stateGlobal = new AgentRunState();
+    const toolState = new AgentWorkspaceState();
+    const userVarChannels = {
+      input: Object.freeze({}),
+      transient: {} as Record<string, any>,
+      output: {} as Record<string, any>,
+    };
+    const store = new AgentSharedStore({
+      round: stateRound,
+      run: stateGlobal,
+      workspace: toolState,
+      user: userVarChannels,
+    });
 
     await runResponseCycle({
       options: {
@@ -338,17 +350,16 @@ describe('ResponseCycle background reasoning logs', () => {
         agentSetting,
         agentConfig,
         agentPrompt,
-        userVars: {},
+        userVars: userVarChannels.transient,
+        userVarChannels,
         logger: loggerStub,
         client: {} as OpenAI,
         checkInterruption: () => false,
         setAbortController: () => {},
       },
       messages,
-      stateRound,
-      stateGlobal,
-      toolState,
       outputFile: 'output.txt',
+      store,
     });
 
     const thinkingLogs = loggedEvents.filter(

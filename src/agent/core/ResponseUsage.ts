@@ -48,11 +48,18 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   completion_tokens: number;
   cached_tokens: number;
   reasoning_tokens: number;
-  // Note: OpenAI API doesn't provide tool_use_tokens
   accepted_prediction_tokens: number | null;
   rejected_prediction_tokens: number | null;
-  // Only present for Google models when using OpenAI-compatible interface
+  // Some providers expose tool-use tokens via the OpenAI-compatible interface.
   tool_use_tokens?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
+  completion_tokens_details?: {
+    reasoning_tokens?: number;
+    accepted_prediction_tokens?: number | null;
+    rejected_prediction_tokens?: number | null;
+  };
 }
 
 /** Anthropic-specific response usage metrics with cache statistics. */
@@ -61,7 +68,8 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   output_tokens: number;
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
-  // Note: Anthropic API doesn't provide tool_use_tokens
+  // Optional field surfaced by compatibility layers that expose tool-use costs.
+  tool_use_tokens?: number;
 }
 
 /** Factory class for creating provider-specific response usage objects. */
