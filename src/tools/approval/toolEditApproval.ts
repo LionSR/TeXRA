@@ -1,10 +1,16 @@
 // Third-party imports
-import { diff_match_patch, DIFF_DELETE, DIFF_EQUAL, DIFF_INSERT } from 'diff-match-patch';
+import {
+  diff_match_patch,
+  DIFF_DELETE,
+  DIFF_EQUAL,
+  DIFF_INSERT,
+} from 'diff-match-patch';
 import * as vscode from 'vscode';
 
 // Local imports - utils
 import { toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
+import { getConfig } from '@utils/config';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -17,6 +23,9 @@ export interface ToolEditApprovalResult {
   accepted: boolean;
   userMessage?: string;
 }
+
+export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
+  'texra.toolUse.requireEditApproval';
 
 const APPROVAL_SCHEME = 'texra-tool-edit';
 
@@ -53,9 +62,13 @@ const provider = new ToolEditContentProvider();
 let registration: vscode.Disposable | undefined;
 let queue: Promise<void> = Promise.resolve();
 let initialized = false;
-let customHandler: ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>) | undefined;
+let customHandler:
+  | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
+  | undefined;
 
-export function initializeToolEditApproval(context: vscode.ExtensionContext): void {
+export function initializeToolEditApproval(
+  context: vscode.ExtensionContext,
+): void {
   if (initialized) {
     return;
   }
@@ -69,7 +82,9 @@ export function initializeToolEditApproval(context: vscode.ExtensionContext): vo
 }
 
 export function setToolEditApprovalHandler(
-  handler?: (request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>,
+  handler?: (
+    request: ToolEditApprovalRequest,
+  ) => Promise<ToolEditApprovalResult>,
 ): void {
   customHandler = handler;
 }
@@ -91,10 +106,7 @@ function countNewlines(value: string): number {
   return (value.match(/\n/g) ?? []).length;
 }
 
-function firstChangedLine(
-  original: string,
-  proposed: string,
-): number | null {
+function firstChangedLine(original: string, proposed: string): number | null {
   if (original === proposed) {
     return null;
   }
@@ -138,7 +150,8 @@ async function revealFirstChange(
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const editor = vscode.window.visibleTextEditors.find(
-      (candidate) => candidate.document.uri.toString() === proposedUri.toString(),
+      (candidate) =>
+        candidate.document.uri.toString() === proposedUri.toString(),
     );
 
     if (editor) {
@@ -179,47 +192,56 @@ async function nativeRequestApproval(
   );
 
   const title = `Tool edit (${sourceTool}): ${description}`;
-  await vscode.commands.executeCommand(
-    'vscode.diff',
-    originalUri,
-    proposedUri,
-    title,
-  );
 
-  await revealFirstChange(proposedUri, originalContent, proposedContent);
+  try {
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      originalUri,
+      proposedUri,
+      title,
+    );
 
-  const approve = 'Approve';
-  const reject = 'Reject';
-  const selection = await vscode.window.showInformationMessage(
-    `Apply changes from ${sourceTool} to ${description}?`,
-    { detail: 'Review the diff, then choose an action.', modal: false },
-    approve,
-    reject,
-  );
+    await revealFirstChange(proposedUri, originalContent, proposedContent);
 
-  if (selection === approve) {
-    return { accepted: true };
-  }
+    const approve = 'Approve';
+    const reject = 'Reject';
+    const selection = await vscode.window.showInformationMessage(
+      `Apply changes from ${sourceTool} to ${description}?`,
+      { detail: 'Review the diff, then choose an action.', modal: true },
+      approve,
+      reject,
+    );
 
-  if (selection === reject) {
-    const userMessage = await vscode.window.showInputBox({
-      prompt: 'Optionally share why the change was rejected',
-      placeHolder: 'Add guidance for the assistant (press Enter to skip)',
-    });
+    if (selection === approve) {
+      return { accepted: true };
+    }
+
+    if (selection === reject) {
+      const userMessage = await vscode.window.showInputBox({
+        prompt: 'Optionally share why the change was rejected',
+        placeHolder: 'Add guidance for the assistant (press Enter to skip)',
+      });
+      return {
+        accepted: false,
+        userMessage: userMessage?.trim() || undefined,
+      };
+    }
+
     return {
       accepted: false,
-      userMessage: userMessage?.trim() || undefined,
+      userMessage: 'User dismissed the approval dialog.',
     };
+  } finally {
+    provider.delete(originalUri);
+    provider.delete(proposedUri);
   }
-
-  return { accepted: false };
 }
 
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
   const run = async () =>
-    (customHandler ? customHandler(request) : nativeRequestApproval(request));
+    customHandler ? customHandler(request) : nativeRequestApproval(request);
 
   const operation = queue.then(run);
   queue = operation.then(
@@ -232,6 +254,15 @@ async function enqueueApproval(
 export async function requestToolEditApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
+  const approvalsEnabled = getConfig<boolean>(
+    TOOL_EDIT_APPROVAL_CONFIG_KEY,
+    true,
+  );
+
+  if (!approvalsEnabled) {
+    return { accepted: true };
+  }
+
   return enqueueApproval(request);
 }
 
@@ -242,7 +273,7 @@ export function buildApprovalRejectedResult(
 ): ToolResult {
   return toolResult({
     summary: `User rejected ${sourceTool} for ${path}`,
-    error: userMessage ?? 'User rejected the change.',
+    error: userMessage ?? `User rejected ${sourceTool} for ${path}.`,
     isError: true,
     output: userMessage,
   });

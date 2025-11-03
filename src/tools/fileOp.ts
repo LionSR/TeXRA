@@ -95,7 +95,7 @@ export class FileOpTool extends defineTool({
           );
         }
 
-        await WorkspaceFS.write(path, proposedContent);
+        await WorkspaceFS.appendFile(path, content);
         return toolResult({
           summary: `Appended to ${path}`,
           output: 'appended',
