@@ -45,4 +45,5 @@ export interface ToolEditApprovalPrompt {
   relativePath: string;
   sourceTool: string;
   allowBypass: boolean;
+  streamId: string;
 }
