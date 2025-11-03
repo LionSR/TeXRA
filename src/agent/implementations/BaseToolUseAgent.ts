@@ -27,7 +27,8 @@ import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   ToolUseSessionManager,
@@ -54,7 +55,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
+    context: AgentExecutionContext,
   ) {
     super(
       modelHandler,
@@ -62,7 +63,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       agentSetting,
       agentPrompt,
       agentPath,
-      executionId,
+      context,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
   }
