@@ -46,4 +46,6 @@ export interface ToolEditApprovalPrompt {
   sourceTool: string;
   allowBypass: boolean;
   streamId: string;
+  addedLines: number;
+  removedLines: number;
 }
