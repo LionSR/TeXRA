@@ -30,7 +30,7 @@ import {
   IOutputHandler,
   type RoundOutputArtifacts,
 } from '@agent/output';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -123,7 +123,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
+    context: AgentExecutionContext,
   ) {
     const workflowSetting = requireWorkflowSetting(agentSetting);
     super(
@@ -132,7 +132,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       workflowSetting,
       agentPrompt,
       agentPath,
-      executionId,
+      context,
     );
     this.agentSetting = workflowSetting;
 
@@ -537,7 +537,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new ToolState();
 
-    return this.withRoundGroup(`r${roundIndex}`, async (_roundGroupId) => {
+    return this.withRoundGroup(`r${roundIndex}`, async () => {
       const shared: ReflectionRoundShared = {
         runtime: {
           toolState,
