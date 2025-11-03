@@ -11,22 +11,25 @@ const contextStack: ToolEditApprovalContext[] = [];
 
 export function withToolEditApprovalContext<T>(
   context: ToolEditApprovalContext,
-  run: () => Promise<T>,
+  run: () => Promise<T> | T,
 ): Promise<T> {
   contextStack.push(context);
   const maybeCleanup = () => {
-    contextStack.pop();
+    const last = contextStack.pop();
+    if (last !== context) {
+      const index = contextStack.lastIndexOf(context);
+      if (index >= 0) {
+        contextStack.splice(index, 1);
+      }
+    }
   };
 
-  const result = run();
-  if (result instanceof Promise) {
-    return result.finally(maybeCleanup);
-  }
-
   try {
-    return Promise.resolve(result);
-  } finally {
+    const result = run();
+    return Promise.resolve(result).finally(maybeCleanup);
+  } catch (error) {
     maybeCleanup();
+    throw error;
   }
 }
 

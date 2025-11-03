@@ -102,7 +102,26 @@ export class FileOpTool extends defineTool({
         }
 
         const finalContent = getApprovedContent(approval, proposedContent);
-        await writeApprovedContent(path, originalContent, finalContent);
+        if (!finalContent.startsWith(originalContent)) {
+          throw new ToolError(
+            `Append aborted: approved changes for ${path} modified existing content.`,
+          );
+        }
+
+        const currentContent = (await WorkspaceFS.exists(path))
+          ? await WorkspaceFS.read(path)
+          : '';
+
+        if (currentContent !== originalContent) {
+          throw new ToolError(
+            `Append aborted: ${path} changed while the edit was pending approval.`,
+          );
+        }
+
+        const appendedSegment = finalContent.slice(originalContent.length);
+        if (appendedSegment.length > 0) {
+          await WorkspaceFS.appendFile(path, appendedSegment);
+        }
         const userDiffNote = formatApprovalUserDiff(path, approval.userPatch);
 
         return toolResult({
