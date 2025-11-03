@@ -24,6 +24,10 @@ import { OPENAI_CHAT_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
+import { AgentLogScopeManager } from '@agent/runtime/AgentLogScopeManager';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentUsageReporter } from '@logger/AgentUsageReporter';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - model configuration
 import {
@@ -58,6 +62,21 @@ type ConfigGetter = (
   section: string | undefined,
   key: string | undefined,
 ) => unknown;
+
+function createExecutionContextStub(logger: AgentLogger): AgentExecutionContext {
+  const logScopes = new AgentLogScopeManager(logger);
+  return {
+    logger,
+    usageReporter: {} as AgentUsageReporter,
+    logScopes,
+    get streamId() {
+      return 'test-stream' as StreamTabId;
+    },
+    get executionId() {
+      return undefined;
+    },
+  } as AgentExecutionContext;
+}
 
 class StubOpenAIResponsesHandler extends ModelHandlerOpenAIResponse {
   constructor(config: ModelConfig) {
@@ -266,6 +285,8 @@ describe('ResponseCycle background reasoning logs', () => {
       endGroup() {},
       getActiveGroupId: () => undefined,
       setActiveGroupId() {},
+      withActiveGroup: async (_groupId?: string, fn?: () => unknown) =>
+        (await fn?.()) ?? undefined,
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {
@@ -339,7 +360,7 @@ describe('ResponseCycle background reasoning logs', () => {
         agentConfig,
         agentPrompt,
         userVars: {},
-        logger: loggerStub,
+        context: createExecutionContextStub(loggerStub),
         client: {} as OpenAI,
         checkInterruption: () => false,
         setAbortController: () => {},
@@ -388,6 +409,8 @@ describe('ResponseCycle background reasoning logs', () => {
       endGroup() {},
       getActiveGroupId: () => undefined,
       setActiveGroupId() {},
+      withActiveGroup: async (_groupId?: string, fn?: () => unknown) =>
+        (await fn?.()) ?? undefined,
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {

@@ -30,8 +30,8 @@ export interface ReflectionRunLifecycle {
 }
 
 export interface ReflectionRunHooks {
-  start(): Promise<string>;
-  init(runGroupId: string): Promise<void>;
+  start(): Promise<void>;
+  init(): Promise<void>;
   resetPromptBuilder(): void;
   initializeClient(): Promise<void>;
   end(status: 'stopped' | 'error'): void | Promise<void>;

@@ -61,8 +61,8 @@ export interface ToolUseRunState<C = unknown> {
 }
 
 export interface ToolUseRunHooks<C = unknown> {
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
+  start(): Promise<void>;
+  init(): Promise<void>;
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];

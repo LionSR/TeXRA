@@ -19,6 +19,10 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { AgentLogScopeManager } from '@agent/runtime/AgentLogScopeManager';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentUsageReporter } from '@logger/AgentUsageReporter';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import {
   ModelConfig,
   ModelProvider,
@@ -81,6 +85,21 @@ class MockHandler extends ModelHandlerDeepSeek {
   }
 }
 
+function createExecutionContextStub(logger: AgentLogger): AgentExecutionContext {
+  const logScopes = new AgentLogScopeManager(logger);
+  return {
+    logger,
+    usageReporter: {} as AgentUsageReporter,
+    logScopes,
+    get streamId() {
+      return 'tool-use-test' as StreamTabId;
+    },
+    get executionId() {
+      return undefined;
+    },
+  } as AgentExecutionContext;
+}
+
 describe('runToolUseCycle DeepSeek', () => {
   it('logs tool calls and creates follow-up message', async () => {
     const config: ModelConfig = {
@@ -120,7 +139,7 @@ describe('runToolUseCycle DeepSeek', () => {
       agentSetting: setting,
       agentPrompt: prompt,
       userVars: {},
-      logger,
+      context: createExecutionContextStub(logger),
       client: {} as OpenAI,
       toolRegistry,
       checkInterruption: () => false,

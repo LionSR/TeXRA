@@ -614,20 +614,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => {
-        const baseStart = baseHooks.start;
         return {
           ...baseHooks,
-          init: async (runGroupId) => {
-            await this.init(runGroupId, { createGroup: true });
+          init: async () => {
+            await this.init({ createGroup: true });
           },
           start: async () => {
-            const runGroupId = await baseStart();
-            if (!runGroupId) {
-              throw new Error(
-                'Run group identifier is required for reflection runs.',
-              );
-            }
-            return runGroupId;
+            await baseHooks.start();
           },
           resetPromptBuilder: () => this.resetPromptBuilder(),
         } satisfies ReflectionRunHooks;

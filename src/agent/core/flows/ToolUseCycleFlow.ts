@@ -35,11 +35,13 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - usage types
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 interface DebugContext {
-  logger: ToolUseCycleOptions['logger'];
+  logger: AgentLogger;
   modelName?: string;
-  executionId?: ToolUseCycleOptions['executionId'];
+  executionId?: ExecutionId;
 }
 
 interface DebugFileOptions {
@@ -178,9 +180,9 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const { options, state } = shared;
     const interrupted = Boolean(await options.checkInterruption());
     const debugContext: DebugContext = {
-      logger: options.logger,
+      logger: options.context.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -254,9 +256,9 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     }
 
     const debugContext: DebugContext = {
-      logger: options.logger,
+      logger: options.context.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -344,19 +346,19 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
-
-    const groupId = options.logger.getActiveGroupId();
-
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
-      groupId,
       state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
-        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+        options.context.logger.info(
+          formatted,
+          undefined,
+          MESSAGE_TYPES.THINKING,
+        );
       }
     }
 
@@ -367,10 +369,14 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     );
 
     if (text) {
-      options.logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      options.context.logger.debug(`Model response: ${text.slice(0, 100)}`);
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
-        options.logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+        options.context.logger.info(
+          formatted,
+          undefined,
+          MESSAGE_TYPES.MODEL_RESPONSE,
+        );
       }
     }
 
@@ -385,7 +391,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         cost: normalized.cost,
         elapsedTime: normalized.responseTime,
       };
-      options.logger.statistics(stats, groupId);
+      options.context.logger.statistics(stats);
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
@@ -446,9 +452,6 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
     }
-
-    const groupId = options.logger.getActiveGroupId();
-
     const interrupted = Boolean(await options.checkInterruption());
     if (interrupted) {
       state.shouldStop = true;
@@ -466,7 +469,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: state.toolInfo,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.context.logger.info(
+        '',
+        undefined,
+        MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
+      );
       return {
         handledError: true,
         toolName: 'unknown',
@@ -487,7 +495,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.context.logger.info(
+        '',
+        undefined,
+        MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
+      );
       return {
         handledError: true,
         toolName: parsed.name || parsed.function?.name || 'unknown',
@@ -507,7 +520,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         input: parsed,
         output: sanitizeToolResultForLog(errorResult),
       };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.context.logger.info(
+        '',
+        undefined,
+        MESSAGE_TYPES.TOOL_USE,
+        toolUseLog,
+      );
       return {
         handledError: true,
         toolCallId,
@@ -547,7 +565,6 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
@@ -589,7 +606,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       state.shouldStop = false;
 
       if (fallbackMessage) {
-        options.logger.warn(fallbackMessage, groupId);
+        options.context.logger.warn(fallbackMessage);
       }
 
       return FlowTransition.CONTINUE;
@@ -610,8 +627,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
         result = await withToolEditApprovalContext(
           {
-            streamId: options.logger.channelId,
-            executionId: options.executionId,
+            streamId: options.context.logger.channelId,
+            executionId: options.context.executionId,
             toolCallId: execRes.toolCallId,
           },
           () => tool.call(execRes.input),
@@ -634,7 +651,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       input: execRes.input ?? execRes.parsed,
       output: sanitizeToolResultForLog(result),
     };
-    options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+    options.context.logger.info(
+      '',
+      undefined,
+      MESSAGE_TYPES.TOOL_USE,
+      toolUseLog,
+    );
 
     if (result.files && result.files.length > 0) {
       const existing = state.toolState.mediaFiles;

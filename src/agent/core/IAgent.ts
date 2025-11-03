@@ -19,10 +19,7 @@ export interface IAgent {
    * @param options - Initialization options
    * @param options.createGroup - Whether to create a new log group (default: true)
    */
-  init(
-    parentGroupId?: string,
-    options?: { createGroup?: boolean },
-  ): Promise<void>;
+  init(options?: { createGroup?: boolean }): Promise<void>;
 
   /** Execute the agent. */
   run(): Promise<void>;
@@ -61,14 +58,10 @@ export interface IAgent {
  */
 export interface AgentRunHooks {
   /**
-   * Begin an agent run and optionally create a logging group.
-   *
-   * @returns The identifier for the run group used by subsequent lifecycle hooks.
-   *          Return `undefined` to indicate that the lifecycle should reuse an
-   *          existing log group (for example, interactive tool-use sessions).
+   * Begin an agent run and establish the logging scope for subsequent lifecycle hooks.
    */
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
+  start(): Promise<void>;
+  init(): Promise<void>;
   initializeClient(): Promise<void>;
   end(status: 'stopped' | 'error'): void | Promise<void>;
   cleanup(): void | Promise<void>;

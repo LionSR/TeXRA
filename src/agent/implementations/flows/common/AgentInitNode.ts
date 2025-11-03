@@ -41,8 +41,8 @@ export class AgentInitNode<
 
   async exec(shared: Shared): Promise<AgentInitExecResult> {
     try {
-      const runGroupId = await shared.hooks.start();
-      await shared.hooks.init(runGroupId);
+      await shared.hooks.start();
+      await shared.hooks.init();
       if (this.config.beforeInitialize) {
         try {
           await this.config.beforeInitialize(shared);

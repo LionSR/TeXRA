@@ -163,8 +163,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       createFlow: () => createToolUseRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => ({
         ...baseHooks,
-        start: async () => undefined,
-        init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
+        start: async () => {
+          // Tool-use sessions reuse the active logging scope from the invoker.
+        },
+        init: () => this.init({ createGroup: false }),
         prepareState: () => this.prepareInitialSessionState(),
         buildCycleOptions: (toolState) =>
           this.buildToolUseCycleOptions(toolState),
