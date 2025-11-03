@@ -224,6 +224,7 @@ export class ProgressViewState {
     this.agentTypeFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
+    this.approvalBypassActive = false;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();

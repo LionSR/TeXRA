@@ -51,7 +51,9 @@ When updating CHANGELOG.md:
 - Default to "stupid simple" solutions that rely on core JavaScript/TypeScript data structures, native VS Code APIs, and structured objects. Avoid stringifying state or inventing custom serialization when SDK helpers, JSON objects, or Maps/Sets already solve the problem.
 - Favor solutions that are readable and straightforward over exhaustive edge-case handling.
 - Avoid over-engineering and unnecessary abstractions when a direct approach communicates intent better.
-- Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario.
+- Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario. Prefer trusting upstream APIs unless the codebase has a documented bug.
+- Remove redundant normalization layers, re-parsing, or data massaging when the input is already controlled by the extension. Let the data flow through in its natural shape unless a real issue emerges.
+- Do not add extra try/catch wrappers around well-behaved code paths or optional chaining that simply rethrows errors. Surface the error once through the shared error utilities instead of masking it.
 - Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
 
 ### Refactoring for simplicity

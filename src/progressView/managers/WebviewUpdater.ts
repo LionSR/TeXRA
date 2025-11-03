@@ -9,7 +9,11 @@ import { COMMANDS, STATUS } from '../modules/constants.js';
 import { ProgressViewState } from '../state/ProgressViewState';
 import type { TaskGroupUpdatePayload } from './TaskGroupManager';
 import { buildStreamInfos } from '../streamInfoUtils';
-import type { InstructionUpdate, StreamTabInfo } from '../types';
+import type {
+  InstructionUpdate,
+  StreamTabInfo,
+  ToolEditApprovalPrompt,
+} from '../types';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
@@ -164,6 +168,36 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_MISSING_OUTPUTS,
       stream,
       files,
+    });
+  }
+
+  showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
+      request: prompt,
+    });
+  }
+
+  resolveToolEditApprovalPrompt(requestId: string): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
+      requestId,
+    });
+  }
+
+  updateToolEditApprovalState(bypassActive: boolean): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      bypassActive,
     });
   }
 
