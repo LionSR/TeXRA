@@ -130,7 +130,7 @@ export class ApprovalRequests {
           data-request-id="${request.requestId}"
           data-toggle-action="resumeApprovals"
           toggleable
-        >Approve &amp; Yolo this session</vscode-toolbar-button>
+        >Appr. &amp; Yolo</vscode-toolbar-button>
       </vscode-toolbar-container>
     `;
     this._updateRequestElement(element, request);
