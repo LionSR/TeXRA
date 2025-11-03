@@ -838,7 +838,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
@@ -872,7 +871,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     // Write file content to output file

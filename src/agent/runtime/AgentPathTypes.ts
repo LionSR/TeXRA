@@ -16,8 +16,14 @@ export enum AgentDirectorySource {
  * Result of resolving an agent name to a directory on disk.
  */
 export interface AgentPathResolution {
-  /** Absolute directory containing the agent definition. */
+  /** Absolute directory containing the resolved agent definition. */
   directory: string;
   /** Origin of the directory used to infer default agent metadata. */
   source: AgentDirectorySource;
+  /** Absolute path to the YAML definition that was selected. */
+  definitionPath: string;
+  /** Basename of the YAML definition without extension. */
+  resolvedName: string;
+  /** Indicates whether resolving required falling back from a preferred variant. */
+  usedFallback: boolean;
 }

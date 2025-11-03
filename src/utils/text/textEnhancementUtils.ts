@@ -110,7 +110,7 @@ export async function polishTextWithAI(
   fileContext?: FileContext,
 ): Promise<{ success: boolean; text: string; error?: string }> {
   try {
-    const useCopilot = getConfig<boolean>('model.useCopilot', false);
+    const useCopilot = getConfig<boolean>('texra.model.useCopilot', false);
 
     // Build file context string if available
     let fileContextString = '';

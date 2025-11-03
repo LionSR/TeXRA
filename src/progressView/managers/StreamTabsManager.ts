@@ -1,9 +1,6 @@
 // Standard library imports
 import { randomUUID } from 'crypto';
 
-// Third-party imports
-import { decode as decodeHtml } from 'he';
-
 // Local imports - persistence
 import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
@@ -13,9 +10,6 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-
-const LEGACY_MESSAGE_TYPES: ReadonlySet<LogMessageData['messageType']> =
-  new Set(['fileList', 'missingOutputs', 'latexdiff', 'statistics']);
 
 /**
  * Manages stream tabs collection with persistence.
@@ -131,46 +125,42 @@ export class StreamTabsManager extends PersistentMapManager<
     _key: StreamTabId,
   ): Promise<LogMessageData[]> {
     const messages = Array.isArray(data) ? data : [];
-    return messages.map((msg: any) => {
-      if (!msg.id) {
-        msg.id = randomUUID();
-      }
-      if (msg.text === undefined && msg.message !== undefined) {
-        msg.text = msg.message;
-      }
-      if (msg.timestamp === undefined) {
-        const attrMatch =
-          typeof msg.text === 'string'
-            ? msg.text.match(/data-full-timestamp="([^"]+)"/)
-            : null;
-        const timeString =
-          attrMatch?.[1] ||
-          (typeof msg.text === 'string'
-            ? (msg.text.match(/\[(.*?)\]/)?.[1] ?? '')
-            : '');
-        const timestamp = new Date(timeString).getTime();
-        msg.timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-      }
-      const log = msg as LogMessageData;
-      if (log.data === undefined && typeof log.text === 'string') {
-        if (log.messageType && LEGACY_MESSAGE_TYPES.has(log.messageType)) {
-          try {
-            const decoded = decodeHtml(log.text);
-            const parsed = JSON.parse(decoded);
-            if (typeof parsed === 'object' && parsed !== null) {
-              log.data = parsed;
-            }
-          } catch (error) {
-            const reason =
-              error instanceof Error ? error.message : String(error);
-            this.logger.warn(`Failed to parse legacy log data: ${reason}`);
-          }
+    return messages.map((raw) => {
+      const message = raw as Partial<LogMessageData> & {
+        message?: string;
+      };
+
+      const rawTimestamp = message.timestamp;
+      let timestamp = Date.now();
+      if (typeof rawTimestamp === 'number') {
+        timestamp = rawTimestamp;
+      } else if (typeof rawTimestamp === 'string') {
+        const numeric = Number(rawTimestamp);
+        if (!Number.isNaN(numeric)) {
+          timestamp = numeric;
         }
       }
-      if (!log.messageType) {
-        log.messageType = 'default';
-      }
-      return log;
+
+      const text =
+        typeof message.text === 'string'
+          ? message.text
+          : typeof message.message === 'string'
+            ? message.message
+            : '';
+
+      return {
+        id:
+          typeof message.id === 'string' && message.id
+            ? message.id
+            : randomUUID(),
+        text,
+        level: message.level ?? 'info',
+        timestamp,
+        messageType: message.messageType ?? 'default',
+        data: message.data,
+        groupId: message.groupId,
+        verbose: message.verbose,
+      } satisfies LogMessageData;
     });
   }
 }
