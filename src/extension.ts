@@ -20,6 +20,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
@@ -129,6 +130,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  initializeToolEditApproval(context);
 
   // Create a status bar item to show TeXRA progress
   statusBarItem = vscode.window.createStatusBarItem(

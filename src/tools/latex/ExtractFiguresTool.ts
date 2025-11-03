@@ -80,7 +80,7 @@ export class ExtractLatexFiguresTool extends defineTool({
     });
 
     if (uniqueFigures.length > limit) {
-      result.system = `Limited attachments to ${limit} files.`;
+      result.userInstruction = `Limited attachments to ${limit} files.`;
     }
 
     return result;
