@@ -1,5 +1,6 @@
 // Third-party imports
 import { execa, type Options, ExecaError } from 'execa';
+import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -73,9 +74,10 @@ export async function executeCommand(
     if (Array.isArray(command)) {
       // Use execa directly with argument array to avoid shell injection
       const [cmd, ...args] = command;
+      const commandForLog = shellQuote([cmd, ...args]);
       logger.debug(
         options.channel ?? CHANNEL,
-        `Running command: ${cmd} ${args.join(' ')}`,
+        `Running command: ${commandForLog}`,
       );
       const result = await execa(cmd, args, execaOptions);
       stdout = (result.stdout as string) ?? '';
