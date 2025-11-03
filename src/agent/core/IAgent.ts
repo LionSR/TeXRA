@@ -4,6 +4,7 @@ import type { AgentConfig } from './AgentConfig';
 import type { AgentSessionDescriptor } from './AgentDataclass';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**
  * Minimal interface implemented by all agent types.
@@ -43,6 +44,9 @@ export interface IAgent {
    * Return the most recent run group identifier for logging fallbacks.
    */
   getLastRunGroupId(): string | undefined;
+
+  /** Retrieve the shared execution context for this agent. */
+  getExecutionContext(): AgentExecutionContext;
 
   /**
    * Retrieve the hooks used to orchestrate an agent run.

@@ -10,6 +10,10 @@ import {
   prepareAgentInstance,
 } from '@agent/runtime/executeAgent';
 import {
+  AgentExecutionContext,
+  type AgentExecutionContextInit,
+} from '@agent/runtime/AgentExecutionContext';
+import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
 } from '@agent/toolUse/ToolUseSessionManager';
@@ -31,7 +35,8 @@ const CHANNEL = 'toolUseFollowUpCoordinator';
 
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
-): Promise<{ agent: BaseToolUseAgent; agentType: AgentType }> {
+  contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
+): Promise<{ agent: BaseToolUseAgent; agentType: AgentType; context: AgentExecutionContext }> {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
     throw new Error('Progress view provider is not initialized.');
@@ -47,17 +52,18 @@ async function buildToolUseAgent(
   }
 
   const fullConfig = AgentConfigSchema.parse(taskState.agentConfig);
-  const { agent, agentType } = await prepareAgentInstance<BaseToolUseAgent>({
+  const { agent, agentType, context } = await prepareAgentInstance<BaseToolUseAgent>({
     agentName: fullConfig.agent,
     configPayload: fullConfig,
     executionId: snapshot.executionId as ExecutionId,
+    contextFactory,
   });
 
   if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
     throw new Error('Attempted to resume a non tool-use agent.');
   }
 
-  return { agent, agentType };
+  return { agent, agentType, context };
 }
 
 export interface ResumeAgentResult {
@@ -137,24 +143,26 @@ export async function resumeFromSnapshot(
 
   let queuedFollowUps: string[] = [];
   try {
-    const { agent, agentType } = await buildToolUseAgent(snapshot);
-
-    agent.resumeFromSnapshot(snapshot);
-    if (followUp !== undefined) {
-      agent.appendFollowUp(followUp);
-    }
-
-    queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(streamId);
-    for (const queuedFollowUp of queuedFollowUps) {
-      agent.appendFollowUp(queuedFollowUp);
-    }
-
     await executeAgentWithLogging(
       snapshot.agentName,
-      async () => ({
-        agent,
-        agentType,
-      }),
+      async (contextFactory) => {
+        const { agent, agentType, context } = await buildToolUseAgent(
+          snapshot,
+          contextFactory,
+        );
+
+        agent.resumeFromSnapshot(snapshot);
+        if (followUp !== undefined) {
+          agent.appendFollowUp(followUp);
+        }
+
+        queuedFollowUps = ToolUseSessionManager.drainQueuedFollowUps(streamId);
+        for (const queuedFollowUp of queuedFollowUps) {
+          agent.appendFollowUp(queuedFollowUp);
+        }
+
+        return { agent, agentType, context };
+      },
       snapshot.executionId as ExecutionId,
       { resume: true },
     );
