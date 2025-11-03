@@ -7,7 +7,7 @@ import { FlowTransition } from './FlowTransitions';
 // Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { ConversationRoundState } from '@agent/core/AgentState';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - model handler types
@@ -127,7 +127,7 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
-  toolState: ToolRuntimeState;
+  toolState: AgentWorkspaceState;
   iteration: number;
 }
 

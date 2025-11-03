@@ -13,7 +13,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
@@ -116,7 +116,7 @@ describe('runToolUseCycle DeepSeek', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new ToolRuntimeState();
+    const toolState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -138,7 +138,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      tool: toolState,
+      workspace: toolState,
       user: options.userVarChannels,
     });
     const events: any[] = [];

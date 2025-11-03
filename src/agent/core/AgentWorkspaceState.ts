@@ -45,7 +45,7 @@ export class DocumentStatsState {
   }
 }
 
-export interface ToolRuntimeSnapshot {
+export interface AgentWorkspaceSnapshot {
   assembly: {
     lastResponse: string;
     accumulatedOutput: string;
@@ -62,7 +62,7 @@ export interface ToolRuntimeSnapshot {
   };
 }
 
-export class ToolRuntimeState {
+export class AgentWorkspaceState {
   public readonly assembly = new ResponseAssemblyState();
   public readonly media = new MediaAttachmentState();
   public readonly reasoning = new ReasoningCacheState();
@@ -72,7 +72,7 @@ export class ToolRuntimeState {
     this.reasoning.reset();
   }
 
-  toJSON(): ToolRuntimeSnapshot {
+  toJSON(): AgentWorkspaceSnapshot {
     return {
       assembly: {
         lastResponse: this.assembly.lastResponse,
@@ -91,8 +91,10 @@ export class ToolRuntimeState {
     };
   }
 
-  static fromJSON(snapshot: ToolRuntimeSnapshot | null): ToolRuntimeState {
-    const state = new ToolRuntimeState();
+  static fromJSON(
+    snapshot: AgentWorkspaceSnapshot | null,
+  ): AgentWorkspaceState {
+    const state = new AgentWorkspaceState();
     if (!snapshot) {
       return state;
     }
