@@ -11,7 +11,7 @@ import { compileLatex2Pdf } from './texTools';
 import { getTeXCountStats } from './texcount';
 
 // Local imports - agent components
-import { ToolState } from '@agent/core/ToolState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { WorkspaceFS } from '@utils/files';
 
@@ -23,11 +23,11 @@ export class LatexMediaManager {
 
   private async attachTeXCount(
     files: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
   ): Promise<void> {
     if (cfg.attachTeXCount && files.length > 0) {
-      toolState.texcountStats = await getTeXCountStats(files);
+      toolState.document.texcountStats = await getTeXCountStats(files);
     }
   }
 
@@ -36,7 +36,7 @@ export class LatexMediaManager {
    */
   private async compilePdfs(
     files: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
     const texFiles = files.filter((file) =>
@@ -88,14 +88,14 @@ export class LatexMediaManager {
     );
     compileResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
-        toolState.addMediaFiles([result.value]);
+        toolState.media.addMediaFiles([result.value]);
       }
     });
   }
 
   private async extractFiguresFromFiles(
     files: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
     const figureResults = await Promise.allSettled(
@@ -112,14 +112,14 @@ export class LatexMediaManager {
           `Extracted ${result.value.length} figures from ${file}`,
           activeGroupId,
         );
-        toolState.addMediaFiles(result.value);
+        toolState.media.addMediaFiles(result.value);
       }
     });
   }
 
   private async compileTikzFigures(
     files: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
@@ -132,7 +132,7 @@ export class LatexMediaManager {
         result.value &&
         result.value.length > 0
       ) {
-        toolState.addMediaFiles(result.value);
+        toolState.media.addMediaFiles(result.value);
       }
     });
     if (logSummary) {
@@ -145,7 +145,7 @@ export class LatexMediaManager {
 
   private async processFiles(
     files: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     {
@@ -187,7 +187,7 @@ export class LatexMediaManager {
     }
 
     if (extraMediaFiles.length > 0) {
-      toolState.addMediaFiles(extraMediaFiles);
+      toolState.media.addMediaFiles(extraMediaFiles);
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
@@ -205,11 +205,11 @@ export class LatexMediaManager {
 
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs.
-   * Adds resulting media paths to the provided ToolState.
+   * Adds resulting media paths to the provided AgentWorkspaceState.
    */
   async processInputFiles(
     inputFiles: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: string[] = [],
@@ -228,7 +228,7 @@ export class LatexMediaManager {
    */
   async processOutputFiles(
     outputFiles: string[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
   ): Promise<void> {

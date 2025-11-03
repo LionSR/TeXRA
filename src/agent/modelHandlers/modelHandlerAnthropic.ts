@@ -63,13 +63,13 @@ import {
   hasEndTag,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateRound } from '@agent/core/AgentState';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
   ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -392,7 +392,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
             }
           }
         }
-        // in the future we log this in firstInputTokens of the AgentStateGlobal
+        // in the future we log this in firstInputTokens of the AgentRunState
       }
     }
 
@@ -1050,8 +1050,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
-    _stateRound: AgentStateRound,
-    _toolState: ToolState,
+    _stateRound: ConversationRoundState,
+    _toolState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1062,13 +1062,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
-    _stateRound: AgentStateRound,
-    toolState: ToolState,
+    _stateRound: ConversationRoundState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
     // Create continuation message with last K tokens
-    const prefillTokens = toolState.lastResponse.slice(-K_SLICE);
+    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -1094,7 +1094,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: MessageParam[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
@@ -1105,7 +1105,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
-          toolState.accumulatedOutput.includes('<scratchpad>') &&
+          toolState.assembly.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
           await WorkspaceFS.write(outputFile, prefill);
@@ -1151,8 +1151,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     await WorkspaceFS.write(outputFile, fileContent);
 
     // Update the toolState with the actual file content
-    toolState.updateAccumulatedOutput(fileContent);
-    toolState.updateLastResponse(fileContent);
+    toolState.assembly.updateAccumulatedOutput(fileContent);
+    toolState.assembly.updateLastResponse(fileContent);
 
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1199,7 +1199,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (!this.capabilities.supportsAssistantPrefill) {
       // For models that don't support assistant prefill, we need to:
       // add a continuation message in addition
-      const state = new AgentStateRound(0);
+      const state = new ConversationRoundState(0);
       this.addContinueMessageWithoutPrefill(
         messages,
         state,
@@ -1274,7 +1274,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
 
@@ -1289,7 +1289,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.accumulatedOutput,
+            text: toolState.assembly.accumulatedOutput,
           } as ContentBlockParam,
         ];
       }
@@ -1305,7 +1305,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
@@ -1368,12 +1368,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           // let newThinkingContent: any[] = [];
 
-          // if (toolState.thinkingAdded && toolState.thinkingBlocks.length > 0) {
+          // if (toolState.reasoning.thinkingAdded && toolState.reasoning.thinkingBlocks.length > 0) {
           //   // if we have thinking blocks, then we use them
           //   this.logger.debug(
-          //     `Using ${toolState.thinkingBlocks.length} existing thinking blocks from previous message`,
+          //     `Using ${toolState.reasoning.thinkingBlocks.length} existing thinking blocks from previous message`,
           //   );
-          //   newThinkingContent = [...toolState.thinkingBlocks];
+          //   newThinkingContent = [...toolState.reasoning.thinkingBlocks];
           // }
 
           // let newContent: any[] = [];
@@ -1385,7 +1385,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           //     ...newThinkingContent,
           //     {
           //       type: 'text',
-          //       text: toolState.accumulatedOutput,
+          //       text: toolState.assembly.accumulatedOutput,
           //     },
           //   ];
           // }
@@ -1418,22 +1418,25 @@ export class ModelHandlerAnthropic extends ModelHandler<
       };
 
       // Include all thinking blocks from toolState if available
-      if (toolState.thinkingBlocks && toolState.thinkingBlocks.length > 0) {
+      if (
+        toolState.reasoning.thinkingBlocks &&
+        toolState.reasoning.thinkingBlocks.length > 0
+      ) {
         this.logger.debug(
-          `Adding ${toolState.thinkingBlocks.length} thinking blocks to new assistant message`,
+          `Adding ${toolState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
         if (Array.isArray(assistantMessage.content)) {
-          assistantMessage.content.push(...toolState.thinkingBlocks);
+          assistantMessage.content.push(...toolState.reasoning.thinkingBlocks);
         }
         // Clear cached thinking so the next response can store fresh blocks
-        toolState.resetThinkingCache();
+        toolState.resetReasoning();
       }
 
       // Add the text content
       if (Array.isArray(assistantMessage.content)) {
         assistantMessage.content.push({
           type: 'text',
-          text: toolState.accumulatedOutput,
+          text: toolState.assembly.accumulatedOutput,
         } as ContentBlockParam);
       }
 
@@ -1498,7 +1501,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   processThinkingBlock(
     responseObject: BetaMessage,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -1543,15 +1546,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
 
     // If toolState is provided, update it with all thinking blocks
-    if (toolState && !toolState.thinkingAdded) {
+    if (toolState && !toolState.reasoning.thinkingAdded) {
       // Store all thinking blocks for future reference
       if (
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
-        toolState.thinkingBlocks = thinkingBlocks;
+        toolState.reasoning.thinkingBlocks = thinkingBlocks;
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
-        toolState.thinkingAdded = true;
+        toolState.reasoning.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to toolState`,
           groupId,
@@ -1585,19 +1588,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     name: string,
     call: ToolUseBlock,
     result: Record<string, unknown>,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
     if (
       this.capabilities.supportsReasoning &&
-      toolState?.thinkingBlocks &&
-      toolState.thinkingBlocks.length > 0
+      toolState?.reasoning.thinkingBlocks &&
+      toolState.reasoning.thinkingBlocks.length > 0
     ) {
       // Anthropic models expect thinking blocks before text
-      content.push(...toolState.thinkingBlocks);
+      content.push(...toolState.reasoning.thinkingBlocks);
       // Clear cached thinking so the next response can store fresh blocks
-      toolState.resetThinkingCache();
+      toolState.resetReasoning();
     }
     if (text) {
       content.push({ type: 'text', text });

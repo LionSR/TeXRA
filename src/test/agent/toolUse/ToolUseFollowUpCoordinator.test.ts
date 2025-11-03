@@ -317,12 +317,20 @@ describe('ToolUseFollowUpCoordinator', () => {
       },
       messages: [],
       toolState: {
-        texcountStats: null,
-        lastResponse: '',
-        accumulatedOutput: '',
-        mediaFiles: [],
-        thinkingBlocks: [],
-        thinkingAdded: false,
+        assembly: {
+          lastResponse: '',
+          accumulatedOutput: '',
+        },
+        media: {
+          files: [],
+        },
+        reasoning: {
+          thinkingBlocks: [],
+          thinkingAdded: false,
+        },
+        document: {
+          texcountStats: null,
+        },
       },
       lastUpdated: Date.now(),
     };

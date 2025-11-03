@@ -6,10 +6,11 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '@agent/core/AgentState';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
   createReflectionRunFlow,
@@ -62,16 +63,16 @@ export interface RoundOutputOptions {
 
 export interface ReflectionRoundContext {
   roundIndex: number;
-  globalState: AgentStateGlobal;
+  globalState: AgentRunState;
   messages: any[];
 }
 
 export interface ReflectionRoundResult {
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
+  roundState: ConversationRoundState;
+  globalState: AgentRunState;
   messages: any[];
   shouldContinue: boolean;
-  toolState: ToolState;
+  toolState: AgentWorkspaceState;
   outputArtifacts: RoundOutputArtifacts | null;
 }
 
@@ -83,9 +84,9 @@ export interface AgentRuntimeXmlExports {
 
 interface RoundPipelineContext {
   roundIndex: number;
-  roundState: AgentStateRound;
-  globalState: AgentStateGlobal;
-  toolState: ToolState;
+  roundState: ConversationRoundState;
+  globalState: AgentRunState;
+  toolState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
@@ -108,8 +109,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
-  public roundStates: AgentStateRound[] = [];
-  public toolStates: ToolState[] = [];
+  public roundStates: ConversationRoundState[] = [];
+  public toolStates: AgentWorkspaceState[] = [];
   public roundOutputArtifacts: RoundOutputArtifacts[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
@@ -190,7 +191,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public setCurrentRound(roundIndex: number): void {
-    this.userVars.CURRENT_ROUND = roundIndex;
+    this.resetTransientUserVars({ CURRENT_ROUND: roundIndex });
   }
 
   /**
@@ -217,8 +218,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   private async handleRoundCompletion(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
     const { outputFile, endTurn } = options;
@@ -252,8 +253,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
@@ -319,19 +320,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       );
 
     if (!endTurn) {
+      const store = new AgentSharedStore({
+        round: roundState,
+        run: globalState,
+        workspace: toolState,
+        user: this.userVarChannels,
+      });
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
-        stateRound: roundState,
-        stateGlobal: globalState,
-        toolState,
         outputFile: outputPath,
+        store,
       });
 
       const artifacts = await this.handleRoundCompletion(
         roundIndex,
-        cycleResult.stateRound,
-        cycleResult.stateGlobal,
+        store.round,
+        store.run,
         {
           outputFile: outputPath,
           endTurn: cycleResult.endTurn,
@@ -339,17 +344,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       );
 
       if (roundIndex === 0) {
-        this.logger.debug(
-          `stateGlobal: ${JSON.stringify(cycleResult.stateGlobal)}`,
-        );
+        this.logger.debug(`stateGlobal: ${JSON.stringify(store.run)}`);
       }
 
       return {
-        roundState: cycleResult.stateRound,
-        globalState: cycleResult.stateGlobal,
+        roundState: store.round,
+        globalState: store.run,
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
-        toolState: cycleResult.toolState,
+        toolState: store.workspace,
         outputArtifacts: artifacts,
       };
     }
@@ -390,16 +393,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareRoundContext(
     currRound: number,
-    _stateGlobal: AgentStateGlobal,
+    _stateGlobal: AgentRunState,
     messages: any[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): Promise<{
-    stateRound: AgentStateRound;
+    stateRound: ConversationRoundState;
     preparedMessages: any[];
     prefill?: string;
     skip: boolean;
   }> {
-    const stateRound = new AgentStateRound(currRound);
+    const stateRound = new ConversationRoundState(currRound);
     const promptBuilder = this.getPromptBuilder();
 
     if (currRound === 0) {
@@ -407,8 +410,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         await promptBuilder.buildInitialPrompts();
 
       let prefixWithStats = userPrefix;
-      if (toolState.texcountStats) {
-        prefixWithStats = `${toolState.texcountStats}${userPrefix}`;
+      if (toolState.document.texcountStats) {
+        prefixWithStats = `${toolState.document.texcountStats}${userPrefix}`;
       }
 
       const shouldSaveInputPrompt = getConfig<boolean>(
@@ -430,12 +433,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const initialMessages = await this.modelHandler.initializeMessages(
         prefixWithStats,
         userRequest,
-        toolState.mediaFiles,
+        toolState.media.files,
         systemPrompt,
       );
 
       const prefill = await promptBuilder.buildPrefill(currRound);
-      toolState.updateAccumulatedOutput(prefill);
+      toolState.assembly.updateAccumulatedOutput(prefill);
 
       return {
         stateRound,
@@ -447,8 +450,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     const userRequest = await promptBuilder.buildUserRequest(currRound);
     let userMessage = userRequest ? `${userRequest}\n` : '';
-    if (toolState.texcountStats) {
-      userMessage = `${toolState.texcountStats}${userMessage}`;
+    if (toolState.document.texcountStats) {
+      userMessage = `${toolState.document.texcountStats}${userMessage}`;
     }
 
     if (!userMessage.trim()) {
@@ -462,11 +465,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const roundMessages = await this.modelHandler.createRoundMessages(
       messages,
       userMessage,
-      toolState.mediaFiles,
+      toolState.media.files,
     );
 
     const prefill = await promptBuilder.buildPrefill(currRound);
-    toolState.updateAccumulatedOutput(prefill);
+    toolState.assembly.updateAccumulatedOutput(prefill);
 
     return {
       stateRound,
@@ -476,9 +479,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareToolState(
+  private async prepareAgentWorkspaceState(
     currRound: number,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
@@ -490,7 +493,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       if (this.modelHandler.capabilities.supportsVision) {
         if (
           this.agentConfig.mediaFile &&
-          !toolState.mediaFiles.includes(this.agentConfig.mediaFile)
+          !toolState.media.files.includes(this.agentConfig.mediaFile)
         ) {
           extraMedia.push(this.agentConfig.mediaFile);
         }
@@ -535,7 +538,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     messages,
   }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
     this.logger.debug(`Processing round ${roundIndex}`);
-    const toolState = new ToolState();
+    const toolState = new AgentWorkspaceState();
 
     return this.withRoundGroup(`r${roundIndex}`, async () => {
       const shared: ReflectionRoundShared = {
@@ -543,7 +546,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           toolState,
         },
         hooks: {
-          prepareToolState: () => this.prepareToolState(roundIndex, toolState),
+          prepareAgentWorkspaceState: () =>
+            this.prepareAgentWorkspaceState(roundIndex, toolState),
           prepareRoundContext: () =>
             this.prepareRoundContext(
               roundIndex,
@@ -610,7 +614,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           currentRound: 0,
           continueRounds: true,
           messages: [],
-          globalState: new AgentStateGlobal(),
+          globalState: new AgentRunState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => {

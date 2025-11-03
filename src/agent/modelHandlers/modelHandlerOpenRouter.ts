@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -96,7 +96,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -142,7 +142,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
@@ -154,7 +154,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.accumulatedOutput,
+            text: toolState.assembly.accumulatedOutput,
           },
         ];
       }
@@ -166,7 +166,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
     if (lastMessage.role === 'user' || lastMessage.role === 'system') {
@@ -175,7 +175,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         content: [
           {
             type: 'text',
-            text: toolState.accumulatedOutput,
+            text: toolState.assembly.accumulatedOutput,
           },
         ],
       });
