@@ -6,10 +6,19 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
+import {
+  buildApprovalRejectedResult,
+  formatUnifiedApprovalUserDiff,
+  getApprovedContent,
+  requestToolEditApproval,
+  writeApprovedContent,
+} from '@tools/approval/toolEditApproval';
 import { ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import replacementEngine from '@replacement/engine';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 const WriteInputSchema = z.strictObject({
   path: z.string(),
@@ -25,10 +34,46 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    await WorkspaceFS.write(input.path, input.content);
+    const originalContent = (await WorkspaceFS.exists(input.path))
+      ? await WorkspaceFS.read(input.path)
+      : '';
+
+    const proposedContent = isTexFile(input.path)
+      ? replacementEngine.applyAll(input.content)
+      : input.content;
+
+    const approval = await requestToolEditApproval({
+      path: input.path,
+      originalContent,
+      proposedContent,
+      sourceTool: 'write_file',
+    });
+
+    if (!approval.accepted) {
+      return buildApprovalRejectedResult(
+        input.path,
+        'write_file',
+        approval.userMessage,
+      );
+    }
+
+    const finalContent = getApprovedContent(approval, proposedContent);
+    const { appliedContent } = await writeApprovedContent(
+      input.path,
+      originalContent,
+      finalContent,
+    );
+
+    const userDiffNote = formatUnifiedApprovalUserDiff(
+      input.path,
+      finalContent,
+      appliedContent,
+    );
+    const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
+
     return toolResult({
       summary: `Wrote ${input.path}`,
-      output: 'written',
+      output,
     });
   }
 }

@@ -72,6 +72,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
         this.handleUpdateMissingOutputs(m),
+      [COMMANDS.SHOW_TOOL_EDIT_APPROVAL]: (m) =>
+        this.handleShowToolEditApproval(m),
+      [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (m) =>
+        this.handleResolveToolEditApproval(m),
+      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (m) =>
+        this.handleUpdateToolEditApprovalState(m),
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
@@ -143,6 +149,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       container.classList.toggle('is-visible', isToolAgent);
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
+
+    dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
 
     dom.toolbar.render(sessionKind);
 
@@ -309,6 +317,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateMissingOutputs(message) {
     // State persisted server-side - no direct DOM updates needed
+  }
+
+  handleShowToolEditApproval(message) {
+    if (!message || !message.request) {
+      return;
+    }
+    dom.approvalRequests.show(message.request);
+  }
+
+  handleResolveToolEditApproval(message) {
+    if (!message || !message.requestId) {
+      return;
+    }
+    dom.approvalRequests.resolve(message.requestId);
+  }
+
+  handleUpdateToolEditApprovalState(message) {
+    const bypassActive = Boolean(message?.bypassActive);
+    state.approvalBypassActive = bypassActive;
+    dom.approvalRequests.setSessionBypassActive(bypassActive);
+    dom.followUpInput.setApprovalBypassState(bypassActive);
   }
 
   /**
