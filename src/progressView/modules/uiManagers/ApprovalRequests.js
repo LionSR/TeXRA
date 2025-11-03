@@ -110,19 +110,19 @@ export class ApprovalRequests {
           label="Open diff"
           data-action="open"
           data-request-id="${request.requestId}"
-        ></vscode-toolbar-button>
+        >Open diff</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="check"
           label="Approve"
           data-action="approve"
           data-request-id="${request.requestId}"
-        ></vscode-toolbar-button>
+        >Approve</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="close"
           label="Reject"
           data-action="reject"
           data-request-id="${request.requestId}"
-        ></vscode-toolbar-button>
+        >Reject</vscode-toolbar-button>
         <vscode-toolbar-button
           icon="shield"
           label="Approve &amp; auto-approve this session"
@@ -130,7 +130,7 @@ export class ApprovalRequests {
           data-request-id="${request.requestId}"
           data-toggle-action="resumeApprovals"
           toggleable
-        ></vscode-toolbar-button>
+        >Approve &amp; auto-approve this session</vscode-toolbar-button>
       </vscode-toolbar-container>
     `;
     this._updateRequestElement(element, request);
