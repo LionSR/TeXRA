@@ -4,8 +4,8 @@ import { FinishReason } from '@google/genai';
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
-import { ToolState } from '../core/ToolState';
+import { ConversationRoundState, AgentRunState } from '../core/AgentState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -432,18 +432,19 @@ export abstract class ModelHandler<
 
   /** Calculates token-based stop flags. */
   protected computeTokenFlags(
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
   ): TokenFlags {
+    const totals = stateGlobal.usageAccumulator.getTotals();
     const maxOutputTokens =
-      stateGlobal.firstInputTokens > 0
-        ? this.maxOutputTokensFactor * stateGlobal.firstInputTokens
+      totals.firstInputTokens > 0
+        ? this.maxOutputTokensFactor * totals.firstInputTokens
         : Number.POSITIVE_INFINITY;
 
     return {
       continuationLimit: stateRound.continuationCount > this.continueLimit,
-      inputTokenLimit: stateGlobal.totalInputTokens > this.inputTokenLimit,
-      maxOutputTokensExceeded: stateGlobal.totalOutputTokens > maxOutputTokens,
+      inputTokenLimit: totals.totalInputTokens > this.inputTokenLimit,
+      maxOutputTokensExceeded: totals.totalOutputTokens > maxOutputTokens,
     };
   }
 
@@ -474,8 +475,8 @@ export abstract class ModelHandler<
   public checkStopConditions(
     stopReason: ProviderStopReason,
     newResponse: string,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
   ): [boolean, boolean] {
     const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
@@ -486,11 +487,12 @@ export abstract class ModelHandler<
     );
 
     if (tokenFlags.maxOutputTokensExceeded) {
+      const totals = stateGlobal.usageAccumulator.getTotals();
       this.logger.warn(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens`,
       );
       this.logger.warn(
-        `Total output tokens: ${stateGlobal.totalOutputTokens}, First input tokens: ${stateGlobal.firstInputTokens}`,
+        `Total output tokens: ${totals.totalOutputTokens}, First input tokens: ${totals.firstInputTokens}`,
       );
     }
 
@@ -578,8 +580,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: ConversationRoundState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -590,8 +592,8 @@ export abstract class ModelHandler<
    */
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
-    stateRound: AgentStateRound,
-    toolState: ToolState,
+    stateRound: ConversationRoundState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -604,7 +606,7 @@ export abstract class ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, M[]]>;
@@ -629,7 +631,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -640,7 +642,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -663,7 +665,7 @@ export abstract class ModelHandler<
   abstract processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
   ): string | null;
 
   /**
@@ -684,7 +686,7 @@ export abstract class ModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 
