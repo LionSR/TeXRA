@@ -11,10 +11,7 @@ const logger = new AgentLogger(CHANNEL);
  * Show the Progress View panel
  */
 async function showProgressView() {
-  // Focus the view in the panel
-  await safeExecuteCommand('workbench.view.extension.texra-panel', [], CHANNEL);
-
-  // Then specifically focus the progress view
+  // Focus the progress view
   await safeExecuteCommand('texra.progressView.focus', [], CHANNEL);
 
   logger.info('ProgressView panel shown');
