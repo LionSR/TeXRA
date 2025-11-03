@@ -9,6 +9,7 @@ import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import { DEFAULT_TOOL_CONFIG } from '@agent/core/ToolConfig';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import * as executeAgentModule from '@agent/runtime/executeAgent';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import {
   ToolUseSessionManager,
   type ToolUseSessionSnapshot,
@@ -50,7 +51,13 @@ describe('ToolUseFollowUpCoordinator', () => {
     | ((streamId: StreamTabId) => ToolUseSessionSnapshot | undefined)
     | undefined;
   let prepareAgentImplementation:
-    | (() => Promise<{ agent: BaseToolUseAgent; agentType: AgentType }>)
+    | ((
+        factory: (init: any) => AgentExecutionContext,
+      ) => Promise<{
+        agent: BaseToolUseAgent;
+        agentType: AgentType;
+        context?: AgentExecutionContext;
+      }>)
     | undefined;
   let executeCalls: {
     agentName: string;
@@ -184,11 +191,14 @@ describe('ToolUseFollowUpCoordinator', () => {
       executeAgentModule as typeof executeAgentModule & {
         prepareAgentInstance: typeof executeAgentModule.prepareAgentInstance;
       }
-    ).prepareAgentInstance = (async (..._args: any[]) => {
+    ).prepareAgentInstance = (async (params: any) => {
       if (!prepareAgentImplementation) {
         throw new Error('prepareAgentInstance was not stubbed');
       }
-      return prepareAgentImplementation();
+      const factory =
+        params.contextFactory ??
+        ((init: any) => new AgentExecutionContext(init));
+      return prepareAgentImplementation(factory);
     }) as typeof executeAgentModule.prepareAgentInstance;
 
     (
@@ -197,7 +207,9 @@ describe('ToolUseFollowUpCoordinator', () => {
       }
     ).executeAgentWithLogging = (async (
       agentName: string,
-      _factory: any,
+      createFn: (
+        factory: (init: any) => AgentExecutionContext,
+      ) => Promise<{ agent: BaseToolUseAgent }>,
       executionId: string,
       options: { resume?: boolean },
     ) => {
@@ -206,6 +218,7 @@ describe('ToolUseFollowUpCoordinator', () => {
         executionId,
         resume: Boolean(options.resume),
       });
+      await createFn((init) => new AgentExecutionContext(init));
       if (executeImplementation) {
         await executeImplementation();
       }
@@ -362,9 +375,13 @@ describe('ToolUseFollowUpCoordinator', () => {
       },
     } as unknown as BaseToolUseAgent;
 
-    prepareAgentImplementation = async () => ({
+    prepareAgentImplementation = async (factory) => ({
       agent,
       agentType: AgentType.ToolUse,
+      context: factory({
+        streamId,
+        executionId: snapshot.executionId,
+      }),
     });
 
     drainImplementation = () => ['queued-follow-up'];
@@ -411,9 +428,13 @@ describe('ToolUseFollowUpCoordinator', () => {
       },
     } as unknown as BaseToolUseAgent;
 
-    prepareAgentImplementation = async () => ({
+    prepareAgentImplementation = async (factory) => ({
       agent,
       agentType: AgentType.ToolUse,
+      context: factory({
+        streamId,
+        executionId: snapshot.executionId,
+      }),
     });
 
     drainImplementation = () => ['first', 'second'];
