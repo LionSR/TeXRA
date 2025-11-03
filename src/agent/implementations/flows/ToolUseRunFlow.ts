@@ -5,8 +5,10 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { ToolState } from '@agent/core/ToolState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
@@ -20,7 +22,7 @@ import {
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: AgentWorkspaceState;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -55,9 +57,12 @@ export interface ToolUseRunLifecycle {
 
 export interface ToolUseRunState<C = unknown> {
   messages: ProviderMessage[];
-  toolState: ToolState | null;
+  toolState: AgentWorkspaceState | null;
   cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
+  store: AgentSharedStore | null;
+  runState: AgentRunState;
+  nextRoundIndex: number;
 }
 
 export interface ToolUseRunHooks<C = unknown> {
@@ -66,13 +71,14 @@ export interface ToolUseRunHooks<C = unknown> {
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];
-    toolState: ToolState;
+    toolState: AgentWorkspaceState;
     shouldSkipCycle: boolean;
   }>;
-  buildCycleOptions(toolState: ToolState): ToolUseCycleOptions<C>;
+  buildCycleOptions(toolState: AgentWorkspaceState): ToolUseCycleOptions<C>;
   runCycle(
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
+    store: AgentSharedStore,
   ): Promise<void>;
   checkInterruption(): boolean;
   hasQueuedFollowUp(): boolean;
@@ -152,6 +158,21 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.toolState = toolState;
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
+    if (!shared.state.store) {
+      const roundState = new ConversationRoundState(
+        shared.state.nextRoundIndex,
+      );
+      shared.state.store = new AgentSharedStore({
+        round: roundState,
+        run: shared.state.runState,
+        workspace: toolState,
+        user: shared.agent.getUserVarChannels(),
+      });
+    } else {
+      shared.state.store.setRound(
+        new ConversationRoundState(shared.state.nextRoundIndex),
+      );
+    }
 
     beginLifecyclePhase(shared.lifecycle, 'cycle');
 
@@ -172,7 +193,11 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     try {
       while (true) {
         if (!state.shouldSkipCycle) {
-          await hooks.runCycle(cycleOptions, state.messages);
+          if (!state.store) {
+            throw new Error('Tool-use store is not initialized.');
+          }
+          await hooks.runCycle(cycleOptions, state.messages, state.store);
+          state.nextRoundIndex = state.store.round.roundIndex;
         } else {
           state.shouldSkipCycle = false;
         }

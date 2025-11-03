@@ -161,7 +161,7 @@ export const ToolUseSnapshotStore = {
         agentCategory: payload.session.agentCategory,
       },
       messages: structuredClone(payload.messages),
-      toolState: structuredClone(payload.toolState),
+      toolState: payload.toolState.toJSON(),
       lastUpdated: Date.now(),
     } as const;
 
