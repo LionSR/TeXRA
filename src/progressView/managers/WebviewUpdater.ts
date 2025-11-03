@@ -191,6 +191,16 @@ export class WebviewUpdater {
     });
   }
 
+  updateToolEditApprovalState(bypassActive: boolean): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+
+    webview.postMessage({
+      command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
+      bypassActive,
+    });
+  }
+
   /**
    * Update usage statistics
    */

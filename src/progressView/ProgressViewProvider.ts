@@ -65,6 +65,7 @@ export class ProgressViewProvider
     string,
     ToolEditApprovalPrompt
   >();
+  private approvalBypassActive = false;
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -236,6 +237,9 @@ export class ProgressViewProvider
       for (const prompt of this.pendingApprovalPrompts.values()) {
         this.webviewUpdater.showToolEditApprovalPrompt(prompt);
       }
+      this.webviewUpdater.updateToolEditApprovalState(
+        this.approvalBypassActive,
+      );
     }
   }
 
@@ -264,6 +268,14 @@ export class ProgressViewProvider
 
     if (this._webviewReady && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
+    }
+  }
+
+  public updateToolEditApprovalBypassState(bypassActive: boolean): void {
+    this.approvalBypassActive = bypassActive;
+
+    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.updateToolEditApprovalState(bypassActive);
     }
   }
 
