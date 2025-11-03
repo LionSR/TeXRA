@@ -58,6 +58,32 @@
 .approval-request__meta {
   font-size: 0.8rem;
   color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.approval-request__diff {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.approval-request__diff-added {
+  color: var(--vscode-charts-green, #4caf50);
+  font-size: 0.8rem;
+}
+
+.approval-request__diff-removed {
+  color: var(--vscode-charts-red, #f44336);
+  font-size: 0.8rem;
+}
+
+.approval-request__diff-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.75rem;
+  opacity: 0.9;
 }
 
 .approval-request__actions {

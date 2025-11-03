@@ -40,6 +40,11 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 const REVEAL_TIMEOUT_MS = 1500;
 
+interface LineChangeSummary {
+  added: number;
+  removed: number;
+}
+
 interface PendingApprovalEntry {
   request: ToolEditApprovalRequest;
   originalUri: vscode.Uri;
@@ -48,6 +53,7 @@ interface PendingApprovalEntry {
   proposedContent: string;
   title: string;
   streamId?: StreamTabId;
+  lineChanges: LineChangeSummary;
   isSettled: () => boolean;
   settle: (result: ToolEditApprovalResult) => void;
 }
@@ -74,6 +80,7 @@ let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 let approvalsBypassedForSession = false;
 let storageDirectory: string | undefined;
+const activePreviewFiles = new Set<string>();
 
 async function notifyProgressViewApprovalBypassState(): Promise<void> {
   if (!initialized) {
@@ -115,7 +122,13 @@ async function createTempFile(
   const fileName = `${randomUUID()}-${side}${ext}`;
   const filePath = path.join(dir, fileName);
   await fs.writeFile(filePath, content, 'utf8');
+  activePreviewFiles.add(filePath);
   return vscode.Uri.file(filePath);
+}
+
+async function cleanupTempFile(uri: vscode.Uri): Promise<void> {
+  activePreviewFiles.delete(uri.fsPath);
+  await fs.unlink(uri.fsPath).catch(() => {});
 }
 
 async function readCurrentContent(
@@ -178,6 +191,7 @@ async function showProgressViewApprovalPrompt(
   requestId: string,
   request: ToolEditApprovalRequest,
   relativePath: string,
+  lineChanges: LineChangeSummary,
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
 
@@ -193,6 +207,8 @@ async function showProgressViewApprovalPrompt(
       sourceTool: request.sourceTool,
       allowBypass: !approvalsBypassedForSession,
       streamId: request.streamId ?? '',
+      addedLines: lineChanges.added,
+      removedLines: lineChanges.removed,
     });
   } catch (error) {
     console.warn('Unable to show progress view approval prompt', error);
@@ -216,6 +232,49 @@ async function resolveProgressViewApprovalPrompt(
 
 function countNewlines(value: string): number {
   return (value.match(/\n/g) ?? []).length;
+}
+
+function countChangedLines(text: string): number {
+  if (!text) {
+    return 0;
+  }
+
+  const normalized = text.replace(/\r\n/g, '\n');
+  const segments = normalized.split('\n');
+  if (normalized.endsWith('\n')) {
+    return Math.max(segments.length - 1, 0);
+  }
+  return segments.length;
+}
+
+function computeLineChangeSummary(
+  original: string,
+  proposed: string,
+): LineChangeSummary {
+  if (original === proposed) {
+    return { added: 0, removed: 0 };
+  }
+
+  const dmp = new diff_match_patch();
+  const diffs = dmp.diff_main(original, proposed);
+  dmp.diff_cleanupSemantic(diffs);
+
+  let added = 0;
+  let removed = 0;
+
+  for (const [type, text] of diffs) {
+    if (!text) {
+      continue;
+    }
+
+    if (type === DIFF_INSERT) {
+      added += countChangedLines(text);
+    } else if (type === DIFF_DELETE) {
+      removed += countChangedLines(text);
+    }
+  }
+
+  return { added, removed };
 }
 
 function firstChangedLine(original: string, proposed: string): number | null {
@@ -385,8 +444,29 @@ async function nativeRequestApproval(
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(path),
   );
+  const lineChanges = computeLineChangeSummary(
+    originalContent,
+    proposedContent,
+  );
+  const totalChanged = Math.max(lineChanges.added + lineChanges.removed, 0);
+  const changeSummaryParts: string[] = [];
+  if (lineChanges.added > 0) {
+    changeSummaryParts.push(`+${lineChanges.added}`);
+  }
+  if (lineChanges.removed > 0) {
+    changeSummaryParts.push(`-${lineChanges.removed}`);
+  }
+  const changeSummary =
+    changeSummaryParts.length > 0
+      ? `${changeSummaryParts.join(' / ')} ${
+          totalChanged === 1 ? 'line' : 'lines'
+        }`
+      : undefined;
 
-  const title = `Tool edit (${sourceTool}): ${description}`;
+  const titleDetails = changeSummary
+    ? `${description} · ${changeSummary}`
+    : description;
+  const title = `Tool edit (${sourceTool}): ${titleDetails}`;
   let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
@@ -418,12 +498,18 @@ async function nativeRequestApproval(
         proposedContent,
         title,
         streamId,
+        lineChanges,
         isSettled: () => settled,
         settle,
       };
 
       pendingApprovals.set(requestId, entry);
-      void showProgressViewApprovalPrompt(requestId, request, description);
+      void showProgressViewApprovalPrompt(
+        requestId,
+        request,
+        description,
+        lineChanges,
+      );
     });
 
     if (result.accepted) {
@@ -443,8 +529,8 @@ async function nativeRequestApproval(
   } finally {
     pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
-    await fs.unlink(originalUri.fsPath).catch(() => {});
-    await fs.unlink(proposedUri.fsPath).catch(() => {});
+    await cleanupTempFile(originalUri);
+    await cleanupTempFile(proposedUri);
     await resolveProgressViewApprovalPrompt(requestId);
   }
 }
@@ -530,25 +616,30 @@ export function formatApprovalUserDiff(
   return `User adjustments to ${path}:\n${userPatch}`;
 }
 
+export interface WriteApprovedContentResult {
+  appliedContent: string;
+  baseContent: string;
+}
+
 export async function writeApprovedContent(
   path: string,
   originalContent: string,
   finalContent: string,
-): Promise<string> {
+): Promise<WriteApprovedContentResult> {
   const exists = await WorkspaceFS.exists(path);
   if (!exists) {
     await WorkspaceFS.write(path, finalContent);
-    return finalContent;
+    return { appliedContent: finalContent, baseContent: '' };
   }
 
   const currentContent = await WorkspaceFS.read(path);
   if (currentContent === finalContent) {
-    return finalContent;
+    return { appliedContent: finalContent, baseContent: currentContent };
   }
 
   if (currentContent === originalContent) {
     await WorkspaceFS.write(path, finalContent);
-    return finalContent;
+    return { appliedContent: finalContent, baseContent: currentContent };
   }
 
   const dmp = new diff_match_patch();
@@ -557,11 +648,11 @@ export async function writeApprovedContent(
 
   if (results.every(Boolean)) {
     await WorkspaceFS.write(path, patchedContent);
-    return patchedContent;
+    return { appliedContent: patchedContent, baseContent: currentContent };
   }
 
   await WorkspaceFS.write(path, finalContent);
-  return finalContent;
+  return { appliedContent: finalContent, baseContent: currentContent };
 }
 
 export async function handleProgressViewToolEditApprovalAction(
