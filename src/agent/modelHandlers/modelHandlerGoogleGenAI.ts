@@ -36,7 +36,7 @@ import {
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - agent components
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
@@ -849,7 +849,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: Content[],
     _stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -875,7 +875,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message history for Google GenAI (no prefill).',
@@ -915,7 +915,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: Content[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, Content[]]> {
@@ -1022,7 +1022,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   processThinkingBlock(
     responseObject: GenerateContentResponse,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     if (
       !responseObject ||
@@ -1129,7 +1129,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolRuntimeState,
+    _toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility

@@ -15,7 +15,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -331,7 +331,7 @@ describe('ResponseCycle background reasoning logs', () => {
     const messages: ProviderMessage[] = [];
     const stateRound = new ConversationRoundState(1);
     const stateGlobal = new AgentRunState();
-    const toolState = new ToolRuntimeState();
+    const toolState = new AgentWorkspaceState();
     const userVarChannels = {
       input: Object.freeze({}),
       transient: {} as Record<string, any>,
@@ -340,7 +340,7 @@ describe('ResponseCycle background reasoning logs', () => {
     const store = new AgentSharedStore({
       round: stateRound,
       run: stateGlobal,
-      tool: toolState,
+      workspace: toolState,
       user: userVarChannels,
     });
 

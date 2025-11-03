@@ -5,7 +5,7 @@ import { FinishReason } from '@google/genai';
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '../core/AgentState';
-import { ToolRuntimeState } from '../core/ToolRuntimeState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -581,7 +581,7 @@ export abstract class ModelHandler<
   abstract addContinueMessageWithPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -593,7 +593,7 @@ export abstract class ModelHandler<
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -606,7 +606,7 @@ export abstract class ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, M[]]>;
@@ -631,7 +631,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -642,7 +642,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -665,7 +665,7 @@ export abstract class ModelHandler<
   abstract processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null;
 
   /**
@@ -686,7 +686,7 @@ export abstract class ModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 
