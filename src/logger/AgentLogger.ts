@@ -1,16 +1,36 @@
 // Third-party imports
-// (none needed)
+import { randomUUID } from 'crypto';
+import { encode as encodeHtml } from 'he';
+
+// Local imports - events
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
 import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
-import type {
-  TokenUsageStats,
-  ExtendedTokenUsageStats,
-} from '@agent/types/UsageTypes';
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
+
+export interface LoggerScopeOptions {
+  parentGroupId?: string;
+  skip?: boolean;
+  successStatus?: 'stopped' | 'error';
+  errorStatus?: 'stopped' | 'error';
+  id?: string;
+}
+
+export interface AgentLogStreamOptions {
+  groupId?: string;
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  progressViewEnabled?: boolean;
+}
+
+export interface AgentLogStream {
+  append(text: string): void;
+  finalize(finalText?: string): string;
+}
 
 /**
  * Encapsulates logging functionality for agents with a dedicated channel.
@@ -133,19 +153,133 @@ export class AgentLogger {
     this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
   }
 
-  /**
-   * Start a new log group and make it active for this logger.
-   * @param groupName Name of the group to display
-   * @param id Optional custom ID for the group
-   * @param parentGroupId Optional parent group ID for nested groups
-   * @returns The group ID
-   */
+  async withScope<T>(
+    groupName: string,
+    fn: () => Promise<T>,
+    options: LoggerScopeOptions = {},
+  ): Promise<T> {
+    const {
+      skip = false,
+      successStatus = 'stopped',
+      errorStatus = 'error',
+      parentGroupId,
+      id,
+    } = options;
+
+    if (skip) {
+      if (parentGroupId) {
+        return this.withActiveGroup(parentGroupId, fn);
+      }
+      return fn();
+    }
+
+    const resolvedParent = parentGroupId ?? this.getActiveGroupId();
+    const groupId = await this.startGroup(groupName, id, resolvedParent);
+
+    try {
+      const result = await fn();
+      this.endGroup(groupId, successStatus);
+      return result;
+    } catch (error) {
+      this.endGroup(groupId, errorStatus);
+      throw error;
+    }
+  }
+
+  createStream(
+    type: MessageType,
+    options: AgentLogStreamOptions = {},
+  ): AgentLogStream {
+    const streamId = this.channelId;
+    const id = randomUUID();
+    let buffer = '';
+    let isFirstUpdate = true;
+    const level = options.level ?? 'info';
+    const progressEnabled = options.progressViewEnabled ?? true;
+    const groupId = options.groupId ?? this.getActiveGroupId();
+
+    return {
+      append: (text: string) => {
+        if (!text) {
+          return;
+        }
+
+        buffer += text;
+
+        if (!progressEnabled) {
+          return;
+        }
+
+        if (isFirstUpdate) {
+          bus.emit('addLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              level,
+              timestamp: Date.now(),
+              groupId,
+              messageType: type,
+            },
+          });
+          isFirstUpdate = false;
+        } else {
+          bus.emit('updateLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              groupId,
+              messageType: type,
+            },
+          });
+        }
+      },
+      finalize: (finalText?: string) => {
+        if (typeof finalText === 'string') {
+          buffer = finalText;
+        }
+
+        if (!progressEnabled) {
+          this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+          return buffer;
+        }
+
+        if (isFirstUpdate) {
+          bus.emit('addLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              level,
+              timestamp: Date.now(),
+              groupId,
+              messageType: type,
+            },
+          });
+        } else {
+          bus.emit('updateLogMessage', {
+            stream: streamId,
+            logMessage: {
+              id,
+              text: encodeHtml(buffer),
+              groupId,
+              messageType: type,
+            },
+          });
+        }
+
+        this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+        return buffer;
+      },
+    };
+  }
+
   async startGroup(
     groupName: string,
     id?: string,
     parentGroupId?: string,
   ): Promise<string> {
-    // brief delay to ensure log order
     await sleep(SHORT_SLEEP_MS);
     return logger.startGroup(
       this.channelId,
@@ -156,28 +290,28 @@ export class AgentLogger {
     );
   }
 
-  /**
-   * End the specified log group.
-   * @param groupId ID of the group to end
-   * @param status Status to set for the group ('error' or 'stopped')
-   */
   endGroup(groupId: string, status: 'error' | 'stopped' = 'stopped'): void {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
-  /**
-   * Get the ID of the active log group for this logger.
-   * @returns The active group ID, or undefined if no active group
-   */
   getActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
   }
 
-  /**
-   * Set the active group ID for this logger.
-   * @param groupId The group ID to set as active, or undefined to clear
-   */
   setActiveGroupId(groupId: string | undefined): void {
     logger.setActiveGroupId(this.channelId, groupId, this.isAgentLogger);
+  }
+
+  async withActiveGroup<T>(
+    groupId: string | undefined,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.getActiveGroupId();
+    this.setActiveGroupId(groupId);
+    try {
+      return await fn();
+    } finally {
+      this.setActiveGroupId(previous);
+    }
   }
 }

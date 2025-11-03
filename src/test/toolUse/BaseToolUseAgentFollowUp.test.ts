@@ -10,6 +10,8 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -154,7 +156,14 @@ describe('BaseToolUseAgent follow-up loop', () => {
         autoCompileInputPdf: false,
       },
     });
-    const agent = new TestAgent(handler, config, setting, prompt, '.');
+    const agent = new TestAgent(
+      handler,
+      config,
+      setting,
+      prompt,
+      '.',
+      new AgentExecutionContext({ streamId: 'test-stream' as StreamTabId }),
+    );
     const logs: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => logs.push(e));
     const runPromise = agent.run();
