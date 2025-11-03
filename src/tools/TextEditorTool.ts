@@ -352,6 +352,7 @@ export class TextEditorTool extends defineTool({
       return toolResult({
         summary: `Created file ${filePath}`,
         output,
+        userPatch: approval.userPatch,
       });
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${String(error)}`);
@@ -467,6 +468,7 @@ export class TextEditorTool extends defineTool({
       return cliResult({
         summary: `Updated ${filePath}`,
         output: successMsg,
+        userPatch: approval.userPatch,
       });
     } catch (error) {
       if (error instanceof ToolError) {
@@ -581,6 +583,7 @@ export class TextEditorTool extends defineTool({
       return cliResult({
         summary: `Inserted text into ${filePath}`,
         output: successMsg,
+        userPatch: approval.userPatch,
       });
     } catch (error) {
       if (error instanceof ToolError) {
@@ -651,6 +654,7 @@ export class TextEditorTool extends defineTool({
       return cliResult({
         summary: `Undid edit on ${filePath}`,
         output,
+        userPatch: approval.userPatch,
       });
     } catch (error) {
       if (error instanceof ToolError) {
