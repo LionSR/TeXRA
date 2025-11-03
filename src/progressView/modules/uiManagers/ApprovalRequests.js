@@ -11,7 +11,10 @@ export class ApprovalRequests {
     this.list = null;
     this.requests = new Map();
     this.isBypassActive = false;
+    this.activeStream = '';
+    this.isToolAgentActive = false;
     this._handleAction = this._handleAction.bind(this);
+    this._handleToggle = this._handleToggle.bind(this);
   }
 
   setup() {
@@ -28,6 +31,7 @@ export class ApprovalRequests {
     }
 
     addEventListenerSafely(this.container, 'click', this._handleAction, true);
+    addEventListenerSafely(this.container, 'change', this._handleToggle, true);
   }
 
   show(request) {
@@ -47,14 +51,12 @@ export class ApprovalRequests {
       const element = this._createRequestElement(request);
       entry = { element, data: { ...request } };
       this.requests.set(request.requestId, entry);
-      this.list.appendChild(element);
     } else {
       entry.data = { ...entry.data, ...request };
     }
 
     this._updateRequestElement(entry.element, entry.data);
-
-    this._toggleVisibility();
+    this._syncVisibleEntries();
   }
 
   resolve(requestId) {
@@ -63,28 +65,32 @@ export class ApprovalRequests {
     }
 
     const entry = this.requests.get(requestId);
+    this.requests.delete(requestId);
     if (entry?.element?.parentElement) {
       entry.element.parentElement.removeChild(entry.element);
     }
-    this.requests.delete(requestId);
-    this._toggleVisibility();
+    this._syncVisibleEntries();
   }
 
   cleanup() {
     if (this.container) {
       this.container.removeEventListener('click', this._handleAction, true);
+      this.container.removeEventListener('change', this._handleToggle, true);
     }
     this.requests.clear();
     this.container = null;
     this.list = null;
     this.isBypassActive = false;
+    this.activeStream = '';
+    this.isToolAgentActive = false;
   }
 
   _toggleVisibility() {
-    if (!this.container) {
+    if (!this.container || !this.list) {
       return;
     }
-    const shouldShow = this.requests.size > 0;
+    const hasVisibleEntries = this.list.children.length > 0;
+    const shouldShow = this.isToolAgentActive && hasVisibleEntries;
     this.container.classList.toggle('is-visible', shouldShow);
     this.container.toggleAttribute('hidden', !shouldShow);
   }
@@ -119,9 +125,11 @@ export class ApprovalRequests {
         ></vscode-toolbar-button>
         <vscode-toolbar-button
           icon="shield"
-          label="Approve &amp; skip approvals this session"
+          label="Approve &amp; auto-approve this session"
           data-action="approveAll"
           data-request-id="${request.requestId}"
+          data-toggle-action="resumeApprovals"
+          toggleable
         ></vscode-toolbar-button>
       </vscode-toolbar-container>
     `;
@@ -133,6 +141,7 @@ export class ApprovalRequests {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
     const bypassButton = element.querySelector('[data-action="approveAll"]');
+    element.dataset.streamId = request.streamId || '';
     if (pathElem) {
       pathElem.textContent = request.relativePath || request.path || '';
     }
@@ -142,10 +151,9 @@ export class ApprovalRequests {
         : '';
     }
     if (bypassButton) {
-      const allowBypass =
-        request.allowBypass !== false && this.isBypassActive !== true;
-      bypassButton.toggleAttribute('hidden', !allowBypass);
+      const allowBypass = request.allowBypass !== false;
       bypassButton.toggleAttribute('disabled', !allowBypass);
+      bypassButton.checked = Boolean(this.isBypassActive);
     }
   }
 
@@ -154,6 +162,38 @@ export class ApprovalRequests {
     this.requests.forEach((entry) => {
       this._updateRequestElement(entry.element, entry.data);
     });
+    this._syncVisibleEntries();
+  }
+
+  setActiveStream(streamId, isToolAgent) {
+    this.activeStream = streamId || '';
+    this.isToolAgentActive = Boolean(isToolAgent);
+    this._syncVisibleEntries();
+  }
+
+  _syncVisibleEntries() {
+    if (!this.list) {
+      return;
+    }
+
+    const activeStream = this.activeStream;
+    const shouldDisplay =
+      this.isToolAgentActive && Boolean(activeStream && activeStream.length);
+
+    const fragment = document.createDocumentFragment();
+    for (const entry of this.requests.values()) {
+      const { element, data } = entry;
+      if (element.parentElement) {
+        element.parentElement.removeChild(element);
+      }
+
+      if (shouldDisplay && (data.streamId || '') === activeStream) {
+        fragment.appendChild(element);
+      }
+    }
+
+    this.list.appendChild(fragment);
+    this._toggleVisibility();
   }
 
   _handleAction(event) {
@@ -162,6 +202,10 @@ export class ApprovalRequests {
     }
     const button = event.target.closest('[data-request-id][data-action]');
     if (!button) {
+      return;
+    }
+
+    if (button.hasAttribute('data-toggle-action')) {
       return;
     }
 
@@ -205,5 +249,37 @@ export class ApprovalRequests {
         action: 'reject',
       });
     }
+  }
+
+  _handleToggle(event) {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const button = event.target.closest(
+      '[data-request-id][data-action][data-toggle-action]',
+    );
+    if (!button) {
+      return;
+    }
+
+    const requestId = button.dataset.requestId;
+    if (!requestId) {
+      return;
+    }
+
+    const primaryAction = button.dataset.action;
+    const toggleAction = button.dataset.toggleAction;
+    const action = button.checked ? primaryAction : toggleAction;
+
+    if (!action) {
+      return;
+    }
+
+    vscode.postMessage({
+      command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId,
+      action,
+    });
   }
 }

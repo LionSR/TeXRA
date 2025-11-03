@@ -13,7 +13,10 @@ import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 // Local imports - approval helpers
 import {
   buildApprovalRejectedResult,
+  formatApprovalUserDiff,
+  getApprovedContent,
   requestToolEditApproval,
+  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 
 // Local imports - logging
@@ -325,12 +328,17 @@ export class TextEditorTool extends defineTool({
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      // Write file content
-      await WorkspaceFS.write(filePath, content);
+      const finalContent = getApprovedContent(approval, content);
+      await writeApprovedContent(filePath, '', finalContent);
+
+      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const output = userDiffNote
+        ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
+        : `File created successfully at: ${filePath}`;
 
       return toolResult({
         summary: `Created file ${filePath}`,
-        output: `File created successfully at: ${filePath}`,
+        output,
       });
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${String(error)}`);
@@ -404,7 +412,8 @@ export class TextEditorTool extends defineTool({
 
       // Save current content to history
       this.addToHistory(filePath, fileContent);
-      await WorkspaceFS.write(filePath, newFileContent);
+      const finalContent = getApprovedContent(approval, newFileContent);
+      await writeApprovedContent(filePath, fileContent, finalContent);
 
       // Create a snippet of the edited section
       const textBeforeReplacement =
@@ -415,15 +424,22 @@ export class TextEditorTool extends defineTool({
       const endLine =
         replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) || []).length;
 
-      const newFileLines = newFileContent.split('\n');
+      const newFileLines = finalContent.split('\n');
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
       // Prepare success message
-      const successMsg = `The file ${filePath} has been edited. ${this.makeOutput(
+      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const successIntro = `The file ${filePath} has been edited.`;
+      const snippetOutput = this.makeOutput(
         snippet,
         `a snippet of ${filePath}`,
         startLine,
-      )}Review the changes and make sure they are as expected. Edit the file again if necessary.`;
+      );
+      const reviewMessage =
+        'Review the changes and make sure they are as expected. Edit the file again if necessary.';
+      const successMsg = userDiffNote
+        ? `${successIntro} ${snippetOutput}${reviewMessage}\n\n${userDiffNote}`
+        : `${successIntro} ${snippetOutput}${reviewMessage}`;
 
       return cliResult({
         summary: `Updated ${filePath}`,
@@ -478,13 +494,6 @@ export class TextEditorTool extends defineTool({
         ...fileLines.slice(insertLine),
       ];
 
-      // Create a snippet of the edited section
-      const snippetLines = [
-        ...fileLines.slice(Math.max(0, insertLine - SNIPPET_LINES), insertLine),
-        ...newStrLines,
-        ...fileLines.slice(insertLine, insertLine + SNIPPET_LINES),
-      ];
-
       // Write new content to file
       const newFileContent = newFileLines.join('\n');
 
@@ -505,17 +514,36 @@ export class TextEditorTool extends defineTool({
 
       // Save current content to history
       this.addToHistory(filePath, fileContent);
-      await WorkspaceFS.write(filePath, newFileContent);
+      const finalContent = getApprovedContent(approval, newFileContent);
+      await writeApprovedContent(filePath, fileContent, finalContent);
 
       // Prepare success message
-      const snippetText = snippetLines.join('\n');
-      const startLine = Math.max(1, insertLine - SNIPPET_LINES + 1);
+      const previewLines = finalContent.split('\n');
+      const snippetStart = Math.max(0, insertLine - SNIPPET_LINES);
+      const snippetEnd = Math.min(
+        previewLines.length,
+        insertLine + newStrLines.length + SNIPPET_LINES,
+      );
+      const snippetText = previewLines
+        .slice(snippetStart, snippetEnd)
+        .join('\n');
+      const startLine = snippetStart + 1;
+      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
 
-      const successMsg = `The file ${filePath} has been edited. ${this.makeOutput(
-        snippetText,
-        'a snippet of the edited file',
-        startLine,
-      )}Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.`;
+      const successIntro = `The file ${filePath} has been edited.`;
+      const reviewNote =
+        'Review the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). Edit the file again if necessary.';
+      const successMsg = userDiffNote
+        ? `${successIntro} ${this.makeOutput(
+            snippetText,
+            'a snippet of the edited file',
+            startLine,
+          )}${reviewNote}\n\n${userDiffNote}`
+        : `${successIntro} ${this.makeOutput(
+            snippetText,
+            'a snippet of the edited file',
+            startLine,
+          )}${reviewNote}`;
 
       return cliResult({
         summary: `Inserted text into ${filePath}`,
@@ -564,16 +592,23 @@ export class TextEditorTool extends defineTool({
       }
 
       history.pop();
-      await WorkspaceFS.write(filePath, previousContent);
+      const finalContent = getApprovedContent(approval, previousContent);
+      await writeApprovedContent(filePath, currentContent, finalContent);
 
       // If the history is now empty, delete the entry
       if (history.length === 0) {
         this.fileHistory.delete(filePath);
       }
 
+      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;
+      const output = userDiffNote
+        ? `${baseOutput}\n${userDiffNote}`
+        : baseOutput;
+
       return cliResult({
         summary: `Undid edit on ${filePath}`,
-        output: `Last edit to ${filePath} undone successfully. ${this.makeOutput(previousContent, filePath)}`,
+        output,
       });
     } catch (error) {
       if (error instanceof ToolError) {

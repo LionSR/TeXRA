@@ -8,7 +8,10 @@ import { defineTool } from './core/define';
 // Local imports - tools
 import {
   buildApprovalRejectedResult,
+  formatApprovalUserDiff,
+  getApprovedContent,
   requestToolEditApproval,
+  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { ToolResult, toolResult } from '@tools/result';
 
@@ -48,10 +51,15 @@ export class WriteFileTool extends defineTool({
       );
     }
 
-    await WorkspaceFS.write(input.path, input.content);
+    const finalContent = getApprovedContent(approval, input.content);
+    await writeApprovedContent(input.path, originalContent, finalContent);
+
+    const userDiffNote = formatApprovalUserDiff(input.path, approval.userPatch);
+    const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
+
     return toolResult({
       summary: `Wrote ${input.path}`,
-      output: 'written',
+      output,
     });
   }
 }
