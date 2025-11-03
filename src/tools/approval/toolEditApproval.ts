@@ -310,18 +310,42 @@ function firstChangedLine(original: string, proposed: string): number | null {
   return 0;
 }
 
+interface ComputeUserPatchOptions {
+  contextLines?: number;
+}
+
 function computeUserPatch(
+  path: string,
   suggestedContent: string,
   appliedContent: string,
+  options?: ComputeUserPatchOptions,
 ): string | undefined {
   if (suggestedContent === appliedContent) {
     return undefined;
   }
 
-  const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(suggestedContent, appliedContent);
-  const text = dmp.patch_toText(patches);
-  return text.trim().length > 0 ? text : undefined;
+  const diffOptions: Record<string, unknown> = {
+    fromfile: `${path} (proposed)`,
+    tofile: `${path} (final)`,
+    lineterm: '',
+  };
+
+  const contextLines = options?.contextLines ?? 3;
+  if (Number.isInteger(contextLines)) {
+    diffOptions.n = contextLines;
+  }
+
+  const diffLines = difflib.unifiedDiff(
+    suggestedContent.split('\n'),
+    appliedContent.split('\n'),
+    diffOptions,
+  );
+
+  if (!diffLines || diffLines.length === 0) {
+    return undefined;
+  }
+
+  return diffLines.join('\n');
 }
 
 async function revealFirstChange(
@@ -518,7 +542,11 @@ async function nativeRequestApproval(
         proposedUri,
         proposedContent,
       );
-      const userPatch = computeUserPatch(proposedContent, appliedContent);
+      const userPatch = computeUserPatch(
+        request.path,
+        proposedContent,
+        appliedContent,
+      );
       result = {
         ...result,
         appliedContent,
@@ -590,7 +618,7 @@ function finalizeApprovalResult(
   const userPatch =
     result.userPatch !== undefined
       ? result.userPatch
-      : computeUserPatch(request.proposedContent, appliedContent);
+      : computeUserPatch(request.path, request.proposedContent, appliedContent);
 
   return {
     ...result,
@@ -619,25 +647,18 @@ export function formatUnifiedApprovalUserDiff(
   appliedContent: string,
   options?: { contextLines?: number },
 ): string | undefined {
-  if (suggestedContent === appliedContent) {
-    return undefined;
-  }
-  const n = options?.contextLines ?? 3;
-  const fromfile = `${path} (proposed)`;
-  const tofile = `${path} (final)`;
-  const diffOptions: any = { fromfile, tofile, lineterm: '' };
-  if (Number.isInteger(n)) diffOptions.n = n;
-  const diffLines = difflib.unifiedDiff(
-    suggestedContent.split('\n'),
-    appliedContent.split('\n'),
-    diffOptions,
+  const diffBody = computeUserPatch(
+    path,
+    suggestedContent,
+    appliedContent,
+    options,
   );
 
-  if (!diffLines || diffLines.length === 0) {
+  if (!diffBody) {
     return undefined;
   }
-  const body = diffLines.join('\n');
-  return `User adjustments to ${path}:\n\n\`\`\`diff\n${body}\n\`\`\``;
+
+  return `User adjustments to ${path}:\n\n\`\`\`diff\n${diffBody}\n\`\`\``;
 }
 
 export interface WriteApprovedContentResult {
