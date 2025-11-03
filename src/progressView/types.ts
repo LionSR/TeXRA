@@ -38,3 +38,10 @@ export interface InstructionUpdate {
   text: string;
   metadata?: InstructionMetadata;
 }
+
+export interface ToolEditApprovalPrompt {
+  requestId: string;
+  path: string;
+  relativePath: string;
+  sourceTool: string;
+}
