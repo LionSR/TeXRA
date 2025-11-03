@@ -51,9 +51,7 @@ describe('ToolUseFollowUpCoordinator', () => {
     | ((streamId: StreamTabId) => ToolUseSessionSnapshot | undefined)
     | undefined;
   let prepareAgentImplementation:
-    | ((
-        factory: (init: any) => AgentExecutionContext,
-      ) => Promise<{
+    | ((factory: (init: any) => AgentExecutionContext) => Promise<{
         agent: BaseToolUseAgent;
         agentType: AgentType;
         context?: AgentExecutionContext;

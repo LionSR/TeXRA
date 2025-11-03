@@ -36,7 +36,11 @@ const CHANNEL = 'toolUseFollowUpCoordinator';
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
   contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
-): Promise<{ agent: BaseToolUseAgent; agentType: AgentType; context: AgentExecutionContext }> {
+): Promise<{
+  agent: BaseToolUseAgent;
+  agentType: AgentType;
+  context: AgentExecutionContext;
+}> {
   const provider = ProgressViewProvider.getInstance();
   if (!provider) {
     throw new Error('Progress view provider is not initialized.');
@@ -52,12 +56,13 @@ async function buildToolUseAgent(
   }
 
   const fullConfig = AgentConfigSchema.parse(taskState.agentConfig);
-  const { agent, agentType, context } = await prepareAgentInstance<BaseToolUseAgent>({
-    agentName: fullConfig.agent,
-    configPayload: fullConfig,
-    executionId: snapshot.executionId as ExecutionId,
-    contextFactory,
-  });
+  const { agent, agentType, context } =
+    await prepareAgentInstance<BaseToolUseAgent>({
+      agentName: fullConfig.agent,
+      configPayload: fullConfig,
+      executionId: snapshot.executionId as ExecutionId,
+      contextFactory,
+    });
 
   if (!(agent instanceof BaseToolUseAgent) || agentType !== AgentType.ToolUse) {
     throw new Error('Attempted to resume a non tool-use agent.');

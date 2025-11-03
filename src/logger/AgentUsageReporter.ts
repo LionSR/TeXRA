@@ -26,7 +26,8 @@ export class AgentUsageReporter {
         stream: this.streamId,
         groupId,
         usage: {
-          inputTokens: stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
+          inputTokens:
+            stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
           outputTokens: stats.outputTokens,
           cost: stats.cost,
         },

@@ -30,7 +30,10 @@ function getStore(): Map<ChannelKey, ChannelContext> {
   return store;
 }
 
-function getContext(channel: string, isAgent: boolean): ChannelContext | undefined {
+function getContext(
+  channel: string,
+  isAgent: boolean,
+): ChannelContext | undefined {
   const store = getStore();
   return store.get(getChannelKey(channel, isAgent));
 }
@@ -72,7 +75,11 @@ function pushGroupContext(
   contextStorage.enterWith(store);
 }
 
-function popGroupContext(channel: string, groupId: string, isAgent: boolean): void {
+function popGroupContext(
+  channel: string,
+  groupId: string,
+  isAgent: boolean,
+): void {
   const store = getStore();
   const key = getChannelKey(channel, isAgent);
   const previous = previousStacks.get(`${key}:${groupId}`);
