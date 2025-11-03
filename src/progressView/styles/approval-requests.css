@@ -66,8 +66,19 @@
   gap: 0.5rem;
 }
 
-.approval-request__actions vscode-button {
-  min-width: 96px;
+.approval-request__actions::part(container) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.approval-request__actions vscode-toolbar-button {
+  min-width: 180px;
+}
+
+.approval-request__actions vscode-toolbar-button::part(control) {
+  justify-content: flex-start;
+  gap: 0.4rem;
 }
 
 .approval-request__actions [hidden] {
