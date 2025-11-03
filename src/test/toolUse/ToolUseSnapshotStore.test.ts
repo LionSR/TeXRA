@@ -198,6 +198,45 @@ describe('ToolUseSnapshotStore', () => {
     assert.equal(snapshots[0].executionId, executionId);
   });
 
+  it('load normalizes legacy toolState shape', async () => {
+    const legacySnapshot = {
+      version: 1,
+      executionId,
+      streamId,
+      agentName: 'demo-agent',
+      model: 'demo-model',
+      session: {
+        agentType: AgentType.ToolUse,
+        agentCategory: AgentCategory.ToolUse,
+      },
+      messages: [],
+      toolState: {
+        lastResponse: 'legacy-last',
+        accumulatedOutput: 'legacy-all',
+        mediaFiles: ['legacy-media.png'],
+        thinkingBlocks: [{ kind: 'legacy' }],
+        thinkingAdded: true,
+        texcountStats: 'legacy',
+      },
+      lastUpdated: Date.now(),
+    } as const;
+
+    const snapshotPath = path.join('toolUseSessions', `${executionId}.json`);
+    readJsonResponses.set(snapshotPath, legacySnapshot);
+
+    const loaded = await ToolUseSnapshotStore.load(executionId);
+
+    assert.ok(loaded);
+    assert.equal(loaded.toolState.assembly.lastResponse, 'legacy-last');
+    assert.equal(loaded.toolState.assembly.accumulatedOutput, 'legacy-all');
+    assert.deepEqual(loaded.toolState.media.files, ['legacy-media.png']);
+    assert.deepEqual(loaded.toolState.reasoning.thinkingBlocks, [
+      { kind: 'legacy' },
+    ]);
+    assert.equal(loaded.toolState.reasoning.thinkingAdded, true);
+    assert.equal(loaded.toolState.document.texcountStats, 'legacy');
+  });
+
   it('load returns null when persistence disabled', async () => {
     configModule.getToolUsePersistenceEnabled = () => false;
 

@@ -15,7 +15,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-export const ToolRuntimeStateSnapshotSchema = z
+const ToolRuntimeStateSnapshotStrictSchema = z
   .object({
     assembly: z
       .object({
@@ -33,6 +33,49 @@ export const ToolRuntimeStateSnapshotSchema = z
     document: z.object({ texcountStats: z.string().nullable() }).strict(),
   })
   .strict();
+
+const ToolRuntimeStateSnapshotLegacySchema = z
+  .object({
+    lastResponse: z.string().optional(),
+    accumulatedOutput: z.string().optional(),
+    mediaFiles: z.array(z.string()).optional(),
+    thinkingBlocks: z.array(z.unknown()).optional(),
+    thinkingAdded: z.boolean().optional(),
+    texcountStats: z.string().nullable().optional(),
+  })
+  .passthrough()
+  .transform((legacy) => ({
+    assembly: {
+      lastResponse: legacy.lastResponse ?? '',
+      accumulatedOutput: legacy.accumulatedOutput ?? '',
+    },
+    media: {
+      files: legacy.mediaFiles ?? [],
+    },
+    reasoning: {
+      thinkingBlocks: legacy.thinkingBlocks ?? [],
+      thinkingAdded: legacy.thinkingAdded ?? false,
+    },
+    document: {
+      texcountStats: legacy.texcountStats ?? null,
+    },
+  }));
+
+export type ToolRuntimeStateSnapshot = z.infer<
+  typeof ToolRuntimeStateSnapshotStrictSchema
+>;
+
+export const ToolRuntimeStateSnapshotSchema = z
+  .union([
+    ToolRuntimeStateSnapshotStrictSchema,
+    ToolRuntimeStateSnapshotLegacySchema,
+  ])
+  .transform((value): ToolRuntimeStateSnapshot => {
+    if ('assembly' in value) {
+      return value;
+    }
+    return value as ToolRuntimeStateSnapshot;
+  });
 
 const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
