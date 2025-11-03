@@ -6,6 +6,7 @@ import {
   DIFF_INSERT,
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 
 // Local imports - utils
 import { toolResult, type ToolResult } from '@tools/result';
@@ -30,8 +31,6 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
 
 const APPROVAL_SCHEME = 'texra-tool-edit';
 
-type ApprovalResolutionSource = 'progressView' | 'notification' | 'dismiss';
-
 interface PendingApprovalEntry {
   request: ToolEditApprovalRequest;
   originalUri: vscode.Uri;
@@ -40,15 +39,12 @@ interface PendingApprovalEntry {
   proposedContent: string;
   title: string;
   isSettled: () => boolean;
-  settle: (
-    result: ToolEditApprovalResult,
-    source: ApprovalResolutionSource,
-  ) => void;
+  settle: (result: ToolEditApprovalResult) => void;
 }
 
 interface ProgressViewApprovalActionPayload {
   requestId: string;
-  action: 'approve' | 'reject' | 'openDiff';
+  action: 'approve' | 'reject' | 'openDiff' | 'approveAll';
   note?: string;
 }
 
@@ -90,6 +86,15 @@ let customHandler:
   | undefined;
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
+let approvalsBypassedForSession = false;
+
+function enableSessionApprovalBypass(): void {
+  approvalsBypassedForSession = true;
+}
+
+export function setToolEditApprovalSessionBypass(enabled: boolean): void {
+  approvalsBypassedForSession = enabled;
+}
 
 export function initializeToolEditApproval(
   context: vscode.ExtensionContext,
@@ -121,7 +126,7 @@ function createVirtualUri(
 ): vscode.Uri {
   const encodedPath = encodeURIComponent(path);
   const encodedTool = encodeURIComponent(sourceTool);
-  const nonce = Date.now().toString(36);
+  const nonce = randomUUID();
   return vscode.Uri.parse(
     `${APPROVAL_SCHEME}://${side}/${encodedTool}/${encodedPath}?t=${nonce}`,
   );
@@ -149,6 +154,7 @@ async function showProgressViewApprovalPrompt(
       path: request.path,
       relativePath,
       sourceTool: request.sourceTool,
+      allowBypass: !approvalsBypassedForSession,
     });
   } catch (error) {
     console.warn('Unable to show progress view approval prompt', error);
@@ -216,28 +222,60 @@ async function revealFirstChange(
     return;
   }
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  const targetUri = proposedUri.toString();
+  const position = new vscode.Position(line, 0);
+
+  const tryReveal = () => {
     const editor = vscode.window.visibleTextEditors.find(
-      (candidate) =>
-        candidate.document.uri.toString() === proposedUri.toString(),
+      (candidate) => candidate.document.uri.toString() === targetUri,
     );
 
-    if (editor) {
-      const position = new vscode.Position(line, 0);
-      editor.selections = [new vscode.Selection(position, position)];
-      editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenter,
-      );
-      return;
+    if (!editor) {
+      return false;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    editor.selections = [new vscode.Selection(position, position)];
+    editor.revealRange(
+      new vscode.Range(position, position),
+      vscode.TextEditorRevealType.InCenter,
+    );
+    return true;
+  };
+
+  if (tryReveal()) {
+    return;
   }
 
-  await vscode.commands.executeCommand(
-    'workbench.action.compareEditor.nextChange',
-  );
+  await new Promise<void>((resolve) => {
+    let resolved = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const disposable = vscode.window.onDidChangeVisibleTextEditors(() => {
+      if (!resolved && tryReveal()) {
+        resolved = true;
+        disposeAll();
+        resolve();
+      }
+    });
+
+    function disposeAll() {
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      disposable.dispose();
+    }
+
+    timer = setTimeout(() => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      disposeAll();
+      tryReveal();
+      resolve();
+    }, 1500);
+  });
 }
 
 async function closeApprovalEditors(
@@ -313,18 +351,12 @@ async function nativeRequestApproval(
     result = await new Promise<ToolEditApprovalResult>((resolve) => {
       let settled = false;
 
-      const settle = (
-        value: ToolEditApprovalResult,
-        source: ApprovalResolutionSource,
-      ) => {
+      const settle = (value: ToolEditApprovalResult) => {
         if (settled) {
           return;
         }
         settled = true;
         pendingApprovals.delete(requestId);
-        if (source === 'progressView') {
-          void safeExecuteCommand('workbench.action.closeMessages');
-        }
         resolve(value);
       };
 
@@ -341,73 +373,6 @@ async function nativeRequestApproval(
 
       pendingApprovals.set(requestId, entry);
       void showProgressViewApprovalPrompt(requestId, request, description);
-
-      const approve: vscode.MessageItem = { title: 'Approve' };
-      const reject: vscode.MessageItem = {
-        title: 'Reject',
-        isCloseAffordance: true,
-      };
-
-      void vscode.window
-        .showInformationMessage(
-          `Apply changes from ${sourceTool} to ${description}?`,
-          {
-            detail:
-              'Review the diff in the editor. This notification stays open until you respond.',
-            modal: false,
-          },
-          approve,
-          reject,
-        )
-        .then(
-          async (selection) => {
-            if (settled) {
-              return;
-            }
-
-            if (selection === approve) {
-              settle({ accepted: true }, 'notification');
-              return;
-            }
-
-            if (selection === reject) {
-              const userMessage = await vscode.window.showInputBox({
-                prompt: 'Optionally share why the change was rejected',
-                placeHolder:
-                  'Add guidance for the assistant (press Enter to skip)',
-              });
-              settle(
-                {
-                  accepted: false,
-                  userMessage: userMessage?.trim() || undefined,
-                },
-                'notification',
-              );
-              return;
-            }
-
-            settle(
-              {
-                accepted: false,
-                userMessage: 'User dismissed the approval notification.',
-              },
-              'dismiss',
-            );
-          },
-          (error: unknown) => {
-            if (settled) {
-              return;
-            }
-            console.warn('Approval notification failed', error);
-            settle(
-              {
-                accepted: false,
-                userMessage: 'Approval prompt failed to display.',
-              },
-              'dismiss',
-            );
-          },
-        );
     });
 
     return result;
@@ -423,8 +388,14 @@ async function nativeRequestApproval(
 async function enqueueApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  const run = async () =>
-    customHandler ? customHandler(request) : nativeRequestApproval(request);
+  const run = async () => {
+    if (approvalsBypassedForSession) {
+      return { accepted: true };
+    }
+    return customHandler
+      ? customHandler(request)
+      : nativeRequestApproval(request);
+  };
 
   const operation = queue.then(run);
   queue = operation.then(
@@ -443,6 +414,10 @@ export async function requestToolEditApproval(
   );
 
   if (!approvalsEnabled) {
+    return { accepted: true };
+  }
+
+  if (approvalsBypassedForSession) {
     return { accepted: true };
   }
 
@@ -481,7 +456,13 @@ export async function handleProgressViewToolEditApprovalAction(
   }
 
   if (payload.action === 'approve') {
-    entry.settle({ accepted: true }, 'progressView');
+    entry.settle({ accepted: true });
+    return;
+  }
+
+  if (payload.action === 'approveAll') {
+    enableSessionApprovalBypass();
+    entry.settle({ accepted: true });
     return;
   }
 
@@ -495,13 +476,10 @@ export async function handleProgressViewToolEditApprovalAction(
       userMessage = note?.trim();
     }
 
-    entry.settle(
-      {
-        accepted: false,
-        userMessage: userMessage || undefined,
-      },
-      'progressView',
-    );
+    entry.settle({
+      accepted: false,
+      userMessage: userMessage || undefined,
+    });
   }
 }
 
