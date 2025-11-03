@@ -1,6 +1,3 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
 // Local imports - persistence
 import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
@@ -23,7 +20,7 @@ export class StreamTabsManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.STREAM_TABS, 'texra.logStreams');
+    super(persistence, WorkspaceStateKey.STREAM_TABS);
     this.logger = new AgentLogger('StreamTabsManager');
   }
 
@@ -32,12 +29,6 @@ export class StreamTabsManager extends PersistentMapManager<
    */
   addMessage(stream: StreamTabId, message: LogMessageData): void {
     const messages = this.ensureMessages(stream);
-
-    // Ensure message has required fields
-    if (!message.id) {
-      message.id = randomUUID();
-    }
-
     messages.push(message);
 
     // Limit message history to prevent memory issues
@@ -124,43 +115,6 @@ export class StreamTabsManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<LogMessageData[]> {
-    const messages = Array.isArray(data) ? data : [];
-    return messages.map((raw) => {
-      const message = raw as Partial<LogMessageData> & {
-        message?: string;
-      };
-
-      const rawTimestamp = message.timestamp;
-      let timestamp = Date.now();
-      if (typeof rawTimestamp === 'number') {
-        timestamp = rawTimestamp;
-      } else if (typeof rawTimestamp === 'string') {
-        const numeric = Number(rawTimestamp);
-        if (!Number.isNaN(numeric)) {
-          timestamp = numeric;
-        }
-      }
-
-      const text =
-        typeof message.text === 'string'
-          ? message.text
-          : typeof message.message === 'string'
-            ? message.message
-            : '';
-
-      return {
-        id:
-          typeof message.id === 'string' && message.id
-            ? message.id
-            : randomUUID(),
-        text,
-        level: message.level ?? 'info',
-        timestamp,
-        messageType: message.messageType ?? 'default',
-        data: message.data,
-        groupId: message.groupId,
-        verbose: message.verbose,
-      } satisfies LogMessageData;
-    });
+    return Array.isArray(data) ? (data as LogMessageData[]) : [];
   }
 }

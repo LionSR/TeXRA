@@ -327,8 +327,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus =
-      provider?.eventHandler.getStreamStatus(activeStreamId);
+    const currentStatus = provider?.state.getStreamStatus(activeStreamId);
     if (!isResume && currentStatus === 'running') {
       const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);

@@ -25,14 +25,6 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
-// Type aliases for status values
-type StreamStatusType =
-  | typeof STATUS.RUNNING
-  | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING
-  | typeof STATUS.RESUMING;
-
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
  * This class now focuses on orchestration and delegation to focused managers,
@@ -204,12 +196,12 @@ export class ProgressViewProvider
     // Update all webview content using the new updater
     this.webviewUpdater.updateAll(
       this.state,
-      this.eventHandler.getAllStreamStatuses(),
+      this.state.getAllStreamStatuses(),
     );
 
     // Update status for current stream
     if (this.state.activeStream) {
-      const status = this.eventHandler.getStreamStatus(this.state.activeStream);
+      const status = this.state.getStreamStatus(this.state.activeStream);
       if (status) {
         this.webviewUpdater.updateStatus(status);
       }
@@ -266,45 +258,7 @@ export class ProgressViewProvider
     waitingStreams?: Set<string>,
   ): Promise<void> {
     // Get affected streams and set their status to ERROR
-    const affectedStreams =
-      this.eventHandler.resetRunningTasksToError(waitingStreams);
-
-    // Also check ALL streams for running groups, not just affected streams
-    // This ensures we catch any groups that might be running even if stream status is not
-    for (const [streamId, groups] of this.state.taskGroups.getAll().entries()) {
-      if (groups.size > 0) {
-        let groupsUpdated = false;
-        for (const [groupId, group] of groups.entries()) {
-          if (group.status === STATUS.RUNNING) {
-            // Update the group to ERROR status with current end time
-            const endTime = Date.now();
-            this.state.taskGroups.updateGroup({
-              stream: streamId,
-              groupId,
-              updates: {
-                status: STATUS.ERROR,
-                endTime,
-              },
-            });
-
-            this.logger.debug(
-              `Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`,
-            );
-            groupsUpdated = true;
-          }
-        }
-
-        // If we updated groups but the stream wasn't in affected streams,
-        // we should still ensure the webview updates
-        if (groupsUpdated && !affectedStreams.includes(streamId)) {
-          this.logger.debug(
-            `Stream ${streamId} had running groups but wasn't marked as affected`,
-          );
-        }
-      }
-    }
-
-    // The TaskGroupManager.updateGroup() method automatically saves state
+    this.state.resetRunningStatuses(waitingStreams);
   }
 
   /**
@@ -326,9 +280,7 @@ export class ProgressViewProvider
 
     // Update only log content and groups (focused responsibility)
     const messages = this.state.streamTabs.getMessages(stream);
-    const groups = Array.from(
-      this.state.taskGroups.getStreamGroups(stream).values(),
-    );
+    const groups = Object.values(this.state.taskGroups.getStreamGroups(stream));
     this.webviewUpdater.updateLogContent(stream, messages, groups);
   }
 

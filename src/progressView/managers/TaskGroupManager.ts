@@ -7,8 +7,13 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - modules
+import { STATUS } from '../modules/constants.js';
+
 // Local imports - types
-import { TaskGroup } from '@logger/LogTypes';
+import type { TaskGroup } from '@logger/LogTypes';
+
+type TaskGroupRecord = Record<string, TaskGroup>;
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;
@@ -18,104 +23,93 @@ export interface TaskGroupUpdatePayload {
 
 /**
  * Manages task groups collection with persistence.
- * Handles adding, updating, and managing task groups for different streams.
+ * Stores groups as plain objects keyed by group ID for straightforward
+ * serialization.
  */
 export class TaskGroupManager extends PersistentMapManager<
   StreamTabId,
-  Map<string, TaskGroup>
+  TaskGroupRecord
 > {
   private readonly logger: AgentLogger;
 
   constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
+    super(persistence, WorkspaceStateKey.TASK_GROUPS);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
-  /**
-   * Add a task group to a stream
-   */
   addGroup(stream: StreamTabId, groupId: string, group: TaskGroup): void {
-    if (!this.has(stream)) {
-      this.items.set(stream, new Map());
-    }
-
-    const streamGroups = this.get(stream)!;
-    streamGroups.set(groupId, { ...group });
+    const groups = this.ensureGroups(stream);
+    groups[groupId] = { ...group };
     this.save();
   }
 
-  /**
-   * Update an existing task group
-   */
   updateGroup({ stream, groupId, updates }: TaskGroupUpdatePayload): void {
-    const streamGroups = this.get(stream);
-    if (!streamGroups) {
-      this.logger.warn(
-        `Cannot update group ${groupId}: stream ${stream} not found`,
-      );
-      return;
+    const groups = this.ensureGroups(stream);
+    const existing = groups[groupId];
+    if (!existing) {
+      groups[groupId] = {
+        id: groupId,
+        name: updates.name ?? groupId,
+        startTime: updates.startTime ?? Date.now(),
+        endTime: updates.endTime,
+        status: updates.status ?? STATUS.RUNNING,
+        parentGroupId: updates.parentGroupId,
+      };
+    } else {
+      groups[groupId] = { ...existing, ...updates };
     }
-
-    const group = streamGroups.get(groupId);
-    if (!group) {
-      this.logger.warn(
-        `Cannot update group ${groupId}: group not found in stream ${stream}`,
-      );
-      return;
-    }
-
-    // Apply updates
-    Object.assign(group, updates);
-    streamGroups.set(groupId, group);
     this.save();
   }
 
-  /**
-   * Get a specific task group
-   */
   getGroup(stream: StreamTabId, groupId: string): TaskGroup | undefined {
-    const streamGroups = this.get(stream);
-    return streamGroups?.get(groupId);
+    const groups = this.items.get(stream);
+    return groups ? groups[groupId] : undefined;
   }
 
-  /**
-   * Get all groups for a stream
-   */
-  getStreamGroups(stream: StreamTabId): Map<string, TaskGroup> {
-    return this.get(stream) || new Map();
+  getStreamGroups(stream: StreamTabId): TaskGroupRecord {
+    return this.items.get(stream) ?? {};
   }
 
-  /**
-   * Check if a stream has groups
-   */
   hasStream(stream: StreamTabId): boolean {
-    return this.has(stream);
+    return this.items.has(stream);
   }
 
-  /**
-   * Delete all groups for a stream
-   */
   deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+    super.delete(stream);
   }
 
-  /**
-   * Clear all groups
-   */
   clear(): void {
     super.clear();
   }
 
-  /**
-   * Set all groups (used during loading)
-   */
-  setAll(groups: Map<StreamTabId, Map<string, TaskGroup>>): void {
-    super.setAll(groups);
+  markRunningGroupsErrored(timestamp: number): StreamTabId[] {
+    const affected: StreamTabId[] = [];
+
+    for (const [stream, groups] of this.items.entries()) {
+      let updated = false;
+      for (const [id, group] of Object.entries(groups)) {
+        if (group.status === STATUS.RUNNING) {
+          groups[id] = {
+            ...group,
+            status: STATUS.ERROR,
+            endTime: group.endTime ?? timestamp,
+          };
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        affected.push(stream);
+      }
+    }
+
+    if (affected.length > 0) {
+      this.save();
+    }
+
+    return affected;
   }
 
-  /**
-   * Load task groups from persistence
-   */
   async load(): Promise<void> {
     await super.load();
     if (this.items.size > 0) {
@@ -123,40 +117,40 @@ export class TaskGroupManager extends PersistentMapManager<
     }
   }
 
-  /** Convert groups map to plain object */
   protected override serialize(
-    value: Map<string, TaskGroup>,
+    value: TaskGroupRecord,
     _key: StreamTabId,
   ): unknown {
-    return Object.fromEntries(value.entries());
+    return value;
   }
 
-  /** Normalize loaded groups */
   protected override async deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<Map<string, TaskGroup>> {
+  ): Promise<TaskGroupRecord> {
     if (!data || typeof data !== 'object') {
-      return new Map();
+      return {};
     }
 
-    const entries = Object.entries(
-      data as Record<string, (TaskGroup & { id?: string }) | undefined>,
-    );
-    const groups = new Map<string, TaskGroup>();
-
-    for (const [key, value] of entries) {
-      if (!value) {
+    const record: TaskGroupRecord = {};
+    for (const [groupId, raw] of Object.entries(
+      data as Record<string, TaskGroup | undefined>,
+    )) {
+      if (!raw) {
         continue;
       }
-
-      const group: TaskGroup = {
-        ...value,
-        id: value.id ?? key,
-      } as TaskGroup;
-      groups.set(key, group);
+      record[groupId] = { ...raw, id: raw.id ?? groupId };
     }
 
+    return record;
+  }
+
+  private ensureGroups(stream: StreamTabId): TaskGroupRecord {
+    let groups = this.items.get(stream);
+    if (!groups) {
+      groups = {};
+      this.items.set(stream, groups);
+    }
     return groups;
   }
 }

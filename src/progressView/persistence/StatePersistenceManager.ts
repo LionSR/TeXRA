@@ -43,27 +43,4 @@ export class StatePersistenceManager {
     return workspaceFolder ? `${key}.${workspaceFolder.uri.fsPath}` : key;
   }
 
-  /**
-   * Load with legacy key fallback and migration
-   */
-  async loadWithMigration<T>(
-    newKey: string,
-    legacyKey: string,
-    defaultValue: T,
-  ): Promise<T> {
-    // Try new key first
-    let value = await this.load(newKey, undefined as any);
-
-    if (value === undefined) {
-      // Try legacy key
-      value = await this.load(legacyKey, defaultValue);
-      if (value !== defaultValue) {
-        // Migrate to new key and clean up old key
-        await this.save(newKey, value);
-        await this.delete(legacyKey);
-      }
-    }
-
-    return value !== undefined ? value : defaultValue;
-  }
 }

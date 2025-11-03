@@ -251,51 +251,8 @@ export class ProgressViewState {
   /** Load saved state from VS Code storage. */
   load() {
     const previous = this.stateManager.getState();
-    if (previous.groupToggleStates) {
-      let data = previous.groupToggleStates;
-      if (!Array.isArray(data) && typeof data === 'string') {
-        try {
-          const parsed = JSON.parse(data);
-          if (Array.isArray(parsed)) {
-            data = parsed;
-          } else {
-            console.error(
-              'Failed to restore group toggle states: parsed data is not an array',
-            );
-            return;
-          }
-        } catch (error) {
-          console.error(
-            'Failed to restore group toggle states: could not parse legacy string data',
-            error,
-          );
-          return;
-        }
-      }
-
-      if (!Array.isArray(data)) {
-        console.error(
-          'Failed to restore group toggle states: data is not an array',
-        );
-        return;
-      }
-
-      const hasValidEntries = data.every((entry) => {
-        if (!Array.isArray(entry) || entry.length !== 2) {
-          return false;
-        }
-        const [id, collapsed] = entry;
-        return typeof id === 'string' && typeof collapsed === 'boolean';
-      });
-
-      if (!hasValidEntries) {
-        console.error(
-          'Failed to restore group toggle states: invalid entry format',
-        );
-        return;
-      }
-
-      this.toggleStates.load(data);
+    if (Array.isArray(previous.groupToggleStates)) {
+      this.toggleStates.load(previous.groupToggleStates);
     }
   }
 

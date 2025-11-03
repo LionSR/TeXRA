@@ -13,7 +13,6 @@ export abstract class PersistentMapManager<K extends string, V> {
   constructor(
     protected readonly persistence: StatePersistenceManager,
     protected readonly storageKey: WorkspaceStateKey,
-    protected readonly legacyKey?: string,
   ) {}
 
   /** Add an entry to the map and persist it */
@@ -73,16 +72,10 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.legacyKey
-      ? await this.persistence.loadWithMigration<Record<string, unknown>>(
-          this.storageKey,
-          this.legacyKey,
-          {},
-        )
-      : await this.persistence.load<Record<string, unknown>>(
-          this.storageKey,
-          {},
-        );
+    const saved = await this.persistence.load<Record<string, unknown>>(
+      this.storageKey,
+      {},
+    );
 
     if (saved && Object.keys(saved).length > 0) {
       const entries: [K, V][] = [];

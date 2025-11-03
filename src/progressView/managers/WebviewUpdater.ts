@@ -287,8 +287,8 @@ export class WebviewUpdater {
     if (activeStream) {
       // Update log content for active stream
       const messages = state.streamTabs.getMessages(activeStream);
-      const groups = Array.from(
-        state.taskGroups.getStreamGroups(activeStream).values(),
+      const groups = Object.values(
+        state.taskGroups.getStreamGroups(activeStream),
       );
       this.updateLogContent(activeStream, messages, groups);
 

@@ -11,16 +11,25 @@ import { WorkspaceFS } from '@utils/files';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 
+type FilesByRound<T> = { [key: number]: T[] };
+
+interface StreamOutputState {
+  files: FilesByRound<OutputFileInfo>;
+  missing: FilesByRound<string>;
+}
+
+function createEmptyState(): StreamOutputState {
+  return { files: {}, missing: {} };
+}
+
 /**
- * Manages output files collection with persistence and file existence validation.
- * Handles adding, updating, and managing output files for different streams.
+ * Manages output files collection with persistence.
+ * Stores output and missing entries in a single structure per stream.
  */
 export class OutputFilesManager extends PersistentMapManager<
   StreamTabId,
-  { [key: number]: OutputFileInfo[] }
+  StreamOutputState
 > {
-  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
-    new Map();
   private readonly logger: AgentLogger;
   private totalFilesProcessed = 0;
   private totalFilesRemoved = 0;
@@ -30,110 +39,60 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /** Add output files for a stream and round */
-  addFiles(
-    stream: StreamTabId,
-    filesByRound: { [key: number]: OutputFileInfo[] },
-  ): void {
-    const existing = this.ensureStreamFiles(stream);
-
+  addFiles(stream: StreamTabId, filesByRound: FilesByRound<OutputFileInfo>): void {
+    const state = this.ensureState(stream);
     for (const [round, files] of Object.entries(filesByRound)) {
-      existing[Number(round)] = files;
+      state.files[Number(round)] = files;
     }
-
     this.save();
   }
 
-  /** Update missing outputs for a stream */
-  updateMissingOutputs(
-    stream: StreamTabId,
-    filesByRound: { [key: number]: string[] },
-  ): void {
-    const streamMissing = this.ensureMissingOutputs(stream);
-
+  updateMissingOutputs(stream: StreamTabId, filesByRound: FilesByRound<string>): void {
+    const state = this.ensureState(stream);
     for (const [round, files] of Object.entries(filesByRound)) {
-      const roundNum = parseInt(round, 10);
-      streamMissing[roundNum] = files;
+      state.missing[Number(round)] = files;
     }
-
-    this.saveMissingOutputs();
+    this.save();
   }
 
-  /** Get output files for a stream */
-  getFiles(stream: StreamTabId): { [key: number]: OutputFileInfo[] } {
-    const files = this.items.get(stream);
-    if (files) {
-      return files;
-    }
-    return {};
+  getFiles(stream: StreamTabId): FilesByRound<OutputFileInfo> {
+    return this.items.get(stream)?.files ?? {};
   }
 
-  /** Get missing outputs for a stream */
-  getMissingOutputs(stream: StreamTabId): { [key: number]: string[] } {
-    const missing = this._missingOutputs.get(stream);
-    if (missing) {
-      return missing;
-    }
-    return {};
+  getMissingOutputs(stream: StreamTabId): FilesByRound<string> {
+    return this.items.get(stream)?.missing ?? {};
   }
 
-  /** Clear output files for a stream */
   clearFiles(stream: StreamTabId): void {
-    this.delete(stream);
-  }
-
-  /** Clear missing outputs for a stream */
-  clearMissingOutputs(stream: StreamTabId): void {
-    if (!this._missingOutputs.delete(stream)) {
+    const state = this.items.get(stream);
+    if (!state) {
       return;
     }
-    this.saveMissingOutputs();
+    state.files = {};
+    this.save();
   }
 
-  /** Delete all files for a stream */
+  clearMissingOutputs(stream: StreamTabId): void {
+    const state = this.items.get(stream);
+    if (!state) {
+      return;
+    }
+    state.missing = {};
+    this.save();
+  }
+
   deleteStream(stream: StreamTabId): void {
     super.delete(stream);
-    this._missingOutputs.delete(stream);
-    this.saveMissingOutputs();
   }
 
-  /** Clear all output files */
   clear(): void {
     super.clear();
-    this._missingOutputs.clear();
-    this.saveMissingOutputs();
   }
 
-  /** Get all output files */
-  getAllFiles(): Map<StreamTabId, { [key: number]: OutputFileInfo[] }> {
-    return this.getAll();
-  }
-
-  /** Get all missing outputs */
-  getAllMissingOutputs(): Map<StreamTabId, { [key: number]: string[] }> {
-    return new Map(this._missingOutputs);
-  }
-
-  /** Set all output files (used during loading) */
-  setAllFiles(
-    files: Map<StreamTabId, { [key: number]: OutputFileInfo[] }>,
-  ): void {
-    this.setAll(files);
-  }
-
-  /** Set all missing outputs (used during loading) */
-  setAllMissingOutputs(
-    missing: Map<StreamTabId, { [key: number]: string[] }>,
-  ): void {
-    this._missingOutputs = new Map(missing);
-  }
-
-  /** Load output files from persistence and clean up missing files */
   async load(): Promise<void> {
     this.totalFilesProcessed = 0;
     this.totalFilesRemoved = 0;
     await super.load();
-    await this.loadMissingOutputs();
     if (this.totalFilesRemoved > 0) {
       this.logger.info(
         `File cleanup completed: processed ${this.totalFilesProcessed} files, removed ${this.totalFilesRemoved} missing files`,
@@ -141,75 +100,78 @@ export class OutputFilesManager extends PersistentMapManager<
     }
   }
 
-  /** Load missing outputs from persistence */
-  private async loadMissingOutputs(): Promise<void> {
-    const saved = await this.persistence.load<{
-      [key: string]: { [key: number]: string[] };
-    }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
-
-    if (saved && Object.keys(saved).length > 0) {
-      const processed = new Map<StreamTabId, { [key: number]: string[] }>();
-
-      for (const [stream, rounds] of Object.entries(saved)) {
-        const roundMap = Object.fromEntries(
-          Object.entries(rounds).map(([r, files]) => [parseInt(r, 10), files]),
-        );
-        processed.set(stream, roundMap);
-      }
-
-      this._missingOutputs = processed;
-    } else {
-      this._missingOutputs.clear();
-    }
+  protected override serialize(
+    value: StreamOutputState,
+    _key: StreamTabId,
+  ): unknown {
+    return value;
   }
 
-  /** Save missing outputs to persistence */
-  saveMissingOutputs(): void {
-    const obj = Object.fromEntries(this._missingOutputs.entries());
-    this.persistence.save(WorkspaceStateKey.MISSING_OUTPUTS, obj);
-  }
-
-  private ensureStreamFiles(stream: StreamTabId): {
-    [key: number]: OutputFileInfo[];
-  } {
-    let files = this.items.get(stream);
-    if (!files) {
-      files = {};
-      this.items.set(stream, files);
-    }
-    return files;
-  }
-
-  private ensureMissingOutputs(stream: StreamTabId): {
-    [key: number]: string[];
-  } {
-    let missing = this._missingOutputs.get(stream);
-    if (!missing) {
-      missing = {};
-      this._missingOutputs.set(stream, missing);
-    }
-    return missing;
-  }
-
-  /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
-    streamId: StreamTabId,
-  ): Promise<{ [key: number]: OutputFileInfo[] }> {
+    _key: StreamTabId,
+  ): Promise<StreamOutputState> {
     if (!data || typeof data !== 'object') {
-      return {};
+      return createEmptyState();
     }
 
-    const rounds = data as Record<string, unknown>;
-    const roundMap: { [key: number]: OutputFileInfo[] } = {};
+    const raw = data as Partial<StreamOutputState> & {
+      [round: string]: OutputFileInfo[];
+    };
 
-    for (const [roundKey, value] of Object.entries(rounds)) {
-      const round = Number.parseInt(roundKey, 10);
-      if (Number.isNaN(round) || !Array.isArray(value)) {
+    const filesSource = raw.files ?? this.extractLegacyFiles(raw);
+    const missingSource = raw.missing ?? {};
+
+    const files = await this.normalizeFiles(filesSource);
+    const missing = this.normalizeMissing(missingSource);
+
+    return { files, missing };
+  }
+
+  private ensureState(stream: StreamTabId): StreamOutputState {
+    let state = this.items.get(stream);
+    if (!state) {
+      state = createEmptyState();
+      this.items.set(stream, state);
+    }
+    return state;
+  }
+
+  private extractLegacyFiles(
+    legacy: Record<string, OutputFileInfo[]>,
+  ): FilesByRound<OutputFileInfo> {
+    const normalized: FilesByRound<OutputFileInfo> = {};
+    for (const [round, files] of Object.entries(legacy)) {
+      const roundNum = Number.parseInt(round, 10);
+      if (!Number.isNaN(roundNum) && Array.isArray(files)) {
+        normalized[roundNum] = files;
+      }
+    }
+    return normalized;
+  }
+
+  private normalizeMissing(source: FilesByRound<string>): FilesByRound<string> {
+    const normalized: FilesByRound<string> = {};
+    for (const [round, files] of Object.entries(source)) {
+      const roundNum = Number.parseInt(round, 10);
+      if (!Number.isNaN(roundNum) && Array.isArray(files)) {
+        normalized[roundNum] = files;
+      }
+    }
+    return normalized;
+  }
+
+  private async normalizeFiles(
+    source: FilesByRound<OutputFileInfo>,
+  ): Promise<FilesByRound<OutputFileInfo>> {
+    const normalized: FilesByRound<OutputFileInfo> = {};
+
+    for (const [round, infos] of Object.entries(source)) {
+      const roundNum = Number.parseInt(round, 10);
+      if (Number.isNaN(roundNum) || !Array.isArray(infos)) {
         continue;
       }
 
-      const infos = value as OutputFileInfo[];
       this.totalFilesProcessed += infos.length;
 
       try {
@@ -219,13 +181,13 @@ export class OutputFilesManager extends PersistentMapManager<
           this.totalFilesRemoved += removed;
         }
         if (filtered.length > 0) {
-          roundMap[round] = filtered;
+          normalized[roundNum] = filtered;
         }
       } catch {
-        roundMap[round] = infos;
+        normalized[roundNum] = infos;
       }
     }
 
-    return roundMap;
+    return normalized;
   }
 }

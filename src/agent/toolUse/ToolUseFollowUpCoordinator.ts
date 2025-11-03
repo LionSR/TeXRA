@@ -124,9 +124,7 @@ export async function resumeFromSnapshot(
   }
 
   const streamId = snapshot.streamId as StreamTabId;
-  const existingStatus = provider.eventHandler.getStreamStatus(
-    snapshot.streamId,
-  );
+  const existingStatus = provider.state.getStreamStatus(snapshot.streamId);
 
   if (existingStatus === STATUS.RUNNING || existingStatus === STATUS.RESUMING) {
     return { success: false };

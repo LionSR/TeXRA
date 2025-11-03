@@ -68,7 +68,6 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createStreamStatusEvents({
       logger: loggerStub,
-      streamStatus: new Map(),
       setStreamStatus: () => {},
       sendInstructionUpdate: () => {},
       updateLogContentForStream: () => {},

@@ -27,14 +27,6 @@ class FakePersistence {
   async delete(): Promise<void> {
     // no-op
   }
-
-  async loadWithMigration<T>(
-    _newKey: string,
-    _legacyKey: string,
-    defaultValue: T,
-  ): Promise<T> {
-    return defaultValue;
-  }
 }
 
 describe('ProgressViewState.clearOutputState', () => {
@@ -70,10 +62,8 @@ describe('ProgressViewState.clearOutputState', () => {
     const lastSave = persistence.saved[persistence.saved.length - 1];
     assert.equal(lastSave.key, WorkspaceStateKey.TASK_STATES);
 
-    const savedState = lastSave.value as {
-      workflow: Record<string, any>;
-    };
-    const storedWorkflow = savedState.workflow[streamId];
+    const savedState = lastSave.value as Record<string, any>;
+    const storedWorkflow = savedState[streamId];
     assert.deepStrictEqual(storedWorkflow.agentConfig.outputFiles, []);
     assert.equal(storedWorkflow.agentConfig.useMultipleOutputs, false);
     assert.equal(storedWorkflow.activeFiles.output, false);

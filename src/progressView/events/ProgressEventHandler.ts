@@ -30,11 +30,7 @@ import {
 } from './TaskGroupEvents';
 
 // Local imports - events
-import type {
-  StatusType,
-  StreamStatusOrReadyType,
-  StreamStatusType,
-} from './types';
+import type { StreamStatusOrReadyType } from './types';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -43,7 +39,6 @@ import type {
  */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
-  private _streamStatus: Map<string, StreamStatusType> = new Map();
   private readonly streamStatusEvents: StreamStatusEventModule;
   private readonly outputEvents: OutputEventsModule;
   private readonly logEvents: LogEventsModule;
@@ -57,7 +52,6 @@ export class ProgressEventHandler {
     this.logger = new AgentLogger('ProgressEventHandler');
     this.streamStatusEvents = createStreamStatusEvents({
       logger: this.logger,
-      streamStatus: this._streamStatus,
       setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
       sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
       updateLogContentForStream: (stream, options) =>
@@ -143,9 +137,7 @@ export class ProgressEventHandler {
     const { updateInstruction = true } = options;
 
     const messages = this.state.streamTabs.getMessages(stream);
-    const groups = Array.from(
-      this.state.taskGroups.getStreamGroups(stream).values(),
-    );
+    const groups = Object.values(this.state.taskGroups.getStreamGroups(stream));
     this.webviewUpdater.updateLogContent(stream, messages, groups);
 
     // Send output files for current stream
@@ -161,7 +153,7 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateUsage(usage);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
-    const status = this._streamStatus.get(stream) || STATUS.STOPPED;
+    const status = this.state.getStreamStatus(stream) ?? STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
@@ -172,25 +164,13 @@ export class ProgressEventHandler {
   /**
    * Get current stream status
    */
-  getStreamStatus(stream: string): StreamStatusType | undefined {
-    return this._streamStatus.get(stream);
-  }
-
-  /**
-   * Set the status for a specific stream synchronously.
-   */
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void {
-    if (status === STATUS.READY) {
-      this._streamStatus.delete(stream);
-    } else {
-      const nextStatus: StreamStatusType = status;
-      this._streamStatus.set(stream, nextStatus);
-    }
+    this.state.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
       const infos = buildStreamInfos(
         this.state,
-        this._streamStatus,
+        this.state.getAllStreamStatuses(),
         this.state.agentTypeFilter,
       );
       this.webviewUpdater.updateStreams(
@@ -206,18 +186,11 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Get a copy of all stream statuses
-   */
-  getAllStreamStatuses(): Map<string, StreamStatusType> {
-    return new Map(this._streamStatus);
-  }
-
-  /**
    * Initialize a stream when task group events arrive before dedicated
    * status or activation events, preserving any existing status metadata.
    */
   private initializeStreamForTaskGroup(stream: string): void {
-    const existingStatus = this._streamStatus.get(stream);
+    const existingStatus = this.state.getStreamStatus(stream);
 
     this.state.streamTabs.ensureStream(stream);
 
@@ -234,7 +207,7 @@ export class ProgressEventHandler {
 
     this.state.activeStream = stream;
 
-    const status = this._streamStatus.get(stream) ?? STATUS.RUNNING;
+    const status = this.state.getStreamStatus(stream) ?? STATUS.RUNNING;
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
@@ -247,9 +220,9 @@ export class ProgressEventHandler {
    * Mark all running tasks as cancelled (used during restart)
    */
   markAllRunningTasksAsCancelled(): void {
-    for (const [stream, status] of this._streamStatus.entries()) {
+    for (const [stream, status] of this.state.getAllStreamStatuses()) {
       if (status === STATUS.RUNNING) {
-        this._streamStatus.set(stream, STATUS.STOPPED);
+        this.state.setStreamStatus(stream, STATUS.STOPPED);
       }
     }
   }
@@ -259,26 +232,6 @@ export class ProgressEventHandler {
    * Returns the list of affected streams for further processing
    */
   resetRunningTasksToError(waitingStreams?: Set<string>): string[] {
-    const affectedStreams: string[] = [];
-    const waitingSet = waitingStreams ?? new Set<string>();
-
-    for (const [stream, status] of this._streamStatus.entries()) {
-      if (status === STATUS.RUNNING) {
-        if (waitingSet.has(stream)) {
-          this._streamStatus.set(stream, STATUS.WAITING);
-          this.logger.debug(
-            `Stream ${stream} restored to WAITING after reload`,
-          );
-        } else {
-          this._streamStatus.set(stream, STATUS.ERROR);
-          affectedStreams.push(stream);
-          this.logger.debug(
-            `Stream ${stream} set to ERROR due to webview reload`,
-          );
-        }
-      }
-    }
-
-    return affectedStreams;
+    return this.state.resetRunningStatuses(waitingStreams);
   }
 }

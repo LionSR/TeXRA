@@ -140,22 +140,10 @@ export class MainViewState {
         commit: 'HEAD',
       };
 
-      const legacyAgent = previousState.agent;
-      const legacyToolUse = previousState.isToolUseAgent === true;
       const normalizedValues = {
-        sessionType: previousState.sessionType
-          ? previousState.sessionType
-          : legacyToolUse
-            ? SESSION_TYPES.TOOL_USE
-            : defaults.sessionType,
-        workflowAgent:
-          previousState.workflowAgent ??
-          (!legacyToolUse ? legacyAgent : undefined) ??
-          defaults.workflowAgent,
-        toolUseAgent:
-          previousState.toolUseAgent ??
-          (legacyToolUse ? legacyAgent : undefined) ??
-          defaults.toolUseAgent,
+        sessionType: previousState.sessionType ?? defaults.sessionType,
+        workflowAgent: previousState.workflowAgent ?? defaults.workflowAgent,
+        toolUseAgent: previousState.toolUseAgent ?? defaults.toolUseAgent,
       };
 
       VALUE_ELEMENTS.forEach((id) => {

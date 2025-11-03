@@ -15,16 +15,11 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Local imports - events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
-import type {
-  ProgressEventBusLike,
-  StreamStatusType,
-  StreamStatusOrReadyType,
-} from './types';
+import type { ProgressEventBusLike, StreamStatusOrReadyType } from './types';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;
-  streamStatus: Map<string, StreamStatusType>;
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
   sendInstructionUpdate(stream: StreamTabId | ''): void;
   updateLogContentForStream(
@@ -79,7 +74,7 @@ export function createStreamStatusEvents(
     state.activeStream = stream;
 
     const status: StreamStatusOrReadyType =
-      shared.streamStatus.get(stream) ?? STATUS.RUNNING;
+      state.getStreamStatus(stream) ?? STATUS.RUNNING;
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
@@ -133,7 +128,7 @@ export function createStreamStatusEvents(
     if (updater.isAvailable()) {
       const infos: StreamTabInfo[] = buildStreamInfos(
         state,
-        shared.streamStatus,
+        state.getAllStreamStatuses(),
         state.agentTypeFilter,
       );
       updater.updateStreams(infos, state.activeStream, state.agentTypeFilter);
