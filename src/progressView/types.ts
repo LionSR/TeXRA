@@ -44,4 +44,5 @@ export interface ToolEditApprovalPrompt {
   path: string;
   relativePath: string;
   sourceTool: string;
+  allowBypass: boolean;
 }
