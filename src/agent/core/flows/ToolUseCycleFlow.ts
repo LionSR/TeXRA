@@ -224,7 +224,8 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   if (result.error !== undefined) payload.error = result.error;
   if (result.base64Image !== undefined)
     payload.base64Image = result.base64Image;
-  if (result.system !== undefined) payload.system = result.system;
+  if (result.userInstruction !== undefined)
+    payload.userInstruction = result.userInstruction;
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
@@ -674,10 +675,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     // If the tool result includes a user-provided instruction (e.g., from
     // rejecting an edit with a note like "Stop"), append it as a user message
     // so the model treats it as explicit guidance.
-    if (typeof result.system === 'string' && result.system.trim().length > 0) {
+    if (
+      typeof result.userInstruction === 'string' &&
+      result.userInstruction.trim().length > 0
+    ) {
       await options.modelHandler.createUserFollowUpMessages(
         state.messages,
-        result.system,
+        result.userInstruction,
       );
     }
     state.iteration += 1;
