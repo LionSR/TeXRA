@@ -22,6 +22,7 @@ import type { ToolDefinition } from '@model';
 import { AbsoluteFS } from '@utils/files';
 import type { AgentPathResolution } from './AgentPathTypes';
 import { AgentDirectorySource } from './AgentPathTypes';
+import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
@@ -63,41 +64,40 @@ export function validateAgentYamlContent(
 
 /** Loads and parses a YAML file from an absolute path. */
 export async function loadYaml(absolutePath: string): Promise<object> {
-  try {
-    if (!path.isAbsolute(absolutePath)) {
-      throw new Error('loadYaml requires an absolute path');
-    }
-
-    // Read and parse YAML
-    const yamlContent = await AbsoluteFS.read(absolutePath);
-    const parsedYaml = yaml.parse(yamlContent);
-
-    console.log(`Successfully loaded YAML from: ${absolutePath}`);
-    return parsedYaml;
-  } catch (err) {
-    const moreInfo = 'More Info';
-    const openFile = 'Open File';
-    void vscode.window
-      .showErrorMessage(
-        `Error loading YAML file ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`,
-        moreInfo,
-        openFile,
-      )
-      .then(async (selection) => {
-        if (selection === moreInfo) {
-          void vscode.commands.executeCommand('texra.openDoc', 'custom-agents');
-          return;
-        }
-
-        if (selection === openFile) {
-          const document = await vscode.workspace.openTextDocument(
-            vscode.Uri.file(absolutePath),
-          );
-          await vscode.window.showTextDocument(document);
-        }
-      });
-    throw err;
+  if (!path.isAbsolute(absolutePath)) {
+    throw new Error('loadYaml requires an absolute path');
   }
+
+  const yamlContent = await AbsoluteFS.read(absolutePath);
+  return yaml.parse(yamlContent);
+}
+
+export function notifyYamlLoadFailure(
+  absolutePath: string,
+  error: unknown,
+): void {
+  const moreInfo = 'More Info';
+  const openFile = 'Open File';
+
+  void vscode.window
+    .showErrorMessage(
+      `Error loading YAML file ${absolutePath}: ${error instanceof Error ? error.message : String(error)}`,
+      moreInfo,
+      openFile,
+    )
+    .then(async (selection) => {
+      if (selection === moreInfo) {
+        void vscode.commands.executeCommand('texra.openDoc', 'custom-agents');
+        return;
+      }
+
+      if (selection === openFile) {
+        const document = await vscode.workspace.openTextDocument(
+          vscode.Uri.file(absolutePath),
+        );
+        await vscode.window.showTextDocument(document);
+      }
+    });
 }
 
 /**
@@ -125,75 +125,26 @@ export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   return settings;
 }
 
-async function resolveAgentDefinition(
-  agentDirectory: string,
-  agentNameFromFile: string,
-  options?: LoadAgentOptions,
-): Promise<{ filePath: string; resolvedName: string }> {
-  const preferMultiple = options?.preferMultiple ?? false;
-  const candidateNames: string[] = [];
-
-  if (preferMultiple) {
-    const preferredName = agentNameFromFile.endsWith('_multiple')
-      ? agentNameFromFile
-      : `${agentNameFromFile}_multiple`;
-    candidateNames.push(preferredName);
-  }
-
-  candidateNames.push(agentNameFromFile);
-
-  const seenCandidates = new Set<string>();
-  for (const candidate of candidateNames) {
-    if (seenCandidates.has(candidate)) {
-      continue;
-    }
-    seenCandidates.add(candidate);
-
-    const candidatePath = path.join(agentDirectory, `${candidate}.yaml`);
-    if (await AbsoluteFS.exists(candidatePath)) {
-      if (
-        preferMultiple &&
-        candidate === agentNameFromFile &&
-        !agentNameFromFile.endsWith('_multiple')
-      ) {
-        logger.warn(
-          CHANNEL,
-          `Requested multiple outputs for agent "${agentNameFromFile}" but no _multiple definition was found. Falling back to base definition.`,
-        );
-      }
-      return { filePath: candidatePath, resolvedName: candidate };
-    }
-  }
-
-  const fallbackPath = path.join(agentDirectory, `${agentNameFromFile}.yaml`);
-  if (preferMultiple && !agentNameFromFile.endsWith('_multiple')) {
-    logger.warn(
-      CHANNEL,
-      `Requested multiple outputs for agent "${agentNameFromFile}" but no _multiple definition was found. Falling back to base definition.`,
-    );
-  }
-  return { filePath: fallbackPath, resolvedName: agentNameFromFile };
-}
-
 export async function loadAgentSettingAndPrompts(
-  agentPath: AgentPathResolution,
-  agentNameFromFile: string,
+  resolution: AgentPathResolution,
   options?: LoadAgentOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
-    const { filePath: agentFile, resolvedName } = await resolveAgentDefinition(
-      agentPath.directory,
-      agentNameFromFile,
-      options,
-    );
-    const rawConfig = await loadYaml(agentFile);
+    if (options?.preferMultiple && resolution.usedFallback) {
+      logger.warn(
+        CHANNEL,
+        `Requested multiple outputs for agent "${resolution.resolvedName.replace(/_multiple$/, '')}" but no _multiple definition was found. Falling back to base definition.`,
+      );
+    }
+
+    const rawConfig = await loadYaml(resolution.definitionPath);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
     // Extract the agent's declared name from the root of the YAML, if present.
     // This is the authoritative name for this specific agent definition.
     // It's used for context or can be returned if needed, but not part of AgentSetting object.
     const declaredAgentName = config.name;
-    // logger.debug(CHANNEL, `Declared agent name for ${agentNameFromFile}: ${declaredAgentName}`); // Optional: for debugging
+    // logger.debug(CHANNEL, `Declared agent name: ${declaredAgentName}`); // Optional: for debugging
 
     const parent = config.inherits;
 
@@ -203,12 +154,18 @@ export async function loadAgentSettingAndPrompts(
     if (parent) {
       // Load parent settings and prompts recursively
       // Note: The 'name' of the parent agent isn't directly used to override the current agent's settings block structure.
-      const [parentSettings, parentPrompts] = await loadAgentSettingAndPrompts(
-        agentPath,
-        parent, // Parent's name (from its filename or root 'name') is used for recursive loading
-        // Intentionally omit options so parents always load their base
-        // definition instead of inheriting multiple-output preferences.
+      const parentResolution = await resolveAgentDefinitionInDirectory(
+        resolution.directory,
+        resolution.source,
+        parent,
       );
+      if (!parentResolution) {
+        throw new Error(
+          `Unable to locate parent agent "${parent}" in ${resolution.directory}.`,
+        );
+      }
+      const [parentSettings, parentPrompts] =
+        await loadAgentSettingAndPrompts(parentResolution);
 
       // Get current agent's specific settings and prompts from its YAML
       const agentOwnSettings = config.settings;
@@ -231,7 +188,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    ensureAgentTypeForSource(settings, agentPath.source);
+    ensureAgentTypeForSource(settings, resolution.source);
 
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {
@@ -252,38 +209,6 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    // Normalize legacy userReflect field by merging into userRequest
-    if ('userReflect' in prompts && prompts.userReflect) {
-      const userRequest = Array.isArray(prompts.userRequest)
-        ? prompts.userRequest
-        : prompts.userRequest
-          ? [prompts.userRequest]
-          : [];
-      const userReflect = Array.isArray(prompts.userReflect)
-        ? prompts.userReflect
-        : [prompts.userReflect];
-
-      prompts.userRequest = [...userRequest, ...userReflect].filter(Boolean);
-      delete (prompts as any).userReflect;
-
-      // Show warning for legacy userReflect field
-      const migrationGuide = 'View Migration Guide';
-      void vscode.window
-        .showWarningMessage(
-          `Agent "${agentNameFromFile}" uses deprecated "userReflect" field. Please migrate to array-based "userRequest" format for better compatibility.`,
-          migrationGuide,
-        )
-        .then((selection) => {
-          if (selection === migrationGuide) {
-            void vscode.env.openExternal(
-              vscode.Uri.parse(
-                'https://texra.ai/docs/guide/custom-agents#reflection-tips',
-              ),
-            );
-          }
-        });
-    }
-
     // Apply defaults and validate the final settings and prompts
     const validatedSettings = parseAgentSetting(settings);
     const validatedPrompts = AgentPromptSchema.parse(prompts);
@@ -292,17 +217,6 @@ export async function loadAgentSettingAndPrompts(
 
     // The function returns the validated settings block and prompts.
     // The agent's name (declaredAgentName) is known in this scope but not part of AgentSetting.
-    if (
-      options?.preferMultiple &&
-      resolvedName.endsWith('_multiple') &&
-      !agentNameFromFile.endsWith('_multiple')
-    ) {
-      logger.debug(
-        CHANNEL,
-        `Using _multiple agent definition "${resolvedName}" for base agent "${agentNameFromFile}".`,
-      );
-    }
-
     return [settings as AgentSetting, prompts as AgentPrompt];
   } catch (err) {
     vscode.window.showErrorMessage(

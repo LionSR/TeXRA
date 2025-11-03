@@ -17,6 +17,32 @@ import type {
 const CHANNEL = 'ToolUseSessionManager';
 const logger = new AgentLogger(CHANNEL);
 
+interface SnapshotBackend {
+  save(payload: SaveToolUseSnapshotPayload): Promise<void>;
+  load(executionId: ExecutionId): Promise<ToolUseSessionSnapshot | null>;
+  delete(executionId: ExecutionId): Promise<void>;
+  list(): Promise<ToolUseSessionSnapshot[]>;
+  deleteAll(): Promise<void>;
+}
+
+const noopSnapshotBackend: SnapshotBackend = {
+  async save() {},
+  async load() {
+    return null;
+  },
+  async delete() {},
+  async list() {
+    return [];
+  },
+  async deleteAll() {},
+};
+
+function resolveSnapshotBackend(): SnapshotBackend {
+  return getToolUsePersistenceEnabled()
+    ? (ToolUseSnapshotStore as SnapshotBackend)
+    : noopSnapshotBackend;
+}
+
 interface ResumingSessionState {
   queuedFollowUps: string[];
 }
@@ -141,20 +167,16 @@ export class ToolUseSessionManager {
   public static async saveSnapshot(
     payload: SaveToolUseSnapshotPayload,
   ): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
-      return;
-    }
-    await ToolUseSnapshotStore.save(payload);
+    const store = resolveSnapshotBackend();
+    await store.save(payload);
   }
 
   /** Loads a tool-use session snapshot from persistent storage. */
   public static async loadSnapshot(
     executionId: ExecutionId,
   ): Promise<ToolUseSessionSnapshot | null> {
-    if (!this.isPersistenceEnabled()) {
-      return null;
-    }
-    return await ToolUseSnapshotStore.load(executionId);
+    const store = resolveSnapshotBackend();
+    return await store.load(executionId);
   }
 
   /** Deletes a persisted tool-use session snapshot. */
@@ -172,23 +194,20 @@ export class ToolUseSessionManager {
       }
     }
 
-    await ToolUseSnapshotStore.delete(executionId);
+    const store = resolveSnapshotBackend();
+    await store.delete(executionId);
   }
 
   /** Lists all persisted tool-use session snapshots. */
   public static async listSnapshots(): Promise<ToolUseSessionSnapshot[]> {
-    if (!this.isPersistenceEnabled()) {
-      return [];
-    }
-    return await ToolUseSnapshotStore.list();
+    const store = resolveSnapshotBackend();
+    return await store.list();
   }
 
   /** Deletes all persisted tool-use session snapshots. */
   public static async deleteAllSnapshots(): Promise<void> {
-    if (!this.isPersistenceEnabled()) {
-      return;
-    }
-    await ToolUseSnapshotStore.deleteAll();
+    const store = resolveSnapshotBackend();
+    await store.deleteAll();
   }
 }
 

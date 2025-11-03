@@ -41,7 +41,7 @@ async function getRecentCommits(): Promise<string[] | null> {
 
   const workspacePath = WorkspaceFS.getPath();
   if (workspacePath) {
-    const numberOfCommits = getConfig('git.numberOfCommitsToShow', 20);
+    const numberOfCommits = getConfig('texra.git.numberOfCommitsToShow', 20);
 
     // Validate numberOfCommits to prevent injection
     if (

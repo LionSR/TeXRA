@@ -130,7 +130,7 @@ export class AgentDirectoryManager {
   async custom(): Promise<string> {
     this.ensureInitialized();
     const configuredPath = getConfig<string>(
-      'explorer.agentsDirectory',
+      'texra.explorer.agentsDirectory',
       '',
     ).trim();
 
@@ -157,7 +157,9 @@ export class AgentDirectoryManager {
     const selectedPath = folder[0].fsPath;
     await AbsoluteFS.ensureDir(selectedPath);
 
-    await updateConfig('explorer.agentsDirectory', selectedPath);
+    await updateConfig('texra.explorer.agentsDirectory', selectedPath, {
+      prefix: false,
+    });
 
     return selectedPath;
   }

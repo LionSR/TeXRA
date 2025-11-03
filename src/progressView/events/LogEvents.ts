@@ -42,7 +42,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       if (
         logMessage.level === 'debug' &&
-        !getConfig<boolean>('logger.debugMode', false)
+        !getConfig<boolean>('texra.logger.debugMode', false)
       ) {
         return;
       }
