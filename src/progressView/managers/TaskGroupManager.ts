@@ -1,12 +1,13 @@
-// Local imports - progress view
-// Local imports
+// Local imports - progress view persistence
 import { PersistentMapManager } from '../persistence/PersistentMapManager';
 import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+
+// Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Types
+// Local imports - types
 import { TaskGroup } from '@logger/LogTypes';
 
 export interface TaskGroupUpdatePayload {
@@ -135,24 +136,27 @@ export class TaskGroupManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<Map<string, TaskGroup>> {
-    const groups = data as Record<string, TaskGroup>;
-    const map = new Map<string, TaskGroup>();
-    for (const [id, group] of Object.entries(groups)) {
-      const normalized: TaskGroup = {
-        ...group,
-        startTime:
-          typeof group.startTime === 'string'
-            ? new Date(group.startTime).getTime()
-            : group.startTime,
-        endTime:
-          group.endTime !== undefined
-            ? typeof group.endTime === 'string'
-              ? new Date(group.endTime).getTime()
-              : group.endTime
-            : undefined,
-      };
-      map.set(id, normalized);
+    if (!data || typeof data !== 'object') {
+      return new Map();
     }
-    return map;
+
+    const entries = Object.entries(
+      data as Record<string, (TaskGroup & { id?: string }) | undefined>,
+    );
+    const groups = new Map<string, TaskGroup>();
+
+    for (const [key, value] of entries) {
+      if (!value) {
+        continue;
+      }
+
+      const group: TaskGroup = {
+        ...value,
+        id: value.id ?? key,
+      } as TaskGroup;
+      groups.set(key, group);
+    }
+
+    return groups;
   }
 }

@@ -200,11 +200,11 @@ export class DiffCommandExecutor {
       mathMarkup:
         mathMarkupOverride ??
         getConfig<MathMarkupOption>(
-          'latexdiff.mathMarkup',
+          'texra.latexdiff.mathMarkup',
           DEFAULT_MATH_MARKUP,
         ),
       pictureEnvs: getConfig<string>(
-        'latexdiff.pictureEnvironments',
+        'texra.latexdiff.pictureEnvironments',
         DEFAULT_PICTURE_ENVS,
       ),
     };

@@ -34,32 +34,10 @@ const logger = new AgentLogger(CHANNEL);
 
 const STORAGE_DIR = 'toolUseSessions';
 
-async function ensureStorageDir(): Promise<boolean> {
-  try {
-    await StorageFS.ensureDir(STORAGE_DIR);
-    return true;
-  } catch (error) {
-    logger.warn(
-      `Unable to ensure tool-use session directory: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return false;
-  }
-}
-
 async function cleanupExpiredSnapshots(): Promise<void> {
   const hours = getToolUsePersistenceTtlHours();
   const ttlMs = Math.max(hours, 1) * 60 * 60 * 1000;
-  try {
-    await StorageFS.cleanupOldFiles(STORAGE_DIR, ttlMs);
-  } catch (error) {
-    logger.debug(
-      `Failed to run tool-use snapshot cleanup: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
+  await StorageFS.cleanupOldFiles(STORAGE_DIR, ttlMs);
 }
 
 function getSnapshotPath(executionId: ExecutionId): string {
@@ -81,18 +59,7 @@ async function migrateLegacySnapshots(): Promise<void> {
 
   if (!migrationState.promise) {
     migrationState.promise = (async () => {
-      if (!(await ensureStorageDir())) {
-        return;
-      }
-
-      const entries = await StorageFS.readDir(STORAGE_DIR).catch((error) => {
-        logger.debug(
-          `Unable to enumerate tool-use snapshots for migration: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-        return [] as [string, vscode.FileType][];
-      });
+      const entries = await StorageFS.readDir(STORAGE_DIR);
 
       for (const [name, type] of entries) {
         if (type !== vscode.FileType.File || !name.endsWith('.json')) {
@@ -100,21 +67,7 @@ async function migrateLegacySnapshots(): Promise<void> {
         }
 
         const relativePath = path.join(STORAGE_DIR, name);
-        const stored = await StorageFS.readJson<unknown>(relativePath).catch(
-          (error) => {
-            logger.debug(
-              `Skipping migration for ${name}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            );
-            return null;
-          },
-        );
-
-        if (stored === null || stored === undefined) {
-          continue;
-        }
-
+        const stored = await StorageFS.readJson<unknown>(relativePath);
         const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
         if (!parsed.success) {
           logger.debug(`Skipping migration for ${name}: validation failed`);
@@ -123,13 +76,12 @@ async function migrateLegacySnapshots(): Promise<void> {
         try {
           await StorageFS.writeJson(relativePath, parsed.data);
           logger.debug(`Migrated legacy snapshot ${name}`);
-        } catch (e) {
+        } catch (error) {
           logger.debug(
             `Skipping migration for ${name}: write failed: ${
-              e instanceof Error ? e.message : String(e)
+              error instanceof Error ? error.message : String(error)
             }`,
           );
-          continue;
         }
       }
     })()
@@ -148,6 +100,33 @@ async function migrateLegacySnapshots(): Promise<void> {
   await migrationState.promise;
 }
 
+let persistenceEnabled: boolean | null = null;
+let storageReady = false;
+let cleanupPerformed = false;
+
+async function ensureInitialized(): Promise<boolean> {
+  if (persistenceEnabled === null) {
+    persistenceEnabled = getToolUsePersistenceEnabled();
+  }
+
+  if (!persistenceEnabled) {
+    return false;
+  }
+
+  if (!storageReady) {
+    await StorageFS.ensureDir(STORAGE_DIR);
+    storageReady = true;
+  }
+
+  if (!cleanupPerformed) {
+    await cleanupExpiredSnapshots();
+    cleanupPerformed = true;
+  }
+
+  await migrateLegacySnapshots();
+  return true;
+}
+
 export const ToolUseSnapshotStore = {
   /**
    * Initializes snapshot persistence: ensures the storage directory exists,
@@ -155,12 +134,7 @@ export const ToolUseSnapshotStore = {
    * Safe to call multiple times.
    */
   async initialize(): Promise<void> {
-    if (!getToolUsePersistenceEnabled()) {
-      return;
-    }
-    await ensureStorageDir();
-    await cleanupExpiredSnapshots();
-    await migrateLegacySnapshots();
+    await ensureInitialized();
   },
 
   /**
@@ -169,54 +143,30 @@ export const ToolUseSnapshotStore = {
    * @param payload Snapshot data to persist.
    */
   async save(payload: SaveToolUseSnapshotPayload): Promise<void> {
-    if (!getToolUsePersistenceEnabled()) {
+    if (!(await ensureInitialized())) {
       return;
     }
     if (!isValidExecutionId(payload.executionId)) {
-      logger.warn(
-        `Skipping snapshot save due to invalid execution id: ${payload.executionId}`,
-      );
-      return;
-    }
-    if (!(await ensureStorageDir())) {
-      return;
+      throw new Error(`Invalid execution id: ${payload.executionId}`);
     }
 
-    try {
-      const snapshot = {
-        version: TOOL_USE_SNAPSHOT_VERSION,
-        executionId: payload.executionId,
-        streamId: payload.streamId,
-        agentName: payload.agentName,
-        model: payload.model,
-        session: {
-          agentType: payload.session.agentType ?? AgentType.ToolUse,
-          agentCategory: payload.session.agentCategory,
-        },
-        messages: structuredClone(payload.messages),
-        toolState: structuredClone(payload.toolState),
-        lastUpdated: Date.now(),
-      } as const;
+    const snapshot = {
+      version: TOOL_USE_SNAPSHOT_VERSION,
+      executionId: payload.executionId,
+      streamId: payload.streamId,
+      agentName: payload.agentName,
+      model: payload.model,
+      session: {
+        agentType: payload.session.agentType ?? AgentType.ToolUse,
+        agentCategory: payload.session.agentCategory,
+      },
+      messages: structuredClone(payload.messages),
+      toolState: structuredClone(payload.toolState),
+      lastUpdated: Date.now(),
+    } as const;
 
-      const validationResult = ToolUseSessionSnapshotSchema.safeParse(snapshot);
-      if (!validationResult.success) {
-        logger.warn(
-          `Snapshot validation failed before save: ${validationResult.error.message}`,
-        );
-        return;
-      }
-
-      await StorageFS.writeJson(
-        getSnapshotPath(payload.executionId),
-        validationResult.data,
-      );
-    } catch (error) {
-      logger.warn(
-        `Failed to save tool-use session snapshot: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+    const validated = ToolUseSessionSnapshotSchema.parse(snapshot);
+    await StorageFS.writeJson(getSnapshotPath(payload.executionId), validated);
   },
 
   /**
@@ -226,7 +176,7 @@ export const ToolUseSnapshotStore = {
    * @returns Normalized snapshot or null.
    */
   async load(executionId: ExecutionId): Promise<ToolUseSessionSnapshot | null> {
-    if (!getToolUsePersistenceEnabled() || !isValidExecutionId(executionId)) {
+    if (!(await ensureInitialized()) || !isValidExecutionId(executionId)) {
       return null;
     }
 
@@ -235,14 +185,8 @@ export const ToolUseSnapshotStore = {
     try {
       const stored =
         await StorageFS.readJson<ToolUseSessionSnapshot>(snapshotPath);
-      const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
-      if (!parsed.success) {
-        logger.warn(
-          `Failed to parse tool-use session snapshot ${executionId}: ${parsed.error.message}`,
-        );
-        return null;
-      }
-      return normalizeSnapshot(parsed.data);
+      const parsed = ToolUseSessionSnapshotSchema.parse(stored);
+      return normalizeSnapshot(parsed);
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
@@ -250,12 +194,7 @@ export const ToolUseSnapshotStore = {
       ) {
         return null;
       }
-      logger.warn(
-        `Failed to load tool-use session snapshot ${executionId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return null;
+      throw error;
     }
   },
 
@@ -265,40 +204,25 @@ export const ToolUseSnapshotStore = {
    * @returns Array of normalized snapshots (may be empty).
    */
   async list(): Promise<ToolUseSessionSnapshot[]> {
-    if (!getToolUsePersistenceEnabled()) {
+    if (!(await ensureInitialized())) {
       return [];
     }
-    if (!(await ensureStorageDir())) {
-      return [];
-    }
-
-    await cleanupExpiredSnapshots();
-
-    try {
-      const entries = await StorageFS.readDir(STORAGE_DIR);
-      const snapshots: ToolUseSessionSnapshot[] = [];
-      for (const [name, type] of entries) {
-        if (type !== vscode.FileType.File || !name.endsWith('.json')) {
-          continue;
-        }
-        const executionId = name.replace(/\.json$/, '') as ExecutionId;
-        if (!isValidExecutionId(executionId)) {
-          continue;
-        }
-        const snapshot = await this.load(executionId);
-        if (snapshot) {
-          snapshots.push(snapshot);
-        }
+    const entries = await StorageFS.readDir(STORAGE_DIR);
+    const snapshots: ToolUseSessionSnapshot[] = [];
+    for (const [name, type] of entries) {
+      if (type !== vscode.FileType.File || !name.endsWith('.json')) {
+        continue;
       }
-      return snapshots;
-    } catch (error) {
-      logger.warn(
-        `Failed to enumerate tool-use session snapshots: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return [];
+      const executionId = name.replace(/\.json$/, '') as ExecutionId;
+      if (!isValidExecutionId(executionId)) {
+        continue;
+      }
+      const snapshot = await this.load(executionId);
+      if (snapshot) {
+        snapshots.push(snapshot);
+      }
     }
+    return snapshots;
   },
 
   /**
@@ -306,24 +230,25 @@ export const ToolUseSnapshotStore = {
    * No-op for undefined/invalid ids or when the file does not exist.
    * @param executionId Identifier of the snapshot to delete.
    */
-  async delete(executionId: ExecutionId | undefined): Promise<void> {
-    if (!executionId || !isValidExecutionId(executionId)) {
+  async delete(executionId: ExecutionId): Promise<void> {
+    if (!(await ensureInitialized())) {
       return;
+    }
+
+    if (!isValidExecutionId(executionId)) {
+      throw new Error(`Invalid execution id: ${executionId}`);
     }
 
     try {
       await StorageFS.delete(getSnapshotPath(executionId));
     } catch (error) {
-      if (error instanceof vscode.FileSystemError) {
-        if (error.code === 'FileNotFound') {
-          return;
-        }
+      if (
+        error instanceof vscode.FileSystemError &&
+        error.code === 'FileNotFound'
+      ) {
+        return;
       }
-      logger.debug(
-        `Unable to delete snapshot ${executionId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      throw error;
     }
   },
 
@@ -331,21 +256,13 @@ export const ToolUseSnapshotStore = {
    * Deletes all stored snapshots when persistence is enabled.
    */
   async deleteAll(): Promise<void> {
-    if (!getToolUsePersistenceEnabled()) {
+    if (!(await ensureInitialized())) {
       return;
     }
 
-    try {
-      const snapshots = await this.list();
-      await Promise.all(
-        snapshots.map((snapshot) => this.delete(snapshot.executionId)),
-      );
-    } catch (error) {
-      logger.warn(
-        `Failed to delete all snapshots: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
+    const snapshots = await this.list();
+    await Promise.all(
+      snapshots.map((snapshot) => this.delete(snapshot.executionId)),
+    );
   },
 };

@@ -42,24 +42,24 @@ export class LatexDiffManager {
   private logLatexdiffResult(
     result: LaTeXdiffResult,
     operation: string = 'latexdiff',
-    groupId?: string,
   ): void {
+    const activeGroupId = this.logger.getActiveGroupId();
     if (result.success) {
       this.logger.debug(
         `Successfully generated ${operation} file: ${result.diffFileName}`,
-        groupId,
+        activeGroupId,
       );
     } else {
       if (result.message && result.message.includes('document environment')) {
         this.logger.debug(
           `Skipping ${operation}: ${result.message}`,
-          groupId,
+          activeGroupId,
           MESSAGE_TYPES.INTERNAL,
         );
       } else {
         this.logger.warn(
           `Failed to generate ${operation}: ${result.message}`,
-          groupId,
+          activeGroupId,
           MESSAGE_TYPES.INTERNAL,
         );
       }
@@ -69,11 +69,10 @@ export class LatexDiffManager {
   async handleLatexdiffofOutput(
     currRound: number,
     mapping: RoundFileMapping,
-    groupId?: string,
   ): Promise<void> {
-    const diffProcessGroupId = groupId ?? this.logger.getActiveGroupId();
+    const diffProcessGroupId = this.logger.getActiveGroupId();
     const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
-      'latexdiff.generateBetweenRoundDiffs',
+      'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
     const aggregated: Array<{
@@ -137,7 +136,7 @@ export class LatexDiffManager {
             outputFile,
             currRound,
           );
-          this.logLatexdiffResult(result, 'round-diff', diffProcessGroupId);
+          this.logLatexdiffResult(result, 'round-diff');
           aggregated.push({
             base: baseFile,
             revised: outputFile,
@@ -192,11 +191,7 @@ export class LatexDiffManager {
             prevOutputFile,
             currOutputFile,
           );
-          this.logLatexdiffResult(
-            result,
-            'between-rounds-diff',
-            diffProcessGroupId,
-          );
+          this.logLatexdiffResult(result, 'between-rounds-diff');
           aggregated.push({
             base: prevOutputFile,
             revised: currOutputFile,

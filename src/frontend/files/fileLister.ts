@@ -61,19 +61,25 @@ export class FileLister {
       | 'ignoredMediaDirs';
 
     const mappings: Array<{ key: string; target: IgnoreListKey }> = [
-      { key: 'files.ignored.fileExtensions', target: 'ignoredFileExtensions' },
-      { key: 'files.ignored.directories', target: 'ignoredDirectories' },
-      { key: 'files.ignored.keywords', target: 'ignoredKeywords' },
-      { key: 'files.ignored.inputFiles', target: 'ignoredInputFiles' },
       {
-        key: 'files.ignored.inputDirectories',
+        key: 'texra.files.ignored.fileExtensions',
+        target: 'ignoredFileExtensions',
+      },
+      { key: 'texra.files.ignored.directories', target: 'ignoredDirectories' },
+      { key: 'texra.files.ignored.keywords', target: 'ignoredKeywords' },
+      { key: 'texra.files.ignored.inputFiles', target: 'ignoredInputFiles' },
+      {
+        key: 'texra.files.ignored.inputDirectories',
         target: 'ignoredInputDirectories',
       },
       {
-        key: 'files.ignored.auxiliaryKeywords',
+        key: 'texra.files.ignored.auxiliaryKeywords',
         target: 'ignoredAuxKeywords',
       },
-      { key: 'files.ignored.mediaDirectories', target: 'ignoredMediaDirs' },
+      {
+        key: 'texra.files.ignored.mediaDirectories',
+        target: 'ignoredMediaDirs',
+      },
     ];
 
     for (const { key, target } of mappings) {

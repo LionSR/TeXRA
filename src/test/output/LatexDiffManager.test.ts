@@ -110,7 +110,7 @@ describe('LatexDiffManager mapping reuse', () => {
       runDiffBetweenRounds: async () => ({ success: true }),
     };
 
-    await manager.handleLatexdiffofOutput(0, mapping, 'group');
+    await manager.handleLatexdiffofOutput(0, mapping);
 
     assert.deepEqual(roundPairs, [
       {
@@ -184,7 +184,7 @@ describe('LatexDiffManager mapping reuse', () => {
       },
     };
 
-    await manager.handleLatexdiffofOutput(1, mapping, 'group');
+    await manager.handleLatexdiffofOutput(1, mapping);
 
     assert.deepEqual(roundPairs, [
       {
