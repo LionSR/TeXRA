@@ -7,6 +7,7 @@ import {
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
+import * as difflib from 'difflib';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -605,15 +606,38 @@ export function getApprovedContent(
   return approval.appliedContent ?? fallback;
 }
 
-export function formatApprovalUserDiff(
+// (legacy formatting removed; use formatUnifiedApprovalUserDiff instead)
+
+/**
+ * Render a human-readable, line-numbered unified diff for user adjustments.
+ * Uses difflib to compute a unified diff between the suggested and applied
+ * contents, including hunk headers with line ranges.
+ */
+export function formatUnifiedApprovalUserDiff(
   path: string,
-  userPatch?: string,
+  suggestedContent: string,
+  appliedContent: string,
+  options?: { contextLines?: number },
 ): string | undefined {
-  if (!userPatch || userPatch.trim().length === 0) {
+  if (suggestedContent === appliedContent) {
     return undefined;
   }
+  const n = options?.contextLines ?? 3;
+  const fromfile = `${path} (proposed)`;
+  const tofile = `${path} (final)`;
+  const diffOptions: any = { fromfile, tofile, lineterm: '' };
+  if (Number.isInteger(n)) diffOptions.n = n;
+  const diffLines = difflib.unifiedDiff(
+    suggestedContent.split('\n'),
+    appliedContent.split('\n'),
+    diffOptions,
+  );
 
-  return `User adjustments to ${path}:\n${userPatch}`;
+  if (!diffLines || diffLines.length === 0) {
+    return undefined;
+  }
+  const body = diffLines.join('\n');
+  return `User adjustments to ${path}:\n\n\`\`\`diff\n${body}\n\`\`\``;
 }
 
 export interface WriteApprovedContentResult {
@@ -725,10 +749,22 @@ export function buildApprovalRejectedResult(
   userMessage?: string,
 ): ToolResult {
   const baseMessage = `User rejected ${sourceTool} for ${path}.`;
+  // If the user provides a note on rejection, treat it as explicit
+  // instructions for the next round instead of an error. This avoids
+  // noisy error logs like "Error: Stop" and ensures the model receives
+  // the guidance as a user message.
+  if (userMessage && userMessage.trim().length > 0) {
+    return toolResult({
+      summary: baseMessage,
+      system: userMessage, // passed through to create a user follow-up message
+      isError: false,
+    });
+  }
+
+  // Otherwise, surface a plain error without extra instructions
   return toolResult({
     summary: baseMessage,
-    error: userMessage ?? baseMessage,
+    error: baseMessage,
     isError: true,
-    output: userMessage,
   });
 }

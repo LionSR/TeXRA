@@ -8,7 +8,7 @@ import { defineTool } from './core/define';
 // Local imports - tools
 import {
   buildApprovalRejectedResult,
-  formatApprovalUserDiff,
+  formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
   writeApprovedContent,
@@ -52,9 +52,17 @@ export class WriteFileTool extends defineTool({
     }
 
     const finalContent = getApprovedContent(approval, input.content);
-    await writeApprovedContent(input.path, originalContent, finalContent);
+    const { appliedContent } = await writeApprovedContent(
+      input.path,
+      originalContent,
+      finalContent,
+    );
 
-    const userDiffNote = formatApprovalUserDiff(input.path, approval.userPatch);
+    const userDiffNote = formatUnifiedApprovalUserDiff(
+      input.path,
+      finalContent,
+      appliedContent,
+    );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
     return toolResult({

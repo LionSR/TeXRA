@@ -8,7 +8,7 @@ import { defineTool } from './core/define';
 // Local imports - tools
 import {
   buildApprovalRejectedResult,
-  formatApprovalUserDiff,
+  formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
   writeApprovedContent,
@@ -96,7 +96,11 @@ export class EditFileTool extends defineTool({
     }
 
     const finalContent = getApprovedContent(approval, updatedContent);
-    await writeApprovedContent(targetPath, currentContent, finalContent);
+    const { appliedContent } = await writeApprovedContent(
+      targetPath,
+      currentContent,
+      finalContent,
+    );
 
     const replacementSummary = replace_all
       ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
@@ -107,7 +111,11 @@ export class EditFileTool extends defineTool({
         }`
       : `Edited ${targetPath}: replaced 1 occurrence`;
 
-    const userDiffNote = formatApprovalUserDiff(targetPath, approval.userPatch);
+    const userDiffNote = formatUnifiedApprovalUserDiff(
+      targetPath,
+      finalContent,
+      appliedContent,
+    );
     const output = userDiffNote
       ? `${replacementSummary}\n\n${userDiffNote}`
       : replacementSummary;
