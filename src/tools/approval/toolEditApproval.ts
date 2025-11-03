@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 export interface ToolEditApprovalRequest {
   path: string;
@@ -28,6 +29,28 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
 const APPROVAL_SCHEME = 'texra-tool-edit';
+
+type ApprovalResolutionSource = 'progressView' | 'notification' | 'dismiss';
+
+interface PendingApprovalEntry {
+  request: ToolEditApprovalRequest;
+  originalUri: vscode.Uri;
+  proposedUri: vscode.Uri;
+  originalContent: string;
+  proposedContent: string;
+  title: string;
+  isSettled: () => boolean;
+  settle: (
+    result: ToolEditApprovalResult,
+    source: ApprovalResolutionSource,
+  ) => void;
+}
+
+interface ProgressViewApprovalActionPayload {
+  requestId: string;
+  action: 'approve' | 'reject' | 'openDiff';
+  note?: string;
+}
 
 class ToolEditContentProvider implements vscode.TextDocumentContentProvider {
   private readonly content = new Map<string, string>();
@@ -65,6 +88,8 @@ let initialized = false;
 let customHandler:
   | ((request: ToolEditApprovalRequest) => Promise<ToolEditApprovalResult>)
   | undefined;
+let approvalCounter = 0;
+const pendingApprovals = new Map<string, PendingApprovalEntry>();
 
 export function initializeToolEditApproval(
   context: vscode.ExtensionContext,
@@ -100,6 +125,49 @@ function createVirtualUri(
   return vscode.Uri.parse(
     `${APPROVAL_SCHEME}://${side}/${encodedTool}/${encodedPath}?t=${nonce}`,
   );
+}
+
+function createApprovalRequestId(): string {
+  approvalCounter += 1;
+  return `approval-${Date.now().toString(36)}-${approvalCounter}`;
+}
+
+async function showProgressViewApprovalPrompt(
+  requestId: string,
+  request: ToolEditApprovalRequest,
+  relativePath: string,
+): Promise<void> {
+  await safeExecuteCommand('texra.showProgressView');
+
+  try {
+    const { ProgressViewProvider } = await import(
+      '@progressView/ProgressViewProvider'
+    );
+    const provider = ProgressViewProvider.getInstance();
+    provider?.showToolEditApprovalPrompt({
+      requestId,
+      path: request.path,
+      relativePath,
+      sourceTool: request.sourceTool,
+    });
+  } catch (error) {
+    console.warn('Unable to show progress view approval prompt', error);
+  }
+}
+
+async function resolveProgressViewApprovalPrompt(
+  requestId: string,
+): Promise<void> {
+  try {
+    const { ProgressViewProvider } = await import(
+      '@progressView/ProgressViewProvider'
+    );
+    ProgressViewProvider.getInstance()?.resolveToolEditApprovalPrompt(
+      requestId,
+    );
+  } catch (error) {
+    console.warn('Unable to resolve progress view approval prompt', error);
+  }
 }
 
 function countNewlines(value: string): number {
@@ -219,6 +287,7 @@ async function nativeRequestApproval(
 
   const { path, originalContent, proposedContent, sourceTool } = request;
 
+  const requestId = createApprovalRequestId();
   const originalUri = createVirtualUri(path, 'original', sourceTool);
   const proposedUri = createVirtualUri(path, 'proposed', sourceTool);
 
@@ -230,7 +299,6 @@ async function nativeRequestApproval(
   );
 
   const title = `Tool edit (${sourceTool}): ${description}`;
-
   let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
@@ -242,48 +310,113 @@ async function nativeRequestApproval(
 
     await revealFirstChange(proposedUri, originalContent, proposedContent);
 
-    const approve: vscode.MessageItem = { title: 'Approve' };
-    const reject: vscode.MessageItem = {
-      title: 'Reject',
-      isCloseAffordance: true,
-    };
-    const selection = await vscode.window.showInformationMessage(
-      `Apply changes from ${sourceTool} to ${description}?`,
-      {
-        detail:
-          'Review the diff in the editor. This notification stays open until you respond.',
-        modal: false,
-      },
-      approve,
-      reject,
-    );
+    result = await new Promise<ToolEditApprovalResult>((resolve) => {
+      let settled = false;
 
-    if (selection === approve) {
-      result = { accepted: true };
-      return result;
-    }
-
-    if (selection === reject) {
-      const userMessage = await vscode.window.showInputBox({
-        prompt: 'Optionally share why the change was rejected',
-        placeHolder: 'Add guidance for the assistant (press Enter to skip)',
-      });
-      result = {
-        accepted: false,
-        userMessage: userMessage?.trim() || undefined,
+      const settle = (
+        value: ToolEditApprovalResult,
+        source: ApprovalResolutionSource,
+      ) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        pendingApprovals.delete(requestId);
+        if (source === 'progressView') {
+          void safeExecuteCommand('workbench.action.closeMessages');
+        }
+        resolve(value);
       };
-      return result;
-    }
 
-    result = {
-      accepted: false,
-      userMessage: 'User dismissed the approval notification.',
-    };
+      const entry: PendingApprovalEntry = {
+        request,
+        originalUri,
+        proposedUri,
+        originalContent,
+        proposedContent,
+        title,
+        isSettled: () => settled,
+        settle,
+      };
+
+      pendingApprovals.set(requestId, entry);
+      void showProgressViewApprovalPrompt(requestId, request, description);
+
+      const approve: vscode.MessageItem = { title: 'Approve' };
+      const reject: vscode.MessageItem = {
+        title: 'Reject',
+        isCloseAffordance: true,
+      };
+
+      void vscode.window
+        .showInformationMessage(
+          `Apply changes from ${sourceTool} to ${description}?`,
+          {
+            detail:
+              'Review the diff in the editor. This notification stays open until you respond.',
+            modal: false,
+          },
+          approve,
+          reject,
+        )
+        .then(
+          async (selection) => {
+            if (settled) {
+              return;
+            }
+
+            if (selection === approve) {
+              settle({ accepted: true }, 'notification');
+              return;
+            }
+
+            if (selection === reject) {
+              const userMessage = await vscode.window.showInputBox({
+                prompt: 'Optionally share why the change was rejected',
+                placeHolder:
+                  'Add guidance for the assistant (press Enter to skip)',
+              });
+              settle(
+                {
+                  accepted: false,
+                  userMessage: userMessage?.trim() || undefined,
+                },
+                'notification',
+              );
+              return;
+            }
+
+            settle(
+              {
+                accepted: false,
+                userMessage: 'User dismissed the approval notification.',
+              },
+              'dismiss',
+            );
+          },
+          (error: unknown) => {
+            if (settled) {
+              return;
+            }
+            console.warn('Approval notification failed', error);
+            settle(
+              {
+                accepted: false,
+                userMessage: 'Approval prompt failed to display.',
+              },
+              'dismiss',
+            );
+          },
+        );
+    });
+
     return result;
   } finally {
+    pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
     provider.delete(originalUri);
     provider.delete(proposedUri);
+    await resolveProgressViewApprovalPrompt(requestId);
   }
 }
 
@@ -314,6 +447,62 @@ export async function requestToolEditApproval(
   }
 
   return enqueueApproval(request);
+}
+
+export async function handleProgressViewToolEditApprovalAction(
+  payload: ProgressViewApprovalActionPayload,
+): Promise<void> {
+  const entry = pendingApprovals.get(payload.requestId);
+  if (!entry) {
+    return;
+  }
+
+  if (payload.action === 'openDiff') {
+    if (entry.isSettled()) {
+      return;
+    }
+
+    await vscode.commands.executeCommand(
+      'vscode.diff',
+      entry.originalUri,
+      entry.proposedUri,
+      entry.title,
+    );
+    await revealFirstChange(
+      entry.proposedUri,
+      entry.originalContent,
+      entry.proposedContent,
+    );
+    return;
+  }
+
+  if (entry.isSettled()) {
+    return;
+  }
+
+  if (payload.action === 'approve') {
+    entry.settle({ accepted: true }, 'progressView');
+    return;
+  }
+
+  if (payload.action === 'reject') {
+    let userMessage = payload.note?.trim();
+    if (!userMessage) {
+      const note = await vscode.window.showInputBox({
+        prompt: 'Optionally share why the change was rejected',
+        placeHolder: 'Add guidance for the assistant (press Enter to skip)',
+      });
+      userMessage = note?.trim();
+    }
+
+    entry.settle(
+      {
+        accepted: false,
+        userMessage: userMessage || undefined,
+      },
+      'progressView',
+    );
+  }
 }
 
 export function buildApprovalRejectedResult(
