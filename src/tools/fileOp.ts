@@ -86,6 +86,7 @@ export class FileOpTool extends defineTool({
         return toolResult({
           summary: `Wrote ${path}`,
           output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
+          userPatch: approval.userPatch,
         });
       }
       case 'append': {
@@ -147,6 +148,7 @@ export class FileOpTool extends defineTool({
         return toolResult({
           summary: `Appended to ${path}`,
           output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
+          userPatch: approval.userPatch,
         });
       }
       default:

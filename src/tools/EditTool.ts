@@ -123,6 +123,7 @@ export class EditFileTool extends defineTool({
     return toolResult({
       summary,
       output,
+      userPatch: approval.userPatch,
     });
   }
 }
