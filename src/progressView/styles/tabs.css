@@ -45,6 +45,8 @@
   align-items: center;
   position: relative;
   width: 100%;
+  gap: var(--spacing-small);
+  padding-right: var(--spacing-small);
 }
 
 .tab {
@@ -109,39 +111,43 @@
 }
 
 .tab-delete {
-  display: none;
-  padding: var(--spacing-tiny);
-  border: none;
-  background: none;
-  color: var(--vscode-foreground);
-  opacity: var(--opacity-subtle);
-  cursor: pointer;
-  margin-right: var(--spacing-small);
-  font-size: var(--font-size-sm);
-  width: calc(var(--height-control) - var(--spacing-small));
-  height: calc(var(--height-control) - var(--spacing-small));
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-container:hover .tab-delete {
   display: flex;
   align-items: center;
-}
-
-.tab-delete:hover {
-  opacity: var(--opacity-full);
-  color: var(--vscode-errorForeground);
-}
-
-.tab-delete .codicon {
-  font-size: var(--font-size-sm);
-  color: var(--vscode-foreground);
+  justify-content: center;
+  width: var(--height-control);
+  height: var(--height-control);
+  margin: 0;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
   opacity: var(--opacity-subtle);
-  margin-right: 0;
+  transition: opacity 120ms ease, color 120ms ease;
 }
 
-.tab-delete:hover .codicon {
+.tab-delete::part(control) {
+  padding: 0;
+  border-radius: var(--border-radius-small);
+}
+
+.tab-container:hover .tab-delete,
+.tab-delete:focus-within {
   opacity: var(--opacity-full);
+}
+
+.tab-delete:hover::part(control),
+.tab-delete:focus-within::part(control) {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.tab-delete:hover,
+.tab-delete:focus-within {
   color: var(--vscode-errorForeground);
+}
+
+.tab-delete vscode-icon {
+  opacity: var(--opacity-subtle);
+  transition: opacity 120ms ease, color 120ms ease;
+}
+
+.tab-container:hover .tab-delete vscode-icon,
+.tab-delete:focus-within vscode-icon {
+  opacity: var(--opacity-full);
 }
