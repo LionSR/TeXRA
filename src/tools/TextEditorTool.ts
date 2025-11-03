@@ -24,6 +24,8 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - filesystem utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import replacementEngine from '@replacement/engine';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 // Constants
 const CHANNEL = 'TextEditorTool';
@@ -307,10 +309,13 @@ export class TextEditorTool extends defineTool({
    */
   private async create(filePath: string, content: string): Promise<ToolResult> {
     try {
+      const proposedContent = isTexFile(filePath)
+        ? replacementEngine.applyAll(content)
+        : content;
       const approval = await requestToolEditApproval({
         path: filePath,
         originalContent: '',
-        proposedContent: content,
+        proposedContent: proposedContent,
         sourceTool: 'text_editor:create',
       });
 
@@ -328,7 +333,7 @@ export class TextEditorTool extends defineTool({
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      const finalContent = getApprovedContent(approval, content);
+      const finalContent = getApprovedContent(approval, proposedContent);
       const { appliedContent } = await writeApprovedContent(
         filePath,
         '',

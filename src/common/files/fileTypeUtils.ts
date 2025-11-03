@@ -1,6 +1,7 @@
 // Local imports - common
 // Local imports
 import { getConfig } from '@utils/config';
+import * as path from 'path';
 
 export type FileType =
   | 'input'
@@ -27,4 +28,11 @@ export function getIncludedExtensions(
   defaultExtensions: string[] = [],
 ): string[] {
   return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[type], defaultExtensions);
+}
+
+/**
+ * Returns true if the file has a .tex extension.
+ */
+export function isTexFile(filePath: string): boolean {
+  return path.extname(filePath).toLowerCase() === '.tex';
 }
