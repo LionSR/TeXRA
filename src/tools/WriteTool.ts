@@ -74,6 +74,7 @@ export class WriteFileTool extends defineTool({
     return toolResult({
       summary: `Wrote ${input.path}`,
       output,
+      userPatch: approval.userPatch,
     });
   }
 }
