@@ -171,6 +171,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
   SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
   RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
+  UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
@@ -195,6 +196,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   SHOW_INFORMATION_MESSAGE: 'showInformationMessage',
   OPEN_TASK_STORAGE: 'openTaskStorage',
   TOOL_EDIT_APPROVAL_ACTION: 'toolEditApprovalAction',
+  RESET_TOOL_EDIT_APPROVAL_BYPASS: 'resetToolEditApprovalBypass',
 
   // File operations
   OPEN_FILE: 'openFile',

@@ -10,6 +10,7 @@ export class ApprovalRequests {
     this.container = null;
     this.list = null;
     this.requests = new Map();
+    this.isBypassActive = false;
     this._handleAction = this._handleAction.bind(this);
   }
 
@@ -41,14 +42,17 @@ export class ApprovalRequests {
       }
     }
 
-    let element = this.requests.get(request.requestId);
-    if (!element) {
-      element = this._createRequestElement(request);
-      this.requests.set(request.requestId, element);
+    let entry = this.requests.get(request.requestId);
+    if (!entry) {
+      const element = this._createRequestElement(request);
+      entry = { element, data: { ...request } };
+      this.requests.set(request.requestId, entry);
       this.list.appendChild(element);
     } else {
-      this._updateRequestElement(element, request);
+      entry.data = { ...entry.data, ...request };
     }
+
+    this._updateRequestElement(entry.element, entry.data);
 
     this._toggleVisibility();
   }
@@ -58,9 +62,9 @@ export class ApprovalRequests {
       return;
     }
 
-    const element = this.requests.get(requestId);
-    if (element?.parentElement) {
-      element.parentElement.removeChild(element);
+    const entry = this.requests.get(requestId);
+    if (entry?.element?.parentElement) {
+      entry.element.parentElement.removeChild(entry.element);
     }
     this.requests.delete(requestId);
     this._toggleVisibility();
@@ -73,6 +77,7 @@ export class ApprovalRequests {
     this.requests.clear();
     this.container = null;
     this.list = null;
+    this.isBypassActive = false;
   }
 
   _toggleVisibility() {
@@ -93,28 +98,32 @@ export class ApprovalRequests {
         <div class="approval-request__path"></div>
         <div class="approval-request__meta"></div>
       </div>
-      <div class="approval-request__actions">
-        <vscode-button
-          appearance="secondary"
+      <vscode-toolbar-container class="approval-request__actions">
+        <vscode-toolbar-button
+          icon="diff"
+          label="Open diff"
           data-action="open"
           data-request-id="${request.requestId}"
-        >Open diff</vscode-button>
-        <vscode-button
-          appearance="primary"
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button
+          icon="check"
+          label="Approve"
           data-action="approve"
           data-request-id="${request.requestId}"
-        >Approve</vscode-button>
-        <vscode-button
-          appearance="secondary"
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button
+          icon="close"
+          label="Reject"
           data-action="reject"
           data-request-id="${request.requestId}"
-        >Reject</vscode-button>
-        <vscode-button
-          appearance="secondary"
+        ></vscode-toolbar-button>
+        <vscode-toolbar-button
+          icon="shield"
+          label="Approve &amp; skip approvals this session"
           data-action="approveAll"
           data-request-id="${request.requestId}"
-        >Don't ask again this session</vscode-button>
-      </div>
+        ></vscode-toolbar-button>
+      </vscode-toolbar-container>
     `;
     this._updateRequestElement(element, request);
     return element;
@@ -133,9 +142,18 @@ export class ApprovalRequests {
         : '';
     }
     if (bypassButton) {
-      bypassButton.toggleAttribute('hidden', request.allowBypass === false);
-      bypassButton.toggleAttribute('disabled', request.allowBypass === false);
+      const allowBypass =
+        request.allowBypass !== false && this.isBypassActive !== true;
+      bypassButton.toggleAttribute('hidden', !allowBypass);
+      bypassButton.toggleAttribute('disabled', !allowBypass);
     }
+  }
+
+  setSessionBypassActive(isActive) {
+    this.isBypassActive = Boolean(isActive);
+    this.requests.forEach((entry) => {
+      this._updateRequestElement(entry.element, entry.data);
+    });
   }
 
   _handleAction(event) {
