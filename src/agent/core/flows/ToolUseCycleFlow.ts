@@ -226,6 +226,7 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
     payload.base64Image = result.base64Image;
   if (result.userInstruction !== undefined)
     payload.userInstruction = result.userInstruction;
+  if (result.userPatch !== undefined) payload.userPatch = result.userPatch;
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
