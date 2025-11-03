@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { ToolState } from './ToolState';
+import { ToolRuntimeState } from './ToolRuntimeState';
 
 // Local imports - flow orchestration
 import {
@@ -20,7 +20,7 @@ import type { BaseTool } from '@tools/core/base';
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   toolRegistry: Record<string, BaseTool<any>>;
-  toolState: ToolState;
+  toolState: ToolRuntimeState;
   modelName?: string;
 }
 

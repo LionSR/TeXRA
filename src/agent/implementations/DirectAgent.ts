@@ -1,5 +1,5 @@
 // Local imports - agent
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ConversationRoundState, AgentRunState } from '../core/AgentState';
 // Local imports - agent components
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
@@ -36,8 +36,8 @@ export class DirectAgent extends BaseReflectionAgent {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
