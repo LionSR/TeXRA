@@ -33,7 +33,7 @@ export interface ToolResult {
   summary?: string;
   error?: string;
   base64Image?: string;
-  system?: string;
+  userInstruction?: string;
   isError?: boolean;
   diagnostics?: ErrorDiagnostics; // Additional error details like validation issues
   files?: ToolFileAttachment[];

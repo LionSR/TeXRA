@@ -17,6 +17,8 @@ import { ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+import replacementEngine from '@replacement/engine';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
 const WriteInputSchema = z.strictObject({
   path: z.string(),
@@ -36,10 +38,14 @@ export class WriteFileTool extends defineTool({
       ? await WorkspaceFS.read(input.path)
       : '';
 
+    const proposedContent = isTexFile(input.path)
+      ? replacementEngine.applyAll(input.content)
+      : input.content;
+
     const approval = await requestToolEditApproval({
       path: input.path,
       originalContent,
-      proposedContent: input.content,
+      proposedContent,
       sourceTool: 'write_file',
     });
 
@@ -51,7 +57,7 @@ export class WriteFileTool extends defineTool({
       );
     }
 
-    const finalContent = getApprovedContent(approval, input.content);
+    const finalContent = getApprovedContent(approval, proposedContent);
     const { appliedContent } = await writeApprovedContent(
       input.path,
       originalContent,
