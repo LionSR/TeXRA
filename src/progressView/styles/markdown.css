@@ -5,6 +5,14 @@
   overflow: visible;
 }
 
+.markdown-content > :first-child {
+  margin-top: 0;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
 /* Banner content for model responses - uses normal whitespace handling */
 .banner-content--model {
   padding: 0;
