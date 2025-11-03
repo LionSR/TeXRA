@@ -8,21 +8,29 @@ import {
   resolveAgentSessionDescriptor,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-export const ToolStateSnapshotSchema = z
+export const ToolRuntimeStateSnapshotSchema = z
   .object({
-    texcountStats: z.string().nullable(),
-    lastResponse: z.string(),
-    accumulatedOutput: z.string(),
-    mediaFiles: z.array(z.string()),
-    thinkingBlocks: z.array(z.unknown()),
-    thinkingAdded: z.boolean(),
+    assembly: z
+      .object({
+        lastResponse: z.string(),
+        accumulatedOutput: z.string(),
+      })
+      .strict(),
+    media: z.object({ files: z.array(z.string()) }).strict(),
+    reasoning: z
+      .object({
+        thinkingBlocks: z.array(z.unknown()),
+        thinkingAdded: z.boolean(),
+      })
+      .strict(),
+    document: z.object({ texcountStats: z.string().nullable() }).strict(),
   })
   .strict();
 
@@ -44,7 +52,7 @@ export const ToolUseSessionSnapshotSchema = z
     agentSessionKind: z.enum(AgentCategory).optional(),
     session: AgentSessionDescriptorSchema.optional(),
     messages: z.array(ProviderMessageSchema),
-    toolState: ToolStateSnapshotSchema,
+    toolState: ToolRuntimeStateSnapshotSchema,
     lastUpdated: z.number(),
   })
   .strict();
@@ -67,7 +75,7 @@ export interface SaveToolUseSnapshotPayload {
   model: string;
   session: AgentSessionDescriptor;
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolRuntimeState;
 }
 
 export function normalizeSnapshot(

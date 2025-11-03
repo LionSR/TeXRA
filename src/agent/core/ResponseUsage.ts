@@ -53,6 +53,14 @@ export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
   rejected_prediction_tokens: number | null;
   // Only present for Google models when using OpenAI-compatible interface
   tool_use_tokens?: number;
+  prompt_tokens_details?: {
+    cached_tokens?: number;
+  };
+  completion_tokens_details?: {
+    reasoning_tokens?: number;
+    accepted_prediction_tokens?: number | null;
+    rejected_prediction_tokens?: number | null;
+  };
 }
 
 /** Anthropic-specific response usage metrics with cache statistics. */
