@@ -5,35 +5,35 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
-import type { AgentStateRound } from '@agent/core/AgentState';
-import type { ToolState } from '@agent/core/ToolState';
+import type { ConversationRoundState } from '@agent/core/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ReflectionRoundResult } from '../BaseReflectionAgent';
 
 interface RoundPreparationResult {
-  stateRound: AgentStateRound;
+  stateRound: ConversationRoundState;
   preparedMessages: any[];
   prefill?: string;
   skip: boolean;
 }
 
 interface ReflectionRoundPipelineInput {
-  stateRound: AgentStateRound;
+  stateRound: ConversationRoundState;
   preparedMessages: any[];
   prefill: string;
 }
 
 export interface ReflectionRoundHooks {
-  prepareToolState(): Promise<void>;
+  prepareAgentWorkspaceState(): Promise<void>;
   prepareRoundContext(): Promise<RoundPreparationResult>;
   runRoundPipeline(
     input: ReflectionRoundPipelineInput,
   ): Promise<ReflectionRoundResult>;
-  createSkipResult(stateRound: AgentStateRound): ReflectionRoundResult;
+  createSkipResult(stateRound: ConversationRoundState): ReflectionRoundResult;
 }
 
 export interface ReflectionRoundRuntime {
-  toolState: ToolState;
-  roundState?: AgentStateRound;
+  toolState: AgentWorkspaceState;
+  roundState?: ConversationRoundState;
   preparedMessages?: any[];
   prefill?: string;
   result?: ReflectionRoundResult;
@@ -50,12 +50,12 @@ class ToolPreparationNode extends BaseNode<ReflectionRoundShared> {
   }
 
   async exec(hooks: ReflectionRoundHooks): Promise<void> {
-    await hooks.prepareToolState();
+    await hooks.prepareAgentWorkspaceState();
   }
 }
 
 interface RoundPreparationExec {
-  stateRound: AgentStateRound;
+  stateRound: ConversationRoundState;
   preparedMessages: any[];
   prefill?: string;
   skip: boolean;

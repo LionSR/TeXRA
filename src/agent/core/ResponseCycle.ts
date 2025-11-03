@@ -1,6 +1,5 @@
 // Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from './AgentState';
-import { ToolState } from './ToolState';
+import { AgentSharedStore } from './AgentSharedStore';
 
 // Local imports - flow orchestration
 import {
@@ -26,16 +25,12 @@ export interface ResponseCycleOptions<C = unknown>
 export interface ResponseCycleContext<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
   outputFile: string;
+  store: AgentSharedStore;
 }
 
 export interface ResponseCycleResult {
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
+  store: AgentSharedStore;
   endTurn: boolean;
 }
 
@@ -44,11 +39,9 @@ export async function runResponseCycle<C = unknown>(
 ): Promise<ResponseCycleResult> {
   const shared: ResponseCycleShared<C> = {
     options: context.options,
-    cycle: {
+    store: context.store,
+    state: {
       messages: context.messages,
-      stateRound: context.stateRound,
-      stateGlobal: context.stateGlobal,
-      toolState: context.toolState,
       outputFile: context.outputFile,
       endTurn: false,
       shouldStop: false,
@@ -68,9 +61,7 @@ export async function runResponseCycle<C = unknown>(
   await flow.run(shared);
 
   return {
-    stateRound: shared.cycle.stateRound,
-    stateGlobal: shared.cycle.stateGlobal,
-    toolState: shared.cycle.toolState,
-    endTurn: shared.cycle.endTurn,
+    store: shared.store,
+    endTurn: shared.state.endTurn,
   };
 }

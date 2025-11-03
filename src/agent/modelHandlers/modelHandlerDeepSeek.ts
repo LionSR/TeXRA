@@ -12,7 +12,7 @@ import type {
 } from 'openai/resources/chat/completions';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -71,7 +71,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -99,15 +99,15 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
 
         // If toolState is provided and we have reasoning content,
         // store it in the toolState for future use (similar to Anthropic thinking blocks)
-        if (toolState && !toolState.thinkingAdded) {
+        if (toolState && !toolState.reasoning.thinkingAdded) {
           // Create a thinking block in the same format as Anthropic for consistency
           const thinkingBlock = {
             type: 'thinking',
             thinking: reasoningContent,
           };
 
-          toolState.thinkingBlocks = [thinkingBlock];
-          toolState.thinkingAdded = true;
+          toolState.reasoning.thinkingBlocks = [thinkingBlock];
+          toolState.reasoning.thinkingAdded = true;
           // this.logger.debug('Added reasoning content to toolState', groupId);
         }
         // For deepseek mode thinking content should not be attached back to the message as a content item.
@@ -146,7 +146,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolState,
+    _toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
