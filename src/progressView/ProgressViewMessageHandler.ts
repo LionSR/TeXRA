@@ -27,7 +27,10 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { handleProgressViewToolEditApprovalAction } from '@tools/approval/toolEditApproval';
+import {
+  handleProgressViewToolEditApprovalAction,
+  resetToolEditApprovalSessionBypass,
+} from '@tools/approval/toolEditApproval';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -132,6 +135,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleShowInformationMessage.bind(this),
       [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]:
         this.handleToolEditApprovalAction.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RESET_TOOL_EDIT_APPROVAL_BYPASS]:
+        this.handleResetToolEditApprovalBypass.bind(this),
 
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
@@ -346,6 +351,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       action,
       note: typeof message?.note === 'string' ? message.note : undefined,
     });
+  }
+
+  private async handleResetToolEditApprovalBypass(): Promise<void> {
+    resetToolEditApprovalSessionBypass();
+    await vscode.window.showInformationMessage(
+      'Tool edit approvals will prompt again for this session.',
+    );
   }
 
   private async handleOpenTaskStorage(message: any): Promise<void> {
