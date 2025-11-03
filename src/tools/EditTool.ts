@@ -6,6 +6,13 @@ import { z } from 'zod';
 import { defineTool } from './core/define';
 
 // Local imports - tools
+import {
+  buildApprovalRejectedResult,
+  formatUnifiedApprovalUserDiff,
+  getApprovedContent,
+  requestToolEditApproval,
+  writeApprovedContent,
+} from '@tools/approval/toolEditApproval';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 
 // Local imports - utils
@@ -73,7 +80,27 @@ export class EditFileTool extends defineTool({
       ? currentContent.replaceAll(old_string, new_string)
       : currentContent.replace(old_string, new_string);
 
-    await WorkspaceFS.write(targetPath, updatedContent);
+    const approval = await requestToolEditApproval({
+      path: targetPath,
+      originalContent: currentContent,
+      proposedContent: updatedContent,
+      sourceTool: 'edit_file',
+    });
+
+    if (!approval.accepted) {
+      return buildApprovalRejectedResult(
+        targetPath,
+        'edit_file',
+        approval.userMessage,
+      );
+    }
+
+    const finalContent = getApprovedContent(approval, updatedContent);
+    const { appliedContent } = await writeApprovedContent(
+      targetPath,
+      currentContent,
+      finalContent,
+    );
 
     const replacementSummary = replace_all
       ? `Replaced ${occurrences} occurrence${occurrences === 1 ? '' : 's'}.`
@@ -84,9 +111,18 @@ export class EditFileTool extends defineTool({
         }`
       : `Edited ${targetPath}: replaced 1 occurrence`;
 
+    const userDiffNote = formatUnifiedApprovalUserDiff(
+      targetPath,
+      finalContent,
+      appliedContent,
+    );
+    const output = userDiffNote
+      ? `${replacementSummary}\n\n${userDiffNote}`
+      : replacementSummary;
+
     return toolResult({
       summary,
-      output: replacementSummary,
+      output,
     });
   }
 }
