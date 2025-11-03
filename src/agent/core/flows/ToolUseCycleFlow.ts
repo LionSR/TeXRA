@@ -671,6 +671,15 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       );
 
     state.messages.push(...followUpMsgs);
+    // If the tool result includes a user-provided instruction (e.g., from
+    // rejecting an edit with a note like "Stop"), append it as a user message
+    // so the model treats it as explicit guidance.
+    if (typeof result.system === 'string' && result.system.trim().length > 0) {
+      await options.modelHandler.createUserFollowUpMessages(
+        state.messages,
+        result.system,
+      );
+    }
     state.iteration += 1;
 
     return FlowTransition.CONTINUE;
