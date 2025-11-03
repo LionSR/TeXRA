@@ -113,6 +113,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.client;
   }
 
+  public getUserVarChannels(): AgentUserVarChannels {
+    return this.userVarChannels;
+  }
+
   protected buildCycleBaseOptions<S extends AgentSetting>(params: {
     agentSetting: S;
     agentPrompt: AgentPrompt;
@@ -224,8 +228,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.executionId;
   }
 
-  protected async trackRoundUsage(stateGlobal: AgentRunState): Promise<void> {
-    await this.usageMonitor.recordUsage(stateGlobal);
+  protected async trackRoundUsage(
+    stateGlobal: AgentRunState,
+    options?: { runKind?: 'workflow' | 'tool-use' },
+  ): Promise<void> {
+    await this.usageMonitor.recordUsage(stateGlobal, options);
   }
 
   /**

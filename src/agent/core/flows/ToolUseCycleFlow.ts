@@ -5,6 +5,8 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
@@ -33,8 +35,8 @@ import { WorkspaceFS } from '@utils/files';
 // Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
 
-// Local imports - usage types
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+// Local imports - usage helpers
+import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];
@@ -167,6 +169,7 @@ function resetToolUseState(state: ToolUseCycleRuntimeState): void {
 export interface ToolUseCycleShared<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
+  store: AgentSharedStore;
 }
 
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
@@ -175,7 +178,8 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     debugContext: DebugContext;
     debugFileOptions: DebugFileOptions;
   }> {
-    const { options, state } = shared;
+    const { options, state, store } = shared;
+    state.iteration = store.round.roundIndex;
     const interrupted = Boolean(await options.checkInterruption());
     const debugContext: DebugContext = {
       logger: options.logger,
@@ -339,7 +343,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         endTurn: boolean;
       }
   > {
-    const { options, state } = context;
+    const { options, state, store } = context;
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
@@ -373,18 +377,23 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
+    if (state.responseTime !== undefined) {
+      store.round.addResponseTime(state.responseTime);
+    }
+
     if (usage) {
-      const normalized = options.modelHandler.computeResponseUsage(
+      const provider = resolveUsageProvider(options.modelHandler);
+      const summary = options.modelHandler.computeResponseUsage(
         usage,
         state.responseTime ?? 0,
       );
-      const stats: ExtendedTokenUsageStats = {
-        inputTokens: normalized.totalInputTokens,
-        outputTokens: normalized.totalOutputTokens,
-        cost: normalized.cost,
-        elapsedTime: normalized.responseTime,
-      };
-      options.logger.statistics(stats, groupId);
+      store.round.setUsage({
+        summary,
+        nativeUsage: usage,
+        provider,
+      });
+    } else {
+      store.round.clearUsage();
     }
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
@@ -406,7 +415,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleShared<C>,
     _prepRes: unknown,
     execRes:
       | { skipped: true }
@@ -417,14 +426,35 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           endTurn: boolean;
         },
   ): Promise<string | undefined> {
+    const { options, state, store } = shared;
+
     if ('skipped' in execRes) {
+      store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
+
+    const completedRound = store.round;
+    store.finalizeRound();
+    store.run.incrementRounds();
+
+    await Promise.resolve(
+      options.onUsageRecorded?.({
+        run: store.run,
+        round: completedRound,
+        endTurn: execRes.endTurn,
+      }),
+    );
+
+    const nextRoundIndex = completedRound.roundIndex + 1;
 
     if (execRes.endTurn) {
+      state.shouldStop = true;
+      state.stopReason = execRes.stopReason;
+      store.setRound(new ConversationRoundState(nextRoundIndex));
       return FlowTransition.COMPLETE;
     }
 
+    store.setRound(new ConversationRoundState(nextRoundIndex));
     return undefined;
   }
 }
