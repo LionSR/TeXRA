@@ -280,11 +280,16 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   const AgentClass = (agentClassOverride ??
     getAgentClass(agentSetting)) as AgentConstructor;
 
-  const streamId = getStreamTabId(agentConfig.agent, modelName, agentConfig.inputFile, {
-    agentType: agentSetting.agentType,
-    executionId,
-    useMultipleOutputs: agentConfig.useMultipleOutputs,
-  });
+  const streamId = getStreamTabId(
+    agentConfig.agent,
+    modelName,
+    agentConfig.inputFile,
+    {
+      agentType: agentSetting.agentType,
+      executionId,
+      useMultipleOutputs: agentConfig.useMultipleOutputs,
+    },
+  );
 
   const context = contextFactory
     ? contextFactory({ streamId, executionId })
@@ -343,7 +348,8 @@ export async function executeAgentWithLogging<T extends IAgent>(
     const created = await createAgentFn(contextFactory);
     agent = created.agent;
     const { agentType } = created;
-    executionContext = created.context ?? executionContext ?? agent.getExecutionContext();
+    executionContext =
+      created.context ?? executionContext ?? agent.getExecutionContext();
 
     contextLogger = executionContext.logger;
     const sessionMetadata = agent.getSessionMetadata();
@@ -620,12 +626,13 @@ export async function executeMergeAgent(
   await executeAgentWithLogging(
     agentName,
     async (contextFactory) => {
-      const { agent, agentType, context } = await prepareAgentInstance<MergeAgent>({
-        agentName,
-        configPayload: { agent: agentName, model, inputFile, editedFile },
-        agentClassOverride: MergeAgent,
-        contextFactory,
-      });
+      const { agent, agentType, context } =
+        await prepareAgentInstance<MergeAgent>({
+          agentName,
+          configPayload: { agent: agentName, model, inputFile, editedFile },
+          agentClassOverride: MergeAgent,
+          contextFactory,
+        });
 
       return { agent, agentType, context };
     },
