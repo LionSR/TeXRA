@@ -11,6 +11,8 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
@@ -133,11 +135,17 @@ describe('runToolUseCycle DeepSeek', () => {
       toolState,
       modelName: 'ds',
     };
+    const store = new AgentSharedStore({
+      round: new ConversationRoundState(0),
+      run: new AgentRunState(),
+      tool: toolState,
+      user: options.userVarChannels,
+    });
     const events: any[] = [];
     const dispose = bus.on('addLogMessage', (e) => events.push(e));
     const messages: ProviderMessage[] = [];
 
-    await runToolUseCycle({ options, messages });
+    await runToolUseCycle({ options, messages, store });
     dispose();
 
     const toolEvents = events.filter(
