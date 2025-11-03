@@ -856,6 +856,12 @@
       {
         "title": "Tool Use Agents",
         "properties": {
+          "texra.toolUse.requireEditApproval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Require user approval in a diff view before tool-driven edits modify workspace files",
+            "scope": "resource"
+          },
           "texra.toolUse.persistence.enabled": {
             "type": "boolean",
             "default": true,
