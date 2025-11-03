@@ -4,6 +4,7 @@ import { WriteFileTool } from '../../tools/WriteTool';
 import { FileOpTool } from '../../tools/fileOp';
 import {
   setToolEditApprovalHandler,
+  setToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
 } from '../../tools/approval/toolEditApproval';
 import * as configModule from '../../utils/config';
@@ -20,6 +21,7 @@ suite('Tool edit approval gating', () => {
     originalRead = WorkspaceFS.read;
     originalWrite = WorkspaceFS.write;
     originalGetConfig = configModule.getConfig;
+    setToolEditApprovalSessionBypass(false);
   });
 
   teardown(() => {
@@ -29,6 +31,7 @@ suite('Tool edit approval gating', () => {
     (configModule as { getConfig: typeof originalGetConfig }).getConfig =
       originalGetConfig;
     setToolEditApprovalHandler();
+    setToolEditApprovalSessionBypass(false);
   });
 
   test('write_file applies changes after approval', async () => {
@@ -113,6 +116,31 @@ suite('Tool edit approval gating', () => {
 
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(writtenContent, 'new content');
+    assert.strictEqual(result.output, 'written');
+  });
+
+  test('session bypass auto-approves pending requests', async () => {
+    const tool = new WriteFileTool();
+    let handlerCalled = false;
+    let writtenContent: string | undefined;
+
+    WorkspaceFS.exists = async () => false;
+    WorkspaceFS.read = async () => '';
+    WorkspaceFS.write = async (_path: string, content: string) => {
+      writtenContent = content;
+    };
+
+    setToolEditApprovalHandler(async () => {
+      handlerCalled = true;
+      return { accepted: true };
+    });
+
+    setToolEditApprovalSessionBypass(true);
+
+    const result = await tool.call({ path: 'doc.txt', content: 'auto' });
+
+    assert.strictEqual(handlerCalled, false);
+    assert.strictEqual(writtenContent, 'auto');
     assert.strictEqual(result.output, 'written');
   });
 });
