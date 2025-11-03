@@ -16,10 +16,10 @@ slices:
 - **Run state (`AgentRunState`)** – Records run-level lifecycle data such as the
   total number of rounds executed, aggregate response time, and a
   `RunUsageAccumulator` that aggregates token usage across all rounds.
-- **Tool runtime state (`ToolRuntimeState`)** – Provides focused slices for
+- **Workspace state (`AgentWorkspaceState`)** – Provides focused slices for
   response assembly, media attachments, reasoning caches, and document metrics.
   Flows mutate these slices independently when composing responses.
-- **User variable channels (`AgentUserVarChannels`)** – Separates immutable input
+- **User variable channels (`UserVariableChannels`)** – Separates immutable input
   variables, per-round transient variables, and exported output variables so
   orchestrators can safely compose multiple agents.
 
@@ -37,18 +37,18 @@ summing native payloads to compute total cost.
 
 ## Persistence and resume
 
-Tool-use persistence stores the serialized `ToolRuntimeState` by delegating to
+Tool-use persistence stores the serialized `AgentWorkspaceState` by delegating to
 its `toJSON`/`fromJSON` helpers. Round and run state serialization hooks are
 available through their `toJSON`/`fromJSON` methods for future resume support.
 
 ## Integration points
 
 - **Response cycle flow** uses `AgentSharedStore` directly, mutating
-  `store.round`, `store.run`, and `store.tool` as the model is invoked and the
+  `store.round`, `store.run`, and `store.workspace` as the model is invoked and the
   response is processed.
 - **Reflection run flow** keeps track of run progress through `AgentRunState`
   and persists round/tool states for later inspection.
-- **Tool-use flows** rely on `ToolRuntimeState` slices to manage assembled
+- **Tool-use flows** rely on `AgentWorkspaceState` slices to manage assembled
   responses, media files, and reasoning caches while persisting state between
   executions.
 

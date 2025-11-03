@@ -8,14 +8,14 @@ import {
   resolveAgentSessionDescriptor,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-const ToolRuntimeStateSnapshotStrictSchema = z
+const AgentWorkspaceStateSnapshotStrictSchema = z
   .object({
     assembly: z
       .object({
@@ -34,7 +34,7 @@ const ToolRuntimeStateSnapshotStrictSchema = z
   })
   .strict();
 
-const ToolRuntimeStateSnapshotLegacySchema = z
+const AgentWorkspaceStateSnapshotLegacySchema = z
   .object({
     lastResponse: z.string().optional(),
     accumulatedOutput: z.string().optional(),
@@ -61,13 +61,13 @@ const ToolRuntimeStateSnapshotLegacySchema = z
     },
   }));
 
-export const ToolRuntimeStateSnapshotSchema = z.union([
-  ToolRuntimeStateSnapshotStrictSchema,
-  ToolRuntimeStateSnapshotLegacySchema,
+export const AgentWorkspaceStateSnapshotSchema = z.union([
+  AgentWorkspaceStateSnapshotStrictSchema,
+  AgentWorkspaceStateSnapshotLegacySchema,
 ]);
 
-export type ToolRuntimeStateSnapshot = z.infer<
-  typeof ToolRuntimeStateSnapshotSchema
+export type AgentWorkspaceStateSnapshot = z.infer<
+  typeof AgentWorkspaceStateSnapshotSchema
 >;
 
 const ProviderMessageSchema = z.custom<ProviderMessage>(
@@ -88,7 +88,7 @@ export const ToolUseSessionSnapshotSchema = z
     agentSessionKind: z.enum(AgentCategory).optional(),
     session: AgentSessionDescriptorSchema.optional(),
     messages: z.array(ProviderMessageSchema),
-    toolState: ToolRuntimeStateSnapshotSchema,
+    toolState: AgentWorkspaceStateSnapshotSchema,
     lastUpdated: z.number(),
   })
   .strict();
@@ -111,7 +111,7 @@ export interface SaveToolUseSnapshotPayload {
   model: string;
   session: AgentSessionDescriptor;
   messages: ProviderMessage[];
-  toolState: ToolRuntimeState;
+  toolState: AgentWorkspaceState;
 }
 
 export function normalizeSnapshot(

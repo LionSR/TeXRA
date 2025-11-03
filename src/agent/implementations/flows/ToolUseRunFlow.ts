@@ -8,7 +8,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
@@ -22,7 +22,7 @@ import {
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  toolState: ToolRuntimeState;
+  toolState: AgentWorkspaceState;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -57,7 +57,7 @@ export interface ToolUseRunLifecycle {
 
 export interface ToolUseRunState<C = unknown> {
   messages: ProviderMessage[];
-  toolState: ToolRuntimeState | null;
+  toolState: AgentWorkspaceState | null;
   cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
   store: AgentSharedStore | null;
@@ -71,10 +71,10 @@ export interface ToolUseRunHooks<C = unknown> {
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];
-    toolState: ToolRuntimeState;
+    toolState: AgentWorkspaceState;
     shouldSkipCycle: boolean;
   }>;
-  buildCycleOptions(toolState: ToolRuntimeState): ToolUseCycleOptions<C>;
+  buildCycleOptions(toolState: AgentWorkspaceState): ToolUseCycleOptions<C>;
   runCycle(
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
@@ -165,7 +165,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       shared.state.store = new AgentSharedStore({
         round: roundState,
         run: shared.state.runState,
-        tool: toolState,
+        workspace: toolState,
         user: shared.agent.getUserVarChannels(),
       });
     } else {

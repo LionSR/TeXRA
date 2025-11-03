@@ -13,7 +13,7 @@ import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type {
   AgentCycleBaseOptions,
-  AgentUserVarChannels,
+  UserVariableChannels,
 } from '@agent/core/AgentCycleOptions';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
@@ -40,7 +40,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected runGroupId?: string;
   private lastRunGroupId?: string;
   protected userVars: Record<string, any> = {};
-  protected userVarChannels: AgentUserVarChannels = {
+  protected userVarChannels: UserVariableChannels = {
     input: Object.freeze({}),
     transient: {},
     output: {},
@@ -113,7 +113,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.client;
   }
 
-  public getUserVarChannels(): AgentUserVarChannels {
+  public getUserVarChannels(): UserVariableChannels {
     return this.userVarChannels;
   }
 

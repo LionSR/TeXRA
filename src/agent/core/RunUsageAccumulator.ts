@@ -80,32 +80,25 @@ export class RunUsageAccumulator {
         this.totals.totalCacheReadInputTokens += cacheRead;
         this.totals.totalCacheCreationInputTokens += cacheCreation;
 
-        const toolUseTokens = (summary as any).tool_use_tokens as
-          | number
-          | undefined;
-        if (typeof toolUseTokens === 'number') {
+        const toolUseTokens = summary.tool_use_tokens ?? 0;
+        if (toolUseTokens) {
           this.totals.totalToolUseTokens += toolUseTokens;
         }
       } else if ('prompt_tokens' in summary) {
         const promptDetails = summary.prompt_tokens_details;
-        const cachedTokens = (promptDetails?.cached_tokens ?? 0) as number;
+        const cachedTokens = promptDetails?.cached_tokens ?? 0;
         this.totals.totalCacheReadInputTokens += cachedTokens;
 
-        const completionDetails = summary.completion_tokens_details as
-          | { reasoning_tokens?: number }
-          | undefined;
         const reasoningTokens =
-          completionDetails?.reasoning_tokens ??
-          ((summary as any).reasoning_tokens as number | undefined) ??
+          summary.completion_tokens_details?.reasoning_tokens ??
+          summary.reasoning_tokens ??
           0;
         if (reasoningTokens) {
           this.totals.totalReasoningTokens += reasoningTokens;
         }
 
-        const toolUseTokens = (summary as any).tool_use_tokens as
-          | number
-          | undefined;
-        if (typeof toolUseTokens === 'number') {
+        const toolUseTokens = summary.tool_use_tokens ?? 0;
+        if (toolUseTokens) {
           this.totals.totalToolUseTokens += toolUseTokens;
         }
       }
@@ -162,7 +155,7 @@ export class RunUsageAccumulator {
       return accumulator;
     }
 
-    accumulator.totals = { ...json.totals };
+    Object.assign(accumulator.totals, json.totals);
     accumulator.snapshots.push(...json.snapshots);
     return accumulator;
   }

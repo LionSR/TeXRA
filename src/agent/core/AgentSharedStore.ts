@@ -1,25 +1,32 @@
 // Local imports - state slices
 import { AgentRunState, ConversationRoundState } from './AgentState';
-import { ToolRuntimeState } from './ToolRuntimeState';
-import type { AgentUserVarChannels } from './AgentCycleOptions';
+import { AgentWorkspaceState } from './AgentWorkspaceState';
+import type { UserVariableChannels } from './AgentCycleOptions';
 
 export interface AgentSharedStoreSlices {
   round: ConversationRoundState;
   run: AgentRunState;
-  tool: ToolRuntimeState;
-  user: AgentUserVarChannels;
+  workspace: AgentWorkspaceState;
+  user: UserVariableChannels;
 }
 
+/**
+ * Central store wiring agent run, round, workspace, and user-variable slices together.
+ *
+ * Only the active round slice is mutable because flows swap it out between iterations
+ * while the run, workspace, and user-variable channels remain stable for the duration
+ * of a run.
+ */
 export class AgentSharedStore {
   private roundState: ConversationRoundState;
   private readonly runState: AgentRunState;
-  private readonly toolState: ToolRuntimeState;
-  private readonly userChannels: AgentUserVarChannels;
+  private readonly workspaceState: AgentWorkspaceState;
+  private readonly userChannels: UserVariableChannels;
 
   constructor(slices: AgentSharedStoreSlices) {
     this.roundState = slices.round;
     this.runState = slices.run;
-    this.toolState = slices.tool;
+    this.workspaceState = slices.workspace;
     this.userChannels = slices.user;
   }
 
@@ -35,11 +42,11 @@ export class AgentSharedStore {
     return this.runState;
   }
 
-  get tool(): ToolRuntimeState {
-    return this.toolState;
+  get workspace(): AgentWorkspaceState {
+    return this.workspaceState;
   }
 
-  get user(): AgentUserVarChannels {
+  get user(): UserVariableChannels {
     return this.userChannels;
   }
 

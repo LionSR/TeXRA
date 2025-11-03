@@ -22,7 +22,7 @@ import {
   ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
-import { ToolRuntimeState } from '../core/ToolRuntimeState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 import { ModelHandler } from './ModelHandler';
 import {
   describeAttachments,
@@ -793,7 +793,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: any[],
     _stateRound: ConversationRoundState,
-    _toolState: ToolRuntimeState,
+    _toolState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -805,7 +805,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: any[],
     _stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -835,7 +835,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: any[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
@@ -1010,7 +1010,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models with prefill support',
@@ -1050,7 +1050,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models without prefill support',
@@ -1137,7 +1137,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
     if (typeof reasoning !== 'string' || !reasoning.trim()) {
@@ -1248,7 +1248,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: ToolRuntimeState,
+    _toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
