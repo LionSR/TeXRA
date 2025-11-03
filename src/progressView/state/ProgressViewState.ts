@@ -23,11 +23,7 @@ import {
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
-import {
-  objectToTaskState,
-  getConfig,
-  agentConfigToTaskState,
-} from '@utils/config';
+import { getConfig, agentConfigToTaskState } from '@utils/config';
 // Local imports - agents
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 
@@ -340,52 +336,25 @@ export class ProgressViewState {
    * Load task states from persistence
    */
   private async loadTaskStates(): Promise<void> {
-    const savedTaskStates = await this.persistence.load<
-      | {
-          workflow?: Record<string, Record<string, any>>;
-          toolUse?: Record<string, Record<string, any>>;
-        }
-      | { [key: string]: Record<string, any> }
-      | [string, Record<string, any>][]
-    >(WorkspaceStateKey.TASK_STATES, {});
+    const savedTaskStates = await this.persistence.load<{
+      workflow?: Record<string, TaskState>;
+      toolUse?: Record<string, TaskState>;
+    }>(WorkspaceStateKey.TASK_STATES, {});
 
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
 
-    const processState = (
-      stream: string,
-      rawState: Record<string, any>,
-    ): void => {
-      const taskState = objectToTaskState(rawState);
-      if (isWorkflowTaskState(taskState)) {
-        this.workflowTaskStates.set(stream as StreamTabId, taskState);
-      } else if (isToolUseTaskState(taskState)) {
-        this.toolUseTaskStates.set(stream as StreamTabId, taskState);
+    const workflowStates = savedTaskStates?.workflow ?? {};
+    for (const [stream, state] of Object.entries(workflowStates)) {
+      if (state && isWorkflowTaskState(state)) {
+        this.workflowTaskStates.set(stream as StreamTabId, state);
       }
-    };
-
-    if (!savedTaskStates) {
-      return;
     }
 
-    if (Array.isArray(savedTaskStates)) {
-      for (const [stream, state] of savedTaskStates) {
-        processState(stream, state);
-      }
-    } else if ('workflow' in savedTaskStates || 'toolUse' in savedTaskStates) {
-      const { workflow = {}, toolUse = {} } = savedTaskStates as {
-        workflow?: Record<string, Record<string, any>>;
-        toolUse?: Record<string, Record<string, any>>;
-      };
-      for (const [stream, state] of Object.entries(workflow)) {
-        processState(stream, state);
-      }
-      for (const [stream, state] of Object.entries(toolUse)) {
-        processState(stream, state);
-      }
-    } else {
-      for (const [stream, state] of Object.entries(savedTaskStates)) {
-        processState(stream, state);
+    const toolUseStates = savedTaskStates?.toolUse ?? {};
+    for (const [stream, state] of Object.entries(toolUseStates)) {
+      if (state && isToolUseTaskState(state)) {
+        this.toolUseTaskStates.set(stream as StreamTabId, state);
       }
     }
 
@@ -455,7 +424,10 @@ export class ProgressViewState {
   }
 
   private async loadStreamSortOrder(): Promise<void> {
-    const configDefault = getConfig('progressBoard.streamSortOrder', 'time');
+    const configDefault = getConfig(
+      'texra.progressBoard.streamSortOrder',
+      'time',
+    );
     this._streamSortOrder = await this.persistence.load(
       WorkspaceStateKey.STREAM_SORT_ORDER,
       configDefault,

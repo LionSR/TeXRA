@@ -179,7 +179,7 @@ export class FileManager {
 
     try {
       const agentPath = await getAgentPath(agent);
-      const [settings] = await loadAgentSettingAndPrompts(agentPath, agent);
+      const [settings] = await loadAgentSettingAndPrompts(agentPath);
       const files = Array.isArray(settings?.defaultOutputFiles)
         ? settings.defaultOutputFiles
         : [];
@@ -532,7 +532,7 @@ export class FileManager {
       return [];
     }
 
-    const modelNames = getConfig<string[]>('models', []);
+    const modelNames = getConfig<string[]>('texra.models', []);
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
       .filter((doc) => doc.uri.scheme === 'file')

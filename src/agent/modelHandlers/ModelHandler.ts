@@ -108,16 +108,7 @@ export abstract class ModelHandler<
   }
 
   constructor(config: ModelConfig) {
-    this.config = {
-      ...config,
-      toolConfig: config.toolConfig || {
-        autoExtractFigure: false,
-        autoExtractTikzFigure: false,
-        attachTeXCount: false,
-        attachDiagnostics: false,
-        autoCompileInputPdf: false,
-      },
-    };
+    this.config = { ...config };
     this.capabilities = cloneCapabilities(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
@@ -284,7 +275,7 @@ export abstract class ModelHandler<
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
       this.config.openRouterOnly ||
-      getConfig<boolean>('model.useOpenRouter', false);
+      getConfig<boolean>('texra.model.useOpenRouter', false);
 
     if (useOpenRouter) {
       try {
@@ -314,13 +305,13 @@ export abstract class ModelHandler<
     // Use OpenRouter if model requires it or if explicitly configured
     const useOpenRouter =
       this.config.openRouterOnly ||
-      getConfig<boolean>('model.useOpenRouter', false);
+      getConfig<boolean>('texra.model.useOpenRouter', false);
     const useImprovedConnection = getConfig<boolean>(
-      'model.useImprovedConnection',
+      'texra.model.useImprovedConnection',
       false,
     );
     const configValue = getConfig<string>(
-      'model.improvedConnectionDomain',
+      'texra.model.improvedConnectionDomain',
       DEFAULT_PROXY_DOMAIN,
     );
     let improvedConnectionDomain = (configValue || '').trim();
@@ -375,7 +366,10 @@ export abstract class ModelHandler<
       return 'https://openrouter.ai/api/v1';
     }
 
-    const customDeepSeekUrl = getConfig<string>('model.baseUrlDeepSeek', '');
+    const customDeepSeekUrl = getConfig<string>(
+      'texra.model.baseUrlDeepSeek',
+      '',
+    );
     if (customDeepSeekUrl && this.config.provider === ModelProvider.DEEPSEEK) {
       const normalized = normalizeUrl(customDeepSeekUrl);
       return `https://${normalized}`;
@@ -435,15 +429,18 @@ export abstract class ModelHandler<
    * @returns Boolean indicating if streaming should be enabled
    */
   public getStreamingConfig(): boolean {
-    const useStreamingGlobal = getConfig<boolean>('model.useStreaming', false);
+    const useStreamingGlobal = getConfig<boolean>(
+      'texra.model.useStreaming',
+      false,
+    );
 
     // For OpenRouter models, use dedicated setting
     if (
       this.config.openRouterOnly ||
-      getConfig<boolean>('model.useOpenRouter', false)
+      getConfig<boolean>('texra.model.useOpenRouter', false)
     ) {
       return getConfig<boolean>(
-        'model.useStreamingOpenrouter',
+        'texra.model.useStreamingOpenrouter',
         useStreamingGlobal,
       );
     }
@@ -469,7 +466,7 @@ export abstract class ModelHandler<
     }
 
     // Build the full config key and fetch the setting
-    const configKey = `model.useStreaming${configSuffix}`;
+    const configKey = `texra.model.useStreaming${configSuffix}`;
     return getConfig<boolean>(configKey, useStreamingGlobal);
   }
 
@@ -700,7 +697,6 @@ export abstract class ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, M[]]>;
 
   /**

@@ -151,7 +151,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   public override getStreamingConfig(): boolean {
     const useBackgroundResponses = getConfig<boolean>(
-      'model.useBackgroundResponses',
+      'texra.model.useBackgroundResponses',
       false,
     );
     if (useBackgroundResponses) {
@@ -497,7 +497,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<Response> {
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
-      'model.useBackgroundResponses',
+      'texra.model.useBackgroundResponses',
       false,
     );
     if (backgroundToggleEnabled && !this.backgroundModeSupported) {
@@ -558,7 +558,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (this.capabilities.supportsReasoning) {
       const isGpt5 = this.config.name.startsWith('gpt5');
       const includeSummary =
-        !isGpt5 || getConfig<boolean>('model.gpt5ReasoningSummary', false);
+        !isGpt5 ||
+        getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
       const reasoning: Reasoning = {};
       if (includeSummary) {
         reasoning.summary = 'auto';
@@ -1064,7 +1065,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     toolState: ToolState,
     outputFile: string,
     prefill: string,
-    groupId?: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
@@ -1096,7 +1096,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
     await WorkspaceFS.write(outputFile, fileContent);

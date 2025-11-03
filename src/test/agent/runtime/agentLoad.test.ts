@@ -46,9 +46,12 @@ suite('loadAgentSettingAndPrompts', () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'polish.yaml');
     const multipleDefinitionPath = path.join(agentPath, 'polish_multiple.yaml');
-    const agentPathInfo = {
+    const multipleResolution = {
       directory: agentPath,
       source: AgentDirectorySource.Custom,
+      definitionPath: multipleDefinitionPath,
+      resolvedName: 'polish_multiple',
+      usedFallback: false,
     } as const;
 
     fileContents.set(
@@ -75,13 +78,9 @@ suite('loadAgentSettingAndPrompts', () => {
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(
-      agentPathInfo,
-      'polish',
-      {
-        preferMultiple: true,
-      },
-    );
+    const [, prompts] = await loadAgentSettingAndPrompts(multipleResolution, {
+      preferMultiple: true,
+    });
 
     assert.strictEqual(prompts.userRequest, 'multiple variant');
   });
@@ -89,9 +88,12 @@ suite('loadAgentSettingAndPrompts', () => {
   test('falls back to the base definition when _multiple is missing', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
-    const agentPathInfo = {
+    const fallbackResolution = {
       directory: agentPath,
       source: AgentDirectorySource.Custom,
+      definitionPath: baseDefinitionPath,
+      resolvedName: 'summarize',
+      usedFallback: true,
     } as const;
 
     fileContents.set(
@@ -106,13 +108,9 @@ suite('loadAgentSettingAndPrompts', () => {
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(
-      agentPathInfo,
-      'summarize',
-      {
-        preferMultiple: true,
-      },
-    );
+    const [, prompts] = await loadAgentSettingAndPrompts(fallbackResolution, {
+      preferMultiple: true,
+    });
 
     assert.strictEqual(prompts.userRequest, 'base only');
   });
