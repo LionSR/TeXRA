@@ -5,8 +5,8 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
-import { ToolState } from '@agent/core/ToolState';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import type { UsageProvider } from '@agent/core/RunUsageAccumulator';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 
@@ -52,6 +52,21 @@ interface DebugFileOptions {
   outputFile: string;
 }
 
+function resolveUsageProvider(
+  handler: ResponseCycleOptions['modelHandler'],
+): UsageProvider {
+  if (handler.isAnthropic) {
+    return 'anthropic';
+  }
+  if (handler.isGoogle) {
+    return 'google';
+  }
+  if (handler.isOpenai || handler.isOpenaiCompatible) {
+    return 'openai';
+  }
+  return 'unknown';
+}
+
 async function maybeSaveDebug(
   debugContext: DebugContext | undefined,
   debugFileOptions: DebugFileOptions | undefined,
@@ -72,9 +87,6 @@ async function maybeSaveDebug(
 
 export interface ResponseCycleInputState {
   messages: ProviderMessage[];
-  stateRound: AgentStateRound;
-  stateGlobal: AgentStateGlobal;
-  toolState: ToolState;
   outputFile: string;
 }
 
@@ -106,7 +118,8 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
 
 export interface ResponseCycleShared<C = unknown> {
   options: ResponseCycleOptions<C>;
-  cycle: ResponseCycleState;
+  store: AgentSharedStore;
+  state: ResponseCycleState;
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle
@@ -126,10 +139,10 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     debugContext?: DebugContext;
     debugFileOptions?: DebugFileOptions;
   }> {
-    const { options, cycle } = shared;
+    const { options, state, store } = shared;
     const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const exists = await WorkspaceFS.exists(cycle.outputFile);
+    const exists = await WorkspaceFS.exists(state.outputFile);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -145,8 +158,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const debugFileOptions: DebugFileOptions | undefined = interrupted
       ? undefined
       : {
-          continuationCount: cycle.stateRound.continuationCount,
-          outputFile: cycle.outputFile,
+          continuationCount: store.round.continuationCount,
+          outputFile: state.outputFile,
         };
 
     return {
@@ -159,7 +172,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
   }
 
   async post(
-    { cycle }: ResponseCycleShared<C>,
+    { state }: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -169,22 +182,22 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
-      resetResponseCycleState(cycle);
-      cycle.shouldStop = true;
+      resetResponseCycleState(state);
+      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    cycle.outputExists = prepRes.exists;
-    cycle.systemPrompt = prepRes.systemPrompt;
-    cycle.debugContext = prepRes.debugContext;
-    cycle.debugFileOptions = prepRes.debugFileOptions;
-    cycle.startTime = Date.now();
-    resetResponseCycleState(cycle);
+    state.outputExists = prepRes.exists;
+    state.systemPrompt = prepRes.systemPrompt;
+    state.debugContext = prepRes.debugContext;
+    state.debugFileOptions = prepRes.debugFileOptions;
+    state.startTime = Date.now();
+    resetResponseCycleState(state);
 
     await maybeSaveDebug(
-      cycle.debugContext,
-      cycle.debugFileOptions,
-      cycle.messages,
+      state.debugContext,
+      state.debugFileOptions,
+      state.messages,
       'messages',
     );
 
@@ -204,8 +217,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
-    const { options, cycle } = context;
-    if (cycle.shouldStop) {
+    const { options, state } = context;
+    if (state.shouldStop) {
       return { skipped: true };
     }
 
@@ -219,9 +232,9 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     try {
       response = await options.modelHandler.createResponse(
         options.client,
-        cycle.messages,
+        state.messages,
         options.agentSetting.temperature || 0.0,
-        cycle.systemPrompt,
+        state.systemPrompt,
         options.agentSetting.endTag,
         abortController.signal,
         options.modelHandler.capabilities.supportsFunctionCalling
@@ -234,15 +247,15 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
           ? `Model invocation failed: ${error.message}`
           : 'Model invocation failed with an unknown error';
       options.logger.error(message, groupId);
-      cycle.shouldStop = true;
-      cycle.endTurn = false;
+      state.shouldStop = true;
+      state.endTurn = false;
       throw error;
     } finally {
       options.setAbortController(null);
     }
 
-    const responseTime = cycle.startTime
-      ? (Date.now() - cycle.startTime) / 1000
+    const responseTime = state.startTime
+      ? (Date.now() - state.startTime) / 1000
       : undefined;
 
     return { response, responseTime };
@@ -253,20 +266,20 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     prepRes: ResponseCycleShared<C>,
     execRes: { skipped: true } | { response: unknown; responseTime?: number },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
+    const { options, state } = prepRes;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
-      cycle.endTurn = false;
+      state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    cycle.responseObject = execRes.response;
-    cycle.responseTime = execRes.responseTime;
+    state.responseObject = execRes.response;
+    state.responseTime = execRes.responseTime;
 
     await maybeSaveDebug(
-      cycle.debugContext,
-      cycle.debugFileOptions,
+      state.debugContext,
+      state.debugFileOptions,
       execRes.response,
       'response',
     );
@@ -276,8 +289,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         'Model response was aborted or returned no data; output may be incomplete.',
         groupId,
       );
-      cycle.endTurn = false;
-      cycle.shouldStop = true;
+      state.endTurn = false;
+      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
@@ -311,14 +324,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(
     context: ResponseCycleShared<C>,
   ): Promise<ProcessResult | { skipped: true }> {
-    const { options, cycle } = context;
-    if (cycle.shouldStop || !cycle.responseObject) {
+    const { options, state, store } = context;
+    if (state.shouldStop || !state.responseObject) {
       return { skipped: true };
     }
 
     const [newResponse, responseUsage, stopReason] =
       options.modelHandler.extractResponse(
-        cycle.responseObject,
+        state.responseObject,
         options.agentSetting.endTag,
       );
 
@@ -331,10 +344,10 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       );
     }
 
-    if (cycle.responseTime !== undefined) {
-      cycle.stateRound.updateResponseTime(cycle.responseTime);
+    if (state.responseTime !== undefined) {
+      store.round.addResponseTime(state.responseTime);
       options.logger.debug(
-        `Response time: ${cycle.responseTime.toFixed(2)}s`,
+        `Response time: ${state.responseTime.toFixed(2)}s`,
         groupId,
       );
     }
@@ -346,9 +359,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     );
 
     const thinkingContent = options.modelHandler.processThinkingBlock(
-      cycle.responseObject,
+      state.responseObject,
       groupId,
-      cycle.toolState,
+      store.tool,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
 
@@ -374,13 +387,16 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const apiUsage = options.modelHandler.computeResponseUsage(
       responseUsage,
-      cycle.responseTime ?? 0,
+      state.responseTime ?? 0,
     );
-    cycle.stateRound.updateTokenCounts(apiUsage);
-    cycle.stateGlobal.updateFromCurrRound(cycle.stateRound);
+    store.round.setUsage({
+      summary: apiUsage,
+      nativeUsage: responseUsage,
+      provider: resolveUsageProvider(options.modelHandler),
+    });
 
     const repetitionResult = checkForMassiveRepetition(
-      cycle.toolState.lastResponse,
+      store.tool.assembly.lastResponse,
       newResponse,
     );
 
@@ -398,7 +414,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         groupId,
       );
       options.logger.error(
-        JSON.stringify(messageToSkeleton(cycle.messages), null, 2),
+        JSON.stringify(messageToSkeleton(state.messages), null, 2),
         groupId,
       );
     }
@@ -410,13 +426,13 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
       if (!repetitionResult.massiveRepetitionDetected) {
         const connector = await bestConnectionMethod(
-          cycle.toolState.lastResponse.slice(-K_SLICE),
+          store.tool.assembly.lastResponse.slice(-K_SLICE),
           processedResponse.slice(0, K_SLICE),
         );
         bestConnector = connector.connector;
-        cycle.toolState.updateLastResponse(processedResponse);
-        cycle.toolState.updateAccumulatedOutput(
-          cycle.toolState.accumulatedOutput +
+        store.tool.assembly.updateLastResponse(processedResponse);
+        store.tool.assembly.updateAccumulatedOutput(
+          store.tool.assembly.accumulatedOutput +
             (bestConnector ?? '') +
             processedResponse,
         );
@@ -441,34 +457,35 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     prepRes: ResponseCycleShared<C>,
     execRes: ProcessResult | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
+    const { options, state, store } = prepRes;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
-      cycle.endTurn = false;
+      state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    cycle.stopReason = execRes.stopReason;
-    cycle.processedResponse = execRes.processedResponse;
+    state.stopReason = execRes.stopReason;
+    state.processedResponse = execRes.processedResponse;
+    store.run.recordRound(store.round);
 
     if (execRes.repetitionDetected || !execRes.processedResponse) {
-      cycle.endTurn = false;
-      cycle.shouldStop = true;
+      state.endTurn = false;
+      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    if (!cycle.outputExists) {
-      options.logger.debug(`Creating new file: ${cycle.outputFile}`, groupId);
-      await WorkspaceFS.write(cycle.outputFile, execRes.processedResponse);
-      cycle.outputExists = true;
+    if (!state.outputExists) {
+      options.logger.debug(`Creating new file: ${state.outputFile}`, groupId);
+      await WorkspaceFS.write(state.outputFile, execRes.processedResponse);
+      state.outputExists = true;
     } else {
       options.logger.debug(
-        `Appending to existing file: ${cycle.outputFile}`,
+        `Appending to existing file: ${state.outputFile}`,
         groupId,
       );
       await WorkspaceFS.appendFile(
-        cycle.outputFile,
+        state.outputFile,
         (execRes.bestConnector ?? '') + execRes.processedResponse,
       );
     }
@@ -485,17 +502,17 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
       options.modelHandler.updateMessageContentWithPrefill(
-        cycle.messages,
+        state.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        cycle.toolState,
+        store.tool,
       );
     } else {
       options.modelHandler.updateMessageContentWithoutPrefill(
-        cycle.messages,
+        state.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        cycle.toolState,
+        store.tool,
       );
     }
 
@@ -518,8 +535,8 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
     | { skipped: true }
   > {
-    const { options, cycle } = context;
-    if (cycle.shouldStop || !cycle.stopReason || !cycle.processedResponse) {
+    const { options, state, store } = context;
+    if (state.shouldStop || !state.stopReason || !state.processedResponse) {
       return { skipped: true };
     }
 
@@ -530,16 +547,16 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const [shouldEndTurn, shouldStop] =
       options.modelHandler.checkStopConditions(
-        cycle.stopReason,
-        cycle.processedResponse,
-        cycle.stateRound,
-        cycle.stateGlobal,
+        state.stopReason,
+        state.processedResponse,
+        store.round,
+        store.run,
         options.agentSetting,
       );
 
     const shouldContinue = options.modelHandler.shouldContinue(
-      cycle.stopReason,
-      cycle.processedResponse,
+      state.stopReason,
+      state.processedResponse,
       options.agentSetting,
     );
 
@@ -553,25 +570,25 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
       | { skipped: true },
   ): Promise<string | undefined> {
-    const { options, cycle } = prepRes;
+    const { options, state, store } = prepRes;
     const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
-      cycle.endTurn = false;
-      cycle.shouldStop = true;
+      state.endTurn = false;
+      state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    cycle.endTurn = execRes.shouldEndTurn;
-    cycle.shouldStop = execRes.shouldStop;
+    state.endTurn = execRes.shouldEndTurn;
+    state.shouldStop = execRes.shouldStop;
 
     if (execRes.shouldStop) {
       return FlowTransition.COMPLETE;
     }
 
-    cycle.stateRound.incrementContinuation();
+    store.round.incrementContinuation();
     options.logger.info(
-      `Starting continuation #${cycle.stateRound.continuationCount}`,
+      `Starting continuation #${store.round.continuationCount}`,
       groupId,
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
@@ -587,17 +604,17 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
       options.modelHandler.addContinueMessageWithPrefill(
-        cycle.messages,
-        cycle.stateRound,
-        cycle.toolState,
+        state.messages,
+        store.round,
+        store.tool,
         options.agentSetting,
         options.agentConfig,
       );
     } else {
       options.modelHandler.addContinueMessageWithoutPrefill(
-        cycle.messages,
-        cycle.stateRound,
-        cycle.toolState,
+        state.messages,
+        store.round,
+        store.tool,
         options.agentSetting,
         options.agentConfig,
       );

@@ -6,7 +6,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { ToolState } from '@agent/core/ToolState';
+import type { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
@@ -20,7 +20,7 @@ import {
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolRuntimeState;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -55,7 +55,7 @@ export interface ToolUseRunLifecycle {
 
 export interface ToolUseRunState<C = unknown> {
   messages: ProviderMessage[];
-  toolState: ToolState | null;
+  toolState: ToolRuntimeState | null;
   cycleOptions: ToolUseCycleOptions<C> | null;
   shouldSkipCycle: boolean;
 }
@@ -66,10 +66,10 @@ export interface ToolUseRunHooks<C = unknown> {
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];
-    toolState: ToolState;
+    toolState: ToolRuntimeState;
     shouldSkipCycle: boolean;
   }>;
-  buildCycleOptions(toolState: ToolState): ToolUseCycleOptions<C>;
+  buildCycleOptions(toolState: ToolRuntimeState): ToolUseCycleOptions<C>;
   runCycle(
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],

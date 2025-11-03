@@ -5,7 +5,7 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - model handler types
@@ -139,7 +139,7 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleInputState {
   messages: ProviderMessage[];
-  toolState: ToolState;
+  toolState: ToolRuntimeState;
   iteration: number;
 }
 
@@ -392,7 +392,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     if (!toolInfo || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
-        state.toolState.updateLastResponse(text);
+        state.toolState.assembly.updateLastResponse(text);
       }
       state.shouldStop = true;
       return { stopReason, text, endTurn: true };
@@ -575,13 +575,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           fallbackMessage ??
           '';
         if (fallback) {
-          state.toolState.updateLastResponse(String(fallback));
+          state.toolState.assembly.updateLastResponse(String(fallback));
         }
       } else if (fallbackMessage) {
         const assistantMessage =
           options.modelHandler.createAssistantMessage(fallbackMessage);
         state.messages.push(assistantMessage);
-        state.toolState.updateLastResponse(fallbackMessage);
+        state.toolState.assembly.updateLastResponse(fallbackMessage);
       }
 
       state.iteration += 1;
@@ -636,7 +636,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
 
     if (result.files && result.files.length > 0) {
-      const existing = state.toolState.mediaFiles;
+      const existing = state.toolState.media.files;
       const toAdd: string[] = [];
       for (const attachment of result.files) {
         const candidate = attachment.path;
@@ -656,7 +656,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         }
       }
       if (toAdd.length > 0) {
-        state.toolState.addMediaFiles(toAdd);
+        state.toolState.media.addMediaFiles(toAdd);
       }
     }
 

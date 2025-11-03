@@ -1,15 +1,6 @@
-// Third-party imports
-import { ResponseUsage } from 'openai/resources/responses/responses';
-
 // Local imports - agent
-import { AgentStateGlobal } from '@agent/core/AgentState';
-import {
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
-} from '@agent/core/ResponseUsage';
+import { AgentRunState } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
@@ -25,75 +16,26 @@ export class UsageMonitor {
     private readonly context: AgentExecutionContext,
   ) {}
 
-  async recordUsage(stateGlobal: AgentStateGlobal): Promise<void> {
+  async recordUsage(stateGlobal: AgentRunState): Promise<void> {
     const { logger, usageReporter } = this.context;
 
     try {
-      let responseUsage:
-        | ExtendedCompletionUsage
-        | AnthropicUsage
-        | GenerateContentResponseUsageMetadata
-        | ResponseUsage = {} as any;
+      const totals = stateGlobal.usageAccumulator.getTotals();
+      const nativeSnapshots =
+        stateGlobal.usageAccumulator.getNativeUsageSnapshots();
 
-      if (this.modelHandler instanceof ModelHandlerOpenAIResponse) {
-        responseUsage = {
-          input_tokens: stateGlobal.totalInputTokens,
-          output_tokens: stateGlobal.totalOutputTokens,
-          total_tokens:
-            stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
-          input_tokens_details: {
-            cached_tokens: stateGlobal.totalCacheReadInputTokens,
-          },
-          output_tokens_details: {
-            reasoning_tokens: stateGlobal.totalReasoningTokens,
-          },
-        };
-      } else if (this.modelHandler.isOpenai) {
-        if (this.modelHandler.capabilities.supportsAutoPromptCaching) {
-          responseUsage = {
-            prompt_tokens: stateGlobal.totalInputTokens,
-            completion_tokens: stateGlobal.totalOutputTokens,
-            total_tokens:
-              stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
-            prompt_tokens_details: {
-              cached_tokens: stateGlobal.totalCacheReadInputTokens,
-            },
-            completion_tokens_details: {
-              reasoning_tokens: stateGlobal.totalReasoningTokens,
-            },
-          };
-        } else {
-          responseUsage = {
-            prompt_tokens: stateGlobal.totalInputTokens,
-            completion_tokens: stateGlobal.totalOutputTokens,
-            total_tokens:
-              stateGlobal.totalInputTokens + stateGlobal.totalOutputTokens,
-            reasoning_tokens: stateGlobal.totalReasoningTokens,
-            cached_tokens: stateGlobal.totalCacheReadInputTokens,
-          } as ExtendedCompletionUsage;
+      let cost = 0;
+      for (const snapshot of nativeSnapshots) {
+        try {
+          cost += this.modelHandler.computePrice(snapshot.payload as any);
+        } catch (error) {
+          logger.debug(
+            `Failed to compute cost for usage snapshot in round ${snapshot.round}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
         }
-      } else if (this.modelHandler.isAnthropic) {
-        responseUsage = {
-          input_tokens: stateGlobal.totalInputTokens,
-          output_tokens: stateGlobal.totalOutputTokens,
-          cache_read_input_tokens: stateGlobal.totalCacheReadInputTokens,
-          cache_creation_input_tokens:
-            stateGlobal.totalCacheCreationInputTokens,
-          cache_creation: null,
-          server_tool_use: null,
-          service_tier: null,
-        };
-      } else if (this.modelHandler.isGoogle) {
-        responseUsage = {
-          promptTokenCount: stateGlobal.totalInputTokens,
-          candidatesTokenCount: stateGlobal.totalOutputTokens,
-          toolUsePromptTokenCount: stateGlobal.totalToolUseTokens,
-          thoughtsTokenCount: stateGlobal.totalReasoningTokens,
-          cachedContentTokenCount: stateGlobal.totalCacheReadInputTokens,
-        };
       }
-
-      const cost = this.modelHandler.computePrice(responseUsage);
 
       const cachingStats =
         this.modelHandler.capabilities.supportsPromptCaching ||
@@ -101,38 +43,38 @@ export class UsageMonitor {
 
       const totalCacheableTokens = cachingStats
         ? this.modelHandler.capabilities.supportsPromptCaching
-          ? stateGlobal.totalCacheCreationInputTokens +
-            stateGlobal.totalCacheReadInputTokens
-          : stateGlobal.totalInputTokens
+          ? totals.totalCacheCreationInputTokens +
+            totals.totalCacheReadInputTokens
+          : totals.totalInputTokens
         : 0;
 
       const percentageCached = cachingStats
         ? totalCacheableTokens > 0
-          ? (stateGlobal.totalCacheReadInputTokens / totalCacheableTokens) * 100
+          ? (totals.totalCacheReadInputTokens / totalCacheableTokens) * 100
           : 0
         : undefined;
 
       const baseStats: TokenUsageStats = {
-        inputTokens: stateGlobal.totalInputTokens,
-        outputTokens: stateGlobal.totalOutputTokens,
+        inputTokens: totals.totalInputTokens,
+        outputTokens: totals.totalOutputTokens,
         cost: Number(cost.toFixed(3)),
       };
 
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number(stateGlobal.totalResponseTime.toFixed(1)),
+        elapsedTime: Number(stateGlobal.totalResponseTimeMs.toFixed(1)),
         ...(cachingStats && {
-          cacheReadInputTokens: stateGlobal.totalCacheReadInputTokens,
+          cacheReadInputTokens: totals.totalCacheReadInputTokens,
           ...(this.modelHandler.capabilities.supportsPromptCaching && {
-            cacheCreationInputTokens: stateGlobal.totalCacheCreationInputTokens,
+            cacheCreationInputTokens: totals.totalCacheCreationInputTokens,
           }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
         ...(this.modelHandler.capabilities.supportsReasoning && {
-          reasoningTokens: stateGlobal.totalReasoningTokens,
+          reasoningTokens: totals.totalReasoningTokens,
         }),
-        ...(stateGlobal.totalToolUseTokens > 0 && {
-          toolUseTokens: stateGlobal.totalToolUseTokens,
+        ...(totals.totalToolUseTokens > 0 && {
+          toolUseTokens: totals.totalToolUseTokens,
         }),
       };
 
