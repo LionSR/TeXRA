@@ -150,6 +150,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
 
+    dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
+
     dom.toolbar.render(sessionKind);
 
     const hasExecution = state.hasExecutionId(message.activeStream);

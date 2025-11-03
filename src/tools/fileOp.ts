@@ -8,7 +8,10 @@ import { defineTool } from './core/define';
 // Local imports - tools
 import {
   buildApprovalRejectedResult,
+  formatApprovalUserDiff,
+  getApprovedContent,
   requestToolEditApproval,
+  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
@@ -62,10 +65,13 @@ export class FileOpTool extends defineTool({
           );
         }
 
-        await WorkspaceFS.write(path, content);
+        const finalContent = getApprovedContent(approval, content);
+        await writeApprovedContent(path, originalContent, finalContent);
+        const userDiffNote = formatApprovalUserDiff(path, approval.userPatch);
+
         return toolResult({
           summary: `Wrote ${path}`,
-          output: 'written',
+          output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
         });
       }
       case 'append': {
@@ -95,10 +101,13 @@ export class FileOpTool extends defineTool({
           );
         }
 
-        await WorkspaceFS.appendFile(path, content);
+        const finalContent = getApprovedContent(approval, proposedContent);
+        await writeApprovedContent(path, originalContent, finalContent);
+        const userDiffNote = formatApprovalUserDiff(path, approval.userPatch);
+
         return toolResult({
           summary: `Appended to ${path}`,
-          output: 'appended',
+          output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
         });
       }
       default:

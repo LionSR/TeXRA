@@ -63,22 +63,23 @@
 .approval-request__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .approval-request__actions::part(container) {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .approval-request__actions vscode-toolbar-button {
-  min-width: 180px;
+  min-width: auto;
+  flex: 1 1 12rem;
 }
 
 .approval-request__actions vscode-toolbar-button::part(control) {
   justify-content: flex-start;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .approval-request__actions [hidden] {
