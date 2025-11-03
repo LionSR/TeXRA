@@ -172,6 +172,44 @@ async function revealFirstChange(
   );
 }
 
+async function closeApprovalEditors(
+  originalUri: vscode.Uri,
+  proposedUri: vscode.Uri,
+): Promise<void> {
+  const targetUris = new Set([originalUri.toString(), proposedUri.toString()]);
+
+  const tabsToClose: vscode.Tab[] = [];
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      const input = tab.input;
+      if (
+        typeof vscode.TabInputTextDiff !== 'undefined' &&
+        input instanceof vscode.TabInputTextDiff
+      ) {
+        const original = input.original.toString();
+        const modified = input.modified.toString();
+        if (targetUris.has(original) && targetUris.has(modified)) {
+          tabsToClose.push(tab);
+        }
+        continue;
+      }
+
+      if (
+        typeof vscode.TabInputText !== 'undefined' &&
+        input instanceof vscode.TabInputText
+      ) {
+        if (targetUris.has(input.uri.toString())) {
+          tabsToClose.push(tab);
+        }
+      }
+    }
+  }
+
+  if (tabsToClose.length > 0) {
+    await vscode.window.tabGroups.close(tabsToClose);
+  }
+}
+
 async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
@@ -193,6 +231,7 @@ async function nativeRequestApproval(
 
   const title = `Tool edit (${sourceTool}): ${description}`;
 
+  let result: ToolEditApprovalResult = { accepted: false };
   try {
     await vscode.commands.executeCommand(
       'vscode.diff',
@@ -203,17 +242,25 @@ async function nativeRequestApproval(
 
     await revealFirstChange(proposedUri, originalContent, proposedContent);
 
-    const approve = 'Approve';
-    const reject = 'Reject';
+    const approve: vscode.MessageItem = { title: 'Approve' };
+    const reject: vscode.MessageItem = {
+      title: 'Reject',
+      isCloseAffordance: true,
+    };
     const selection = await vscode.window.showInformationMessage(
       `Apply changes from ${sourceTool} to ${description}?`,
-      { detail: 'Review the diff, then choose an action.', modal: true },
+      {
+        detail:
+          'Review the diff in the editor. This notification stays open until you respond.',
+        modal: false,
+      },
       approve,
       reject,
     );
 
     if (selection === approve) {
-      return { accepted: true };
+      result = { accepted: true };
+      return result;
     }
 
     if (selection === reject) {
@@ -221,17 +268,20 @@ async function nativeRequestApproval(
         prompt: 'Optionally share why the change was rejected',
         placeHolder: 'Add guidance for the assistant (press Enter to skip)',
       });
-      return {
+      result = {
         accepted: false,
         userMessage: userMessage?.trim() || undefined,
       };
+      return result;
     }
 
-    return {
+    result = {
       accepted: false,
-      userMessage: 'User dismissed the approval dialog.',
+      userMessage: 'User dismissed the approval notification.',
     };
+    return result;
   } finally {
+    await closeApprovalEditors(originalUri, proposedUri);
     provider.delete(originalUri);
     provider.delete(proposedUri);
   }
