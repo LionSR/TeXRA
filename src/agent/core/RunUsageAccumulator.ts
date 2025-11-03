@@ -79,7 +79,6 @@ export class RunUsageAccumulator {
         const cacheCreation = summary.cache_creation_input_tokens ?? 0;
         this.totals.totalCacheReadInputTokens += cacheRead;
         this.totals.totalCacheCreationInputTokens += cacheCreation;
-        this.totals.firstInputTokens += cacheRead + cacheCreation;
 
         const toolUseTokens = (summary as any).tool_use_tokens as
           | number
