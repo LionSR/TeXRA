@@ -22,6 +22,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 // Types
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { ToolEditApprovalPrompt } from './types';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
@@ -60,6 +61,10 @@ export class ProgressViewProvider
   private _pendingUpdate = false;
   private _hasResolved = false;
   private readonly logger: AgentLogger;
+  private readonly pendingApprovalPrompts = new Map<
+    string,
+    ToolEditApprovalPrompt
+  >();
 
   constructor(
     protected readonly context: vscode.ExtensionContext,
@@ -226,6 +231,12 @@ export class ProgressViewProvider
   public markWebviewReady(): void {
     this._webviewReady = true;
     this.updateWebview();
+
+    if (this.webviewUpdater.isAvailable()) {
+      for (const prompt of this.pendingApprovalPrompts.values()) {
+        this.webviewUpdater.showToolEditApprovalPrompt(prompt);
+      }
+    }
   }
 
   // Public API methods - these delegate to the new architecture
@@ -237,6 +248,22 @@ export class ProgressViewProvider
     const didUpdate = this.state.clearOutputState(streamTabId);
     if (didUpdate) {
       this.updateWebview();
+    }
+  }
+
+  public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
+    this.pendingApprovalPrompts.set(prompt.requestId, prompt);
+
+    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.showToolEditApprovalPrompt(prompt);
+    }
+  }
+
+  public resolveToolEditApprovalPrompt(requestId: string): void {
+    this.pendingApprovalPrompts.delete(requestId);
+
+    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.resolveToolEditApprovalPrompt(requestId);
     }
   }
 
