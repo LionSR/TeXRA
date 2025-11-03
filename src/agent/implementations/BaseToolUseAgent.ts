@@ -1,6 +1,7 @@
 // Local imports - agent
 import type { AgentConfig } from '../core/AgentConfig';
 import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
+import { AgentRunState } from '../core/AgentState';
 import { ToolRuntimeState } from '../core/ToolRuntimeState';
 import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
@@ -159,6 +160,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           toolState: this.toolState,
           cycleOptions: null,
           shouldSkipCycle: false,
+          store: null,
+          runState: new AgentRunState(),
+          nextRoundIndex: 0,
         }) satisfies ToolUseRunState<C>,
       createFlow: () => createToolUseRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => ({
@@ -168,10 +172,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         prepareState: () => this.prepareInitialSessionState(),
         buildCycleOptions: (toolState) =>
           this.buildToolUseCycleOptions(toolState),
-        runCycle: (options, messages) =>
+        runCycle: (options, messages, store) =>
           runToolUseCycle({
             options,
             messages,
+            store,
           }),
         checkInterruption: () => this.checkInterruption(),
         hasQueuedFollowUp: () => this.followUpQueue.length > 0,
@@ -290,6 +295,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       toolState,
       modelName: this.agentConfig.model,
+      onUsageRecorded: async ({ run }) => {
+        await this.trackRoundUsage(run, { runKind: 'tool-use' });
+      },
     };
   }
 
