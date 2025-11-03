@@ -12,11 +12,11 @@ import { UsageMonitor } from '../utils/UsageMonitor';
 import { buildUserVars } from '../utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { getStreamTabId as buildStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -31,6 +31,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected agentSetting: AgentSetting;
   protected agentPrompt: AgentPrompt;
   protected agentPath: string;
+  protected readonly context: AgentExecutionContext;
   protected logger: AgentLogger;
   protected usageMonitor: UsageMonitor;
   protected runGroupId?: string;
@@ -47,6 +48,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.agentConfig;
   }
 
+  public getExecutionContext(): AgentExecutionContext {
+    return this.context;
+  }
+
   public getSessionMetadata(): AgentSessionDescriptor {
     if (!this.agentConfig.session) {
       throw new Error('Agent configuration is missing session metadata.');
@@ -61,24 +66,20 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
+    context: AgentExecutionContext,
   ) {
     this.modelHandler = modelHandler;
     this.agentConfig = agentConfig;
     this.agentSetting = agentSetting;
     this.agentPrompt = agentPrompt;
     this.agentPath = agentPath;
-    this.executionId = executionId;
+    this.context = context;
+    this.executionId = context.executionId;
 
-    const streamTabId = this.getStreamTabId();
-    this.logger = new AgentLogger(streamTabId, true);
+    this.logger = context.logger;
     this.modelHandler.setLogger(this.logger);
     this.modelHandler.setAgentType(this.agentSetting.agentType);
-    this.usageMonitor = new UsageMonitor(
-      this.modelHandler,
-      this.logger.channelId,
-      this.logger,
-    );
+    this.usageMonitor = new UsageMonitor(this.modelHandler, context);
   }
 
   /** Initialize the API client. */
@@ -118,17 +119,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Compute the stream tab identifier for this agent execution. */
   public getStreamTabId(): StreamTabId {
-    const metadata = this.getSessionMetadata();
-    return buildStreamTabId(
-      this.agentConfig.agent,
-      this.agentConfig.model,
-      this.agentConfig.inputFile,
-      {
-        agentType: metadata.agentType,
-        executionId: this.executionId,
-        useMultipleOutputs: this.agentConfig.useMultipleOutputs,
-      },
-    );
+    return this.context.streamId;
   }
 
   /** Gather variables used for prompt rendering. */
@@ -149,36 +140,28 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     options?: { createGroup?: boolean },
   ): Promise<void> {
     const { createGroup = true } = options ?? {};
-    const initGroupId = createGroup
-      ? await this.logger.startGroup(`Init`, undefined, parentGroupId)
-      : parentGroupId;
-
-    try {
-      this.logger.debug(
-        `AgentConfig: ${JSON.stringify(this.agentConfig)}`,
-        initGroupId,
-      );
-      this.logger.debug(
-        `AgentSetting: ${JSON.stringify(this.agentSetting)}`,
-        initGroupId,
-      );
+    const runInit = async () => {
+      this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}`);
+      this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}`);
       this.logger.debug(
         `ModelConfig: ${JSON.stringify(this.modelHandler.config)}`,
-        initGroupId,
       );
 
       this.userVars = await this.getUserVars();
       this.registerRunningAgent(this.getStreamTabId());
+    };
 
-      if (createGroup && initGroupId) {
-        this.logger.endGroup(initGroupId, 'stopped');
-      }
-    } catch (error) {
-      if (createGroup && initGroupId) {
-        this.logger.endGroup(initGroupId, 'error');
-      }
-      throw error;
+    if (createGroup) {
+      await this.logger.withScope(`Init`, runInit, { parentGroupId });
+      return;
     }
+
+    if (parentGroupId) {
+      await this.logger.withActiveGroup(parentGroupId, runInit);
+      return;
+    }
+
+    await runInit();
   }
 
   /** Interrupt the agent's execution. */
@@ -230,23 +213,11 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    */
   protected async withRoundGroup<T>(
     groupLabel: string,
-    callback: (groupId: string) => Promise<T>,
+    callback: () => Promise<T>,
   ): Promise<T> {
-    const groupId = await this.logger.startGroup(
-      groupLabel,
-      undefined,
-      this.runGroupId,
-    );
-
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await callback(groupId);
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      this.logger.endGroup(groupId, status);
-    }
+    return this.logger.withScope(groupLabel, callback, {
+      parentGroupId: this.runGroupId,
+    });
   }
 
   /**

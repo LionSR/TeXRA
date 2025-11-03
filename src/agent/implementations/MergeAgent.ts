@@ -10,7 +10,7 @@ import { RoundOutputOptions } from './BaseReflectionAgent';
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
 import type { IModelHandler } from '@agent/modelHandlers';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.
@@ -23,7 +23,7 @@ export class MergeAgent extends DirectAgent {
     agentSetting: AgentSetting,
     agentPrompt: AgentPrompt,
     agentPath: string,
-    executionId?: ExecutionId,
+    context: AgentExecutionContext,
   ) {
     super(
       modelHandler,
@@ -31,7 +31,7 @@ export class MergeAgent extends DirectAgent {
       agentSetting,
       agentPrompt,
       agentPath,
-      executionId,
+      context,
     );
     this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
   }

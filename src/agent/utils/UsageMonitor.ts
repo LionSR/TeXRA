@@ -14,9 +14,7 @@ import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
-import { bus } from '@eventBus/ProgressEventBus';
-// Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -24,12 +22,11 @@ import { AgentLogger } from '@logger/AgentLogger';
 export class UsageMonitor {
   constructor(
     private readonly modelHandler: IModelHandler,
-    private readonly channel: string,
-    private readonly logger: AgentLogger,
+    private readonly context: AgentExecutionContext,
   ) {}
 
   async recordUsage(stateGlobal: AgentStateGlobal): Promise<void> {
-    const statsGroupId = this.logger.getActiveGroupId();
+    const { logger, usageReporter } = this.context;
 
     try {
       let responseUsage:
@@ -98,20 +95,6 @@ export class UsageMonitor {
 
       const cost = this.modelHandler.computePrice(responseUsage);
 
-      if (statsGroupId) {
-        bus.emit('updateGroupUsage', {
-          stream: this.channel,
-          groupId: statsGroupId,
-          usage: {
-            inputTokens:
-              stateGlobal.totalInputTokens +
-              (stateGlobal.totalCacheCreationInputTokens ?? 0),
-            outputTokens: stateGlobal.totalOutputTokens,
-            cost,
-          },
-        });
-      }
-
       const cachingStats =
         this.modelHandler.capabilities.supportsPromptCaching ||
         this.modelHandler.capabilities.supportsAutoPromptCaching;
@@ -153,9 +136,9 @@ export class UsageMonitor {
         }),
       };
 
-      this.logger.statistics(payload, statsGroupId);
+      usageReporter.report(payload);
     } catch (error) {
-      this.logger.error(`Error printing statistics: ${error}`, statsGroupId);
+      logger.error(`Error printing statistics: ${error}`);
     }
   }
 }
