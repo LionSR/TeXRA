@@ -11,7 +11,7 @@ import { compileLatex2Pdf } from './texTools';
 import { getTeXCountStats } from './texcount';
 
 // Local imports - agent components
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { WorkspaceFS } from '@utils/files';
 
@@ -23,7 +23,7 @@ export class LatexMediaManager {
 
   private async attachTeXCount(
     files: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
   ): Promise<void> {
     if (cfg.attachTeXCount && files.length > 0) {
@@ -36,7 +36,7 @@ export class LatexMediaManager {
    */
   private async compilePdfs(
     files: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
     const texFiles = files.filter((file) =>
@@ -95,7 +95,7 @@ export class LatexMediaManager {
 
   private async extractFiguresFromFiles(
     files: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
     const figureResults = await Promise.allSettled(
@@ -119,7 +119,7 @@ export class LatexMediaManager {
 
   private async compileTikzFigures(
     files: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
     const activeGroupId = this.logger.getActiveGroupId();
@@ -145,7 +145,7 @@ export class LatexMediaManager {
 
   private async processFiles(
     files: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     {
@@ -205,11 +205,11 @@ export class LatexMediaManager {
 
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs.
-   * Adds resulting media paths to the provided ToolRuntimeState.
+   * Adds resulting media paths to the provided AgentWorkspaceState.
    */
   async processInputFiles(
     inputFiles: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: string[] = [],
@@ -228,7 +228,7 @@ export class LatexMediaManager {
    */
   async processOutputFiles(
     outputFiles: string[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
   ): Promise<void> {

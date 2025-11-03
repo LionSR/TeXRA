@@ -10,7 +10,7 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
   createReflectionRunFlow,
@@ -72,7 +72,7 @@ export interface ReflectionRoundResult {
   globalState: AgentRunState;
   messages: any[];
   shouldContinue: boolean;
-  toolState: ToolRuntimeState;
+  toolState: AgentWorkspaceState;
   outputArtifacts: RoundOutputArtifacts | null;
 }
 
@@ -86,7 +86,7 @@ interface RoundPipelineContext {
   roundIndex: number;
   roundState: ConversationRoundState;
   globalState: AgentRunState;
-  toolState: ToolRuntimeState;
+  toolState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
@@ -110,7 +110,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
   public roundStates: ConversationRoundState[] = [];
-  public toolStates: ToolRuntimeState[] = [];
+  public toolStates: AgentWorkspaceState[] = [];
   public roundOutputArtifacts: RoundOutputArtifacts[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
@@ -323,7 +323,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const store = new AgentSharedStore({
         round: roundState,
         run: globalState,
-        tool: toolState,
+        workspace: toolState,
         user: this.userVarChannels,
       });
       const cycleResult = await runResponseCycle({
@@ -352,7 +352,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         globalState: store.run,
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
-        toolState: store.tool,
+        toolState: store.workspace,
         outputArtifacts: artifacts,
       };
     }
@@ -395,7 +395,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     currRound: number,
     _stateGlobal: AgentRunState,
     messages: any[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): Promise<{
     stateRound: ConversationRoundState;
     preparedMessages: any[];
@@ -479,9 +479,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareToolRuntimeState(
+  private async prepareAgentWorkspaceState(
     currRound: number,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
@@ -538,7 +538,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     messages,
   }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
     this.logger.debug(`Processing round ${roundIndex}`);
-    const toolState = new ToolRuntimeState();
+    const toolState = new AgentWorkspaceState();
 
     return this.withRoundGroup(`r${roundIndex}`, async () => {
       const shared: ReflectionRoundShared = {
@@ -546,8 +546,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           toolState,
         },
         hooks: {
-          prepareToolRuntimeState: () =>
-            this.prepareToolRuntimeState(roundIndex, toolState),
+          prepareAgentWorkspaceState: () =>
+            this.prepareAgentWorkspaceState(roundIndex, toolState),
           prepareRoundContext: () =>
             this.prepareRoundContext(
               roundIndex,

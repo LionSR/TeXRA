@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 
@@ -52,7 +52,7 @@ describe('ToolUseSnapshotStore', () => {
   const streamId = 'stream-1' as StreamTabId;
 
   function buildPayload() {
-    const toolState = new ToolRuntimeState();
+    const toolState = new AgentWorkspaceState();
     toolState.assembly.updateLastResponse('last');
     toolState.assembly.updateAccumulatedOutput('all');
     toolState.media.addMediaFiles(['media.png']);

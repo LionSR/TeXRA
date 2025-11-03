@@ -346,7 +346,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const thinkingContent = options.modelHandler.processThinkingBlock(
       state.responseObject,
       groupId,
-      store.tool,
+      store.workspace,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
 
@@ -381,7 +381,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     });
 
     const repetitionResult = checkForMassiveRepetition(
-      store.tool.assembly.lastResponse,
+      store.workspace.assembly.lastResponse,
       newResponse,
     );
 
@@ -411,13 +411,13 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
       if (!repetitionResult.massiveRepetitionDetected) {
         const connector = await bestConnectionMethod(
-          store.tool.assembly.lastResponse.slice(-K_SLICE),
+          store.workspace.assembly.lastResponse.slice(-K_SLICE),
           processedResponse.slice(0, K_SLICE),
         );
         bestConnector = connector.connector;
-        store.tool.assembly.updateLastResponse(processedResponse);
-        store.tool.assembly.updateAccumulatedOutput(
-          store.tool.assembly.accumulatedOutput +
+        store.workspace.assembly.updateLastResponse(processedResponse);
+        store.workspace.assembly.updateAccumulatedOutput(
+          store.workspace.assembly.accumulatedOutput +
             (bestConnector ?? '') +
             processedResponse,
         );
@@ -490,14 +490,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         state.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        store.tool,
+        store.workspace,
       );
     } else {
       options.modelHandler.updateMessageContentWithoutPrefill(
         state.messages,
         execRes.bestConnector ?? '',
         execRes.processedResponse,
-        store.tool,
+        store.workspace,
       );
     }
 
@@ -591,7 +591,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.modelHandler.addContinueMessageWithPrefill(
         state.messages,
         store.round,
-        store.tool,
+        store.workspace,
         options.agentSetting,
         options.agentConfig,
       );
@@ -599,7 +599,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.modelHandler.addContinueMessageWithoutPrefill(
         state.messages,
         store.round,
-        store.tool,
+        store.workspace,
         options.agentSetting,
         options.agentConfig,
       );
