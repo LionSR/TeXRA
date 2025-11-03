@@ -7,29 +7,37 @@ import {
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import * as path from 'path';
+
+// Local imports - agent types
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
 
 export interface ToolEditApprovalRequest {
   path: string;
   originalContent: string;
   proposedContent: string;
   sourceTool: string;
+  streamId?: StreamTabId;
 }
 
 export interface ToolEditApprovalResult {
   accepted: boolean;
   userMessage?: string;
+  appliedContent?: string;
+  userPatch?: string;
 }
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
-const APPROVAL_SCHEME = 'texra-tool-edit';
 const REVEAL_TIMEOUT_MS = 1500;
 
 interface PendingApprovalEntry {
@@ -39,47 +47,24 @@ interface PendingApprovalEntry {
   originalContent: string;
   proposedContent: string;
   title: string;
+  streamId?: StreamTabId;
   isSettled: () => boolean;
   settle: (result: ToolEditApprovalResult) => void;
 }
 
+type ProgressViewApprovalAction =
+  | 'approve'
+  | 'reject'
+  | 'openDiff'
+  | 'approveAll'
+  | 'resumeApprovals';
+
 interface ProgressViewApprovalActionPayload {
   requestId: string;
-  action: 'approve' | 'reject' | 'openDiff' | 'approveAll';
+  action: ProgressViewApprovalAction;
   note?: string;
 }
 
-class ToolEditContentProvider implements vscode.TextDocumentContentProvider {
-  private readonly content = new Map<string, string>();
-  private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
-
-  public readonly onDidChange = this.emitter.event;
-
-  public set(uri: vscode.Uri, value: string): void {
-    const key = uri.toString();
-    this.content.set(key, value);
-    this.emitter.fire(uri);
-  }
-
-  public delete(uri: vscode.Uri): void {
-    const key = uri.toString();
-    if (this.content.delete(key)) {
-      this.emitter.fire(uri);
-    }
-  }
-
-  public provideTextDocumentContent(uri: vscode.Uri): string {
-    return this.content.get(uri.toString()) ?? '';
-  }
-
-  public dispose(): void {
-    this.emitter.dispose();
-    this.content.clear();
-  }
-}
-
-const provider = new ToolEditContentProvider();
-let registration: vscode.Disposable | undefined;
 let queue: Promise<void> = Promise.resolve();
 let initialized = false;
 let customHandler:
@@ -88,6 +73,7 @@ let customHandler:
 let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 let approvalsBypassedForSession = false;
+let storageDirectory: string | undefined;
 
 async function notifyProgressViewApprovalBypassState(): Promise<void> {
   if (!initialized) {
@@ -102,6 +88,51 @@ async function notifyProgressViewApprovalBypassState(): Promise<void> {
     );
   } catch (error) {
     console.warn('Unable to broadcast approval bypass state', error);
+  }
+}
+
+async function ensureStorageDir(): Promise<string> {
+  if (!initialized || !storageDirectory) {
+    throw new Error('Tool edit approval has not been initialized.');
+  }
+
+  await fs.mkdir(storageDirectory, { recursive: true });
+  return storageDirectory;
+}
+
+function resolveTempExtension(targetPath: string): string {
+  const ext = path.extname(targetPath);
+  return ext ? ext : '.txt';
+}
+
+async function createTempFile(
+  side: 'original' | 'proposed',
+  targetPath: string,
+  content: string,
+): Promise<vscode.Uri> {
+  const dir = await ensureStorageDir();
+  const ext = resolveTempExtension(targetPath);
+  const fileName = `${randomUUID()}-${side}${ext}`;
+  const filePath = path.join(dir, fileName);
+  await fs.writeFile(filePath, content, 'utf8');
+  return vscode.Uri.file(filePath);
+}
+
+async function readCurrentContent(
+  uri: vscode.Uri,
+  fallback: string,
+): Promise<string> {
+  const openDocument = vscode.workspace.textDocuments.find(
+    (document) => document.uri.toString() === uri.toString(),
+  );
+  if (openDocument) {
+    return openDocument.getText();
+  }
+
+  try {
+    return await fs.readFile(uri.fsPath, 'utf8');
+  } catch {
+    return fallback;
   }
 }
 
@@ -125,12 +156,8 @@ export function initializeToolEditApproval(
   if (initialized) {
     return;
   }
-
-  registration = vscode.workspace.registerTextDocumentContentProvider(
-    APPROVAL_SCHEME,
-    provider,
-  );
-  context.subscriptions.push(provider, registration);
+  const baseDir = context.globalStorageUri ?? context.storageUri;
+  storageDirectory = path.join(baseDir.fsPath, 'tool-edit-previews');
   initialized = true;
 }
 
@@ -140,19 +167,6 @@ export function setToolEditApprovalHandler(
   ) => Promise<ToolEditApprovalResult>,
 ): void {
   customHandler = handler;
-}
-
-function createVirtualUri(
-  path: string,
-  side: 'original' | 'proposed',
-  sourceTool: string,
-): vscode.Uri {
-  const encodedPath = encodeURIComponent(path);
-  const encodedTool = encodeURIComponent(sourceTool);
-  const nonce = randomUUID();
-  return vscode.Uri.parse(
-    `${APPROVAL_SCHEME}://${side}/${encodedTool}/${encodedPath}?t=${nonce}`,
-  );
 }
 
 function createApprovalRequestId(): string {
@@ -178,6 +192,7 @@ async function showProgressViewApprovalPrompt(
       relativePath,
       sourceTool: request.sourceTool,
       allowBypass: !approvalsBypassedForSession,
+      streamId: request.streamId ?? '',
     });
   } catch (error) {
     console.warn('Unable to show progress view approval prompt', error);
@@ -233,6 +248,20 @@ function firstChangedLine(original: string, proposed: string): number | null {
   }
 
   return 0;
+}
+
+function computeUserPatch(
+  suggestedContent: string,
+  appliedContent: string,
+): string | undefined {
+  if (suggestedContent === appliedContent) {
+    return undefined;
+  }
+
+  const dmp = new diff_match_patch();
+  const patches = dmp.patch_make(suggestedContent, appliedContent);
+  const text = dmp.patch_toText(patches);
+  return text.trim().length > 0 ? text : undefined;
 }
 
 async function revealFirstChange(
@@ -342,18 +371,16 @@ async function closeApprovalEditors(
 async function nativeRequestApproval(
   request: ToolEditApprovalRequest,
 ): Promise<ToolEditApprovalResult> {
-  if (!initialized || !registration) {
+  if (!initialized) {
     throw new Error('Tool edit approval has not been initialized.');
   }
 
-  const { path, originalContent, proposedContent, sourceTool } = request;
+  const { path, originalContent, proposedContent, sourceTool, streamId } =
+    request;
 
   const requestId = createApprovalRequestId();
-  const originalUri = createVirtualUri(path, 'original', sourceTool);
-  const proposedUri = createVirtualUri(path, 'proposed', sourceTool);
-
-  provider.set(originalUri, originalContent);
-  provider.set(proposedUri, proposedContent);
+  const originalUri = await createTempFile('original', path, originalContent);
+  const proposedUri = await createTempFile('proposed', path, proposedContent);
 
   const description = vscode.workspace.asRelativePath(
     WorkspaceFS.fullPath(path),
@@ -390,6 +417,7 @@ async function nativeRequestApproval(
         originalContent,
         proposedContent,
         title,
+        streamId,
         isSettled: () => settled,
         settle,
       };
@@ -398,12 +426,25 @@ async function nativeRequestApproval(
       void showProgressViewApprovalPrompt(requestId, request, description);
     });
 
+    if (result.accepted) {
+      const appliedContent = await readCurrentContent(
+        proposedUri,
+        proposedContent,
+      );
+      const userPatch = computeUserPatch(proposedContent, appliedContent);
+      result = {
+        ...result,
+        appliedContent,
+        userPatch,
+      };
+    }
+
     return result;
   } finally {
     pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
-    provider.delete(originalUri);
-    provider.delete(proposedUri);
+    await fs.unlink(originalUri.fsPath).catch(() => {});
+    await fs.unlink(proposedUri.fsPath).catch(() => {});
     await resolveProgressViewApprovalPrompt(requestId);
   }
 }
@@ -436,15 +477,91 @@ export async function requestToolEditApproval(
     true,
   );
 
-  if (!approvalsEnabled) {
-    return { accepted: true };
+  const context = getCurrentToolEditApprovalContext();
+  const preparedRequest =
+    request.streamId || !context?.streamId
+      ? request
+      : { ...request, streamId: context.streamId };
+
+  if (!approvalsEnabled || approvalsBypassedForSession) {
+    return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
 
-  if (approvalsBypassedForSession) {
-    return { accepted: true };
+  const result = await enqueueApproval(preparedRequest);
+  return finalizeApprovalResult(result, preparedRequest);
+}
+
+function finalizeApprovalResult(
+  result: ToolEditApprovalResult,
+  request: ToolEditApprovalRequest,
+): ToolEditApprovalResult {
+  if (!result.accepted) {
+    return { ...result };
   }
 
-  return enqueueApproval(request);
+  const appliedContent = result.appliedContent ?? request.proposedContent;
+  const userPatch =
+    result.userPatch !== undefined
+      ? result.userPatch
+      : computeUserPatch(request.proposedContent, appliedContent);
+
+  return {
+    ...result,
+    appliedContent,
+    userPatch,
+  };
+}
+
+export function getApprovedContent(
+  approval: ToolEditApprovalResult,
+  fallback: string,
+): string {
+  return approval.appliedContent ?? fallback;
+}
+
+export function formatApprovalUserDiff(
+  path: string,
+  userPatch?: string,
+): string | undefined {
+  if (!userPatch || userPatch.trim().length === 0) {
+    return undefined;
+  }
+
+  return `User adjustments to ${path}:\n${userPatch}`;
+}
+
+export async function writeApprovedContent(
+  path: string,
+  originalContent: string,
+  finalContent: string,
+): Promise<string> {
+  const exists = await WorkspaceFS.exists(path);
+  if (!exists) {
+    await WorkspaceFS.write(path, finalContent);
+    return finalContent;
+  }
+
+  const currentContent = await WorkspaceFS.read(path);
+  if (currentContent === finalContent) {
+    return finalContent;
+  }
+
+  if (currentContent === originalContent) {
+    await WorkspaceFS.write(path, finalContent);
+    return finalContent;
+  }
+
+  const dmp = new diff_match_patch();
+  const patches = dmp.patch_make(originalContent, finalContent);
+  const [patchedContent, results] = dmp.patch_apply(patches, currentContent);
+
+  if (results.every(Boolean)) {
+    await WorkspaceFS.write(path, patchedContent);
+    return patchedContent;
+  }
+
+  await WorkspaceFS.write(path, finalContent);
+  return finalContent;
 }
 
 export async function handleProgressViewToolEditApprovalAction(
@@ -489,6 +606,11 @@ export async function handleProgressViewToolEditApprovalAction(
     return;
   }
 
+  if (payload.action === 'resumeApprovals') {
+    resetToolEditApprovalSessionBypass();
+    return;
+  }
+
   if (payload.action === 'reject') {
     let userMessage = payload.note?.trim();
     if (!userMessage) {
@@ -511,7 +633,7 @@ export function buildApprovalRejectedResult(
   sourceTool: string,
   userMessage?: string,
 ): ToolResult {
-  const baseMessage = `User rejected ${sourceTool} for ${path}`;
+  const baseMessage = `User rejected ${sourceTool} for ${path}.`;
   return toolResult({
     summary: baseMessage,
     error: userMessage ?? baseMessage,

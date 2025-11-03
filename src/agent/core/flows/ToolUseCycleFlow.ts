@@ -602,7 +602,18 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       });
     } else {
       try {
-        result = await tool.call(execRes.input);
+        const { withToolEditApprovalContext } = await import(
+          '@tools/approval/toolEditApprovalContext'
+        );
+
+        result = await withToolEditApprovalContext(
+          {
+            streamId: options.logger.channelId,
+            executionId: options.executionId,
+            toolCallId: execRes.toolCallId,
+          },
+          () => tool.call(execRes.input),
+        );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
           execRes.name,
