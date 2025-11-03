@@ -69,7 +69,7 @@ import {
   ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
-import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -1051,7 +1051,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
     _stateRound: ConversationRoundState,
-    _toolState: ToolRuntimeState,
+    _toolState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1063,7 +1063,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
     _stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1094,7 +1094,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: MessageParam[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
@@ -1274,7 +1274,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
 
@@ -1305,7 +1305,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
@@ -1501,7 +1501,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   processThinkingBlock(
     responseObject: BetaMessage,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -1588,7 +1588,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     name: string,
     call: ToolUseBlock,
     result: Record<string, unknown>,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];

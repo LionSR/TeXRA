@@ -3,7 +3,7 @@ export * from './AgentDataclass';
 export * from './AgentState';
 export * from './AgentSharedStore';
 export * from './ToolConfig';
-export * from './ToolRuntimeState';
+export * from './AgentWorkspaceState';
 export * from './ResponseUsage';
 export * from './IAgent';
 export * from './ResponseCycle';

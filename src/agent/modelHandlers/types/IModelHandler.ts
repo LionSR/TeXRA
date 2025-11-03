@@ -2,7 +2,7 @@
 import type { AgentConfig } from '../../core/AgentConfig';
 import { AgentSetting, AgentType } from '../../core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '../../core/AgentState';
-import { ToolRuntimeState } from '../../core/ToolRuntimeState';
+import { AgentWorkspaceState } from '../../core/AgentWorkspaceState';
 import type { MediaEntry } from '../../utils/mediaTypes';
 
 // Local imports - provider types
@@ -116,7 +116,7 @@ export interface IModelHandler<
   addContinueMessageWithPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -125,7 +125,7 @@ export interface IModelHandler<
   addContinueMessageWithoutPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -135,7 +135,7 @@ export interface IModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, M[]]>;
@@ -151,7 +151,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /** Update messages when prefill is not supported. */
@@ -159,7 +159,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void;
 
   /** Determine whether generation should continue. */
@@ -185,7 +185,7 @@ export interface IModelHandler<
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null;
 
   /** Extract tool-use details from a provider response. */
@@ -206,7 +206,7 @@ export interface IModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 

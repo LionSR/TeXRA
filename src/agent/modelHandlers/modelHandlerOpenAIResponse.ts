@@ -33,7 +33,7 @@ import {
   type OpenAIAPIResponseUsage,
   type ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
-import { ToolRuntimeState } from '../core/ToolRuntimeState';
+import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 import { z } from 'zod';
 
 // Local imports - base handler
@@ -771,7 +771,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
     _stateRound: ConversationRoundState,
-    _toolState: ToolRuntimeState,
+    _toolState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1037,7 +1037,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
     _stateRound: ConversationRoundState,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1062,7 +1062,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
@@ -1138,7 +1138,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models with prefill support',
@@ -1162,7 +1162,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: ToolRuntimeState,
+    toolState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models without prefill support',
@@ -1227,7 +1227,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   processThinkingBlock(
     responseObject: Response,
     groupId?: string,
-    toolState?: ToolRuntimeState,
+    toolState?: AgentWorkspaceState,
   ): string | null {
     const outputArr = responseObject?.output;
     if (!Array.isArray(outputArr)) {
@@ -1277,7 +1277,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     name: string,
     call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
-    _toolState?: ToolRuntimeState,
+    _toolState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
