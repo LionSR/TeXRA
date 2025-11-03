@@ -13,7 +13,7 @@ import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 // Local imports - approval helpers
 import {
   buildApprovalRejectedResult,
-  formatApprovalUserDiff,
+  formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
   writeApprovedContent,
@@ -329,9 +329,17 @@ export class TextEditorTool extends defineTool({
       }
 
       const finalContent = getApprovedContent(approval, content);
-      await writeApprovedContent(filePath, '', finalContent);
+      const { appliedContent } = await writeApprovedContent(
+        filePath,
+        '',
+        finalContent,
+      );
 
-      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const userDiffNote = formatUnifiedApprovalUserDiff(
+        filePath,
+        finalContent,
+        appliedContent,
+      );
       const output = userDiffNote
         ? `File created successfully at: ${filePath}\n\n${userDiffNote}`
         : `File created successfully at: ${filePath}`;
@@ -434,7 +442,11 @@ export class TextEditorTool extends defineTool({
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
 
       // Prepare success message
-      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const userDiffNote = formatUnifiedApprovalUserDiff(
+        filePath,
+        approvedContent,
+        finalContent,
+      );
       const successIntro = `The file ${filePath} has been edited.`;
       const snippetOutput = this.makeOutput(
         snippet,
@@ -540,7 +552,11 @@ export class TextEditorTool extends defineTool({
         .slice(snippetStart, snippetEnd)
         .join('\n');
       const startLine = snippetStart + 1;
-      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const userDiffNote = formatUnifiedApprovalUserDiff(
+        filePath,
+        approvedContent,
+        finalContent,
+      );
 
       const successIntro = `The file ${filePath} has been edited.`;
       const reviewNote =
@@ -617,7 +633,11 @@ export class TextEditorTool extends defineTool({
         this.fileHistory.delete(filePath);
       }
 
-      const userDiffNote = formatApprovalUserDiff(filePath, approval.userPatch);
+      const userDiffNote = formatUnifiedApprovalUserDiff(
+        filePath,
+        approvedContent,
+        finalContent,
+      );
       const baseOutput = `Last edit to ${filePath} undone successfully. ${this.makeOutput(finalContent, filePath)}`;
       const output = userDiffNote
         ? `${baseOutput}\n${userDiffNote}`
