@@ -30,6 +30,7 @@ export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
 const APPROVAL_SCHEME = 'texra-tool-edit';
+const REVEAL_TIMEOUT_MS = 1500;
 
 interface PendingApprovalEntry {
   request: ToolEditApprovalRequest;
@@ -88,12 +89,34 @@ let approvalCounter = 0;
 const pendingApprovals = new Map<string, PendingApprovalEntry>();
 let approvalsBypassedForSession = false;
 
+async function notifyProgressViewApprovalBypassState(): Promise<void> {
+  if (!initialized) {
+    return;
+  }
+  try {
+    const { ProgressViewProvider } = await import(
+      '@progressView/ProgressViewProvider'
+    );
+    ProgressViewProvider.getInstance()?.updateToolEditApprovalBypassState(
+      approvalsBypassedForSession,
+    );
+  } catch (error) {
+    console.warn('Unable to broadcast approval bypass state', error);
+  }
+}
+
 function enableSessionApprovalBypass(): void {
   approvalsBypassedForSession = true;
+  void notifyProgressViewApprovalBypassState();
 }
 
 export function setToolEditApprovalSessionBypass(enabled: boolean): void {
   approvalsBypassedForSession = enabled;
+  void notifyProgressViewApprovalBypassState();
+}
+
+export function resetToolEditApprovalSessionBypass(): void {
+  setToolEditApprovalSessionBypass(false);
 }
 
 export function initializeToolEditApproval(
@@ -274,7 +297,7 @@ async function revealFirstChange(
       disposeAll();
       tryReveal();
       resolve();
-    }, 1500);
+    }, REVEAL_TIMEOUT_MS);
   });
 }
 
@@ -488,9 +511,10 @@ export function buildApprovalRejectedResult(
   sourceTool: string,
   userMessage?: string,
 ): ToolResult {
+  const baseMessage = `User rejected ${sourceTool} for ${path}`;
   return toolResult({
-    summary: `User rejected ${sourceTool} for ${path}`,
-    error: userMessage ?? `User rejected ${sourceTool} for ${path}.`,
+    summary: baseMessage,
+    error: userMessage ?? baseMessage,
     isError: true,
     output: userMessage,
   });

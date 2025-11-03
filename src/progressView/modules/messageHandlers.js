@@ -76,6 +76,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         this.handleShowToolEditApproval(m),
       [COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL]: (m) =>
         this.handleResolveToolEditApproval(m),
+      [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (m) =>
+        this.handleUpdateToolEditApprovalState(m),
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
@@ -327,6 +329,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
     dom.approvalRequests.resolve(message.requestId);
+  }
+
+  handleUpdateToolEditApprovalState(message) {
+    const bypassActive = Boolean(message?.bypassActive);
+    state.approvalBypassActive = bypassActive;
+    dom.approvalRequests.setSessionBypassActive(bypassActive);
+    dom.followUpInput.setApprovalBypassState(bypassActive);
   }
 
   /**
