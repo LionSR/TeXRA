@@ -8,7 +8,7 @@ import { defineTool } from './core/define';
 // Local imports - tools
 import {
   buildApprovalRejectedResult,
-  formatApprovalUserDiff,
+  formatUnifiedApprovalUserDiff,
   getApprovedContent,
   requestToolEditApproval,
   writeApprovedContent,
@@ -66,8 +66,16 @@ export class FileOpTool extends defineTool({
         }
 
         const finalContent = getApprovedContent(approval, content);
-        await writeApprovedContent(path, originalContent, finalContent);
-        const userDiffNote = formatApprovalUserDiff(path, approval.userPatch);
+        const { appliedContent } = await writeApprovedContent(
+          path,
+          originalContent,
+          finalContent,
+        );
+        const userDiffNote = formatUnifiedApprovalUserDiff(
+          path,
+          finalContent,
+          appliedContent,
+        );
 
         return toolResult({
           summary: `Wrote ${path}`,
@@ -122,7 +130,13 @@ export class FileOpTool extends defineTool({
         if (appendedSegment.length > 0) {
           await WorkspaceFS.appendFile(path, appendedSegment);
         }
-        const userDiffNote = formatApprovalUserDiff(path, approval.userPatch);
+        // Report the actual applied content after append
+        const appliedContent = await WorkspaceFS.read(path);
+        const userDiffNote = formatUnifiedApprovalUserDiff(
+          path,
+          finalContent,
+          appliedContent,
+        );
 
         return toolResult({
           summary: `Appended to ${path}`,
