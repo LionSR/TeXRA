@@ -231,27 +231,13 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   };
 
   const fullConfig = parseAgentConfig(configInput);
-  const originalAgentName = fullConfig.agent;
-  let resolvedAgentName = getAgentName(
-    originalAgentName,
-    fullConfig.useMultipleOutputs,
-  );
+  const requestedAgentName = fullConfig.agent;
 
-  let agentPathInfo: AgentPathResolution;
-  try {
-    agentPathInfo = await getAgentPath(resolvedAgentName);
-  } catch (err) {
-    if (resolvedAgentName !== originalAgentName) {
-      resolvedAgentName = originalAgentName;
-      agentPathInfo = await getAgentPath(originalAgentName);
-    } else {
-      throw err;
-    }
-  }
+  const agentPathInfo = await getAgentPath(requestedAgentName);
 
   const [loadedAgentSetting, agentPrompt] = await loadAgentSettingAndPrompts(
     agentPathInfo,
-    resolvedAgentName,
+    requestedAgentName,
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
@@ -264,7 +250,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const agentConfig: AgentConfig = {
     ...fullConfig,
-    agent: originalAgentName,
+    agent: requestedAgentName,
     agentType: sessionDescriptor.agentType,
     session: sessionDescriptor,
   };

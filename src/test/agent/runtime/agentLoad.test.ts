@@ -5,6 +5,7 @@ import * as path from 'path';
 // Local imports - agent runtime
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
 suite('loadAgentSettingAndPrompts', () => {
@@ -106,14 +107,35 @@ suite('loadAgentSettingAndPrompts', () => {
       ].join('\n'),
     );
 
-    const [, prompts] = await loadAgentSettingAndPrompts(
-      agentPathInfo,
-      'summarize',
-      {
-        preferMultiple: true,
-      },
-    );
+    const recordedWarnings: { channel: string; message: string }[] = [];
+    const loggerAny = logger as typeof logger & {
+      warn: typeof logger.warn;
+    };
+    const originalWarn = loggerAny.warn;
+    loggerAny.warn = (channel, message) => {
+      recordedWarnings.push({ channel, message });
+    };
 
-    assert.strictEqual(prompts.userRequest, 'base only');
+    try {
+      const [, prompts] = await loadAgentSettingAndPrompts(
+        agentPathInfo,
+        'summarize',
+        {
+          preferMultiple: true,
+        },
+      );
+
+      assert.strictEqual(prompts.userRequest, 'base only');
+    } finally {
+      loggerAny.warn = originalWarn;
+    }
+
+    assert.deepStrictEqual(recordedWarnings, [
+      {
+        channel: 'agentLoad',
+        message:
+          'Requested multiple outputs for agent "summarize" but no _multiple definition was found. Falling back to base definition.',
+      },
+    ]);
   });
 });
