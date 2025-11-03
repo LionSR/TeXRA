@@ -119,7 +119,9 @@
   margin: 0;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
   opacity: var(--opacity-subtle);
-  transition: opacity 120ms ease, color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
 }
 
 .tab-delete::part(control) {
@@ -144,7 +146,9 @@
 
 .tab-delete vscode-icon {
   opacity: var(--opacity-subtle);
-  transition: opacity 120ms ease, color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
 }
 
 .tab-container:hover .tab-delete vscode-icon,
