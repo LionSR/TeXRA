@@ -1,0 +1,113 @@
+.approval-requests {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-input-border);
+  background: var(--vscode-editor-background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.approval-requests.is-visible {
+  display: flex;
+}
+
+.approval-requests__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--vscode-editor-foreground);
+}
+
+.approval-requests__header .codicon {
+  color: var(--vscode-editor-foreground);
+}
+
+.approval-requests__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.approval-request {
+  border-radius: 4px;
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  background: var(--vscode-editorHoverWidget-background);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.approval-request__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.approval-request__path {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85rem;
+  color: var(--vscode-textLink-foreground);
+  word-break: break-word;
+}
+
+.approval-request__meta {
+  font-size: 0.8rem;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.approval-request__diff {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.approval-request__diff-added {
+  color: var(--vscode-charts-green, #4caf50);
+  font-size: 0.8rem;
+}
+
+.approval-request__diff-removed {
+  color: var(--vscode-charts-red, #f44336);
+  font-size: 0.8rem;
+}
+
+.approval-request__diff-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
+.approval-request__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.approval-request__actions::part(container) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.approval-request__actions vscode-toolbar-button {
+  min-width: auto;
+  flex: 1 1 12rem;
+}
+
+.approval-request__actions vscode-toolbar-button::part(control) {
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.approval-request__actions [hidden] {
+  display: none !important;
+}
