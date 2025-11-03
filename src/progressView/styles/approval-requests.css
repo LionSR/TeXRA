@@ -69,3 +69,7 @@
 .approval-request__actions vscode-button {
   min-width: 96px;
 }
+
+.approval-request__actions [hidden] {
+  display: none !important;
+}

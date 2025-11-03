@@ -109,6 +109,11 @@ export class ApprovalRequests {
           data-action="reject"
           data-request-id="${request.requestId}"
         >Reject</vscode-button>
+        <vscode-button
+          appearance="secondary"
+          data-action="approveAll"
+          data-request-id="${request.requestId}"
+        >Don't ask again this session</vscode-button>
       </div>
     `;
     this._updateRequestElement(element, request);
@@ -118,6 +123,7 @@ export class ApprovalRequests {
   _updateRequestElement(element, request) {
     const pathElem = element.querySelector('.approval-request__path');
     const metaElem = element.querySelector('.approval-request__meta');
+    const bypassButton = element.querySelector('[data-action="approveAll"]');
     if (pathElem) {
       pathElem.textContent = request.relativePath || request.path || '';
     }
@@ -125,6 +131,10 @@ export class ApprovalRequests {
       metaElem.textContent = request.sourceTool
         ? `Requested by ${request.sourceTool}`
         : '';
+    }
+    if (bypassButton) {
+      bypassButton.toggleAttribute('hidden', request.allowBypass === false);
+      bypassButton.toggleAttribute('disabled', request.allowBypass === false);
     }
   }
 
@@ -157,6 +167,15 @@ export class ApprovalRequests {
         command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
         requestId,
         action: 'approve',
+      });
+      return;
+    }
+
+    if (action === 'approveAll') {
+      vscode.postMessage({
+        command: COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+        requestId,
+        action: 'approveAll',
       });
       return;
     }
