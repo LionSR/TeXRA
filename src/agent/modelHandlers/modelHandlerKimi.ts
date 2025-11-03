@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { ToolState } from '../core/ToolState';
+import { ToolRuntimeState } from '../core/ToolRuntimeState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
@@ -38,7 +38,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   processThinkingBlock(
     responseObject: any,
     groupId?: string,
-    toolState?: ToolState,
+    toolState?: ToolRuntimeState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -64,15 +64,15 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
         // If toolState is provided and we have reasoning content,
         // store it in the toolState for future use (similar to Anthropic thinking blocks)
-        if (toolState && !toolState.thinkingAdded) {
+        if (toolState && !toolState.reasoning.thinkingAdded) {
           // Create a thinking block in the same format as Anthropic for consistency
           const thinkingBlock = {
             type: 'thinking',
             thinking: reasoningContent,
           };
 
-          toolState.thinkingBlocks = [thinkingBlock];
-          toolState.thinkingAdded = true;
+          toolState.reasoning.thinkingBlocks = [thinkingBlock];
+          toolState.reasoning.thinkingAdded = true;
         }
       }
     }

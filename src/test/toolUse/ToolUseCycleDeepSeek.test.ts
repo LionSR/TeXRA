@@ -11,7 +11,7 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { ToolState } from '@agent/core/ToolState';
+import { ToolRuntimeState } from '@agent/core/ToolRuntimeState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
@@ -114,12 +114,17 @@ describe('runToolUseCycle DeepSeek', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new ToolState();
+    const toolState = new ToolRuntimeState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
       agentPrompt: prompt,
       userVars: {},
+      userVarChannels: {
+        input: Object.freeze({}) as Readonly<Record<string, any>>,
+        transient: {},
+        output: {},
+      },
       logger,
       client: {} as OpenAI,
       toolRegistry,

@@ -23,7 +23,7 @@ import {
   AgentWorkflowSetting,
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
-import { AgentStateGlobal, AgentStateRound } from '@agent/core/AgentState';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';

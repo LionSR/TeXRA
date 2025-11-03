@@ -1,5 +1,5 @@
 // Local imports - agent components
-import { AgentStateRound, AgentStateGlobal } from '../core/AgentState';
+import { ConversationRoundState, AgentRunState } from '../core/AgentState';
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
 
@@ -35,8 +35,8 @@ export class CoTAgent extends BaseReflectionAgent {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: AgentStateRound,
-    stateGlobal: AgentStateGlobal,
+    stateRound: ConversationRoundState,
+    stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn } = options;
