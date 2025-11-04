@@ -150,6 +150,17 @@ export function generateXmlLatexConversions(environments: string[]): {
     // LaTeX with incorrect XML ending
     patterns[`\\begin${env}`] = `\\begin{${env}}`;
     patterns[`\\end${env}`] = `\\end{${env}}`;
+
+    // LaTeX with duplicated begin/end keywords
+    patterns[`\\begin{begin{${env}}`] = `\\begin{${env}}`;
+    patterns[`\\begin{begin{${env}}}`] = `\\begin{${env}}`;
+    patterns[`\\begin{\\begin{${env}}`] = `\\begin{${env}}`;
+    patterns[`\\begin{\\begin{${env}}}`] = `\\begin{${env}}`;
+
+    patterns[`\\end{end{${env}}`] = `\\end{${env}}`;
+    patterns[`\\end{end{${env}}}`] = `\\end{${env}}`;
+    patterns[`\\end{\\end{${env}}`] = `\\end{${env}}`;
+    patterns[`\\end{\\end{${env}}}`] = `\\end{${env}}`;
   });
 
   return patterns;
