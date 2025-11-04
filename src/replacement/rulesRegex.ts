@@ -366,6 +366,10 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
     [`(\\r?\\n)(?:[ \t]*\\r?\\n)+([ \t]*\\\\end\\{(${EQUATION_ENVIRONMENT_PATTERN})\\})`]:
       '$1$2',
 
+    // Fix duplicated begin/end wrappers such as \begin{begin{align}}
+    '\\\\begin\\{begin\\{([a-zA-Z*]+)\\}\\}': '\\begin{$1}',
+    '\\\\end\\{end\\{([a-zA-Z*]+)\\}\\}': '\\end{$1}',
+
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
       '$1\n\n$3',
