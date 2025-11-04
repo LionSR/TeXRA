@@ -24,7 +24,6 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import { bestConnectionMethod } from '@latex';
 
 // Local imports - logging
-import type { AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - replacement engine
@@ -69,22 +68,6 @@ async function maybeSaveDebug(
     context: debugContext,
     fileOptions: debugFileOptions,
   });
-}
-
-/**
- * Executes work within the provided stage and guarantees that the handle is
- * ended once the work finishes or throws. This helper is used when exec/post
- * pairs share a stage so that handles never leak even if an error is thrown.
- */
-async function runStageToCompletion<T>(
-  stage: AgentLogStage | undefined,
-  work: () => Promise<T>,
-): Promise<T> {
-  if (!stage) {
-    return work();
-  }
-
-  return stage.run(work);
 }
 
 export interface ResponseCycleInputState {
@@ -233,7 +216,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.modelHandler.setOutputStreaming(false);
 
     try {
-      const result = await runStageToCompletion(stage, async () => {
+      const result = await stage.run(async () => {
         const response = await options.modelHandler.createResponse(
           options.client,
           state.messages,
@@ -322,14 +305,11 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
-type ProcessNodeResult =
-  | { skipped: true }
-  | (ProcessResult & { stage: AgentLogStage });
+type ProcessNodeResult = { skipped: true } | ProcessResult;
 
 type ContinuationNodeResult =
   | { skipped: true }
   | {
-      stage: AgentLogStage;
       shouldEndTurn: boolean;
       shouldStop: boolean;
       shouldContinue: boolean;
@@ -352,124 +332,120 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const stage = await options.logger.stage('Process response');
 
-    try {
-      const result = await stage.within(async () => {
-        const [newResponse, responseUsage, stopReason] =
-          options.modelHandler.extractResponse(
-            state.responseObject,
-            options.agentSetting.endTag,
-          );
-
-        if (newResponse) {
-          options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
-        }
-
-        if (state.responseTime !== undefined) {
-          store.round.addResponseTime(state.responseTime);
-          options.logger.debug(
-            `Response time: ${state.responseTime.toFixed(2)}s`,
-          );
-        }
-
-        options.logger.debug(`Stop reason: ${stopReason}`);
-        options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
-
-        const thinkingContent = options.modelHandler.processThinkingBlock(
+    const result = await stage.run(async () => {
+      const [newResponse, responseUsage, stopReason] =
+        options.modelHandler.extractResponse(
           state.responseObject,
+          options.agentSetting.endTag,
+        );
+
+      if (newResponse) {
+        options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+      }
+
+      if (state.responseTime !== undefined) {
+        store.round.addResponseTime(state.responseTime);
+        options.logger.debug(
+          `Response time: ${state.responseTime.toFixed(2)}s`,
+        );
+      }
+
+      options.logger.debug(`Stop reason: ${stopReason}`);
+      options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
+
+      const thinkingContent = options.modelHandler.processThinkingBlock(
+        state.responseObject,
+        undefined,
+        store.workspace,
+      );
+      const useStreaming = options.modelHandler.getStreamingConfig();
+
+      if (thinkingContent && !useStreaming) {
+        const formatted = await xmlUtils.formatContent(thinkingContent);
+        if (formatted.trim().length > 0) {
+          options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
+        }
+      }
+
+      const scratchpad = await xmlUtils.extractScratchpad(
+        newResponse,
+        'scratchpad',
+      );
+      if (scratchpad) {
+        options.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      }
+
+      if (newResponse && !useStreaming) {
+        const formattedResponse = await xmlUtils.formatContent(newResponse);
+        options.logger.info(
+          formattedResponse,
           undefined,
-          store.workspace,
+          MESSAGE_TYPES.INTERNAL,
         );
-        const useStreaming = options.modelHandler.getStreamingConfig();
+      }
 
-        if (thinkingContent && !useStreaming) {
-          const formatted = await xmlUtils.formatContent(thinkingContent);
-          if (formatted.trim().length > 0) {
-            options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
-          }
-        }
-
-        const scratchpad = await xmlUtils.extractScratchpad(
-          newResponse,
-          'scratchpad',
-        );
-        if (scratchpad) {
-          options.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
-        }
-
-        if (newResponse && !useStreaming) {
-          const formattedResponse = await xmlUtils.formatContent(newResponse);
-          options.logger.info(
-            formattedResponse,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
-          );
-        }
-
-        const apiUsage = options.modelHandler.computeResponseUsage(
-          responseUsage,
-          state.responseTime ?? 0,
-        );
-        store.round.setUsage({
-          summary: apiUsage,
-          nativeUsage: responseUsage,
-          provider: resolveUsageProvider(options.modelHandler),
-        });
-
-        const repetitionResult = checkForMassiveRepetition(
-          store.workspace.assembly.lastResponse,
-          newResponse,
-        );
-
-        if (repetitionResult.massiveRepetitionDetected && newResponse) {
-          options.logger.error(
-            `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-          );
-          options.logger.error(
-            'Massive repetition detected - skipping this response',
-          );
-          options.logger.error('Message structure when repetition detected:');
-          options.logger.error(
-            JSON.stringify(messageToSkeleton(state.messages), null, 2),
-          );
-        }
-
-        let processedResponse: string | undefined;
-        let bestConnector: string | undefined;
-        if (newResponse) {
-          processedResponse = replacementEngine.applyAll(newResponse);
-
-          if (!repetitionResult.massiveRepetitionDetected) {
-            const connector = await bestConnectionMethod(
-              store.workspace.assembly.lastResponse.slice(-K_SLICE),
-              processedResponse.slice(0, K_SLICE),
-            );
-            bestConnector = connector.connector;
-            store.workspace.assembly.updateLastResponse(processedResponse);
-            store.workspace.assembly.updateAccumulatedOutput(
-              store.workspace.assembly.accumulatedOutput +
-                (bestConnector ?? '') +
-                processedResponse,
-            );
-          }
-        }
-
-        return {
-          stopReason,
-          newResponse,
-          processedResponse,
-          bestConnector,
-          thinkingContent,
-          useStreaming,
-          responseUsage,
-          apiUsage,
-          repetitionDetected: repetitionResult.massiveRepetitionDetected,
-        } satisfies ProcessResult;
+      const apiUsage = options.modelHandler.computeResponseUsage(
+        responseUsage,
+        state.responseTime ?? 0,
+      );
+      store.round.setUsage({
+        summary: apiUsage,
+        nativeUsage: responseUsage,
+        provider: resolveUsageProvider(options.modelHandler),
       });
-      return { stage, ...result };
-    } catch (error) {
-      stage.end('error');
-      throw error;
-    }
+
+      const repetitionResult = checkForMassiveRepetition(
+        store.workspace.assembly.lastResponse,
+        newResponse,
+      );
+
+      if (repetitionResult.massiveRepetitionDetected && newResponse) {
+        options.logger.error(
+          `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
+        );
+        options.logger.error(
+          'Massive repetition detected - skipping this response',
+        );
+        options.logger.error('Message structure when repetition detected:');
+        options.logger.error(
+          JSON.stringify(messageToSkeleton(state.messages), null, 2),
+        );
+      }
+
+      let processedResponse: string | undefined;
+      let bestConnector: string | undefined;
+      if (newResponse) {
+        processedResponse = replacementEngine.applyAll(newResponse);
+
+        if (!repetitionResult.massiveRepetitionDetected) {
+          const connector = await bestConnectionMethod(
+            store.workspace.assembly.lastResponse.slice(-K_SLICE),
+            processedResponse.slice(0, K_SLICE),
+          );
+          bestConnector = connector.connector;
+          store.workspace.assembly.updateLastResponse(processedResponse);
+          store.workspace.assembly.updateAccumulatedOutput(
+            store.workspace.assembly.accumulatedOutput +
+              (bestConnector ?? '') +
+              processedResponse,
+          );
+        }
+      }
+
+      return {
+        stopReason,
+        newResponse,
+        processedResponse,
+        bestConnector,
+        thinkingContent,
+        useStreaming,
+        responseUsage,
+        apiUsage,
+        repetitionDetected: repetitionResult.massiveRepetitionDetected,
+      } satisfies ProcessResult;
+    });
+
+    return result;
   }
 
   async post(
@@ -484,7 +460,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    const { stage, ...result } = execRes;
+    const result = execRes;
 
     const processedResponse =
       result.processedResponse ??
@@ -587,7 +563,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return undefined;
     };
 
-    return runStageToCompletion(stage, applyPost);
+    return options.logger.withScope('Process response summary', applyPost);
   }
 }
 
@@ -611,40 +587,35 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const stage = await options.logger.stage('Continuation decision');
 
-    try {
-      const decision = await stage.within(async () => {
-        const interrupted = Boolean(await options.checkInterruption());
-        if (interrupted) {
-          return {
-            shouldEndTurn: false,
-            shouldStop: true,
-            shouldContinue: false,
-          };
-        }
+    const decision = await stage.run(async () => {
+      const interrupted = Boolean(await options.checkInterruption());
+      if (interrupted) {
+        return {
+          shouldEndTurn: false,
+          shouldStop: true,
+          shouldContinue: false,
+        };
+      }
 
-        const [shouldEndTurn, shouldStop] =
-          options.modelHandler.checkStopConditions(
-            stopReason,
-            processedResponse,
-            store.round,
-            store.run,
-            options.agentSetting,
-          );
-
-        const shouldContinue = options.modelHandler.shouldContinue(
+      const [shouldEndTurn, shouldStop] =
+        options.modelHandler.checkStopConditions(
           stopReason,
           processedResponse,
+          store.round,
+          store.run,
           options.agentSetting,
         );
 
-        return { shouldEndTurn, shouldStop, shouldContinue };
-      });
+      const shouldContinue = options.modelHandler.shouldContinue(
+        stopReason,
+        processedResponse,
+        options.agentSetting,
+      );
 
-      return { stage, ...decision };
-    } catch (error) {
-      stage.end('error');
-      throw error;
-    }
+      return { shouldEndTurn, shouldStop, shouldContinue };
+    });
+
+    return decision;
   }
 
   async post(
@@ -660,7 +631,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    const { stage, shouldEndTurn, shouldStop, shouldContinue } = execRes;
+    const { shouldEndTurn, shouldStop, shouldContinue } = execRes;
 
     const applyDecision = async () => {
       state.endTurn = shouldEndTurn;
@@ -706,7 +677,10 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.CONTINUE;
     };
 
-    return runStageToCompletion(stage, applyDecision);
+    return options.logger.withScope(
+      'Continuation decision summary',
+      applyDecision,
+    );
   }
 }
 

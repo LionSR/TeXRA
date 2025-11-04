@@ -66,14 +66,13 @@ class AgentLogStageHandle implements AgentLogStage {
 
   async within<T>(fn: () => Promise<T>): Promise<T> {
     if (this.config.skip) {
-      const parentGroup = this.config.parentGroupId;
-      if (parentGroup) {
-        return this.logger.withActiveGroup(parentGroup, fn);
+      if (this.config.parentGroupId) {
+        return this.logger.runWithGroup(this.config.parentGroupId, fn);
       }
-      return fn();
+      return this.logger.runWithinCurrentGroup(fn);
     }
 
-    return this.logger.withActiveGroup(this.config.id, fn);
+    return this.logger.runWithGroup(this.config.id, fn);
   }
 
   async run<T>(fn: () => Promise<T>): Promise<T> {
@@ -229,6 +228,35 @@ export class AgentLogger {
     this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
   }
 
+  withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
+    const groupId = this.resolveActiveGroupId();
+    if (!groupId) {
+      return undefined;
+    }
+
+    return fn(groupId);
+  }
+
+  async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {
+    return this.runWithGroup(this.resolveActiveGroupId(), fn);
+  }
+
+  async runWithGroup<T>(
+    groupId: string | undefined,
+    fn: () => Promise<T> | T,
+  ): Promise<T> {
+    if (!groupId) {
+      return Promise.resolve(fn());
+    }
+
+    return logger.runWithGroupContext(
+      this.channelId,
+      groupId,
+      this.isAgentLogger,
+      async () => await fn(),
+    );
+  }
+
   async withScope<T>(
     groupName: string,
     fn: () => Promise<T>,
@@ -274,7 +302,7 @@ export class AgentLogger {
     } = options as AgentLoggerStageOptions;
 
     const resolvedParent =
-      parent?.id ?? parentGroupId ?? this.getActiveGroupId();
+      parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
 
     if (skip) {
       return new AgentLogStageHandle(this, {
@@ -306,7 +334,7 @@ export class AgentLogger {
     let isFirstUpdate = true;
     const level = options.level ?? 'info';
     const progressEnabled = options.progressViewEnabled ?? true;
-    const groupId = options.groupId ?? this.getActiveGroupId();
+    const groupId = options.groupId ?? this.resolveActiveGroupId();
 
     return {
       append: (text: string) => {
@@ -404,36 +432,7 @@ export class AgentLogger {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
-  /**
-   * @deprecated Use {@link AgentLogger.stage} with `skip: true` or
-   * {@link AgentLogger.withExistingGroup} instead.
-   */
-  getActiveGroupId(): string | undefined {
+  private resolveActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
-  }
-
-  /**
-   * @deprecated Use {@link AgentLogger.stage} with `skip: true` instead of
-   * manipulating group identifiers directly.
-   */
-  setActiveGroupId(groupId: string | undefined): void {
-    logger.setActiveGroupId(this.channelId, groupId, this.isAgentLogger);
-  }
-
-  /**
-   * @deprecated Prefer {@link AgentLogger.stage} and
-   * {@link AgentLogStage.within} for scoped logging.
-   */
-  async withActiveGroup<T>(
-    groupId: string | undefined,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.getActiveGroupId();
-    this.setActiveGroupId(groupId);
-    try {
-      return await fn();
-    } finally {
-      this.setActiveGroupId(previous);
-    }
   }
 }

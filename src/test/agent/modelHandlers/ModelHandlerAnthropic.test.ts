@@ -396,7 +396,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       warn: () => {},
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;
@@ -477,7 +479,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       warn: () => {},
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;
@@ -551,7 +555,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       warn: () => {},
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;
@@ -629,7 +635,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       warn: () => {},
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;
@@ -703,7 +711,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       warn: () => {},
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;
@@ -777,7 +787,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
       error: () => {},
       fileList: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     handler.setLogger(loggerStub as unknown as AgentLogger);
     (handler as any).getStreamingConfig = () => false;

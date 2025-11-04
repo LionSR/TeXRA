@@ -267,8 +267,9 @@ describe('ResponseCycle background reasoning logs', () => {
       userMessage() {},
       startGroup: async () => 'group',
       endGroup() {},
-      getActiveGroupId: () => undefined,
-      setActiveGroupId() {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {
@@ -402,8 +403,9 @@ describe('ResponseCycle background reasoning logs', () => {
       userMessage() {},
       startGroup: async () => 'group',
       endGroup() {},
-      getActiveGroupId: () => undefined,
-      setActiveGroupId() {},
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     } as unknown as AgentLogger;
 
     const handlerConfig: ModelConfig = {
