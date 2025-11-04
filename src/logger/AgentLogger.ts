@@ -21,6 +21,82 @@ export interface LoggerScopeOptions {
   id?: string;
 }
 
+export interface AgentLoggerStageOptions extends LoggerScopeOptions {
+  parent?: AgentLogStage;
+}
+
+export interface AgentLogStage {
+  readonly id?: string;
+  run<T>(fn: () => Promise<T>): Promise<T>;
+  within<T>(fn: () => Promise<T>): Promise<T>;
+  end(status?: 'stopped' | 'error'): void;
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage>;
+}
+
+class AgentLogStageHandle implements AgentLogStage {
+  private ended = false;
+
+  constructor(
+    private readonly logger: AgentLogger,
+    private readonly config: {
+      id?: string;
+      skip: boolean;
+      successStatus: 'stopped' | 'error';
+      errorStatus: 'stopped' | 'error';
+      parentGroupId?: string;
+    },
+  ) {}
+
+  get id(): string | undefined {
+    return this.config.id;
+  }
+
+  async stage(
+    label: string,
+    options: AgentLoggerStageOptions = {},
+  ): Promise<AgentLogStage> {
+    return this.logger.stage(label, {
+      ...options,
+      parent: this,
+    });
+  }
+
+  async within<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.config.skip) {
+      const parentGroup = this.config.parentGroupId;
+      if (parentGroup) {
+        return this.logger.withActiveGroup(parentGroup, fn);
+      }
+      return fn();
+    }
+
+    return this.logger.withActiveGroup(this.config.id, fn);
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      const result = await this.within(fn);
+      this.end(this.config.successStatus);
+      return result;
+    } catch (error) {
+      this.end(this.config.errorStatus);
+      throw error;
+    }
+  }
+
+  end(status: 'stopped' | 'error' = 'stopped'): void {
+    if (this.config.skip || !this.config.id || this.ended) {
+      return;
+    }
+
+    this.logger.endGroup(this.config.id, status);
+    this.ended = true;
+  }
+}
+
 export interface AgentLogStreamOptions {
   groupId?: string;
   level?: 'debug' | 'info' | 'warn' | 'error';
@@ -184,6 +260,42 @@ export class AgentLogger {
       this.endGroup(groupId, errorStatus);
       throw error;
     }
+  }
+
+  async stage(
+    groupName: string,
+    options: AgentLoggerStageOptions = {},
+  ): Promise<AgentLogStage> {
+    const {
+      skip = false,
+      successStatus = 'stopped',
+      errorStatus = 'error',
+      parentGroupId,
+      parent,
+      id,
+    } = options;
+
+    const resolvedParent =
+      parent?.id ?? parentGroupId ?? this.getActiveGroupId();
+
+    if (skip) {
+      return new AgentLogStageHandle(this, {
+        id: undefined,
+        skip: true,
+        successStatus,
+        errorStatus,
+        parentGroupId: resolvedParent,
+      });
+    }
+
+    const groupId = await this.startGroup(groupName, id, resolvedParent);
+    return new AgentLogStageHandle(this, {
+      id: groupId,
+      skip: false,
+      successStatus,
+      errorStatus,
+      parentGroupId: resolvedParent,
+    });
   }
 
   createStream(

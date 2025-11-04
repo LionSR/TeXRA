@@ -18,7 +18,7 @@ import type {
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
@@ -37,8 +37,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected readonly context: AgentExecutionContext;
   protected logger: AgentLogger;
   protected usageMonitor: UsageMonitor;
-  protected runGroupId?: string;
-  private lastRunGroupId?: string;
+  protected runStage?: AgentLogStage;
+  private lastRunStageId?: string;
   protected userVars: Record<string, any> = {};
   protected userVarChannels: UserVariableChannels = {
     input: Object.freeze({}),
@@ -158,10 +158,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   /** Perform asynchronous initialization work. */
   public async init(
-    parentGroupId?: string,
-    options?: { createGroup?: boolean },
+    parentStage?: AgentLogStage,
+    options?: { createStage?: boolean },
   ): Promise<void> {
-    const { createGroup = true } = options ?? {};
+    const { createStage = true } = options ?? {};
     const runInit = async () => {
       this.logger.debug(`AgentConfig: ${JSON.stringify(this.agentConfig)}`);
       this.logger.debug(`AgentSetting: ${JSON.stringify(this.agentSetting)}`);
@@ -179,13 +179,18 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       this.registerRunningAgent(this.getStreamTabId());
     };
 
-    if (createGroup) {
-      await this.logger.withScope(`Init`, runInit, { parentGroupId });
+    const parent = parentStage ?? this.runStage;
+
+    if (createStage) {
+      const stage = await this.logger.stage('Init', {
+        parent,
+      });
+      await stage.run(runInit);
       return;
     }
 
-    if (parentGroupId) {
-      await this.logger.withActiveGroup(parentGroupId, runInit);
+    if (parent) {
+      await parent.within(runInit);
       return;
     }
 
@@ -240,13 +245,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    * @param groupLabel Label to use for the new log group
    * @param callback Callback to execute with the created group ID
    */
-  protected async withRoundGroup<T>(
+  protected async withRoundStage<T>(
     groupLabel: string,
-    callback: () => Promise<T>,
+    callback: (stage: AgentLogStage) => Promise<T>,
   ): Promise<T> {
-    return this.logger.withScope(groupLabel, callback, {
-      parentGroupId: this.runGroupId,
+    const stage = await this.logger.stage(groupLabel, {
+      parent: this.runStage,
     });
+    return stage.run(async () => callback(stage));
   }
 
   /**
@@ -254,33 +260,39 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    * @param parentGroupId Optional parent group
    * @returns The created group ID
    */
-  protected async startRunGroup(parentGroupId?: string): Promise<string> {
-    this.runGroupId = await this.logger.startGroup(
+  protected async startRunStage(
+    parentStage?: AgentLogStage,
+  ): Promise<AgentLogStage> {
+    const stage = await this.logger.stage(
       `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
-      undefined,
-      parentGroupId,
+      {
+        parent: parentStage,
+      },
     );
-    this.lastRunGroupId = this.runGroupId;
-    return this.runGroupId;
+    this.runStage = stage;
+    this.lastRunStageId = stage.id;
+    return stage;
   }
 
   /**
    * End the current run group.
    * @param status Status to mark for the group
    */
-  protected endRunGroup(status: 'stopped' | 'error' = 'stopped'): void {
-    if (this.runGroupId) {
-      this.lastRunGroupId = this.runGroupId;
-      this.logger.endGroup(this.runGroupId, status);
-      this.runGroupId = undefined;
+  protected endRunStage(status: 'stopped' | 'error' = 'stopped'): void {
+    if (!this.runStage) {
+      return;
     }
+
+    this.runStage.end(status);
+    this.lastRunStageId = this.runStage.id;
+    this.runStage = undefined;
   }
 
   /**
    * Retrieve the most recently used run group identifier.
    */
   public getLastRunGroupId(): string | undefined {
-    return this.lastRunGroupId;
+    return this.lastRunStageId;
   }
 
   public static getRunningAgent(
@@ -296,10 +308,10 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
 
   public getRunHooks(overrides?: Partial<AgentRunHooks>): AgentRunHooks {
     const baseHooks: AgentRunHooks = {
-      start: () => this.startRunGroup(),
-      init: (runGroupId) => this.init(runGroupId),
+      start: () => this.startRunStage(),
+      init: (runStage) => this.init(runStage),
       initializeClient: () => this.initializeClient(),
-      end: (status) => this.endRunGroup(status),
+      end: (status) => this.endRunStage(status),
       cleanup: () => this.cleanup(),
     };
 
