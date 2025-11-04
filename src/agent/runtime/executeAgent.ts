@@ -20,10 +20,7 @@ import {
   MergeAgent,
   BaseToolUseAgent,
 } from '@agent/implementations';
-import {
-  loadAgentSettingAndPrompts,
-  ensureAgentTypeForSource,
-} from '@agent/runtime/agentLoad';
+import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -255,10 +252,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     { preferMultiple: fullConfig.useMultipleOutputs },
   );
 
-  const agentSetting = ensureAgentTypeForSource(
-    loadedAgentSetting,
-    agentPathInfo.source,
-  );
+  const agentSetting = loadedAgentSetting;
 
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
 

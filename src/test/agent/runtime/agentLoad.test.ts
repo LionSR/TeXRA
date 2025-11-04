@@ -2,9 +2,14 @@
 import { strict as assert } from 'assert';
 import * as path from 'path';
 
+// Local imports - agent core
+import { AgentType } from '@agent/core/AgentDataclass';
+
 // Local imports - agent runtime
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+
+// Local imports - utilities
 import { AbsoluteFS } from '@utils/files';
 
 suite('loadAgentSettingAndPrompts', () => {
@@ -115,5 +120,33 @@ suite('loadAgentSettingAndPrompts', () => {
     );
 
     assert.strictEqual(prompts.userRequest, 'base only');
+  });
+
+  test('sets tool-use agent type for built-in tool agents without explicit type', async () => {
+    const agentPath = path.join('/', 'tmp', 'tool-use');
+    const baseDefinitionPath = path.join(agentPath, 'toolsmith.yaml');
+    const agentPathInfo = {
+      directory: agentPath,
+      source: AgentDirectorySource.BuiltInToolUse,
+    } as const;
+
+    fileContents.set(
+      normalize(baseDefinitionPath),
+      [
+        'name: toolsmith',
+        'settings:',
+        '  temperature: 0.1',
+        'prompts:',
+        '  userRequest: gather tools',
+        '',
+      ].join('\n'),
+    );
+
+    const [settings] = await loadAgentSettingAndPrompts(
+      agentPathInfo,
+      'toolsmith',
+    );
+
+    assert.strictEqual(settings.agentType, AgentType.ToolUse);
   });
 });
