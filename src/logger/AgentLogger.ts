@@ -120,7 +120,6 @@ export class AgentLogger {
   ) {
     this.isAgentLogger = isAgentLogger;
     logger.initialize(this.channelId, this.isAgentLogger);
-    this.channelId = channelId;
   }
 
   debug(
