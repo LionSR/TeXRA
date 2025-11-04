@@ -40,7 +40,7 @@ export class DirectAgent extends BaseReflectionAgent {
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn } = options;
+    const { outputFile, endTurn, stage } = options;
     try {
       this.outputHandler.ensureRound(currRound);
 
@@ -54,14 +54,11 @@ export class DirectAgent extends BaseReflectionAgent {
           );
         }
 
-        await this.outputHandler.processOutputFiles(outputFile, currRound);
+        await this.outputHandler.processOutputFiles(outputFile, currRound, stage);
         this.logger.debug(`Output files processed for round ${currRound}`);
       }
 
-      return super.handleOutput(currRound, stateRound, stateGlobal, {
-        outputFile,
-        endTurn,
-      });
+      return super.handleOutput(currRound, stateRound, stateGlobal, options);
     } catch (error) {
       this.logger.error(`Error in DirectAgent.handleOutput: ${error}`);
       throw error;

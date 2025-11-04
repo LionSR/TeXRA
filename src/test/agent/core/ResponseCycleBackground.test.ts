@@ -16,6 +16,8 @@ import {
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
@@ -356,6 +358,9 @@ describe('ResponseCycle background reasoning logs', () => {
         client: {} as OpenAI,
         checkInterruption: () => false,
         setAbortController: () => {},
+        context: new AgentExecutionContext({
+          streamId: 'test-stream' as StreamTabId,
+        }),
       },
       messages,
       outputFile: 'output.txt',
