@@ -13,6 +13,7 @@ import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
 import type { AgentRunShared } from '@agent/implementations/flows/common/types';
+import type { AgentLogStage } from '@logger/AgentLogger';
 import {
   beginLifecyclePhase,
   failLifecycle,
@@ -66,8 +67,8 @@ export interface ToolUseRunState<C = unknown> {
 }
 
 export interface ToolUseRunHooks<C = unknown> {
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
+  start(): Promise<AgentLogStage | undefined>;
+  init(runStage: AgentLogStage | undefined): Promise<void>;
   initializeClient(): Promise<void>;
   prepareState(): Promise<{
     messages: ProviderMessage[];
