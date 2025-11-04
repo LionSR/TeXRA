@@ -138,7 +138,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       : {
           logger,
           modelName: agentConfig.model,
-          executionId: options.executionId,
+          executionId: options.context.executionId,
         };
 
     const debugFileOptions: DebugFileOptions | undefined = interrupted

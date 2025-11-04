@@ -4,6 +4,9 @@ import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - execution context
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+
 // Local imports - model handlers
 import type { IModelHandler } from '@agent/modelHandlers';
 
@@ -23,6 +26,7 @@ export interface AgentCycleBaseOptions<C = unknown> {
   userVars: Record<string, any>;
   userVarChannels: UserVariableChannels;
   logger: AgentLogger;
+  context: AgentExecutionContext;
   client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;

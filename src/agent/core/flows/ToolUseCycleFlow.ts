@@ -170,7 +170,7 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -246,7 +246,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -627,7 +627,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         result = await withToolEditApprovalContext(
           {
             streamId: options.logger.channelId,
-            executionId: options.executionId,
+            executionId: options.context.executionId,
             toolCallId: execRes.toolCallId,
           },
           () => tool.call(execRes.input),

@@ -574,10 +574,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = client.responses.stream(streamParams, { signal });
-      const groupId = this.logger.getActiveGroupId();
-      const thinking = this.createThinkingStream(groupId);
+      const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream(groupId)
+        ? this.createOutputStream()
         : undefined;
       const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
       for await (const event of responseStream) {
