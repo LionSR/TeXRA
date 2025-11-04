@@ -234,46 +234,29 @@ export class AgentLogger {
     fn: () => Promise<T>,
     options: LoggerScopeOptions = {},
   ): Promise<T> {
-    const {
-      skip = false,
-      successStatus = 'stopped',
-      errorStatus = 'error',
-      parentGroupId,
-      id,
-    } = options;
-
-    if (skip) {
-      if (parentGroupId) {
-        return this.withActiveGroup(parentGroupId, fn);
-      }
-      return fn();
-    }
-
-    const resolvedParent = parentGroupId ?? this.getActiveGroupId();
-    const groupId = await this.startGroup(groupName, id, resolvedParent);
-
-    try {
-      const result = await fn();
-      this.endGroup(groupId, successStatus);
-      return result;
-    } catch (error) {
-      this.endGroup(groupId, errorStatus);
-      throw error;
-    }
+    const stage = await this.createStageHandle(groupName, options);
+    return stage.run(fn);
   }
 
   async stage(
     groupName: string,
     options: AgentLoggerStageOptions = {},
   ): Promise<AgentLogStage> {
+    return this.createStageHandle(groupName, options);
+  }
+
+  private async createStageHandle(
+    groupName: string,
+    options: AgentLoggerStageOptions | LoggerScopeOptions,
+  ): Promise<AgentLogStageHandle> {
     const {
       skip = false,
       successStatus = 'stopped',
       errorStatus = 'error',
       parentGroupId,
-      parent,
       id,
-    } = options;
+      parent,
+    } = options as AgentLoggerStageOptions;
 
     const resolvedParent =
       parent?.id ?? parentGroupId ?? this.getActiveGroupId();

@@ -71,23 +71,15 @@ async function maybeSaveDebug(
   });
 }
 
-async function completeStage<T>(
+async function runStageToCompletion<T>(
   stage: AgentLogStage | undefined,
   work: () => Promise<T>,
-  successStatus: 'stopped' | 'error' = 'stopped',
 ): Promise<T> {
   if (!stage) {
     return work();
   }
 
-  try {
-    const result = await stage.within(work);
-    stage.end(successStatus);
-    return result;
-  } catch (error) {
-    stage.end('error');
-    throw error;
-  }
+  return stage.run(work);
 }
 
 export interface ResponseCycleInputState {
@@ -287,7 +279,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     state.responseObject = response;
     state.responseTime = responseTime;
 
-    return completeStage(stage, async () => {
+    return runStageToCompletion(stage, async () => {
       await maybeSaveDebug(
         state.debugContext,
         state.debugFileOptions,
@@ -578,7 +570,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return undefined;
     };
 
-    return completeStage(stage, applyPost);
+    return runStageToCompletion(stage, applyPost);
   }
 }
 
@@ -697,7 +689,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.CONTINUE;
     };
 
-    return completeStage(stage, applyDecision);
+    return runStageToCompletion(stage, applyDecision);
   }
 }
 
