@@ -245,6 +245,21 @@ export class AgentLogger {
     return this.createStageHandle(groupName, options);
   }
 
+  async withExistingGroup<T>(
+    groupId: string,
+    fn: () => Promise<T>,
+    options: { label?: string } = {},
+  ): Promise<T> {
+    const stage = await this.stage(options.label ?? 'Existing group', {
+      skip: true,
+      parentGroupId: groupId,
+      successStatus: 'stopped',
+      errorStatus: 'error',
+    });
+
+    return stage.run(fn);
+  }
+
   private async createStageHandle(
     groupName: string,
     options: AgentLoggerStageOptions | LoggerScopeOptions,
@@ -389,14 +404,26 @@ export class AgentLogger {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
+  /**
+   * @deprecated Use {@link AgentLogger.stage} with `skip: true` or
+   * {@link AgentLogger.withExistingGroup} instead.
+   */
   getActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
   }
 
+  /**
+   * @deprecated Use {@link AgentLogger.stage} with `skip: true` instead of
+   * manipulating group identifiers directly.
+   */
   setActiveGroupId(groupId: string | undefined): void {
     logger.setActiveGroupId(this.channelId, groupId, this.isAgentLogger);
   }
 
+  /**
+   * @deprecated Prefer {@link AgentLogger.stage} and
+   * {@link AgentLogStage.within} for scoped logging.
+   */
   async withActiveGroup<T>(
     groupId: string | undefined,
     fn: () => Promise<T>,

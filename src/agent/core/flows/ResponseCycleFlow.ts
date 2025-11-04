@@ -71,6 +71,11 @@ async function maybeSaveDebug(
   });
 }
 
+/**
+ * Executes work within the provided stage and guarantees that the handle is
+ * ended once the work finishes or throws. This helper is used when exec/post
+ * pairs share a stage so that handles never leak even if an error is thrown.
+ */
 async function runStageToCompletion<T>(
   stage: AgentLogStage | undefined,
   work: () => Promise<T>,
@@ -121,7 +126,7 @@ export interface ResponseCycleShared<C = unknown> {
 
 type InvocationNodeResult =
   | { skipped: true }
-  | { stage: AgentLogStage; response: unknown; responseTime?: number };
+  | { response: unknown; responseTime?: number };
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -228,8 +233,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.modelHandler.setOutputStreaming(false);
 
     try {
-      const response = await stage.within(async () =>
-        options.modelHandler.createResponse(
+      const result = await runStageToCompletion(stage, async () => {
+        const response = await options.modelHandler.createResponse(
           options.client,
           state.messages,
           options.agentSetting.temperature || 0.0,
@@ -239,14 +244,35 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
           options.modelHandler.capabilities.supportsFunctionCalling
             ? options.agentSetting.tools
             : undefined,
-        ),
-      );
+        );
 
-      const responseTime = state.startTime
-        ? (Date.now() - state.startTime) / 1000
-        : undefined;
+        const responseTime = state.startTime
+          ? (Date.now() - state.startTime) / 1000
+          : undefined;
 
-      return { stage, response, responseTime };
+        await maybeSaveDebug(
+          state.debugContext,
+          state.debugFileOptions,
+          response,
+          'response',
+        );
+
+        if (!response) {
+          options.logger.warn(
+            'Model response was aborted or returned no data; output may be incomplete.',
+          );
+        }
+
+        return { response, responseTime } satisfies InvocationNodeResult;
+      });
+
+      if (!result.response) {
+        state.shouldStop = true;
+        state.endTurn = false;
+        return { skipped: true } satisfies InvocationNodeResult;
+      }
+
+      return result;
     } catch (error) {
       const message =
         error instanceof Error
@@ -255,7 +281,6 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.logger.error(message);
       state.shouldStop = true;
       state.endTurn = false;
-      stage.end('error');
       throw error;
     } finally {
       options.setAbortController(null);
@@ -274,30 +299,12 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    const { stage, response, responseTime } = execRes;
+    const { response, responseTime } = execRes;
 
     state.responseObject = response;
     state.responseTime = responseTime;
 
-    return runStageToCompletion(stage, async () => {
-      await maybeSaveDebug(
-        state.debugContext,
-        state.debugFileOptions,
-        response,
-        'response',
-      );
-
-      if (!response) {
-        options.logger.warn(
-          'Model response was aborted or returned no data; output may be incomplete.',
-        );
-        state.endTurn = false;
-        state.shouldStop = true;
-        return FlowTransition.COMPLETE;
-      }
-
-      return undefined;
-    });
+    return undefined;
   }
 }
 
@@ -479,29 +486,27 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const { stage, ...result } = execRes;
 
+    const processedResponse =
+      result.processedResponse ??
+      (result.useStreaming
+        ? (store.workspace.assembly.lastResponse ?? '')
+        : undefined);
+
     state.stopReason = result.stopReason;
-    state.processedResponse = result.processedResponse;
+    state.processedResponse = processedResponse;
     store.run.recordRound(store.round);
 
     const applyPost = async () => {
-      if (result.repetitionDetected || !result.processedResponse) {
+      if (result.repetitionDetected) {
         state.endTurn = false;
         state.shouldStop = true;
         return FlowTransition.COMPLETE;
       }
 
-      const processedResponse = result.processedResponse;
-
-      if (!state.outputExists) {
-        options.logger.debug(`Creating new file: ${state.outputFile}`);
-        await WorkspaceFS.write(state.outputFile, processedResponse);
-        state.outputExists = true;
-      } else {
-        options.logger.debug(`Appending to existing file: ${state.outputFile}`);
-        await WorkspaceFS.appendFile(
-          state.outputFile,
-          (result.bestConnector ?? '') + processedResponse,
-        );
+      if (processedResponse === undefined) {
+        state.endTurn = false;
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
       }
 
       const responseUsage = result.responseUsage ?? {};
@@ -538,7 +543,19 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
       if (result.useStreaming) {
         options.logger.debug('Using streaming - skipping direct write');
-        return FlowTransition.COMPLETE;
+        return undefined;
+      }
+
+      if (!state.outputExists) {
+        options.logger.debug(`Creating new file: ${state.outputFile}`);
+        await WorkspaceFS.write(state.outputFile, processedResponse);
+        state.outputExists = true;
+      } else {
+        options.logger.debug(`Appending to existing file: ${state.outputFile}`);
+        await WorkspaceFS.appendFile(
+          state.outputFile,
+          (result.bestConnector ?? '') + processedResponse,
+        );
       }
 
       options.logger.debug('Response preview:');
@@ -585,12 +602,12 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
   async exec(context: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
     const { options, state, store } = context;
-    if (state.shouldStop || !state.stopReason || !state.processedResponse) {
+    const stopReason = state.stopReason;
+    const processedResponse = state.processedResponse;
+
+    if (state.shouldStop || !stopReason || processedResponse === undefined) {
       return { skipped: true };
     }
-
-    const stopReason = state.stopReason!;
-    const processedResponse = state.processedResponse!;
 
     const stage = await options.logger.stage('Continuation decision');
 

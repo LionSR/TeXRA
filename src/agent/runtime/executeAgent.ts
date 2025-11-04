@@ -542,12 +542,15 @@ export async function executeAgentWithLogging<T extends IAgent>(
       contextLogger ??
       (streamTabId ? new AgentLogger(streamTabId, true) : undefined);
     if (agentLoggerFallback) {
-      const fallbackGroupId =
-        agentLoggerFallback.getActiveGroupId() ?? agent?.getLastRunGroupId();
+      const fallbackGroupId = agent?.getLastRunGroupId();
       if (fallbackGroupId) {
-        await agentLoggerFallback.withActiveGroup(fallbackGroupId, async () => {
-          agentLoggerFallback.error(errorMsg);
-        });
+        await agentLoggerFallback.withExistingGroup(
+          fallbackGroupId,
+          async () => {
+            agentLoggerFallback.error(errorMsg);
+          },
+          { label: `Error: ${agentName}` },
+        );
       } else {
         await agentLoggerFallback.withScope(
           `Error: ${agentName}`,
