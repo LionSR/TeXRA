@@ -466,10 +466,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         try {
-          const groupId = this.logger.getActiveGroupId();
-          const thinking = this.createThinkingStream(groupId);
+          const thinking = this.createThinkingStream();
           const output = this.isOutputStreamingEnabled()
-            ? this.createOutputStream(groupId)
+            ? this.createOutputStream()
             : undefined;
           stream.on('thinking', (delta: string) => {
             thinking.append(delta);

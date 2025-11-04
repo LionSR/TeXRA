@@ -5,7 +5,7 @@ import * as path from 'path';
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 import { compileLatex2Pdf } from '@latex/texTools';
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
@@ -43,34 +43,34 @@ export class LatexDiffManager {
     result: LaTeXdiffResult,
     operation: string = 'latexdiff',
   ): void {
-    const activeGroupId = this.logger.getActiveGroupId();
     if (result.success) {
       this.logger.debug(
         `Successfully generated ${operation} file: ${result.diffFileName}`,
-        activeGroupId,
       );
-    } else {
-      if (result.message && result.message.includes('document environment')) {
-        this.logger.debug(
-          `Skipping ${operation}: ${result.message}`,
-          activeGroupId,
-          MESSAGE_TYPES.INTERNAL,
-        );
-      } else {
-        this.logger.warn(
-          `Failed to generate ${operation}: ${result.message}`,
-          activeGroupId,
-          MESSAGE_TYPES.INTERNAL,
-        );
-      }
+      return;
     }
+
+    if (result.message && result.message.includes('document environment')) {
+      this.logger.debug(
+        `Skipping ${operation}: ${result.message}`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+      return;
+    }
+
+    this.logger.warn(
+      `Failed to generate ${operation}: ${result.message}`,
+      undefined,
+      MESSAGE_TYPES.INTERNAL,
+    );
   }
 
   async handleLatexdiffofOutput(
     currRound: number,
     mapping: RoundFileMapping,
+    stage?: AgentLogStage,
   ): Promise<void> {
-    const diffProcessGroupId = this.logger.getActiveGroupId();
     const generateBetweenRoundDiffs = this.dependencies.getConfig<boolean>(
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
@@ -83,12 +83,9 @@ export class LatexDiffManager {
       message?: string;
     }> = [];
 
-    try {
+    const execute = async () => {
       if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
-        this.logger.warn(
-          'Skipping latexdiff operations - latexdiff not installed',
-          diffProcessGroupId,
-        );
+        this.logger.warn('Skipping latexdiff operations - latexdiff not installed');
         return;
       }
 
@@ -96,16 +93,12 @@ export class LatexDiffManager {
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
-          diffProcessGroupId,
         );
         return;
       }
 
-      this.logger.debug(`Base files: ${this.baseFiles}`, diffProcessGroupId);
-      this.logger.debug(
-        `r${currRound} output files: ${outputFiles}`,
-        diffProcessGroupId,
-      );
+      this.logger.debug(`Base files: ${this.baseFiles}`);
+      this.logger.debug(`r${currRound} output files: ${outputFiles}`);
 
       const basePairs = Array.from(mapping.baseToOutput.entries());
       if (basePairs.length > 0) {
@@ -116,20 +109,13 @@ export class LatexDiffManager {
                 `${path.basename(base)} -> ${path.basename(output)}`,
             )
             .join(', ')}`,
-          diffProcessGroupId,
         );
       } else if (this.baseFiles.length > 0) {
-        this.logger.debug(
-          'No base file mappings found for current round outputs',
-          diffProcessGroupId,
-        );
+        this.logger.debug('No base file mappings found for current round outputs');
       }
 
       if (this.agentSetting.isRewrite) {
-        this.logger.debug(
-          'Running round-based latexdiff operations',
-          diffProcessGroupId,
-        );
+        this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
           const result = await this.latexdiffService.runDiffForRound(
             baseFile,
@@ -156,17 +142,14 @@ export class LatexDiffManager {
               diffPath,
               this.channel,
               buildDir,
-              true, // prefer latexmk when available
+              true,
             );
           }
         }
       }
 
       if (generateBetweenRoundDiffs && currRound > 0) {
-        this.logger.debug(
-          'Running between-rounds latexdiff operations',
-          diffProcessGroupId,
-        );
+        this.logger.debug('Running between-rounds latexdiff operations');
         const prevPairs = Array.from(mapping.prevToOutput.entries());
 
         if (prevPairs.length > 0) {
@@ -177,13 +160,9 @@ export class LatexDiffManager {
                   `${path.basename(prev)} -> ${path.basename(curr)}`,
               )
               .join(', ')}`,
-            diffProcessGroupId,
           );
         } else {
-          this.logger.debug(
-            'No previous round mappings found for current round outputs',
-            diffProcessGroupId,
-          );
+          this.logger.debug('No previous round mappings found for current round outputs');
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
@@ -211,26 +190,32 @@ export class LatexDiffManager {
               diffPath,
               this.channel,
               buildDir,
-              true, // prefer latexmk when available
+              true,
             );
           }
         }
       } else if (!generateBetweenRoundDiffs) {
-        this.logger.debug(
-          'Skipping between-round latexdiff operations: disabled in settings',
-          diffProcessGroupId,
-        );
+        this.logger.debug('Skipping between-round latexdiff operations: disabled in settings');
       }
 
       if (aggregated.length > 0) {
-        this.logger.latexDiff(aggregated, diffProcessGroupId);
+        this.logger.latexDiff(aggregated);
       } else {
-        this.logger.debug('No latexdiff results to report', diffProcessGroupId);
+        this.logger.debug('No latexdiff results to report');
+      }
+    };
+
+    try {
+      if (stage) {
+        await stage.within(execute);
+      } else {
+        await execute();
       }
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
-        diffProcessGroupId,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
       );
     }
   }
