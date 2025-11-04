@@ -540,7 +540,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new AgentWorkspaceState();
 
-    return this.withRoundGroup(`r${roundIndex}`, async () => {
+    return this.withRoundStage(`r${roundIndex}`, async () => {
       const shared: ReflectionRoundShared = {
         runtime: {
           toolState,
@@ -621,17 +621,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         const baseStart = baseHooks.start;
         return {
           ...baseHooks,
-          init: async (runGroupId) => {
-            await this.init(runGroupId, { createGroup: true });
+          init: async (runStage) => {
+            await this.init(runStage, { createStage: true });
           },
           start: async () => {
-            const runGroupId = await baseStart();
-            if (!runGroupId) {
+            const runStage = await baseStart();
+            if (!runStage) {
               throw new Error(
                 'Run group identifier is required for reflection runs.',
               );
             }
-            return runGroupId;
+            return runStage;
           },
           resetPromptBuilder: () => this.resetPromptBuilder(),
         } satisfies ReflectionRunHooks;
