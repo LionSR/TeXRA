@@ -130,6 +130,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       userVars: this.userVarChannels.transient,
       userVarChannels: this.userVarChannels,
       logger: this.logger,
+      context: this.context,
       client,
       checkInterruption: () => this.checkInterruption(),
       setAbortController: (ctrl) => {
