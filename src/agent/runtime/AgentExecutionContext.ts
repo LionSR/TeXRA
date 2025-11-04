@@ -34,7 +34,10 @@ export class AgentExecutionContext {
     return this.init.executionId;
   }
 
-  stage(label: string, options?: AgentLoggerStageOptions): Promise<AgentLogStage> {
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage> {
     return this.logger.stage(label, options);
   }
 
