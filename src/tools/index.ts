@@ -18,3 +18,4 @@ export * from './texcount';
 export * from './latex';
 export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
+export * from './papers';
