@@ -472,7 +472,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     state.processedResponse = processedResponse;
     store.run.recordRound(store.round);
 
-    const applyPost = async () => {
+    const stage = await options.logger.stage('Process response summary');
+
+    return stage.run(async () => {
       if (result.repetitionDetected) {
         state.endTurn = false;
         state.shouldStop = true;
@@ -561,9 +563,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       }
 
       return undefined;
-    };
-
-    return options.logger.withScope('Process response summary', applyPost);
+    });
   }
 }
 
@@ -633,7 +633,9 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     const { shouldEndTurn, shouldStop, shouldContinue } = execRes;
 
-    const applyDecision = async () => {
+    const stage = await options.logger.stage('Continuation decision summary');
+
+    return stage.run(async () => {
       state.endTurn = shouldEndTurn;
       state.shouldStop = shouldStop;
 
@@ -675,12 +677,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       }
 
       return FlowTransition.CONTINUE;
-    };
-
-    return options.logger.withScope(
-      'Continuation decision summary',
-      applyDecision,
-    );
+    });
   }
 }
 
