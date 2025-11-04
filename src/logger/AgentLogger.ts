@@ -92,8 +92,8 @@ class AgentLogStageHandle implements AgentLogStage {
       return;
     }
 
-    this.logger.endGroup(this.config.id, status);
     this.ended = true;
+    this.logger.endGroup(this.config.id, status);
   }
 }
 
