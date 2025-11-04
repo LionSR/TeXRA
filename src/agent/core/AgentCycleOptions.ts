@@ -10,9 +10,6 @@ import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext
 // Local imports - model handlers
 import type { IModelHandler } from '@agent/modelHandlers';
 
-// Local imports - identifier types
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-
 export interface UserVariableChannels {
   input: Readonly<Record<string, any>>;
   transient: Record<string, any>;
@@ -30,5 +27,4 @@ export interface AgentCycleBaseOptions<C = unknown> {
   client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
-  executionId?: ExecutionId;
 }
