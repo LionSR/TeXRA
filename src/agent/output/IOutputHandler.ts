@@ -2,6 +2,9 @@
 import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 
+// Local imports - logging
+import type { AgentLogStage } from '@logger/AgentLogger';
+
 // Local imports - types
 import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
 import type { OutputXmlSummary, RoundOutputArtifacts } from './OutputHandler';
@@ -36,7 +39,7 @@ export interface IOutputHandler {
   processOutputFiles(
     outputFile: string,
     currRound: number,
-    groupId?: string,
+    stage?: AgentLogStage,
   ): Promise<void>;
 
   /** Gather mapping and diff stats for output files of a round. */
@@ -49,7 +52,7 @@ export interface IOutputHandler {
   validateExpectedOutputs(
     outputFile: string,
     currRound: number,
-    groupId?: string,
+    stage?: AgentLogStage,
   ): Promise<void>;
 
   /** Finalize processing for a round. */
@@ -58,7 +61,7 @@ export interface IOutputHandler {
     currRound: number,
     options: {
       endTurn: boolean;
-      groupId?: string;
+      stage?: AgentLogStage;
     },
   ): Promise<void>;
 

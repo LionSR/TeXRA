@@ -16,6 +16,8 @@ import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -134,6 +136,9 @@ describe('runToolUseCycle DeepSeek', () => {
       setAbortController: () => {},
       toolState,
       modelName: 'ds',
+      context: new AgentExecutionContext({
+        streamId: 'tool-use-stream' as StreamTabId,
+      }),
     };
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
