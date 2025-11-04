@@ -274,63 +274,69 @@ export class OutputHandler implements IOutputHandler {
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void> {
-    await this.withOutputStage(`Validate expected r${currRound}`, stage, async () => {
-      const expected = this.agentConfig.outputFiles;
-      if (!expected || expected.length === 0) {
+    await this.withOutputStage(
+      `Validate expected r${currRound}`,
+      stage,
+      async () => {
+        const expected = this.agentConfig.outputFiles;
+        if (!expected || expected.length === 0) {
+          bus.emit('updateMissingOutputs', {
+            stream: this.channel,
+            filesByRound: { [currRound]: [] },
+          });
+          return;
+        }
+
+        const checks = expected.map(async (file) => ({
+          file,
+          exists: path.isAbsolute(file)
+            ? await AbsoluteFS.exists(file)
+            : await WorkspaceFS.exists(file),
+        }));
+        const results = await Promise.all(checks);
+        const missing = results.filter((r) => !r.exists).map((r) => r.file);
+
+        if (missing.length > 0) {
+          const xmlPath = outputFile
+            ? outputFile
+            : getOutputFileName(
+                this.agentConfig.inputFile,
+                this.agentConfig.agent,
+                this.agentConfig.model,
+                'xml',
+                currRound,
+              );
+
+          const xmlExists = path.isAbsolute(xmlPath)
+            ? await AbsoluteFS.exists(xmlPath)
+            : await WorkspaceFS.exists(xmlPath);
+
+          const missingOutputsData = {
+            missing,
+            xmlFile: xmlExists ? xmlPath : null,
+            documentTag: this.agentSetting.documentTag,
+          };
+
+          this.logger.missingOutputs(missingOutputsData);
+          await showInstructionWithSuppress(
+            'missingOutputsInfo',
+            'Missing output files detected',
+          );
+          this.logger.debug(
+            `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,
+          );
+        } else {
+          this.logger.debug(
+            `All expected outputs exist after round ${currRound}`,
+          );
+        }
+
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          filesByRound: { [currRound]: [] },
+          filesByRound: { [currRound]: missing },
         });
-        return;
-      }
-
-      const checks = expected.map(async (file) => ({
-        file,
-        exists: path.isAbsolute(file)
-          ? await AbsoluteFS.exists(file)
-          : await WorkspaceFS.exists(file),
-      }));
-      const results = await Promise.all(checks);
-      const missing = results.filter((r) => !r.exists).map((r) => r.file);
-
-      if (missing.length > 0) {
-        const xmlPath = outputFile
-          ? outputFile
-          : getOutputFileName(
-              this.agentConfig.inputFile,
-              this.agentConfig.agent,
-              this.agentConfig.model,
-              'xml',
-              currRound,
-            );
-
-        const xmlExists = path.isAbsolute(xmlPath)
-          ? await AbsoluteFS.exists(xmlPath)
-          : await WorkspaceFS.exists(xmlPath);
-
-        const missingOutputsData = {
-          missing,
-          xmlFile: xmlExists ? xmlPath : null,
-          documentTag: this.agentSetting.documentTag,
-        };
-
-        this.logger.missingOutputs(missingOutputsData);
-        await showInstructionWithSuppress(
-          'missingOutputsInfo',
-          'Missing output files detected',
-        );
-        this.logger.debug(
-          `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,
-        );
-      } else {
-        this.logger.debug(`All expected outputs exist after round ${currRound}`);
-      }
-
-      bus.emit('updateMissingOutputs', {
-        stream: this.channel,
-        filesByRound: { [currRound]: missing },
-      });
-    });
+      },
+    );
   }
 
   /**
@@ -344,47 +350,53 @@ export class OutputHandler implements IOutputHandler {
     options: { endTurn: boolean; stage?: AgentLogStage },
   ): Promise<void> {
     const { endTurn, stage } = options;
-    await this.withOutputStage(`Finalize r${currRound}`, stage, async (scope) => {
-      this.ensureRound(currRound);
-      this.rawOutputs[currRound] = outputFile || null;
-      const fileInfos = await this.gatherOutputFileInfo(currRound);
-      this.roundFileInfos[currRound] = fileInfos;
+    await this.withOutputStage(
+      `Finalize r${currRound}`,
+      stage,
+      async (scope) => {
+        this.ensureRound(currRound);
+        this.rawOutputs[currRound] = outputFile || null;
+        const fileInfos = await this.gatherOutputFileInfo(currRound);
+        this.roundFileInfos[currRound] = fileInfos;
 
-      if (endTurn) {
-        try {
-          await this.validateExpectedOutputs(outputFile, currRound, scope);
-          this.logger.debug(`Expected outputs validated for round ${currRound}`);
-        } catch (error) {
-          this.logger.error(
-            `Expected output validation failed after round ${currRound}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-
-      bus.emit('addOutputFiles', {
-        stream: this.channel,
-        filesByRound: { [currRound]: fileInfos },
-      });
-
-      for (const { path: filePath } of fileInfos) {
-        if (this.openedOutputs.has(filePath)) {
-          continue;
+        if (endTurn) {
+          try {
+            await this.validateExpectedOutputs(outputFile, currRound, scope);
+            this.logger.debug(
+              `Expected outputs validated for round ${currRound}`,
+            );
+          } catch (error) {
+            this.logger.error(
+              `Expected output validation failed after round ${currRound}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
         }
 
-        try {
-          await openBuildDisplayIfTex(filePath, { preserveFocus: true });
-          this.openedOutputs.add(filePath);
-        } catch (error) {
-          this.logger.error(
-            `Failed to open output file ${filePath}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
+        bus.emit('addOutputFiles', {
+          stream: this.channel,
+          filesByRound: { [currRound]: fileInfos },
+        });
+
+        for (const { path: filePath } of fileInfos) {
+          if (this.openedOutputs.has(filePath)) {
+            continue;
+          }
+
+          try {
+            await openBuildDisplayIfTex(filePath, { preserveFocus: true });
+            this.openedOutputs.add(filePath);
+          } catch (error) {
+            this.logger.error(
+              `Failed to open output file ${filePath}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
         }
-      }
-    });
+      },
+    );
   }
 
   /**
@@ -395,115 +407,136 @@ export class OutputHandler implements IOutputHandler {
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void> {
-    await this.withOutputStage(`Process files r${currRound}`, stage, async (scope) => {
-      this.ensureRound(currRound);
+    await this.withOutputStage(
+      `Process files r${currRound}`,
+      stage,
+      async (scope) => {
+        this.ensureRound(currRound);
 
-      const handleMultipleOutputs = async () => {
-        this.logger.debug(
-          `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
-        );
-
-        try {
-          const processedPairs =
-            await this.xmlManager.processMultipleXmlOutputs(outputFile);
-
-          if (processedPairs && processedPairs.length > 0) {
-            const processedFiles = processedPairs.map((p) => p.path);
-            await this.indentLatexFiles(processedFiles);
-            this.logger.debug(
-              `Indented multiple output files: ${processedFiles.join(',')}`,
-            );
-
-            this.setRoundOutputs(currRound, processedFiles, processedPairs);
-            await this.captureXmlSummary(currRound, outputFile, processedPairs, scope);
-
-            if (this.baseFiles && this.baseFiles.length > 0) {
-              await replaceInputCommands(
-                this.baseFiles,
-                processedFiles,
-                this.logger,
-              );
-            }
-            return;
-          }
-
-          this.logger.debug(`No processed files were generated from ${outputFile}`);
-          this.setRoundOutputs(currRound, [], []);
-          await this.captureXmlSummary(currRound, outputFile, [], scope);
-        } catch (err) {
+        const handleMultipleOutputs = async () => {
           this.logger.debug(
-            `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
+            `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
           );
-          this.setRoundOutputs(currRound, [], []);
-          await this.captureXmlSummary(currRound, outputFile, [], scope);
-        }
-      };
 
-      const handleSingleOutput = async () => {
-        this.logger.debug(`Processing single output for ${outputFile}`);
+          try {
+            const processedPairs =
+              await this.xmlManager.processMultipleXmlOutputs(outputFile);
 
-        try {
-          let processed: NamedOutputFile = {
-            source: outputFile,
-            path: outputFile,
-          };
-          const hasScratchpadPrefill =
-            this.agentSetting.prefills?.some((prefill) =>
-              /<scratchpad\s*>/i.test(prefill),
-            ) ?? false;
-          const shouldProcessXml =
-            this.agentSetting.agentType === AgentType.CoT ||
-            (this.agentSetting.agentType === AgentType.Direct &&
-              hasScratchpadPrefill);
+            if (processedPairs && processedPairs.length > 0) {
+              const processedFiles = processedPairs.map((p) => p.path);
+              await this.indentLatexFiles(processedFiles);
+              this.logger.debug(
+                `Indented multiple output files: ${processedFiles.join(',')}`,
+              );
 
-          if (shouldProcessXml) {
-            processed = await this.xmlManager.processSingleXmlOutput(outputFile);
-          }
+              this.setRoundOutputs(currRound, processedFiles, processedPairs);
+              await this.captureXmlSummary(
+                currRound,
+                outputFile,
+                processedPairs,
+                scope,
+              );
 
-          if (processed && processed.path) {
-            await this.indentLatexFile(processed.path);
-            this.logger.debug(`Indented single output file: ${processed.path}`);
+              if (this.baseFiles && this.baseFiles.length > 0) {
+                await replaceInputCommands(
+                  this.baseFiles,
+                  processedFiles,
+                  this.logger,
+                );
+              }
+              return;
+            }
 
-            this.setRoundOutputs(currRound, [processed.path], [processed]);
-            await this.captureXmlSummary(currRound, outputFile, [processed], scope);
-          } else {
-            this.logger.debug(`No processed file was generated from ${outputFile}`);
+            this.logger.debug(
+              `No processed files were generated from ${outputFile}`,
+            );
+            this.setRoundOutputs(currRound, [], []);
+            await this.captureXmlSummary(currRound, outputFile, [], scope);
+          } catch (err) {
+            this.logger.debug(
+              `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
+              undefined,
+              MESSAGE_TYPES.INTERNAL,
+            );
             this.setRoundOutputs(currRound, [], []);
             await this.captureXmlSummary(currRound, outputFile, [], scope);
           }
-        } catch (err) {
-          this.logger.debug(
-            `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
-          );
-          const missingOutputsData = {
-            missing: [],
-            xmlFile: outputFile,
-            documentTag: this.agentSetting.documentTag,
-          };
-          this.logger.missingOutputs(missingOutputsData);
-          bus.emit('updateMissingOutputs', {
-            stream: this.channel,
-            filesByRound: { [currRound]: [] },
-          });
-          this.setRoundOutputs(currRound, [], []);
-          await this.captureXmlSummary(currRound, outputFile, [], scope);
+        };
+
+        const handleSingleOutput = async () => {
+          this.logger.debug(`Processing single output for ${outputFile}`);
+
+          try {
+            let processed: NamedOutputFile = {
+              source: outputFile,
+              path: outputFile,
+            };
+            const hasScratchpadPrefill =
+              this.agentSetting.prefills?.some((prefill) =>
+                /<scratchpad\s*>/i.test(prefill),
+              ) ?? false;
+            const shouldProcessXml =
+              this.agentSetting.agentType === AgentType.CoT ||
+              (this.agentSetting.agentType === AgentType.Direct &&
+                hasScratchpadPrefill);
+
+            if (shouldProcessXml) {
+              processed =
+                await this.xmlManager.processSingleXmlOutput(outputFile);
+            }
+
+            if (processed && processed.path) {
+              await this.indentLatexFile(processed.path);
+              this.logger.debug(
+                `Indented single output file: ${processed.path}`,
+              );
+
+              this.setRoundOutputs(currRound, [processed.path], [processed]);
+              await this.captureXmlSummary(
+                currRound,
+                outputFile,
+                [processed],
+                scope,
+              );
+            } else {
+              this.logger.debug(
+                `No processed file was generated from ${outputFile}`,
+              );
+              this.setRoundOutputs(currRound, [], []);
+              await this.captureXmlSummary(currRound, outputFile, [], scope);
+            }
+          } catch (err) {
+            this.logger.debug(
+              `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
+              undefined,
+              MESSAGE_TYPES.INTERNAL,
+            );
+            const missingOutputsData = {
+              missing: [],
+              xmlFile: outputFile,
+              documentTag: this.agentSetting.documentTag,
+            };
+            this.logger.missingOutputs(missingOutputsData);
+            bus.emit('updateMissingOutputs', {
+              stream: this.channel,
+              filesByRound: { [currRound]: [] },
+            });
+            this.setRoundOutputs(currRound, [], []);
+            await this.captureXmlSummary(currRound, outputFile, [], scope);
+          }
+        };
+
+        if (
+          Array.isArray(this.agentConfig.outputFiles) &&
+          this.agentConfig.outputFiles.length > 0
+        ) {
+          await handleMultipleOutputs();
+          return;
         }
-      };
 
-      if (
-        Array.isArray(this.agentConfig.outputFiles) &&
-        this.agentConfig.outputFiles.length > 0
-      ) {
-        await handleMultipleOutputs();
-        return;
-      }
-
-      await handleSingleOutput();
-    });
+        await handleSingleOutput();
+      },
+    );
   }
 
   public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
@@ -589,7 +622,9 @@ export class OutputHandler implements IOutputHandler {
           ).trim();
           if (singleDocument) {
             tagContents[documentTag] = singleDocument;
-            documents.push(`<${documentTag}>${singleDocument}</${documentTag}>`);
+            documents.push(
+              `<${documentTag}>${singleDocument}</${documentTag}>`,
+            );
           }
         }
 

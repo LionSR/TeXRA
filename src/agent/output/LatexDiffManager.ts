@@ -85,7 +85,9 @@ export class LatexDiffManager {
 
     const execute = async () => {
       if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
-        this.logger.warn('Skipping latexdiff operations - latexdiff not installed');
+        this.logger.warn(
+          'Skipping latexdiff operations - latexdiff not installed',
+        );
         return;
       }
 
@@ -111,7 +113,9 @@ export class LatexDiffManager {
             .join(', ')}`,
         );
       } else if (this.baseFiles.length > 0) {
-        this.logger.debug('No base file mappings found for current round outputs');
+        this.logger.debug(
+          'No base file mappings found for current round outputs',
+        );
       }
 
       if (this.agentSetting.isRewrite) {
@@ -162,7 +166,9 @@ export class LatexDiffManager {
               .join(', ')}`,
           );
         } else {
-          this.logger.debug('No previous round mappings found for current round outputs');
+          this.logger.debug(
+            'No previous round mappings found for current round outputs',
+          );
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
@@ -195,7 +201,9 @@ export class LatexDiffManager {
           }
         }
       } else if (!generateBetweenRoundDiffs) {
-        this.logger.debug('Skipping between-round latexdiff operations: disabled in settings');
+        this.logger.debug(
+          'Skipping between-round latexdiff operations: disabled in settings',
+        );
       }
 
       if (aggregated.length > 0) {
