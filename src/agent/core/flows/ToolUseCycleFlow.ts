@@ -338,7 +338,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
 
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
@@ -466,7 +466,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
 
     const interrupted = Boolean(await options.checkInterruption());
     if (interrupted) {
@@ -566,7 +566,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
