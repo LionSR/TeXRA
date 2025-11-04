@@ -38,10 +38,13 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local imports - usage helpers
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 
+// Local imports - identifier types
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];
   modelName?: string;
-  executionId?: ToolUseCycleOptions['executionId'];
+  executionId?: ExecutionId;
 }
 
 interface DebugFileOptions {

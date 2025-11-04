@@ -71,6 +71,25 @@ async function maybeSaveDebug(
   });
 }
 
+async function completeStage<T>(
+  stage: AgentLogStage | undefined,
+  work: () => Promise<T>,
+  successStatus: 'stopped' | 'error' = 'stopped',
+): Promise<T> {
+  if (!stage) {
+    return work();
+  }
+
+  try {
+    const result = await stage.within(work);
+    stage.end(successStatus);
+    return result;
+  } catch (error) {
+    stage.end('error');
+    throw error;
+  }
+}
+
 export interface ResponseCycleInputState {
   messages: ProviderMessage[];
   outputFile: string;
@@ -107,6 +126,10 @@ export interface ResponseCycleShared<C = unknown> {
   store: AgentSharedStore;
   state: ResponseCycleState;
 }
+
+type InvocationNodeResult =
+  | { skipped: true }
+  | { stage: AgentLogStage; response: unknown; responseTime?: number };
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -196,32 +219,24 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
  * timing information for downstream processing.
  */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  private stage?: AgentLogStage;
-
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
+  async exec(context: ResponseCycleShared<C>): Promise<InvocationNodeResult> {
     const { options, state } = context;
     if (state.shouldStop) {
-      this.stage = undefined;
       return { skipped: true };
     }
 
     const stage = await options.logger.stage('Model invocation');
-    this.stage = stage;
 
     const abortController = new AbortController();
     options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
-    let response: unknown;
-
     try {
-      response = await stage.within(async () =>
+      const response = await stage.within(async () =>
         options.modelHandler.createResponse(
           options.client,
           state.messages,
@@ -234,6 +249,12 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
             : undefined,
         ),
       );
+
+      const responseTime = state.startTime
+        ? (Date.now() - state.startTime) / 1000
+        : undefined;
+
+      return { stage, response, responseTime };
     } catch (error) {
       const message =
         error instanceof Error
@@ -243,84 +264,48 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       state.shouldStop = true;
       state.endTurn = false;
       stage.end('error');
-      this.stage = undefined;
       throw error;
     } finally {
       options.setAbortController(null);
     }
-
-    const responseTime = state.startTime
-      ? (Date.now() - state.startTime) / 1000
-      : undefined;
-
-    return { response, responseTime };
   }
 
   async post(
     _shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes: { skipped: true } | { response: unknown; responseTime?: number },
+    execRes: InvocationNodeResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
-    const stage = this.stage;
-    this.stage = undefined;
 
     if ('skipped' in execRes) {
-      stage?.end('stopped');
       state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    state.responseObject = execRes.response;
-    state.responseTime = execRes.responseTime;
+    const { stage, response, responseTime } = execRes;
 
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await (stage
-        ? stage.within(async () => {
-            await maybeSaveDebug(
-              state.debugContext,
-              state.debugFileOptions,
-              execRes.response,
-              'response',
-            );
+    state.responseObject = response;
+    state.responseTime = responseTime;
 
-            if (!execRes.response) {
-              options.logger.warn(
-                'Model response was aborted or returned no data; output may be incomplete.',
-              );
-              state.endTurn = false;
-              state.shouldStop = true;
-              return FlowTransition.COMPLETE;
-            }
+    return completeStage(stage, async () => {
+      await maybeSaveDebug(
+        state.debugContext,
+        state.debugFileOptions,
+        response,
+        'response',
+      );
 
-            return undefined;
-          })
-        : (async () => {
-            await maybeSaveDebug(
-              state.debugContext,
-              state.debugFileOptions,
-              execRes.response,
-              'response',
-            );
+      if (!response) {
+        options.logger.warn(
+          'Model response was aborted or returned no data; output may be incomplete.',
+        );
+        state.endTurn = false;
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
 
-            if (!execRes.response) {
-              options.logger.warn(
-                'Model response was aborted or returned no data; output may be incomplete.',
-              );
-              state.endTurn = false;
-              state.shouldStop = true;
-              return FlowTransition.COMPLETE;
-            }
-
-            return undefined;
-          })());
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      stage?.end(status);
-    }
+      return undefined;
+    });
   }
 }
 
@@ -338,31 +323,38 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
+type ProcessNodeResult =
+  | { skipped: true }
+  | (ProcessResult & { stage: AgentLogStage });
+
+type ContinuationNodeResult =
+  | { skipped: true }
+  | {
+      stage: AgentLogStage;
+      shouldEndTurn: boolean;
+      shouldStop: boolean;
+      shouldContinue: boolean;
+    };
+
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
  */
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  private stage?: AgentLogStage;
-
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<ProcessResult | { skipped: true }> {
+  async exec(context: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.responseObject) {
-      this.stage = undefined;
       return { skipped: true };
     }
 
     const stage = await options.logger.stage('Process response');
-    this.stage = stage;
 
     try {
-      return await stage.within(async () => {
+      const result = await stage.within(async () => {
         const [newResponse, responseUsage, stopReason] =
           options.modelHandler.extractResponse(
             state.responseObject,
@@ -472,11 +464,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
           responseUsage,
           apiUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
-        };
+        } satisfies ProcessResult;
       });
+      return { stage, ...result };
     } catch (error) {
       stage.end('error');
-      this.stage = undefined;
       throw error;
     }
   }
@@ -484,61 +476,104 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async post(
     _shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes: ProcessResult | { skipped: true },
+    execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
-    const stage = this.stage;
-    this.stage = undefined;
 
     if ('skipped' in execRes) {
-      stage?.end('stopped');
       state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    state.stopReason = execRes.stopReason;
-    state.processedResponse = execRes.processedResponse;
+    const { stage, ...result } = execRes;
+
+    state.stopReason = result.stopReason;
+    state.processedResponse = result.processedResponse;
     store.run.recordRound(store.round);
 
     const applyPost = async () => {
-      if (execRes.repetitionDetected || !execRes.processedResponse) {
+      if (result.repetitionDetected || !result.processedResponse) {
         state.endTurn = false;
         state.shouldStop = true;
         return FlowTransition.COMPLETE;
       }
 
+      const processedResponse = result.processedResponse;
+
       if (!state.outputExists) {
         options.logger.debug(`Creating new file: ${state.outputFile}`);
-        await WorkspaceFS.write(state.outputFile, execRes.processedResponse);
+        await WorkspaceFS.write(state.outputFile, processedResponse);
         state.outputExists = true;
       } else {
         options.logger.debug(`Appending to existing file: ${state.outputFile}`);
         await WorkspaceFS.appendFile(
           state.outputFile,
-          (execRes.bestConnector ?? '') + execRes.processedResponse,
+          (result.bestConnector ?? '') + processedResponse,
         );
+      }
+
+      const responseUsage = result.responseUsage ?? {};
+      const usageSummary = Object.entries(responseUsage)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+      options.logger.debug(`Usage summary: ${usageSummary}`);
+
+      if (result.thinkingContent && !result.useStreaming) {
+        options.logger.info(
+          result.thinkingContent,
+          undefined,
+          MESSAGE_TYPES.THINKING,
+        );
+      }
+
+      options.logger.info(
+        `Stop reason: ${result.stopReason}`,
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
+
+      if (result.apiUsage) {
+        store.round.setUsage({
+          summary: result.apiUsage,
+          nativeUsage: result.responseUsage,
+          provider: resolveUsageProvider(options.modelHandler),
+        });
+
+        options.logger.debug(
+          `API usage summary: ${JSON.stringify(result.apiUsage)}`,
+        );
+      }
+
+      state.endTurn = !result.useStreaming;
+      state.shouldStop = result.stopReason !== 'max_tokens';
+
+      if (result.useStreaming) {
+        options.logger.debug('Using streaming - skipping direct write');
+        return FlowTransition.COMPLETE;
       }
 
       options.logger.debug('Response preview:');
       options.logger.debug(
-        `First ${K_SLICE} chars:\n${execRes.processedResponse.slice(0, K_SLICE)}`,
+        `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
       );
       options.logger.debug(
-        `Last ${K_SLICE} chars:\n${execRes.processedResponse.slice(-K_SLICE)}`,
+        `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
       );
+
+      const connector = result.bestConnector ?? '';
 
       if (options.modelHandler.capabilities.supportsAssistantPrefill) {
         options.modelHandler.updateMessageContentWithPrefill(
           state.messages,
-          execRes.bestConnector ?? '',
-          execRes.processedResponse,
+          connector,
+          processedResponse,
           store.workspace,
         );
       } else {
         options.modelHandler.updateMessageContentWithoutPrefill(
           state.messages,
-          execRes.bestConnector ?? '',
-          execRes.processedResponse,
+          connector,
+          processedResponse,
           store.workspace,
         );
       }
@@ -546,15 +581,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return undefined;
     };
 
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await (stage ? stage.within(applyPost) : applyPost());
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      stage?.end(status);
-    }
+    return completeStage(stage, applyPost);
   }
 }
 
@@ -563,21 +590,13 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
  * stop entirely, or enqueue a continuation request.
  */
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
-  private stage?: AgentLogStage;
-
   async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<
-    | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
-    | { skipped: true }
-  > {
+  async exec(context: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.stopReason || !state.processedResponse) {
-      this.stage = undefined;
       return { skipped: true };
     }
 
@@ -585,10 +604,9 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const processedResponse = state.processedResponse!;
 
     const stage = await options.logger.stage('Continuation decision');
-    this.stage = stage;
 
     try {
-      return await stage.within(async () => {
+      const decision = await stage.within(async () => {
         const interrupted = Boolean(await options.checkInterruption());
         if (interrupted) {
           return {
@@ -615,9 +633,10 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
         return { shouldEndTurn, shouldStop, shouldContinue };
       });
+
+      return { stage, ...decision };
     } catch (error) {
       stage.end('error');
-      this.stage = undefined;
       throw error;
     }
   }
@@ -625,116 +644,63 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async post(
     shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes:
-      | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
-      | { skipped: true },
+    execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
-    const stage = this.stage;
-    this.stage = undefined;
 
     if ('skipped' in execRes) {
-      stage?.end('stopped');
       state.endTurn = false;
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    let status: 'stopped' | 'error' = 'stopped';
-    try {
-      return await (stage
-        ? stage.within(async () => {
-            state.endTurn = execRes.shouldEndTurn;
-            state.shouldStop = execRes.shouldStop;
+    const { stage, shouldEndTurn, shouldStop, shouldContinue } = execRes;
 
-            if (execRes.shouldStop) {
-              return FlowTransition.COMPLETE;
-            }
+    const applyDecision = async () => {
+      state.endTurn = shouldEndTurn;
+      state.shouldStop = shouldStop;
 
-            store.round.incrementContinuation();
-            options.logger.info(
-              `Starting continuation #${store.round.continuationCount}`,
-              undefined,
-              MESSAGE_TYPES.PROGRESS_STATUS,
-            );
+      if (shouldStop) {
+        return FlowTransition.COMPLETE;
+      }
 
-            if (!execRes.shouldContinue) {
-              return FlowTransition.COMPLETE;
-            }
+      store.round.incrementContinuation();
+      options.logger.info(
+        `Starting continuation #${store.round.continuationCount}`,
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
 
-            options.logger.debug(
-              'Should continue - adding continuation message to conversation',
-            );
+      if (!shouldContinue) {
+        return FlowTransition.COMPLETE;
+      }
 
-            if (options.modelHandler.capabilities.supportsAssistantPrefill) {
-              options.modelHandler.addContinueMessageWithPrefill(
-                state.messages,
-                store.round,
-                store.workspace,
-                options.agentSetting,
-                options.agentConfig,
-              );
-            } else {
-              options.modelHandler.addContinueMessageWithoutPrefill(
-                state.messages,
-                store.round,
-                store.workspace,
-                options.agentSetting,
-                options.agentConfig,
-              );
-            }
+      options.logger.debug(
+        'Should continue - adding continuation message to conversation',
+      );
 
-            return FlowTransition.CONTINUE;
-          })
-        : (async () => {
-            state.endTurn = execRes.shouldEndTurn;
-            state.shouldStop = execRes.shouldStop;
+      if (options.modelHandler.capabilities.supportsAssistantPrefill) {
+        options.modelHandler.addContinueMessageWithPrefill(
+          state.messages,
+          store.round,
+          store.workspace,
+          options.agentSetting,
+          options.agentConfig,
+        );
+      } else {
+        options.modelHandler.addContinueMessageWithoutPrefill(
+          state.messages,
+          store.round,
+          store.workspace,
+          options.agentSetting,
+          options.agentConfig,
+        );
+      }
 
-            if (execRes.shouldStop) {
-              return FlowTransition.COMPLETE;
-            }
+      return FlowTransition.CONTINUE;
+    };
 
-            store.round.incrementContinuation();
-            options.logger.info(
-              `Starting continuation #${store.round.continuationCount}`,
-              undefined,
-              MESSAGE_TYPES.PROGRESS_STATUS,
-            );
-
-            if (!execRes.shouldContinue) {
-              return FlowTransition.COMPLETE;
-            }
-
-            options.logger.debug(
-              'Should continue - adding continuation message to conversation',
-            );
-
-            if (options.modelHandler.capabilities.supportsAssistantPrefill) {
-              options.modelHandler.addContinueMessageWithPrefill(
-                state.messages,
-                store.round,
-                store.workspace,
-                options.agentSetting,
-                options.agentConfig,
-              );
-            } else {
-              options.modelHandler.addContinueMessageWithoutPrefill(
-                state.messages,
-                store.round,
-                store.workspace,
-                options.agentSetting,
-                options.agentConfig,
-              );
-            }
-
-            return FlowTransition.CONTINUE;
-          })());
-    } catch (error) {
-      status = 'error';
-      throw error;
-    } finally {
-      stage?.end(status);
-    }
+    return completeStage(stage, applyDecision);
   }
 }
 
