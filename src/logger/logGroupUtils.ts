@@ -23,7 +23,11 @@ export async function withLogGroup<T>(
 
   return logger.withScope(
     groupName,
-    () => fn(logger.getActiveGroupId() ?? parentGroupId),
+    async () => {
+      const resolvedGroupId =
+        logger.withCurrentGroup((id) => id) ?? parentGroupId;
+      return fn(resolvedGroupId);
+    },
     {
       parentGroupId,
       skip,
