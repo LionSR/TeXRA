@@ -263,6 +263,12 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected async startRunStage(
     parentStage?: AgentLogStage,
   ): Promise<AgentLogStage> {
+    if (this.runStage) {
+      this.runStage.end();
+      this.lastRunStageId = this.runStage.id;
+      this.runStage = undefined;
+    }
+
     const stage = await this.logger.stage(
       `Run: ${this.agentConfig.agent}@${this.agentConfig.model}`,
       {
