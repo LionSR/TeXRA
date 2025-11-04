@@ -544,9 +544,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         );
       }
 
-      state.endTurn = !result.useStreaming;
-      state.shouldStop = result.stopReason !== 'max_tokens';
-
       if (result.useStreaming) {
         options.logger.debug('Using streaming - skipping direct write');
         return FlowTransition.COMPLETE;
