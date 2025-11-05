@@ -15,6 +15,12 @@ import { SHORT_SLEEP_MS } from '@utils/config';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
+  /**
+   * When true, no progress-view group is created. The callback runs inside the
+   * currently active group (or without grouping) while still inheriting the
+   * logging context. Use this for instrumentation helpers that should not
+   * clutter the UI with nested groups.
+   */
   skip?: boolean;
   successStatus?: 'stopped' | 'error';
   errorStatus?: 'stopped' | 'error';
@@ -33,7 +39,10 @@ export interface AgentLoggerStageOptions extends LoggerScopeOptions {
  *   stage with a success or error status when the promise settles.
  * - {@link within} runs the callback without ending the stage, allowing the
  *   caller to perform additional work (or register nested stages) before
- *   explicitly calling {@link end}.
+ *   explicitly calling {@link end}. If the callback throws, the stage remains
+ *   active until the caller finalizes it via {@link end}. Prefer calling
+ *   {@link run} unless you need to coordinate several steps inside the same
+ *   stage and can guarantee cleanup in a `finally` block.
  * - {@link end} manually finalizes the stage; calling it multiple times is a
  *   no-op after the first invocation.
  * - {@link stage} spawns a nested stage that inherits the current context.
@@ -47,7 +56,9 @@ export interface AgentLogStage {
   run<T>(fn: () => Promise<T>): Promise<T>;
   /**
    * Executes work within the stage context without ending it. Useful when the
-   * caller wants to manually control completion.
+   * caller wants to manually control completion across several async steps.
+   * Callers should typically wrap the invocation in a `try/finally` block that
+   * calls {@link end} to avoid leaking the stage when the callback rejects.
    */
   within<T>(fn: () => Promise<T>): Promise<T>;
   /**
