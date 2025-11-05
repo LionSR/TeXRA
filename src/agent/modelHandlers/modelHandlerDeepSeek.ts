@@ -118,7 +118,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     // Log preview of thinking content (assuming it's a string)
     this.logger.debug(
       `DeepSeek reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-      groupId,
     );
 
     // Return the reasoning content (already a string for DeepSeek)
