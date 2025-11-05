@@ -706,33 +706,4 @@ export abstract class ModelHandler<
       String(reason).toLowerCase() === 'endturn'
     );
   }
-
-  /**
-   * Creates a log group for model operations with the given name.
-   * @param name Name of the operation group
-   * @param parentGroupId Optional parent group ID
-   * @returns The group ID
-   */
-  protected async createOperationGroup(
-    name: string,
-    parentGroupId?: string,
-  ): Promise<string> {
-    return await this.logger.startGroup(
-      `Model Operation: ${name}`,
-      undefined,
-      parentGroupId,
-    );
-  }
-
-  /**
-   * Ends a model operation log group with the given status.
-   * @param groupId ID of the group to end
-   * @param status Status of the operation ('error' or 'stopped')
-   */
-  protected endOperationGroup(
-    groupId: string,
-    status: 'error' | 'stopped' = 'stopped',
-  ): void {
-    this.logger.endGroup(groupId, status);
-  }
 }
