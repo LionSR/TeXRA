@@ -1,3 +1,6 @@
+// Third-party imports
+import { FinishReason } from '@google/genai';
+
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
@@ -9,6 +12,12 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import {
+  ANTHROPIC_STOP,
+  MCP_STOP,
+  OPENAI_CHAT_FINISH,
+  OPENAI_COMPLETION_FINISH,
+} from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -100,6 +109,25 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   cycle.responseTime = undefined;
   cycle.stopReason = undefined;
   cycle.processedResponse = undefined;
+}
+
+function isTokenLimitStop(reason: ProviderStopReason | undefined): boolean {
+  if (reason === undefined || reason === null) {
+    return false;
+  }
+
+  if (
+    reason === OPENAI_CHAT_FINISH.LENGTH ||
+    reason === OPENAI_COMPLETION_FINISH.LENGTH ||
+    reason === ANTHROPIC_STOP.MAX_TOKENS ||
+    reason === MCP_STOP.MAX_TOKENS ||
+    reason === FinishReason.MAX_TOKENS
+  ) {
+    return true;
+  }
+
+  const normalized = String(reason).toLowerCase();
+  return normalized.includes('max_token');
 }
 
 export interface ResponseCycleShared<C = unknown> {
@@ -643,6 +671,14 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if (!shouldContinue) {
       return FlowTransition.COMPLETE;
+    }
+
+    if (isTokenLimitStop(state.stopReason)) {
+      options.logger.info(
+        'Continuing after hitting the model token limit',
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
     }
 
     options.logger.info(
