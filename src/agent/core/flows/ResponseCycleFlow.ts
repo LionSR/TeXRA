@@ -1,6 +1,3 @@
-// Third-party imports
-import { FinishReason } from '@google/genai';
-
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
@@ -12,12 +9,6 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import {
-  ANTHROPIC_STOP,
-  MCP_STOP,
-  OPENAI_CHAT_FINISH,
-  OPENAI_COMPLETION_FINISH,
-} from '@agent/modelHandlers/types/StopReasonTypes';
 
 // Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -33,7 +24,6 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import { bestConnectionMethod } from '@latex';
 
 // Local imports - logging
-import type { AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - replacement engine
@@ -50,6 +40,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - identifier types
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 
 interface DebugContext {
   logger: ResponseCycleOptions['logger'];
@@ -109,25 +100,6 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   cycle.responseTime = undefined;
   cycle.stopReason = undefined;
   cycle.processedResponse = undefined;
-}
-
-function isTokenLimitStop(reason: ProviderStopReason | undefined): boolean {
-  if (reason === undefined || reason === null) {
-    return false;
-  }
-
-  if (
-    reason === OPENAI_CHAT_FINISH.LENGTH ||
-    reason === OPENAI_COMPLETION_FINISH.LENGTH ||
-    reason === ANTHROPIC_STOP.MAX_TOKENS ||
-    reason === MCP_STOP.MAX_TOKENS ||
-    reason === FinishReason.MAX_TOKENS
-  ) {
-    return true;
-  }
-
-  const normalized = String(reason).toLowerCase();
-  return normalized.includes('max_token');
 }
 
 export interface ResponseCycleShared<C = unknown> {
@@ -242,12 +214,11 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
-    let stage: AgentLogStage | undefined;
-    try {
-      stage = await options.logger.stage('Model invocation', {
-        skip: true,
-      });
+    const stage = await options.logger.stage('Model invocation', {
+      skip: true,
+    });
 
+    try {
       const { response, responseTime } = await stage.run(async () => {
         const invocation = await options.modelHandler.createResponse(
           options.client,
@@ -277,7 +248,6 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.logger.error(message);
       state.shouldStop = true;
       state.endTurn = false;
-      stage?.end('error');
       throw error;
     } finally {
       options.setAbortController(null);
@@ -662,6 +632,13 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
+    const reachedTokenLimit = isTokenLimitStopReason(state.stopReason);
+    const willContinue = shouldContinue || reachedTokenLimit;
+
+    if (!willContinue) {
+      return FlowTransition.COMPLETE;
+    }
+
     store.round.incrementContinuation();
     options.logger.info(
       `Starting continuation #${store.round.continuationCount}`,
@@ -669,11 +646,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
-    if (!shouldContinue) {
-      return FlowTransition.COMPLETE;
-    }
-
-    if (isTokenLimitStop(state.stopReason)) {
+    if (reachedTokenLimit) {
       options.logger.info(
         'Continuing after hitting the model token limit',
         undefined,
