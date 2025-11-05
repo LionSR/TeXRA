@@ -88,7 +88,7 @@ class AgentLogStageHandle implements AgentLogStage {
   ): Promise<AgentLogStage> {
     return this.logger.stage(label, {
       ...options,
-      parent: this,
+      parent: options.parent ?? this,
     });
   }
 
