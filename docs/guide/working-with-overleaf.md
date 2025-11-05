@@ -19,7 +19,18 @@ This guide outlines a workflow to clone your Overleaf project, leverage TeXRA lo
 
 ## Workflow Steps
 
-### 1. Get Overleaf Git URL & Clone
+### 1. Clone Your Overleaf Project
+
+#### Option A: Use TeXRA's clone command (recommended)
+
+1.  In VS Code, open the command palette (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and run **TeXRA: Clone Overleaf Project**.
+2.  Paste the Overleaf project URL or 24-character project ID when prompted.
+3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to VS Code's secret storage so future clones can reuse it.
+4.  The command runs `git clone` directly into your workspace root so the cloned project becomes the repository you're working in. Make sure that folder is empty before starting.
+
+> **Token storage:** Reset the cached token anytime via the VS Code command **Developer: Clear Secret Storage**.
+
+#### Option B: Manual terminal fallback
 
 1.  **Overleaf:** Go to your project > **Menu** > **Git**. Copy the Git **clone URL** (`https://git.overleaf.com/YOUR_PROJECT_ID`).
     ![Overleaf Git Menu](/images/overleaf-git.png)
