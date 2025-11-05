@@ -16,5 +16,6 @@ export * from './registry';
 export * from './wolfram';
 export * from './texcount';
 export * from './latex';
+export * from './doi';
 export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';

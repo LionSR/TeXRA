@@ -20,15 +20,34 @@ const extensionConfig = {
     filename: 'extension.js',
     libraryTarget: 'commonjs2',
   },
-  externals: {
-    bufferutil: 'bufferutil',
-    'utf-8-validate': 'utf-8-validate',
-    fsevents: 'require("fsevents")',
-    'split.js': 'Split',
-    '@vscode/codicons': 'commonjs @vscode/codicons',
-    vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
-    // modules added here also need to be added in the .vscodeignore file
-  },
+  externals: [
+    {
+      bufferutil: 'bufferutil',
+      'utf-8-validate': 'utf-8-validate',
+      fsevents: 'require("fsevents")',
+      'split.js': 'Split',
+      '@vscode/codicons': 'commonjs @vscode/codicons',
+      vscode: 'commonjs vscode', // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
+      // modules added here also need to be added in the .vscodeignore file
+      'zotero-api-client': 'commonjs zotero-api-client',
+      '@babel/runtime-corejs3': 'commonjs @babel/runtime-corejs3',
+      'core-js-pure': 'commonjs core-js-pure',
+    },
+    ({ request }, callback) => {
+      if (typeof request !== 'string') {
+        return callback();
+      }
+
+      if (
+        request.startsWith('@babel/runtime-corejs3/') ||
+        request.startsWith('core-js-pure/')
+      ) {
+        return callback(null, `commonjs ${request}`);
+      }
+
+      return callback();
+    },
+  ],
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
     extensions: ['.ts', '.js'],
