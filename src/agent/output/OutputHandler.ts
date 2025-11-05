@@ -109,6 +109,7 @@ export class OutputHandler implements IOutputHandler {
   ): Promise<T> {
     const stage = await this.logger.stage(`Output: ${label}`, {
       parent: parentStage,
+      skip: true,
     });
     return stage.run(() => fn(stage));
   }
