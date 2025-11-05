@@ -1129,13 +1129,11 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /**
    * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
    * @param responseObject The response object from the OpenAI API
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with thinking blocks
    * @returns Always returns null as OpenAI doesn't support thinking blocks
    */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null {
     const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
@@ -1152,7 +1150,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     this.logger.debug(
       `OpenAI reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
-      groupId,
     );
     return reasoning;
   }
