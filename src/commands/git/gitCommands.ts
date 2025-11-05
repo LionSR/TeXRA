@@ -1,7 +1,8 @@
 // Standard library imports
-import { execa, execaSync } from 'execa';
+import { promises as fs } from 'fs';
 
 // Third-party imports
+import { execa, execaSync } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
@@ -131,7 +132,7 @@ async function cloneOverleafProject(
     return;
   }
 
-  const match = input.trim().match(/[a-f0-9]{24}/);
+  const match = input.trim().match(/[a-f0-9]{24}/i);
   if (!match) {
     vscode.window.showErrorMessage(
       'Enter a valid Overleaf project URL or 24-character project ID.',
@@ -164,11 +165,47 @@ async function cloneOverleafProject(
       return;
     }
 
-    token = tokenInput.trim();
+    const trimmedToken = tokenInput.trim();
+    if (!trimmedToken) {
+      vscode.window.showWarningMessage('Overleaf clone cancelled.');
+      return;
+    }
+
+    token = trimmedToken;
     await context.secrets.store(tokenKey, token);
   }
 
-  const remote = `https://git:${token}@git.overleaf.com/${projectId}`;
+  if (!token) {
+    vscode.window.showWarningMessage('Overleaf clone cancelled.');
+    return;
+  }
+
+  token = token.trim();
+  if (!token) {
+    vscode.window.showWarningMessage('Overleaf clone cancelled.');
+    return;
+  }
+
+  const encodedToken = encodeURIComponent(token);
+  const remote = `https://git:${encodedToken}@git.overleaf.com/${projectId}`;
+
+  let directoryEntries: string[];
+  try {
+    directoryEntries = await fs.readdir(workspacePath);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      'Unable to inspect the workspace folder before cloning the Overleaf project.',
+    );
+    console.error('Failed to read workspace contents:', error);
+    return;
+  }
+
+  if (directoryEntries.length > 0) {
+    vscode.window.showErrorMessage(
+      'The workspace folder must be empty before cloning an Overleaf project.',
+    );
+    return;
+  }
 
   try {
     await vscode.window.withProgress(
@@ -187,11 +224,18 @@ async function cloneOverleafProject(
       'Overleaf project cloned into the workspace root.',
     );
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Failed to clone Overleaf project.';
-    vscode.window.showErrorMessage(message);
+    vscode.window.showErrorMessage(
+      'Failed to clone Overleaf project. Check your connection, token, and workspace folder.',
+    );
+
+    if (error instanceof Error) {
+      const sanitizedMessage = error.message
+        .replaceAll(token, '********')
+        .replaceAll(encodedToken, '********');
+      console.error('Overleaf clone failed:', sanitizedMessage);
+    } else {
+      console.error('Overleaf clone failed with non-error value:', error);
+    }
   }
 }
 
