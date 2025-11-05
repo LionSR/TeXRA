@@ -168,7 +168,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       extendHooks: (baseHooks: AgentRunHooks) => ({
         ...baseHooks,
         start: async () => undefined,
-        init: (runGroupId) => this.init(runGroupId, { createGroup: false }),
+        init: (runStage) => this.init(runStage, { createStage: false }),
         prepareState: () => this.prepareInitialSessionState(),
         buildCycleOptions: (toolState) =>
           this.buildToolUseCycleOptions(toolState),

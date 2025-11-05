@@ -42,7 +42,9 @@ function createLoggerStub(): LoggerStub {
     error: () => {
       /* no-op for tests */
     },
-    getActiveGroupId: () => undefined,
+    withCurrentGroup: () => undefined,
+    runWithinCurrentGroup: async (fn: () => any) => fn(),
+    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 }
 

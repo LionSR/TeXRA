@@ -13,7 +13,7 @@ import { OutputHandler } from '@agent/output';
 
 // Local imports
 import { bus } from '@eventBus/ProgressEventBus';
-import { AgentLogger } from '@logger/AgentLogger';
+import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 
 class MockOutputHandler extends OutputHandler {
@@ -39,7 +39,7 @@ class MockOutputHandler extends OutputHandler {
   public override async validateExpectedOutputs(
     outputFile: string,
     currRound: number,
-    groupId?: string,
+    stage?: AgentLogStage,
   ): Promise<void> {
     this.validateCalled = true;
   }

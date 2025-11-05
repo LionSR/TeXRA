@@ -15,10 +15,124 @@ import { SHORT_SLEEP_MS } from '@utils/config';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
+  /**
+   * When true, no progress-view group is created. The callback runs inside the
+   * currently active group (or without grouping) while still inheriting the
+   * logging context. Use this for instrumentation helpers that should not
+   * clutter the UI with nested groups.
+   */
   skip?: boolean;
   successStatus?: 'stopped' | 'error';
   errorStatus?: 'stopped' | 'error';
   id?: string;
+}
+
+export interface AgentLoggerStageOptions extends LoggerScopeOptions {
+  parent?: AgentLogStage;
+}
+
+/**
+ * Represents a logical logging scope that can wrap asynchronous work and
+ * create nested child stages.
+ *
+ * - {@link run} executes the provided callback and automatically finalizes the
+ *   stage with a success or error status when the promise settles.
+ * - {@link within} runs the callback without ending the stage, allowing the
+ *   caller to perform additional work (or register nested stages) before
+ *   explicitly calling {@link end}. If the callback throws, the stage remains
+ *   active until the caller finalizes it via {@link end}. Prefer calling
+ *   {@link run} unless you need to coordinate several steps inside the same
+ *   stage and can guarantee cleanup in a `finally` block.
+ * - {@link end} manually finalizes the stage; calling it multiple times is a
+ *   no-op after the first invocation.
+ * - {@link stage} spawns a nested stage that inherits the current context.
+ */
+export interface AgentLogStage {
+  readonly id?: string;
+  /**
+   * Runs work within the stage and automatically ends it once the promise
+   * resolves or rejects.
+   */
+  run<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Executes work within the stage context without ending it. Useful when the
+   * caller wants to manually control completion across several async steps.
+   * Callers should typically wrap the invocation in a `try/finally` block that
+   * calls {@link end} to avoid leaking the stage when the callback rejects.
+   */
+  within<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Explicitly finalizes the stage with the provided status. Safe to call
+   * multiple times; subsequent calls are ignored.
+   */
+  end(status?: 'stopped' | 'error'): void;
+  /**
+   * Creates a nested child stage beneath the current stage.
+   */
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage>;
+}
+
+class AgentLogStageHandle implements AgentLogStage {
+  private ended = false;
+
+  constructor(
+    private readonly logger: AgentLogger,
+    private readonly config: {
+      id?: string;
+      skip: boolean;
+      successStatus: 'stopped' | 'error';
+      errorStatus: 'stopped' | 'error';
+      parentGroupId?: string;
+    },
+  ) {}
+
+  get id(): string | undefined {
+    return this.config.id;
+  }
+
+  async stage(
+    label: string,
+    options: AgentLoggerStageOptions = {},
+  ): Promise<AgentLogStage> {
+    return this.logger.stage(label, {
+      ...options,
+      parent: options.parent ?? this,
+    });
+  }
+
+  async within<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.config.skip) {
+      if (this.config.parentGroupId) {
+        return this.logger.runWithGroup(this.config.parentGroupId, fn);
+      }
+      return this.logger.runWithinCurrentGroup(fn);
+    }
+
+    return this.logger.runWithGroup(this.config.id, fn);
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      const result = await this.within(fn);
+      this.end(this.config.successStatus);
+      return result;
+    } catch (error) {
+      this.end(this.config.errorStatus);
+      throw error;
+    }
+  }
+
+  end(status: 'stopped' | 'error' = 'stopped'): void {
+    if (this.config.skip || !this.config.id || this.ended) {
+      return;
+    }
+
+    this.ended = true;
+    this.logger.endGroup(this.config.id, status);
+  }
 }
 
 export interface AgentLogStreamOptions {
@@ -45,7 +159,6 @@ export class AgentLogger {
   ) {
     this.isAgentLogger = isAgentLogger;
     logger.initialize(this.channelId, this.isAgentLogger);
-    this.channelId = channelId;
   }
 
   debug(
@@ -153,37 +266,100 @@ export class AgentLogger {
     this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
   }
 
+  withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
+    const groupId = this.resolveActiveGroupId();
+    if (!groupId) {
+      return undefined;
+    }
+
+    return fn(groupId);
+  }
+
+  async runWithinCurrentGroup<T>(fn: () => Promise<T> | T): Promise<T> {
+    return this.runWithGroup(this.resolveActiveGroupId(), fn);
+  }
+
+  async runWithGroup<T>(
+    groupId: string | undefined,
+    fn: () => Promise<T> | T,
+  ): Promise<T> {
+    if (!groupId) {
+      return Promise.resolve(fn());
+    }
+
+    return logger.runWithGroupContext(
+      this.channelId,
+      groupId,
+      this.isAgentLogger,
+      async () => await fn(),
+    );
+  }
+
   async withScope<T>(
     groupName: string,
     fn: () => Promise<T>,
     options: LoggerScopeOptions = {},
   ): Promise<T> {
+    const stage = await this.createStageHandle(groupName, options);
+    return stage.run(fn);
+  }
+
+  async stage(
+    groupName: string,
+    options: AgentLoggerStageOptions = {},
+  ): Promise<AgentLogStage> {
+    return this.createStageHandle(groupName, options);
+  }
+
+  async withExistingGroup<T>(
+    groupId: string,
+    fn: () => Promise<T>,
+    options: { label?: string } = {},
+  ): Promise<T> {
+    const stage = await this.stage(options.label ?? 'Existing group', {
+      skip: true,
+      parentGroupId: groupId,
+      successStatus: 'stopped',
+      errorStatus: 'error',
+    });
+
+    return stage.run(fn);
+  }
+
+  private async createStageHandle(
+    groupName: string,
+    options: AgentLoggerStageOptions | LoggerScopeOptions,
+  ): Promise<AgentLogStageHandle> {
     const {
       skip = false,
       successStatus = 'stopped',
       errorStatus = 'error',
       parentGroupId,
       id,
-    } = options;
+      parent,
+    } = options as AgentLoggerStageOptions;
+
+    const resolvedParent =
+      parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
 
     if (skip) {
-      if (parentGroupId) {
-        return this.withActiveGroup(parentGroupId, fn);
-      }
-      return fn();
+      return new AgentLogStageHandle(this, {
+        id: undefined,
+        skip: true,
+        successStatus,
+        errorStatus,
+        parentGroupId: resolvedParent,
+      });
     }
 
-    const resolvedParent = parentGroupId ?? this.getActiveGroupId();
     const groupId = await this.startGroup(groupName, id, resolvedParent);
-
-    try {
-      const result = await fn();
-      this.endGroup(groupId, successStatus);
-      return result;
-    } catch (error) {
-      this.endGroup(groupId, errorStatus);
-      throw error;
-    }
+    return new AgentLogStageHandle(this, {
+      id: groupId,
+      skip: false,
+      successStatus,
+      errorStatus,
+      parentGroupId: resolvedParent,
+    });
   }
 
   createStream(
@@ -196,7 +372,7 @@ export class AgentLogger {
     let isFirstUpdate = true;
     const level = options.level ?? 'info';
     const progressEnabled = options.progressViewEnabled ?? true;
-    const groupId = options.groupId ?? this.getActiveGroupId();
+    const groupId = options.groupId ?? this.resolveActiveGroupId();
 
     return {
       append: (text: string) => {
@@ -294,24 +470,7 @@ export class AgentLogger {
     logger.endGroup(this.channelId, groupId, status, this.isAgentLogger);
   }
 
-  getActiveGroupId(): string | undefined {
+  private resolveActiveGroupId(): string | undefined {
     return logger.getActiveGroupId(this.channelId, this.isAgentLogger);
-  }
-
-  setActiveGroupId(groupId: string | undefined): void {
-    logger.setActiveGroupId(this.channelId, groupId, this.isAgentLogger);
-  }
-
-  async withActiveGroup<T>(
-    groupId: string | undefined,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const previous = this.getActiveGroupId();
-    this.setActiveGroupId(groupId);
-    try {
-      return await fn();
-    } finally {
-      this.setActiveGroupId(previous);
-    }
   }
 }
