@@ -250,9 +250,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       return stage.within(() => execute(stage));
     }
 
-    return this.withRoundStage(`Output r${currRound}`, (roundStage) =>
-      execute(roundStage),
-    );
+    return execute(undefined);
   }
 
   /**
