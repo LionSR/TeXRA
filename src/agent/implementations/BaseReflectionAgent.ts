@@ -36,6 +36,9 @@ import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 
+// Local imports - logging
+import type { AgentLogStage } from '@logger/AgentLogger';
+
 // Local imports - latex utilities
 import { LatexMediaManager } from '@latex';
 
@@ -59,6 +62,7 @@ import { WorkspaceFS } from '@utils/files';
 export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
+  stage?: AgentLogStage;
 }
 
 export interface ReflectionRoundContext {
@@ -222,23 +226,31 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
-    const { outputFile, endTurn } = options;
-    const activeGroupId = this.logger.getActiveGroupId();
-    try {
-      await this.handleOutput(currRound, stateRound, stateGlobal, options);
+    const { outputFile, endTurn, stage } = options;
 
-      this.logger.debug(`Completed round ${currRound}`, activeGroupId);
-    } catch (error) {
-      throw error;
+    const execute = async (scope: AgentLogStage | undefined) => {
+      await this.handleOutput(currRound, stateRound, stateGlobal, {
+        ...options,
+        stage: scope,
+      });
+
+      this.logger.debug(`Completed round ${currRound}`);
+
+      await this.outputHandler.finalizeRound(outputFile, currRound, {
+        endTurn,
+        stage: scope,
+      });
+
+      const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
+      this.roundOutputArtifacts[currRound] = artifacts;
+      return artifacts;
+    };
+
+    if (stage) {
+      return stage.within(() => execute(stage));
     }
 
-    await this.outputHandler.finalizeRound(outputFile, currRound, {
-      endTurn,
-    });
-
-    const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
-    this.roundOutputArtifacts[currRound] = artifacts;
-    return artifacts;
+    return execute(undefined);
   }
 
   /**
@@ -257,8 +269,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn } = options;
-    const activeGroupId = this.logger.getActiveGroupId();
+    const { outputFile, endTurn, stage } = options;
     // Record usage statistics at the end of each round
     await this.trackRoundUsage(stateGlobal);
 
@@ -274,11 +285,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         await this.outputHandler.diffManager.handleLatexdiffofOutput(
           currRound,
           mapping,
+          stage,
         );
       } else {
         this.logger.debug(
           `Skipping latexdiff for round ${currRound} - base files missing`,
-          activeGroupId,
         );
       }
     }
@@ -540,7 +551,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.logger.debug(`Processing round ${roundIndex}`);
     const toolState = new AgentWorkspaceState();
 
-    return this.withRoundGroup(`r${roundIndex}`, async () => {
+    return this.withRoundStage(`r${roundIndex}`, async () => {
       const shared: ReflectionRoundShared = {
         runtime: {
           toolState,
@@ -621,17 +632,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         const baseStart = baseHooks.start;
         return {
           ...baseHooks,
-          init: async (runGroupId) => {
-            await this.init(runGroupId, { createGroup: true });
+          init: async (runStage) => {
+            await this.init(runStage, { createStage: true });
           },
           start: async () => {
-            const runGroupId = await baseStart();
-            if (!runGroupId) {
+            const runStage = await baseStart();
+            if (!runStage) {
               throw new Error(
                 'Run group identifier is required for reflection runs.',
               );
             }
-            return runGroupId;
+            return runStage;
           },
           resetPromptBuilder: () => this.resetPromptBuilder(),
         } satisfies ReflectionRunHooks;

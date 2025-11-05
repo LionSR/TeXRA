@@ -40,6 +40,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local imports - identifier types
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 
 interface DebugContext {
   logger: ResponseCycleOptions['logger'];
@@ -107,6 +108,10 @@ export interface ResponseCycleShared<C = unknown> {
   state: ResponseCycleState;
 }
 
+type InvocationNodeResult =
+  | { skipped: true }
+  | { response: unknown; responseTime?: number };
+
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
 // intentionally visible to downstream nodes so that debug metadata and model
@@ -137,7 +142,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
       : {
           logger,
           modelName: agentConfig.model,
-          executionId: options.executionId,
+          executionId: options.context.executionId,
         };
 
     const debugFileOptions: DebugFileOptions | undefined = interrupted
@@ -199,9 +204,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<{ skipped: true } | { response: unknown; responseTime?: number }> {
+  async exec(context: ResponseCycleShared<C>): Promise<InvocationNodeResult> {
     const { options, state } = context;
     if (state.shouldStop) {
       return { skipped: true };
@@ -211,68 +214,73 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
-    let response: unknown;
-    const groupId = options.logger.getActiveGroupId();
+    const stage = await options.logger.stage('Model invocation', {
+      skip: true,
+    });
 
     try {
-      response = await options.modelHandler.createResponse(
-        options.client,
-        state.messages,
-        options.agentSetting.temperature || 0.0,
-        state.systemPrompt,
-        options.agentSetting.endTag,
-        abortController.signal,
-        options.modelHandler.capabilities.supportsFunctionCalling
-          ? options.agentSetting.tools
-          : undefined,
-      );
+      const { response, responseTime } = await stage.run(async () => {
+        const invocation = await options.modelHandler.createResponse(
+          options.client,
+          state.messages,
+          options.agentSetting.temperature || 0.0,
+          state.systemPrompt,
+          options.agentSetting.endTag,
+          abortController.signal,
+          options.modelHandler.capabilities.supportsFunctionCalling
+            ? options.agentSetting.tools
+            : undefined,
+        );
+
+        const elapsed = state.startTime
+          ? (Date.now() - state.startTime) / 1000
+          : undefined;
+
+        return { response: invocation, responseTime: elapsed };
+      });
+
+      return { response, responseTime };
     } catch (error) {
       const message =
         error instanceof Error
           ? `Model invocation failed: ${error.message}`
           : 'Model invocation failed with an unknown error';
-      options.logger.error(message, groupId);
+      options.logger.error(message);
       state.shouldStop = true;
       state.endTurn = false;
       throw error;
     } finally {
       options.setAbortController(null);
     }
-
-    const responseTime = state.startTime
-      ? (Date.now() - state.startTime) / 1000
-      : undefined;
-
-    return { response, responseTime };
   }
 
   async post(
     _shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes: { skipped: true } | { response: unknown; responseTime?: number },
+    execRes: InvocationNodeResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    state.responseObject = execRes.response;
-    state.responseTime = execRes.responseTime;
+    const { response, responseTime } = execRes;
+
+    state.responseObject = response;
+    state.responseTime = responseTime;
 
     await maybeSaveDebug(
       state.debugContext,
       state.debugFileOptions,
-      execRes.response,
+      response,
       'response',
     );
 
-    if (!execRes.response) {
+    if (!response) {
       options.logger.warn(
         'Model response was aborted or returned no data; output may be incomplete.',
-        groupId,
       );
       state.endTurn = false;
       state.shouldStop = true;
@@ -297,6 +305,16 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
+type ProcessNodeResult = { skipped: true } | ProcessResult;
+
+type ContinuationNodeResult =
+  | { skipped: true }
+  | {
+      shouldEndTurn: boolean;
+      shouldStop: boolean;
+      shouldContinue: boolean;
+    };
+
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
@@ -306,198 +324,234 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<ProcessResult | { skipped: true }> {
+  async exec(context: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.responseObject) {
       return { skipped: true };
     }
 
-    const [newResponse, responseUsage, stopReason] =
-      options.modelHandler.extractResponse(
-        state.responseObject,
-        options.agentSetting.endTag,
-      );
-
-    const groupId = options.logger.getActiveGroupId();
-
-    if (newResponse) {
-      options.logger.debug(
-        `Model response: ${newResponse.slice(0, 100)}`,
-        groupId,
-      );
-    }
-
-    if (state.responseTime !== undefined) {
-      store.round.addResponseTime(state.responseTime);
-      options.logger.debug(
-        `Response time: ${state.responseTime.toFixed(2)}s`,
-        groupId,
-      );
-    }
-
-    options.logger.debug(`Stop reason: ${stopReason}`, groupId);
-    options.logger.debug(
-      `Token usage: ${JSON.stringify(responseUsage)}`,
-      groupId,
-    );
-
-    const thinkingContent = options.modelHandler.processThinkingBlock(
-      state.responseObject,
-      groupId,
-      store.workspace,
-    );
-    const useStreaming = options.modelHandler.getStreamingConfig();
-
-    if (thinkingContent && !useStreaming) {
-      const formatted = await xmlUtils.formatContent(thinkingContent);
-      if (formatted.trim().length > 0) {
-        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
-      }
-    }
-
-    const scratchpad = await xmlUtils.extractScratchpad(
-      newResponse,
-      'scratchpad',
-    );
-    if (scratchpad) {
-      options.logger.info(scratchpad, groupId, MESSAGE_TYPES.SCRATCHPAD);
-    }
-
-    if (newResponse && !useStreaming) {
-      const formattedResponse = await xmlUtils.formatContent(newResponse);
-      options.logger.info(formattedResponse, groupId, MESSAGE_TYPES.INTERNAL);
-    }
-
-    const apiUsage = options.modelHandler.computeResponseUsage(
-      responseUsage,
-      state.responseTime ?? 0,
-    );
-    store.round.setUsage({
-      summary: apiUsage,
-      nativeUsage: responseUsage,
-      provider: resolveUsageProvider(options.modelHandler),
+    const stage = await options.logger.stage('Process response', {
+      skip: true,
     });
 
-    const repetitionResult = checkForMassiveRepetition(
-      store.workspace.assembly.lastResponse,
-      newResponse,
-    );
-
-    if (repetitionResult.massiveRepetitionDetected && newResponse) {
-      options.logger.error(
-        `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
-        groupId,
-      );
-      options.logger.error(
-        'Massive repetition detected - skipping this response',
-        groupId,
-      );
-      options.logger.error(
-        'Message structure when repetition detected:',
-        groupId,
-      );
-      options.logger.error(
-        JSON.stringify(messageToSkeleton(state.messages), null, 2),
-        groupId,
-      );
-    }
-
-    let processedResponse: string | undefined;
-    let bestConnector: string | undefined;
-    if (newResponse) {
-      processedResponse = replacementEngine.applyAll(newResponse);
-
-      if (!repetitionResult.massiveRepetitionDetected) {
-        const connector = await bestConnectionMethod(
-          store.workspace.assembly.lastResponse.slice(-K_SLICE),
-          processedResponse.slice(0, K_SLICE),
+    return stage.run(async () => {
+      const [newResponse, responseUsage, stopReason] =
+        options.modelHandler.extractResponse(
+          state.responseObject,
+          options.agentSetting.endTag,
         );
-        bestConnector = connector.connector;
-        store.workspace.assembly.updateLastResponse(processedResponse);
-        store.workspace.assembly.updateAccumulatedOutput(
-          store.workspace.assembly.accumulatedOutput +
-            (bestConnector ?? '') +
-            processedResponse,
+
+      if (newResponse) {
+        options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
+      }
+
+      if (state.responseTime !== undefined) {
+        store.round.addResponseTime(state.responseTime);
+        options.logger.debug(
+          `Response time: ${state.responseTime.toFixed(2)}s`,
         );
       }
-    }
 
-    return {
-      stopReason,
-      newResponse,
-      processedResponse,
-      bestConnector,
-      thinkingContent,
-      useStreaming,
-      responseUsage,
-      apiUsage,
-      repetitionDetected: repetitionResult.massiveRepetitionDetected,
-    };
+      options.logger.debug(`Stop reason: ${stopReason}`);
+      options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
+
+      const thinkingContent = options.modelHandler.processThinkingBlock(
+        state.responseObject,
+        store.workspace,
+      );
+      const useStreaming = options.modelHandler.getStreamingConfig();
+
+      if (thinkingContent && !useStreaming) {
+        const formatted = await xmlUtils.formatContent(thinkingContent);
+        if (formatted.trim().length > 0) {
+          options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
+        }
+      }
+
+      const scratchpad = await xmlUtils.extractScratchpad(
+        newResponse,
+        'scratchpad',
+      );
+      if (scratchpad) {
+        options.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      }
+
+      if (newResponse && !useStreaming) {
+        const formattedResponse = await xmlUtils.formatContent(newResponse);
+        options.logger.info(
+          formattedResponse,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+      }
+
+      const apiUsage = options.modelHandler.computeResponseUsage(
+        responseUsage,
+        state.responseTime ?? 0,
+      );
+      store.round.setUsage({
+        summary: apiUsage,
+        nativeUsage: responseUsage,
+        provider: resolveUsageProvider(options.modelHandler),
+      });
+
+      const repetitionResult = checkForMassiveRepetition(
+        store.workspace.assembly.lastResponse,
+        newResponse,
+      );
+
+      if (repetitionResult.massiveRepetitionDetected && newResponse) {
+        options.logger.error(
+          `The new response is (first ${REPETITION_DETECTION_THRESHOLD} chars): ${newResponse.substring(0, REPETITION_DETECTION_THRESHOLD)}`,
+        );
+        options.logger.error(
+          'Massive repetition detected - skipping this response',
+        );
+        options.logger.error('Message structure when repetition detected:');
+        options.logger.error(
+          JSON.stringify(messageToSkeleton(state.messages), null, 2),
+        );
+      }
+
+      let processedResponse: string | undefined;
+      let bestConnector: string | undefined;
+      if (newResponse) {
+        processedResponse = replacementEngine.applyAll(newResponse);
+
+        if (!repetitionResult.massiveRepetitionDetected) {
+          const connector = await bestConnectionMethod(
+            store.workspace.assembly.lastResponse.slice(-K_SLICE),
+            processedResponse.slice(0, K_SLICE),
+          );
+          bestConnector = connector.connector;
+          store.workspace.assembly.updateLastResponse(processedResponse);
+          store.workspace.assembly.updateAccumulatedOutput(
+            store.workspace.assembly.accumulatedOutput +
+              (bestConnector ?? '') +
+              processedResponse,
+          );
+        }
+      }
+
+      return {
+        stopReason,
+        newResponse,
+        processedResponse,
+        bestConnector,
+        thinkingContent,
+        useStreaming,
+        responseUsage,
+        apiUsage,
+        repetitionDetected: repetitionResult.massiveRepetitionDetected,
+      } satisfies ProcessResult;
+    });
   }
 
   async post(
     _shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes: ProcessResult | { skipped: true },
+    execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
 
-    state.stopReason = execRes.stopReason;
-    state.processedResponse = execRes.processedResponse;
+    const result = execRes;
+
+    state.stopReason = result.stopReason;
+    state.processedResponse = result.processedResponse;
     store.run.recordRound(store.round);
 
-    if (execRes.repetitionDetected || !execRes.processedResponse) {
+    if (result.repetitionDetected) {
+      state.endTurn = false;
+      state.shouldStop = true;
+      return FlowTransition.COMPLETE;
+    }
+
+    const processedResponse = result.processedResponse;
+
+    if (!processedResponse) {
       state.endTurn = false;
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
     if (!state.outputExists) {
-      options.logger.debug(`Creating new file: ${state.outputFile}`, groupId);
-      await WorkspaceFS.write(state.outputFile, execRes.processedResponse);
+      options.logger.debug(`Creating new file: ${state.outputFile}`);
+      await WorkspaceFS.write(state.outputFile, processedResponse);
       state.outputExists = true;
     } else {
-      options.logger.debug(
-        `Appending to existing file: ${state.outputFile}`,
-        groupId,
-      );
+      options.logger.debug(`Appending to existing file: ${state.outputFile}`);
       await WorkspaceFS.appendFile(
         state.outputFile,
-        (execRes.bestConnector ?? '') + execRes.processedResponse,
+        (result.bestConnector ?? '') + processedResponse,
       );
     }
 
-    options.logger.debug('Response preview:', groupId);
+    const responseUsage = result.responseUsage ?? {};
+    const usageSummary = Object.entries(responseUsage)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ');
+    options.logger.debug(`Usage summary: ${usageSummary}`);
+
+    if (result.thinkingContent && !result.useStreaming) {
+      options.logger.info(
+        result.thinkingContent,
+        undefined,
+        MESSAGE_TYPES.THINKING,
+      );
+    }
+
+    options.logger.info(
+      `Stop reason: ${result.stopReason}`,
+      undefined,
+      MESSAGE_TYPES.PROGRESS_STATUS,
+    );
+
+    if (result.apiUsage) {
+      store.round.setUsage({
+        summary: result.apiUsage,
+        nativeUsage: result.responseUsage,
+        provider: resolveUsageProvider(options.modelHandler),
+      });
+
+      options.logger.debug(
+        `API usage summary: ${JSON.stringify(result.apiUsage)}`,
+      );
+    }
+
+    options.logger.debug('Response preview:');
     options.logger.debug(
-      `First ${K_SLICE} chars:\n${execRes.processedResponse.slice(0, K_SLICE)}`,
-      groupId,
+      `First ${K_SLICE} chars:\n${processedResponse.slice(0, K_SLICE)}`,
     );
     options.logger.debug(
-      `Last ${K_SLICE} chars:\n${execRes.processedResponse.slice(-K_SLICE)}`,
-      groupId,
+      `Last ${K_SLICE} chars:\n${processedResponse.slice(-K_SLICE)}`,
     );
+
+    const connector = result.bestConnector ?? '';
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
       options.modelHandler.updateMessageContentWithPrefill(
         state.messages,
-        execRes.bestConnector ?? '',
-        execRes.processedResponse,
+        connector,
+        processedResponse,
         store.workspace,
       );
     } else {
       options.modelHandler.updateMessageContentWithoutPrefill(
         state.messages,
-        execRes.bestConnector ?? '',
-        execRes.processedResponse,
+        connector,
+        processedResponse,
         store.workspace,
+      );
+    }
+
+    if (result.useStreaming) {
+      options.logger.debug(
+        'Using streaming - deferring continuation decision to next stage',
       );
     }
 
@@ -514,49 +568,54 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleShared<C>,
-  ): Promise<
-    | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
-    | { skipped: true }
-  > {
+  async exec(context: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.stopReason || !state.processedResponse) {
       return { skipped: true };
     }
 
-    const interrupted = Boolean(await options.checkInterruption());
-    if (interrupted) {
-      return { shouldEndTurn: false, shouldStop: true, shouldContinue: false };
-    }
+    const stopReason = state.stopReason!;
+    const processedResponse = state.processedResponse!;
 
-    const [shouldEndTurn, shouldStop] =
-      options.modelHandler.checkStopConditions(
-        state.stopReason,
-        state.processedResponse,
-        store.round,
-        store.run,
+    const stage = await options.logger.stage('Continuation decision', {
+      skip: true,
+    });
+
+    return stage.run(async () => {
+      const interrupted = Boolean(await options.checkInterruption());
+      if (interrupted) {
+        return {
+          shouldEndTurn: false,
+          shouldStop: true,
+          shouldContinue: false,
+        };
+      }
+
+      const [shouldEndTurn, shouldStop] =
+        options.modelHandler.checkStopConditions(
+          stopReason,
+          processedResponse,
+          store.round,
+          store.run,
+          options.agentSetting,
+        );
+
+      const shouldContinue = options.modelHandler.shouldContinue(
+        stopReason,
+        processedResponse,
         options.agentSetting,
       );
 
-    const shouldContinue = options.modelHandler.shouldContinue(
-      state.stopReason,
-      state.processedResponse,
-      options.agentSetting,
-    );
-
-    return { shouldEndTurn, shouldStop, shouldContinue };
+      return { shouldEndTurn, shouldStop, shouldContinue };
+    });
   }
 
   async post(
-    shared: ResponseCycleShared<C>,
+    _shared: ResponseCycleShared<C>,
     prepRes: ResponseCycleShared<C>,
-    execRes:
-      | { shouldEndTurn: boolean; shouldStop: boolean; shouldContinue: boolean }
-      | { skipped: true },
+    execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
 
     if ('skipped' in execRes) {
       state.endTurn = false;
@@ -564,27 +623,41 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    state.endTurn = execRes.shouldEndTurn;
-    state.shouldStop = execRes.shouldStop;
+    const { shouldEndTurn, shouldStop, shouldContinue } = execRes;
 
-    if (execRes.shouldStop) {
+    state.endTurn = shouldEndTurn;
+    state.shouldStop = shouldStop;
+
+    if (shouldStop) {
+      return FlowTransition.COMPLETE;
+    }
+
+    const reachedTokenLimit = isTokenLimitStopReason(state.stopReason);
+    const willContinue = shouldContinue || reachedTokenLimit;
+
+    if (!willContinue) {
       return FlowTransition.COMPLETE;
     }
 
     store.round.incrementContinuation();
     options.logger.info(
       `Starting continuation #${store.round.continuationCount}`,
-      groupId,
+      undefined,
       MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
-    if (!execRes.shouldContinue) {
-      return FlowTransition.COMPLETE;
+    if (reachedTokenLimit) {
+      options.logger.info(
+        'Continuing after hitting the model token limit',
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+      );
     }
 
-    options.logger.debug(
-      'Should continue - adding continuation message to conversation',
-      groupId,
+    options.logger.info(
+      '🧵 Added continuation prompt from partial XML output',
+      undefined,
+      MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {

@@ -170,7 +170,9 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       warn: () => {},
       error: () => {},
       statistics: () => {},
-      getActiveGroupId: () => undefined,
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
     };
     (handler as any).getStreamingConfig = () => false;
 

@@ -4,11 +4,11 @@ import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 
+// Local imports - execution context
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+
 // Local imports - model handlers
 import type { IModelHandler } from '@agent/modelHandlers';
-
-// Local imports - identifier types
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 export interface UserVariableChannels {
   input: Readonly<Record<string, any>>;
@@ -23,8 +23,8 @@ export interface AgentCycleBaseOptions<C = unknown> {
   userVars: Record<string, any>;
   userVarChannels: UserVariableChannels;
   logger: AgentLogger;
+  context: AgentExecutionContext;
   client: C;
   checkInterruption: () => Promise<boolean> | boolean;
   setAbortController: (ctrl: AbortController | null) => void;
-  executionId?: ExecutionId;
 }
