@@ -18,13 +18,11 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   /**
    * Process thinking blocks for xAI models
    * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
   processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
@@ -50,7 +48,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
         reasoningContent = message.reasoning_content;
         this.logger.debug(
           'Found reasoning_content in choices[0].message.reasoning_content',
-          groupId,
         );
 
         // If toolState is provided and we have reasoning content,
@@ -75,7 +72,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
     // Log preview of thinking content
     this.logger.debug(
       `xAI reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-      groupId,
     );
 
     return reasoningContent;

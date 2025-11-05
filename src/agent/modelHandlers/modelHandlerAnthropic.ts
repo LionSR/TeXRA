@@ -1491,7 +1491,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Process thinking blocks for Anthropic models
    * @param responseObject The response object from Anthropic API
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking blocks
    * @returns The extracted thinking content (or null if none)
    * This preserves the full thinking objects including signature which is required
@@ -1499,7 +1498,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   processThinkingBlock(
     responseObject: BetaMessage,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
@@ -1528,7 +1526,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } catch (e) {
       this.logger.error(
         `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        groupId,
+        undefined,
         undefined,
         e,
       );
@@ -1539,10 +1537,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return null;
     }
 
-    this.logger.debug(
-      `Found ${thinkingBlocks.length} thinking blocks`,
-      groupId,
-    );
+    this.logger.debug(`Found ${thinkingBlocks.length} thinking blocks`);
 
     // If toolState is provided, update it with all thinking blocks
     if (toolState && !toolState.reasoning.thinkingAdded) {
@@ -1556,12 +1551,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         toolState.reasoning.thinkingAdded = true;
         this.logger.debug(
           `Added ${thinkingBlocks.length} thinking blocks to toolState`,
-          groupId,
         );
       } else {
         this.logger.debug(
           `Skipping adding thinking blocks to toolState because of cut off message`,
-          groupId,
         );
       }
     }
