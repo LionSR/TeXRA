@@ -645,8 +645,10 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    options.logger.debug(
-      'Should continue - adding continuation message to conversation',
+    options.logger.info(
+      '🧵 Added continuation prompt from partial XML output',
+      undefined,
+      MESSAGE_TYPES.PROGRESS_STATUS,
     );
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {
