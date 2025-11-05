@@ -338,78 +338,70 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const stage = await options.logger.stage('Process tool response');
+    const groupId = options.logger.withCurrentGroup((id) => id);
 
-    return stage.run(async () => {
-      const thinking = options.modelHandler.processThinkingBlock(
-        state.response,
-        stage.id,
-        state.toolState,
-      );
-      const useStreaming = options.modelHandler.getStreamingConfig();
-      if (thinking && !useStreaming) {
-        const formatted = await xmlUtils.formatContent(thinking);
-        if (formatted.trim().length > 0) {
-          options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
-        }
+    const thinking = options.modelHandler.processThinkingBlock(
+      state.response,
+      groupId,
+      state.toolState,
+    );
+    const useStreaming = options.modelHandler.getStreamingConfig();
+    if (thinking && !useStreaming) {
+      const formatted = await xmlUtils.formatContent(thinking);
+      if (formatted.trim().length > 0) {
+        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
       }
+    }
 
-      const toolInfo = options.modelHandler.extractToolUse(state.response);
-      const [text, usage, stopReason] = options.modelHandler.extractResponse(
-        state.response,
-        '',
+    const toolInfo = options.modelHandler.extractToolUse(state.response);
+    const [text, usage, stopReason] = options.modelHandler.extractResponse(
+      state.response,
+      '',
+    );
+
+    if (text) {
+      options.logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      if (!useStreaming) {
+        const formatted = await xmlUtils.formatContent(text);
+        options.logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+      }
+    }
+
+    if (state.responseTime !== undefined) {
+      store.round.addResponseTime(state.responseTime);
+    }
+
+    if (usage) {
+      const provider = resolveUsageProvider(options.modelHandler);
+      const summary = options.modelHandler.computeResponseUsage(
+        usage,
+        state.responseTime ?? 0,
       );
+      store.round.setUsage({
+        summary,
+        nativeUsage: usage,
+        provider,
+      });
+    } else {
+      store.round.clearUsage();
+    }
 
+    const endTurn = options.modelHandler.isEndTurnStop(stopReason);
+
+    if (!toolInfo || endTurn) {
       if (text) {
-        options.logger.debug(`Model response: ${text.slice(0, 100)}`);
-        if (!useStreaming) {
-          const formatted = await xmlUtils.formatContent(text);
-          options.logger.info(
-            formatted,
-            undefined,
-            MESSAGE_TYPES.MODEL_RESPONSE,
-          );
-        }
+        state.messages.push(options.modelHandler.createAssistantMessage(text));
+        state.toolState.assembly.updateLastResponse(text);
       }
+      state.shouldStop = true;
+      return { stopReason, text, endTurn: true };
+    }
 
-      if (state.responseTime !== undefined) {
-        store.round.addResponseTime(state.responseTime);
-      }
+    state.toolInfo = toolInfo;
+    state.text = text ?? undefined;
+    state.stopReason = stopReason;
 
-      if (usage) {
-        const provider = resolveUsageProvider(options.modelHandler);
-        const summary = options.modelHandler.computeResponseUsage(
-          usage,
-          state.responseTime ?? 0,
-        );
-        store.round.setUsage({
-          summary,
-          nativeUsage: usage,
-          provider,
-        });
-      } else {
-        store.round.clearUsage();
-      }
-
-      const endTurn = options.modelHandler.isEndTurnStop(stopReason);
-
-      if (!toolInfo || endTurn) {
-        if (text) {
-          state.messages.push(
-            options.modelHandler.createAssistantMessage(text),
-          );
-          state.toolState.assembly.updateLastResponse(text);
-        }
-        state.shouldStop = true;
-        return { stopReason, text, endTurn: true };
-      }
-
-      state.toolInfo = toolInfo;
-      state.text = text ?? undefined;
-      state.stopReason = stopReason;
-
-      return { toolInfo, stopReason, text: text ?? undefined, endTurn: false };
-    });
+    return { toolInfo, stopReason, text: text ?? undefined, endTurn: false };
   }
 
   async post(
@@ -470,106 +462,99 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     | ToolDispatchErrorResult
   > {
     const { options, state } = context;
-    if (state.shouldStop) {
+    if (state.shouldStop || !state.toolInfo) {
       return { skipped: true };
     }
 
-    const toolInfo = state.toolInfo;
-    if (!toolInfo) {
+    const groupId = options.logger.withCurrentGroup((id) => id);
+
+    const interrupted = Boolean(await options.checkInterruption());
+    if (interrupted) {
+      state.shouldStop = true;
       return { skipped: true };
     }
 
-    const stage = await options.logger.stage('Parse tool call');
+    let parsed: any;
+    try {
+      parsed = JSON.parse(state.toolInfo);
+    } catch (err) {
+      const errorMsg = `Malformed tool JSON: ${toErrorMessage(err)}`;
+      const errorResult = toolResult({ error: errorMsg, isError: true });
+      const toolUseLog = {
+        tool: 'unknown',
+        input: state.toolInfo,
+        output: sanitizeToolResultForLog(errorResult),
+      };
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      return {
+        handledError: true,
+        toolName: 'unknown',
+        result: errorResult,
+        fallbackMessage:
+          'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
+      };
+    }
 
-    return stage.run(async () => {
-      const interrupted = Boolean(await options.checkInterruption());
-      if (interrupted) {
-        state.shouldStop = true;
-        return { skipped: true };
-      }
+    let toolCallId: string;
+    try {
+      toolCallId = extractToolCallId(parsed);
+    } catch (error) {
+      const errorMsg = toErrorMessage(error);
+      const errorResult = toolResult({ error: errorMsg, isError: true });
+      const toolUseLog = {
+        tool: parsed.name || parsed.function?.name || 'unknown',
+        input: parsed,
+        output: sanitizeToolResultForLog(errorResult),
+      };
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      return {
+        handledError: true,
+        toolName: parsed.name || parsed.function?.name || 'unknown',
+        result: errorResult,
+        parsed,
+        fallbackMessage:
+          'The tool call is missing a valid identifier. Please include a non-empty call_id for each tool request.',
+      };
+    }
 
-      let parsed: any;
+    const name = parsed.name || parsed.function?.name;
+    if (!name) {
+      const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
+      const errorResult = toolResult({ error: errorMsg, isError: true });
+      const toolUseLog = {
+        tool: 'unknown',
+        input: parsed,
+        output: sanitizeToolResultForLog(errorResult),
+      };
+      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      return {
+        handledError: true,
+        toolCallId,
+        toolName: 'unknown',
+        result: errorResult,
+        parsed,
+        fallbackMessage:
+          'The tool request did not specify which tool to call. Please provide a "name" field with the tool identifier.',
+      };
+    }
+
+    let input = parsed.input ?? parsed.args;
+    if (!input && parsed.arguments) {
       try {
-        parsed = JSON.parse(toolInfo);
-      } catch (err) {
-        const errorMsg = `Malformed tool JSON: ${toErrorMessage(err)}`;
-        const errorResult = toolResult({ error: errorMsg, isError: true });
-        const toolUseLog = {
-          tool: 'unknown',
-          input: toolInfo,
-          output: sanitizeToolResultForLog(errorResult),
-        };
-        options.logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-        return {
-          handledError: true,
-          toolName: 'unknown',
-          result: errorResult,
-          fallbackMessage:
-            'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
-        };
+        input = JSON.parse(parsed.arguments);
+      } catch {
+        input = parsed.arguments;
       }
-
-      let toolCallId: string;
+    }
+    if (!input && parsed.function?.arguments) {
       try {
-        toolCallId = extractToolCallId(parsed);
-      } catch (error) {
-        const errorMsg = toErrorMessage(error);
-        const errorResult = toolResult({ error: errorMsg, isError: true });
-        const toolUseLog = {
-          tool: parsed.name || parsed.function?.name || 'unknown',
-          input: parsed,
-          output: sanitizeToolResultForLog(errorResult),
-        };
-        options.logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-        return {
-          handledError: true,
-          toolName: parsed.name || parsed.function?.name || 'unknown',
-          result: errorResult,
-          parsed,
-          fallbackMessage:
-            'The tool call is missing a valid identifier. Please include a non-empty call_id for each tool request.',
-        };
+        input = JSON.parse(parsed.function.arguments);
+      } catch {
+        input = parsed.function.arguments;
       }
+    }
 
-      const name = parsed.name || parsed.function?.name;
-      if (!name) {
-        const errorMsg = `Tool JSON missing name: ${JSON.stringify(parsed)}`;
-        const errorResult = toolResult({ error: errorMsg, isError: true });
-        const toolUseLog = {
-          tool: 'unknown',
-          input: parsed,
-          output: sanitizeToolResultForLog(errorResult),
-        };
-        options.logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-        return {
-          handledError: true,
-          toolCallId,
-          toolName: 'unknown',
-          result: errorResult,
-          parsed,
-          fallbackMessage:
-            'The tool request did not specify which tool to call. Please provide a "name" field with the tool identifier.',
-        };
-      }
-
-      let input = parsed.input ?? parsed.args;
-      if (!input && parsed.arguments) {
-        try {
-          input = JSON.parse(parsed.arguments);
-        } catch {
-          input = parsed.arguments;
-        }
-      }
-      if (!input && parsed.function?.arguments) {
-        try {
-          input = JSON.parse(parsed.function.arguments);
-        } catch {
-          input = parsed.function.arguments;
-        }
-      }
-
-      return { parsed, name, input, toolCallId };
-    });
+    return { parsed, name, input, toolCallId };
   }
 
   async post(
@@ -581,148 +566,147 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
+    const groupId = options.logger.withCurrentGroup((id) => id);
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    const stage = await options.logger.stage('Apply tool call result');
+    if ('handledError' in execRes) {
+      const { toolCallId, result, fallbackMessage, toolName, parsed } = execRes;
 
-    return stage.run(async () => {
-      if ('handledError' in execRes) {
-        const { toolCallId, result, fallbackMessage, toolName, parsed } =
-          execRes;
-
-        if (toolCallId) {
-          const followUpMessages =
-            await options.modelHandler.createToolUseFollowUpMessages(
-              options.client,
-              toolCallId,
-              toolName,
-              parsed,
-              buildToolResultPayload(result),
-              state.toolState,
-              state.text ?? '',
-            );
-
-          state.messages.push(...followUpMessages);
-          const fallback =
-            result.summary ??
-            result.output ??
-            result.error ??
-            fallbackMessage ??
-            '';
-          if (fallback) {
-            state.toolState.assembly.updateLastResponse(String(fallback));
-          }
-        } else if (fallbackMessage) {
-          const assistantMessage =
-            options.modelHandler.createAssistantMessage(fallbackMessage);
-          state.messages.push(assistantMessage);
-          state.toolState.assembly.updateLastResponse(fallbackMessage);
-        }
-
-        state.iteration += 1;
-        state.shouldStop = false;
-
-        if (fallbackMessage) {
-          options.logger.warn(fallbackMessage);
-        }
-
-        return FlowTransition.CONTINUE;
-      }
-
-      const tool = options.toolRegistry[execRes.name];
-      let result: ToolResult;
-      if (!tool) {
-        result = toolResult({
-          error: `Unknown tool ${execRes.name}`,
-          isError: true,
-        });
-      } else {
-        try {
-          const { withToolEditApprovalContext } = await import(
-            '@tools/approval/toolEditApprovalContext'
+      if (toolCallId) {
+        const followUpMessages =
+          await options.modelHandler.createToolUseFollowUpMessages(
+            options.client,
+            toolCallId,
+            toolName,
+            parsed,
+            buildToolResultPayload(result),
+            state.toolState,
+            state.text ?? '',
           );
 
-          result = await withToolEditApprovalContext(
-            {
-              streamId: options.logger.channelId,
-              executionId: options.context.executionId,
-              toolCallId: execRes.toolCallId,
-            },
-            () => tool.call(execRes.input),
-          );
-        } catch (err) {
-          const { message, diagnostics } = normalizeToolCallError(
-            execRes.name,
-            err,
-          );
-          result = toolResult({
-            error: message,
-            isError: true,
-            diagnostics,
-          });
+        state.messages.push(...followUpMessages);
+        const fallback =
+          result.summary ??
+          result.output ??
+          result.error ??
+          fallbackMessage ??
+          '';
+        if (fallback) {
+          state.toolState.assembly.updateLastResponse(String(fallback));
         }
+      } else if (fallbackMessage) {
+        const assistantMessage =
+          options.modelHandler.createAssistantMessage(fallbackMessage);
+        state.messages.push(assistantMessage);
+        state.toolState.assembly.updateLastResponse(fallbackMessage);
       }
 
-      const toolUseLog = {
-        tool: execRes.name,
-        input: execRes.input ?? execRes.parsed,
-        output: sanitizeToolResultForLog(result),
-      };
-      options.logger.info('', undefined, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-
-      if (result.files && result.files.length > 0) {
-        const existing = state.toolState.media.files;
-        const toAdd: string[] = [];
-        for (const attachment of result.files) {
-          const candidate = attachment.path;
-          if (typeof candidate !== 'string' || candidate.trim() === '') {
-            continue;
-          }
-          if (existing.includes(candidate) || toAdd.includes(candidate)) {
-            continue;
-          }
-          try {
-            const exists = await WorkspaceFS.exists(candidate);
-            if (exists) {
-              toAdd.push(candidate);
-            }
-          } catch {
-            // Ignore errors when checking existence
-          }
-        }
-        if (toAdd.length > 0) {
-          state.toolState.media.addMediaFiles(toAdd);
-        }
-      }
-
-      const followUpMsgs =
-        await options.modelHandler.createToolUseFollowUpMessages(
-          options.client,
-          execRes.toolCallId,
-          execRes.name,
-          execRes.parsed,
-          buildToolResultPayload(result),
-          state.toolState,
-          state.text ?? '',
-        );
-
-      state.messages.push(...followUpMsgs);
-      if (
-        typeof result.userInstruction === 'string' &&
-        result.userInstruction.trim().length > 0
-      ) {
-        await options.modelHandler.createUserFollowUpMessages(
-          state.messages,
-          result.userInstruction,
-        );
-      }
       state.iteration += 1;
+      state.shouldStop = false;
+
+      if (fallbackMessage) {
+        options.logger.warn(fallbackMessage, groupId);
+      }
 
       return FlowTransition.CONTINUE;
-    });
+    }
+
+    const tool = options.toolRegistry[execRes.name];
+    let result: ToolResult;
+    if (!tool) {
+      result = toolResult({
+        error: `Unknown tool ${execRes.name}`,
+        isError: true,
+      });
+    } else {
+      try {
+        const { withToolEditApprovalContext } = await import(
+          '@tools/approval/toolEditApprovalContext'
+        );
+
+        result = await withToolEditApprovalContext(
+          {
+            streamId: options.logger.channelId,
+            executionId: options.context.executionId,
+            toolCallId: execRes.toolCallId,
+          },
+          () => tool.call(execRes.input),
+        );
+      } catch (err) {
+        const { message, diagnostics } = normalizeToolCallError(
+          execRes.name,
+          err,
+        );
+        result = toolResult({
+          error: message,
+          isError: true,
+          diagnostics,
+        });
+      }
+    }
+
+    const toolUseLog = {
+      tool: execRes.name,
+      input: execRes.input ?? execRes.parsed,
+      output: sanitizeToolResultForLog(result),
+    };
+    options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+
+    if (result.files && result.files.length > 0) {
+      const existing = state.toolState.media.files;
+      const toAdd: string[] = [];
+      for (const attachment of result.files) {
+        const candidate = attachment.path;
+        if (typeof candidate !== 'string' || candidate.trim() === '') {
+          continue;
+        }
+        if (existing.includes(candidate) || toAdd.includes(candidate)) {
+          continue;
+        }
+        try {
+          const exists = await WorkspaceFS.exists(candidate);
+          if (exists) {
+            toAdd.push(candidate);
+          }
+        } catch {
+          // Ignore errors when checking existence
+        }
+      }
+      if (toAdd.length > 0) {
+        state.toolState.media.addMediaFiles(toAdd);
+      }
+    }
+
+    const followUpMsgs =
+      await options.modelHandler.createToolUseFollowUpMessages(
+        options.client,
+        execRes.toolCallId,
+        execRes.name,
+        execRes.parsed,
+        buildToolResultPayload(result),
+        state.toolState,
+        state.text ?? '',
+      );
+
+    state.messages.push(...followUpMsgs);
+    // If the tool result includes a user-provided instruction (e.g., from
+    // rejecting an edit with a note like "Stop"), append it as a user message
+    // so the model treats it as explicit guidance.
+    if (
+      typeof result.userInstruction === 'string' &&
+      result.userInstruction.trim().length > 0
+    ) {
+      await options.modelHandler.createUserFollowUpMessages(
+        state.messages,
+        result.userInstruction,
+      );
+    }
+    state.iteration += 1;
+
+    return FlowTransition.CONTINUE;
   }
 }
 
