@@ -499,7 +499,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       .join(', ');
     options.logger.debug(`Usage summary: ${usageSummary}`);
 
-    if (result.thinkingContent) {
+    if (result.thinkingContent && !result.useStreaming) {
       options.logger.info(
         result.thinkingContent,
         undefined,
