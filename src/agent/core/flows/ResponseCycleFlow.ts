@@ -71,6 +71,10 @@ async function maybeSaveDebug(
   });
 }
 
+/**
+ * Executes work within the provided stage, ensuring the stage is always
+ * completed when the work finishes or throws.
+ */
 async function runStageToCompletion<T>(
   stage: AgentLogStage | undefined,
   work: () => Promise<T>,
@@ -373,7 +377,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
         const thinkingContent = options.modelHandler.processThinkingBlock(
           state.responseObject,
-          undefined,
           store.workspace,
         );
         const useStreaming = options.modelHandler.getStreamingConfig();
@@ -488,13 +491,26 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     store.run.recordRound(store.round);
 
     const applyPost = async () => {
-      if (result.repetitionDetected || !result.processedResponse) {
+      if (result.repetitionDetected) {
         state.endTurn = false;
         state.shouldStop = true;
         return FlowTransition.COMPLETE;
       }
 
+      if (result.useStreaming) {
+        options.logger.debug(
+          'Using streaming - deferring continuation decision to next stage',
+        );
+        return undefined;
+      }
+
       const processedResponse = result.processedResponse;
+
+      if (!processedResponse) {
+        state.endTurn = false;
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
 
       if (!state.outputExists) {
         options.logger.debug(`Creating new file: ${state.outputFile}`);
