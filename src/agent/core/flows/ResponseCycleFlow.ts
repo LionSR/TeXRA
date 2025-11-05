@@ -221,7 +221,9 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const stage = await options.logger.stage('Model invocation');
+    const stage = await options.logger.stage('Model invocation', {
+      skip: true,
+    });
 
     const abortController = new AbortController();
     options.setAbortController(abortController);
@@ -343,7 +345,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const stage = await options.logger.stage('Process response');
+    const stage = await options.logger.stage('Process response', {
+      skip: true,
+    });
 
     try {
       const result = await stage.within(async () => {
@@ -592,7 +596,9 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const stopReason = state.stopReason!;
     const processedResponse = state.processedResponse!;
 
-    const stage = await options.logger.stage('Continuation decision');
+    const stage = await options.logger.stage('Continuation decision', {
+      skip: true,
+    });
 
     try {
       const decision = await stage.within(async () => {
