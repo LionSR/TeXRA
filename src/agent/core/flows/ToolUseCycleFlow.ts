@@ -342,7 +342,6 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
-      groupId,
       state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
