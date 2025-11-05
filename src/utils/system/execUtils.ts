@@ -28,6 +28,14 @@ function truncateOutput(
   return text;
 }
 
+function normalizeOutput(text: string | null | undefined): string | null {
+  if (text == null) {
+    return null;
+  }
+  const trimmed = text.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /**
  * Execute external command with output handling and workspace path management.
  */
@@ -97,29 +105,30 @@ export async function executeCommand(
     }
 
     const shouldTruncate = options.truncate ?? false;
-    const processOutput = (output: string | null) =>
-      shouldTruncate
-        ? truncateOutput(output?.trim() || null)
-        : output?.trim() || null;
+    const formatForLog = (output: string | null) =>
+      shouldTruncate && output ? truncateOutput(output) : output;
 
-    if (stderr && stderr.trim()) {
+    const normalizedStdout = normalizeOutput(stdout);
+    const normalizedStderr = normalizeOutput(stderr);
+
+    if (normalizedStderr) {
       logger.debug(
         options.channel ?? CHANNEL,
-        `Command stderr: ${processOutput(stderr)}`,
+        `Command stderr: ${formatForLog(normalizedStderr)}`,
       );
     }
 
-    // if (stdout && stdout.trim()) {
+    // if (normalizedStdout) {
     //   logger.debug(
     //     options.channel ?? CHANNEL,
-    //     `Command stdout: ${processOutput(stdout)}`,
+    //     `Command stdout: ${formatForLog(normalizedStdout)}`,
     //   );
     // }
 
     return {
       success: exitCode === 0 && !timedOut,
-      stdout: processOutput(stdout),
-      stderr: processOutput(stderr),
+      stdout: normalizedStdout,
+      stderr: normalizedStderr,
       timedOut,
     };
   } catch (err) {
@@ -137,13 +146,12 @@ export async function executeCommand(
 
     // With reject: false, this catch block only handles actual execution errors
     // (e.g., command not found), not timeouts or non-zero exit codes
-    const shouldTruncate = options.truncate ?? false;
+    const fallbackOutput = stderr ?? errorMessage;
+    const normalizedError = normalizeOutput(fallbackOutput) ?? fallbackOutput;
     return {
       success: false,
       stdout: null,
-      stderr: shouldTruncate
-        ? truncateOutput(stderr || errorMessage)
-        : stderr || errorMessage,
+      stderr: normalizedError,
       timedOut: false, // Real timeouts are handled in the main flow via result.timedOut
     };
   }
