@@ -39,7 +39,7 @@ export class CoTAgent extends BaseReflectionAgent {
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
-    const { outputFile, endTurn } = options;
+    const { outputFile, endTurn, stage } = options;
 
     try {
       this.outputHandler.ensureRound(currRound);
@@ -52,13 +52,14 @@ export class CoTAgent extends BaseReflectionAgent {
           this.agentSetting.documentTag,
         );
 
-        await this.outputHandler.processOutputFiles(outputFile, currRound);
+        await this.outputHandler.processOutputFiles(
+          outputFile,
+          currRound,
+          stage,
+        );
       }
 
-      return super.handleOutput(currRound, stateRound, stateGlobal, {
-        outputFile,
-        endTurn,
-      });
+      return super.handleOutput(currRound, stateRound, stateGlobal, options);
     } catch (error) {
       this.logger.error(
         `Error in handleOutput for round ${currRound}: ${error}`,

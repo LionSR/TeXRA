@@ -150,10 +150,7 @@ export class MergeAgent extends DirectAgent {
         currRound,
         stateRound,
         stateGlobal,
-        {
-          outputFile,
-          endTurn,
-        },
+        options,
       );
       this.logger.info(`Merge output file: ${outputFile}`);
       return files;

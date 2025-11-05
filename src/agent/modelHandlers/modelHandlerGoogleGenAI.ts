@@ -533,10 +533,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
-        const groupId = this.logger.getActiveGroupId();
-        const thinking = this.createThinkingStream(groupId);
+        const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream(groupId)
+          ? this.createOutputStream()
           : undefined;
         const fullParts: Part[] = [];
         let lastCandidate: Candidate | undefined;
@@ -1021,7 +1020,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   processThinkingBlock(
     responseObject: GenerateContentResponse,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null {
     if (
@@ -1064,7 +1062,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (thoughtContent) {
       this.logger.debug(
         `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
-        groupId,
       );
     }
 

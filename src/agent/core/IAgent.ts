@@ -5,6 +5,7 @@ import type { AgentSessionDescriptor } from './AgentDataclass';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { AgentLogStage } from '@logger/AgentLogger';
 
 /**
  * Minimal interface implemented by all agent types.
@@ -17,11 +18,11 @@ export interface IAgent {
    * Initialize the agent before running.
    * @param parentGroupId - Optional parent group ID for nested logging
    * @param options - Initialization options
-   * @param options.createGroup - Whether to create a new log group (default: true)
+   * @param options.createStage - Whether to create a new log stage (default: true)
    */
   init(
-    parentGroupId?: string,
-    options?: { createGroup?: boolean },
+    parentStage?: AgentLogStage,
+    options?: { createStage?: boolean },
   ): Promise<void>;
 
   /** Execute the agent. */
@@ -67,8 +68,8 @@ export interface AgentRunHooks {
    *          Return `undefined` to indicate that the lifecycle should reuse an
    *          existing log group (for example, interactive tool-use sessions).
    */
-  start(): Promise<string | undefined>;
-  init(runGroupId: string | undefined): Promise<void>;
+  start(): Promise<AgentLogStage | undefined>;
+  init(runStage: AgentLogStage | undefined): Promise<void>;
   initializeClient(): Promise<void>;
   end(status: 'stopped' | 'error'): void | Promise<void>;
   cleanup(): void | Promise<void>;
