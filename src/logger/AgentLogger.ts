@@ -25,11 +25,39 @@ export interface AgentLoggerStageOptions extends LoggerScopeOptions {
   parent?: AgentLogStage;
 }
 
+/**
+ * Represents a logical logging scope that can wrap asynchronous work and
+ * create nested child stages.
+ *
+ * - {@link run} executes the provided callback and automatically finalizes the
+ *   stage with a success or error status when the promise settles.
+ * - {@link within} runs the callback without ending the stage, allowing the
+ *   caller to perform additional work (or register nested stages) before
+ *   explicitly calling {@link end}.
+ * - {@link end} manually finalizes the stage; calling it multiple times is a
+ *   no-op after the first invocation.
+ * - {@link stage} spawns a nested stage that inherits the current context.
+ */
 export interface AgentLogStage {
   readonly id?: string;
+  /**
+   * Runs work within the stage and automatically ends it once the promise
+   * resolves or rejects.
+   */
   run<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Executes work within the stage context without ending it. Useful when the
+   * caller wants to manually control completion.
+   */
   within<T>(fn: () => Promise<T>): Promise<T>;
+  /**
+   * Explicitly finalizes the stage with the provided status. Safe to call
+   * multiple times; subsequent calls are ignored.
+   */
   end(status?: 'stopped' | 'error'): void;
+  /**
+   * Creates a nested child stage beneath the current stage.
+   */
   stage(
     label: string,
     options?: AgentLoggerStageOptions,
