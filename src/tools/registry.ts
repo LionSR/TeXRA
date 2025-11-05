@@ -20,7 +20,12 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
-import { DoiLookupTool, ArxivMetadataTool } from './papers';
+import {
+  DoiLookupTool,
+  ArxivMetadataTool,
+  AddToBibliographyTool,
+  ManageBibliographyTool,
+} from './papers';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
@@ -43,4 +48,6 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   web_search: new WebSearchTool(),
   doi_lookup: new DoiLookupTool(),
   arxiv_metadata: new ArxivMetadataTool(),
+  add_to_bibliography: new AddToBibliographyTool(),
+  manage_bibliography: new ManageBibliographyTool(),
 };

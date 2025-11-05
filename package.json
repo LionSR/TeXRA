@@ -530,6 +530,18 @@
         "properties": {}
       },
       {
+        "title": "Bibliography",
+        "properties": {
+          "texra.bibliography.centralBibFile": {
+            "type": "string",
+            "default": "references.bib",
+            "description": "Path to the central bibliography file (relative to workspace root). Used by bibliography tools when no specific file is provided.",
+            "editPresentation": "singlelineText",
+            "order": 1
+          }
+        }
+      },
+      {
         "title": "LaTeX Formatter",
         "properties": {
           "texra.latex.formatter": {
@@ -1490,6 +1502,7 @@
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.28.0",
     "@modelcontextprotocol/sdk": "^1.21.0",
+    "@retorquere/bibtex-parser": "^9.0.26",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.41",
     "@vscode/markdown-it-katex": "^1.1.2",
