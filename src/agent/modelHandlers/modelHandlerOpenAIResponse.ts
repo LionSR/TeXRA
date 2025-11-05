@@ -574,10 +574,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = client.responses.stream(streamParams, { signal });
-      const groupId = this.logger.getActiveGroupId();
-      const thinking = this.createThinkingStream(groupId);
+      const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream(groupId)
+        ? this.createOutputStream()
         : undefined;
       const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
       for await (const event of responseStream) {
@@ -1226,7 +1225,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Process reasoning summaries from the Responses API. */
   processThinkingBlock(
     responseObject: Response,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null {
     const outputArr = responseObject?.output;
@@ -1254,7 +1252,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (thoughtContent) {
       this.logger.debug(
         `OpenAI Responses reasoning preview: ${thoughtContent.substring(0, K_SLICE)}...`,
-        groupId,
       );
     }
 

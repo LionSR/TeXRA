@@ -38,10 +38,13 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local imports - usage helpers
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 
+// Local imports - identifier types
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];
   modelName?: string;
-  executionId?: ToolUseCycleOptions['executionId'];
+  executionId?: ExecutionId;
 }
 
 interface DebugFileOptions {
@@ -170,7 +173,7 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -246,7 +249,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const debugContext: DebugContext = {
       logger: options.logger,
       modelName: options.modelName,
-      executionId: options.executionId,
+      executionId: options.context.executionId,
     };
     const debugFileOptions: DebugFileOptions = {
       continuationCount: state.iteration,
@@ -335,11 +338,10 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
 
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
-      groupId,
       state.toolState,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
@@ -463,7 +465,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
 
     const interrupted = Boolean(await options.checkInterruption());
     if (interrupted) {
@@ -563,7 +565,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
-    const groupId = options.logger.getActiveGroupId();
+    const groupId = options.logger.withCurrentGroup((id) => id);
     if ('skipped' in execRes) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
@@ -627,7 +629,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         result = await withToolEditApprovalContext(
           {
             streamId: options.logger.channelId,
-            executionId: options.executionId,
+            executionId: options.context.executionId,
             toolCallId: execRes.toolCallId,
           },
           () => tool.call(execRes.input),

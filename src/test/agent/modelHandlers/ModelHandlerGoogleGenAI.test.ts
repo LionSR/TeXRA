@@ -47,7 +47,9 @@ function createLoggerStub(): { logger: AgentLogger; stub: LoggerStub } {
     fileList(entries: Array<{ path: string; ok: boolean }>) {
       this.fileListEntries.push(entries);
     },
-    getActiveGroupId: () => undefined,
+    withCurrentGroup: () => undefined,
+    runWithinCurrentGroup: async (fn: () => any) => fn(),
+    runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
   };
 
   return { logger: stub as unknown as AgentLogger, stub };

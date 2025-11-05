@@ -160,9 +160,8 @@ export abstract class ModelHandler<
   /**
    * Convenience wrapper for thinking streams.
    */
-  protected createThinkingStream(groupId?: string) {
+  protected createThinkingStream() {
     return this.logger.createStream(MESSAGE_TYPES.THINKING, {
-      groupId,
       progressViewEnabled: this.progressViewEnabled,
     });
   }
@@ -170,9 +169,8 @@ export abstract class ModelHandler<
   /**
    * Convenience wrapper for output streams.
    */
-  protected createOutputStream(groupId?: string) {
+  protected createOutputStream() {
     return this.logger.createStream(MESSAGE_TYPES.MODEL_RESPONSE, {
-      groupId,
       progressViewEnabled: this.progressViewEnabled,
     });
   }
@@ -658,13 +656,11 @@ export abstract class ModelHandler<
   /**
    * Extracts thinking content from model responses
    * @param responseObject The raw response object from the model
-   * @param groupId Optional group ID for logging
    * @param toolState Optional toolState to update with the thinking block
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
     responseObject: any,
-    groupId?: string,
     toolState?: AgentWorkspaceState,
   ): string | null;
 
@@ -709,34 +705,5 @@ export abstract class ModelHandler<
       String(reason).toLowerCase() === 'end_turn' ||
       String(reason).toLowerCase() === 'endturn'
     );
-  }
-
-  /**
-   * Creates a log group for model operations with the given name.
-   * @param name Name of the operation group
-   * @param parentGroupId Optional parent group ID
-   * @returns The group ID
-   */
-  protected async createOperationGroup(
-    name: string,
-    parentGroupId?: string,
-  ): Promise<string> {
-    return await this.logger.startGroup(
-      `Model Operation: ${name}`,
-      undefined,
-      parentGroupId,
-    );
-  }
-
-  /**
-   * Ends a model operation log group with the given status.
-   * @param groupId ID of the group to end
-   * @param status Status of the operation ('error' or 'stopped')
-   */
-  protected endOperationGroup(
-    groupId: string,
-    status: 'error' | 'stopped' = 'stopped',
-  ): void {
-    this.logger.endGroup(groupId, status);
   }
 }

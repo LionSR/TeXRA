@@ -16,6 +16,8 @@ import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
@@ -146,6 +148,9 @@ describe('runToolUseCycle OpenAIResponse', () => {
       setAbortController: () => {},
       toolState,
       modelName: 'test',
+      context: new AgentExecutionContext({
+        streamId: 'tool-use-openai' as StreamTabId,
+      }),
     };
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
