@@ -24,6 +24,7 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import { bestConnectionMethod } from '@latex';
 
 // Local imports - logging
+import type { AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - replacement engine
@@ -213,8 +214,9 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
+    let stage: AgentLogStage | undefined;
     try {
-      const stage = await options.logger.stage('Model invocation', {
+      stage = await options.logger.stage('Model invocation', {
         skip: true,
       });
 
@@ -247,7 +249,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       options.logger.error(message);
       state.shouldStop = true;
       state.endTurn = false;
-      stage.end('error');
+      stage?.end('error');
       throw error;
     } finally {
       options.setAbortController(null);
@@ -471,13 +473,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    if (result.useStreaming) {
-      options.logger.debug(
-        'Using streaming - deferring continuation decision to next stage',
-      );
-      return undefined;
-    }
-
     const processedResponse = result.processedResponse;
 
     if (!processedResponse) {
@@ -553,6 +548,12 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         connector,
         processedResponse,
         store.workspace,
+      );
+    }
+
+    if (result.useStreaming) {
+      options.logger.debug(
+        'Using streaming - deferring continuation decision to next stage',
       );
     }
 
