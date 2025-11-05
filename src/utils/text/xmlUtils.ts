@@ -386,12 +386,9 @@ export function extractContentFromXMLbyTagMultiple(
 }
 
 /**
- * Formats and logs special content (scratchpad or thinking) with standardized formatting
+ * Formats special content (scratchpad or thinking) with standardized formatting
  *
  * @param content The raw content to format
- * @param logger The logger instance to use
- * @param contentType The type of content (e.g., 'Scratchpad', 'Thinking')
- * @param groupId Optional group ID for logging
  */
 export async function formatContent(content: string): Promise<string> {
   if (!content) {
