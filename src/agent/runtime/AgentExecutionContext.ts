@@ -2,7 +2,11 @@
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logger
-import { AgentLogger } from '@logger/AgentLogger';
+import {
+  AgentLogger,
+  type AgentLogStage,
+  type AgentLoggerStageOptions,
+} from '@logger/AgentLogger';
 import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 
 export interface AgentExecutionContextInit {
@@ -28,5 +32,21 @@ export class AgentExecutionContext {
 
   get executionId(): ExecutionId | undefined {
     return this.init.executionId;
+  }
+
+  stage(
+    label: string,
+    options?: AgentLoggerStageOptions,
+  ): Promise<AgentLogStage> {
+    return this.logger.stage(label, options);
+  }
+
+  async withStage<T>(
+    label: string,
+    fn: (stage: AgentLogStage) => Promise<T>,
+    options?: AgentLoggerStageOptions,
+  ): Promise<T> {
+    const stage = await this.stage(label, options);
+    return stage.run(() => fn(stage));
   }
 }

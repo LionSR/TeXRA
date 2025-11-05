@@ -14,8 +14,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
 
 class TestModelHandlerGoogleGenAI extends ModelHandlerGoogleGenAI {
-  public createThinkingStreamPublic(groupId?: string) {
-    return this.createThinkingStream(groupId);
+  public createThinkingStreamPublic() {
+    return this.createThinkingStream();
   }
 }
 
@@ -65,7 +65,7 @@ describe('ModelHandler progress view flag', () => {
   it('prevents progress events when disabled', () => {
     handler.setProgressViewEnabled(false);
 
-    const stream = handler.createThinkingStreamPublic('group-1');
+    const stream = handler.createThinkingStreamPublic();
     stream.append('Partial output ');
     const finalText = stream.finalize('Final output');
 

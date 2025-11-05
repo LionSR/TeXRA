@@ -19,7 +19,7 @@ export class AgentUsageReporter {
    * Emit usage data to the progress view and attach detailed stats to the log.
    */
   public report(stats: ExtendedTokenUsageStats): void {
-    const groupId = this.logger.getActiveGroupId();
+    const groupId = this.logger.withCurrentGroup((id) => id);
 
     if (groupId) {
       bus.emit('updateGroupUsage', {
