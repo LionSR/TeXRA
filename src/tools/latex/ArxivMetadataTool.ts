@@ -1,6 +1,8 @@
 // Third-party imports
-import search from 'arxiv-api-ts';
 import { z } from 'zod';
+
+// Local imports - arxiv wrapper
+import { search } from './arxivApiWrapper';
 
 // Local imports - latex
 import { arxivProcessor } from '@latex/arxivProcessor';
