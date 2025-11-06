@@ -633,10 +633,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         ];
       } else if (
         media.media_category === 'audio' &&
-        this.isGoogle &&
         this.config.capabilities.supportsNativeAudio
       ) {
-        // Currently only Google via OpenAI compatibility layer supports this
+        // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
         let audioFormat = media.media_type;
         if (media.media_type.includes('/')) {
           audioFormat = media.media_type.split('/')[1]; // e.g., 'wav' from 'audio/wav'
