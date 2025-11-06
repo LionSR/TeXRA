@@ -100,10 +100,12 @@
                 "qwen3max",
                 "qwenplus",
                 "qwenturbo",
-                "kimit",
-                "kimiv",
+                "kimi2T",
+                "kimi2T+",
                 "kimi2",
-                "kimi2turbo"
+                "kimi2+",
+                "kimit",
+                "kimiv"
               ]
             },
             "default": [
@@ -115,11 +117,12 @@
               "gpt41",
               "deepseek",
               "deepseekT",
+              "kimi2T",
               "kimi2",
               "qwen3max",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2turbo (Kimi Thinking/Vision/K2/K2 Turbo)",
+            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini25p/gemini25f/gemini2fT (Gemini 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2+/kimi2T/kimi2T+ (Kimi Thinking/Vision/K2/K2 Turbo/K2 Thinking/K2 Thinking Turbo)",
             "scope": "resource"
           }
         }
@@ -276,10 +279,12 @@
               "qwen3max",
               "qwenplus",
               "qwenturbo",
+              "kimi2T",
+              "kimi2T+",
               "kimit",
               "kimiv",
               "kimi2",
-              "kimi2turbo"
+              "kimi2+"
             ],
             "description": "Short name of the model used to polish instruction text when Copilot is disabled.",
             "scope": "resource"
@@ -1494,11 +1499,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
     "@cantoo/pdf-lib": "^2.5.3",
+    "@cfworker/json-schema": "^4.1.1",
     "@google/genai": "^1.29.0",
+    "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.21.0",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.41",
     "@vscode/markdown-it-katex": "^1.1.2",
+    "arxiv-client": "^0.0.9",
     "axios": "^1.13.2",
     "deepmerge": "^4.3.1",
     "diff-match-patch": "^1.0.5",

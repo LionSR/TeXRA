@@ -99,13 +99,13 @@ It excels at coding and agentic tasks but currently lacks multimodal and
 thought-mode support. The 0905 preview offers a 256k context window, and a
 high-speed turbo variant is also available.
 
-| Model ID     | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                                              |
-| :----------- | :----------------------------- | :------------ | :------------- | :------------------------------------------------- |
-| `kimit`      | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview                              |
-| `kimi`       | Large context, general tasks   | $$            | Medium         | 128k context                                       |
-| `kimiv`      | Vision-enabled variant         | $$            | Medium         | 128k context, vision                               |
-| `kimi2`      | Agent tasks, 256k context      | $$$           | Medium         | Kimi K2 0905 Preview (`moonshotai/kimi-k2-0905`)   |
-| `kimi2turbo` | Fast agent tasks               | $$$$          | Very Fast      | Kimi K2 Turbo Preview (`moonshotai/kimi-k2-turbo`) |
+| Model ID | Key Strength / Use Case        | Relative Cost | Relative Speed | Notes                                              |
+| :------- | :----------------------------- | :------------ | :------------- | :------------------------------------------------- |
+| `kimit`  | Detailed reasoning with vision | $$$           | Medium         | Kimi Thinking Preview                              |
+| `kimi`   | Large context, general tasks   | $$            | Medium         | 128k context                                       |
+| `kimiv`  | Vision-enabled variant         | $$            | Medium         | 128k context, vision                               |
+| `kimi2`  | Agent tasks, 256k context      | $$$           | Medium         | Kimi K2 0905 Preview (`moonshotai/kimi-k2-0905`)   |
+| `kimi2+` | Fast agent tasks               | $$$$          | Very Fast      | Kimi K2 Turbo Preview (`moonshotai/kimi-k2-turbo`) |
 
 The earlier Kimi K2 0711 model remains available on OpenRouter as `moonshotai/kimi-k2`.
 

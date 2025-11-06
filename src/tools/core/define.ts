@@ -11,7 +11,7 @@ export function defineTool<T>(def: {
     name: def.name,
     description: def.description,
     parameters: toJSONSchema(def.schema, {
-      target: 'openapi-3.0',
+      target: 'draft-2020-12',
       unrepresentable: 'any',
       io: 'input',
     }) as Record<string, unknown>,
