@@ -35,7 +35,7 @@ export class CrossrefDoiTool extends defineTool({
       if (typeof message !== 'object' || message === null) {
         throw new Error('Crossref metadata payload was empty.');
       }
-      work = (message as unknown) as Record<string, unknown>;
+      work = message as unknown as Record<string, unknown>;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Crossref lookup failed: ${message}`);
