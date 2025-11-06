@@ -4,6 +4,37 @@ import { extract as extractArxivId } from 'identifiers-arxiv';
 // Local imports - none
 
 /**
+ * Base arXiv paper metadata shared between search and metadata tools.
+ */
+export interface ArxivPaperBase {
+  id: string | null;
+  doi: string | null;
+  title: string;
+  published: Date | null;
+  updated: Date | null;
+  authors: string[];
+  primaryCategory: string | null;
+}
+
+/**
+ * arXiv paper metadata returned by search results.
+ */
+export interface ArxivSearchResult extends ArxivPaperBase {
+  abstract: string | null;
+  arxivUrl: string | null;
+}
+
+/**
+ * Detailed arXiv paper metadata with additional fields.
+ */
+export interface ArxivPaperMetadata extends ArxivPaperBase {
+  abstract?: string | null;
+  journalReference: string | null;
+  comment: string | null;
+  links: unknown;
+}
+
+/**
  * Normalize an arXiv identifier by extracting it from various formats.
  * Handles URLs (abs/pdf), plain IDs, arxiv: prefixes, and old/new format IDs.
  * Uses the identifiers-arxiv package for robust extraction.
