@@ -125,7 +125,6 @@ export class CrossrefSearchTool extends defineTool({
       count: results.length,
       totalResults:
         typeof message.totalResults === 'number' ? message.totalResults : null,
-      nextOptions: null,
       results,
     };
 
