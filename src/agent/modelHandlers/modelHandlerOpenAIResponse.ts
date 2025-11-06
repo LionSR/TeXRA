@@ -35,7 +35,6 @@ import {
   type ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
 import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import { z } from 'zod';
 
 // Local imports - base handler
 import { ModelHandler } from './ModelHandler';
@@ -61,49 +60,6 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
-
-const ResponseOutputPartSchema = z.looseObject({
-  type: z.string(),
-  text: z.string().optional(),
-});
-
-const ResponseOutputItemSchema = z.looseObject({
-  type: z.string(),
-  content: z.array(ResponseOutputPartSchema).optional().prefault([]),
-});
-
-const ResponseUsageDetailsSchema = z
-  .looseObject({
-    cached_tokens: z.int().nonnegative().prefault(0),
-  })
-  .prefault({ cached_tokens: 0 });
-
-const ResponseOutputDetailsSchema = z
-  .looseObject({
-    reasoning_tokens: z.int().nonnegative().prefault(0),
-  })
-  .prefault({ reasoning_tokens: 0 });
-
-const ResponseUsageSchema = z.looseObject({
-  input_tokens: z.int().nonnegative(),
-  output_tokens: z.int().nonnegative(),
-  total_tokens: z.int().nonnegative(),
-  input_tokens_details: ResponseUsageDetailsSchema,
-  output_tokens_details: ResponseOutputDetailsSchema,
-});
-
-const ResponseEnvelopeSchema = z.looseObject({
-  status: z.string(),
-  usage: ResponseUsageSchema,
-  output_text: z
-    .string()
-    .optional()
-    .transform((value) => (value ?? '').trim()),
-  output: z
-    .array(ResponseOutputItemSchema)
-    .optional()
-    .transform((value) => value ?? []),
-});
 
 interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;
@@ -670,22 +626,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     responseObject: Response,
     endTag: string,
   ): [string, ResponseUsage, ProviderStopReason] {
-    const parsed = ResponseEnvelopeSchema.parse(responseObject);
-    const usage = parsed.usage;
+    if (!responseObject.usage) {
+      throw new Error('Response object missing required usage information');
+    }
 
-    let newResponse = parsed.output_text;
+    const usage = responseObject.usage;
+    let newResponse = responseObject.output_text?.trim() ?? '';
 
-    if (!newResponse) {
+    if (!newResponse && responseObject.output) {
       const fallbackSegments: string[] = [];
 
-      for (const item of parsed.output) {
+      for (const item of responseObject.output) {
         if (item.type !== 'message') {
           continue;
         }
 
-        for (const part of item.content) {
-          if (part.type === 'output_text' && typeof part.text === 'string') {
-            fallbackSegments.push(part.text);
+        const content = (item as { content?: unknown[] }).content;
+        if (!Array.isArray(content)) {
+          continue;
+        }
+
+        for (const part of content) {
+          const partType = (part as { type?: unknown }).type;
+          const partText = (part as { text?: unknown }).text;
+          if (partType === 'output_text' && typeof partText === 'string') {
+            fallbackSegments.push(partText);
           }
         }
       }
@@ -697,7 +662,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const stopReason =
-      parsed.status === 'completed'
+      responseObject.status === 'completed'
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
