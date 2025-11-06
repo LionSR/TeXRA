@@ -4,21 +4,52 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.34.3] - 2025-11-06
+
 ### Features
 
-- Add a **Clone Overleaf Project** command so you can pull remote Overleaf
-  workspaces directly into the current VS Code folder without leaving TeXRA.
-- Capture XML output summaries (detected tag contents, serialized `<document>`
-  elements, and single-output paths) so orchestrated workflows can reuse
-  generated artifacts without re-selecting files.
+- Add a **Clone Overleaf Project** command that initializes a local workspace
+  from an Overleaf project so newcomers can bootstrap a folder without manual
+  downloads or Git juggling.
+- Require approving tool-proposed edits from the progress board, complete with
+  a pending approvals queue, unified diffs, and the ability to turn rejection
+  notes directly into follow-up instructions.
+- Capture XML output summaries—including detected tag contents, serialized
+  `<document>` elements, and single-output paths—so orchestrated workflows can
+  reuse generated artifacts without re-running the same tools.
+- Add dedicated arXiv metadata/search and Crossref DOI lookup tools to the
+  default registry so agents can fetch paper details without manual API calls.
+- Add Kimi K2 thinking variants to the model catalog so the latest Moonshot
+  releases are immediately available in TeXRA.
 
 ### Improvements
 
-- Expand the progress board empty state reminder with a quick link to the
-  Overleaf clone command.
-- Render approval “User adjustments” as line-numbered unified diffs using a
-  native line diff (difflib). This replaces raw percent-encoded patch text with
-  clean `diff` code blocks that show hunk ranges and readable `+`/`-` lines.
+- Expand the progress board empty state with a direct shortcut to the Overleaf
+  clone flow and streamline the header with toolbar session switching, tighter
+  dropdowns, and clearer delete affordances.
+- Harden the new Overleaf initialization by validating tokens, enforcing
+  workspace preflight checks, and surfacing full command output when cloning.
+- Render progress tool logs and tour output in YAML to keep structured
+  responses readable at a glance.
+- Update Kimi K2 naming and pricing while reusing shared vision helpers so
+  image attachments stay consistent across providers.
+- Stabilize agent logging, tool-use persistence, and continuation reporting so
+  usage totals, follow-up prompts, and streaming status badges stay in sync.
+
+### Bug Fixes
+
+- Stabilize Google Gemini tool calls by simplifying stream aggregation and
+  aligning tool-call handling with the provider API.
+- Keep the new arXiv metadata tools fresh by resetting cached search state so
+  repeat lookups always return current abstracts and figure links.
+- Guard progress board detail toggles and approval actions to eliminate
+  runtime errors while reviewing runs.
+- Fix duplicated LaTeX environment tags that produced malformed `eqnarray`
+  blocks in generated documents.
+- Restore tool-use cost tracking and keep user edit patches synchronized with
+  the approvals workflow.
+- Prevent YAML log loaders from failing when generated files expose quick
+  actions.
 
 ## [0.34.2] - 2025-10-31
 
