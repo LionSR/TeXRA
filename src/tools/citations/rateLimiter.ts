@@ -27,28 +27,11 @@ export async function waitForRateLimit(
   if (timeSinceLastRequest < minDelayMs) {
     const waitTime = minDelayMs - timeSinceLastRequest;
     await new Promise((resolve) => setTimeout(resolve, waitTime));
+    // Use calculated time to avoid drift from async operations
+    state.lastRequestTime = now + waitTime;
+  } else {
+    state.lastRequestTime = now;
   }
 
-  // Update last request time
-  state.lastRequestTime = Date.now();
   rateLimiters.set(apiName, state);
-}
-
-/**
- * Wraps an async function with rate limiting.
- *
- * @param apiName - Unique identifier for the API
- * @param minDelayMs - Minimum milliseconds between requests
- * @param fn - Async function to execute with rate limiting
- * @returns Wrapped function that enforces rate limits
- */
-export function withRateLimit<T extends (...args: any[]) => Promise<any>>(
-  apiName: string,
-  minDelayMs: number,
-  fn: T,
-): T {
-  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
-    await waitForRateLimit(apiName, minDelayMs);
-    return fn(...args);
-  }) as T;
 }
