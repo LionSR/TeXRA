@@ -48,6 +48,10 @@ interface PersistSnapshotArgs {
   hasQueuedFollowUps: () => boolean;
 }
 
+// The persistence helper keeps a local cache so follow-up dispatch can resume
+// a session without reloading from disk. The resume queue mirrors this cache
+// to look up snapshots by stream identifier. These two structures must always
+// be updated together, so helper utilities below mutate both in lockstep.
 const persistedExecutions = new Map<ExecutionId, ToolUseSessionSnapshot>();
 
 function rememberSnapshot(snapshot: ToolUseSessionSnapshot): void {
@@ -212,15 +216,19 @@ export const ToolUseSessionPersistence = {
       return false;
     }
 
+    // Cache before the final follow-up check so resume dispatch can find the
+    // snapshot immediately after persistence succeeds.
+    rememberSnapshot(stored);
+
     if (hasQueuedFollowUps()) {
+      forgetSnapshot(executionId);
       await ToolUseSnapshotStore.delete(executionId);
       logger.debug(
-        `Skipped caching snapshot for execution ${executionId} because a follow-up arrived post-persistence.`,
+        `Dropped cached snapshot for execution ${executionId} because a follow-up arrived immediately after persistence.`,
       );
       return false;
     }
 
-    rememberSnapshot(stored);
     return true;
   },
 
@@ -273,7 +281,6 @@ export const ToolUseSessionPersistence = {
     provider.eventHandler.setStreamStatus(snapshot.streamId, STATUS.RESUMING);
 
     let queuedFollowUps: string[] = [];
-    let resumeFailed = false;
     try {
       await executeAgentWithLogging(
         snapshot.agentName,
@@ -303,7 +310,6 @@ export const ToolUseSessionPersistence = {
 
       return { success: true };
     } catch (error) {
-      resumeFailed = true;
       const lostFollowUps =
         queuedFollowUps.length > 0
           ? queuedFollowUps
