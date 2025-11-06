@@ -96,7 +96,7 @@ export class CrossrefSearchTool extends defineTool({
           url: null,
         };
       }
-      const work = (item as unknown) as Record<string, unknown>;
+      const work = item as unknown as Record<string, unknown>;
       const titleValue = work.title;
       const primaryTitle = Array.isArray(titleValue)
         ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
