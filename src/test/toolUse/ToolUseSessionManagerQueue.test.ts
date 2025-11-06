@@ -3,10 +3,11 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionManager';
-import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
+import {
+  ToolUseResumeQueue,
+  type ToolUseSessionSnapshot,
+} from '@agent/toolUse/ToolUseResumeQueue';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 describe('ToolUseSessionManager queue handling', () => {
   type ManagerState = {
@@ -14,13 +15,9 @@ describe('ToolUseSessionManager queue handling', () => {
     resumingSessions: Map<StreamTabId, { queuedFollowUps: string[] }>;
   };
 
-  type StoreMutable = {
-    delete: typeof ToolUseSnapshotStore.delete;
+  const managerState = ToolUseResumeQueue as unknown as ManagerState & {
+    clearAllPendingSnapshots: () => void;
   };
-
-  const managerState = ToolUseSessionManager as unknown as ManagerState;
-  const storeMutable = ToolUseSnapshotStore as unknown as StoreMutable;
-  const originalDelete = storeMutable.delete;
 
   const streamId = 'stream-queue' as StreamTabId;
 
@@ -59,56 +56,45 @@ describe('ToolUseSessionManager queue handling', () => {
   beforeEach(() => {
     managerState.pendingSnapshots.clear();
     managerState.resumingSessions.clear();
-    storeMutable.delete = async () => {
-      /* noop */
-    };
   });
 
   afterEach(() => {
-    storeMutable.delete = originalDelete;
     managerState.pendingSnapshots.clear();
     managerState.resumingSessions.clear();
   });
 
   it('drains queued follow-ups in FIFO order', () => {
-    ToolUseSessionManager.setResumingSession(streamId);
-    ToolUseSessionManager.enqueueFollowUpWhileResuming(streamId, 'first');
-    ToolUseSessionManager.enqueueFollowUpWhileResuming(streamId, 'second');
+    ToolUseResumeQueue.setResumingSession(streamId);
+    ToolUseResumeQueue.enqueueFollowUpWhileResuming(streamId, 'first');
+    ToolUseResumeQueue.enqueueFollowUpWhileResuming(streamId, 'second');
 
-    const drained = ToolUseSessionManager.drainQueuedFollowUps(streamId);
+    const drained = ToolUseResumeQueue.drainQueuedFollowUps(streamId);
 
     assert.deepEqual(drained, ['first', 'second']);
-    const secondDrain = ToolUseSessionManager.drainQueuedFollowUps(streamId);
+    const secondDrain = ToolUseResumeQueue.drainQueuedFollowUps(streamId);
     assert.deepEqual(secondDrain, []);
   });
 
   it('consumes pending snapshots when resuming', () => {
     const snapshot = createSnapshot();
-    ToolUseSessionManager.registerPendingSnapshots([snapshot]);
+    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
 
-    assert.equal(
-      ToolUseSessionManager.getSnapshotForStream(streamId),
-      snapshot,
-    );
+    assert.equal(ToolUseResumeQueue.getSnapshotForStream(streamId), snapshot);
 
-    const consumed = ToolUseSessionManager.consumeSnapshotForStream(streamId);
+    const consumed = ToolUseResumeQueue.consumeSnapshotForStream(streamId);
     assert.equal(consumed, snapshot);
-    assert.equal(ToolUseSessionManager.hasPendingSnapshot(streamId), false);
+    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
   });
 
-  it('removes cached snapshot before delegating to the store on delete', async () => {
+  it('clears cached snapshots explicitly', () => {
     const snapshot = createSnapshot();
-    ToolUseSessionManager.registerPendingSnapshots([snapshot]);
+    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
 
-    const deleteCalls: ExecutionId[] = [];
-    storeMutable.delete = async (executionId) => {
-      deleteCalls.push(executionId);
-    };
+    ToolUseResumeQueue.clearPendingSnapshot(streamId);
+    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
 
-    await ToolUseSessionManager.deleteSnapshot(snapshot.executionId);
-
-    assert.equal(deleteCalls.length, 1);
-    assert.equal(deleteCalls[0], snapshot.executionId);
-    assert.equal(ToolUseSessionManager.hasPendingSnapshot(streamId), false);
+    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
+    managerState.clearAllPendingSnapshots();
+    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
   });
 });
