@@ -22,7 +22,7 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
-import { CrossrefDoiTool, CrossrefSearchTool } from './metadata';
+import { CrossrefDoiTool, CrossrefSearchTool } from './citations';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
