@@ -6,6 +6,12 @@ settings:
     - glob
     - grep
     - ls
+    - extract_figures
+    - extract_tikz_figures
+    - arxiv_search
+    - arxiv_metadata
+    - crossref_search
+    - crossref_doi
 prompts:
   systemPrompt: |
     You are a scientist. Reason deeply.
