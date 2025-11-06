@@ -11,7 +11,6 @@ import type {
   ResponseCreateParamsNonStreaming,
   ResponseReasoningItem,
   ResponseFunctionToolCallItem,
-  ResponseFunctionToolCall,
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
@@ -123,6 +122,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ] as const;
   private previousResponseId: string | null = null;
   private sentMessages = 0;
+  private readonly pendingToolCalls = new Map<
+    string,
+    ResponseFunctionToolCallItem
+  >();
 
   /**
    * Manually set the previous response ID to resume a conversation.
@@ -131,6 +134,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   setPreviousResponseId(id: string | null): void {
     this.previousResponseId = id;
     this.sentMessages = 0;
+    this.pendingToolCalls.clear();
   }
 
   /** Retrieve the stored previous response ID. */
@@ -162,6 +166,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<ResponseInputItem[]> {
     this.previousResponseId = null;
     this.sentMessages = 0;
+    this.pendingToolCalls.clear();
 
     const messages: ResponseInputItem[] = [];
 
@@ -1230,17 +1235,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const items = response?.output;
     if (!Array.isArray(items)) return null;
 
-    const call = items.find(
-      (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
-    );
-    return call ? JSON.stringify(call, null, 2) : null;
+    let firstCall: ResponseFunctionToolCallItem | null = null;
+    for (const item of items) {
+      if (item?.type !== 'function_call') {
+        continue;
+      }
+
+      const callItem = item as ResponseFunctionToolCallItem;
+      this.pendingToolCalls.set(callItem.call_id, callItem);
+      if (!firstCall) {
+        firstCall = callItem;
+      }
+    }
+
+    return firstCall ? JSON.stringify(firstCall, null, 2) : null;
   }
 
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
     id: string,
-    name: string,
-    call: ResponseFunctionToolCallItem,
+    _name: string,
+    _call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
     _toolState?: AgentWorkspaceState,
     text?: string,
@@ -1250,21 +1265,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
-    const callMsg: ResponseFunctionToolCall = {
-      type: 'function_call',
-      call_id: id,
-      name,
-      arguments:
-        typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(
-              (call as unknown as { input?: unknown; arguments?: unknown })
-                ?.input ??
-                (call as unknown as { input?: unknown; arguments?: unknown })
-                  ?.arguments ??
-                {},
-            ),
-    };
+    const pendingCall = this.pendingToolCalls.get(id);
+    if (pendingCall) {
+      messages.push(pendingCall);
+      this.pendingToolCalls.delete(id);
+    } else {
+      this.logger.warn(
+        `Missing original function_call item for call_id ${id}; follow-up may fail`,
+      );
+    }
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const supportsAttachments = this.supportsToolFileOutputs;
@@ -1341,7 +1350,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       output: outputPayload,
     };
 
-    messages.push(callMsg, resultMsg);
+    messages.push(resultMsg);
     return messages;
   }
 

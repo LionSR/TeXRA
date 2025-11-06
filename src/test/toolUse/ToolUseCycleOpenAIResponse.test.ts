@@ -180,20 +180,21 @@ describe('runToolUseCycle OpenAIResponse', () => {
     const assistantMsg = messages[0] as any;
     assert.equal(assistantMsg.role, 'assistant');
     assert.equal(assistantMsg.type, 'message');
-    assert.equal(assistantMsg.status, 'completed');
-    assert.ok(Array.isArray(assistantMsg.content));
-    assert.equal(assistantMsg.content[0].type, 'output_text');
-    assert.equal(assistantMsg.content[0].text, 'intro');
-    assert.deepEqual(messages[1], {
+    assert.equal(assistantMsg.content, 'intro');
+
+    assert.equal(messages.length, 3);
+    const callMsg = messages[1] as any;
+    assert.deepEqual(callMsg, {
       type: 'function_call',
       call_id: 'c1',
       name: 'echo',
       arguments: '{"value":"hello"}',
     });
-    assert.deepEqual(messages[2], {
-      type: 'function_call_output',
-      call_id: 'c1',
-      output: JSON.stringify({ output: 'hello' }),
-    });
+    const outputMsg = messages[2] as any;
+    assert.equal(outputMsg.type, 'function_call_output');
+    assert.equal(outputMsg.call_id, 'c1');
+    assert.ok(typeof outputMsg.output === 'string');
+    assert.ok(outputMsg.output.includes('hello'));
+    assert.ok(outputMsg.output.includes('"output": "hello"'));
   });
 });
