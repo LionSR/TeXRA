@@ -10,7 +10,6 @@ import {
   Content,
   GenerateContentResponse,
   FinishReason,
-  type Candidate,
   type FunctionCall,
   File,
   createPartFromText,
@@ -18,6 +17,8 @@ import {
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
   createPartFromBase64,
+  createUserContent,
+  createModelContent,
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
@@ -71,25 +72,8 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 type GoogleRole = 'user' | 'model';
 
-function ensureParts(message: Content): Part[] {
-  if (!Array.isArray(message.parts)) {
-    message.parts = []; // Initialize parts array if missing
-  }
-  return message.parts;
-}
-
 function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
-}
-
-function getCombinedText(parts: Part[] | undefined): string {
-  if (!Array.isArray(parts)) {
-    return '';
-  }
-  return parts
-    .filter((part): part is Part & { text: string } => isTextPart(part))
-    .map((part) => part.text)
-    .join('');
 }
 
 function findLastTextPart(
@@ -128,14 +112,11 @@ function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   return null;
 }
 
-function convertMessagesToGoogleContentHistory(
+export function convertMessagesToGoogleContentHistory(
   messages: Content[],
   logger: AgentLogger,
 ): Content[] {
   const history: Content[] = [];
-  let currentRole: GoogleRole | null = null;
-  let currentParts: Part[] = [];
-
   messages.forEach((message) => {
     const role = toGoogleRole(message.role, logger);
     if (!role) {
@@ -150,20 +131,16 @@ function convertMessagesToGoogleContentHistory(
       return;
     }
 
-    if (role === currentRole) {
-      currentParts.push(...parts);
+    const normalized =
+      role === 'user' ? createUserContent(parts) : createModelContent(parts);
+
+    const last = history.at(-1);
+    if (last?.role === normalized.role) {
+      last.parts.push(...normalized.parts);
     } else {
-      if (currentRole && currentParts.length > 0) {
-        history.push({ role: currentRole, parts: [...currentParts] });
-      }
-      currentRole = role;
-      currentParts = [...parts];
+      history.push(normalized);
     }
   });
-
-  if (currentRole && currentParts.length > 0) {
-    history.push({ role: currentRole, parts: [...currentParts] });
-  }
 
   logger.debug(
     `Converted message history length for chat init: ${history.length}`,
@@ -181,6 +158,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   FunctionCall,
   GoogleGenAI
 > {
+  private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
+
   private googleClient: GoogleGenAI | null = null;
 
   private supportsFileUploads(): boolean {
@@ -188,6 +167,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.config.capabilities.supportsVision ||
       this.config.capabilities.supportsNativeAudio
     );
+  }
+
+  protected getInlineUploadLimitBytes(): number {
+    return ModelHandlerGoogleGenAI.INLINE_MEDIA_LIMIT_BYTES;
   }
 
   protected async uploadMediaEntries(entries: MediaEntry[]): Promise<Part[]> {
@@ -198,38 +181,55 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const client = await this.getClient();
     const uploadedParts: Part[] = [];
     const uploadSummaries: MediaFileResult[] = [];
+    const inlineLimit = this.getInlineUploadLimitBytes();
 
     for (const entry of entries) {
       const fileName = entry.file_name || 'unnamed-file';
       const mimeType = entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
-      const uploadSource = this.getUploadSource(entry, mimeType);
+      const inlinePayload =
+        typeof entry.data === 'string' && entry.data.length > 0
+          ? entry.data
+          : null;
 
-      if (!uploadSource) {
+      if (inlinePayload) {
+        const payloadBytes = Buffer.byteLength(inlinePayload, 'base64');
+        if (payloadBytes <= inlineLimit) {
+          this.logger.debug(
+            `Attaching media entry ${fileName} inline (${payloadBytes} bytes).`,
+          );
+          uploadedParts.push(createPartFromBase64(inlinePayload, mimeType));
+          uploadSummaries.push({ path: fileName, ok: true });
+          continue;
+        }
+        this.logger.debug(
+          `Media entry ${fileName} is ${payloadBytes} bytes which exceeds inline limit of ${inlineLimit}. Falling back to upload.`,
+        );
+      }
+
+      const canUseSourcePath =
+        entry.source_path &&
+        entry.source_path.length > 0 &&
+        entry.bytes_match_source !== false;
+
+      if (!canUseSourcePath) {
         this.logger.error(
-          `Skipping media entry ${fileName} due to missing data or mime type`,
+          `Skipping media entry ${fileName} due to missing upload source`,
         );
         uploadSummaries.push({ path: fileName, ok: false });
         continue;
       }
 
       try {
-        const uploadParams: UploadFileParameters = {
-          file: uploadSource,
+        this.logger.debug(
+          `Uploading media entry ${fileName} via Google GenAI SDK from path ${entry.source_path}`,
+        );
+        const uploadResult: File = await client.files.upload({
+          file: entry.source_path,
           config: {
             mimeType,
             displayName: fileName,
           },
-        };
-
-        const uploadDescription =
-          typeof uploadSource === 'string'
-            ? `path ${uploadSource}`
-            : `in-memory payload (${mimeType})`;
-        this.logger.debug(
-          `Uploading media entry ${fileName} via Google GenAI SDK using ${uploadDescription}`,
-        );
-
-        const uploadResult: File = await client.files.upload(uploadParams);
+        });
         const fileUri = uploadResult.uri;
 
         if (!fileUri) {
@@ -263,33 +263,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
     }
     return uploadedParts;
-  }
-
-  private getUploadSource(
-    entry: MediaEntry,
-    mimeType: string,
-  ): string | globalThis.Blob | null {
-    if (
-      entry.source_path &&
-      entry.source_path.length > 0 &&
-      entry.bytes_match_source !== false
-    ) {
-      return entry.source_path;
-    }
-    if (entry.data) {
-      try {
-        const buffer = Buffer.from(entry.data, 'base64');
-        return new globalThis.Blob([buffer], { type: mimeType });
-      } catch (error) {
-        this.logger.error(
-          `Failed to decode base64 media for ${entry.file_name}: ${getSdkErrorMessage(error)}`,
-          undefined,
-          undefined,
-          error,
-        );
-      }
-    }
-    return null;
   }
 
   private resolveUploadMimeType(entry: MediaEntry, uploaded: File): string {
@@ -459,63 +432,38 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
-        const fullParts: Part[] = [];
-        let lastCandidate: Candidate | undefined;
-        let finalUsage: GenerateContentResponseUsageMetadata | undefined;
-        const finalResponse = new GenerateContentResponse();
+        let interimUsage: GenerateContentResponseUsageMetadata | undefined;
         for await (const chunk of stream) {
-          if (chunk.candidates && chunk.candidates.length > 0) {
-            lastCandidate = chunk.candidates[0];
-            const parts = chunk.candidates[0]?.content?.parts;
-            if (Array.isArray(parts)) {
-              fullParts.push(...parts);
-              for (const part of parts) {
-                if (part.thought && isTextPart(part)) {
-                  thinking.append(part.text);
-                } else if (isTextPart(part)) {
-                  output?.append(part.text);
-                }
-              }
+          const chunkText = chunk.text ?? '';
+          if (chunkText.length > 0) {
+            output?.append(chunkText);
+          }
+
+          const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+          for (const part of parts) {
+            if (part.thought && isTextPart(part)) {
+              thinking.append(part.text);
             }
           }
+
           if (chunk.usageMetadata) {
-            finalUsage = chunk.usageMetadata;
-          }
-          if (chunk.responseId) finalResponse.responseId = chunk.responseId;
-          if (chunk.createTime) finalResponse.createTime = chunk.createTime;
-          if (chunk.modelVersion)
-            finalResponse.modelVersion = chunk.modelVersion;
-          if (!finalResponse.promptFeedback && chunk.promptFeedback) {
-            finalResponse.promptFeedback = chunk.promptFeedback;
+            interimUsage = chunk.usageMetadata;
           }
         }
 
-        if (fullParts.length === 0) {
-          throw new Error('Stream yielded no chunks');
+        const finalResponse = await stream.response;
+        if (!finalResponse) {
+          throw new Error('Stream yielded no response');
         }
-
-        finalResponse.usageMetadata = finalUsage;
-        finalResponse.candidates = [
-          {
-            content: { role: 'model', parts: fullParts },
-            finishReason:
-              lastCandidate?.finishReason ??
-              FinishReason.FINISH_REASON_UNSPECIFIED,
-            finishMessage: lastCandidate?.finishMessage,
-            safetyRatings: lastCandidate?.safetyRatings,
-          },
-        ];
+        if (!finalResponse.usageMetadata && interimUsage) {
+          finalResponse.usageMetadata = interimUsage;
+        }
 
         const finalReasoning = this.processThinkingBlock(finalResponse);
         thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput = fullParts
-          .filter(
-            (part): part is Part & { text: string } =>
-              isTextPart(part) && !part.thought,
-          )
-          .map((part) => part.text)
-          .join('');
-        if (output) output.finalize(finalOutput);
+        if (output) {
+          output.finalize(finalResponse.text ?? '');
+        }
         return finalResponse;
       }
 
@@ -804,7 +752,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const lastMessage = messages.at(-1);
     if (
       lastMessage?.role === 'user' &&
-      this.containCutOffMessage(getCombinedText(lastMessage.parts))
+      this.containCutOffMessage(
+        (lastMessage.parts ?? [])
+          .filter((part): part is Part & { text: string } => isTextPart(part))
+          .map((part) => part.text)
+          .join(''),
+      )
     ) {
       messages.pop();
       this.logger.debug('Removed user continuation prompt.');
@@ -812,7 +765,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const modelMessage = messages.at(-1);
     if (modelMessage?.role === 'model') {
-      const parts = ensureParts(modelMessage);
+      const parts = (modelMessage.parts ??= []);
       const lastTextPart = findLastTextPart(parts);
       if (lastTextPart) {
         lastTextPart.text =
@@ -856,7 +809,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
       if (lastMessage) {
-        const parts = ensureParts(lastMessage);
+        const parts = (lastMessage.parts ??= []);
         parts.push(createPartFromText(pseudoPrefillMsg));
       } else {
         messages.push({
