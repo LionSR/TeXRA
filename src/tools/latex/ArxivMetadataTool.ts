@@ -12,6 +12,10 @@ import {
   readPrimaryCategory,
 } from './arxivShared';
 
+// Local imports - citations
+import { ARXIV_CONSTANTS } from '../citations/constants';
+import { waitForRateLimit } from '../citations/rateLimiter';
+
 // Local imports - tools
 import { defineTool } from '../core/define';
 import { ToolError, toolResult } from '../result';
@@ -19,7 +23,7 @@ import { ToolError, toolResult } from '../result';
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),
   includeAbstract: z.boolean().optional(),
-  maxAuthors: z.number().int().positive().max(50).optional(),
+  maxAuthors: z.int().positive().max(ARXIV_CONSTANTS.MAX_AUTHORS).optional(),
 });
 
 export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;
@@ -40,6 +44,8 @@ export class ArxivMetadataTool extends defineTool({
 
     let entries;
     try {
+      // Respect arXiv API rate limits
+      await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
       // Use arxiv-client's ids() method for direct ID lookup
       entries = await arxivClient.ids([requestId]).execute();
     } catch (error) {

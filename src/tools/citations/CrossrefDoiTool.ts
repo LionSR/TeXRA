@@ -2,6 +2,10 @@
 import { CrossrefClient } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
+// Local imports - metadata
+import { CROSSREF_CONSTANTS } from './constants';
+import { waitForRateLimit } from './rateLimiter';
+
 // Local imports - tools
 import { defineTool } from '../core/define';
 import { ToolError, toolResult } from '../result';
@@ -27,6 +31,11 @@ export class CrossrefDoiTool extends defineTool({
 
     let work: Record<string, unknown>;
     try {
+      // Respect Crossref API rate limits
+      await waitForRateLimit(
+        'crossref',
+        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+      );
       const response = await crossrefClient.work(trimmedDoi);
       if (!response.ok || !response.content || !response.content.message) {
         throw new Error('Crossref response did not include metadata.');
