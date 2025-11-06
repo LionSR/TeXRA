@@ -17,8 +17,6 @@ import {
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
   createPartFromBase64,
-  createUserContent,
-  createModelContent,
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
@@ -70,8 +68,6 @@ import { K_SLICE } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
-type GoogleRole = 'user' | 'model';
-
 function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
@@ -96,58 +92,42 @@ function ensureCallId(call: FunctionCall): string {
   return call.id?.trim() || randomUUID();
 }
 
-function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
-  if (role === 'assistant' || role === 'model') {
-    return 'model';
+export function assertGoogleContentHistory(messages: Content[]): void {
+  if (messages.length === 0) {
+    return;
   }
-  if (role === 'user') {
-    return 'user';
-  }
-  if (role === 'system') {
-    logger?.debug(
-      `Converting system role to user role for Google API compatibility`,
-    );
-    return 'user';
-  }
-  return null;
-}
 
-export function convertMessagesToGoogleContentHistory(
-  messages: Content[],
-  logger: AgentLogger,
-): Content[] {
-  const history: Content[] = [];
-  messages.forEach((message) => {
-    const role = toGoogleRole(message.role, logger);
-    if (!role) {
-      logger.warn(
-        `Skipping message with unsupported role during history conversion: ${message.role}`,
+  let previousRole: 'user' | 'model' | null = null;
+
+  messages.forEach((message, index) => {
+    const role = message.role;
+    if (role !== 'user' && role !== 'model') {
+      throw new Error(
+        `Google chat history must use user/model roles. Found ${String(
+          role,
+        )} at index ${index}.`,
       );
-      return;
     }
 
     const parts = Array.isArray(message.parts) ? message.parts : [];
     if (parts.length === 0) {
-      return;
+      throw new Error(
+        `Google chat history message at index ${index} is missing parts.`,
+      );
     }
 
-    const normalized =
-      role === 'user' ? createUserContent(parts) : createModelContent(parts);
-    const normalizedParts = normalized.parts ?? [];
-
-    const last = history.at(-1);
-    if (last && last.role === normalized.role) {
-      const existingParts = Array.isArray(last.parts) ? last.parts : [];
-      last.parts = [...existingParts, ...normalizedParts];
-    } else {
-      history.push({ ...normalized, parts: normalizedParts });
+    if (index === 0 && role !== 'user') {
+      throw new Error('Google chat history must start with a user message.');
     }
+
+    if (previousRole === role) {
+      throw new Error(
+        `Google chat history must alternate roles but encountered consecutive ${role} messages at index ${index - 1} and ${index}.`,
+      );
+    }
+
+    previousRole = role;
   });
-
-  logger.debug(
-    `Converted message history length for chat init: ${history.length}`,
-  );
-  return history;
 }
 
 /**
@@ -313,13 +293,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const historyMessages = messages.slice(0, -1);
     const lastMessage = messages.at(-1);
 
-    // chatHistory intentionally excludes the final user message because
-    // we send it separately with `chat.sendMessage` below
+    if (historyMessages.length > 0) {
+      assertGoogleContentHistory(historyMessages);
+    }
 
-    const chatHistory = convertMessagesToGoogleContentHistory(
-      historyMessages,
-      this.logger,
-    );
+    if (lastMessage?.role !== 'user') {
+      throw new Error('Last Google message must use the user role.');
+    }
 
     const lastMessageParts = Array.isArray(lastMessage?.parts)
       ? lastMessage.parts
@@ -349,7 +329,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const chatParams: CreateChatParameters = {
       model: this.config.fullName,
-      history: chatHistory,
+      history: historyMessages,
       config: generationConfig,
       ...(systemPrompt && {
         systemInstruction: {
@@ -368,7 +348,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             parts: [createPartFromText(systemPrompt)],
           });
         }
-        countContents.push(...chatHistory);
+        countContents.push(...historyMessages);
         // The token count API expects the upcoming message as part of the
         // history, so append the final user message that will be sent next.
         countContents.push({ role: 'user', parts: [...lastMessageParts] });
@@ -416,7 +396,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     try {
       this.logger.debug(
-        `Creating chat session with history length: ${chatHistory.length}`,
+        `Creating chat session with history length: ${historyMessages.length}`,
       );
       const chat = client.chats.create(chatParams);
 

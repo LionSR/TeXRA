@@ -18,7 +18,7 @@ import {
 // Local imports - agent
 import {
   ModelHandlerGoogleGenAI,
-  convertMessagesToGoogleContentHistory,
+  assertGoogleContentHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -302,30 +302,37 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
   });
 });
 
-describe('convertMessagesToGoogleContentHistory', () => {
-  it('groups consecutive turns using SDK helpers', () => {
-    const { logger } = createLoggerStub();
+describe('assertGoogleContentHistory', () => {
+  it('accepts alternating user/model messages with parts', () => {
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('prompt')] },
+      { role: 'model', parts: [createPartFromText('reply')] },
+      { role: 'user', parts: [createPartFromText('follow up')] },
+      { role: 'model', parts: [createPartFromText('final')] },
+    ];
+
+    assert.doesNotThrow(() => assertGoogleContentHistory(messages));
+  });
+
+  it('throws when roles do not alternate', () => {
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
       { role: 'user', parts: [createPartFromText('second')] },
-      { role: 'model', parts: [createPartFromText('reply one')] },
-      { role: 'model', parts: [createPartFromText('reply two')] },
     ];
 
-    const history = convertMessagesToGoogleContentHistory(messages, logger);
+    assert.throws(() => assertGoogleContentHistory(messages));
+  });
 
-    assert.equal(history.length, 2, 'user and model messages should merge');
-    assert.equal(history[0].role, 'user');
-    const userParts = history[0].parts ?? [];
-    assert.equal(userParts.length, 2);
-    assert.equal((userParts[0] as Part & { text: string }).text, 'first');
-    assert.equal((userParts[1] as Part & { text: string }).text, 'second');
+  it('throws when roles are not supported', () => {
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('first')] },
+      {
+        role: 'system' as Content['role'],
+        parts: [createPartFromText('oops')],
+      },
+    ];
 
-    assert.equal(history[1].role, 'model');
-    const modelParts = history[1].parts ?? [];
-    assert.equal(modelParts.length, 2);
-    assert.equal((modelParts[0] as Part & { text: string }).text, 'reply one');
-    assert.equal((modelParts[1] as Part & { text: string }).text, 'reply two');
+    assert.throws(() => assertGoogleContentHistory(messages));
   });
 });
 
