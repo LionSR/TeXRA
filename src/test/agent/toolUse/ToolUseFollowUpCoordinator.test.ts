@@ -11,9 +11,10 @@ import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import * as executeAgentModule from '@agent/runtime/executeAgent';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import {
-  ToolUseSessionManager,
+  ToolUseSessionPersistence,
   type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseSessionManager';
+} from '@agent/toolUse/ToolUseSessionPersistence';
+import { ToolUseResumeQueue } from '@agent/toolUse/ToolUseResumeQueue';
 import { clearToolUseAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import {
   sendFollowUp,
@@ -66,16 +67,14 @@ describe('ToolUseFollowUpCoordinator', () => {
   let providerTaskState: TaskState | undefined;
 
   const originalShowWarningMessage = vscode.window.showWarningMessage;
-  const originalIsPersistenceEnabled =
-    ToolUseSessionManager.isPersistenceEnabled;
-  const originalSetResuming = ToolUseSessionManager.setResumingSession;
-  const originalClearResuming = ToolUseSessionManager.clearResumingSession;
-  const originalDrainQueued = ToolUseSessionManager.drainQueuedFollowUps;
-  const originalConsumeSnapshot =
-    ToolUseSessionManager.consumeSnapshotForStream;
-  const originalGetSnapshot = ToolUseSessionManager.getSnapshotForStream;
-  const originalIsResuming = ToolUseSessionManager.isResumingSession;
-  const originalEnqueue = ToolUseSessionManager.enqueueFollowUpWhileResuming;
+  const originalIsPersistenceEnabled = ToolUseSessionPersistence.isEnabled;
+  const originalSetResuming = ToolUseResumeQueue.setResumingSession;
+  const originalClearResuming = ToolUseResumeQueue.clearResumingSession;
+  const originalDrainQueued = ToolUseResumeQueue.drainQueuedFollowUps;
+  const originalConsumeSnapshot = ToolUseResumeQueue.consumeSnapshotForStream;
+  const originalGetSnapshot = ToolUseResumeQueue.getSnapshotForStream;
+  const originalIsResuming = ToolUseResumeQueue.isResumingSession;
+  const originalEnqueue = ToolUseResumeQueue.enqueueFollowUpWhileResuming;
   const originalPrepareAgent = executeAgentModule.prepareAgentInstance;
   const originalExecuteAgent = executeAgentModule.executeAgentWithLogging;
   const originalProgressGetInstance = ProgressViewProvider.getInstance;
@@ -105,30 +104,30 @@ describe('ToolUseFollowUpCoordinator', () => {
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        isPersistenceEnabled: typeof ToolUseSessionManager.isPersistenceEnabled;
+      ToolUseSessionPersistence as typeof ToolUseSessionPersistence & {
+        isEnabled: typeof ToolUseSessionPersistence.isEnabled;
       }
-    ).isPersistenceEnabled = () => true;
+    ).isEnabled = () => true;
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        setResumingSession: typeof ToolUseResumeQueue.setResumingSession;
       }
     ).setResumingSession = (streamId: StreamTabId) => {
       setResumingCalls.push(streamId);
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        clearResumingSession: typeof ToolUseResumeQueue.clearResumingSession;
       }
     ).clearResumingSession = (streamId: StreamTabId) => {
       clearResumingCalls.push(streamId);
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        drainQueuedFollowUps: typeof ToolUseResumeQueue.drainQueuedFollowUps;
       }
     ).drainQueuedFollowUps = (streamId: StreamTabId) => {
       drainCalls.push(streamId);
@@ -139,8 +138,8 @@ describe('ToolUseFollowUpCoordinator', () => {
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        consumeSnapshotForStream: typeof ToolUseResumeQueue.consumeSnapshotForStream;
       }
     ).consumeSnapshotForStream = (streamId: StreamTabId) => {
       consumeCalls.push(streamId);
@@ -151,8 +150,8 @@ describe('ToolUseFollowUpCoordinator', () => {
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        getSnapshotForStream: typeof ToolUseResumeQueue.getSnapshotForStream;
       }
     ).getSnapshotForStream = (streamId: StreamTabId) => {
       if (pendingSnapshot) {
@@ -162,8 +161,8 @@ describe('ToolUseFollowUpCoordinator', () => {
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        isResumingSession: typeof ToolUseSessionManager.isResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        isResumingSession: typeof ToolUseResumeQueue.isResumingSession;
       }
     ).isResumingSession = (streamId: StreamTabId) => {
       isResumingCalls.push(streamId);
@@ -171,8 +170,8 @@ describe('ToolUseFollowUpCoordinator', () => {
     };
 
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        enqueueFollowUpWhileResuming: typeof ToolUseResumeQueue.enqueueFollowUpWhileResuming;
       }
     ).enqueueFollowUpWhileResuming = (
       streamId: StreamTabId,
@@ -230,13 +229,15 @@ describe('ToolUseFollowUpCoordinator', () => {
       if (!providerTaskState) {
         return undefined as unknown as ProgressViewProvider;
       }
+      let currentStatus: string = STATUS.WAITING;
       return {
         state: {
           getTaskState: () => providerTaskState,
         },
         eventHandler: {
-          getStreamStatus: () => STATUS.WAITING,
+          getStreamStatus: () => currentStatus,
           setStreamStatus: (streamId: string, status: string) => {
+            currentStatus = status;
             statusChanges.push({ streamId, status });
           },
         },
@@ -248,43 +249,43 @@ describe('ToolUseFollowUpCoordinator', () => {
     clearToolUseAgents();
     (vscode.window as any).showWarningMessage = originalShowWarningMessage;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        isPersistenceEnabled: typeof ToolUseSessionManager.isPersistenceEnabled;
+      ToolUseSessionPersistence as typeof ToolUseSessionPersistence & {
+        isEnabled: typeof ToolUseSessionPersistence.isEnabled;
       }
-    ).isPersistenceEnabled = originalIsPersistenceEnabled;
+    ).isEnabled = originalIsPersistenceEnabled;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        setResumingSession: typeof ToolUseSessionManager.setResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        setResumingSession: typeof ToolUseResumeQueue.setResumingSession;
       }
     ).setResumingSession = originalSetResuming;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        clearResumingSession: typeof ToolUseSessionManager.clearResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        clearResumingSession: typeof ToolUseResumeQueue.clearResumingSession;
       }
     ).clearResumingSession = originalClearResuming;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        drainQueuedFollowUps: typeof ToolUseSessionManager.drainQueuedFollowUps;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        drainQueuedFollowUps: typeof ToolUseResumeQueue.drainQueuedFollowUps;
       }
     ).drainQueuedFollowUps = originalDrainQueued;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        consumeSnapshotForStream: typeof ToolUseSessionManager.consumeSnapshotForStream;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        consumeSnapshotForStream: typeof ToolUseResumeQueue.consumeSnapshotForStream;
       }
     ).consumeSnapshotForStream = originalConsumeSnapshot;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        getSnapshotForStream: typeof ToolUseSessionManager.getSnapshotForStream;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        getSnapshotForStream: typeof ToolUseResumeQueue.getSnapshotForStream;
       }
     ).getSnapshotForStream = originalGetSnapshot;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        isResumingSession: typeof ToolUseSessionManager.isResumingSession;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        isResumingSession: typeof ToolUseResumeQueue.isResumingSession;
       }
     ).isResumingSession = originalIsResuming;
     (
-      ToolUseSessionManager as typeof ToolUseSessionManager & {
-        enqueueFollowUpWhileResuming: typeof ToolUseSessionManager.enqueueFollowUpWhileResuming;
+      ToolUseResumeQueue as typeof ToolUseResumeQueue & {
+        enqueueFollowUpWhileResuming: typeof ToolUseResumeQueue.enqueueFollowUpWhileResuming;
       }
     ).enqueueFollowUpWhileResuming = originalEnqueue;
     (

@@ -27,7 +27,7 @@ import {
 
 /**
  * Persists tool-use session snapshots to disk. Runtime queue state lives in
- * {@link ToolUseSessionManager}; add only filesystem/persistence helpers here.
+ * {@link ToolUseResumeQueue}; add only filesystem/persistence helpers here.
  */
 const CHANNEL = 'ToolUseSnapshotStore';
 const logger = new AgentLogger(CHANNEL);
