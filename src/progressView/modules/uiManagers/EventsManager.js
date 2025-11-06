@@ -143,16 +143,20 @@ export class EventsManager {
     document.addEventListener(
       'toggle',
       (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+
         if (
-          e.target &&
-          (e.target.classList.contains('banner-details') ||
-            e.target.classList.contains('file-list-details') ||
-            e.target.classList.contains('latexdiff-details') ||
-            e.target.classList.contains('statistics-details'))
+          target.classList.contains('banner-details') ||
+          target.classList.contains('file-list-details') ||
+          target.classList.contains('latexdiff-details') ||
+          target.classList.contains('statistics-details')
         ) {
-          const toggleIcon = e.target.querySelector('.toggle-icon');
+          const toggleIcon = target.querySelector('.toggle-icon');
           if (toggleIcon) {
-            const isOpen = e.target.open;
+            const isOpen = target.open;
             setChevronIconHorizontal(toggleIcon, isOpen);
           }
         }
