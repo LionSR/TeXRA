@@ -112,7 +112,8 @@ suite('BashTool', () => {
     const longOutput = '0123456789'.repeat(35); // 350 chars, exceeds log truncation of 150
     const execResult: ExecResult = {
       success: true,
-      stdout: longOutput,
+      // executeCommand trims trailing whitespace before returning stdout
+      stdout: `${longOutput}\n`.trim(),
       stderr: null,
       timedOut: false,
     };
