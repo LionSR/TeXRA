@@ -1,8 +1,6 @@
 // Third-party imports
+import arxivClient from 'arxiv-client';
 import { z } from 'zod';
-
-// Local imports - arxiv wrapper
-import { search } from './arxivApiWrapper';
 
 // Local imports - latex
 import { arxivProcessor } from '@latex/arxivProcessor';
@@ -38,50 +36,29 @@ export class ArxivMetadataTool extends defineTool({
     }
 
     const requestId = normaliseArxivIdentifier(rawId);
-    const baseId = requestId.replace(/v\d+$/i, '');
 
-    let response;
+    let entries;
     try {
-      response = await search({
-        searchQueryParams: [
-          {
-            include: [
-              {
-                name: requestId,
-              },
-            ],
-          },
-        ],
-        maxResults: 25,
-      });
+      // Use arxiv-client's ids() method for direct ID lookup
+      entries = await arxivClient.ids([requestId]).execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Failed to query arXiv API: ${message}`);
     }
 
-    const entries = Array.isArray(response?.entries) ? response.entries : [];
-    const targetEntry = entries.find((entry) => {
-      const entryId = extractEntryIdentifier(entry?.id);
-      if (!entryId) {
-        return false;
-      }
-      if (entryId === requestId) {
-        return true;
-      }
-      const candidateBase = entryId.replace(/v\d+$/i, '');
-      return candidateBase === baseId;
-    });
-
-    if (!targetEntry) {
+    if (!entries || entries.length === 0) {
       throw new ToolError(`No metadata found for arXiv ID ${requestId}`);
     }
+
+    // Take the first result (should be the only one for ID lookup)
+    const targetEntry = entries[0];
 
     const authorNames = getAuthorNames(targetEntry.authors, input.maxAuthors);
     const includeAbstract = input.includeAbstract !== false;
 
     const metadata = {
       id: extractEntryIdentifier(targetEntry.id) ?? requestId,
-      doi: targetEntry.doi ?? null,
+      doi: targetEntry.doi?.id ?? null,
       title:
         typeof targetEntry.title === 'string'
           ? targetEntry.title.trim()
@@ -90,7 +67,7 @@ export class ArxivMetadataTool extends defineTool({
       published: targetEntry.published ?? null,
       updated: targetEntry.updated ?? null,
       authors: authorNames,
-      journalReference: targetEntry.journalReference ?? null,
+      journalReference: targetEntry.journalRef ?? null,
       comment: targetEntry.comment ?? null,
       primaryCategory: readPrimaryCategory(targetEntry.primaryCategory),
       links: targetEntry.links ?? null,
