@@ -6,11 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- Capture XML output summaries (detected tag contents, serialized `<document>` elements, and single-output paths) so orchestrated workflows can reuse generated artifacts without re-selecting files.
+- Add a **Clone Overleaf Project** command so you can pull remote Overleaf
+  workspaces directly into the current VS Code folder without leaving TeXRA.
+- Capture XML output summaries (detected tag contents, serialized `<document>`
+  elements, and single-output paths) so orchestrated workflows can reuse
+  generated artifacts without re-selecting files.
 
 ### Improvements
 
-- Render approval “User adjustments” as line-numbered unified diffs using a native line diff (difflib). This replaces raw percent-encoded patch text with clean `diff` code blocks that show hunk ranges and readable `+`/`-` lines.
+- Expand the progress board empty state reminder with a quick link to the
+  Overleaf clone command.
+- Render approval “User adjustments” as line-numbered unified diffs using a
+  native line diff (difflib). This replaces raw percent-encoded patch text with
+  clean `diff` code blocks that show hunk ranges and readable `+`/`-` lines.
 
 ## [0.34.2] - 2025-10-31
 

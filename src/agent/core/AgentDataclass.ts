@@ -207,7 +207,7 @@ export type AgentPrompt = z.infer<typeof AgentPromptSchema>;
  * Includes the root name, optional inheritance target,
  * settings block and prompt configuration.
  */
-const DefinitionBlockSchema = z.record(z.string(), z.unknown()).default({});
+const DefinitionBlockSchema = z.record(z.string(), z.unknown()).prefault({});
 
 export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
