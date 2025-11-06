@@ -11,6 +11,10 @@ settings:
     - ls
     - extract_figures
     - extract_tikz_figures
+    - arxiv_search
+    - arxiv_metadata
+    - crossref_search
+    - crossref_doi
 prompts:
   systemPrompt: |
     You are a scientist and a collaborator of the user on a research project. Reason deeply.
