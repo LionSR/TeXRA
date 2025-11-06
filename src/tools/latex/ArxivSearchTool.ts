@@ -83,7 +83,7 @@ export class ArxivSearchTool extends defineTool({
         doi: entry.doi?.id ?? null,
         title:
           typeof entry.title === 'string' ? entry.title.trim() : entry.title,
-        summary: entry.summary ?? null,
+        abstract: entry.summary ?? null,
         published: entry.published ?? null,
         updated: entry.updated ?? null,
         authors: getAuthorNames(entry.authors),

@@ -43,11 +43,8 @@ export class CrossrefSearchTool extends defineTool({
 
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
+      rows: input.rows ?? 10, // Default to 10 results
     };
-
-    if (typeof input.rows === 'number') {
-      options.rows = input.rows;
-    }
     if (typeof input.offset === 'number') {
       options.offset = input.offset;
     }

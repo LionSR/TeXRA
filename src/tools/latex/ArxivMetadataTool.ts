@@ -63,7 +63,7 @@ export class ArxivMetadataTool extends defineTool({
         typeof targetEntry.title === 'string'
           ? targetEntry.title.trim()
           : targetEntry.title,
-      summary: includeAbstract ? (targetEntry.summary ?? null) : undefined,
+      abstract: includeAbstract ? (targetEntry.summary ?? null) : undefined,
       published: targetEntry.published ?? null,
       updated: targetEntry.updated ?? null,
       authors: authorNames,
