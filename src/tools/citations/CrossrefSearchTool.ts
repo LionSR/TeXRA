@@ -32,7 +32,22 @@ const CrossrefSearchInputSchema = z.strictObject({
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
 
 const crossrefClient = new CrossrefClient();
+
+/**
+ * Extended QueryWorksParams to include filter field.
+ * Note: The Crossref API supports filter parameters, but the library type definitions
+ * (@jamesgopsill/crossref-client) are incomplete and don't include this field.
+ * See: https://api.crossref.org/swagger-ui/index.html#/Works/get_works
+ */
 type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
+
+/**
+ * Type guard to safely access Crossref work item properties.
+ * The library returns untyped objects, so we use this helper to access properties safely.
+ */
+function isWorkItem(item: unknown): item is Record<string, unknown> {
+  return typeof item === 'object' && item !== null;
+}
 
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
@@ -92,7 +107,7 @@ export class CrossrefSearchTool extends defineTool({
     const items = Array.isArray(message.items) ? message.items : [];
 
     const results = items.map((item) => {
-      if (!item || typeof item !== 'object') {
+      if (!isWorkItem(item)) {
         return {
           title: null,
           doi: null,
@@ -102,8 +117,7 @@ export class CrossrefSearchTool extends defineTool({
           url: null,
         };
       }
-      const work = item as unknown as Record<string, unknown>;
-      const titleValue = work.title;
+      const titleValue = item.title;
       const primaryTitle = Array.isArray(titleValue)
         ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
         : typeof titleValue === 'string'
@@ -112,11 +126,11 @@ export class CrossrefSearchTool extends defineTool({
 
       return {
         title: primaryTitle,
-        doi: typeof work.DOI === 'string' ? work.DOI : null,
-        publisher: typeof work.publisher === 'string' ? work.publisher : null,
-        type: typeof work.type === 'string' ? work.type : null,
-        issued: work.issued ?? null,
-        url: typeof work.URL === 'string' ? work.URL : null,
+        doi: typeof item.DOI === 'string' ? item.DOI : null,
+        publisher: typeof item.publisher === 'string' ? item.publisher : null,
+        type: typeof item.type === 'string' ? item.type : null,
+        issued: item.issued ?? null,
+        url: typeof item.URL === 'string' ? item.URL : null,
       };
     });
 

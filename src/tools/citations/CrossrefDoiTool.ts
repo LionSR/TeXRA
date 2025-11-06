@@ -18,6 +18,14 @@ export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
 const crossrefClient = new CrossrefClient();
 
+/**
+ * Type guard to safely access Crossref work metadata properties.
+ * The library returns untyped objects, so we use this helper to access properties safely.
+ */
+function isWorkMetadata(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
   description: 'Look up detailed metadata for a DOI using Crossref.',
@@ -41,10 +49,10 @@ export class CrossrefDoiTool extends defineTool({
         throw new Error('Crossref response did not include metadata.');
       }
       const message = response.content.message;
-      if (typeof message !== 'object' || message === null) {
+      if (!isWorkMetadata(message)) {
         throw new Error('Crossref metadata payload was empty.');
       }
-      work = message as unknown as Record<string, unknown>;
+      work = message;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Crossref lookup failed: ${message}`);

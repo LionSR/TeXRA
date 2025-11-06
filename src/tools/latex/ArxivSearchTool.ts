@@ -50,10 +50,20 @@ export class ArxivSearchTool extends defineTool({
 
     // Add category filters if provided
     if (input.categories && input.categories.length > 0) {
-      const categoryFilters = input.categories
-        .map((cat) => cat.trim())
-        .filter((cat) => cat.length > 0)
-        .map((cat) => catQuery(cat as any)); // User-provided categories may not match strict Category type
+      const categoryFilters: ReturnType<typeof catQuery>[] = [];
+      for (const cat of input.categories) {
+        const trimmed = cat.trim();
+        if (trimmed.length > 0) {
+          try {
+            // catQuery expects a strict Category union type (e.g., "cs.AI", "math.CO")
+            // We accept user input as string and handle invalid categories gracefully
+            categoryFilters.push(catQuery(trimmed as never));
+          } catch (error) {
+            // Skip invalid categories silently - they won't be used in the query
+            continue;
+          }
+        }
+      }
 
       if (categoryFilters.length > 0) {
         query = and(query, ...categoryFilters);
