@@ -71,8 +71,7 @@ describe('ToolUseFollowUpCoordinator', () => {
   const originalSetResuming = ToolUseResumeQueue.setResumingSession;
   const originalClearResuming = ToolUseResumeQueue.clearResumingSession;
   const originalDrainQueued = ToolUseResumeQueue.drainQueuedFollowUps;
-  const originalConsumeSnapshot =
-    ToolUseResumeQueue.consumeSnapshotForStream;
+  const originalConsumeSnapshot = ToolUseResumeQueue.consumeSnapshotForStream;
   const originalGetSnapshot = ToolUseResumeQueue.getSnapshotForStream;
   const originalIsResuming = ToolUseResumeQueue.isResumingSession;
   const originalEnqueue = ToolUseResumeQueue.enqueueFollowUpWhileResuming;

@@ -50,6 +50,38 @@ interface PersistSnapshotArgs {
 
 const persistedExecutions = new Map<ExecutionId, ToolUseSessionSnapshot>();
 
+function rememberSnapshot(snapshot: ToolUseSessionSnapshot): void {
+  persistedExecutions.set(snapshot.executionId as ExecutionId, snapshot);
+  ToolUseResumeQueue.cacheSnapshot(snapshot);
+}
+
+function rememberSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
+  for (const snapshot of snapshots) {
+    persistedExecutions.set(snapshot.executionId as ExecutionId, snapshot);
+  }
+
+  ToolUseResumeQueue.registerPendingSnapshots(snapshots);
+}
+
+function forgetSnapshot(
+  executionId: ExecutionId,
+): ToolUseSessionSnapshot | undefined {
+  const snapshot = persistedExecutions.get(executionId);
+  if (snapshot) {
+    persistedExecutions.delete(executionId);
+    ToolUseResumeQueue.clearPendingSnapshot(snapshot.streamId as StreamTabId);
+  }
+
+  return snapshot;
+}
+
+function forgetSnapshotForStream(streamId: StreamTabId): void {
+  const snapshot = ToolUseResumeQueue.consumeSnapshotForStream(streamId);
+  if (snapshot) {
+    persistedExecutions.delete(snapshot.executionId as ExecutionId);
+  }
+}
+
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
   contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
@@ -115,12 +147,33 @@ async function persistSnapshot(
     return null;
   }
 
+  if (hasQueuedFollowUps()) {
+    await ToolUseSnapshotStore.delete(payload.executionId);
+    logger.debug(
+      `Aborted caching for execution ${payload.executionId} because a follow-up arrived post-persistence.`,
+    );
+    return null;
+  }
+
   return stored;
 }
 
 export const ToolUseSessionPersistence = {
   isEnabled(): boolean {
     return getToolUsePersistenceEnabled();
+  },
+
+  registerPersistedSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
+    if (!this.isEnabled() || snapshots.length === 0) {
+      return;
+    }
+
+    rememberSnapshots(snapshots);
+  },
+
+  clearAllPersistedSnapshots(): void {
+    persistedExecutions.clear();
+    ToolUseResumeQueue.clearAllPendingSnapshots();
   },
 
   async maybePersistIdleSnapshot({
@@ -159,20 +212,33 @@ export const ToolUseSessionPersistence = {
       return false;
     }
 
-    persistedExecutions.set(executionId, stored);
-    ToolUseResumeQueue.cacheSnapshot(stored);
+    if (hasQueuedFollowUps()) {
+      await ToolUseSnapshotStore.delete(executionId);
+      logger.debug(
+        `Skipped caching snapshot for execution ${executionId} because a follow-up arrived post-persistence.`,
+      );
+      return false;
+    }
+
+    rememberSnapshot(stored);
     return true;
   },
 
-  async clearPersistedSnapshot(executionId: ExecutionId | undefined): Promise<void> {
+  async clearPersistedSnapshot(
+    executionId: ExecutionId | undefined,
+  ): Promise<void> {
     if (!executionId || !this.isEnabled()) {
       return;
     }
 
-    const snapshot = persistedExecutions.get(executionId);
-    if (snapshot) {
-      ToolUseResumeQueue.clearPendingSnapshot(snapshot.streamId as StreamTabId);
-      persistedExecutions.delete(executionId);
+    const cachedSnapshot = forgetSnapshot(executionId);
+    if (!cachedSnapshot) {
+      const storedSnapshot = await ToolUseSnapshotStore.load(executionId);
+      if (storedSnapshot) {
+        ToolUseResumeQueue.clearPendingSnapshot(
+          storedSnapshot.streamId as StreamTabId,
+        );
+      }
     }
 
     await ToolUseSnapshotStore.delete(executionId);
@@ -192,9 +258,14 @@ export const ToolUseSessionPersistence = {
     }
 
     const streamId = snapshot.streamId as StreamTabId;
-    const existingStatus = provider.eventHandler.getStreamStatus(snapshot.streamId);
+    const existingStatus = provider.eventHandler.getStreamStatus(
+      snapshot.streamId,
+    );
 
-    if (existingStatus === STATUS.RUNNING || existingStatus === STATUS.RESUMING) {
+    if (
+      existingStatus === STATUS.RUNNING ||
+      existingStatus === STATUS.RESUMING
+    ) {
       return { success: false };
     }
 
@@ -228,8 +299,7 @@ export const ToolUseSessionPersistence = {
         { resume: true },
       );
 
-      ToolUseResumeQueue.consumeSnapshotForStream(streamId);
-      persistedExecutions.delete(snapshot.executionId as ExecutionId);
+      forgetSnapshotForStream(streamId);
 
       return { success: true };
     } catch (error) {
@@ -255,7 +325,10 @@ export const ToolUseSessionPersistence = {
       ToolUseResumeQueue.clearResumingSession(streamId);
       const status = provider.eventHandler.getStreamStatus(snapshot.streamId);
       if (status === STATUS.RESUMING) {
-        provider.eventHandler.setStreamStatus(snapshot.streamId, STATUS.WAITING);
+        provider.eventHandler.setStreamStatus(
+          snapshot.streamId,
+          STATUS.WAITING,
+        );
       }
     }
   },
