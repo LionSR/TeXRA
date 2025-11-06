@@ -68,8 +68,8 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 64000,
     contextWindow: 262144,
-    inputPrice: 0.56,
-    outputPrice: 2.22,
+    inputPrice: 0.6,
+    outputPrice: 2.5,
     capabilities: {
       ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: false,
@@ -79,15 +79,15 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  kimi2turbo: {
-    name: 'kimi2turbo',
-    fullName: 'kimi-k2-turbo-preview',
+  'kimi2+': {
+    name: 'kimi2+',
+    fullName: 'kimi-k2-turbo-preview', // Turbo is the high speed inference variant of kimi2! Not the smaller version like gpt4-turbo!
     openrouterFullName: 'moonshotai/kimi-k2-turbo',
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 64000,
     contextWindow: 262144,
-    inputPrice: 0.56,
-    outputPrice: 2.22,
+    inputPrice: 0.56 * 4,
+    outputPrice: 2.22 * 4,
     capabilities: {
       ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: false,
@@ -117,15 +117,15 @@ export const MOONSHOT_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
-  'kimi2T-': {
-    name: 'kimi2T-',
+  'kimi2T+': {
+    name: 'kimi2T+',
     fullName: 'kimi-k2-thinking-turbo',
     openrouterFullName: 'moonshotai/kimi-k2-thinking-turbo',
     provider: ModelProvider.MOONSHOT,
     maxOutputTokens: 64000,
     contextWindow: 262144,
-    inputPrice: 0.56,
-    outputPrice: 2.22,
+    inputPrice: 0.56 * 4,
+    outputPrice: 2.22 * 4,
     capabilities: {
       ...MOONSHOT_DEFAULT_CAPABILITIES,
       supportsVision: false,
