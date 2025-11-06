@@ -108,8 +108,8 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
     // For Kimi thinking model, add the thinking parameter
     const isThinkingModel =
-      ['kimit', 'kimi2T', 'kimi2T-'].includes(this.config.name) ||
-      (this.config.fullName && this.config.fullName.includes('thinking'));
+      this.config.capabilities.supportsReasoning ||
+      this.capabilities.supportsReasoning;
 
     if (isThinkingModel) {
       this.logger.debug(
