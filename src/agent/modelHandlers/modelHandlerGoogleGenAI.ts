@@ -431,16 +431,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
-        type StreamWithResponse = AsyncGenerator<GenerateContentResponse> & {
-          response?: Promise<GenerateContentResponse>;
-        };
-        const streamWithResponse = stream as StreamWithResponse;
-
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
         let interimUsage: GenerateContentResponseUsageMetadata | undefined;
+        let finalResponse: GenerateContentResponse | undefined;
         for await (const chunk of stream) {
           const chunkText = chunk.text ?? '';
           if (chunkText.length > 0) {
@@ -457,11 +453,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           if (chunk.usageMetadata) {
             interimUsage = chunk.usageMetadata;
           }
+
+          finalResponse = chunk;
         }
 
-        const finalResponse = streamWithResponse.response
-          ? await streamWithResponse.response
-          : undefined;
         if (!finalResponse) {
           throw new Error('Stream yielded no response');
         }
