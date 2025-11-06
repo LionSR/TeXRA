@@ -79,10 +79,7 @@ describe('ToolUseSessionManager queue handling', () => {
     const snapshot = createSnapshot();
     ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
 
-    assert.equal(
-      ToolUseResumeQueue.getSnapshotForStream(streamId),
-      snapshot,
-    );
+    assert.equal(ToolUseResumeQueue.getSnapshotForStream(streamId), snapshot);
 
     const consumed = ToolUseResumeQueue.consumeSnapshotForStream(streamId);
     assert.equal(consumed, snapshot);
