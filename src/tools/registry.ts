@@ -8,13 +8,8 @@ import { FileOpTool } from './fileOp';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
 import { LsTool } from './ls';
-import {
-  ArxivDownloadTool,
-  ArxivMetadataTool,
-  ArxivSearchTool,
-  ExtractLatexFiguresTool,
-  ExtractTikzFiguresTool,
-} from './latex';
+import { ExtractLatexFiguresTool, ExtractTikzFiguresTool } from './latex';
+import { ArxivDownloadTool, ArxivMetadataTool, ArxivSearchTool } from './arxiv';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
@@ -22,7 +17,7 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
-import { CrossrefDoiTool, CrossrefSearchTool } from './citations';
+import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
