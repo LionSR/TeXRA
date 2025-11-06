@@ -370,7 +370,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
               data: media.data,
               format: normalizedFormat,
             },
-          },
+          } satisfies Record<string, unknown> as ResponseInputContent,
         ];
       }
 
