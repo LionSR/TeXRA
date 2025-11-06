@@ -18,7 +18,8 @@ import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { bus } from '@eventBus/ProgressEventBus';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
-import { ToolUseSessionManager } from '@agent/toolUse/ToolUseSessionManager';
+import { ToolUseResumeQueue } from '@agent/toolUse/ToolUseResumeQueue';
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 
@@ -106,12 +107,12 @@ export async function activate(context: vscode.ExtensionContext) {
 
   await ToolUseSnapshotStore.initialize();
 
-  const toolUsePersistenceEnabled =
-    ToolUseSessionManager.isPersistenceEnabled();
+  const toolUsePersistenceEnabled = ToolUseSessionPersistence.isEnabled();
   const persistedToolUseSessions = toolUsePersistenceEnabled
-    ? await ToolUseSessionManager.listSnapshots()
+    ? await ToolUseSnapshotStore.list()
     : [];
-  ToolUseSessionManager.registerPendingSnapshots(persistedToolUseSessions);
+  ToolUseResumeQueue.clearAllPendingSnapshots();
+  ToolUseResumeQueue.registerPendingSnapshots(persistedToolUseSessions);
   const waitingStreams = new Set(
     persistedToolUseSessions.map((snapshot) => snapshot.streamId),
   );
@@ -237,7 +238,8 @@ export async function deactivate() {
   disposeStatusListener?.();
 
   // Clean up persisted tool-use sessions when extension deactivates
-  await ToolUseSessionManager.deleteAllSnapshots();
+  await ToolUseSnapshotStore.deleteAll();
+  ToolUseResumeQueue.clearAllPendingSnapshots();
 
   // Get the ProgressViewProvider instance
   const progressViewProvider = ProgressViewProvider.getInstance();
