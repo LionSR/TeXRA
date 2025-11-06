@@ -32,9 +32,9 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
-  ToolUseSessionManager,
+  ToolUseSessionPersistence,
   type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseSessionManager';
+} from '@agent/toolUse/ToolUseSessionPersistence';
 import {
   registerToolUseAgent,
   unregisterToolUseAgent,
@@ -47,8 +47,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private messages: ProviderMessage[] = [];
   private toolState: AgentWorkspaceState | null = null;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
-  private hasPersistedSnapshot = false;
-  private persistenceLock = false; // Lock to prevent race conditions during persistence
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -110,10 +108,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     } else {
       this.followUpQueue.push(text);
     }
-    // If we're in the middle of persisting, mark for cleanup
-    if (this.persistenceLock) {
-      this.hasPersistedSnapshot = true; // Will trigger cleanup in the next cycle
-    }
   }
 
   /**
@@ -122,7 +116,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    */
   public resumeFromSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.resumeSnapshot = snapshot;
-    this.hasPersistedSnapshot = true;
   }
 
   private async waitForFollowUp(): Promise<string | null> {
@@ -311,38 +304,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const executionId = this.getExecutionId();
     const state = this.toolState;
 
-    // Persist snapshot with lock to prevent race conditions
-    if (state && executionId && ToolUseSessionManager.isPersistenceEnabled()) {
-      // Acquire lock to prevent race conditions
-      this.persistenceLock = true;
-
-      try {
-        // Double-check queue is still empty under lock
-        if (this.followUpQueue.length === 0) {
-          await ToolUseSessionManager.saveSnapshot({
-            executionId,
-            streamId: stream,
-            agentName: this.agentConfig.agent,
-            model: this.agentConfig.model,
-            session: this.getSessionMetadata(),
-            messages: this.messages,
-            toolState: state,
-          });
-
-          // Final check after save completes
-          if (this.followUpQueue.length > 0) {
-            // A follow-up arrived while we were saving
-            await ToolUseSessionManager.deleteSnapshot(executionId);
-            this.hasPersistedSnapshot = false;
-          } else {
-            this.hasPersistedSnapshot = true;
-          }
-        }
-      } finally {
-        // Always release lock
-        this.persistenceLock = false;
-      }
-    }
+    await ToolUseSessionPersistence.maybePersistIdleSnapshot({
+      executionId,
+      streamId: stream,
+      agentName: this.agentConfig.agent,
+      model: this.agentConfig.model,
+      session: this.getSessionMetadata(),
+      messages: this.messages,
+      toolState: state ?? null,
+      hasQueuedFollowUps: () => this.followUpQueue.length > 0,
+    });
 
     bus.emit('updateStreamStatus', {
       stream,
@@ -358,18 +329,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private async clearPersistedSnapshot(): Promise<void> {
-    if (!this.hasPersistedSnapshot) {
-      return;
-    }
     const executionId = this.getExecutionId();
-    if (!executionId) {
-      this.hasPersistedSnapshot = false;
-      return;
-    }
-    try {
-      await ToolUseSessionManager.deleteSnapshot(executionId);
-    } finally {
-      this.hasPersistedSnapshot = false;
-    }
+    await ToolUseSessionPersistence.clearPersistedSnapshot(executionId);
   }
 }
