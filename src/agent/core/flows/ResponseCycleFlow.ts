@@ -463,7 +463,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     state.stopReason = result.stopReason;
     state.processedResponse = result.processedResponse;
-    store.run.recordRound(store.round);
+    await store.finalizeRound();
 
     if (result.repetitionDetected) {
       state.endTurn = false;
