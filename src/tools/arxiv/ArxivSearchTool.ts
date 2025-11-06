@@ -71,17 +71,17 @@ export class ArxivSearchTool extends defineTool({
       }
     }
 
-    const client = createArxivClient()
+    let client = createArxivClient()
       .query(query)
       .start(input.start ?? 0)
       .maxResults(input.maxResults ?? ARXIV_CONSTANTS.DEFAULT_RESULTS);
 
     if (input.sortBy) {
-      client.sortBy(input.sortBy);
+      client = client.sortBy(input.sortBy);
     }
 
     if (input.sortOrder) {
-      client.sortOrder(input.sortOrder);
+      client = client.sortOrder(input.sortOrder);
     }
 
     let entries;
