@@ -21,7 +21,7 @@ import { WorkspaceFS } from '@utils/files';
 
 const LsInputSchema = z.strictObject({
   path: z.string(),
-  ignore: z.array(z.string()).default([]),
+  ignore: z.array(z.string()).prefault([]),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;

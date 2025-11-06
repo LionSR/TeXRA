@@ -18,6 +18,7 @@ import type {
   ResponseInputFile,
   ResponseInputImage,
   ResponseInputText,
+  ResponseInputAudio,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 import type { Reasoning } from 'openai/resources/shared';
@@ -34,7 +35,6 @@ import {
   type ExtendedCompletionUsage,
 } from '../core/ResponseUsage';
 import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import { z } from 'zod';
 
 // Local imports - base handler
 import { ModelHandler } from './ModelHandler';
@@ -60,59 +60,6 @@ import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
-
-const ResponseOutputPartSchema = z
-  .object({
-    type: z.string(),
-    text: z.string().optional(),
-  })
-  .passthrough();
-
-const ResponseOutputItemSchema = z
-  .object({
-    type: z.string(),
-    content: z.array(ResponseOutputPartSchema).optional().default([]),
-  })
-  .passthrough();
-
-const ResponseUsageDetailsSchema = z
-  .object({
-    cached_tokens: z.number().int().nonnegative().default(0),
-  })
-  .passthrough()
-  .default({ cached_tokens: 0 });
-
-const ResponseOutputDetailsSchema = z
-  .object({
-    reasoning_tokens: z.number().int().nonnegative().default(0),
-  })
-  .passthrough()
-  .default({ reasoning_tokens: 0 });
-
-const ResponseUsageSchema = z
-  .object({
-    input_tokens: z.number().int().nonnegative(),
-    output_tokens: z.number().int().nonnegative(),
-    total_tokens: z.number().int().nonnegative(),
-    input_tokens_details: ResponseUsageDetailsSchema,
-    output_tokens_details: ResponseOutputDetailsSchema,
-  })
-  .passthrough();
-
-const ResponseEnvelopeSchema = z
-  .object({
-    status: z.string(),
-    usage: ResponseUsageSchema,
-    output_text: z
-      .string()
-      .optional()
-      .transform((value) => (value ?? '').trim()),
-    output: z
-      .array(ResponseOutputItemSchema)
-      .optional()
-      .transform((value) => value ?? []),
-  })
-  .passthrough();
 
 interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;
@@ -338,41 +285,53 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ];
       }
 
+      // Audio input is documented but not functional in the Responses API
+      // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
+      // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
+      // TODO: Re-enable when OpenAI makes this functional
       if (media.media_category === 'audio') {
-        if (!this.capabilities.supportsNativeAudio) {
-          this.logger.warn(
-            `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
-          );
-          return [];
-        }
-
-        let audioFormat = media.media_type;
-        if (media.media_type.includes('/')) {
-          audioFormat = media.media_type.split('/')[1];
-        }
-
-        const normalizedFormat =
-          audioFormat === 'mp3' || audioFormat === 'wav'
-            ? audioFormat
-            : undefined;
-        if (!normalizedFormat) {
-          this.logger.warn(
-            `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
-          );
-          return [];
-        }
-
-        return [
-          this.createInputText(`Audio: ${media.file_name}`),
-          {
-            type: 'input_audio',
-            input_audio: {
-              data: media.data,
-              format: normalizedFormat,
-            },
-          } satisfies Record<string, unknown> as ResponseInputContent,
-        ];
+        this.logger.warn(
+          `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
+        );
+        return [];
       }
+
+      // Commented out until audio input is functional in Responses API
+      // if (media.media_category === 'audio') {
+      //   if (!this.capabilities.supportsNativeAudio) {
+      //     this.logger.warn(
+      //       `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
+      //     );
+      //     return [];
+      //   }
+      //
+      //   let audioFormat = media.media_type;
+      //   if (media.media_type.includes('/')) {
+      //     audioFormat = media.media_type.split('/')[1];
+      //   }
+      //
+      //   const normalizedFormat =
+      //     audioFormat === 'mp3' || audioFormat === 'wav'
+      //       ? audioFormat
+      //       : undefined;
+      //   if (!normalizedFormat) {
+      //     this.logger.warn(
+      //       `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
+      //     );
+      //     return [];
+      //   }
+      //
+      //   return [
+      //     this.createInputText(`Audio: ${media.file_name}`),
+      //     {
+      //       type: 'input_audio',
+      //       input_audio: {
+      //         data: media.data,
+      //         format: normalizedFormat,
+      //       },
+      //     } as ResponseInputAudio as ResponseInputContent,
+      //   ];
+      // }
 
       if (mediaType === 'application/pdf') {
         return [
@@ -667,22 +626,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     responseObject: Response,
     endTag: string,
   ): [string, ResponseUsage, ProviderStopReason] {
-    const parsed = ResponseEnvelopeSchema.parse(responseObject);
-    const usage = parsed.usage;
+    if (!responseObject.usage) {
+      throw new Error('Response object missing required usage information');
+    }
 
-    let newResponse = parsed.output_text;
+    const usage = responseObject.usage;
+    let newResponse = responseObject.output_text?.trim() ?? '';
 
-    if (!newResponse) {
+    if (!newResponse && responseObject.output) {
       const fallbackSegments: string[] = [];
 
-      for (const item of parsed.output) {
+      for (const item of responseObject.output) {
         if (item.type !== 'message') {
           continue;
         }
 
-        for (const part of item.content) {
-          if (part.type === 'output_text' && typeof part.text === 'string') {
-            fallbackSegments.push(part.text);
+        const content = (item as { content?: unknown[] }).content;
+        if (!Array.isArray(content)) {
+          continue;
+        }
+
+        for (const part of content) {
+          const partType = (part as { type?: unknown }).type;
+          const partText = (part as { text?: unknown }).text;
+          if (partType === 'output_text' && typeof partText === 'string') {
+            fallbackSegments.push(partText);
           }
         }
       }
@@ -694,7 +662,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const stopReason =
-      parsed.status === 'completed'
+      responseObject.status === 'completed'
         ? OPENAI_CHAT_FINISH.STOP
         : OPENAI_CHAT_FINISH.LENGTH;
 
@@ -1473,7 +1441,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const content = (item as { content?: unknown }).content;
-    return typeof content === 'string' || this.isInputContentList(content);
+    return typeof content === 'string' || Array.isArray(content);
   }
 
   private getMessageContent(
@@ -1485,29 +1453,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return item.content;
   }
 
-  private isInputContentList(
-    content: unknown,
-  ): content is ResponseInputMessageContentList {
-    return (
-      Array.isArray(content) &&
-      content.every((item) => this.isInputContent(item))
-    );
-  }
-
-  private isInputContent(content: unknown): content is ResponseInputContent {
-    if (!content || typeof content !== 'object') {
-      return false;
-    }
-
-    const type = (content as { type?: unknown }).type;
-    return (
-      type === 'input_text' ||
-      type === 'input_image' ||
-      type === 'input_file' ||
-      type === 'input_audio'
-    );
-  }
-
   private appendInputText(message: ResponseInputItem, text: string): void {
     if (!this.isMessageItem(message)) {
       return;
@@ -1515,7 +1460,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const content = message.content;
 
-    if (this.isInputContentList(content)) {
+    if (Array.isArray(content)) {
       content.push(this.createInputText(text));
       return;
     }
@@ -1547,7 +1492,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     let existingText = '';
-    if (this.isInputContentList(content)) {
+    if (Array.isArray(content)) {
       existingText = content
         .map((part) => {
           const type = (part as { type?: unknown }).type;
