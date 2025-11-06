@@ -12,39 +12,40 @@ import type {
   ReflectionRoundResult,
 } from '../BaseReflectionAgent';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
-import type { AgentRunShared } from '@agent/implementations/flows/common/types';
-import type { AgentLogStage } from '@logger/AgentLogger';
+import type {
+  AgentLifecycleState,
+  AgentRunHooks,
+  AgentRunShared,
+} from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
   completeLifecycle,
   failLifecycle,
   setLifecyclePhase,
 } from '@agent/implementations/flows/common/lifecycle';
+import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
+import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
+import { BaseRunStateSchema } from '@agent/implementations/flows/common/types';
+import { z } from 'zod';
 
-type RunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
-type RunStatus = 'pending' | 'running' | 'error' | 'completed';
+export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 
-export interface ReflectionRunLifecycle {
-  phase: RunPhase;
-  status: RunStatus;
-  error?: unknown;
-}
+export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
-export interface ReflectionRunHooks {
-  start(): Promise<AgentLogStage>;
-  init(runStage: AgentLogStage): Promise<void>;
-  resetPromptBuilder(): void;
-  initializeClient(): Promise<void>;
-  end(status: 'stopped' | 'error'): void | Promise<void>;
-  cleanup(): void | Promise<void>;
-}
+const ReflectionRunStateSchemaBase = BaseRunStateSchema.extend({
+  totalRounds: z.number().nonnegative(),
+  currentRound: z.number().nonnegative(),
+  continueRounds: z.boolean(),
+});
 
-export interface ReflectionRunState {
-  totalRounds: number;
-  currentRound: number;
-  continueRounds: boolean;
+type ReflectionRunStateStruct = z.infer<typeof ReflectionRunStateSchemaBase>;
+
+export type ReflectionRunState = Omit<ReflectionRunStateStruct, 'messages'> & {
   messages: any[];
-  globalState: AgentRunState;
+};
+
+export interface ReflectionRunHooks extends AgentRunHooks {
+  resetPromptBuilder(): void;
 }
 
 export type ReflectionRunShared<C = unknown> = AgentRunShared<
@@ -60,7 +61,7 @@ interface ReflectionRoundPrep<C> {
   shouldFinalize: boolean;
   roundIndex: number;
   messages: any[];
-  globalState: AgentRunState;
+  runState: AgentRunState;
 }
 
 interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
@@ -71,10 +72,6 @@ interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
 interface ReflectionFinalizePrep {
   hooks: ReflectionRunHooks;
   lifecycle: ReflectionRunLifecycle;
-}
-
-interface ReflectionFinalizeExec {
-  endError?: unknown;
 }
 
 class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
@@ -91,7 +88,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       shouldFinalize,
       roundIndex: state.currentRound,
       messages: state.messages,
-      globalState: state.globalState,
+      runState: state.runState,
     };
   }
 
@@ -106,7 +103,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       prepRes.agent.setCurrentRound(prepRes.roundIndex);
       const result = await prepRes.agent.runReflectionRound({
         roundIndex: prepRes.roundIndex,
-        globalState: prepRes.state.globalState,
+        runState: prepRes.state.runState,
         messages: prepRes.state.messages,
       } satisfies ReflectionRoundContext);
 
@@ -157,11 +154,11 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       shared.agent.roundOutputArtifacts[result.outputArtifacts.round] =
         result.outputArtifacts;
     }
-    shared.state.globalState = result.globalState;
+    shared.state.runState = result.runState;
     shared.state.messages = result.messages;
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
-    shared.state.globalState.incrementRounds();
+    shared.state.runState.incrementRounds();
 
     if (shared.agent.isInterruptionRequested()) {
       return FlowTransition.FINALIZE;
@@ -188,38 +185,14 @@ class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
     };
   }
 
-  async exec(prepRes: ReflectionFinalizePrep): Promise<ReflectionFinalizeExec> {
+  async exec(prepRes: ReflectionFinalizePrep): Promise<void> {
     const status = prepRes.lifecycle.error ? 'error' : 'stopped';
-    try {
-      await Promise.resolve(prepRes.hooks.end(status));
-      return {};
-    } catch (error) {
-      return { endError: error };
-    }
-  }
-
-  async post(
-    shared: ReflectionRunShared<C>,
-    prepRes: ReflectionFinalizePrep,
-    execRes: ReflectionFinalizeExec,
-  ): Promise<string | undefined> {
-    let error = shared.lifecycle.error ?? execRes.endError;
-
-    try {
-      await Promise.resolve(prepRes.hooks.cleanup());
-    } catch (cleanupError) {
-      if (!error) {
-        error = cleanupError;
-      }
-    }
-
-    if (error) {
-      failLifecycle(shared.lifecycle, error);
-    } else {
-      completeLifecycle(shared.lifecycle);
-    }
-
-    return undefined;
+    await finalizeLifecycle({
+      lifecycle: prepRes.lifecycle,
+      runFinalize: () => Promise.resolve(prepRes.hooks.end(status)),
+      runCleanup: () => Promise.resolve(prepRes.hooks.cleanup()),
+      onSuccess: () => completeLifecycle(prepRes.lifecycle),
+    });
   }
 }
 
@@ -237,11 +210,13 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
   const finalizeNode = new ReflectionFinalizeNode<C>();
 
-  initNode.on(FlowTransition.ROUND, roundNode);
-  initNode.on(FlowTransition.FINALIZE, finalizeNode);
-
-  roundNode.on(FlowTransition.CONTINUE, roundNode);
-  roundNode.on(FlowTransition.FINALIZE, finalizeNode);
-
-  return new Flow<ReflectionRunShared<C>>(initNode);
+  return buildRunFlow({
+    init: initNode,
+    finalize: finalizeNode,
+    links: [
+      { from: initNode, on: FlowTransition.ROUND, to: roundNode },
+      { from: roundNode, on: FlowTransition.CONTINUE, to: roundNode },
+      { from: roundNode, on: FlowTransition.FINALIZE },
+    ],
+  });
 }
