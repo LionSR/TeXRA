@@ -1,10 +1,11 @@
 // Third-party imports
-import arxivClient, { all, and, category as catQuery } from 'arxiv-client';
+import { all, and, category as catQuery } from 'arxiv-client';
 import { z } from 'zod';
 
 // Local imports - latex
 import {
   type ArxivSearchResult,
+  createArxivClient,
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
@@ -70,7 +71,7 @@ export class ArxivSearchTool extends defineTool({
       }
     }
 
-    let client = arxivClient
+    let client = createArxivClient()
       .query(query)
       .start(input.start ?? 0)
       .maxResults(input.maxResults ?? ARXIV_CONSTANTS.DEFAULT_RESULTS);
