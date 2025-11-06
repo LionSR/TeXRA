@@ -70,7 +70,6 @@ export class ArxivMetadataTool extends defineTool({
         typeof targetEntry.title === 'string'
           ? targetEntry.title.trim()
           : targetEntry.title,
-      abstract: includeAbstract ? (targetEntry.summary ?? null) : undefined,
       published: targetEntry.published ?? null,
       updated: targetEntry.updated ?? null,
       authors: authorNames,
@@ -78,6 +77,8 @@ export class ArxivMetadataTool extends defineTool({
       comment: targetEntry.comment ?? null,
       primaryCategory: readPrimaryCategory(targetEntry.primaryCategory),
       links: targetEntry.links ?? null,
+      // Conditionally include abstract field only when requested
+      ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
     };
 
     return toolResult({
