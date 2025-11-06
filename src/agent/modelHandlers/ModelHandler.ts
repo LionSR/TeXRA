@@ -42,20 +42,6 @@ const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 // Default proxy domain
 const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
-function cloneCapabilities(capabilities: ModelCapabilities): ModelCapabilities {
-  const globalStructuredClone = (
-    globalThis as {
-      structuredClone?: <T>(value: T) => T;
-    }
-  ).structuredClone;
-
-  if (typeof globalStructuredClone === 'function') {
-    return globalStructuredClone(capabilities);
-  }
-
-  return JSON.parse(JSON.stringify(capabilities)) as ModelCapabilities;
-}
-
 /** Flags for token-based stop conditions. */
 interface TokenFlags {
   continuationLimit: boolean;
@@ -102,7 +88,7 @@ export abstract class ModelHandler<
 
   constructor(config: ModelConfig) {
     this.config = { ...config };
-    this.capabilities = cloneCapabilities(config.capabilities);
+    this.capabilities = structuredClone(config.capabilities);
     this.continueLimit = DEFAULT_CONTINUE_LIMIT;
     this.inputTokenLimit = DEFAULT_INPUT_TOKEN_LIMIT;
     this.maxOutputTokensFactor = DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR;
