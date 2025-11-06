@@ -10,6 +10,8 @@ import { GrepTool } from './grep';
 import { LsTool } from './ls';
 import {
   ArxivDownloadTool,
+  ArxivMetadataTool,
+  ArxivSearchTool,
   ExtractLatexFiguresTool,
   ExtractTikzFiguresTool,
 } from './latex';
@@ -20,6 +22,7 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
+import { CrossrefDoiTool, CrossrefSearchTool } from './metadata';
 
 export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   str_replace_editor: new TextEditorTool(),
@@ -34,8 +37,12 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   grep: new GrepTool(),
   ls: new LsTool(),
   download_arxiv_source: new ArxivDownloadTool(),
+  arxiv_metadata: new ArxivMetadataTool(),
+  arxiv_search: new ArxivSearchTool(),
   extract_figures: new ExtractLatexFiguresTool(),
   extract_tikz_figures: new ExtractTikzFiguresTool(),
+  crossref_doi: new CrossrefDoiTool(),
+  crossref_search: new CrossrefSearchTool(),
   wolfram: new WolframTool(),
   texcount: new TexcountTool(),
   web_fetch: new WebFetchTool(),
