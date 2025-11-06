@@ -10,7 +10,10 @@ import { getConfig } from '@utils/config';
 
 // Local imports
 import { WorkspaceFS, StorageFS } from '@utils/files';
-import { getRunDir } from '@utils/files/taskRunStorage';
+import {
+  ensureRunDir,
+  TASK_RUNS_DIR,
+} from '@utils/files/taskRunStorage';
 
 /**
  * Context information for the debug save operation
@@ -87,23 +90,28 @@ export async function maybeSaveDebugObject({
   const modelPart = modelName ? `_${modelName.replace(/[\\/]/g, '_')}` : '';
   const debugFileName = `${fileBase}${modelPart}${cont}.json`;
 
-  const debugFilePath = executionId
-    ? path.join(getRunDir(executionId), debugFileName)
-    : WorkspaceFS.fullPath(debugFileName);
-
   try {
     if (executionId) {
-      await StorageFS.writeJson(debugFilePath, object);
+      await ensureRunDir(executionId);
+      const relativePath = path.join(
+        TASK_RUNS_DIR,
+        executionId,
+        debugFileName,
+      );
+      await StorageFS.writeJson(relativePath, object);
+      const debugFilePath = StorageFS.fullPath(relativePath);
+      logger.info(
+        `Saved ${objectType} object to ${debugFilePath}`,
+        activeGroupId,
+      );
     } else {
-      await WorkspaceFS.writeJson(
-        WorkspaceFS.relativePath(debugFilePath),
-        object,
+      await WorkspaceFS.writeJson(debugFileName, object);
+      const debugFilePath = WorkspaceFS.fullPath(debugFileName);
+      logger.info(
+        `Saved ${objectType} object to ${debugFilePath}`,
+        activeGroupId,
       );
     }
-    logger.info(
-      `Saved ${objectType} object to ${debugFilePath}`,
-      activeGroupId,
-    );
   } catch (error) {
     logger.error(
       `Failed to save ${objectType} object: ${error}`,
