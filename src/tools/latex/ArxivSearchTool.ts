@@ -1,8 +1,6 @@
 // Third-party imports
+import arxivClient, { all, and, category as catQuery } from 'arxiv-client';
 import { z } from 'zod';
-
-// Local imports - arxiv wrapper
-import { search } from './arxivApiWrapper';
 
 // Local imports - latex
 import {
@@ -42,44 +40,47 @@ export class ArxivSearchTool extends defineTool({
       throw new ToolError('Search query cannot be empty.');
     }
 
-    const includeTags = [
-      {
-        name: trimmedQuery,
-      },
-      ...(input.categories?.map((category) => ({
-        name: category.trim(),
-        prefix: 'cat' as const,
-      })) ?? []),
-    ].filter((tag) => tag.name.length > 0);
+    // Build query using arxiv-client query builder
+    let query = all(trimmedQuery);
 
-    if (includeTags.length === 0) {
-      throw new ToolError('Search query cannot be empty.');
+    // Add category filters if provided
+    if (input.categories && input.categories.length > 0) {
+      const categoryFilters = input.categories
+        .map((cat) => cat.trim())
+        .filter((cat) => cat.length > 0)
+        .map((cat) => catQuery(cat as any)); // User-provided categories may not match strict Category type
+
+      if (categoryFilters.length > 0) {
+        query = and(query, ...categoryFilters);
+      }
     }
 
-    let response;
+    let client = arxivClient
+      .query(query)
+      .start(input.start ?? 0)
+      .maxResults(input.maxResults ?? 10);
+
+    if (input.sortBy) {
+      client = client.sortBy(input.sortBy);
+    }
+
+    if (input.sortOrder) {
+      client = client.sortOrder(input.sortOrder);
+    }
+
+    let entries;
     try {
-      response = await search({
-        searchQueryParams: [
-          {
-            include: includeTags,
-          },
-        ],
-        start: input.start,
-        maxResults: input.maxResults ?? 10,
-        sortBy: input.sortBy,
-        sortOrder: input.sortOrder,
-      });
+      entries = await client.execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Failed to query arXiv API: ${message}`);
     }
 
-    const entries = Array.isArray(response?.entries) ? response.entries : [];
     const results = entries.map((entry) => {
       const identifier = extractEntryIdentifier(entry.id);
       return {
         id: identifier ?? null,
-        doi: entry.doi ?? null,
+        doi: entry.doi?.id ?? null,
         title:
           typeof entry.title === 'string' ? entry.title.trim() : entry.title,
         summary: entry.summary ?? null,
@@ -95,9 +96,9 @@ export class ArxivSearchTool extends defineTool({
 
     const payload = {
       query: trimmedQuery,
-      start: response?.startIndex ?? input.start ?? 0,
+      start: input.start ?? 0,
       count: results.length,
-      totalResults: response?.totalResults ?? null,
+      totalResults: null, // arxiv-client doesn't expose totalResults
       results,
     };
 
