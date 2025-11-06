@@ -279,7 +279,6 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
         },
       } as any,
     ];
-
     const chunkTwo = new GenerateContentResponse();
     chunkTwo.candidates = [
       {
@@ -305,7 +304,9 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
               yield chunkTwo;
             })(),
           sendMessage: async () => {
-            throw new Error('sendMessage should not be called when streaming is enabled');
+            throw new Error(
+              'sendMessage should not be called when streaming is enabled',
+            );
           },
         }),
       },
@@ -329,5 +330,92 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     assert.equal(response.text, 'Hello world');
     assert.equal(candidate.finishReason, FinishReason.STOP);
     assert.deepEqual(response.usageMetadata, chunkTwo.usageMetadata);
+  });
+
+  it('concatenates automaticFunctionCallingHistory across streamed chunks', async () => {
+    const handler = new ModelHandlerGoogleGenAI({
+      name: 'test-google-model',
+      fullName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 4096,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    });
+
+    (handler as any).capabilities.supportsTokenCounting = false;
+    handler.setOutputStreaming(true);
+    (handler as any).logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      statistics: () => {},
+      createStream: () => ({
+        append: () => {},
+        finalize: () => {},
+      }),
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+    };
+    (handler as any).getStreamingConfig = () => true;
+
+    const chunkOne = new GenerateContentResponse();
+    chunkOne.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText('First')],
+        },
+      } as any,
+    ];
+    chunkOne.automaticFunctionCallingHistory = [{ name: 'callOne' } as any];
+
+    const chunkTwo = new GenerateContentResponse();
+    chunkTwo.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText('Second')],
+        },
+      } as any,
+    ];
+    chunkTwo.automaticFunctionCallingHistory = [{ name: 'callTwo' } as any];
+
+    const fakeClient = {
+      chats: {
+        create: () => ({
+          sendMessageStream: async () =>
+            (async function* () {
+              yield chunkOne;
+              yield chunkTwo;
+            })(),
+          sendMessage: async () => {
+            throw new Error(
+              'sendMessage should not be called when streaming is enabled',
+            );
+          },
+        }),
+      },
+      models: {},
+    } as any;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('Hi there')] },
+    ];
+
+    const response = await handler.createResponse(fakeClient, messages, 0);
+
+    assert.ok(response.automaticFunctionCallingHistory);
+    assert.equal(response.automaticFunctionCallingHistory?.length, 2);
+    assert.deepEqual(response.automaticFunctionCallingHistory?.[0], {
+      name: 'callOne',
+    });
+    assert.deepEqual(response.automaticFunctionCallingHistory?.[1], {
+      name: 'callTwo',
+    });
   });
 });
