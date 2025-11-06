@@ -1,11 +1,5 @@
 // Third-party imports
-import { Temporal } from '@js-temporal/polyfill';
-import { getWork, type PartialDate } from 'crossref-ts';
-import { parse as parseDoi } from 'doi-ts';
-import * as E from 'fp-ts/Either';
-import { pipe } from 'fp-ts/function';
-import { isNone } from 'fp-ts/Option';
-import type { Fetch } from 'fetch-fp-ts';
+import crossref from 'crossref';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -18,21 +12,30 @@ const CrossrefDoiInputSchema = z.strictObject({
 
 export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
-const formatPartialDate = (value?: PartialDate | null): string | null => {
-  if (!value) {
-    return null;
-  }
-  if (typeof value === 'number') {
-    return value.toString();
-  }
-  if (
-    value instanceof Temporal.PlainDate ||
-    value instanceof Temporal.PlainYearMonth
-  ) {
-    return value.toString();
-  }
-  return null;
-};
+type CrossrefWorkCallback = (
+  error: Error | null,
+  message?: Record<string, unknown>,
+) => void;
+
+const fetchWork = (doi: string) =>
+  new Promise<Record<string, unknown>>((resolve, reject) => {
+    (
+      crossref.work as unknown as (
+        doiValue: string,
+        cb: CrossrefWorkCallback,
+      ) => void
+    )(doi, (error, message) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      if (!message || typeof message !== 'object') {
+        reject(new Error('Crossref response did not include metadata.'));
+        return;
+      }
+      resolve(message);
+    });
+  });
 
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
@@ -41,48 +44,44 @@ export class CrossrefDoiTool extends defineTool({
 }) {
   protected async execute(input: CrossrefDoiInput) {
     const trimmedDoi = input.doi.trim();
-    const parsed = parseDoi(trimmedDoi);
-    if (isNone(parsed)) {
+    if (!trimmedDoi) {
       throw new ToolError('Invalid DOI string.');
     }
 
-    const fetchAdapter: Fetch = ((url: string, init: RequestInit) => {
-      return fetch(url, init);
-    }) as unknown as Fetch;
-    const workResult = await pipe(getWork(parsed.value), (reader) =>
-      reader({ fetch: fetchAdapter }),
-    )();
-    if (E.isLeft(workResult)) {
-      const reason = workResult.left;
-      const message = reason instanceof Error ? reason.message : String(reason);
+    let work: Record<string, unknown>;
+    try {
+      work = await fetchWork(trimmedDoi);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Crossref lookup failed: ${message}`);
     }
 
-    const work = workResult.right;
-    const authors = work.author.map((author) =>
-      'name' in author
-        ? author.name
-        : [author.given, author.family].filter(Boolean).join(' ').trim(),
-    );
-    const licenses = work.license.map((license) => ({
-      url: license.URL.href,
-      start: formatPartialDate(license.start),
-    }));
+    const titleValue = work.title;
+    const resolvedTitle = Array.isArray(titleValue)
+      ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
+      : typeof titleValue === 'string'
+        ? titleValue
+        : null;
 
     const metadata = {
-      doi: work.DOI,
-      title: work.title[0] ?? null,
-      titles: work.title,
-      publisher: work.publisher,
-      type: work.type,
-      abstract: work.abstract ?? null,
-      description: work.description ?? null,
-      created: formatPartialDate(work.created),
-      published: formatPartialDate(work.published ?? null),
-      url: work.resource.primary.URL.href,
-      language: work.language ?? null,
-      authors,
-      licenses,
+      doi: typeof work.DOI === 'string' ? work.DOI : trimmedDoi,
+      title: resolvedTitle,
+      titles: Array.isArray(titleValue)
+        ? titleValue
+        : resolvedTitle
+          ? [resolvedTitle]
+          : [],
+      publisher: typeof work.publisher === 'string' ? work.publisher : null,
+      type: typeof work.type === 'string' ? work.type : null,
+      abstract: typeof work.abstract === 'string' ? work.abstract : null,
+      description:
+        typeof work.description === 'string' ? work.description : null,
+      created: work.created ?? null,
+      published: work.published ?? null,
+      url: typeof work.URL === 'string' ? work.URL : null,
+      language: typeof work.language === 'string' ? work.language : null,
+      authors: Array.isArray(work.author) ? work.author : [],
+      licenses: Array.isArray(work.license) ? work.license : [],
     };
 
     return toolResult({
