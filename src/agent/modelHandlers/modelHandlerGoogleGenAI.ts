@@ -1001,7 +1001,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const callId = ensureCallId(call);
         const callWithId = { ...call, id: callId };
 
-        if (!call.id) {
+        if (!call.id?.trim()) {
           this.logger.debug(
             `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
           );
