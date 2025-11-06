@@ -19,7 +19,8 @@
   ],
   "activationEvents": [
     "onColorTheme",
-    "onCommand:texra.openGettingStarted"
+    "onCommand:texra.openGettingStarted",
+    "onCommand:texra.cloneOverleafProject"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -912,6 +913,12 @@
         "command": "texra.getRecentCommits",
         "title": "Get Recent Commits",
         "category": "TeXRA"
+      },
+      {
+        "command": "texra.cloneOverleafProject",
+        "title": "Clone Overleaf Project",
+        "category": "TeXRA",
+        "icon": "$(repo-clone)"
       },
       {
         "command": "texra.refreshCommits",
