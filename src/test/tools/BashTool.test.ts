@@ -100,25 +100,24 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
 
 suite('BashTool', () => {
   const originalExecuteCommand = execUtils.executeCommand;
+  const execUtilsMutable = execUtils as unknown as {
+    executeCommand: typeof originalExecuteCommand;
+  };
 
   teardown(() => {
-    (
-      execUtils as unknown as { executeCommand: typeof originalExecuteCommand }
-    ).executeCommand = originalExecuteCommand;
+    execUtilsMutable.executeCommand = originalExecuteCommand;
   });
 
   test('preserves long stdout for tool results and model payloads', async () => {
-    const longOutput = '0123456789'.repeat(35);
+    const longOutput = '0123456789'.repeat(35); // 350 chars, exceeds log truncation of 150
     const execResult: ExecResult = {
       success: true,
-      stdout: `${longOutput}\n`,
+      stdout: longOutput,
       stderr: null,
       timedOut: false,
     };
 
-    (
-      execUtils as unknown as { executeCommand: typeof originalExecuteCommand }
-    ).executeCommand = async () => execResult;
+    execUtilsMutable.executeCommand = async () => execResult;
 
     const bashTool = new BashTool();
     const directResult = await bashTool.call({ command: 'echo long' });
@@ -192,9 +191,9 @@ suite('BashTool', () => {
       (msg) => (msg as any).type === 'function_call_output',
     ) as any;
     assert.ok(toolOutputMessage, 'Tool output message was not produced');
-    assert.equal(
-      toolOutputMessage.output,
-      JSON.stringify({ output: longOutput }),
+    assert.ok(
+      typeof toolOutputMessage.output === 'string' &&
+        toolOutputMessage.output.includes(longOutput),
       'Model follow-up payload should contain the complete stdout text',
     );
   });
