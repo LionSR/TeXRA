@@ -1,11 +1,11 @@
 // Third-party imports
-import arxivClient from 'arxiv-client';
 import { z } from 'zod';
 
 // Local imports - latex
 import { arxivProcessor } from '@latex/arxivProcessor';
 import {
   type ArxivPaperMetadata,
+  createArxivClient,
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
@@ -47,7 +47,7 @@ export class ArxivMetadataTool extends defineTool({
       // Respect arXiv API rate limits
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
       // Use arxiv-client's ids() method for direct ID lookup
-      entries = await arxivClient.ids([requestId]).execute();
+      entries = await createArxivClient().ids([requestId]).execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Failed to query arXiv API: ${message}`);
