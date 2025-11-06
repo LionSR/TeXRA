@@ -56,15 +56,7 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
   createMediaContent(mediaMessage: MediaEntry[]): any[] {
     return mediaMessage.flatMap((media): any[] => {
       if (media.media_category === 'image') {
-        return [
-          { type: 'text', text: `Image: ${media.file_name}` },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${media.media_type};base64,${media.data}`,
-            },
-          },
-        ];
+        return this.buildStandardVisionParts(media);
       } else {
         this.logger.warn(
           `Unsupported media category for DashScope: ${media.media_category}`,
