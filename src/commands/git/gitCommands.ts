@@ -1,4 +1,5 @@
 // Standard library imports
+import type { Dirent } from 'fs';
 import { promises as fs } from 'fs';
 
 // Third-party imports
@@ -186,16 +187,22 @@ async function cloneOverleafProject(
 
     token = trimmedToken;
     await context.secrets.store(tokenKey, token);
-  } else {
-    token = token.trim();
   }
 
   const encodedToken = encodeURIComponent(token);
   const remote = `https://git:${encodedToken}@git.overleaf.com/${projectId}`;
 
-  let directoryEntries: string[];
+  const gitCheck = execaSync('git', ['--version'], { reject: false });
+  if (gitCheck.exitCode !== 0) {
+    vscode.window.showErrorMessage(
+      'Git must be installed and available in PATH to clone an Overleaf project.',
+    );
+    return;
+  }
+
+  let directoryEntries: Dirent[];
   try {
-    directoryEntries = await fs.readdir(workspacePath);
+    directoryEntries = await fs.readdir(workspacePath, { withFileTypes: true });
   } catch (error) {
     vscode.window.showErrorMessage(
       'Unable to inspect the workspace folder before cloning the Overleaf project.',
@@ -204,7 +211,12 @@ async function cloneOverleafProject(
     return;
   }
 
-  if (directoryEntries.length > 0) {
+  const ignoredWorkspaceEntries = new Set(['.DS_Store', 'Thumbs.db']);
+  const nonIgnoredEntries = directoryEntries.filter(
+    (entry) => !ignoredWorkspaceEntries.has(entry.name),
+  );
+
+  if (nonIgnoredEntries.length > 0) {
     vscode.window.showErrorMessage(
       'The workspace folder must be empty before cloning an Overleaf project.',
     );
