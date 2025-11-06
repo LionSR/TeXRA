@@ -52,11 +52,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     ) {
       const message = responseObject.choices[0].message;
 
-      // Check for thinking_content in Kimi thinking model
-      if (message.thinking_content) {
-        reasoningContent = message.thinking_content;
+      if (message.reasoning_content) {
+        reasoningContent = message.reasoning_content;
         this.logger.debug(
-          'Found thinking_content in choices[0].message.thinking_content',
+          'Found reasoning_content in choices[0].message.reasoning_content',
         );
 
         // If toolState is provided and we have reasoning content,
@@ -109,8 +108,8 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
     // For Kimi thinking model, add the thinking parameter
     const isThinkingModel =
-      this.config.name === 'kimit' ||
-      (this.config.fullName && this.config.fullName.includes('thinking'));
+      this.config.capabilities.supportsReasoning ||
+      this.capabilities.supportsReasoning;
 
     if (isThinkingModel) {
       this.logger.debug(
