@@ -146,7 +146,7 @@ export async function executeCommand(
 
     // With reject: false, this catch block only handles actual execution errors
     // (e.g., command not found), not timeouts or non-zero exit codes
-    const fallbackOutput = stderr ?? errorMessage;
+    const fallbackOutput = stderr || errorMessage;
     const normalizedError = normalizeOutput(fallbackOutput);
     return {
       success: false,
