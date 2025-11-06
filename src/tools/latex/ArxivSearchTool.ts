@@ -11,6 +11,10 @@ import {
   readPrimaryCategory,
 } from './arxivShared';
 
+// Local imports - citations
+import { ARXIV_CONSTANTS } from '../citations/constants';
+import { waitForRateLimit } from '../citations/rateLimiter';
+
 // Local imports - tools
 import { defineTool } from '../core/define';
 import { ToolError, toolResult } from '../result';
@@ -21,8 +25,8 @@ const SortOrderSchema = z.enum(['ascending', 'descending']);
 const ArxivSearchInputSchema = z.strictObject({
   query: z.string(),
   categories: z.array(z.string()).optional(),
-  maxResults: z.number().int().positive().max(50).optional(),
-  start: z.number().int().min(0).optional(),
+  maxResults: z.int().positive().max(ARXIV_CONSTANTS.MAX_RESULTS).optional(),
+  start: z.int().min(0).optional(),
   sortBy: SortBySchema.optional(),
   sortOrder: SortOrderSchema.optional(),
 });
@@ -59,7 +63,7 @@ export class ArxivSearchTool extends defineTool({
     let client = arxivClient
       .query(query)
       .start(input.start ?? 0)
-      .maxResults(input.maxResults ?? 10);
+      .maxResults(input.maxResults ?? ARXIV_CONSTANTS.DEFAULT_RESULTS);
 
     if (input.sortBy) {
       client = client.sortBy(input.sortBy);
@@ -71,6 +75,8 @@ export class ArxivSearchTool extends defineTool({
 
     let entries;
     try {
+      // Respect arXiv API rate limits
+      await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
       entries = await client.execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
