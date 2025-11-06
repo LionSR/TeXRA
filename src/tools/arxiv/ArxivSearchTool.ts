@@ -9,11 +9,11 @@ import {
   getAuthorNames,
   normaliseArxivIdentifier,
   readPrimaryCategory,
-} from './arxivShared';
+} from '../latex/arxivShared';
 
 // Local imports - citations
-import { ARXIV_CONSTANTS } from '../citations/constants';
-import { waitForRateLimit } from '../citations/rateLimiter';
+import { ARXIV_CONSTANTS } from '../citation/constants';
+import { waitForRateLimit } from '../citation/rateLimiter';
 
 // Local imports - tools
 import { defineTool } from '../core/define';
