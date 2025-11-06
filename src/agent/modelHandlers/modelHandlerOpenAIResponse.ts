@@ -18,6 +18,7 @@ import type {
   ResponseInputFile,
   ResponseInputImage,
   ResponseInputText,
+  ResponseInputAudio,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 import type { Reasoning } from 'openai/resources/shared';
@@ -338,41 +339,53 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ];
       }
 
+      // Audio input is documented but not functional in the Responses API
+      // See: https://community.openai.com/t/audio-input-not-working-when-migrating-from-completions-to-responses/1364108/3
+      // See: https://github.com/openai/openai-node/commit/9909fef596280fc16174679d97c3e81543c68646
+      // TODO: Re-enable when OpenAI makes this functional
       if (media.media_category === 'audio') {
-        if (!this.capabilities.supportsNativeAudio) {
-          this.logger.warn(
-            `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
-          );
-          return [];
-        }
-
-        let audioFormat = media.media_type;
-        if (media.media_type.includes('/')) {
-          audioFormat = media.media_type.split('/')[1];
-        }
-
-        const normalizedFormat =
-          audioFormat === 'mp3' || audioFormat === 'wav'
-            ? audioFormat
-            : undefined;
-        if (!normalizedFormat) {
-          this.logger.warn(
-            `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
-          );
-          return [];
-        }
-
-        return [
-          this.createInputText(`Audio: ${media.file_name}`),
-          {
-            type: 'input_audio',
-            input_audio: {
-              data: media.data,
-              format: normalizedFormat,
-            },
-          },
-        ];
+        this.logger.warn(
+          `Audio input received (${media.file_name}) but the Responses API does not currently support audio input. Skipping.`,
+        );
+        return [];
       }
+
+      // Commented out until audio input is functional in Responses API
+      // if (media.media_category === 'audio') {
+      //   if (!this.capabilities.supportsNativeAudio) {
+      //     this.logger.warn(
+      //       `Audio input received (${media.file_name}) but native audio is not supported by this model/provider (${this.config.provider}). Skipping.`,
+      //     );
+      //     return [];
+      //   }
+      //
+      //   let audioFormat = media.media_type;
+      //   if (media.media_type.includes('/')) {
+      //     audioFormat = media.media_type.split('/')[1];
+      //   }
+      //
+      //   const normalizedFormat =
+      //     audioFormat === 'mp3' || audioFormat === 'wav'
+      //       ? audioFormat
+      //       : undefined;
+      //   if (!normalizedFormat) {
+      //     this.logger.warn(
+      //       `Audio input received (${media.file_name}) with unsupported format (${audioFormat}). Skipping.`,
+      //     );
+      //     return [];
+      //   }
+      //
+      //   return [
+      //     this.createInputText(`Audio: ${media.file_name}`),
+      //     {
+      //       type: 'input_audio',
+      //       input_audio: {
+      //         data: media.data,
+      //         format: normalizedFormat,
+      //       },
+      //     } as ResponseInputAudio as ResponseInputContent,
+      //   ];
+      // }
 
       if (mediaType === 'application/pdf') {
         return [
@@ -1473,7 +1486,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     const content = (item as { content?: unknown }).content;
-    return typeof content === 'string' || this.isInputContentList(content);
+    return typeof content === 'string' || Array.isArray(content);
   }
 
   private getMessageContent(
@@ -1485,29 +1498,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return item.content;
   }
 
-  private isInputContentList(
-    content: unknown,
-  ): content is ResponseInputMessageContentList {
-    return (
-      Array.isArray(content) &&
-      content.every((item) => this.isInputContent(item))
-    );
-  }
-
-  private isInputContent(content: unknown): content is ResponseInputContent {
-    if (!content || typeof content !== 'object') {
-      return false;
-    }
-
-    const type = (content as { type?: unknown }).type;
-    return (
-      type === 'input_text' ||
-      type === 'input_image' ||
-      type === 'input_file' ||
-      type === 'input_audio'
-    );
-  }
-
   private appendInputText(message: ResponseInputItem, text: string): void {
     if (!this.isMessageItem(message)) {
       return;
@@ -1515,7 +1505,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const content = message.content;
 
-    if (this.isInputContentList(content)) {
+    if (Array.isArray(content)) {
       content.push(this.createInputText(text));
       return;
     }
@@ -1547,7 +1537,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     let existingText = '';
-    if (this.isInputContentList(content)) {
+    if (Array.isArray(content)) {
       existingText = content
         .map((part) => {
           const type = (part as { type?: unknown }).type;
