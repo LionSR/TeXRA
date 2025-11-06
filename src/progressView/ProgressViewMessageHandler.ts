@@ -31,6 +31,7 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
 // @ts-ignore - Import JavaScript module
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
@@ -84,10 +85,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
     const executionId = this.provider.state.getExecutionId(stream);
     if (executionId) {
-      const { ToolUseSessionManager } = await import(
-        '@agent/toolUse/ToolUseSessionManager'
-      );
-      await ToolUseSessionManager.deleteSnapshot(executionId);
+      await ToolUseSessionPersistence.clearPersistedSnapshot(executionId);
     }
   }
 
