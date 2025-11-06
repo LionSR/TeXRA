@@ -1,11 +1,22 @@
 // Third-party imports
+import { extract as extractArxivId } from 'identifiers-arxiv';
 
 // Local imports - none
 
-export const normaliseArxivIdentifier = (value: string): string =>
-  value
-    .replace(/^https?:\/\/arxiv\.org\/(abs|pdf)\//, '')
+/**
+ * Normalize an arXiv identifier by extracting it from various formats.
+ * Handles URLs (abs/pdf), plain IDs, arxiv: prefixes, and old/new format IDs.
+ * Uses the identifiers-arxiv package for robust extraction.
+ */
+export const normaliseArxivIdentifier = (value: string): string => {
+  // Preprocess PDF URLs since identifiers-arxiv doesn't handle them
+  const preprocessed = value
+    .replace(/^https?:\/\/arxiv\.org\/pdf\//, 'https://arxiv.org/abs/')
     .replace(/\.pdf$/i, '');
+
+  const extracted = extractArxivId(preprocessed);
+  return extracted[0] || value; // Fallback to original if extraction fails
+};
 
 export const extractEntryIdentifier = (rawId: unknown): string | null => {
   if (typeof rawId !== 'string') {
