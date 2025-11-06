@@ -25,9 +25,11 @@ export class Placeholder {
         '<a href="command:texra.openGettingStarted">open the getting started walkthrough</a>';
       const sampleLink =
         '<a href="command:texra.createSampleProject">create a sample project</a>';
+      const overleafLink =
+        '<a href="command:texra.cloneOverleafProject">clone an Overleaf project</a>';
       const arxivLink =
         '<a href="command:texra.downloadArXivSource">download an arXiv source</a>';
-      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${walkthroughLink}, ${sampleLink}, or ${arxivLink}.`;
+      this._element.innerHTML = `No runs yet—use TeXRA commands to start. Try ${walkthroughLink}, ${sampleLink}, ${overleafLink}, or ${arxivLink}.`;
     }
 
     container.innerHTML = '';
