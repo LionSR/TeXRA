@@ -615,22 +615,27 @@ export class ModelHandlerOpenAI extends ModelHandler<
     return { role: 'assistant', content: [{ type: 'text', text }] };
   }
 
+  /** Builds the default content parts for inline vision requests. */
+  protected buildStandardVisionParts(
+    media: MediaEntry,
+  ): ChatCompletionContentPart[] {
+    return [
+      { type: 'text', text: `Image: ${media.file_name}` },
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:${media.media_type};base64,${media.data}`,
+          detail: 'high',
+        },
+      },
+    ];
+  }
+
   /** Formats image/audio content for OpenAI/Google's vision/audio API. */
   createMediaContent(mediaMessage: MediaEntry[]): ChatCompletionContentPart[] {
     return mediaMessage.flatMap((media): ChatCompletionContentPart[] => {
       if (media.media_category === 'image') {
-        return [
-          { type: 'text', text: `Image: ${media.file_name}` },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${media.media_type};base64,${media.data}`,
-              detail: 'high',
-              // media_type and data are not standard OpenAI
-              // Re-add them if needed for other providers (which is not the case for Google/OpenRouter)
-            },
-          },
-        ];
+        return this.buildStandardVisionParts(media);
       } else if (
         media.media_category === 'audio' &&
         this.isGoogle &&
