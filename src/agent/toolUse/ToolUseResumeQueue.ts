@@ -2,7 +2,7 @@
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - tool-use snapshots
 import type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
@@ -22,6 +22,10 @@ interface ResumingSessionState {
 export class ToolUseResumeQueue {
   private static readonly pendingSnapshots = new Map<
     StreamTabId,
+    ToolUseSessionSnapshot
+  >();
+  private static readonly snapshotsByExecution = new Map<
+    ExecutionId,
     ToolUseSessionSnapshot
   >();
   private static readonly resumingSessions = new Map<
@@ -44,6 +48,10 @@ export class ToolUseResumeQueue {
 
     for (const snapshot of snapshots) {
       this.pendingSnapshots.set(snapshot.streamId as StreamTabId, snapshot);
+      this.snapshotsByExecution.set(
+        snapshot.executionId as ExecutionId,
+        snapshot,
+      );
     }
 
     logger.debug(
@@ -58,6 +66,7 @@ export class ToolUseResumeQueue {
     }
 
     this.pendingSnapshots.clear();
+    this.snapshotsByExecution.clear();
     logger.debug('Cleared all pending tool-use snapshots.');
   }
 
@@ -75,6 +84,7 @@ export class ToolUseResumeQueue {
     const snapshot = this.pendingSnapshots.get(streamId);
     if (snapshot) {
       this.pendingSnapshots.delete(streamId);
+      this.snapshotsByExecution.delete(snapshot.executionId as ExecutionId);
       logger.debug(
         `Consuming pending snapshot for stream ${streamId} to resume lazily.`,
       );
@@ -84,14 +94,38 @@ export class ToolUseResumeQueue {
 
   /** Removes a cached snapshot for the provided stream without consuming it. */
   public static clearPendingSnapshot(streamId: StreamTabId): void {
-    if (this.pendingSnapshots.delete(streamId)) {
-      logger.debug(`Cleared pending snapshot for stream ${streamId}.`);
+    const snapshot = this.pendingSnapshots.get(streamId);
+    if (!snapshot) {
+      return;
     }
+
+    this.pendingSnapshots.delete(streamId);
+    this.snapshotsByExecution.delete(snapshot.executionId as ExecutionId);
+    logger.debug(`Cleared pending snapshot for stream ${streamId}.`);
+  }
+
+  /** Removes a cached snapshot for the provided execution identifier. */
+  public static clearPendingSnapshotByExecution(
+    executionId: ExecutionId,
+  ): ToolUseSessionSnapshot | undefined {
+    const snapshot = this.snapshotsByExecution.get(executionId);
+    if (!snapshot) {
+      return undefined;
+    }
+
+    this.snapshotsByExecution.delete(executionId);
+    this.pendingSnapshots.delete(snapshot.streamId as StreamTabId);
+    logger.debug(`Cleared pending snapshot for execution ${executionId}.`);
+    return snapshot;
   }
 
   /** Adds a pending snapshot or replaces an existing entry for the stream. */
   public static cacheSnapshot(snapshot: ToolUseSessionSnapshot): void {
     this.pendingSnapshots.set(snapshot.streamId as StreamTabId, snapshot);
+    this.snapshotsByExecution.set(
+      snapshot.executionId as ExecutionId,
+      snapshot,
+    );
     logger.debug(
       `Cached pending snapshot for stream ${snapshot.streamId} after persistence.`,
     );

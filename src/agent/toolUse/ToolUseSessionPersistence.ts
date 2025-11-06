@@ -48,42 +48,22 @@ interface PersistSnapshotArgs {
   hasQueuedFollowUps: () => boolean;
 }
 
-// The persistence helper keeps a local cache so follow-up dispatch can resume
-// a session without reloading from disk. The resume queue mirrors this cache
-// to look up snapshots by stream identifier. These two structures must always
-// be updated together, so helper utilities below mutate both in lockstep.
-const persistedExecutions = new Map<ExecutionId, ToolUseSessionSnapshot>();
-
 function rememberSnapshot(snapshot: ToolUseSessionSnapshot): void {
-  persistedExecutions.set(snapshot.executionId as ExecutionId, snapshot);
   ToolUseResumeQueue.cacheSnapshot(snapshot);
 }
 
 function rememberSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
-  for (const snapshot of snapshots) {
-    persistedExecutions.set(snapshot.executionId as ExecutionId, snapshot);
-  }
-
   ToolUseResumeQueue.registerPendingSnapshots(snapshots);
 }
 
 function forgetSnapshot(
   executionId: ExecutionId,
 ): ToolUseSessionSnapshot | undefined {
-  const snapshot = persistedExecutions.get(executionId);
-  if (snapshot) {
-    persistedExecutions.delete(executionId);
-    ToolUseResumeQueue.clearPendingSnapshot(snapshot.streamId as StreamTabId);
-  }
-
-  return snapshot;
+  return ToolUseResumeQueue.clearPendingSnapshotByExecution(executionId);
 }
 
 function forgetSnapshotForStream(streamId: StreamTabId): void {
-  const snapshot = ToolUseResumeQueue.consumeSnapshotForStream(streamId);
-  if (snapshot) {
-    persistedExecutions.delete(snapshot.executionId as ExecutionId);
-  }
+  ToolUseResumeQueue.consumeSnapshotForStream(streamId);
 }
 
 async function buildToolUseAgent(
@@ -176,7 +156,6 @@ export const ToolUseSessionPersistence = {
   },
 
   clearAllPersistedSnapshots(): void {
-    persistedExecutions.clear();
     ToolUseResumeQueue.clearAllPendingSnapshots();
   },
 
@@ -239,15 +218,7 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    const cachedSnapshot = forgetSnapshot(executionId);
-    if (!cachedSnapshot) {
-      const storedSnapshot = await ToolUseSnapshotStore.load(executionId);
-      if (storedSnapshot) {
-        ToolUseResumeQueue.clearPendingSnapshot(
-          storedSnapshot.streamId as StreamTabId,
-        );
-      }
-    }
+    forgetSnapshot(executionId);
 
     await ToolUseSnapshotStore.delete(executionId);
   },
