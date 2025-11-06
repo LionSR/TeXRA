@@ -104,92 +104,12 @@ function findLastTextPart(
   return undefined;
 }
 
-const UNSUPPORTED_FUNCTION_CALL_KEYS = [
-  'call_id',
-  'tool_call_id',
-  'tool_use_id',
-];
-
-function sanitizeFunctionCallPart(part: Part): Part {
-  if (!part || typeof part !== 'object') {
-    return part;
-  }
-
-  const candidate = part as Part & {
-    functionCall?: Record<string, unknown>;
-  };
-
-  if (!candidate.functionCall) {
-    return part;
-  }
-
-  const sanitizedCall = {
-    ...candidate.functionCall,
-  } as Record<string, unknown>;
-
-  for (const key of UNSUPPORTED_FUNCTION_CALL_KEYS) {
-    if (key in sanitizedCall) {
-      delete sanitizedCall[key];
-    }
-  }
-
-  return {
-    ...candidate,
-    functionCall: sanitizedCall as Part['functionCall'],
-  };
-}
-
-function sanitizeFunctionCallParts(parts?: Part[]): Part[] {
-  if (!Array.isArray(parts)) {
-    return [];
-  }
-
-  return parts.map((part) => sanitizeFunctionCallPart(part));
-}
-
-type NormalizedFunctionCall = (FunctionCall & Record<string, unknown>) & {
-  id: string;
-  call_id: string;
-};
-
-function toTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function ensureFunctionCallIdentifiers(call: FunctionCall): {
-  normalized: NormalizedFunctionCall;
-  synthesized: boolean;
-} {
-  const normalized = { ...call } as FunctionCall & Record<string, unknown>;
-  const existingId = toTrimmedString(normalized.id);
-  const existingCallId = toTrimmedString(normalized.call_id);
-  const existingToolCallId = toTrimmedString(normalized.tool_call_id);
-  const existingToolUseId = toTrimmedString(normalized.tool_use_id);
-
-  const fallbackId =
-    existingId || existingCallId || existingToolCallId || existingToolUseId;
-  const id = fallbackId || randomUUID();
-  normalized.id = id;
-
-  const callId =
-    existingCallId || existingToolCallId || existingToolUseId || id;
-  normalized.call_id = callId;
-
-  if (!toTrimmedString(normalized.tool_call_id)) {
-    normalized.tool_call_id = callId;
-  }
-  if (!toTrimmedString(normalized.tool_use_id)) {
-    normalized.tool_use_id = callId;
-  }
-
-  const synthesizedId = !fallbackId;
-  const synthesizedCallId =
-    !existingCallId && !existingToolCallId && !existingToolUseId;
-
-  return {
-    normalized: normalized as NormalizedFunctionCall,
-    synthesized: synthesizedId || synthesizedCallId,
-  };
+/**
+ * Ensures a function call has an ID. Google's SDK may return function calls
+ * without IDs in some cases, so we generate one if needed.
+ */
+function ensureCallId(call: FunctionCall): string {
+  return call.id?.trim() || randomUUID();
 }
 
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
@@ -226,19 +146,18 @@ function convertMessagesToGoogleContentHistory(
     }
 
     const parts = Array.isArray(message.parts) ? message.parts : [];
-    const sanitizedParts = sanitizeFunctionCallParts(parts);
     if (parts.length === 0) {
       return;
     }
 
     if (role === currentRole) {
-      currentParts.push(...sanitizedParts);
+      currentParts.push(...parts);
     } else {
       if (currentRole && currentParts.length > 0) {
         history.push({ role: currentRole, parts: [...currentParts] });
       }
       currentRole = role;
-      currentParts = [...sanitizedParts];
+      currentParts = [...parts];
     }
   });
 
@@ -426,7 +345,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger,
     );
 
-    const lastMessageParts = sanitizeFunctionCallParts(lastMessage?.parts);
+    const lastMessageParts = Array.isArray(lastMessage?.parts)
+      ? lastMessage.parts
+      : [];
     if (lastMessageParts.length === 0) {
       this.logger.error('Could not extract valid parts from the last message.');
       throw new Error('Last message conversion resulted in empty parts.');
@@ -440,7 +361,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (
       this.config.fullName.includes('2.5-pro') ||
-      this.config.fullName.includes('2.5-flash')
+      this.config.fullName.includes('2.5-flash') ||
+      this.config.fullName.includes('flash-latest')
     ) {
       generationConfig.thinkingConfig = { includeThoughts: true };
     }
@@ -1074,16 +996,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (Array.isArray(parts)) {
       const funcPart = parts.find((part) => part.functionCall);
       if (funcPart?.functionCall) {
-        const { normalized, synthesized } = ensureFunctionCallIdentifiers(
-          funcPart.functionCall,
-        );
-        if (synthesized) {
-          const functionName = normalized.name ?? 'unknown';
+        const call = funcPart.functionCall;
+        // Ensure the call has an ID
+        const callId = ensureCallId(call);
+        const callWithId = { ...call, id: callId };
+
+        if (!call.id) {
           this.logger.debug(
-            `Synthesized tool call identifier for Google function call '${functionName}'.`,
+            `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
           );
         }
-        return JSON.stringify(normalized, null, 2);
+        return JSON.stringify(callWithId, null, 2);
       }
     }
     return null;
@@ -1122,7 +1045,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
-    id: string,
+    _id: string,
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
@@ -1141,20 +1064,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
 
-    // Use consistent ID for both call and result to ensure proper correlation
-    const callRecord = call as FunctionCall & Record<string, unknown>;
-    const callId =
-      toTrimmedString(callRecord?.id) ||
-      toTrimmedString(callRecord?.call_id) ||
-      toTrimmedString(callRecord?.tool_call_id) ||
-      toTrimmedString(callRecord?.tool_use_id) ||
-      id;
+    // Ensure the function call has an ID for correlation with result
+    const callId = ensureCallId(call);
     if (callPart.functionCall) {
       callPart.functionCall.id = callId;
-      // The Google GenAI Chat API rejects unknown fields on the function call
-      // payload, so avoid populating call_id/tool_call_id/tool_use_id here.
-      // The synthesized identifiers are still preserved via the follow-up
-      // result message and the normalized JSON stored in tool state.
     }
 
     // Use the same ID for the result to maintain correlation
@@ -1192,7 +1105,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     callParts.push(callPart);
     const callMsg: Content = {
       role: 'model',
-      parts: sanitizeFunctionCallParts(callParts),
+      parts: callParts,
     };
     const resultParts: Part[] = [resultPart, ...attachmentParts];
     const resultMsg: Content = { role: 'user', parts: resultParts };
