@@ -88,6 +88,7 @@ export interface ResponseCycleRuntimeState {
   responseTime?: number;
   stopReason?: ProviderStopReason;
   processedResponse?: string;
+  roundFinalized: boolean;
 }
 
 export type ResponseCycleState = ResponseCycleInputState &
@@ -100,6 +101,19 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   cycle.responseTime = undefined;
   cycle.stopReason = undefined;
   cycle.processedResponse = undefined;
+  cycle.roundFinalized = false;
+}
+
+async function finalizeRoundIfNeeded(
+  store: AgentSharedStore,
+  state: ResponseCycleRuntimeState,
+): Promise<void> {
+  if (state.roundFinalized) {
+    return;
+  }
+
+  state.roundFinalized = true;
+  await store.finalizeRound();
 }
 
 export interface ResponseCycleShared<C = unknown> {
@@ -456,6 +470,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if ('skipped' in execRes) {
       state.endTurn = false;
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
@@ -463,11 +478,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     state.stopReason = result.stopReason;
     state.processedResponse = result.processedResponse;
-    await store.finalizeRound();
 
     if (result.repetitionDetected) {
       state.endTurn = false;
       state.shouldStop = true;
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
@@ -476,6 +491,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (!processedResponse) {
       state.endTurn = false;
       state.shouldStop = true;
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
@@ -620,6 +636,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if ('skipped' in execRes) {
       state.endTurn = false;
       state.shouldStop = true;
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
@@ -629,6 +646,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     state.shouldStop = shouldStop;
 
     if (shouldStop) {
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
@@ -636,6 +654,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const willContinue = shouldContinue || reachedTokenLimit;
 
     if (!willContinue) {
+      await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
     }
 
