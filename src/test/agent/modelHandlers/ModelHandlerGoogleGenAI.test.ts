@@ -7,11 +7,19 @@ import type {
   Part,
   UploadFileParameters,
   FunctionCall,
+  Content,
 } from '@google/genai';
-import { createPartFromUri } from '@google/genai';
+import {
+  createPartFromBase64,
+  createPartFromText,
+  createPartFromUri,
+} from '@google/genai';
 
 // Local imports - agent
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+import {
+  ModelHandlerGoogleGenAI,
+  convertMessagesToGoogleContentHistory,
+} from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
@@ -96,7 +104,7 @@ class GoogleHandlerTestDouble extends ModelHandlerGoogleGenAI {
 }
 
 describe('ModelHandlerGoogleGenAI media uploads', () => {
-  it('uploads MediaEntry instances via files.upload using file paths when available', async () => {
+  it('creates inline parts when base64 media is provided', async () => {
     const uploadCalls: UploadFileParameters[] = [];
 
     const clientStub = {
@@ -130,31 +138,17 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
     const parts = await handler.invokeUpload([entry]);
 
-    assert.equal(uploadCalls.length, 1, 'should invoke files.upload once');
-    const [uploadParams] = uploadCalls;
-    assert.equal(
-      uploadParams.file,
-      '/tmp/sample.pdf',
-      'file payload should reference the source path',
-    );
-    assert.equal(uploadParams.config?.mimeType, 'application/pdf');
-    assert.equal(uploadParams.config?.displayName, 'sample.pdf');
-
+    assert.equal(uploadCalls.length, 0, 'should not invoke files.upload');
     assert.deepEqual(parts, [
-      createPartFromUri('files/test-file', 'application/pdf'),
+      createPartFromBase64(entry.data, 'application/pdf'),
     ]);
   });
 
-  it('does not emit duplicate fileList logs while uploading media', async () => {
+  it('does not emit duplicate fileList logs for inline attachments', async () => {
     const clientStub = {
       files: {
-        upload: async (params: UploadFileParameters) => {
-          return {
-            name: 'files/test-file',
-            uri: 'files/test-file',
-            mimeType: params.config?.mimeType ?? 'application/pdf',
-            displayName: params.config?.displayName ?? 'test.pdf',
-          } satisfies Partial<File> as File;
+        upload: async () => {
+          throw new Error('upload should not be called for inline payloads');
         },
       },
     };
@@ -171,7 +165,6 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
       data: Buffer.from('%PDF-1.7').toString('base64'),
       media_type: 'application/pdf',
       media_category: 'image',
-      source_path: '/tmp/sample.pdf',
     };
 
     await handler.invokeUpload([entry]);
@@ -183,134 +176,46 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
     );
   });
 
-  it('prefers binary payloads when provided on media entries', async () => {
-    let uploadInvocationCount = 0;
-    const clientStub = {
-      files: {
-        upload: async (params: UploadFileParameters) => {
-          uploadInvocationCount += 1;
-          return {
-            name: 'files/audio',
-            uri: 'files/audio',
-            mimeType: params.config?.mimeType ?? 'audio/wav',
-            displayName: params.config?.displayName ?? 'audio.wav',
-          } satisfies Partial<File> as File;
-        },
-      },
-    };
-
-    const handler = new GoogleHandlerTestDouble(
-      buildGoogleConfig({ supportsNativeAudio: true }),
-      clientStub,
-    );
-    const { logger } = createLoggerStub();
-    handler.setLogger(logger);
-
-    const binaryPayload = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
-    const entry: MediaEntry = {
-      file_name: 'audio.wav',
-      data: 'not-valid-base64',
-      media_type: 'audio/wav',
-      media_category: 'audio',
-      binary_data: binaryPayload,
-    };
-
-    const parts = await handler.invokeUpload([entry]);
-
-    assert.equal(uploadInvocationCount, 1, 'should still upload once');
-    assert.deepEqual(parts, [createPartFromUri('files/audio', 'audio/wav')]);
-  });
-
-  it('ignores source paths when bytes no longer match the encoded payload', async () => {
+  it('falls back to files.upload when inline payload exceeds the configured limit', async () => {
     const uploadCalls: UploadFileParameters[] = [];
-
     const clientStub = {
       files: {
         upload: async (params: UploadFileParameters) => {
           uploadCalls.push(params);
           return {
-            name: 'files/converted',
-            uri: 'files/converted',
-            mimeType: params.config?.mimeType ?? 'image/png',
-            displayName: params.config?.displayName ?? 'converted.png',
-          } satisfies Partial<File> as File;
-        },
-      },
-    };
-
-    const handler = new GoogleHandlerTestDouble(
-      buildGoogleConfig({ supportsNativePdf: false }),
-      clientStub,
-    );
-    const { logger } = createLoggerStub();
-    handler.setLogger(logger);
-
-    const pngPayload = Buffer.from([0, 1, 2, 3]).toString('base64');
-    const entry: MediaEntry = {
-      file_name: 'converted_page_1',
-      data: pngPayload,
-      media_type: 'image/png',
-      media_category: 'image',
-      source_path: '/tmp/original.pdf',
-      bytes_match_source: false,
-    };
-
-    const parts = await handler.invokeUpload([entry]);
-
-    assert.equal(uploadCalls.length, 1, 'should invoke files.upload once');
-    const [uploadParams] = uploadCalls;
-    assert.ok(
-      uploadParams.file instanceof globalThis.Blob,
-      'file payload should be uploaded from memory instead of the stale path',
-    );
-
-    assert.deepEqual(parts, [
-      createPartFromUri('files/converted', 'image/png'),
-    ]);
-  });
-
-  it('falls back to Blob payloads when media entries only contain encoded data', async () => {
-    const uploadCalls: UploadFileParameters[] = [];
-
-    const clientStub = {
-      files: {
-        upload: async (params: UploadFileParameters) => {
-          uploadCalls.push(params);
-          return {
-            name: 'files/base64',
-            uri: 'files/base64',
+            name: 'files/large',
+            uri: 'files/large',
             mimeType: params.config?.mimeType ?? 'application/pdf',
-            displayName: params.config?.displayName ?? 'fallback.pdf',
+            displayName: params.config?.displayName ?? 'large.pdf',
           } satisfies Partial<File> as File;
         },
       },
     };
 
-    const handler = new GoogleHandlerTestDouble(
-      buildGoogleConfig(),
-      clientStub,
-    );
+    class LimitedInlineHandler extends GoogleHandlerTestDouble {
+      protected override getInlineUploadLimitBytes(): number {
+        return 1;
+      }
+    }
+
+    const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
     const { logger } = createLoggerStub();
     handler.setLogger(logger);
 
+    const oversized = Buffer.from([0, 1]).toString('base64');
     const entry: MediaEntry = {
-      file_name: 'no-path.pdf',
-      data: Buffer.from('%PDF-1.5').toString('base64'),
+      file_name: 'large.pdf',
+      data: oversized,
       media_type: 'application/pdf',
       media_category: 'image',
+      source_path: '/tmp/large.pdf',
     };
 
     const parts = await handler.invokeUpload([entry]);
 
     assert.equal(uploadCalls.length, 1, 'should invoke files.upload once');
-    const [uploadParams] = uploadCalls;
-    assert.ok(
-      uploadParams.file instanceof globalThis.Blob,
-      'file payload should be a Blob when no file path is provided',
-    );
-
     assert.deepEqual(parts, [
-      createPartFromUri('files/base64', 'application/pdf'),
+      createPartFromUri('files/large', 'application/pdf'),
     ]);
   });
 
@@ -394,6 +299,33 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
     handlerMediaProcessor.mediaProcessor.loadEntries = originalLoadEntries;
     handlerMediaProcessor.mediaProcessor.logResults = originalLogResults;
+  });
+});
+
+describe('convertMessagesToGoogleContentHistory', () => {
+  it('groups consecutive turns using SDK helpers', () => {
+    const { logger } = createLoggerStub();
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('first')] },
+      { role: 'user', parts: [createPartFromText('second')] },
+      { role: 'model', parts: [createPartFromText('reply one')] },
+      { role: 'model', parts: [createPartFromText('reply two')] },
+    ];
+
+    const history = convertMessagesToGoogleContentHistory(messages, logger);
+
+    assert.equal(history.length, 2, 'user and model messages should merge');
+    assert.equal(history[0].role, 'user');
+    const userParts = history[0].parts ?? [];
+    assert.equal(userParts.length, 2);
+    assert.equal((userParts[0] as Part & { text: string }).text, 'first');
+    assert.equal((userParts[1] as Part & { text: string }).text, 'second');
+
+    assert.equal(history[1].role, 'model');
+    const modelParts = history[1].parts ?? [];
+    assert.equal(modelParts.length, 2);
+    assert.equal((modelParts[0] as Part & { text: string }).text, 'reply one');
+    assert.equal((modelParts[1] as Part & { text: string }).text, 'reply two');
   });
 });
 
