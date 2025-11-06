@@ -258,7 +258,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         uploadSummaries.push({ path: fileName, ok: false });
       }
-      }
+    }
 
     if (uploadSummaries.some((summary) => !summary.ok)) {
       this.logger.warn(
