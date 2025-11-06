@@ -475,9 +475,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             if (chunk.modelVersion) {
               baseResponse.modelVersion = chunk.modelVersion;
             }
-            if (chunk.automaticFunctionCallingHistory) {
+            if (chunk.automaticFunctionCallingHistory?.length) {
+              const existingHistory =
+                baseResponse.automaticFunctionCallingHistory ?? [];
               baseResponse.automaticFunctionCallingHistory =
-                chunk.automaticFunctionCallingHistory;
+                existingHistory.length === 0
+                  ? [...chunk.automaticFunctionCallingHistory]
+                  : [
+                      ...existingHistory,
+                      ...chunk.automaticFunctionCallingHistory,
+                    ];
             }
             if (chunk.responseId) {
               baseResponse.responseId = chunk.responseId;
@@ -493,7 +500,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         if (candidateSource) {
           const candidateParts = aggregatedParts.length
             ? aggregatedParts
-            : candidateSource.content?.parts ?? [];
+            : (candidateSource.content?.parts ?? []);
           baseResponse.candidates = [
             {
               ...candidateSource,
@@ -511,7 +518,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
-        output?.finalize(aggregatedText || baseResponse.text || '');
+
+        let finalOutputText = aggregatedText;
+        if (!finalOutputText) {
+          const partsText = aggregatedParts
+            .filter(isTextPart)
+            .map((part) => part.text)
+            .join('');
+          if (partsText) {
+            finalOutputText = partsText;
+          } else if (baseResponse.text) {
+            finalOutputText = baseResponse.text;
+            this.logger.warn(
+              'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
+            );
+          } else {
+            finalOutputText = '';
+          }
+        }
+        output?.finalize(finalOutputText);
 
         return baseResponse;
       }
