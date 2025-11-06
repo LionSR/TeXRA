@@ -20,7 +20,7 @@ export interface AgentSharedStoreSlices {
   user: UserVariableChannels;
 }
 
-interface AgentSharedStoreConfig extends AgentSharedStoreSlices {
+interface AgentSharedStoreOptions extends AgentSharedStoreSlices {
   onRoundFinalized?: AgentRoundFinalizedCallback;
 }
 
@@ -38,7 +38,7 @@ export class AgentSharedStore {
   private readonly userChannels: UserVariableChannels;
   private readonly onRoundFinalized?: AgentRoundFinalizedCallback;
 
-  constructor(config: AgentSharedStoreConfig) {
+  constructor(config: AgentSharedStoreOptions) {
     this.roundState = config.round;
     this.runState = config.run;
     this.workspaceState = config.workspace;
