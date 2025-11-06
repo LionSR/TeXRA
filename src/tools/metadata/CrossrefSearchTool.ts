@@ -1,5 +1,10 @@
 // Third-party imports
-import crossref from 'crossref';
+import {
+  CrossrefClient,
+  SortOrder,
+  type QueryWorksParams,
+  type WorkSortOptions,
+} from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -13,45 +18,17 @@ const CrossrefSearchInputSchema = z.strictObject({
   sort: z.string().optional(),
   order: z.enum(['asc', 'desc']).optional(),
   filter: z
-    .record(z.string(), z.union([z.string(), z.array(z.string())]))
+    .union([
+      z.string(),
+      z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+    ])
     .optional(),
 });
 
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
 
-type CrossrefWorksCallback = (
-  error: Error | null,
-  items?: unknown[],
-  nextOptions?: Record<string, unknown>,
-  isDone?: boolean,
-  message?: Record<string, unknown>,
-) => void;
-
-const queryWorks = (options: Record<string, unknown>) =>
-  new Promise<{
-    items: unknown[];
-    nextOptions?: Record<string, unknown>;
-    isDone?: boolean;
-    message?: Record<string, unknown>;
-  }>((resolve, reject) => {
-    (
-      crossref.works as (
-        opts: Record<string, unknown>,
-        cb: CrossrefWorksCallback,
-      ) => void
-    )(options, (error, items, nextOptions, isDone, message) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve({
-        items: Array.isArray(items) ? items : [],
-        nextOptions,
-        isDone,
-        message,
-      });
-    });
-  });
+const crossrefClient = new CrossrefClient();
+type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
 
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
@@ -64,7 +41,7 @@ export class CrossrefSearchTool extends defineTool({
       throw new ToolError('Search query cannot be empty.');
     }
 
-    const options: Record<string, unknown> = {
+    const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
     };
 
@@ -75,24 +52,39 @@ export class CrossrefSearchTool extends defineTool({
       options.offset = input.offset;
     }
     if (input.sort) {
-      options.sort = input.sort;
+      options.sort = input.sort as WorkSortOptions;
     }
     if (input.order) {
-      options.order = input.order;
+      options.order = input.order === 'asc' ? SortOrder.ASC : SortOrder.DESC;
     }
     if (input.filter) {
-      options.filter = input.filter;
+      if (typeof input.filter === 'string') {
+        options.filter = input.filter;
+      } else {
+        const segments = Object.entries(input.filter).flatMap(([key, value]) =>
+          Array.isArray(value)
+            ? value.map((entry) => `${key}:${entry}`)
+            : [`${key}:${value}`],
+        );
+        options.filter = segments.join(',');
+      }
     }
 
-    let response;
+    let response: Awaited<ReturnType<typeof crossrefClient.works>>;
     try {
-      response = await queryWorks(options);
+      response = await crossrefClient.works(options);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Crossref search failed: ${message}`);
     }
 
-    const items = response.items;
+    if (!response.ok || !response.content || !response.content.message) {
+      throw new ToolError('Crossref search did not return any items.');
+    }
+
+    const message = response.content.message;
+    const items = Array.isArray(message.items) ? message.items : [];
+
     const results = items.map((item) => {
       if (!item || typeof item !== 'object') {
         return {
@@ -104,10 +96,10 @@ export class CrossrefSearchTool extends defineTool({
           url: null,
         };
       }
-      const work = item as Record<string, unknown>;
+      const work = (item as unknown) as Record<string, unknown>;
       const titleValue = work.title;
       const primaryTitle = Array.isArray(titleValue)
-        ? titleValue[0]
+        ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
         : typeof titleValue === 'string'
           ? titleValue
           : null;
@@ -126,10 +118,8 @@ export class CrossrefSearchTool extends defineTool({
       query: trimmedQuery,
       count: results.length,
       totalResults:
-        typeof response.message?.['total-results'] === 'number'
-          ? response.message['total-results']
-          : null,
-      nextOptions: response.isDone ? null : (response.nextOptions ?? null),
+        typeof message.totalResults === 'number' ? message.totalResults : null,
+      nextOptions: null,
       results,
     };
 
