@@ -11,7 +11,9 @@ import {
   ChatCompletionMessage,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageCustomToolCall,
+  ChatCompletionChunk,
 } from 'openai/resources/chat/completions';
+import type { ChatCompletionStreamEvents } from 'openai/lib/ChatCompletionStream';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -171,7 +173,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     if (useStreaming) {
-      let response: any;
       kwargs.stream_options = { include_usage: true };
       try {
         const stream = client.chat.completions.stream(kwargs as any, {
@@ -182,79 +183,104 @@ export class ModelHandlerOpenAI extends ModelHandler<
           ? this.createOutputStream()
           : undefined;
 
-        if (this.config.fullName.includes('deepseek')) {
-          // Aggregate stream chunks manually for DeepSeek models
-          const collectText = (value: any): string => {
-            if (!value) {
-              return '';
-            }
-            if (typeof value === 'string') {
-              return value;
-            }
-            if (Array.isArray(value)) {
-              return value
-                .map((entry) => {
-                  if (!entry) {
-                    return '';
-                  }
-                  if (typeof entry === 'string') {
-                    return entry;
-                  }
-                  if (typeof entry === 'object' && 'text' in entry) {
-                    return (entry as { text?: string }).text ?? '';
-                  }
-                  return '';
-                })
-                .join('');
-            }
-            if (typeof value === 'object' && 'text' in value) {
-              return (value as { text?: string }).text ?? '';
-            }
+        const disposables: Array<() => void> = [];
+        const registerListener = <
+          Event extends keyof ChatCompletionStreamEvents,
+        >(
+          event: Event,
+          listener: ChatCompletionStreamEvents[Event],
+        ) => {
+          stream.on(event, listener as any);
+          disposables.push(() => stream.off(event, listener as any));
+        };
+
+        const collectText = (value: unknown): string => {
+          if (!value) {
             return '';
-          };
+          }
+          if (typeof value === 'string') {
+            return value;
+          }
+          if (Array.isArray(value)) {
+            return value
+              .map((entry) => {
+                if (!entry) {
+                  return '';
+                }
+                if (typeof entry === 'string') {
+                  return entry;
+                }
+                if (typeof entry === 'object' && 'text' in entry) {
+                  return (entry as { text?: string }).text ?? '';
+                }
+                return '';
+              })
+              .join('');
+          }
+          if (
+            typeof value === 'object' &&
+            'text' in (value as Record<string, unknown>)
+          ) {
+            return (value as { text?: string }).text ?? '';
+          }
+          return '';
+        };
 
-          const appendStringValue = (
-            existing: string | undefined,
-            addition: unknown,
-          ): string => {
-            if (typeof addition !== 'string' || addition.length === 0) {
-              return existing ?? '';
+        const appendStringValue = (
+          existing: string | undefined,
+          addition: unknown,
+        ): string => {
+          if (typeof addition !== 'string' || addition.length === 0) {
+            return existing ?? '';
+          }
+          return `${existing ?? ''}${addition}`;
+        };
+
+        const isDeepSeekModel = this.config.fullName.includes('deepseek');
+        const deepSeekAggregation = isDeepSeekModel
+          ? {
+              contentParts: [] as string[],
+              reasoningParts: [] as string[],
+              toolCalls: [] as Array<{
+                id: string;
+                type?: string;
+                function?: { name?: string; arguments?: string };
+              }>,
+              functionCall: null as {
+                name: string;
+                arguments: string;
+              } | null,
+              role: undefined as string | undefined,
+              lastChunk: undefined as ChatCompletionChunk | undefined,
             }
-            return `${existing ?? ''}${addition}`;
-          };
+          : null;
 
-          const fullContentParts: string[] = [];
-          const reasoningParts: string[] = [];
-          const aggregatedToolCalls: Array<{
-            id: string;
-            type?: string;
-            function?: { name?: string; arguments?: string };
-          }> = [];
-          let aggregatedFunctionCall: {
-            name: string;
-            arguments: string;
-          } | null = null;
-          let role: string | undefined;
-          let lastChunk: any;
+        registerListener('content.delta', ({ delta }) => {
+          if (delta) {
+            output?.append(delta);
+          }
+        });
 
-          for await (const chunk of stream) {
-            lastChunk = chunk;
-            const delta: any = chunk.choices?.[0]?.delta ?? {};
+        registerListener('chunk', (chunk) => {
+          const delta: any = chunk.choices?.[0]?.delta ?? {};
+          const reasoningDelta = collectText(delta?.reasoning_content);
+          if (reasoningDelta) {
+            thinking.append(reasoningDelta);
+          }
 
+          if (deepSeekAggregation) {
+            deepSeekAggregation.lastChunk = chunk;
             if (delta.role && typeof delta.role === 'string') {
-              role = delta.role;
-            }
-
-            const reasoningDelta = collectText(delta?.reasoning_content);
-            if (reasoningDelta) {
-              reasoningParts.push(reasoningDelta);
-              thinking.append(reasoningDelta);
+              deepSeekAggregation.role = delta.role;
             }
 
             const contentDelta = collectText(delta?.content);
             if (contentDelta) {
-              fullContentParts.push(contentDelta);
-              output?.append(contentDelta);
+              deepSeekAggregation.contentParts.push(contentDelta);
+            }
+
+            if (reasoningDelta) {
+              deepSeekAggregation.reasoningParts.push(reasoningDelta);
             }
 
             if (Array.isArray(delta?.tool_calls)) {
@@ -266,14 +292,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
                   typeof toolCallChunk.index === 'number'
                     ? toolCallChunk.index
                     : 0;
-                while (aggregatedToolCalls.length <= index) {
-                  aggregatedToolCalls.push({
+                while (deepSeekAggregation.toolCalls.length <= index) {
+                  deepSeekAggregation.toolCalls.push({
                     id: '',
                     type: 'function',
                     function: { name: '', arguments: '' },
                   });
                 }
-                const target = aggregatedToolCalls[index];
+                const target = deepSeekAggregation.toolCalls[index];
                 target.id = appendStringValue(target.id, toolCallChunk.id);
                 if (toolCallChunk.type) {
                   target.type = toolCallChunk.type;
@@ -299,8 +325,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
             if (delta?.function_call) {
               const functionCall =
-                aggregatedFunctionCall ??
-                (aggregatedFunctionCall = {
+                deepSeekAggregation.functionCall ??
+                (deepSeekAggregation.functionCall = {
                   name: '',
                   arguments: '',
                 });
@@ -314,89 +340,74 @@ export class ModelHandlerOpenAI extends ModelHandler<
               );
             }
           }
+        });
 
-          const fullContent = fullContentParts.join('');
-          const reasoning = reasoningParts.join('');
+        try {
+          const response = await stream.finalChatCompletion();
 
-          const normalizedToolCalls = aggregatedToolCalls.filter((call) => {
-            const hasId = typeof call.id === 'string' && call.id.length > 0;
-            const hasName =
-              typeof call.function?.name === 'string' &&
-              call.function.name.length > 0;
-            const hasArgs =
-              typeof call.function?.arguments === 'string' &&
-              call.function.arguments.length > 0;
-            return hasId || hasName || hasArgs;
-          });
-
-          const finalMessage: Record<string, unknown> = {
-            role: role ?? 'assistant',
-            content: fullContent,
-          };
-
-          if (reasoning) {
-            finalMessage.reasoning_content = reasoning;
+          if (deepSeekAggregation && response?.choices?.length) {
+            const { contentParts, reasoningParts, toolCalls } =
+              deepSeekAggregation;
+            const [choice] = response.choices;
+            if (choice?.message) {
+              if (contentParts.length > 0) {
+                (choice.message as any).content = contentParts.join('');
+              }
+              if (reasoningParts.length > 0) {
+                (choice.message as any).reasoning_content =
+                  reasoningParts.join('');
+              }
+              const normalizedToolCalls = toolCalls.filter((call) => {
+                const hasId = typeof call.id === 'string' && call.id.length > 0;
+                const hasName =
+                  typeof call.function?.name === 'string' &&
+                  call.function.name.length > 0;
+                const hasArgs =
+                  typeof call.function?.arguments === 'string' &&
+                  call.function.arguments.length > 0;
+                return hasId || hasName || hasArgs;
+              });
+              if (normalizedToolCalls.length > 0) {
+                (choice.message as any).tool_calls = normalizedToolCalls;
+              }
+              if (deepSeekAggregation.functionCall) {
+                (choice.message as any).function_call =
+                  deepSeekAggregation.functionCall;
+              }
+              if (deepSeekAggregation.role) {
+                (choice.message as any).role = deepSeekAggregation.role;
+              }
+            }
+            if (!response.usage && deepSeekAggregation.lastChunk?.usage) {
+              response.usage = deepSeekAggregation.lastChunk.usage as any;
+            }
+            if (
+              response.choices?.[0] &&
+              !response.choices[0].finish_reason &&
+              deepSeekAggregation.lastChunk?.choices?.[0]?.finish_reason
+            ) {
+              response.choices[0].finish_reason =
+                deepSeekAggregation.lastChunk.choices[0]?.finish_reason ??
+                undefined;
+            }
           }
-          if (normalizedToolCalls.length > 0) {
-            finalMessage.tool_calls = normalizedToolCalls;
-          }
-          if (
-            aggregatedFunctionCall &&
-            (aggregatedFunctionCall.name || aggregatedFunctionCall.arguments)
-          ) {
-            finalMessage.function_call = aggregatedFunctionCall;
-          }
 
-          const finalResponse = {
-            id: lastChunk?.id,
-            object: 'chat.completion',
-            created: lastChunk?.created,
-            model: lastChunk?.model,
-            system_fingerprint: lastChunk?.system_fingerprint,
-            usage: lastChunk?.usage,
-            choices: [
-              {
-                index: 0,
-                message: finalMessage,
-                finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-              },
-            ],
-          };
-          // this.logger.debug(
-          //   `Final response: ${objectToLogString(finalResponse)}`,
-          // );
-          // (1) If the request to the deepseek-reasoner model includes the tools parameter, the request will actually be processed using the deepseek-chat model.
-
-          const finalReasoning = this.processThinkingBlock(finalResponse);
+          const finalReasoning = this.processThinkingBlock(response);
           thinking.finalize(finalReasoning ?? undefined);
-          if (output) {
-            output.finalize(fullContent);
-          }
-          return finalResponse;
+          const finalOutput = response.choices?.[0]?.message?.content ?? '';
+          if (output) output.finalize(finalOutput);
+          return response;
+        } finally {
+          disposables.forEach((dispose) => {
+            try {
+              dispose();
+            } catch (listenerErr) {
+              this.logger.warn(
+                `Error disposing chat stream listener: ${getSdkErrorMessage(listenerErr)}`,
+              );
+            }
+          });
         }
-
-        for await (const chunk of stream) {
-          const reasoningDelta =
-            (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
-          const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-          if (reasoningDelta) thinking.append(reasoningDelta);
-          // Here the support for streaming of thinking of grok model seem to be broken.
-          // if (reasoningDelta) {
-          //   this.logger.debug(`Reasoning delta: ${reasoningDelta}`);
-          // }
-          if (contentDelta) output?.append(contentDelta);
-        }
-
-        // Note that there is no second consumption problem as per openai sdk examples
-        response = await stream.finalChatCompletion();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        if (output) output.finalize(finalOutput);
-
-        // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
-        // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
-        // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
         this.logger.error(
           `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
@@ -406,7 +417,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
         );
         throw err;
       }
-      return response;
     } else {
       try {
         const response = await client.chat.completions.create(kwargs, {

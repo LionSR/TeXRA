@@ -19,7 +19,6 @@ import type {
   ResponseInputImage,
   ResponseInputText,
   ResponseInputAudio,
-  ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 import type { Reasoning } from 'openai/resources/shared';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
@@ -537,32 +536,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;
-      const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
-      for await (const event of responseStream) {
-        switch (event.type) {
-          case 'response.reasoning_text.delta':
-          case 'response.reasoning_summary_text.delta': {
-            thinking.append(event.delta);
-            break;
+      const disposables: Array<() => void> = [];
+      const registerListener = <Event extends Parameters<typeof stream.on>[0]>(
+        event: Event,
+        listener: (...args: any[]) => void,
+      ) => {
+        stream.on(event, listener as any);
+        disposables.push(() => stream.off(event, listener as any));
+      };
+
+      registerListener('response.reasoning_text.delta', (event) => {
+        thinking.append(event.delta);
+      });
+
+      registerListener('response.reasoning_summary_text.delta', (event) => {
+        thinking.append(event.delta);
+      });
+
+      registerListener('response.output_text.delta', (event) => {
+        output?.append(event.delta);
+      });
+
+      try {
+        const response = await stream.finalResponse();
+        const finalReasoning = this.processThinkingBlock(response);
+        thinking.finalize(finalReasoning ?? undefined);
+        const [finalText] = this.extractResponse(response, '');
+        if (output) output.finalize(finalText);
+
+        this.previousResponseId = response.id;
+        this.sentMessages = messages.length;
+        return response;
+      } finally {
+        disposables.forEach((dispose) => {
+          try {
+            dispose();
+          } catch (listenerErr) {
+            this.logger.warn(
+              `Error disposing Responses stream listener: ${getSdkErrorMessage(listenerErr)}`,
+            );
           }
-          case 'response.output_text.delta': {
-            output?.append(event.delta);
-            break;
-          }
-          default:
-            break;
-        }
+        });
       }
-
-      const response = await stream.finalResponse();
-      const finalReasoning = this.processThinkingBlock(response);
-      thinking.finalize(finalReasoning ?? undefined);
-      const [finalText] = this.extractResponse(response, '');
-      if (output) output.finalize(finalText);
-
-      this.previousResponseId = response.id;
-      this.sentMessages = messages.length;
-      return response;
     }
 
     try {
