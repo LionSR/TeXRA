@@ -22,24 +22,6 @@ type MessageLike = {
 
 type ContentArray = Array<Record<string, unknown>>;
 
-function cloneContent(content: unknown): unknown {
-  if (!Array.isArray(content)) {
-    return content;
-  }
-
-  return (content as ContentArray).map((part) =>
-    part && typeof part === 'object' ? { ...part } : part,
-  );
-}
-
-function cloneMessage<T extends MessageLike>(message: T): T {
-  const cloned = { ...message } as T;
-  if (Array.isArray(message.content)) {
-    cloned.content = cloneContent(message.content);
-  }
-  return cloned;
-}
-
 function mergeMessageContent(
   previous: MessageLike,
   current: MessageLike,
@@ -50,7 +32,7 @@ function mergeMessageContent(
   if (Array.isArray(prevContent) && Array.isArray(currContent)) {
     previous.content = [
       ...(prevContent as ContentArray),
-      ...((cloneContent(currContent) as ContentArray) ?? []),
+      ...((structuredClone(currContent) as ContentArray) ?? []),
     ];
     return;
   }
@@ -66,7 +48,7 @@ function mergeMessageContent(
   }
 
   if (Array.isArray(currContent)) {
-    const clonedCurrent = cloneContent(currContent);
+    const clonedCurrent = structuredClone(currContent);
     if (typeof prevContent === 'string' && prevContent.length > 0) {
       previous.content = [
         { type: 'text', text: prevContent },
@@ -121,7 +103,7 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     convertContentToString: asString = false,
   } = options;
 
-  let working: T[] = messages.map((message) => cloneMessage(message));
+  let working: T[] = messages.map((message) => structuredClone(message));
 
   if (mergeConsecutiveRoles) {
     const merged: T[] = [];
