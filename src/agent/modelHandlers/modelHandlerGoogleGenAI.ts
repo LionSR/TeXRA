@@ -431,13 +431,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
+        type StreamWithLegacyResponse = AsyncGenerator<GenerateContentResponse> & {
+          response?: Promise<GenerateContentResponse>;
+        };
+        const streamWithLegacyResponse = stream as StreamWithLegacyResponse;
+
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
         let interimUsage: GenerateContentResponseUsageMetadata | undefined;
         let finalResponse: GenerateContentResponse | undefined;
-        for await (const chunk of stream) {
+        for await (const chunk of streamWithLegacyResponse) {
           const chunkText = chunk.text ?? '';
           if (chunkText.length > 0) {
             output?.append(chunkText);
@@ -457,6 +462,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           finalResponse = chunk;
         }
 
+        if (!finalResponse && streamWithLegacyResponse.response) {
+          finalResponse = await streamWithLegacyResponse.response;
+        }
         if (!finalResponse) {
           throw new Error('Stream yielded no response');
         }
