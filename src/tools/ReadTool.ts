@@ -18,12 +18,12 @@ const ReadInputSchema = z.strictObject({
   path: z.string(),
   range: z
     .strictObject({
-      start: z.number().int().min(1),
-      end: z.number().int().min(1).optional(),
+      start: z.int().min(1),
+      end: z.int().min(1).optional(),
     })
     .refine((value) => value.end === undefined || value.end >= value.start, {
-      message: 'range.end must be greater than or equal to range.start',
       path: ['end'],
+      error: 'range.end must be greater than or equal to range.start',
     })
     .optional(),
 });
