@@ -3,7 +3,7 @@ import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
 import type {
   AgentRunHooks,
-  AgentRunLifecycleBase,
+  AgentLifecycleState,
   AgentRunShared,
 } from './types';
 
@@ -13,7 +13,7 @@ type AgentRunFlowOptionsBase<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 > = {
@@ -29,7 +29,7 @@ type AgentRunFlowOptionsWithExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 > = AgentRunFlowOptionsBase<Shared> & {
@@ -40,7 +40,7 @@ type AgentRunFlowOptionsWithoutExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 > =
@@ -52,7 +52,7 @@ export type AgentRunFlowOptions<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 > =
@@ -63,7 +63,7 @@ function hasExtendHooks<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 >(
@@ -79,7 +79,7 @@ async function runAgentFlowWithExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 >(options: AgentRunFlowOptionsWithExtend<Shared>): Promise<Shared> {
@@ -110,7 +110,7 @@ async function runAgentFlowWithoutExtend<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 >(options: AgentRunFlowOptionsWithoutExtend<Shared>): Promise<Shared> {
@@ -140,7 +140,7 @@ export async function runAgentFlow<
   Shared extends AgentRunShared<
     BaseAgent<any>,
     any,
-    AgentRunLifecycleBase,
+    AgentLifecycleState<string>,
     AgentRunHooks
   >,
 >(options: AgentRunFlowOptions<Shared>): Promise<Shared> {
