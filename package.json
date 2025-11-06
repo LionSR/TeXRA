@@ -1494,6 +1494,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
     "@cantoo/pdf-lib": "^2.5.3",
+    "@cfworker/json-schema": "^4.1.1",
     "@google/genai": "^1.29.0",
     "@modelcontextprotocol/sdk": "^1.21.0",
     "@vscode-elements/elements": "^2.3.1",
