@@ -62,58 +62,48 @@ import { sleep } from '@utils/helpers';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
-const ResponseOutputPartSchema = z
-  .object({
-    type: z.string(),
-    text: z.string().optional(),
-  })
-  .passthrough();
+const ResponseOutputPartSchema = z.looseObject({
+  type: z.string(),
+  text: z.string().optional(),
+});
 
-const ResponseOutputItemSchema = z
-  .object({
-    type: z.string(),
-    content: z.array(ResponseOutputPartSchema).optional().default([]),
-  })
-  .passthrough();
+const ResponseOutputItemSchema = z.looseObject({
+  type: z.string(),
+  content: z.array(ResponseOutputPartSchema).optional().prefault([]),
+});
 
 const ResponseUsageDetailsSchema = z
-  .object({
-    cached_tokens: z.number().int().nonnegative().default(0),
+  .looseObject({
+    cached_tokens: z.int().nonnegative().prefault(0),
   })
-  .passthrough()
-  .default({ cached_tokens: 0 });
+  .prefault({ cached_tokens: 0 });
 
 const ResponseOutputDetailsSchema = z
-  .object({
-    reasoning_tokens: z.number().int().nonnegative().default(0),
+  .looseObject({
+    reasoning_tokens: z.int().nonnegative().prefault(0),
   })
-  .passthrough()
-  .default({ reasoning_tokens: 0 });
+  .prefault({ reasoning_tokens: 0 });
 
-const ResponseUsageSchema = z
-  .object({
-    input_tokens: z.number().int().nonnegative(),
-    output_tokens: z.number().int().nonnegative(),
-    total_tokens: z.number().int().nonnegative(),
-    input_tokens_details: ResponseUsageDetailsSchema,
-    output_tokens_details: ResponseOutputDetailsSchema,
-  })
-  .passthrough();
+const ResponseUsageSchema = z.looseObject({
+  input_tokens: z.int().nonnegative(),
+  output_tokens: z.int().nonnegative(),
+  total_tokens: z.int().nonnegative(),
+  input_tokens_details: ResponseUsageDetailsSchema,
+  output_tokens_details: ResponseOutputDetailsSchema,
+});
 
-const ResponseEnvelopeSchema = z
-  .object({
-    status: z.string(),
-    usage: ResponseUsageSchema,
-    output_text: z
-      .string()
-      .optional()
-      .transform((value) => (value ?? '').trim()),
-    output: z
-      .array(ResponseOutputItemSchema)
-      .optional()
-      .transform((value) => value ?? []),
-  })
-  .passthrough();
+const ResponseEnvelopeSchema = z.looseObject({
+  status: z.string(),
+  usage: ResponseUsageSchema,
+  output_text: z
+    .string()
+    .optional()
+    .transform((value) => (value ?? '').trim()),
+  output: z
+    .array(ResponseOutputItemSchema)
+    .optional()
+    .transform((value) => value ?? []),
+});
 
 interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;

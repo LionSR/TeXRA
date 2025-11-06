@@ -15,27 +15,21 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-const AgentWorkspaceStateSnapshotStrictSchema = z
-  .object({
-    assembly: z
-      .object({
-        lastResponse: z.string(),
-        accumulatedOutput: z.string(),
-      })
-      .strict(),
-    media: z.object({ files: z.array(z.string()) }).strict(),
-    reasoning: z
-      .object({
-        thinkingBlocks: z.array(z.unknown()),
-        thinkingAdded: z.boolean(),
-      })
-      .strict(),
-    document: z.object({ texcountStats: z.string().nullable() }).strict(),
-  })
-  .strict();
+const AgentWorkspaceStateSnapshotStrictSchema = z.strictObject({
+  assembly: z.strictObject({
+    lastResponse: z.string(),
+    accumulatedOutput: z.string(),
+  }),
+  media: z.strictObject({ files: z.array(z.string()) }),
+  reasoning: z.strictObject({
+    thinkingBlocks: z.array(z.unknown()),
+    thinkingAdded: z.boolean(),
+  }),
+  document: z.strictObject({ texcountStats: z.string().nullable() }),
+});
 
 const AgentWorkspaceStateSnapshotLegacySchema = z
-  .object({
+  .looseObject({
     lastResponse: z.string().optional(),
     accumulatedOutput: z.string().optional(),
     mediaFiles: z.array(z.string()).optional(),
@@ -43,7 +37,6 @@ const AgentWorkspaceStateSnapshotLegacySchema = z
     thinkingAdded: z.boolean().optional(),
     texcountStats: z.string().nullable().optional(),
   })
-  .passthrough()
   .transform((legacy) => ({
     assembly: {
       lastResponse: legacy.lastResponse ?? '',
@@ -74,24 +67,22 @@ const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>
     typeof value === 'object' && value !== null,
   {
-    message: 'messages must contain provider message objects',
+    error: 'messages must contain provider message objects',
   },
 );
 
-export const ToolUseSessionSnapshotSchema = z
-  .object({
-    version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
-    executionId: z.string(),
-    streamId: z.string(),
-    agentName: z.string(),
-    model: z.string(),
-    agentSessionKind: z.enum(AgentCategory).optional(),
-    session: AgentSessionDescriptorSchema.optional(),
-    messages: z.array(ProviderMessageSchema),
-    toolState: AgentWorkspaceStateSnapshotSchema,
-    lastUpdated: z.number(),
-  })
-  .strict();
+export const ToolUseSessionSnapshotSchema = z.strictObject({
+  version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
+  executionId: z.string(),
+  streamId: z.string(),
+  agentName: z.string(),
+  model: z.string(),
+  agentSessionKind: z.enum(AgentCategory).optional(),
+  session: AgentSessionDescriptorSchema.optional(),
+  messages: z.array(ProviderMessageSchema),
+  toolState: AgentWorkspaceStateSnapshotSchema,
+  lastUpdated: z.number(),
+});
 
 export type ToolUseSessionSnapshotParsed = z.infer<
   typeof ToolUseSessionSnapshotSchema
