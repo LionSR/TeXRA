@@ -431,50 +431,89 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
-        type StreamWithResponse = AsyncGenerator<GenerateContentResponse> & {
-          response?: Promise<GenerateContentResponse>;
-        };
-        const streamWithResponse = stream as StreamWithResponse;
-
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
-        let interimUsage: GenerateContentResponseUsageMetadata | undefined;
-        for await (const chunk of stream) {
-          const chunkText = chunk.text ?? '';
-          if (chunkText.length > 0) {
-            output?.append(chunkText);
-          }
 
-          const parts = chunk.candidates?.[0]?.content?.parts ?? [];
-          for (const part of parts) {
-            if (part.thought && isTextPart(part)) {
-              thinking.append(part.text);
+        let baseResponse: GenerateContentResponse | undefined;
+        let latestCandidate:
+          | NonNullable<GenerateContentResponse['candidates']>[number]
+          | undefined;
+        const aggregatedParts: Part[] = [];
+        let aggregatedText = '';
+        let usageFromChunks: GenerateContentResponseUsageMetadata | undefined;
+
+        for await (const chunk of stream) {
+          baseResponse ??= chunk;
+          const candidate = chunk.candidates?.[0];
+          if (candidate) {
+            latestCandidate = candidate;
+            const parts = candidate.content?.parts ?? [];
+            aggregatedParts.push(...parts);
+            for (const part of parts) {
+              if (part.thought && isTextPart(part)) {
+                thinking.append(part.text);
+              }
             }
           }
 
+          const chunkText = chunk.text ?? '';
+          if (chunkText) {
+            aggregatedText += chunkText;
+            output?.append(chunkText);
+          }
+
           if (chunk.usageMetadata) {
-            interimUsage = chunk.usageMetadata;
+            usageFromChunks = chunk.usageMetadata;
+          }
+
+          if (baseResponse && chunk !== baseResponse) {
+            if (chunk.promptFeedback) {
+              baseResponse.promptFeedback = chunk.promptFeedback;
+            }
+            if (chunk.modelVersion) {
+              baseResponse.modelVersion = chunk.modelVersion;
+            }
+            if (chunk.automaticFunctionCallingHistory) {
+              baseResponse.automaticFunctionCallingHistory =
+                chunk.automaticFunctionCallingHistory;
+            }
+            if (chunk.responseId) {
+              baseResponse.responseId = chunk.responseId;
+            }
           }
         }
 
-        const finalResponse = streamWithResponse.response
-          ? await streamWithResponse.response
-          : undefined;
-        if (!finalResponse) {
-          throw new Error('Stream yielded no response');
-        }
-        if (!finalResponse.usageMetadata && interimUsage) {
-          finalResponse.usageMetadata = interimUsage;
+        if (!baseResponse) {
+          throw new Error('Stream produced no response');
         }
 
-        const finalReasoning = this.processThinkingBlock(finalResponse);
-        thinking.finalize(finalReasoning ?? undefined);
-        if (output) {
-          output.finalize(finalResponse.text ?? '');
+        const candidateSource = latestCandidate ?? baseResponse.candidates?.[0];
+        if (candidateSource) {
+          const candidateParts = aggregatedParts.length
+            ? aggregatedParts
+            : candidateSource.content?.parts ?? [];
+          baseResponse.candidates = [
+            {
+              ...candidateSource,
+              content: {
+                role: candidateSource.content?.role ?? 'model',
+                parts: candidateParts,
+              },
+            },
+          ];
         }
-        return finalResponse;
+
+        if (!baseResponse.usageMetadata && usageFromChunks) {
+          baseResponse.usageMetadata = usageFromChunks;
+        }
+
+        const finalReasoning = this.processThinkingBlock(baseResponse);
+        thinking.finalize(finalReasoning ?? undefined);
+        output?.finalize(aggregatedText || baseResponse.text || '');
+
+        return baseResponse;
       }
 
       const sendParams: SendMessageParameters = {

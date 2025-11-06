@@ -238,4 +238,96 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     assert.equal('tool_call_id' in functionCall, false);
     assert.equal('tool_use_id' in functionCall, false);
   });
+
+  it('aggregates streamed chunks without relying on SDK response promises', async () => {
+    const handler = new ModelHandlerGoogleGenAI({
+      name: 'test-google-model',
+      fullName: 'google/test',
+      provider: ModelProvider.GOOGLE,
+      maxOutputTokens: 1024,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 4096,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    });
+
+    (handler as any).capabilities.supportsTokenCounting = false;
+    handler.setOutputStreaming(true);
+    (handler as any).logger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      statistics: () => {},
+      createStream: () => ({
+        append: () => {},
+        finalize: () => {},
+      }),
+      withCurrentGroup: () => undefined,
+      runWithinCurrentGroup: async (fn: () => any) => fn(),
+      runWithGroup: async (_groupId: string | undefined, fn: () => any) => fn(),
+    };
+    (handler as any).getStreamingConfig = () => true;
+
+    const chunkOne = new GenerateContentResponse();
+    chunkOne.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText('Hello')],
+        },
+      } as any,
+    ];
+
+    const chunkTwo = new GenerateContentResponse();
+    chunkTwo.candidates = [
+      {
+        content: {
+          role: 'model',
+          parts: [createPartFromText(' world')],
+        },
+        finishReason: FinishReason.STOP,
+      } as any,
+    ];
+    chunkTwo.usageMetadata = {
+      inputTokenCount: 1,
+      outputTokenCount: 2,
+      totalTokenCount: 3,
+    } as any;
+
+    const fakeClient = {
+      chats: {
+        create: () => ({
+          sendMessageStream: async () =>
+            (async function* () {
+              yield chunkOne;
+              yield chunkTwo;
+            })(),
+          sendMessage: async () => {
+            throw new Error('sendMessage should not be called when streaming is enabled');
+          },
+        }),
+      },
+      models: {},
+    } as any;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('Hi there')] },
+    ];
+
+    const response = await handler.createResponse(fakeClient, messages, 0);
+
+    assert.ok(response, 'expected a response to be returned');
+    const candidate = response.candidates?.[0];
+    assert.ok(candidate, 'expected a candidate in the aggregated response');
+    assert.equal(
+      candidate.content?.parts?.length,
+      2,
+      'expected both streamed parts to be present',
+    );
+    assert.equal(response.text, 'Hello world');
+    assert.equal(candidate.finishReason, FinishReason.STOP);
+    assert.deepEqual(response.usageMetadata, chunkTwo.usageMetadata);
+  });
 });
