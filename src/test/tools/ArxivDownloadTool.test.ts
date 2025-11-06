@@ -4,7 +4,7 @@ import * as assert from 'assert';
 import * as arxivModule from '@latex/arxivProcessor';
 
 // Local imports - tools
-import { ArxivDownloadTool } from '@tools/latex/ArxivDownloadTool';
+import { ArxivDownloadTool } from '@/tools/arxiv/ArxivDownloadTool';
 import { LsTool } from '@tools/ls';
 import { toolResult } from '@tools/result';
 
