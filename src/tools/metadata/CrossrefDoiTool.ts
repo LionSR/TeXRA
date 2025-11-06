@@ -1,5 +1,5 @@
 // Third-party imports
-import crossref from 'crossref';
+import { CrossrefClient } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -12,30 +12,7 @@ const CrossrefDoiInputSchema = z.strictObject({
 
 export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
-type CrossrefWorkCallback = (
-  error: Error | null,
-  message?: Record<string, unknown>,
-) => void;
-
-const fetchWork = (doi: string) =>
-  new Promise<Record<string, unknown>>((resolve, reject) => {
-    (
-      crossref.work as unknown as (
-        doiValue: string,
-        cb: CrossrefWorkCallback,
-      ) => void
-    )(doi, (error, message) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      if (!message || typeof message !== 'object') {
-        reject(new Error('Crossref response did not include metadata.'));
-        return;
-      }
-      resolve(message);
-    });
-  });
+const crossrefClient = new CrossrefClient();
 
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
@@ -50,27 +27,32 @@ export class CrossrefDoiTool extends defineTool({
 
     let work: Record<string, unknown>;
     try {
-      work = await fetchWork(trimmedDoi);
+      const response = await crossrefClient.work(trimmedDoi);
+      if (!response.ok || !response.content || !response.content.message) {
+        throw new Error('Crossref response did not include metadata.');
+      }
+      const message = response.content.message;
+      if (typeof message !== 'object' || message === null) {
+        throw new Error('Crossref metadata payload was empty.');
+      }
+      work = (message as unknown) as Record<string, unknown>;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new ToolError(`Crossref lookup failed: ${message}`);
     }
 
     const titleValue = work.title;
-    const resolvedTitle = Array.isArray(titleValue)
-      ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
+    const titles = Array.isArray(titleValue)
+      ? titleValue.filter((entry): entry is string => typeof entry === 'string')
       : typeof titleValue === 'string'
-        ? titleValue
-        : null;
+        ? [titleValue]
+        : [];
+    const resolvedTitle = titles.length > 0 ? titles[0] : null;
 
     const metadata = {
       doi: typeof work.DOI === 'string' ? work.DOI : trimmedDoi,
       title: resolvedTitle,
-      titles: Array.isArray(titleValue)
-        ? titleValue
-        : resolvedTitle
-          ? [resolvedTitle]
-          : [],
+      titles,
       publisher: typeof work.publisher === 'string' ? work.publisher : null,
       type: typeof work.type === 'string' ? work.type : null,
       abstract: typeof work.abstract === 'string' ? work.abstract : null,
