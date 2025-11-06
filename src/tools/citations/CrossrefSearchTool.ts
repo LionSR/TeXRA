@@ -7,14 +7,18 @@ import {
 } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
+// Local imports - metadata
+import { CROSSREF_CONSTANTS } from './constants';
+import { waitForRateLimit } from './rateLimiter';
+
 // Local imports - tools
 import { defineTool } from '../core/define';
 import { ToolError, toolResult } from '../result';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),
-  rows: z.number().int().positive().max(100).optional(),
-  offset: z.number().int().min(0).optional(),
+  rows: z.int().positive().max(CROSSREF_CONSTANTS.MAX_ROWS).optional(),
+  offset: z.int().min(0).optional(),
   sort: z.string().optional(),
   order: z.enum(['asc', 'desc']).optional(),
   filter: z
@@ -43,7 +47,7 @@ export class CrossrefSearchTool extends defineTool({
 
     const options: ExtendedQueryWorksParams = {
       query: trimmedQuery,
-      rows: input.rows ?? 10, // Default to 10 results
+      rows: input.rows ?? CROSSREF_CONSTANTS.DEFAULT_ROWS,
     };
     if (typeof input.offset === 'number') {
       options.offset = input.offset;
@@ -69,6 +73,11 @@ export class CrossrefSearchTool extends defineTool({
 
     let response: Awaited<ReturnType<typeof crossrefClient.works>>;
     try {
+      // Respect Crossref API rate limits
+      await waitForRateLimit(
+        'crossref',
+        CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+      );
       response = await crossrefClient.works(options);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
