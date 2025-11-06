@@ -150,7 +150,13 @@ async function cloneOverleafProject(
   }
 
   const tokenKey = 'overleaf.gitToken';
-  let token = await context.secrets.get(tokenKey);
+  const validateToken = (value: string): boolean => value.startsWith('olp_');
+
+  let token = (await context.secrets.get(tokenKey))?.trim() ?? '';
+  if (token && !validateToken(token)) {
+    await context.secrets.delete(tokenKey);
+    token = '';
+  }
 
   if (!token) {
     const tokenInput = await vscode.window.showInputBox({
@@ -171,19 +177,17 @@ async function cloneOverleafProject(
       return;
     }
 
+    if (!validateToken(trimmedToken)) {
+      vscode.window.showErrorMessage(
+        'Enter a valid Overleaf Git token. Tokens start with "olp_".',
+      );
+      return;
+    }
+
     token = trimmedToken;
     await context.secrets.store(tokenKey, token);
-  }
-
-  if (!token) {
-    vscode.window.showWarningMessage('Overleaf clone cancelled.');
-    return;
-  }
-
-  token = token.trim();
-  if (!token) {
-    vscode.window.showWarningMessage('Overleaf clone cancelled.');
-    return;
+  } else {
+    token = token.trim();
   }
 
   const encodedToken = encodeURIComponent(token);
