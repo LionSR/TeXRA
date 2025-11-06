@@ -22,6 +22,8 @@ export class BashTool extends defineTool({
   schema: BashInputSchema,
 }) {
   protected async execute(input: BashInput): Promise<ToolResult> {
+    // Truncation only applies to internal logging so long-running commands keep
+    // the output channel readable while still returning the complete stdout.
     const result = await executeCommand(input.command, { truncate: true });
     if (result.success) {
       const commandPreview =

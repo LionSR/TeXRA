@@ -118,13 +118,6 @@ export async function executeCommand(
       );
     }
 
-    // if (normalizedStdout) {
-    //   logger.debug(
-    //     options.channel ?? CHANNEL,
-    //     `Command stdout: ${formatForLog(normalizedStdout)}`,
-    //   );
-    // }
-
     return {
       success: exitCode === 0 && !timedOut,
       stdout: normalizedStdout,
