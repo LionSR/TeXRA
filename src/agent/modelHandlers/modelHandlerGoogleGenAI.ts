@@ -133,12 +133,14 @@ export function convertMessagesToGoogleContentHistory(
 
     const normalized =
       role === 'user' ? createUserContent(parts) : createModelContent(parts);
+    const normalizedParts = normalized.parts ?? [];
 
     const last = history.at(-1);
-    if (last?.role === normalized.role) {
-      last.parts.push(...normalized.parts);
+    if (last && last.role === normalized.role) {
+      const existingParts = Array.isArray(last.parts) ? last.parts : [];
+      last.parts = [...existingParts, ...normalizedParts];
     } else {
-      history.push(normalized);
+      history.push({ ...normalized, parts: normalizedParts });
     }
   });
 
@@ -220,11 +222,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
 
       try {
+        const uploadPath = entry.source_path as string;
         this.logger.debug(
-          `Uploading media entry ${fileName} via Google GenAI SDK from path ${entry.source_path}`,
+          `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
         );
         const uploadResult: File = await client.files.upload({
-          file: entry.source_path,
+          file: uploadPath,
           config: {
             mimeType,
             displayName: fileName,
@@ -255,7 +258,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         uploadSummaries.push({ path: fileName, ok: false });
       }
-    }
+      }
 
     if (uploadSummaries.some((summary) => !summary.ok)) {
       this.logger.warn(
@@ -428,6 +431,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
+        type StreamWithResponse = AsyncGenerator<GenerateContentResponse> & {
+          response?: Promise<GenerateContentResponse>;
+        };
+        const streamWithResponse = stream as StreamWithResponse;
+
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
@@ -451,7 +459,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           }
         }
 
-        const finalResponse = await stream.response;
+        const finalResponse = streamWithResponse.response
+          ? await streamWithResponse.response
+          : undefined;
         if (!finalResponse) {
           throw new Error('Stream yielded no response');
         }
