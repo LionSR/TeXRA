@@ -5,6 +5,7 @@ import { z } from 'zod';
 // Local imports - latex
 import { arxivProcessor } from '@latex/arxivProcessor';
 import {
+  type ArxivPaperMetadata,
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
@@ -56,7 +57,7 @@ export class ArxivMetadataTool extends defineTool({
     const authorNames = getAuthorNames(targetEntry.authors, input.maxAuthors);
     const includeAbstract = input.includeAbstract !== false;
 
-    const metadata = {
+    const metadata: ArxivPaperMetadata = {
       id: extractEntryIdentifier(targetEntry.id) ?? requestId,
       doi: targetEntry.doi?.id ?? null,
       title:
