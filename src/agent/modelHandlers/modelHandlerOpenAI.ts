@@ -2,16 +2,22 @@
 import { countTokens } from 'gpt-tokenizer';
 import OpenAI from 'openai';
 import {
+  ChatCompletion,
+  ChatCompletionChunk,
   ChatCompletionContentPart,
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
-  ChatCompletionToolMessageParam,
+  ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionCreateParamsStreaming,
+  ChatCompletionMessage,
+  ChatCompletionMessageCustomToolCall,
+  ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
-  ChatCompletionMessage,
-  ChatCompletionMessageFunctionToolCall,
-  ChatCompletionMessageCustomToolCall,
+  ChatCompletionToolMessageParam,
+  ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
+import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 // Local imports - agent components
 import type { AgentConfig } from '../core/AgentConfig';
@@ -48,6 +54,245 @@ import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
+
+type ChatCompletionRequestBase = Omit<
+  ChatCompletionCreateParamsStreaming,
+  'stream' | 'stream_options'
+>;
+
+type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
+  reasoning_content?: string;
+};
+
+interface AggregatedToolCall {
+  id: string;
+  function: ChatCompletionMessageFunctionToolCall['function'];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const collectTextFromUnknown = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(collectTextFromUnknown).join('');
+  }
+  if (isRecord(value) && typeof value.text === 'string') {
+    return value.text;
+  }
+  return '';
+};
+
+class DeepSeekStreamAggregator {
+  private readonly contentParts: string[] = [];
+  private readonly reasoningParts: string[] = [];
+  private readonly toolCalls = new Map<number, AggregatedToolCall>();
+  private functionCall: ChatCompletionMessage['function_call'] = null;
+  private lastChunkWithChoices: ChatCompletionChunk | undefined;
+  private usageChunk: ChatCompletionChunk | undefined;
+
+  appendContent(delta: string): void {
+    if (delta) {
+      this.contentParts.push(delta);
+    }
+  }
+
+  appendReasoning(delta: string): void {
+    if (delta) {
+      this.reasoningParts.push(delta);
+    }
+  }
+
+  consumeChunk(chunk: ChatCompletionChunk): void {
+    if (chunk.choices.length > 0) {
+      this.lastChunkWithChoices = chunk;
+    }
+    if (chunk.usage) {
+      this.usageChunk = chunk;
+    }
+
+    const choice = chunk.choices[0];
+    if (!choice) {
+      return;
+    }
+
+    const { delta } = choice;
+
+    if (Array.isArray(delta.tool_calls)) {
+      for (const call of delta.tool_calls) {
+        const existing = this.toolCalls.get(call.index) ?? {
+          id: '',
+          function: { name: '', arguments: '' },
+        };
+        if (call.id) {
+          existing.id += call.id;
+        }
+        if (call.function?.name) {
+          existing.function.name += call.function.name;
+        }
+        if (call.function?.arguments) {
+          existing.function.arguments += call.function.arguments;
+        }
+        this.toolCalls.set(call.index, existing);
+      }
+    }
+
+    if (delta.function_call) {
+      const { name = '', arguments: args = '' } = delta.function_call;
+      const current = this.functionCall ?? { name: '', arguments: '' };
+      this.functionCall = {
+        name: `${current.name}${name}`,
+        arguments: `${current.arguments}${args}`,
+      };
+    }
+  }
+
+  finalize(fallback?: ChatCompletion): ChatCompletion {
+    const base = fallback ?? this.buildFallbackResponse();
+    const primaryChoice = base.choices[0] ?? {
+      index: 0,
+      message: { role: 'assistant', content: '', refusal: null },
+      finish_reason: 'stop',
+      logprobs: null,
+    };
+    const fallbackMessage = primaryChoice.message;
+
+    const mergedMessage: ChatCompletionMessageWithReasoning = {
+      ...fallbackMessage,
+      role: 'assistant',
+      content: this.getFullContent(),
+      refusal: fallbackMessage.refusal ?? null,
+    };
+
+    const reasoning = this.getFullReasoning();
+    if (reasoning) {
+      mergedMessage.reasoning_content = reasoning;
+    }
+
+    const toolCalls = this.buildToolCalls();
+    if (toolCalls.length > 0) {
+      mergedMessage.tool_calls = toolCalls;
+    }
+
+    if (
+      this.functionCall &&
+      (this.functionCall.name.length > 0 ||
+        this.functionCall.arguments.length > 0)
+    ) {
+      mergedMessage.function_call = this.functionCall;
+    }
+
+    const mergedChoice = {
+      ...primaryChoice,
+      index: primaryChoice.index ?? 0,
+      message: mergedMessage,
+      finish_reason: primaryChoice.finish_reason ?? 'stop',
+      logprobs: primaryChoice.logprobs ?? null,
+    };
+
+    const usage =
+      base.usage ??
+      this.usageChunk?.usage ??
+      this.lastChunkWithChoices?.usage ??
+      undefined;
+
+    return {
+      ...base,
+      choices: [mergedChoice],
+      usage,
+    };
+  }
+
+  getFullContent(): string {
+    return this.contentParts.join('');
+  }
+
+  getFullReasoning(): string {
+    return this.reasoningParts.join('');
+  }
+
+  private buildToolCalls(): ChatCompletionMessageFunctionToolCall[] {
+    const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
+    for (const [index, call] of this.toolCalls.entries()) {
+      if (!call.id && !call.function.name && !call.function.arguments) {
+        continue;
+      }
+      toolCalls.push({
+        id: call.id || `tool_call_${index}`,
+        type: 'function',
+        function: {
+          name: call.function.name,
+          arguments: call.function.arguments,
+        },
+      });
+    }
+    return toolCalls;
+  }
+
+  private buildFallbackResponse(): ChatCompletion {
+    const chunk = this.lastChunkWithChoices ?? this.usageChunk;
+    if (!chunk) {
+      return {
+        id: '',
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: '',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: this.getFullContent(),
+              refusal: null,
+            },
+            finish_reason: 'stop',
+            logprobs: null,
+          },
+        ],
+      };
+    }
+
+    const choice = chunk.choices[0];
+    return {
+      id: chunk.id,
+      object: 'chat.completion',
+      created: chunk.created,
+      model: chunk.model,
+      system_fingerprint: chunk.system_fingerprint,
+      usage: chunk.usage ?? undefined,
+      choices: [
+        {
+          index: choice?.index ?? 0,
+          message: {
+            role: 'assistant',
+            content: this.getFullContent(),
+            refusal: null,
+          },
+          finish_reason: choice?.finish_reason ?? 'stop',
+          logprobs: choice?.logprobs ?? null,
+        },
+      ],
+    };
+  }
+}
+
+const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
+  const choice = chunk.choices[0];
+  if (!choice) {
+    return '';
+  }
+
+  const delta = choice.delta as unknown;
+  if (!isRecord(delta) || !('reasoning_content' in delta)) {
+    return '';
+  }
+
+  return collectTextFromUnknown(
+    (delta as { reasoning_content?: unknown }).reasoning_content,
+  );
+};
 
 /**
  * OpenAI-specific handlers.
@@ -92,41 +337,41 @@ export class ModelHandlerOpenAI extends ModelHandler<
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
-    const kwargs: any = {
+    const baseParams: ChatCompletionRequestBase = {
       model: this.config.fullName,
       messages,
-      [this.isOReasoningModel ? 'max_completion_tokens' : 'max_tokens']:
-        this.config.maxOutputTokens,
+      ...(this.isOReasoningModel
+        ? { max_completion_tokens: this.config.maxOutputTokens }
+        : { max_tokens: this.config.maxOutputTokens }),
     };
 
-    // stop parameters are not supported by Grok reasoning models .
     if (!this.isOReasoningModel && !this.isGrokReasoningModel) {
       if (endTag) {
-        kwargs.stop = [endTag];
+        baseParams.stop = [endTag];
       }
-      kwargs.temperature = temperature;
+      baseParams.temperature = temperature;
     }
-    if (this.config.capabilities.supportsReasoning) {
-      if (
-        this.config.capabilities.supportsReasoningEffort &&
-        this.config.capabilities.reasoningEffort
-      ) {
-        // Validate reasoning effort based on provider-specific constraints
-        kwargs.reasoning_effort = this.validateReasoningEffort(
-          this.config.capabilities.reasoningEffort,
-        ) as any; // Cast to any for compatibility with different API providers
-      }
+
+    if (
+      this.config.capabilities.supportsReasoning &&
+      this.config.capabilities.supportsReasoningEffort &&
+      this.config.capabilities.reasoningEffort
+    ) {
+      baseParams.reasoning_effort = this.validateReasoningEffort(
+        this.config.capabilities.reasoningEffort,
+      ) as ChatCompletionRequestBase['reasoning_effort'];
     }
+
     if (tools && tools.length > 0) {
-      kwargs.tools = toOpenAITools(tools);
-      kwargs.tool_choice = 'auto';
+      baseParams.tools = toOpenAITools(tools);
+      baseParams.tool_choice = 'auto';
     }
+
     if (this.config.fullName.includes('deepseek-chat')) {
-      // for deepseek models,  this and context window are not the same for openrouter models and the official api. so we need to set max_tokens manually if the official api is used
       this.logger.debug(
         'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
       );
-      kwargs.max_tokens = 8192;
+      baseParams.max_tokens = 8192;
     }
 
     // Calculate input tokens using the helper method
@@ -146,18 +391,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
         throw new Error(errorMsg);
       }
 
-      const maxOutputKey = this.isOReasoningModel
+      const maxOutputKey: 'max_completion_tokens' | 'max_tokens' = this
+        .isOReasoningModel
         ? 'max_completion_tokens'
         : 'max_tokens';
-      if (
-        this.config.contextWindow - approximateInputTokens <
-        kwargs[maxOutputKey]
-      ) {
-        const originalMaxTokens = kwargs[maxOutputKey];
-        kwargs[maxOutputKey] =
-          this.config.contextWindow - approximateInputTokens - 5000; // Add a small buffer
+      const availableTokens =
+        this.config.contextWindow - approximateInputTokens;
+      const currentMax = baseParams[maxOutputKey];
+      if (typeof currentMax === 'number' && availableTokens < currentMax) {
+        const adjusted = Math.max(1, availableTokens - 5000);
+        baseParams[maxOutputKey] = adjusted;
         this.logger.warn(
-          `Approximate token count (${approximateInputTokens}) + max tokens (${originalMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${kwargs[maxOutputKey]}.`,
+          `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${adjusted}.`,
         );
       }
     } catch (err) {
@@ -171,232 +416,60 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     if (useStreaming) {
-      let response: any;
-      kwargs.stream_options = { include_usage: true };
+      const streamParams: ChatCompletionStreamParams = {
+        ...baseParams,
+        stream: true,
+        stream_options: { include_usage: true },
+      };
+
       try {
-        const stream = client.chat.completions.stream(kwargs as any, {
+        const stream = await client.chat.completions.stream(streamParams, {
           signal,
         });
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
+        const deepSeekAggregator = this.config.fullName.includes('deepseek')
+          ? new DeepSeekStreamAggregator()
+          : null;
 
-        if (this.config.fullName.includes('deepseek')) {
-          // Aggregate stream chunks manually for DeepSeek models
-          const collectText = (value: any): string => {
-            if (!value) {
-              return '';
-            }
-            if (typeof value === 'string') {
-              return value;
-            }
-            if (Array.isArray(value)) {
-              return value
-                .map((entry) => {
-                  if (!entry) {
-                    return '';
-                  }
-                  if (typeof entry === 'string') {
-                    return entry;
-                  }
-                  if (typeof entry === 'object' && 'text' in entry) {
-                    return (entry as { text?: string }).text ?? '';
-                  }
-                  return '';
-                })
-                .join('');
-            }
-            if (typeof value === 'object' && 'text' in value) {
-              return (value as { text?: string }).text ?? '';
-            }
-            return '';
-          };
-
-          const appendStringValue = (
-            existing: string | undefined,
-            addition: unknown,
-          ): string => {
-            if (typeof addition !== 'string' || addition.length === 0) {
-              return existing ?? '';
-            }
-            return `${existing ?? ''}${addition}`;
-          };
-
-          const fullContentParts: string[] = [];
-          const reasoningParts: string[] = [];
-          const aggregatedToolCalls: Array<{
-            id: string;
-            type?: string;
-            function?: { name?: string; arguments?: string };
-          }> = [];
-          let aggregatedFunctionCall: {
-            name: string;
-            arguments: string;
-          } | null = null;
-          let role: string | undefined;
-          let lastChunk: any;
-
-          for await (const chunk of stream) {
-            lastChunk = chunk;
-            const delta: any = chunk.choices?.[0]?.delta ?? {};
-
-            if (delta.role && typeof delta.role === 'string') {
-              role = delta.role;
-            }
-
-            const reasoningDelta = collectText(delta?.reasoning_content);
-            if (reasoningDelta) {
-              reasoningParts.push(reasoningDelta);
-              thinking.append(reasoningDelta);
-            }
-
-            const contentDelta = collectText(delta?.content);
-            if (contentDelta) {
-              fullContentParts.push(contentDelta);
-              output?.append(contentDelta);
-            }
-
-            if (Array.isArray(delta?.tool_calls)) {
-              for (const toolCallChunk of delta.tool_calls) {
-                if (!toolCallChunk) {
-                  continue;
-                }
-                const index =
-                  typeof toolCallChunk.index === 'number'
-                    ? toolCallChunk.index
-                    : 0;
-                while (aggregatedToolCalls.length <= index) {
-                  aggregatedToolCalls.push({
-                    id: '',
-                    type: 'function',
-                    function: { name: '', arguments: '' },
-                  });
-                }
-                const target = aggregatedToolCalls[index];
-                target.id = appendStringValue(target.id, toolCallChunk.id);
-                if (toolCallChunk.type) {
-                  target.type = toolCallChunk.type;
-                }
-                if (toolCallChunk.function) {
-                  const targetFunction =
-                    target.function ??
-                    (target.function = {
-                      name: '',
-                      arguments: '',
-                    });
-                  targetFunction.name = appendStringValue(
-                    targetFunction.name,
-                    toolCallChunk.function.name,
-                  );
-                  targetFunction.arguments = appendStringValue(
-                    targetFunction.arguments,
-                    toolCallChunk.function.arguments,
-                  );
-                }
-              }
-            }
-
-            if (delta?.function_call) {
-              const functionCall =
-                aggregatedFunctionCall ??
-                (aggregatedFunctionCall = {
-                  name: '',
-                  arguments: '',
-                });
-              functionCall.name = appendStringValue(
-                functionCall.name,
-                delta.function_call.name,
-              );
-              functionCall.arguments = appendStringValue(
-                functionCall.arguments,
-                delta.function_call.arguments,
-              );
-            }
+        const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
+          if (!delta) {
+            return;
           }
+          output?.append(delta);
+          deepSeekAggregator?.appendContent(delta);
+        };
 
-          const fullContent = fullContentParts.join('');
-          const reasoning = reasoningParts.join('');
-
-          const normalizedToolCalls = aggregatedToolCalls.filter((call) => {
-            const hasId = typeof call.id === 'string' && call.id.length > 0;
-            const hasName =
-              typeof call.function?.name === 'string' &&
-              call.function.name.length > 0;
-            const hasArgs =
-              typeof call.function?.arguments === 'string' &&
-              call.function.arguments.length > 0;
-            return hasId || hasName || hasArgs;
-          });
-
-          const finalMessage: Record<string, unknown> = {
-            role: role ?? 'assistant',
-            content: fullContent,
-          };
-
-          if (reasoning) {
-            finalMessage.reasoning_content = reasoning;
+        const onChunk = (chunk: ChatCompletionChunk): void => {
+          deepSeekAggregator?.consumeChunk(chunk);
+          const reasoningDelta = extractReasoningDelta(chunk);
+          if (reasoningDelta) {
+            thinking.append(reasoningDelta);
+            deepSeekAggregator?.appendReasoning(reasoningDelta);
           }
-          if (normalizedToolCalls.length > 0) {
-            finalMessage.tool_calls = normalizedToolCalls;
-          }
-          if (
-            aggregatedFunctionCall &&
-            (aggregatedFunctionCall.name || aggregatedFunctionCall.arguments)
-          ) {
-            finalMessage.function_call = aggregatedFunctionCall;
-          }
+        };
 
-          const finalResponse = {
-            id: lastChunk?.id,
-            object: 'chat.completion',
-            created: lastChunk?.created,
-            model: lastChunk?.model,
-            system_fingerprint: lastChunk?.system_fingerprint,
-            usage: lastChunk?.usage,
-            choices: [
-              {
-                index: 0,
-                message: finalMessage,
-                finish_reason: lastChunk?.choices?.[0]?.finish_reason,
-              },
-            ],
-          };
-          // this.logger.debug(
-          //   `Final response: ${objectToLogString(finalResponse)}`,
-          // );
-          // (1) If the request to the deepseek-reasoner model includes the tools parameter, the request will actually be processed using the deepseek-chat model.
+        stream.on('content.delta', onContentDelta);
+        stream.on('chunk', onChunk);
 
+        try {
+          const sdkFinalResponse = await stream.finalChatCompletion();
+          const finalResponse = deepSeekAggregator
+            ? deepSeekAggregator.finalize(sdkFinalResponse)
+            : sdkFinalResponse;
           const finalReasoning = this.processThinkingBlock(finalResponse);
           thinking.finalize(finalReasoning ?? undefined);
-          if (output) {
-            output.finalize(fullContent);
-          }
+          const finalOutput = deepSeekAggregator
+            ? deepSeekAggregator.getFullContent()
+            : (finalResponse.choices?.[0]?.message?.content ?? '');
+          output?.finalize(finalOutput);
           return finalResponse;
+        } finally {
+          stream.off('content.delta', onContentDelta);
+          stream.off('chunk', onChunk);
         }
-
-        for await (const chunk of stream) {
-          const reasoningDelta =
-            (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
-          const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-          if (reasoningDelta) thinking.append(reasoningDelta);
-          // Here the support for streaming of thinking of grok model seem to be broken.
-          // if (reasoningDelta) {
-          //   this.logger.debug(`Reasoning delta: ${reasoningDelta}`);
-          // }
-          if (contentDelta) output?.append(contentDelta);
-        }
-
-        // Note that there is no second consumption problem as per openai sdk examples
-        response = await stream.finalChatCompletion();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        if (output) output.finalize(finalOutput);
-
-        // in the future we can add: stream_options: {"include_usage": true} to get usage statistics
-        // in the future if we pass stream to outside (signal: controller.signal)), calling stream.controller.abort() will abort the stream; which will be very useful for our stop button (controller.abort();)
-        // we should also make sure partial results can be returned in the presence of errors!
       } catch (err) {
         this.logger.error(
           `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
@@ -406,12 +479,18 @@ export class ModelHandlerOpenAI extends ModelHandler<
         );
         throw err;
       }
-      return response;
     } else {
       try {
-        const response = await client.chat.completions.create(kwargs, {
-          signal,
-        });
+        const nonStreamingParams: ChatCompletionCreateParamsNonStreaming = {
+          ...baseParams,
+          stream: false,
+        };
+        const response = await client.chat.completions.create(
+          nonStreamingParams,
+          {
+            signal,
+          },
+        );
         return response;
       } catch (err) {
         this.logger.error(
