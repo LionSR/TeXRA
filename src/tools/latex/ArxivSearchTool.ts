@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports - latex
 import {
+  type ArxivSearchResult,
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
@@ -76,7 +77,7 @@ export class ArxivSearchTool extends defineTool({
       throw new ToolError(`Failed to query arXiv API: ${message}`);
     }
 
-    const results = entries.map((entry) => {
+    const results: ArxivSearchResult[] = entries.map((entry) => {
       const identifier = extractEntryIdentifier(entry.id);
       return {
         id: identifier ?? null,
