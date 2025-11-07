@@ -131,12 +131,16 @@ const registerOutputFileListeners = (
 const registerClearTaskOutput = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
+  updater: WebviewUpdater,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable => {
   return new vscode.Disposable(
     bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
       withErrorBoundary('failed to handle clearTaskOutput', () => {
-        state.clearOutputState(streamTabId);
+        const cleared = state.clearOutputState(streamTabId);
+        if (cleared && updater.isAvailable()) {
+          updater.updateAll(state);
+        }
       });
     }),
   );
@@ -159,7 +163,9 @@ export function createOutputEvents(
         updater,
         withErrorBoundary,
       );
-      disposables.push(registerClearTaskOutput(bus, state, withErrorBoundary));
+      disposables.push(
+        registerClearTaskOutput(bus, state, updater, withErrorBoundary),
+      );
       return disposables;
     },
   };

@@ -335,27 +335,66 @@ export class ProgressViewState {
    * Load task states from persistence
    */
   private async loadTaskStates(): Promise<void> {
-    const savedTaskStates = this.storage.get<Record<string, TaskState>>(
-      WorkspaceStateKey.TASK_STATES,
-      {},
-    );
+    const raw = this.storage.get<unknown>(WorkspaceStateKey.TASK_STATES, {});
 
     this.taskStates.clear();
 
     let loaded = 0;
-    for (const [stream, state] of Object.entries(savedTaskStates ?? {})) {
-      if (!state) {
-        continue;
+    const isTaskState = (value: unknown): value is TaskState => {
+      if (!value || typeof value !== 'object') {
+        return false;
+      }
+      return (
+        isWorkflowTaskState(value as TaskState) ||
+        isToolUseTaskState(value as TaskState)
+      );
+    };
+
+    const addFromRecord = (record: unknown): void => {
+      if (!record || typeof record !== 'object') {
+        return;
       }
 
-      if (isWorkflowTaskState(state) || isToolUseTaskState(state)) {
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(state));
+      for (const [stream, value] of Object.entries(
+        record as Record<string, unknown>,
+      )) {
+        if (!isTaskState(value)) {
+          continue;
+        }
+
+        this.taskStates.set(stream as StreamTabId, cloneTaskState(value));
         loaded += 1;
+      }
+    };
+
+    let migratedLegacyState = false;
+
+    if (raw && typeof raw === 'object') {
+      const container = raw as Record<string, unknown>;
+      const workflow = container['workflow'];
+      const toolUse = container['toolUse'];
+
+      const hasLegacyShape =
+        (!!workflow &&
+          typeof workflow === 'object' &&
+          !isTaskState(workflow)) ||
+        (!!toolUse && typeof toolUse === 'object' && !isTaskState(toolUse));
+
+      if (hasLegacyShape) {
+        migratedLegacyState = true;
+        addFromRecord(workflow);
+        addFromRecord(toolUse);
+      } else {
+        addFromRecord(container);
       }
     }
 
     if (loaded > 0) {
       this.logger.debug(`Loaded task states for ${loaded} streams`);
+    }
+
+    if (migratedLegacyState) {
+      this.saveTaskStates();
     }
 
     this.cleanupToolUseAgentRegistry();

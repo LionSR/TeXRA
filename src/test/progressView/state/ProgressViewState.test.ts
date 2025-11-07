@@ -9,6 +9,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 // Local imports - agent
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import type { WorkflowTaskState } from '@logger/TaskState';
 
 class FakeStorage implements StateStorage {
   public readonly saved: { key: string; value: unknown }[] = [];
@@ -48,9 +49,12 @@ describe('ProgressViewState.clearOutputState', () => {
       useMultipleOutputs: true,
     });
 
-    const workflowState = {
+    const workflowState: WorkflowTaskState = {
       agentConfig: config,
-      session: config.session!,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
       activeFiles: {
         input: true,
         reference: false,
@@ -93,9 +97,12 @@ describe('ProgressViewState.clearOutputState', () => {
       inputFile: 'main.tex',
     });
 
-    const workflowState = {
+    const workflowState: WorkflowTaskState = {
       agentConfig: config,
-      session: config.session!,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
       activeFiles: {
         input: true,
         reference: false,
@@ -131,9 +138,12 @@ describe('ProgressViewState.clearOutputState', () => {
       outputFiles: undefined,
     });
 
-    const workflowState = {
+    const workflowState: WorkflowTaskState = {
       agentConfig: config,
-      session: config.session!,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
       activeFiles: {
         input: true,
         reference: false,
