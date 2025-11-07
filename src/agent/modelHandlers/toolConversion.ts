@@ -12,6 +12,7 @@ import type {
 // Third-party imports
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { FunctionTool } from 'openai/resources/responses/responses';
+import type { Tool as OpenRouterTool } from '@openrouter/sdk/models/tool';
 
 // Local imports - agent
 // Local imports - types
@@ -52,6 +53,18 @@ export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
       strict: false,
     };
   });
+}
+
+/** Convert generic ToolDefinition objects to OpenRouter Tool format. */
+export function toOpenRouterTools(defs: ToolDefinition[]): OpenRouterTool[] {
+  return defs.map((d) => ({
+    type: 'function',
+    function: {
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Record<string, unknown> | undefined,
+    },
+  }));
 }
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */

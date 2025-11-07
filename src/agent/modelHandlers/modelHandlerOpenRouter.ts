@@ -2,14 +2,31 @@
 // (none needed)
 
 // Third-party imports
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
+import type { RequestOptions } from '@openrouter/sdk/lib/sdks';
+
+// Third-party imports - openrouter models
+import type { ChatGenerationParams } from '@openrouter/sdk/models/chatgenerationparams';
+import type { ChatResponse } from '@openrouter/sdk/models/chatresponse';
+import type { ChatStreamingResponseChunkData } from '@openrouter/sdk/models/chatstreamingresponsechunk';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { toOpenAITools } from './toolConversion';
+import { toOpenRouterTools } from './toolConversion';
+import {
+  convertChatResponseToOpenAI,
+  convertToOpenRouterMessages,
+  createStreamAccumulator,
+  consumeStreamChunk,
+  finalizeStreamAccumulator,
+} from './utils/openRouterConversion';
+import {
+  createOpenRouterClient,
+  type OpenRouterClient,
+} from './support/openRouterClient';
 import type { ToolDefinition } from '@model';
 import { K_SLICE } from '@utils/config';
 
@@ -17,6 +34,20 @@ import { K_SLICE } from '@utils/config';
  * Handler for models accessed through OpenRouter.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
+  private openRouterClient?: OpenRouterClient;
+
+  override async getClient(): Promise<OpenAI> {
+    if (!this.openRouterClient) {
+      const baseURL = this.getBaseUrl();
+      this.openRouterClient = await createOpenRouterClient({
+        serverURL: baseURL,
+        debugLogger: (message) => this.logger.debug(`[openrouter] ${message}`),
+      });
+    }
+
+    return this.openRouterClient as unknown as OpenAI;
+  }
+
   /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
     client: OpenAI,
@@ -27,68 +58,126 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     signal?: AbortSignal,
     tools?: ToolDefinition[],
   ): Promise<any> {
-    // Get streaming config
+    const openRouterClient = client as unknown as OpenRouterClient;
     const useStreaming = this.getStreamingConfig();
 
-    const kwargs: any = {
-      model: this.config.openrouterFullName, // Use OpenRouter model name
-      messages,
-      max_tokens: this.config.maxOutputTokens,
-      temperature,
-      extra_headers: { 'X-Title': 'TeXRA.ai' },
+    const routerMessages = convertToOpenRouterMessages(messages);
+    const params: ChatGenerationParams = {
+      messages: routerMessages,
+      model: this.config.openrouterFullName ?? this.config.fullName,
     };
 
-    // Reasoning parameters might vary depending on the underlying model via OpenRouter
-    // The `reasoning` and `include_reasoning` parameters are specific to some models like O1
+    if (this.isOReasoningModel) {
+      params.maxCompletionTokens = this.config.maxOutputTokens;
+    } else {
+      params.maxTokens = this.config.maxOutputTokens;
+    }
+
+    if (!this.isOReasoningModel && !this.isGrokReasoningModel) {
+      params.temperature = temperature;
+    }
+
     if (this.config.capabilities.supportsReasoning) {
       if (
         this.config.capabilities.supportsReasoningEffort &&
         this.config.capabilities.reasoningEffort
       ) {
-        kwargs.reasoning = {
+        params.reasoning = {
           effort: this.validateReasoningEffort(
             this.config.capabilities.reasoningEffort,
           ),
-        };
-        kwargs.include_reasoning = true;
+        } as ChatGenerationParams['reasoning'];
       }
     }
 
     if (tools && tools.length > 0) {
-      kwargs.tools = toOpenAITools(tools);
-      kwargs.tool_choice = 'auto';
+      params.tools = toOpenRouterTools(tools);
+      params.toolChoice = 'auto' as ChatGenerationParams['toolChoice'];
     }
 
     if (endTag) {
-      kwargs.stop = [endTag];
+      params.stop = [endTag];
+    }
+
+    const serverURL = this.getBaseUrl();
+    const requestOptions: RequestOptions = {
+      signal,
+      headers: {
+        'X-Title': 'TeXRA.ai',
+      },
+    };
+
+    if (serverURL) {
+      requestOptions.serverURL = serverURL;
     }
 
     if (useStreaming) {
-      kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
-      const stream = client.chat.completions.stream(kwargs, { signal });
+      const streamingParams: ChatGenerationParams & {
+        stream: true;
+      } = {
+        ...params,
+        stream: true,
+        streamOptions: { includeUsage: true },
+      };
+
+      const stream = (await openRouterClient.chat.send(
+        streamingParams,
+        requestOptions,
+      )) as unknown as AsyncIterable<ChatStreamingResponseChunkData>;
+
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;
+      const accumulator = createStreamAccumulator();
+
       for await (const chunk of stream) {
-        const reasoningDelta =
-          (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
-        const contentDelta = chunk.choices[0]?.delta?.content ?? '';
-        if (reasoningDelta) thinking.append(reasoningDelta);
-        if (contentDelta) output?.append(contentDelta);
+        const { contentDelta, reasoningDelta } = consumeStreamChunk(
+          accumulator,
+          chunk,
+        );
+        if (reasoningDelta) {
+          thinking.append(reasoningDelta);
+        }
+        if (contentDelta) {
+          output?.append(contentDelta);
+        }
       }
 
-      // Note that there is no second consumption problem
-      // But i am not sure about openrouter's stream api, whether it works for every model.
-      const response = await stream.finalChatCompletion();
+      const chatResponse = finalizeStreamAccumulator(
+        accumulator,
+        params.model ?? this.config.openrouterFullName ?? this.config.fullName,
+      );
+      const response = convertChatResponseToOpenAI(chatResponse);
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
-      const finalOutput = response.choices?.[0]?.message?.content ?? '';
-      if (output) output.finalize(finalOutput);
+
+      const finalMessage = response.choices?.[0]?.message;
+      const finalOutput =
+        typeof finalMessage?.content === 'string'
+          ? finalMessage.content
+          : Array.isArray(finalMessage?.content)
+            ? finalMessage.content
+                .map((part: Record<string, unknown>) => {
+                  if (typeof part?.text === 'string') {
+                    return part.text;
+                  }
+                  return '';
+                })
+                .join('')
+            : '';
+      if (output) {
+        output.finalize(finalOutput);
+      }
+
       return response;
-    } else {
-      return await client.chat.completions.create(kwargs, { signal });
     }
+
+    const chatResponse = (await openRouterClient.chat.send(
+      params,
+      requestOptions,
+    )) as ChatResponse;
+    return convertChatResponseToOpenAI(chatResponse);
   }
 
   // Implementation for processing thinking blocks in OpenRouter responses
