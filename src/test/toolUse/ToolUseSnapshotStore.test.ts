@@ -6,10 +6,16 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import {
+  AgentSharedStore,
+  createSharedStore,
+} from '@agent/core/AgentSharedStore';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 
 // Local imports - utilities
 import { StorageFS } from '@utils/files';
@@ -51,54 +57,67 @@ describe('ToolUseSnapshotStore', () => {
   const executionId = 'run-1' as ExecutionId;
   const streamId = 'stream-1' as StreamTabId;
 
-  function buildPayload() {
-    const toolState = new AgentWorkspaceState();
-    toolState.assembly.updateLastResponse('last');
-    toolState.assembly.updateAccumulatedOutput('all');
-    toolState.media.addMediaFiles(['media.png']);
+  function createStore(): AgentSharedStore {
+    const workspace = new AgentWorkspaceState();
+    workspace.assembly.updateLastResponse('last');
+    workspace.assembly.updateAccumulatedOutput('all');
+    workspace.media.addMediaFiles(['media.png']);
 
+    const run = new AgentRunState();
+    run.incrementRounds();
+    run.addResponseTime(123);
+
+    const round = new ConversationRoundState(1);
+    round.outputFile = 'result.tex';
+
+    return createSharedStore({
+      roundState: round,
+      roundIndex: 1,
+      runState: run,
+      workspaceState: workspace,
+      userChannels: {
+        input: Object.freeze({}) as Readonly<Record<string, unknown>>,
+        transient: {},
+        output: {},
+      },
+    });
+  }
+
+  function buildPayload(): Parameters<typeof ToolUseSnapshotStore.save>[0] {
+    const store = createStore();
     return {
       executionId,
       streamId,
-      agentName: 'demo-agent',
-      model: 'demo-model',
-      session: {
-        agentType: AgentType.ToolUse,
-        agentCategory: AgentCategory.ToolUse,
-      },
+      agentConfig: parseAgentConfig({
+        model: 'demo-model',
+        agent: 'demo-agent',
+        session: {
+          agentType: 'toolUse',
+          agentCategory: 'toolUse',
+        },
+      }),
       messages: [],
-      toolState,
-    } satisfies Parameters<typeof ToolUseSnapshotStore.save>[0];
+      store,
+    };
   }
 
-  function buildSnapshot() {
+  function buildSnapshot(): ToolUseSessionSnapshot {
+    const store = createStore();
+    const agentConfig = parseAgentConfig({
+      model: 'demo-model',
+      agent: 'demo-agent',
+      session: {
+        agentType: 'toolUse',
+        agentCategory: 'toolUse',
+      },
+    });
     return {
       version: 1,
       executionId,
       streamId,
-      agentName: 'demo-agent',
-      model: 'demo-model',
-      session: {
-        agentType: AgentType.ToolUse,
-        agentCategory: AgentCategory.ToolUse,
-      },
+      agentConfig,
       messages: [],
-      toolState: {
-        assembly: {
-          lastResponse: 'last',
-          accumulatedOutput: 'all',
-        },
-        media: {
-          files: ['media.png'],
-        },
-        reasoning: {
-          thinkingBlocks: [],
-          thinkingAdded: false,
-        },
-        document: {
-          texcountStats: null,
-        },
-      },
+      store: store.toJSON(),
       lastUpdated: Date.now(),
     };
   }
@@ -168,10 +187,10 @@ describe('ToolUseSnapshotStore', () => {
       relativePath,
       path.join('toolUseSessions', `${executionId}.json`),
     );
-    const stored = value as ReturnType<typeof buildSnapshot>;
-    assert.equal(stored.session.agentType, AgentType.ToolUse);
+    const stored = value as ToolUseSessionSnapshot;
+    assert.equal(stored.agentConfig.session.agentType, 'toolUse');
     assert.notStrictEqual(stored.messages, payload.messages);
-    assert.equal(stored.toolState.assembly.lastResponse, 'last');
+    assert.equal(stored.store.workspace.assembly.lastResponse, 'last');
   });
 
   it('list triggers TTL cleanup and filters invalid snapshots', async () => {
@@ -196,6 +215,10 @@ describe('ToolUseSnapshotStore', () => {
 
     assert.equal(snapshots.length, 1);
     assert.equal(snapshots[0].executionId, executionId);
+    assert.equal(
+      snapshots[0].store.workspace.assembly.accumulatedOutput,
+      'all',
+    );
   });
 
   it('load returns null when persistence disabled', async () => {

@@ -26,6 +26,7 @@ import {
 import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
 import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
 import { BaseRunStateSchema } from '@agent/implementations/flows/common/types';
+import { AgentConversationState } from '@agent/core/AgentConversationState';
 import { z } from 'zod';
 
 export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
@@ -40,8 +41,11 @@ const ReflectionRunStateSchemaBase = BaseRunStateSchema.extend({
 
 type ReflectionRunStateStruct = z.infer<typeof ReflectionRunStateSchemaBase>;
 
-export type ReflectionRunState = Omit<ReflectionRunStateStruct, 'messages'> & {
-  messages: any[];
+export type ReflectionRunState = Omit<
+  ReflectionRunStateStruct,
+  'conversation'
+> & {
+  conversation: AgentConversationState<any>;
 };
 
 export interface ReflectionRunHooks extends AgentRunHooks {
@@ -87,7 +91,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       state,
       shouldFinalize,
       roundIndex: state.currentRound,
-      messages: state.messages,
+      messages: state.conversation.all(),
       runState: state.runState,
     };
   }
@@ -104,7 +108,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       const result = await prepRes.agent.runReflectionRound({
         roundIndex: prepRes.roundIndex,
         runState: prepRes.state.runState,
-        messages: prepRes.state.messages,
+        messages: prepRes.state.conversation.all(),
       } satisfies ReflectionRoundContext);
 
       return {
@@ -155,7 +159,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
         result.outputArtifacts;
     }
     shared.state.runState = result.runState;
-    shared.state.messages = result.messages;
+    shared.state.conversation.replace(result.messages);
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
     shared.state.runState.incrementRounds();

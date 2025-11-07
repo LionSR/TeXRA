@@ -30,20 +30,19 @@ import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import { bus } from '@eventBus/ProgressEventBus';
-import {
-  ToolUseSessionPersistence,
-  type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseSessionPersistence';
+import { createSharedStore } from '@agent/core/AgentSharedStore';
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
 import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
+import { AgentConversationState } from '@agent/core/AgentConversationState';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
-  private followUpQueue: string[] = [];
-  private followUpResolver: ((v: string | null) => void) | null = null;
+  private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
   private activeState: ToolUseRunState<C> | null = null;
 
@@ -64,6 +63,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       context,
     );
     this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+    this.sessionLifecycle = new ToolUseSessionLifecycle(this);
   }
 
   protected override registerRunningAgent(streamTabId: StreamTabId): void {
@@ -101,12 +101,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
    * @param text - The follow-up message text
    */
   public appendFollowUp(text: string): void {
-    if (this.followUpResolver) {
-      this.followUpResolver(text);
-      this.followUpResolver = null;
-    } else {
-      this.followUpQueue.push(text);
-    }
+    this.sessionLifecycle.appendFollowUp(text);
   }
 
   /**
@@ -118,22 +113,16 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private async waitForFollowUp(): Promise<string | null> {
-    if (this.followUpQueue.length > 0) {
-      return this.followUpQueue.shift()!;
-    }
-    if (this.isInterrupted) return null;
-    return new Promise<string | null>((resolve) => {
-      this.followUpResolver = resolve;
-    });
+    return this.sessionLifecycle.waitForFollowUp(() =>
+      this.checkInterruption(),
+    );
   }
 
   public override interrupt(): void {
     super.interrupt();
-    if (this.followUpResolver) {
-      this.followUpResolver(null);
-      this.followUpResolver = null;
-    }
-    void this.clearPersistedSnapshot();
+    this.sessionLifecycle.interrupt();
+    void this.sessionLifecycle.clearPersistedSnapshot();
+    this.sessionLifecycle.setStore(null);
   }
 
   public async run(): Promise<void> {
@@ -148,13 +137,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         },
         createState: () => {
           const state: ToolUseRunState<C> = {
-            messages: [],
-            toolState: null,
+            conversation: new AgentConversationState<ProviderMessage>(),
             cycleOptions: null,
             shouldSkipCycle: false,
             store: null,
             runState: new AgentRunState(),
-            nextRoundIndex: 0,
           };
           this.activeState = state;
           return state;
@@ -164,8 +151,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           ...baseHooks,
           init: (runStage) => this.init(runStage, { createStage: false }),
           prepareState: () => this.prepareInitialSessionState(),
-          buildCycleOptions: (toolState) =>
-            this.buildToolUseCycleOptions(toolState),
+          buildCycleOptions: (store) => this.buildToolUseCycleOptions(store),
           runCycle: (options, messages, store) =>
             runToolUseCycle({
               options,
@@ -173,7 +159,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
               store,
             }),
           checkInterruption: () => this.checkInterruption(),
-          hasQueuedFollowUp: () => this.followUpQueue.length > 0,
+          hasQueuedFollowUp: () => this.sessionLifecycle.hasQueuedFollowUp(),
           enterWaitingState: () => this.enterWaitingState(),
           clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
           waitForFollowUp: () => this.waitForFollowUp(),
@@ -185,8 +171,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
                 messages,
                 followUp,
               );
-            this.getActiveState().messages = updatedMessages;
-            return updatedMessages;
+            this.getActiveState().conversation.replace(updatedMessages);
+            return this.getActiveState().conversation.all();
           },
           logFinalizeWarning: (message, error) => {
             this.logger.warn(message, undefined, undefined, error);
@@ -194,6 +180,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           cleanup: async () => {
             await baseHooks.cleanup();
             this.activeState = null;
+            this.sessionLifecycle.dispose();
           },
         }),
       });
@@ -204,7 +191,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareInitialSessionState(): Promise<{
     messages: ProviderMessage[];
-    toolState: AgentWorkspaceState;
+    store: AgentSharedStore;
     shouldSkipCycle: boolean;
   }> {
     const state = this.getActiveState();
@@ -214,30 +201,19 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       this.resumeSnapshot = null;
 
       const messages = snapshot.messages;
-      let toolState: AgentWorkspaceState;
+      const store = createSharedStore({
+        snapshot: snapshot.store,
+        onRoundFinalized: this.getUsageRecorder('tool-use'),
+      });
 
-      try {
-        toolState = AgentWorkspaceState.fromJSON(snapshot.toolState);
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Unknown error while hydrating tool state';
-        this.logger.warn(
-          `Failed to hydrate tool state from snapshot: ${message}`,
-        );
-        toolState = new AgentWorkspaceState();
-      }
-
-      state.messages = messages;
-      state.toolState = toolState;
+      state.conversation.replace(messages);
+      state.store = store;
+      state.runState = store.run;
       state.shouldSkipCycle = true;
 
-      return {
-        messages,
-        toolState,
-        shouldSkipCycle: true,
-      };
+      this.sessionLifecycle.setStore(store);
+
+      return { messages, store, shouldSkipCycle: true };
     }
 
     const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
@@ -256,21 +232,25 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         : instructionSuffix,
     );
 
-    const toolState = new AgentWorkspaceState();
+    const store = createSharedStore({
+      roundIndex: state.runState.totalRounds,
+      runState: state.runState,
+      workspaceState: new AgentWorkspaceState(),
+      userChannels: this.getUserVarChannels(),
+      onRoundFinalized: this.getUsageRecorder('tool-use'),
+    });
 
-    state.messages = messages;
-    state.toolState = toolState;
+    state.conversation.replace(messages);
+    state.store = store;
     state.shouldSkipCycle = false;
 
-    return {
-      messages,
-      toolState,
-      shouldSkipCycle: false,
-    };
+    this.sessionLifecycle.setStore(store);
+
+    return { messages, store, shouldSkipCycle: false };
   }
 
   private buildToolUseCycleOptions(
-    toolState: AgentWorkspaceState,
+    store: AgentSharedStore,
   ): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
     const resolvedSetting = {
@@ -287,48 +267,23 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return {
       ...baseOptions,
       toolRegistry: this.toolRegistry,
-      toolState,
+      toolState: store.workspace,
       modelName: this.agentConfig.model,
     };
   }
 
   private async enterWaitingState(): Promise<void> {
-    // Early check to avoid unnecessary work
-    if (this.followUpQueue.length > 0) {
-      return;
-    }
-
-    const stream = this.getStreamTabId();
-    const executionId = this.getExecutionId();
-    const { toolState, messages } = this.getActiveState();
-
-    await ToolUseSessionPersistence.maybePersistIdleSnapshot({
-      executionId,
-      streamId: stream,
-      agentName: this.agentConfig.agent,
-      model: this.agentConfig.model,
-      session: this.getSessionMetadata(),
-      messages,
-      toolState: toolState ?? null,
-      hasQueuedFollowUps: () => this.followUpQueue.length > 0,
-    });
-
-    bus.emit('updateStreamStatus', {
-      stream,
-      status: 'waiting', // Using string literal here as it's part of the bus event API
-    });
+    await this.sessionLifecycle.enterWaitingState(
+      this.getActiveState().conversation.all(),
+    );
   }
 
   private async markRunning(): Promise<void> {
-    bus.emit('updateStreamStatus', {
-      stream: this.getStreamTabId(),
-      status: 'running', // Using string literal here as it's part of the bus event API
-    });
+    await this.sessionLifecycle.markRunning();
   }
 
   private async clearPersistedSnapshot(): Promise<void> {
-    const executionId = this.getExecutionId();
-    await ToolUseSessionPersistence.clearPersistedSnapshot(executionId);
+    await this.sessionLifecycle.clearPersistedSnapshot();
   }
 
   private getActiveState(): ToolUseRunState<C> {
