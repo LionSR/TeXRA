@@ -12,6 +12,7 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  normalizeSessionType,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
 import { createFileHandlers } from './handlers/fileHandlers.js';
@@ -42,6 +43,7 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - webview context
 import { vscode } from '@common/webviewContext.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 /**
  * Handles messages from the extension and syncs the webview state.
@@ -424,21 +426,32 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _restoreFormFields(state, savedState) {
-    const sessionType = state.sessionType
-      ? state.sessionType
-      : state.isToolUseAgent
+    const sessionCategory = state.session?.agentCategory;
+
+    let sessionType = state.sessionType;
+    if (sessionCategory === AgentCategory.ToolUse) {
+      sessionType = SESSION_TYPES.TOOL_USE;
+    } else if (sessionCategory === AgentCategory.Workflow) {
+      sessionType = SESSION_TYPES.WORKFLOW;
+    }
+
+    if (!sessionType) {
+      sessionType = state.isToolUseAgent
         ? SESSION_TYPES.TOOL_USE
         : SESSION_TYPES.WORKFLOW;
+    }
+
+    const normalizedSessionType = normalizeSessionType(sessionType);
+    const isToolUseSession = normalizedSessionType === SESSION_TYPES.TOOL_USE;
+
     const workflowAgentValue =
       state.workflowAgent ??
-      (!state.isToolUseAgent ? state.agent : undefined) ??
+      (!isToolUseSession ? state.agent : undefined) ??
       '';
     const toolUseAgentValue =
-      state.toolUseAgent ??
-      (state.isToolUseAgent ? state.agent : undefined) ??
-      '';
+      state.toolUseAgent ?? (isToolUseSession ? state.agent : undefined) ?? '';
 
-    safeSetElementValue(SESSION_TYPE_INPUT, sessionType);
+    safeSetElementValue(SESSION_TYPE_INPUT, normalizedSessionType);
     safeSetElementValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       workflowAgentValue,
@@ -467,14 +480,12 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     const toolConfig = state.toolConfig || {};
     Object.assign(savedState, {
-      sessionType,
+      sessionType: normalizedSessionType,
       workflowAgent: workflowAgentValue,
       toolUseAgent: toolUseAgentValue,
       agent:
         state.agent ??
-        (sessionType === SESSION_TYPES.TOOL_USE
-          ? toolUseAgentValue
-          : workflowAgentValue),
+        (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
       inputFile: state.inputFile,
