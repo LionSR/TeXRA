@@ -36,20 +36,28 @@ export class TaskGroupManager extends PersistentMapManager<
   /**
    * Add a task group to a stream
    */
-  addGroup(stream: StreamTabId, groupId: string, group: TaskGroup): void {
+  async addGroup(
+    stream: StreamTabId,
+    groupId: string,
+    group: TaskGroup,
+  ): Promise<void> {
     if (!this.has(stream)) {
       this.items.set(stream, new Map());
     }
 
     const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
-    this.save();
+    await this.save();
   }
 
   /**
    * Update an existing task group
    */
-  updateGroup({ stream, groupId, updates }: TaskGroupUpdatePayload): void {
+  async updateGroup({
+    stream,
+    groupId,
+    updates,
+  }: TaskGroupUpdatePayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
       this.logger.warn(
@@ -69,7 +77,7 @@ export class TaskGroupManager extends PersistentMapManager<
     // Apply updates
     Object.assign(group, updates);
     streamGroups.set(groupId, group);
-    this.save();
+    await this.save();
   }
 
   /**
@@ -97,15 +105,15 @@ export class TaskGroupManager extends PersistentMapManager<
   /**
    * Delete all groups for a stream
    */
-  deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await this.delete(stream);
   }
 
   /**
    * Clear all groups
    */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
   }
 
   /**

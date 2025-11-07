@@ -28,26 +28,34 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Update usage statistics for a stream
    */
-  updateStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    this.add(stream, { ...usage });
+  async updateStreamUsage(
+    stream: StreamTabId,
+    usage: TokenUsageStats,
+  ): Promise<void> {
+    await this.add(stream, this.sanitizeUsage(usage));
   }
 
   /**
    * Add usage to existing stream statistics
    */
-  addToStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
+  async addToStreamUsage(
+    stream: StreamTabId,
+    usage: TokenUsageStats,
+  ): Promise<void> {
     const existing = this.get(stream);
     if (existing) {
+      const current = this.sanitizeUsage(existing);
+      const incoming = this.sanitizeUsage(usage);
       const updated: TokenUsageStats = {
-        inputTokens: existing.inputTokens + usage.inputTokens,
-        outputTokens: existing.outputTokens + usage.outputTokens,
-        cost: existing.cost + usage.cost,
+        inputTokens: current.inputTokens + incoming.inputTokens,
+        outputTokens: current.outputTokens + incoming.outputTokens,
+        cost: current.cost + incoming.cost,
       };
-      this.add(stream, updated);
+      await this.add(stream, updated);
       return;
     }
 
-    this.add(stream, { ...usage });
+    await this.add(stream, this.sanitizeUsage(usage));
   }
 
   /**
@@ -60,15 +68,15 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Delete usage statistics for a stream
    */
-  deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await this.delete(stream);
   }
 
   /**
    * Clear all usage statistics
    */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
   }
 
   /**
@@ -126,6 +134,31 @@ export class UsageStatsManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<TokenUsageStats> {
-    return data as TokenUsageStats;
+    if (!data || typeof data !== 'object') {
+      return this.zeroUsage();
+    }
+
+    const candidate = data as Partial<TokenUsageStats>;
+    return this.sanitizeUsage({
+      inputTokens: candidate.inputTokens ?? NaN,
+      outputTokens: candidate.outputTokens ?? NaN,
+      cost: candidate.cost ?? NaN,
+    });
+  }
+
+  private sanitizeUsage(usage: TokenUsageStats): TokenUsageStats {
+    return {
+      inputTokens: this.toSafeNumber(usage.inputTokens),
+      outputTokens: this.toSafeNumber(usage.outputTokens),
+      cost: this.toSafeNumber(usage.cost),
+    };
+  }
+
+  private toSafeNumber(value: number): number {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  private zeroUsage(): TokenUsageStats {
+    return { inputTokens: 0, outputTokens: 0, cost: 0 };
   }
 }

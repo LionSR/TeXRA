@@ -29,7 +29,10 @@ export class StreamTabsManager extends PersistentMapManager<
   /**
    * Add a log message to a stream
    */
-  addMessage(stream: StreamTabId, message: LogMessageData): void {
+  async addMessage(
+    stream: StreamTabId,
+    message: LogMessageData,
+  ): Promise<void> {
     const messages = this.ensureMessages(stream);
 
     messages.push(message);
@@ -42,44 +45,44 @@ export class StreamTabsManager extends PersistentMapManager<
       );
     }
 
-    this.save();
+    await this.save();
   }
 
   /**
    * Create an empty stream if it doesn't exist
    */
-  ensureStream(stream: StreamTabId): void {
+  async ensureStream(stream: StreamTabId): Promise<void> {
     if (!this.has(stream)) {
       this.ensureMessages(stream);
-      this.save();
+      await this.save();
     }
   }
 
   /**
    * Delete a stream and its messages
    */
-  delete(stream: StreamTabId): void {
-    super.delete(stream);
+  async delete(stream: StreamTabId): Promise<void> {
+    await super.delete(stream);
   }
 
   /**
    * Clear all streams
    */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
   }
 
   /**
    * Clear content of a specific stream (but keep the stream)
    */
-  clearContent(stream: StreamTabId): void {
+  async clearContent(stream: StreamTabId): Promise<void> {
     if (!this.has(stream)) {
       return;
     }
 
     const messages = this.ensureMessages(stream);
     messages.length = 0;
-    this.save();
+    await this.save();
   }
 
   getMessages(stream: StreamTabId): LogMessageData[] {
