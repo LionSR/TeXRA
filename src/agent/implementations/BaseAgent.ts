@@ -15,6 +15,7 @@ import type {
   AgentCycleBaseOptions,
   UserVariableChannels,
 } from '@agent/core/AgentCycleOptions';
+import type { AgentRoundFinalizedCallback } from '../core/AgentSharedStore';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - logging
@@ -238,6 +239,14 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     options?: { runKind?: 'workflow' | 'tool-use' },
   ): Promise<void> {
     await this.usageMonitor.recordUsage(stateGlobal, options);
+  }
+
+  public getUsageRecorder(
+    runKind: 'workflow' | 'tool-use' = 'workflow',
+  ): AgentRoundFinalizedCallback {
+    return async ({ run }) => {
+      await this.trackRoundUsage(run, { runKind });
+    };
   }
 
   /**
