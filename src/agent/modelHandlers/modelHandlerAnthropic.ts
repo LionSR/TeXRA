@@ -81,7 +81,10 @@ import {
 } from './utils/toolAttachmentUtils';
 
 // Local imports - error utils
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
@@ -494,11 +497,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         response = await client.beta.messages.create(options, { signal });
       }
     } catch (err) {
+      const formattedError = formatProviderHttpError(err);
       this.logger.error(
-        `Error creating response: ${getSdkErrorMessage(err)}`,
+        `Error creating response: ${formattedError.message}`,
         undefined,
-        undefined,
-        err,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+        formattedError,
       );
       throw err;
     }
@@ -617,11 +621,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
         } catch (err) {
+          const formattedError = formatProviderHttpError(err);
           this.logger.error(
-            `Failed to upload document ${filename}: ${getSdkErrorMessage(err)}`,
+            `Failed to upload document ${filename}: ${formattedError.message}`,
             undefined,
-            undefined,
-            err,
+            MESSAGE_TYPES.PROGRESS_STATUS,
+            formattedError,
           );
           throw err;
         } finally {
@@ -737,11 +742,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           mediaType: normalized,
         });
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
         unsupported.push(attachment);
       } finally {
@@ -845,11 +851,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          `Error processing media files for follow-up round: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
       }
     }
