@@ -65,8 +65,8 @@ const registerOutputFileListeners = (
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable[] => {
   const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
-    withErrorBoundary('failed to handle addOutputFiles', () => {
-      state.outputFiles.addFiles(stream, filesByRound);
+    withErrorBoundary('failed to handle addOutputFiles', async () => {
+      await state.outputFiles.addFiles(stream, filesByRound);
       const files = state.outputFiles.getFiles(stream);
       updateActiveStreamOutputs({
         state,
@@ -80,8 +80,8 @@ const registerOutputFileListeners = (
   const updateMissing = bus.on(
     'updateMissingOutputs',
     ({ stream, filesByRound }) => {
-      withErrorBoundary('failed to handle updateMissingOutputs', () => {
-        state.outputFiles.updateMissingOutputs(stream, filesByRound);
+      withErrorBoundary('failed to handle updateMissingOutputs', async () => {
+        await state.outputFiles.updateMissingOutputs(stream, filesByRound);
         const missing = state.outputFiles.getMissingOutputs(stream);
         updateActiveStreamOutputs({
           state,
@@ -94,8 +94,8 @@ const registerOutputFileListeners = (
   );
 
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
-    withErrorBoundary('failed to handle clearMissingOutputs', () => {
-      state.outputFiles.clearMissingOutputs(stream);
+    withErrorBoundary('failed to handle clearMissingOutputs', async () => {
+      await state.outputFiles.clearMissingOutputs(stream);
       updateActiveStreamOutputs({
         state,
         updater,
@@ -106,8 +106,8 @@ const registerOutputFileListeners = (
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
-    withErrorBoundary('failed to handle clearOutputFiles', () => {
-      state.outputFiles.clearFiles(stream);
+    withErrorBoundary('failed to handle clearOutputFiles', async () => {
+      await state.outputFiles.clearFiles(stream);
       updateActiveStreamOutputs({
         state,
         updater,
