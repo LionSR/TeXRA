@@ -15,7 +15,7 @@ import type { TaskGroup } from '@logger/LogTypes';
 
 interface TaskGroupEventsShared {
   logger: AgentLogger;
-  initializeStreamForTaskGroup(stream: string): void;
+  initializeStreamForTaskGroup(stream: string): Promise<void>;
 }
 
 export interface TaskGroupEventsModule {
@@ -39,7 +39,7 @@ export function createTaskGroupEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    withErrorBoundary('failed to handle addTaskGroup', () => {
+    withErrorBoundary('failed to handle addTaskGroup', async () => {
       const {
         stream,
         groupId,
@@ -53,7 +53,7 @@ export function createTaskGroupEvents(
       const hasStream = state.streamTabs.has(stream);
       if (!hasStream) {
         shared.logger.debug(`Creating stream from addTaskGroup: ${stream}`);
-        shared.initializeStreamForTaskGroup(stream);
+        await shared.initializeStreamForTaskGroup(stream);
       }
 
       const group: TaskGroup = {
@@ -65,7 +65,7 @@ export function createTaskGroupEvents(
         parentGroupId,
       };
 
-      state.taskGroups.addGroup(stream, groupId, group);
+      await state.taskGroups.addGroup(stream, groupId, group);
 
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.addTaskGroup(stream, group);
@@ -78,7 +78,7 @@ export function createTaskGroupEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    withErrorBoundary('failed to handle updateTaskGroup', () => {
+    withErrorBoundary('failed to handle updateTaskGroup', async () => {
       const update: TaskGroupUpdatePayload = {
         stream: data.stream,
         groupId: data.groupId,
@@ -88,7 +88,7 @@ export function createTaskGroupEvents(
         },
       };
 
-      state.taskGroups.updateGroup(update);
+      await state.taskGroups.updateGroup(update);
 
       if (updater.isAvailable() && data.stream === state.activeStream) {
         updater.updateTaskGroup(update);

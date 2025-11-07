@@ -173,14 +173,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleDeleteStream(message: any): Promise<void> {
     // Delete persisted session data if any
     await this.deleteSessionSnapshot(message.stream);
-    this.provider.state.clearStream(message.stream);
+    await this.provider.state.clearStream(message.stream);
     this.provider.updateWebview();
   }
 
   private async handleEraseStream(message: any): Promise<void> {
     // Delete persisted session data when erasing stream
     await this.deleteSessionSnapshot(message.stream);
-    this.provider.state.eraseStreamContent(message.stream);
+    await this.provider.state.eraseStreamContent(message.stream);
     this.provider.updateWebview();
   }
 
@@ -203,7 +203,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       await this.deleteSessionSnapshot(stream);
     }
 
-    this.provider.state.clearAll();
+    await this.provider.state.clearAll();
     this.provider.updateWebview();
   }
 

@@ -1,6 +1,8 @@
 // Local imports - progress view persistence
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -26,28 +28,36 @@ export class TaskGroupManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.TASK_GROUPS, storage);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
   /**
    * Add a task group to a stream
    */
-  addGroup(stream: StreamTabId, groupId: string, group: TaskGroup): void {
+  async addGroup(
+    stream: StreamTabId,
+    groupId: string,
+    group: TaskGroup,
+  ): Promise<void> {
     if (!this.has(stream)) {
       this.items.set(stream, new Map());
     }
 
     const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
-    this.save();
+    await this.save();
   }
 
   /**
    * Update an existing task group
    */
-  updateGroup({ stream, groupId, updates }: TaskGroupUpdatePayload): void {
+  async updateGroup({
+    stream,
+    groupId,
+    updates,
+  }: TaskGroupUpdatePayload): Promise<void> {
     const streamGroups = this.get(stream);
     if (!streamGroups) {
       this.logger.warn(
@@ -67,7 +77,7 @@ export class TaskGroupManager extends PersistentMapManager<
     // Apply updates
     Object.assign(group, updates);
     streamGroups.set(groupId, group);
-    this.save();
+    await this.save();
   }
 
   /**
@@ -95,15 +105,15 @@ export class TaskGroupManager extends PersistentMapManager<
   /**
    * Delete all groups for a stream
    */
-  deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await this.delete(stream);
   }
 
   /**
    * Clear all groups
    */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
   }
 
   /**
@@ -140,23 +150,7 @@ export class TaskGroupManager extends PersistentMapManager<
       return new Map();
     }
 
-    const entries = Object.entries(
-      data as Record<string, (TaskGroup & { id?: string }) | undefined>,
-    );
-    const groups = new Map<string, TaskGroup>();
-
-    for (const [key, value] of entries) {
-      if (!value) {
-        continue;
-      }
-
-      const group: TaskGroup = {
-        ...value,
-        id: value.id ?? key,
-      } as TaskGroup;
-      groups.set(key, group);
-    }
-
-    return groups;
+    const entries = Object.entries(data as Record<string, TaskGroup>);
+    return new Map(entries as [string, TaskGroup][]);
   }
 }
