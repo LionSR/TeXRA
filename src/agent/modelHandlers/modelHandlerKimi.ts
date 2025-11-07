@@ -12,7 +12,11 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - utilities
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
 import { K_SLICE } from '@utils/config';
 
@@ -134,11 +138,12 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         });
         return response;
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error in createResponse for Kimi thinking model: ${getSdkErrorMessage(err)}`,
+          `Error in createResponse for Kimi thinking model: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
         throw err;
       }
