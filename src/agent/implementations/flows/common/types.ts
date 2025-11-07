@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { AgentRunState } from '@agent/core/AgentState';
+import { AgentConversationState } from '@agent/core/AgentConversationState';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
@@ -17,7 +18,7 @@ export interface AgentLifecycleState<Phase extends string> {
 }
 
 export const BaseRunStateSchema = z.object({
-  messages: z.array(z.any()),
+  conversation: z.instanceof(AgentConversationState),
   runState: z.instanceof(AgentRunState),
 });
 
