@@ -85,6 +85,8 @@ const collectTextFromUnknown = (value: unknown): string => {
   return '';
 };
 
+const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
+
 class DeepSeekStreamAggregator {
   private readonly contentParts: string[] = [];
   private readonly reasoningParts: string[] = [];
@@ -192,11 +194,9 @@ class DeepSeekStreamAggregator {
       logprobs: primaryChoice.logprobs ?? null,
     };
 
-    const usage =
-      base.usage ??
-      this.usageChunk?.usage ??
-      this.lastChunkWithChoices?.usage ??
-      undefined;
+    const usageCandidate =
+      base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage;
+    const usage = usageCandidate === null ? undefined : usageCandidate;
 
     return {
       ...base,
@@ -255,13 +255,15 @@ class DeepSeekStreamAggregator {
     }
 
     const choice = chunk.choices[0];
+    const usage = chunk.usage === null ? undefined : chunk.usage;
+
     return {
       id: chunk.id,
       object: 'chat.completion',
       created: chunk.created,
       model: chunk.model,
       system_fingerprint: chunk.system_fingerprint,
-      usage: chunk.usage ?? undefined,
+      usage,
       choices: [
         {
           index: choice?.index ?? 0,
@@ -372,9 +374,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       !this.config.capabilities.supportsReasoning
     ) {
       this.logger.debug(
-        'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
+        `Setting max_tokens to ${DEEPSEEK_OFFICIAL_API_MAX_TOKENS} for DeepSeek-chat models from the official api`,
       );
-      baseParams.max_tokens = 8192;
+      baseParams.max_tokens = DEEPSEEK_OFFICIAL_API_MAX_TOKENS;
     }
 
     // Calculate input tokens using the helper method
@@ -402,11 +404,25 @@ export class ModelHandlerOpenAI extends ModelHandler<
         this.config.contextWindow - approximateInputTokens;
       const currentMax = baseParams[maxOutputKey];
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
-        const adjusted = Math.max(1, availableTokens - 5000);
-        baseParams[maxOutputKey] = adjusted;
-        this.logger.warn(
-          `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing max tokens to ${adjusted}.`,
-        );
+        const TOKEN_BUFFER = 5000;
+        const MIN_COMPLETION_TOKENS = 100;
+
+        if (availableTokens <= 0) {
+          baseParams[maxOutputKey] = 1;
+          this.logger.warn(
+            `Approximate token count (${approximateInputTokens}) already exceeds context window (${this.config.contextWindow}). Forcing ${maxOutputKey} to 1 token.`,
+          );
+        } else {
+          const adjustedWithBuffer = Math.max(
+            MIN_COMPLETION_TOKENS,
+            availableTokens - TOKEN_BUFFER,
+          );
+          const adjusted = Math.min(availableTokens, adjustedWithBuffer);
+          baseParams[maxOutputKey] = adjusted;
+          this.logger.warn(
+            `Approximate token count (${approximateInputTokens}) + max tokens (${currentMax}) exceeds context window (${this.config.contextWindow}). Reducing ${maxOutputKey} to ${adjusted}.`,
+          );
+        }
       }
     } catch (err) {
       this.logger.error(
@@ -433,6 +449,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
+        // DeepSeek streaming chunks surface reasoning/tool deltas that we need to
+        // stitch back into the final message. Non-DeepSeek models already return
+        // complete data through the SDK response, so the aggregator isn't needed.
         const deepSeekAggregator = this.config.fullName.includes('deepseek')
           ? new DeepSeekStreamAggregator()
           : null;
@@ -463,10 +482,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
             ? deepSeekAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
           const finalReasoning = this.processThinkingBlock(finalResponse);
-          thinking.finalize(finalReasoning ?? undefined);
-          const finalOutput = deepSeekAggregator
-            ? deepSeekAggregator.getFullContent()
-            : (finalResponse.choices?.[0]?.message?.content ?? '');
+          if (finalReasoning === null) {
+            thinking.finalize();
+          } else {
+            thinking.finalize(finalReasoning);
+          }
+          const finalOutput =
+            finalResponse.choices?.[0]?.message?.content ?? '';
           output?.finalize(finalOutput);
           return finalResponse;
         } finally {
