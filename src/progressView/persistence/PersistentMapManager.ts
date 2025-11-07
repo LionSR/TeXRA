@@ -1,7 +1,11 @@
-// Local imports - progress view
-import { StatePersistenceManager } from './StatePersistenceManager';
 // Local imports
-import { WorkspaceStateKey } from '@common/state/stateManager';
+import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+
+export interface StateStorage {
+  get<T>(key: string): T | undefined;
+  get<T>(key: string, defaultValue: T): T;
+  update<T>(key: string, value: T): Thenable<void>;
+}
 
 /**
  * Generic manager for map-based state with persistence support.
@@ -9,12 +13,18 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
  */
 export abstract class PersistentMapManager<K extends string, V> {
   protected items: Map<K, V> = new Map();
+  protected readonly storage: StateStorage;
+  protected readonly storageKey: WorkspaceStateKey;
 
-  constructor(
-    protected readonly persistence: StatePersistenceManager,
-    protected readonly storageKey: WorkspaceStateKey,
-    protected readonly legacyKey?: string,
-  ) {}
+  constructor(storageKey: WorkspaceStateKey, storage?: StateStorage) {
+    const resolvedStorage = storage ?? workspaceSM;
+    if (!resolvedStorage) {
+      throw new Error('workspace state manager is not initialized');
+    }
+
+    this.storage = resolvedStorage;
+    this.storageKey = storageKey;
+  }
 
   /** Add an entry to the map and persist it */
   add(key: K, value: V): void {
@@ -73,16 +83,10 @@ export abstract class PersistentMapManager<K extends string, V> {
 
   /** Load state from persistence */
   async load(): Promise<void> {
-    const saved = this.legacyKey
-      ? await this.persistence.loadWithMigration<Record<string, unknown>>(
-          this.storageKey,
-          this.legacyKey,
-          {},
-        )
-      : await this.persistence.load<Record<string, unknown>>(
-          this.storageKey,
-          {},
-        );
+    const saved = this.storage.get<Record<string, unknown>>(
+      this.storageKey,
+      {},
+    );
 
     if (saved && Object.keys(saved).length > 0) {
       const entries: [K, V][] = [];
@@ -103,6 +107,6 @@ export abstract class PersistentMapManager<K extends string, V> {
       this.serialize(value, key),
     ]);
     const obj = Object.fromEntries(serialized);
-    this.persistence.save(this.storageKey, obj);
+    void this.storage.update(this.storageKey, obj);
   }
 }

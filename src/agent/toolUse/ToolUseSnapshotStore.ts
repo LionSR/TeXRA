@@ -4,9 +4,6 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
-import { AgentType } from '@agent/core/AgentDataclass';
-
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 
@@ -20,7 +17,6 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
-  normalizeSnapshot,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
@@ -42,62 +38,6 @@ async function cleanupExpiredSnapshots(): Promise<void> {
 
 function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
-}
-
-const migrationState: {
-  promise: Promise<void> | null;
-  completed: boolean;
-} = {
-  promise: null,
-  completed: false,
-};
-
-async function migrateLegacySnapshots(): Promise<void> {
-  if (migrationState.completed) {
-    return;
-  }
-
-  if (!migrationState.promise) {
-    migrationState.promise = (async () => {
-      const entries = await StorageFS.readDir(STORAGE_DIR);
-
-      for (const [name, type] of entries) {
-        if (type !== vscode.FileType.File || !name.endsWith('.json')) {
-          continue;
-        }
-
-        const relativePath = path.join(STORAGE_DIR, name);
-        const stored = await StorageFS.readJson<unknown>(relativePath);
-        const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
-        if (!parsed.success) {
-          logger.debug(`Skipping migration for ${name}: validation failed`);
-          continue;
-        }
-        try {
-          await StorageFS.writeJson(relativePath, parsed.data);
-          logger.debug(`Migrated legacy snapshot ${name}`);
-        } catch (error) {
-          logger.debug(
-            `Skipping migration for ${name}: write failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-    })()
-      .catch((error) => {
-        logger.debug(
-          `Legacy snapshot migration failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      })
-      .finally(() => {
-        migrationState.completed = true;
-      });
-  }
-
-  await migrationState.promise;
 }
 
 let persistenceEnabled: boolean | null = null;
@@ -122,8 +62,6 @@ async function ensureInitialized(): Promise<boolean> {
     await cleanupExpiredSnapshots();
     cleanupPerformed = true;
   }
-
-  await migrateLegacySnapshots();
   return true;
 }
 
@@ -156,10 +94,7 @@ export const ToolUseSnapshotStore = {
       streamId: payload.streamId,
       agentName: payload.agentName,
       model: payload.model,
-      session: {
-        agentType: payload.session.agentType ?? AgentType.ToolUse,
-        agentCategory: payload.session.agentCategory,
-      },
+      session: { ...payload.session },
       messages: structuredClone(payload.messages),
       toolState: payload.toolState.toJSON(),
       lastUpdated: Date.now(),
@@ -185,8 +120,7 @@ export const ToolUseSnapshotStore = {
     try {
       const stored =
         await StorageFS.readJson<ToolUseSessionSnapshot>(snapshotPath);
-      const parsed = ToolUseSessionSnapshotSchema.parse(stored);
-      return normalizeSnapshot(parsed);
+      return ToolUseSessionSnapshotSchema.parse(stored);
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
