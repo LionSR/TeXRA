@@ -26,6 +26,9 @@ import { bestConnectionMethod } from '@latex';
 // Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
+// Local imports - errors
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+
 // Local imports - replacement engine
 import replacementEngine from '@replacement/engine';
 
@@ -241,11 +244,14 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
       return { response, responseTime };
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? `Model invocation failed: ${error.message}`
-          : 'Model invocation failed with an unknown error';
-      options.logger.error(message);
+      const formattedError = formatProviderHttpError(error);
+      const message = `Model invocation failed: ${formattedError.message}`;
+      options.logger.error(
+        message,
+        undefined,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+        formattedError,
+      );
       state.shouldStop = true;
       state.endTurn = false;
       throw error;

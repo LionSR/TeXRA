@@ -35,10 +35,14 @@ import {
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
 
+// Local imports - errors
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId } from '@/logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -507,12 +511,17 @@ export async function executeAgentWithLogging<T extends IAgent>(
       { skip: isResume },
     );
   } catch (err) {
-    const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
+    const formattedError = formatProviderHttpError(err);
+    const rawErrorMessage =
+      formattedError.rawMessage ??
+      (err instanceof Error ? err.message : String(err));
+    const errorMsg = `Error executing agent ${agentName}: ${formattedError.message}`;
+    const errorData = { ...formattedError, rawMessage: rawErrorMessage };
 
     // Check if the error is related to missing API key
     if (
-      errorMsg.includes('Missing API key') ||
-      errorMsg.includes('API key not found')
+      rawErrorMessage.includes('Missing API key') ||
+      rawErrorMessage.includes('API key not found')
     ) {
       const setKey = 'Set API Key';
       const openGuide = 'Open Settings Guide';
@@ -547,7 +556,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withExistingGroup(
           fallbackGroupId,
           async () => {
-            agentLoggerFallback.error(errorMsg);
+            agentLoggerFallback.error(
+              errorMsg,
+              undefined,
+              MESSAGE_TYPES.PROGRESS_STATUS,
+              errorData,
+            );
           },
           { label: `Error: ${agentName}` },
         );
@@ -555,7 +569,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withScope(
           `Error: ${agentName}`,
           async () => {
-            agentLoggerFallback.error(errorMsg);
+            agentLoggerFallback.error(
+              errorMsg,
+              undefined,
+              MESSAGE_TYPES.PROGRESS_STATUS,
+              errorData,
+            );
           },
           { errorStatus: 'error' },
         );
@@ -565,7 +584,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
     await logger.withScope(
       `Error: ${agentName}`,
       async () => {
-        logger.error(errorMsg);
+        logger.error(
+          errorMsg,
+          undefined,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          errorData,
+        );
       },
       { errorStatus: 'error' },
     );
