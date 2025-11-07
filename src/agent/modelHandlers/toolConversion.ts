@@ -54,6 +54,20 @@ export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
   });
 }
 
+/** Convert generic ToolDefinition objects to OpenRouter Tool format. */
+export function toOpenRouterTools(
+  defs: ToolDefinition[],
+): Record<string, unknown>[] {
+  return defs.map((d) => ({
+    type: 'function',
+    function: {
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Record<string, unknown> | undefined,
+    },
+  }));
+}
+
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
 export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
   return defs.map<ToolUnion>((d) => {
