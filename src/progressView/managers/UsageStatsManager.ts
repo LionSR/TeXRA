@@ -1,7 +1,8 @@
 // Local imports - progress view
-// Local imports
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types
@@ -19,8 +20,8 @@ export class UsageStatsManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.USAGE_STATS);
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.USAGE_STATS, storage);
     this.logger = new AgentLogger('UsageStatsManager');
   }
 
@@ -35,19 +36,18 @@ export class UsageStatsManager extends PersistentMapManager<
    * Add usage to existing stream statistics
    */
   addToStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    const existing = this.get(stream) || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
+    const existing = this.get(stream);
+    if (existing) {
+      const updated: TokenUsageStats = {
+        inputTokens: existing.inputTokens + usage.inputTokens,
+        outputTokens: existing.outputTokens + usage.outputTokens,
+        cost: existing.cost + usage.cost,
+      };
+      this.add(stream, updated);
+      return;
+    }
 
-    const updated: TokenUsageStats = {
-      inputTokens: existing.inputTokens + (usage.inputTokens || 0),
-      outputTokens: existing.outputTokens + (usage.outputTokens || 0),
-      cost: existing.cost + (usage.cost || 0),
-    };
-
-    this.add(stream, updated);
+    this.add(stream, { ...usage });
   }
 
   /**
@@ -82,19 +82,17 @@ export class UsageStatsManager extends PersistentMapManager<
    * Calculate total usage across all streams
    */
   getTotalUsage(): TokenUsageStats {
-    const total: TokenUsageStats = {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cost = 0;
 
     for (const usage of this.items.values()) {
-      total.inputTokens += usage.inputTokens || 0;
-      total.outputTokens += usage.outputTokens || 0;
-      total.cost += usage.cost || 0;
+      inputTokens += usage.inputTokens;
+      outputTokens += usage.outputTokens;
+      cost += usage.cost;
     }
 
-    return total;
+    return { inputTokens, outputTokens, cost };
   }
 
   /**
@@ -128,15 +126,6 @@ export class UsageStatsManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<TokenUsageStats> {
-    const usage = (data as TokenUsageStats) || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
-    return {
-      inputTokens: usage.inputTokens || 0,
-      outputTokens: usage.outputTokens || 0,
-      cost: usage.cost || 0,
-    };
+    return data as TokenUsageStats;
   }
 }
