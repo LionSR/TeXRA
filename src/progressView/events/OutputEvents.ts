@@ -27,7 +27,7 @@ interface OutputEventsShared {
   logger: AgentLogger;
 }
 
-type FilesByRound<T> = { [key: number]: T[] };
+type FilesByRound<T> = Map<number, T[]>;
 
 interface ActiveStreamOutputUpdate {
   state: ProgressViewState;
@@ -50,11 +50,17 @@ const updateActiveStreamOutputs = ({
   }
 
   if (updates.files !== undefined) {
-    updater.updateFiles(stream, updates.files ?? {});
+    const payload = updates.files
+      ? Object.fromEntries(updates.files.entries())
+      : {};
+    updater.updateFiles(stream, payload);
   }
 
   if (updates.missing !== undefined) {
-    updater.updateMissingOutputs(stream, updates.missing ?? {});
+    const payload = updates.missing
+      ? Object.fromEntries(updates.missing.entries())
+      : {};
+    updater.updateMissingOutputs(stream, payload);
   }
 };
 
@@ -100,7 +106,7 @@ const registerOutputFileListeners = (
         state,
         updater,
         stream,
-        updates: { missing: {} },
+        updates: { missing: new Map() },
       });
     });
   });
@@ -112,7 +118,7 @@ const registerOutputFileListeners = (
         state,
         updater,
         stream,
-        updates: { files: {} },
+        updates: { files: new Map() },
       });
     });
   });
