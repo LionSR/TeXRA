@@ -43,7 +43,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Local imports - webview context
 import { vscode } from '@common/webviewContext.js';
 import { BaseWebviewMessageHandler } from '@common/BaseWebviewMessageHandler.js';
-import { AgentCategory } from '@agent/core/AgentDataclass';
 
 /**
  * Handles messages from the extension and syncs the webview state.
@@ -429,9 +428,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const sessionCategory = state.session?.agentCategory;
 
     let sessionType = state.sessionType;
-    if (sessionCategory === AgentCategory.ToolUse) {
+    if (sessionCategory === SESSION_TYPES.TOOL_USE) {
       sessionType = SESSION_TYPES.TOOL_USE;
-    } else if (sessionCategory === AgentCategory.Workflow) {
+    } else if (sessionCategory === SESSION_TYPES.WORKFLOW) {
       sessionType = SESSION_TYPES.WORKFLOW;
     }
 
