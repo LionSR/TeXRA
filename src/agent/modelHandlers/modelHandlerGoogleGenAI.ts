@@ -45,7 +45,10 @@ import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ToolDefinition } from '@model';
@@ -250,11 +253,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         uploadedParts.push(createPartFromUri(fileUri, resolvedMimeType));
         uploadSummaries.push({ path: fileName, ok: true });
       } catch (error) {
+        const formattedError = formatProviderHttpError(error);
         this.logger.error(
-          `Failed to upload media entry ${fileName}: ${getSdkErrorMessage(error)}`,
+          `Failed to upload media entry ${fileName}: ${formattedError.message}`,
           undefined,
-          undefined,
-          error,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
         uploadSummaries.push({ path: fileName, ok: false });
       }
@@ -549,11 +553,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
       return result;
     } catch (error) {
+      const formattedError = formatProviderHttpError(error);
       this.logger.error(
-        `Error during Google GenAI Chat API call: ${getSdkErrorMessage(error)}`,
+        `Error during Google GenAI Chat API call: ${formattedError.message}`,
         undefined,
-        undefined,
-        error,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+        formattedError,
       );
       if (
         error instanceof Error &&
