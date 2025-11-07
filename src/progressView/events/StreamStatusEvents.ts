@@ -27,7 +27,7 @@ export interface StreamStatusEventShared {
   streamStatus: Map<string, StreamStatusType>;
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
   sendInstructionUpdate(stream: StreamTabId | ''): void;
-  updateLogContentForStream(
+  refreshStreamSurface(
     stream: string,
     options?: { updateInstruction?: boolean },
   ): void;
@@ -83,7 +83,7 @@ export function createStreamStatusEvents(
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
-      shared.updateLogContentForStream(stream, { updateInstruction: false });
+      shared.refreshStreamSurface(stream, { updateInstruction: false });
       shared.sendInstructionUpdate(stream);
     }
   };
