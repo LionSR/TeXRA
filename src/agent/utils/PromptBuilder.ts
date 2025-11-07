@@ -1,8 +1,6 @@
 // Local imports - agent
-import type {
-  AgentPrompt,
-  AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+import type { AgentPrompt } from '@agent/core/AgentDataclass';
+import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 
 // Local imports - log
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -10,6 +8,9 @@ import type { AgentLogger } from '@logger/AgentLogger';
 // Local imports - utilities
 import { getSystemPromptWithRules } from './promptHelpers';
 import { renderPrompt } from './promptUtils';
+import { TOOL_USE_INSTRUCTIONS } from './toolUsePrompt';
+
+type PromptBuilderSetting = Pick<AgentWorkflowSetting, 'prefills'>;
 
 /**
  * Centralises prompt construction logic for multi-round agents.
@@ -30,7 +31,7 @@ import { renderPrompt } from './promptUtils';
 export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
-    private readonly agentSetting: AgentWorkflowSetting,
+    private readonly agentSetting: PromptBuilderSetting,
     private readonly userVars: Record<string, any>,
     private readonly logger?: AgentLogger,
   ) {}
@@ -130,3 +131,22 @@ export class PromptBuilder {
 export type InitialPrompts = Awaited<
   ReturnType<PromptBuilder['buildInitialPrompts']>
 >;
+
+export async function buildInitialToolUsePrompts(
+  agentPrompt: AgentPrompt,
+  userVars: Record<string, any>,
+  logger?: AgentLogger,
+): Promise<InitialPrompts & { instructionSuffix: string }> {
+  const builder = new PromptBuilder(
+    agentPrompt,
+    { prefills: [] },
+    userVars,
+    logger,
+  );
+  const initial = await builder.buildInitialPrompts();
+
+  return {
+    ...initial,
+    instructionSuffix: TOOL_USE_INSTRUCTIONS,
+  };
+}
