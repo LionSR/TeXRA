@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import OpenAI, { toFile } from 'openai';
+import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 import type {
   EasyInputMessage,
   Response,
@@ -431,6 +431,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
+
+      if (
+        err instanceof APIConnectionTimeoutError ||
+        formattedError.message.includes('Request timed out')
+      ) {
+        this.logger.warn(
+          `Timed out uploading file ${filename}. Falling back to inline payload.`,
+        );
+        return;
+      }
+
       this.logger.error(
         `Failed to upload file ${filename}: ${formattedError.message}`,
         undefined,
