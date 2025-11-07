@@ -143,6 +143,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       await runAgentFlow<ToolUseRunShared<C>>({
         agent: this,
         lifecycle,
+        hookOverrides: {
+          start: async () => undefined,
+        },
         createState: () => {
           const state: ToolUseRunState<C> = {
             messages: [],
