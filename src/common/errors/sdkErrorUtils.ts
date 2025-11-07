@@ -29,10 +29,20 @@ import {
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
 } from 'openai';
 
+/**
+ * Structured representation of a provider HTTP failure.
+ */
 export interface ProviderHttpErrorDetails {
+  /**
+   * Human readable description of the provider failure. Includes HTTP prefix when
+   * a status code is available.
+   */
   message: string;
+  /** HTTP status code reported by the provider, when present. */
   statusCode?: number;
+  /** HTTP status text reported by the provider or derived from the status code. */
   statusText?: string;
+  /** Identifier for the provider that produced the error, when known. */
   provider?: string;
 }
 
@@ -52,21 +62,23 @@ const STATUS_TITLES: Record<number, string> = {
 };
 
 const STATUS_DESCRIPTIONS: Record<number, string> = {
-  400: 'Invalid parameters.',
-  401: 'Invalid API key.',
-  402: 'Insufficient credits.',
-  403: 'Permission denied.',
-  404: 'Resource not found.',
-  409: 'Conflict error.',
-  422: 'Unprocessable entity.',
-  429: 'Rate limit exceeded.',
-  500: 'Provider error.',
-  502: 'Provider error.',
-  503: 'No available providers.',
-  504: 'Provider timeout.',
+  400: 'Invalid parameters',
+  401: 'Invalid API key',
+  402: 'Insufficient credits',
+  403: 'Permission denied',
+  404: 'Resource not found',
+  409: 'Conflict error',
+  422: 'Unprocessable entity',
+  429: 'Rate limit exceeded',
+  500: 'Provider error',
+  502: 'Provider error',
+  503: 'No available providers',
+  504: 'Provider timeout',
 };
 
-type ErrorConstructor<T extends Error = Error> = new (...args: any[]) => T;
+type ErrorConstructor<T extends Error = Error> = abstract new (
+  ...args: never[]
+) => T;
 
 interface NativeMessageErrorEntry {
   ctor: ErrorConstructor;
@@ -84,32 +96,32 @@ const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
   {
     ctor: OpenAIConnectionTimeoutError,
     provider: 'openai',
-    message: 'Connection timed out.',
+    message: 'Connection timed out',
   },
   {
     ctor: AnthropicConnectionTimeoutError,
     provider: 'anthropic',
-    message: 'Connection timed out.',
+    message: 'Connection timed out',
   },
   {
     ctor: OpenAIConnectionError,
     provider: 'openai',
-    message: 'Connection error.',
+    message: 'Connection error',
   },
   {
     ctor: AnthropicConnectionError,
     provider: 'anthropic',
-    message: 'Connection error.',
+    message: 'Connection error',
   },
   {
     ctor: OpenAIUserAbortError,
     provider: 'openai',
-    message: 'Request aborted.',
+    message: 'Request aborted',
   },
   {
     ctor: AnthropicUserAbortError,
     provider: 'anthropic',
-    message: 'Request aborted.',
+    message: 'Request aborted',
   },
 ];
 
@@ -186,69 +198,61 @@ const NATIVE_HTTP_ERRORS: NativeHttpErrorEntry[] = [
 function matchNativeMessageError(
   err: unknown,
 ): ProviderHttpErrorDetails | undefined {
-  for (const entry of NATIVE_MESSAGE_ERRORS) {
-    if (err instanceof entry.ctor) {
-      const message =
-        entry.message ??
-        extractMessage(err) ??
-        'An unexpected provider error occurred.';
-      return {
-        message,
-        provider: entry.provider,
-      };
-    }
+  const entry = NATIVE_MESSAGE_ERRORS.find(({ ctor }) => err instanceof ctor);
+  if (!entry) {
+    return undefined;
   }
 
-  return undefined;
+  return {
+    message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
+    provider: entry.provider,
+  };
 }
 
 function matchNativeHttpError(
   err: unknown,
 ): ProviderHttpErrorDetails | undefined {
-  for (const entry of NATIVE_HTTP_ERRORS) {
-    if (!(err instanceof entry.ctor)) {
-      continue;
-    }
+  const entry = NATIVE_HTTP_ERRORS.find(({ ctor }) => err instanceof ctor);
+  if (!entry) {
+    return undefined;
+  }
 
-    const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
-    const statusText = detectStatusText(err, statusCode);
-    const rawMessage = extractMessage(err);
-    const fallbackMessage = statusCode
-      ? STATUS_DESCRIPTIONS[statusCode]
-      : undefined;
-    const finalMessage =
-      rawMessage ?? fallbackMessage ?? 'An unexpected provider error occurred.';
+  const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
+  const statusText = detectStatusText(err, statusCode);
+  const fallbackMessage = statusCode
+    ? STATUS_DESCRIPTIONS[statusCode]
+    : undefined;
+  const finalMessage =
+    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
-    if (statusCode) {
-      const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
-      return {
-        message: `${prefix} – ${finalMessage}`,
-        statusCode,
-        statusText,
-        provider: entry.provider,
-      };
-    }
-
+  if (!statusCode) {
     return {
       message: finalMessage,
       provider: entry.provider,
     };
   }
 
-  return undefined;
+  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  return {
+    message: `${prefix} – ${finalMessage}`,
+    statusCode,
+    statusText,
+    provider: entry.provider,
+  };
 }
 
-function toNumber(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
+type StatusCarrier = {
+  status?: number;
+  statusCode?: number;
+  code?: number;
+  response?: { status?: number };
+  error?: { status?: number };
+};
 
-  if (typeof value === 'string') {
-    const parsed = Number.parseInt(value, 10);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-
-  return undefined;
+function pickStatus(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function detectStatusCode(err: unknown): number | undefined {
@@ -256,20 +260,13 @@ function detectStatusCode(err: unknown): number | undefined {
     return undefined;
   }
 
-  const candidate = err as {
-    status?: unknown;
-    statusCode?: unknown;
-    code?: unknown;
-    response?: { status?: unknown };
-    error?: { status?: unknown };
-  };
-
+  const candidate = err as StatusCarrier;
   return (
-    toNumber(candidate.status) ??
-    toNumber(candidate.statusCode) ??
-    toNumber(candidate.code) ??
-    toNumber(candidate.response?.status) ??
-    toNumber(candidate.error?.status)
+    pickStatus(candidate.status) ??
+    pickStatus(candidate.statusCode) ??
+    pickStatus(candidate.code) ??
+    pickStatus(candidate.response?.status) ??
+    pickStatus(candidate.error?.status)
   );
 }
 
@@ -282,18 +279,17 @@ function detectStatusText(
   }
 
   const candidate = err as {
-    statusText?: unknown;
-    response?: { statusText?: unknown };
-    error?: { statusText?: unknown };
+    statusText?: string;
+    response?: { statusText?: string };
+    error?: { statusText?: string };
   };
 
-  const rawText =
+  return (
     candidate.statusText ??
     candidate.response?.statusText ??
     candidate.error?.statusText ??
-    (statusCode ? STATUS_TITLES[statusCode] : undefined);
-
-  return typeof rawText === 'string' ? rawText : undefined;
+    (statusCode ? STATUS_TITLES[statusCode] : undefined)
+  );
 }
 
 function detectProvider(err: unknown): string | undefined {
@@ -301,34 +297,31 @@ function detectProvider(err: unknown): string | undefined {
     return undefined;
   }
 
-  const candidate = err as { provider?: unknown; name?: unknown } & {
-    constructor?: { name?: unknown };
+  const candidate = err as { provider?: string } & {
+    constructor?: { name?: string };
   };
 
-  if (typeof candidate.provider === 'string') {
+  if (candidate.provider) {
     return candidate.provider;
   }
 
-  const names = [candidate.name, candidate.constructor?.name];
+  const name = candidate.constructor?.name;
+  if (!name) {
+    return undefined;
+  }
 
-  for (const name of names) {
-    if (typeof name !== 'string') {
-      continue;
-    }
-
-    const lowered = name.toLowerCase();
-    if (lowered.includes('openai')) {
-      return 'openai';
-    }
-    if (lowered.includes('anthropic')) {
-      return 'anthropic';
-    }
-    if (lowered.includes('google')) {
-      return 'google';
-    }
-    if (lowered.includes('kimi')) {
-      return 'kimi';
-    }
+  const lowered = name.toLowerCase();
+  if (lowered.includes('openai')) {
+    return 'openai';
+  }
+  if (lowered.includes('anthropic')) {
+    return 'anthropic';
+  }
+  if (lowered.includes('google')) {
+    return 'google';
+  }
+  if (lowered.includes('kimi')) {
+    return 'kimi';
   }
 
   return undefined;
@@ -348,6 +341,14 @@ function extractMessage(err: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Formats SDK errors from model providers into a consistent message so agent logs
+ * can surface status codes alongside concise descriptions.
+ *
+ * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
+ * Google responses. When the error is not a known class, it inspects common
+ * HTTP-shaped fields and falls back to a best-effort summary.
+ */
 export function formatProviderHttpError(
   err: unknown,
 ): ProviderHttpErrorDetails {
@@ -365,25 +366,24 @@ export function formatProviderHttpError(
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
 
-  const rawMessage = extractMessage(err);
   const fallbackMessage = statusCode
     ? STATUS_DESCRIPTIONS[statusCode]
     : undefined;
   const finalMessage =
-    rawMessage ?? fallbackMessage ?? 'An unexpected provider error occurred.';
+    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
-  if (statusCode) {
-    const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  if (!statusCode) {
     return {
-      message: `${prefix} – ${finalMessage}`,
-      statusCode,
-      statusText,
+      message: finalMessage,
       provider,
     };
   }
 
+  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
   return {
-    message: finalMessage,
+    message: `${prefix} – ${finalMessage}`,
+    statusCode,
+    statusText,
     provider,
   };
 }

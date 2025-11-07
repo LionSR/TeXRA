@@ -10,10 +10,7 @@ import { getConfig } from '@utils/config';
 
 // Local imports
 import { WorkspaceFS, StorageFS } from '@utils/files';
-import {
-  ensureRunDir,
-  TASK_RUNS_DIR,
-} from '@utils/files/taskRunStorage';
+import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 /**
  * Context information for the debug save operation
@@ -93,11 +90,7 @@ export async function maybeSaveDebugObject({
   try {
     if (executionId) {
       await ensureRunDir(executionId);
-      const relativePath = path.join(
-        TASK_RUNS_DIR,
-        executionId,
-        debugFileName,
-      );
+      const relativePath = path.join(TASK_RUNS_DIR, executionId, debugFileName);
       await StorageFS.writeJson(relativePath, object);
       const debugFilePath = StorageFS.fullPath(relativePath);
       logger.info(
