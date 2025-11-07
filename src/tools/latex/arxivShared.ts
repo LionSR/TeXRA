@@ -1,4 +1,5 @@
 // Third-party imports
+import arxivClient from 'arxiv-client';
 import { extract as extractArxivId } from 'identifiers-arxiv';
 
 // Local imports - none
@@ -33,6 +34,15 @@ export interface ArxivPaperMetadata extends ArxivPaperBase {
   comment: string | null;
   links: unknown;
 }
+
+export type ArxivClientInstance = typeof arxivClient;
+
+export const createArxivClient = (options?: unknown): ArxivClientInstance => {
+  const ClientCtor = arxivClient.constructor as {
+    new (ctorOptions?: unknown): ArxivClientInstance;
+  };
+  return new ClientCtor(options);
+};
 
 /**
  * Normalize an arXiv identifier by extracting it from various formats.
