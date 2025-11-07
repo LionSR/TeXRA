@@ -245,11 +245,13 @@ export class ProgressViewState {
   }
 
   // Stream cleanup operations
-  clearStream(stream: StreamTabId): void {
-    this._streamTabs.delete(stream);
-    this._taskGroups.deleteStream(stream);
-    this._outputFiles.deleteStream(stream);
-    this._usageStats.deleteStream(stream);
+  async clearStream(stream: StreamTabId): Promise<void> {
+    await Promise.all([
+      this._streamTabs.delete(stream),
+      this._taskGroups.deleteStream(stream),
+      this._outputFiles.deleteStream(stream),
+      this._usageStats.deleteStream(stream),
+    ]);
     this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
@@ -268,13 +270,15 @@ export class ProgressViewState {
   }
 
   // Stream content erasure (clear content but keep the stream tab and re-run capability)
-  eraseStreamContent(stream: StreamTabId): void {
+  async eraseStreamContent(stream: StreamTabId): Promise<void> {
     // Clear visual content but keep the stream tab
-    this._streamTabs.clearContent(stream);
+    await this._streamTabs.clearContent(stream);
 
     // Clear display-related data (matching original eraseStream behavior)
-    this._taskGroups.deleteStream(stream);
-    this._outputFiles.deleteStream(stream);
+    await Promise.all([
+      this._taskGroups.deleteStream(stream),
+      this._outputFiles.deleteStream(stream),
+    ]);
     this.clearSessionKindHint(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
@@ -282,11 +286,13 @@ export class ProgressViewState {
     // NOTE: Missing outputs are also preserved (not cleared in original)
   }
 
-  clearAll(): void {
-    this._streamTabs.clear();
-    this._taskGroups.clear();
-    this._outputFiles.clear();
-    this._usageStats.clear();
+  async clearAll(): Promise<void> {
+    await Promise.all([
+      this._streamTabs.clear(),
+      this._taskGroups.clear(),
+      this._outputFiles.clear(),
+      this._usageStats.clear(),
+    ]);
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
