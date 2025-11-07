@@ -2,12 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import {
-  AgentCategory,
-  AgentType,
-  resolveAgentSessionDescriptor,
-  type AgentSessionDescriptor,
-} from '@agent/core/AgentDataclass';
+import { type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentSessionDescriptorSchema } from '@agent/core/AgentSessionSchema';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -15,7 +10,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
-const AgentWorkspaceStateSnapshotStrictSchema = z.strictObject({
+export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   assembly: z.strictObject({
     lastResponse: z.string(),
     accumulatedOutput: z.string(),
@@ -27,37 +22,6 @@ const AgentWorkspaceStateSnapshotStrictSchema = z.strictObject({
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
 });
-
-const AgentWorkspaceStateSnapshotLegacySchema = z
-  .looseObject({
-    lastResponse: z.string().optional(),
-    accumulatedOutput: z.string().optional(),
-    mediaFiles: z.array(z.string()).optional(),
-    thinkingBlocks: z.array(z.unknown()).optional(),
-    thinkingAdded: z.boolean().optional(),
-    texcountStats: z.string().nullable().optional(),
-  })
-  .transform((legacy) => ({
-    assembly: {
-      lastResponse: legacy.lastResponse ?? '',
-      accumulatedOutput: legacy.accumulatedOutput ?? '',
-    },
-    media: {
-      files: legacy.mediaFiles ?? [],
-    },
-    reasoning: {
-      thinkingBlocks: legacy.thinkingBlocks ?? [],
-      thinkingAdded: legacy.thinkingAdded ?? false,
-    },
-    document: {
-      texcountStats: legacy.texcountStats ?? null,
-    },
-  }));
-
-export const AgentWorkspaceStateSnapshotSchema = z.union([
-  AgentWorkspaceStateSnapshotStrictSchema,
-  AgentWorkspaceStateSnapshotLegacySchema,
-]);
 
 export type AgentWorkspaceStateSnapshot = z.infer<
   typeof AgentWorkspaceStateSnapshotSchema
@@ -77,23 +41,15 @@ export const ToolUseSessionSnapshotSchema = z.strictObject({
   streamId: z.string(),
   agentName: z.string(),
   model: z.string(),
-  agentSessionKind: z.enum(AgentCategory).optional(),
-  session: AgentSessionDescriptorSchema.optional(),
+  session: AgentSessionDescriptorSchema,
   messages: z.array(ProviderMessageSchema),
   toolState: AgentWorkspaceStateSnapshotSchema,
   lastUpdated: z.number(),
 });
 
-export type ToolUseSessionSnapshotParsed = z.infer<
+export type ToolUseSessionSnapshot = z.infer<
   typeof ToolUseSessionSnapshotSchema
 >;
-
-export type ToolUseSessionSnapshot = Omit<
-  ToolUseSessionSnapshotParsed,
-  'agentSessionKind' | 'session'
-> & {
-  session: Required<AgentSessionDescriptor>;
-};
 
 export interface SaveToolUseSnapshotPayload {
   executionId: ExecutionId;
@@ -105,28 +61,4 @@ export interface SaveToolUseSnapshotPayload {
   toolState: AgentWorkspaceState;
 }
 
-export function normalizeSnapshot(
-  snapshot: ToolUseSessionSnapshotParsed,
-): ToolUseSessionSnapshot {
-  if (snapshot.session && !snapshot.agentSessionKind) {
-    return snapshot as ToolUseSessionSnapshot;
-  }
-
-  const descriptor =
-    snapshot.session ??
-    resolveAgentSessionDescriptor(AgentType.ToolUse, snapshot.agentSessionKind);
-
-  const {
-    agentSessionKind: _legacyKind,
-    session: _legacySession,
-    ...rest
-  } = snapshot;
-
-  return {
-    ...rest,
-    session: {
-      agentType: descriptor.agentType ?? AgentType.ToolUse,
-      agentCategory: descriptor.agentCategory,
-    },
-  };
-}
+// Legacy normalization removed; snapshots must conform to the strict schema.
