@@ -216,10 +216,10 @@ export class ProgressEventHandler {
    * Initialize a stream when task group events arrive before dedicated
    * status or activation events, preserving any existing status metadata.
    */
-  private initializeStreamForTaskGroup(stream: string): void {
+  private async initializeStreamForTaskGroup(stream: string): Promise<void> {
     const existingStatus = this._streamStatus.get(stream);
 
-    this.state.streamTabs.ensureStream(stream);
+    await this.state.streamTabs.ensureStream(stream);
 
     if (!existingStatus) {
       this.setStreamStatus(stream, STATUS.RUNNING);

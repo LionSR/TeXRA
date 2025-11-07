@@ -38,7 +38,7 @@ export function createUsageEvents(
       const updateGroupUsage = bus.on(
         'updateGroupUsage',
         ({ stream, groupId, usage }) => {
-          withErrorBoundary('failed to handle updateGroupUsage', () => {
+          withErrorBoundary('failed to handle updateGroupUsage', async () => {
             const group = state.taskGroups.getGroup(stream, groupId);
             if (group) {
               const update: TaskGroupUpdatePayload = {
@@ -46,7 +46,7 @@ export function createUsageEvents(
                 groupId,
                 updates: { usage },
               };
-              state.taskGroups.updateGroup(update);
+              await state.taskGroups.updateGroup(update);
             }
           });
         },
@@ -55,8 +55,8 @@ export function createUsageEvents(
       const updateStreamUsage = bus.on(
         'updateStreamUsage',
         ({ stream, usage }) => {
-          withErrorBoundary('failed to handle updateStreamUsage', () => {
-            state.usageStats.updateStreamUsage(stream, usage);
+          withErrorBoundary('failed to handle updateStreamUsage', async () => {
+            await state.usageStats.updateStreamUsage(stream, usage);
             if (state.activeStream === stream && updater.isAvailable()) {
               updater.updateUsage(usage);
             }

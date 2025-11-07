@@ -27,21 +27,21 @@ export abstract class PersistentMapManager<K extends string, V> {
   }
 
   /** Add an entry to the map and persist it */
-  add(key: K, value: V): void {
+  async add(key: K, value: V): Promise<void> {
     this.items.set(key, value);
-    this.save();
+    await this.save();
   }
 
   /** Delete an entry and persist the change */
-  delete(key: K): void {
+  async delete(key: K): Promise<void> {
     this.items.delete(key);
-    this.save();
+    await this.save();
   }
 
   /** Clear the map and persist the change */
-  clear(): void {
+  async clear(): Promise<void> {
     this.items.clear();
-    this.save();
+    await this.save();
   }
 
   /** Get a value for the key */
@@ -101,12 +101,12 @@ export abstract class PersistentMapManager<K extends string, V> {
   }
 
   /** Save current state to persistence */
-  save(): void {
+  async save(): Promise<void> {
     const serialized = Array.from(this.items.entries()).map(([key, value]) => [
       key,
       this.serialize(value, key),
     ]);
     const obj = Object.fromEntries(serialized);
-    void this.storage.update(this.storageKey, obj);
+    await this.storage.update(this.storageKey, obj);
   }
 }

@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { ZodError } from 'zod';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -128,6 +129,14 @@ export const ToolUseSnapshotStore = {
       ) {
         return null;
       }
+
+      if (error instanceof ZodError || error instanceof SyntaxError) {
+        logger.warn(
+          `Skipping invalid snapshot at ${snapshotPath}: ${error.message}`,
+        );
+        return null;
+      }
+
       throw error;
     }
   },

@@ -113,12 +113,12 @@ describe('Progress event modules', () => {
     const calls: string[] = [];
     const state = {
       outputFiles: {
-        addFiles: () => {},
+        addFiles: async () => {},
         getFiles: () => undefined,
-        updateMissingOutputs: () => {},
+        updateMissingOutputs: async () => {},
         getMissingOutputs: () => undefined,
-        clearMissingOutputs: () => {},
-        clearFiles: () => {},
+        clearMissingOutputs: async () => {},
+        clearFiles: async () => {},
       },
       clearOutputState: (stream: string) => {
         calls.push(stream);
@@ -170,7 +170,7 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createTaskGroupEvents({
       logger: loggerStub,
-      initializeStreamForTaskGroup: () => {},
+      initializeStreamForTaskGroup: async () => {},
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
@@ -185,7 +185,7 @@ describe('Progress event modules', () => {
     const initialized: string[] = [];
     const module = createTaskGroupEvents({
       logger: loggerStub,
-      initializeStreamForTaskGroup: (stream) => {
+      initializeStreamForTaskGroup: async (stream) => {
         initialized.push(stream);
       },
     });
@@ -193,14 +193,14 @@ describe('Progress event modules', () => {
     const state = {
       streamTabs: {
         has: () => false,
-        ensureStream: () => {},
-        addMessage: () => {},
+        ensureStream: async () => {},
+        addMessage: async () => {},
         get: () => undefined,
-        save: () => {},
+        save: async () => {},
       },
       taskGroups: {
-        addGroup: () => {},
-        updateGroup: () => {},
+        addGroup: async () => {},
+        updateGroup: async () => {},
       },
       setSessionKindHint: () => {},
       agentTypeFilter: 'all',
