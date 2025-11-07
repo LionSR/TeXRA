@@ -10,9 +10,7 @@ import {
 } from '@logger/TaskState';
 import {
   AgentCategory,
-  AgentType,
   type AgentSessionDescriptor,
-  resolveAgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
@@ -38,63 +36,6 @@ function createActiveFilesFromArrays(
       multipleFlag;
   });
   return active;
-}
-
-function coerceAgentType(value: unknown): AgentType | undefined {
-  if (
-    value === AgentType.CoT ||
-    value === AgentType.Direct ||
-    value === AgentType.ToolUse
-  ) {
-    return value;
-  }
-  return undefined;
-}
-
-function coerceAgentCategory(value: unknown): AgentCategory | undefined {
-  if (value === AgentCategory.Workflow || value === AgentCategory.ToolUse) {
-    return value;
-  }
-  return undefined;
-}
-
-function resolveSessionDescriptor(
-  ...sources: Array<Record<string, any>>
-): AgentSessionDescriptor | undefined {
-  for (const source of sources) {
-    const rawSession = source.session;
-    if (isObjectRecord(rawSession)) {
-      const descriptor = rawSession as Partial<AgentSessionDescriptor> & {
-        agentCategory?: unknown;
-        agentType?: unknown;
-      };
-      const agentCategory = coerceAgentCategory(descriptor.agentCategory);
-      if (agentCategory) {
-        return {
-          agentCategory,
-          agentType: coerceAgentType(descriptor.agentType),
-        };
-      }
-    }
-  }
-
-  let agentType: AgentType | undefined;
-  let agentCategory: AgentCategory | undefined;
-
-  for (const source of sources) {
-    if (!agentType) {
-      agentType = coerceAgentType(source.agentType);
-    }
-    if (!agentCategory) {
-      agentCategory = coerceAgentCategory(source.agentSessionKind);
-    }
-  }
-
-  if (agentType || agentCategory) {
-    return resolveAgentSessionDescriptor(agentType, agentCategory);
-  }
-
-  return undefined;
 }
 
 /**
@@ -152,11 +93,12 @@ export function objectToTaskState(obj: Record<string, any>): TaskState {
     : null;
 
   const configSource = nestedConfig ?? obj;
-  const sessionDescriptor = resolveSessionDescriptor(configSource, obj);
+  if (!isObjectRecord(configSource.session)) {
+    throw new Error('Task state payload is missing a canonical session.');
+  }
 
   const configInput: Record<string, unknown> = {
     ...configSource,
-    ...(sessionDescriptor ? { session: sessionDescriptor } : {}),
   };
 
   const normalizedConfig = parseAgentConfig(configInput);

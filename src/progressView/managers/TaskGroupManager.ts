@@ -1,10 +1,9 @@
-// Local imports - progress view persistence
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import { WorkspaceStateKey } from '@common/state/stateManager';
+import {
+  WorkspaceStateKey,
+  type StateManager,
+} from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
@@ -20,14 +19,13 @@ export interface TaskGroupUpdatePayload {
  * Manages task groups collection with persistence.
  * Handles adding, updating, and managing task groups for different streams.
  */
-export class TaskGroupManager extends PersistentMapManager<
-  StreamTabId,
-  Map<string, TaskGroup>
-> {
+export class TaskGroupManager {
   private readonly logger: AgentLogger;
+  private readonly store: StateManager;
+  private items = new Map<StreamTabId, Map<string, TaskGroup>>();
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
+  constructor(store: StateManager) {
+    this.store = store;
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
@@ -41,7 +39,7 @@ export class TaskGroupManager extends PersistentMapManager<
 
     const streamGroups = this.get(stream)!;
     streamGroups.set(groupId, { ...group });
-    this.save();
+    this.persist();
   }
 
   /**
@@ -67,7 +65,7 @@ export class TaskGroupManager extends PersistentMapManager<
     // Apply updates
     Object.assign(group, updates);
     streamGroups.set(groupId, group);
-    this.save();
+    this.persist();
   }
 
   /**
@@ -96,67 +94,75 @@ export class TaskGroupManager extends PersistentMapManager<
    * Delete all groups for a stream
    */
   deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+    if (this.items.delete(stream)) {
+      this.persist();
+    }
   }
 
   /**
    * Clear all groups
    */
   clear(): void {
-    super.clear();
+    if (this.items.size === 0) {
+      return;
+    }
+    this.items.clear();
+    this.persist();
   }
 
   /**
    * Set all groups (used during loading)
    */
   setAll(groups: Map<StreamTabId, Map<string, TaskGroup>>): void {
-    super.setAll(groups);
+    this.items = new Map(groups);
+    this.persist();
   }
 
   /**
    * Load task groups from persistence
    */
   async load(): Promise<void> {
-    await super.load();
+    const saved = this.store.get<Record<string, Record<string, TaskGroup>>>(
+      WorkspaceStateKey.TASK_GROUPS,
+      {},
+    );
+
+    this.items.clear();
+    for (const [stream, groups] of Object.entries(saved ?? {})) {
+      this.items.set(
+        stream as StreamTabId,
+        new Map(Object.entries(groups ?? {})),
+      );
+    }
+
     if (this.items.size > 0) {
       this.logger.debug(`Loaded task groups for ${this.items.size} streams`);
     }
   }
 
-  /** Convert groups map to plain object */
-  protected override serialize(
-    value: Map<string, TaskGroup>,
-    _key: StreamTabId,
-  ): unknown {
-    return Object.fromEntries(value.entries());
+  get(stream: StreamTabId): Map<string, TaskGroup> | undefined {
+    return this.items.get(stream);
   }
 
-  /** Normalize loaded groups */
-  protected override async deserialize(
-    data: unknown,
-    _key: StreamTabId,
-  ): Promise<Map<string, TaskGroup>> {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
+  has(stream: StreamTabId): boolean {
+    return this.items.has(stream);
+  }
 
-    const entries = Object.entries(
-      data as Record<string, (TaskGroup & { id?: string }) | undefined>,
+  keys(): StreamTabId[] {
+    return Array.from(this.items.keys());
+  }
+
+  getAll(): Map<StreamTabId, Map<string, TaskGroup>> {
+    return new Map(this.items);
+  }
+
+  private persist(): void {
+    const serialized = Object.fromEntries(
+      Array.from(this.items.entries(), ([stream, groups]) => [
+        stream,
+        Object.fromEntries(groups.entries()),
+      ]),
     );
-    const groups = new Map<string, TaskGroup>();
-
-    for (const [key, value] of entries) {
-      if (!value) {
-        continue;
-      }
-
-      const group: TaskGroup = {
-        ...value,
-        id: value.id ?? key,
-      } as TaskGroup;
-      groups.set(key, group);
-    }
-
-    return groups;
+    void this.store.update(WorkspaceStateKey.TASK_GROUPS, serialized);
   }
 }

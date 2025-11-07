@@ -12,8 +12,6 @@ import { WebviewUpdater } from './managers';
 import { STATUS } from './modules/constants.js';
 
 // Local imports - new architecture
-import { StatePersistenceManager } from './persistence/StatePersistenceManager';
-
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
@@ -77,10 +75,7 @@ export class ProgressViewProvider
     this.logger = new AgentLogger('ProgressViewProvider');
 
     // Initialize new modular architecture
-    const persistenceManager = new StatePersistenceManager(
-      context.workspaceState,
-    );
-    this.state = new ProgressViewState(persistenceManager);
+    this.state = new ProgressViewState();
     this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
     this.eventHandler = new ProgressEventHandler(
       this.state,

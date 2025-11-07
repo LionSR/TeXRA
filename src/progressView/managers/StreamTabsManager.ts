@@ -1,13 +1,9 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
-// Local imports - persistence
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
-
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import { WorkspaceStateKey } from '@common/state/stateManager';
+import {
+  WorkspaceStateKey,
+  type StateManager,
+} from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
@@ -15,15 +11,14 @@ import { LogMessageData } from '@logger/LogTypes';
  * Manages stream tabs collection with persistence.
  * Handles adding, retrieving, and managing log messages for different streams.
  */
-export class StreamTabsManager extends PersistentMapManager<
-  StreamTabId,
-  LogMessageData[]
-> {
+export class StreamTabsManager {
   private static readonly MAX_MESSAGE_HISTORY = 1000;
   private readonly logger: AgentLogger;
+  private readonly items = new Map<StreamTabId, LogMessageData[]>();
+  private readonly store: StateManager;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.STREAM_TABS, 'texra.logStreams');
+  constructor(store: StateManager) {
+    this.store = store;
     this.logger = new AgentLogger('StreamTabsManager');
   }
 
@@ -32,12 +27,6 @@ export class StreamTabsManager extends PersistentMapManager<
    */
   addMessage(stream: StreamTabId, message: LogMessageData): void {
     const messages = this.ensureMessages(stream);
-
-    // Ensure message has required fields
-    if (!message.id) {
-      message.id = randomUUID();
-    }
-
     messages.push(message);
 
     // Limit message history to prevent memory issues
@@ -48,7 +37,7 @@ export class StreamTabsManager extends PersistentMapManager<
       );
     }
 
-    this.save();
+    this.persist();
   }
 
   /**
@@ -57,7 +46,7 @@ export class StreamTabsManager extends PersistentMapManager<
   ensureStream(stream: StreamTabId): void {
     if (!this.has(stream)) {
       this.ensureMessages(stream);
-      this.save();
+      this.persist();
     }
   }
 
@@ -65,14 +54,20 @@ export class StreamTabsManager extends PersistentMapManager<
    * Delete a stream and its messages
    */
   delete(stream: StreamTabId): void {
-    super.delete(stream);
+    if (this.items.delete(stream)) {
+      this.persist();
+    }
   }
 
   /**
    * Clear all streams
    */
   clear(): void {
-    super.clear();
+    if (this.items.size === 0) {
+      return;
+    }
+    this.items.clear();
+    this.persist();
   }
 
   /**
@@ -85,11 +80,31 @@ export class StreamTabsManager extends PersistentMapManager<
 
     const messages = this.ensureMessages(stream);
     messages.length = 0;
-    this.save();
+    this.persist();
   }
 
   getMessages(stream: StreamTabId): LogMessageData[] {
     return this.ensureMessages(stream);
+  }
+
+  get(stream: StreamTabId): LogMessageData[] | undefined {
+    return this.items.get(stream);
+  }
+
+  has(stream: StreamTabId): boolean {
+    return this.items.has(stream);
+  }
+
+  keys(): StreamTabId[] {
+    return Array.from(this.items.keys());
+  }
+
+  getAll(): Map<StreamTabId, LogMessageData[]> {
+    return new Map(this.items);
+  }
+
+  save(): void {
+    this.persist();
   }
 
   private ensureMessages(stream: StreamTabId): LogMessageData[] {
@@ -105,62 +120,33 @@ export class StreamTabsManager extends PersistentMapManager<
    * Load streams from persistence
    */
   async load(): Promise<void> {
-    await super.load();
+    const saved = this.store.get<Record<string, LogMessageData[]>>(
+      WorkspaceStateKey.STREAM_TABS,
+      {},
+    );
+
+    this.items.clear();
+    for (const [stream, messages] of Object.entries(saved ?? {})) {
+      if (Array.isArray(messages)) {
+        this.items.set(
+          stream as StreamTabId,
+          messages.map((entry) => ({ ...entry })),
+        );
+      }
+    }
+
     if (this.items.size > 0) {
       this.logger.debug(`Loaded ${this.items.size} streams from storage`);
     }
   }
 
-  /** Serialize messages before saving */
-  protected override serialize(
-    value: LogMessageData[],
-    _key: StreamTabId,
-  ): unknown {
-    return value;
-  }
-
-  /** Normalize loaded messages */
-  protected override async deserialize(
-    data: unknown,
-    _key: StreamTabId,
-  ): Promise<LogMessageData[]> {
-    const messages = Array.isArray(data) ? data : [];
-    return messages.map((raw) => {
-      const message = raw as Partial<LogMessageData> & {
-        message?: string;
-      };
-
-      const rawTimestamp = message.timestamp;
-      let timestamp = Date.now();
-      if (typeof rawTimestamp === 'number') {
-        timestamp = rawTimestamp;
-      } else if (typeof rawTimestamp === 'string') {
-        const numeric = Number(rawTimestamp);
-        if (!Number.isNaN(numeric)) {
-          timestamp = numeric;
-        }
-      }
-
-      const text =
-        typeof message.text === 'string'
-          ? message.text
-          : typeof message.message === 'string'
-            ? message.message
-            : '';
-
-      return {
-        id:
-          typeof message.id === 'string' && message.id
-            ? message.id
-            : randomUUID(),
-        text,
-        level: message.level ?? 'info',
-        timestamp,
-        messageType: message.messageType ?? 'default',
-        data: message.data,
-        groupId: message.groupId,
-        verbose: message.verbose,
-      } satisfies LogMessageData;
-    });
+  private persist(): void {
+    const serialized = Object.fromEntries(
+      Array.from(this.items.entries(), ([stream, messages]) => [
+        stream,
+        messages.map((entry) => ({ ...entry })),
+      ]),
+    );
+    void this.store.update(WorkspaceStateKey.STREAM_TABS, serialized);
   }
 }
