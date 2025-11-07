@@ -311,7 +311,7 @@ export class ProgressViewProvider
           if (group.status === STATUS.RUNNING) {
             // Update the group to ERROR status with current end time
             const endTime = Date.now();
-            this.state.taskGroups.updateGroup({
+            await this.state.taskGroups.updateGroup({
               stream: streamId,
               groupId,
               updates: {
