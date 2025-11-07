@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - response usage types
 import type {
   AnthropicAPIResponseUsage,
@@ -20,6 +23,20 @@ export type NativeResponseUsage =
   | ExtendedCompletionUsage
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata;
+
+export const ConversationRoundStateSnapshotSchema = z.strictObject({
+  roundIndex: z.number().int().nonnegative(),
+  continuationCount: z.number().int().nonnegative(),
+  responseTimeMs: z.number().nonnegative(),
+  outputFile: z.string(),
+  usageSummary: z.custom<UsageSummary>().nullable(),
+  nativeUsage: z.custom<NativeUsagePayload>().nullable(),
+  provider: z.custom<UsageProvider>().nullable(),
+});
+
+export type ConversationRoundStateSnapshot = z.infer<
+  typeof ConversationRoundStateSnapshotSchema
+>;
 
 export interface ConversationRoundStateJSON {
   roundIndex: number;
@@ -103,6 +120,14 @@ export interface AgentRunStateJSON {
   totalResponseTimeMs: number;
   usageAccumulator: RunUsageAccumulatorJSON;
 }
+
+export const AgentRunStateSnapshotSchema = z.strictObject({
+  totalRounds: z.number().int().nonnegative(),
+  totalResponseTimeMs: z.number().nonnegative(),
+  usageAccumulator: z.custom<RunUsageAccumulatorJSON>(),
+});
+
+export type AgentRunStateSnapshot = z.infer<typeof AgentRunStateSnapshotSchema>;
 
 export class AgentRunState {
   public totalRounds: number;

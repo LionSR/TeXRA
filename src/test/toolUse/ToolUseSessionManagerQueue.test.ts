@@ -2,99 +2,94 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
-import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import {
-  ToolUseResumeQueue,
-  type ToolUseSessionSnapshot,
-} from '@agent/toolUse/ToolUseResumeQueue';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunState } from '@agent/core/AgentState';
+import { createSharedStore } from '@agent/core/AgentSharedStore';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
+import { ToolUseSnapshotCache } from '@agent/toolUse/ToolUseSnapshotCache';
+import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 
-describe('ToolUseSessionManager queue handling', () => {
-  type ManagerState = {
-    pendingSnapshots: Map<StreamTabId, ToolUseSessionSnapshot>;
-    resumingSessions: Map<StreamTabId, { queuedFollowUps: string[] }>;
-  };
-
-  const managerState = ToolUseResumeQueue as unknown as ManagerState & {
-    clearAllPendingSnapshots: () => void;
-  };
-
+describe('ToolUse session queue helpers', () => {
   const streamId = 'stream-queue' as StreamTabId;
+  const executionId = 'exec-queue' as ExecutionId;
 
-  function createSnapshot(): ToolUseSessionSnapshot {
+  function buildSnapshot(): ToolUseSessionSnapshot {
+    const workspace = new AgentWorkspaceState();
+    workspace.assembly.updateLastResponse('queued');
+    const store = createSharedStore({
+      roundIndex: 0,
+      runState: new AgentRunState(),
+      workspaceState: workspace,
+      userChannels: {
+        input: Object.freeze({}) as Readonly<Record<string, unknown>>,
+        transient: {},
+        output: {},
+      },
+    });
+
     return {
       version: 1,
-      executionId: 'exec-queue',
+      executionId,
       streamId,
-      agentName: 'demo-agent',
-      model: 'demo-model',
-      session: {
-        agentType: AgentType.ToolUse,
-        agentCategory: AgentCategory.ToolUse,
-      },
+      agentConfig: parseAgentConfig({
+        model: 'demo-model',
+        agent: 'demo-agent',
+        session: {
+          agentType: 'toolUse',
+          agentCategory: 'toolUse',
+        },
+      }),
       messages: [],
-      toolState: {
-        assembly: {
-          lastResponse: '',
-          accumulatedOutput: '',
-        },
-        media: {
-          files: [],
-        },
-        reasoning: {
-          thinkingBlocks: [],
-          thinkingAdded: false,
-        },
-        document: {
-          texcountStats: null,
-        },
-      },
+      store: store.toJSON(),
       lastUpdated: Date.now(),
     };
   }
 
   beforeEach(() => {
-    managerState.pendingSnapshots.clear();
-    managerState.resumingSessions.clear();
+    ToolUseFollowUpQueue.clearResuming(streamId);
+    ToolUseSnapshotCache.clearAll();
   });
 
   afterEach(() => {
-    managerState.pendingSnapshots.clear();
-    managerState.resumingSessions.clear();
+    ToolUseFollowUpQueue.clearResuming(streamId);
+    ToolUseSnapshotCache.clearAll();
   });
 
   it('drains queued follow-ups in FIFO order', () => {
-    ToolUseResumeQueue.setResumingSession(streamId);
-    ToolUseResumeQueue.enqueueFollowUpWhileResuming(streamId, 'first');
-    ToolUseResumeQueue.enqueueFollowUpWhileResuming(streamId, 'second');
+    ToolUseFollowUpQueue.markResuming(streamId);
+    assert.equal(ToolUseFollowUpQueue.enqueue(streamId, 'first'), true);
+    assert.equal(ToolUseFollowUpQueue.enqueue(streamId, 'second'), true);
 
-    const drained = ToolUseResumeQueue.drainQueuedFollowUps(streamId);
+    const drained = ToolUseFollowUpQueue.drain(streamId);
 
     assert.deepEqual(drained, ['first', 'second']);
-    const secondDrain = ToolUseResumeQueue.drainQueuedFollowUps(streamId);
+    const secondDrain = ToolUseFollowUpQueue.drain(streamId);
     assert.deepEqual(secondDrain, []);
   });
 
   it('consumes pending snapshots when resuming', () => {
-    const snapshot = createSnapshot();
-    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
+    const snapshot = buildSnapshot();
+    ToolUseSnapshotCache.registerSnapshots([snapshot]);
 
-    assert.equal(ToolUseResumeQueue.getSnapshotForStream(streamId), snapshot);
+    assert.equal(ToolUseSnapshotCache.getByStream(streamId), snapshot);
 
-    const consumed = ToolUseResumeQueue.consumeSnapshotForStream(streamId);
+    const consumed = ToolUseSnapshotCache.consumeByStream(streamId);
     assert.equal(consumed, snapshot);
-    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
+    assert.equal(ToolUseSnapshotCache.getByStream(streamId), undefined);
   });
 
   it('clears cached snapshots explicitly', () => {
-    const snapshot = createSnapshot();
-    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
+    const snapshot = buildSnapshot();
+    ToolUseSnapshotCache.cacheSnapshot(snapshot);
 
-    ToolUseResumeQueue.clearPendingSnapshot(streamId);
-    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
+    ToolUseSnapshotCache.clearByStream(streamId);
+    assert.equal(ToolUseSnapshotCache.getByStream(streamId), undefined);
 
-    ToolUseResumeQueue.registerPendingSnapshots([snapshot]);
-    managerState.clearAllPendingSnapshots();
-    assert.equal(ToolUseResumeQueue.hasPendingSnapshot(streamId), false);
+    ToolUseSnapshotCache.cacheSnapshot(snapshot);
+    ToolUseSnapshotCache.clearAll();
+    assert.equal(ToolUseSnapshotCache.getByStream(streamId), undefined);
+    assert.equal(ToolUseSnapshotCache.clearByExecution(executionId), undefined);
   });
 });
