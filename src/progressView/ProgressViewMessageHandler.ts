@@ -533,14 +533,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
 
-    for (const [round, infos] of Object.entries(generated)) {
-      if (!Array.isArray(infos)) {
-        this.logger.warn(
-          `Skipping invalid output metadata for stream ${stream}, round ${round}`,
-        );
-        continue;
-      }
-
+    for (const infos of generated.values()) {
       for (const info of infos) {
         allFiles.add(info.path);
         if (info.original) {
