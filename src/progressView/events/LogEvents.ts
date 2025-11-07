@@ -37,7 +37,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    withErrorBoundary('failed to handle addLogMessage', () => {
+    withErrorBoundary('failed to handle addLogMessage', async () => {
       const { stream, logMessage } = data;
 
       if (
@@ -51,7 +51,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         return;
       }
 
-      state.streamTabs.addMessage(stream, logMessage);
+      await state.streamTabs.addMessage(stream, logMessage);
 
       if (updater.isAvailable()) {
         updater.appendLogMessage(stream, logMessage);
@@ -64,7 +64,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    withErrorBoundary('failed to handle updateLogMessage', () => {
+    withErrorBoundary('failed to handle updateLogMessage', async () => {
       const { stream, logMessage } = data;
 
       if (!state.streamTabs.has(stream)) {
@@ -102,7 +102,7 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         existing.data = logMessage.data;
       }
 
-      state.streamTabs.save();
+      await state.streamTabs.save();
 
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.updateLogMessage(stream, existing);
