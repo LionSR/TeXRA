@@ -44,7 +44,10 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ModelConfig, ToolDefinition } from '@model';
 import { cleanFileContent } from '@replacement/engine';
@@ -496,11 +499,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
           stream.off('chunk', onChunk);
         }
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error in createResponse(streaming): ${getSdkErrorMessage(err)}`,
+          `Error in createResponse(streaming): ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
         throw err;
       }
@@ -518,11 +522,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
         );
         return response;
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error in createResponse: ${getSdkErrorMessage(err)}`,
+          `Error in createResponse: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
         throw err;
       }
