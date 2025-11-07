@@ -3,113 +3,391 @@ import {
   APIConnectionError as AnthropicConnectionError,
   APIConnectionTimeoutError as AnthropicConnectionTimeoutError,
   APIError as AnthropicAPIError,
+  APIUserAbortError as AnthropicUserAbortError,
   AuthenticationError as AnthropicAuthenticationError,
+  BadRequestError as AnthropicBadRequestError,
+  ConflictError as AnthropicConflictError,
+  InternalServerError as AnthropicInternalServerError,
+  NotFoundError as AnthropicNotFoundError,
   PermissionDeniedError as AnthropicPermissionDeniedError,
   RateLimitError as AnthropicRateLimitError,
-  BadRequestError as AnthropicBadRequestError,
-  NotFoundError as AnthropicNotFoundError,
-  ConflictError as AnthropicConflictError,
   UnprocessableEntityError as AnthropicUnprocessableEntityError,
-  InternalServerError as AnthropicInternalServerError,
-  APIUserAbortError as AnthropicUserAbortError,
 } from '@anthropic-ai/sdk';
+import { ApiError as GoogleGenAIApiError } from '@google/genai';
 import {
   APIConnectionError as OpenAIConnectionError,
   APIConnectionTimeoutError as OpenAIConnectionTimeoutError,
   APIError as OpenAIAPIError,
+  APIUserAbortError as OpenAIUserAbortError,
   AuthenticationError as OpenAIAuthenticationError,
+  BadRequestError as OpenAIBadRequestError,
+  ConflictError as OpenAIConflictError,
+  InternalServerError as OpenAIInternalServerError,
+  NotFoundError as OpenAINotFoundError,
   PermissionDeniedError as OpenAIPermissionDeniedError,
   RateLimitError as OpenAIRateLimitError,
-  BadRequestError as OpenAIBadRequestError,
-  NotFoundError as OpenAINotFoundError,
-  ConflictError as OpenAIConflictError,
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
-  InternalServerError as OpenAIInternalServerError,
-  APIUserAbortError as OpenAIUserAbortError,
 } from 'openai';
 
-// Local imports - configuration
-import { getConfig } from '@utils/config';
+/**
+ * Structured representation of a provider HTTP failure.
+ */
+export interface ProviderHttpErrorDetails {
+  /**
+   * Human readable description of the provider failure. Includes HTTP prefix when
+   * a status code is available.
+   */
+  message: string;
+  /** HTTP status code reported by the provider, when present. */
+  statusCode?: number;
+  /** HTTP status text reported by the provider or derived from the status code. */
+  statusText?: string;
+  /** Identifier for the provider that produced the error, when known. */
+  provider?: string;
+}
 
-// Google GenAI errors are still not exported as of v1.5.1 of the SDK,
-// but the runtime uses the names `ClientError` and `ServerError`.
-// We detect them via those names when inspecting the error object.
-// The OpenAI Responses API reuses the standard OpenAI error classes so
-// no additional imports are required.
+const STATUS_TITLES: Record<number, string> = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  402: 'Payment Required',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  422: 'Unprocessable Entity',
+  429: 'Too Many Requests',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+  504: 'Gateway Timeout',
+};
+
+const STATUS_DESCRIPTIONS: Record<number, string> = {
+  400: 'Invalid parameters',
+  401: 'Invalid API key',
+  402: 'Insufficient credits',
+  403: 'Permission denied',
+  404: 'Resource not found',
+  409: 'Conflict error',
+  422: 'Unprocessable entity',
+  429: 'Rate limit exceeded',
+  500: 'Provider error',
+  502: 'Provider error',
+  503: 'No available providers',
+  504: 'Provider timeout',
+};
+
+type ErrorConstructor<T extends Error = Error> = abstract new (
+  ...args: never[]
+) => T;
+
+interface NativeMessageErrorEntry {
+  ctor: ErrorConstructor;
+  provider: string;
+  message?: string;
+}
+
+interface NativeHttpErrorEntry {
+  ctor: ErrorConstructor;
+  provider: string;
+  fallbackStatusCode?: number;
+}
+
+const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
+  {
+    ctor: OpenAIConnectionTimeoutError,
+    provider: 'openai',
+    message: 'Connection timed out',
+  },
+  {
+    ctor: AnthropicConnectionTimeoutError,
+    provider: 'anthropic',
+    message: 'Connection timed out',
+  },
+  {
+    ctor: OpenAIConnectionError,
+    provider: 'openai',
+    message: 'Connection error',
+  },
+  {
+    ctor: AnthropicConnectionError,
+    provider: 'anthropic',
+    message: 'Connection error',
+  },
+  {
+    ctor: OpenAIUserAbortError,
+    provider: 'openai',
+    message: 'Request aborted',
+  },
+  {
+    ctor: AnthropicUserAbortError,
+    provider: 'anthropic',
+    message: 'Request aborted',
+  },
+];
+
+const NATIVE_HTTP_ERRORS: NativeHttpErrorEntry[] = [
+  { ctor: OpenAIBadRequestError, provider: 'openai', fallbackStatusCode: 400 },
+  {
+    ctor: AnthropicBadRequestError,
+    provider: 'anthropic',
+    fallbackStatusCode: 400,
+  },
+  {
+    ctor: OpenAIAuthenticationError,
+    provider: 'openai',
+    fallbackStatusCode: 401,
+  },
+  {
+    ctor: AnthropicAuthenticationError,
+    provider: 'anthropic',
+    fallbackStatusCode: 401,
+  },
+  {
+    ctor: OpenAIPermissionDeniedError,
+    provider: 'openai',
+    fallbackStatusCode: 403,
+  },
+  {
+    ctor: AnthropicPermissionDeniedError,
+    provider: 'anthropic',
+    fallbackStatusCode: 403,
+  },
+  { ctor: OpenAINotFoundError, provider: 'openai', fallbackStatusCode: 404 },
+  {
+    ctor: AnthropicNotFoundError,
+    provider: 'anthropic',
+    fallbackStatusCode: 404,
+  },
+  { ctor: OpenAIConflictError, provider: 'openai', fallbackStatusCode: 409 },
+  {
+    ctor: AnthropicConflictError,
+    provider: 'anthropic',
+    fallbackStatusCode: 409,
+  },
+  {
+    ctor: OpenAIUnprocessableEntityError,
+    provider: 'openai',
+    fallbackStatusCode: 422,
+  },
+  {
+    ctor: AnthropicUnprocessableEntityError,
+    provider: 'anthropic',
+    fallbackStatusCode: 422,
+  },
+  { ctor: OpenAIRateLimitError, provider: 'openai', fallbackStatusCode: 429 },
+  {
+    ctor: AnthropicRateLimitError,
+    provider: 'anthropic',
+    fallbackStatusCode: 429,
+  },
+  {
+    ctor: OpenAIInternalServerError,
+    provider: 'openai',
+    fallbackStatusCode: 500,
+  },
+  {
+    ctor: AnthropicInternalServerError,
+    provider: 'anthropic',
+    fallbackStatusCode: 500,
+  },
+  { ctor: OpenAIAPIError, provider: 'openai' },
+  { ctor: AnthropicAPIError, provider: 'anthropic' },
+  { ctor: GoogleGenAIApiError, provider: 'google' },
+];
+
+function matchNativeMessageError(
+  err: unknown,
+): ProviderHttpErrorDetails | undefined {
+  const entry = NATIVE_MESSAGE_ERRORS.find(({ ctor }) => err instanceof ctor);
+  if (!entry) {
+    return undefined;
+  }
+
+  return {
+    message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
+    provider: entry.provider,
+  };
+}
+
+function matchNativeHttpError(
+  err: unknown,
+): ProviderHttpErrorDetails | undefined {
+  const entry = NATIVE_HTTP_ERRORS.find(({ ctor }) => err instanceof ctor);
+  if (!entry) {
+    return undefined;
+  }
+
+  const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
+  const statusText = detectStatusText(err, statusCode);
+  const fallbackMessage = statusCode
+    ? STATUS_DESCRIPTIONS[statusCode]
+    : undefined;
+  const finalMessage =
+    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+
+  if (!statusCode) {
+    return {
+      message: finalMessage,
+      provider: entry.provider,
+    };
+  }
+
+  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  return {
+    message: `${prefix} – ${finalMessage}`,
+    statusCode,
+    statusText,
+    provider: entry.provider,
+  };
+}
+
+type StatusCarrier = {
+  status?: number;
+  statusCode?: number;
+  code?: number;
+  response?: { status?: number };
+  error?: { status?: number };
+};
+
+function pickStatus(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function detectStatusCode(err: unknown): number | undefined {
+  if (!err || typeof err !== 'object') {
+    return undefined;
+  }
+
+  const candidate = err as StatusCarrier;
+  return (
+    pickStatus(candidate.status) ??
+    pickStatus(candidate.statusCode) ??
+    pickStatus(candidate.code) ??
+    pickStatus(candidate.response?.status) ??
+    pickStatus(candidate.error?.status)
+  );
+}
+
+function detectStatusText(
+  err: unknown,
+  statusCode?: number,
+): string | undefined {
+  if (!err || typeof err !== 'object') {
+    return statusCode ? STATUS_TITLES[statusCode] : undefined;
+  }
+
+  const candidate = err as {
+    statusText?: string;
+    response?: { statusText?: string };
+    error?: { statusText?: string };
+  };
+
+  return (
+    candidate.statusText ??
+    candidate.response?.statusText ??
+    candidate.error?.statusText ??
+    (statusCode ? STATUS_TITLES[statusCode] : undefined)
+  );
+}
+
+function detectProvider(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') {
+    return undefined;
+  }
+
+  const candidate = err as { provider?: string } & {
+    constructor?: { name?: string };
+  };
+
+  if (candidate.provider) {
+    return candidate.provider;
+  }
+
+  const name = candidate.constructor?.name;
+  if (!name) {
+    return undefined;
+  }
+
+  const lowered = name.toLowerCase();
+  if (lowered.includes('openai')) {
+    return 'openai';
+  }
+  if (lowered.includes('anthropic')) {
+    return 'anthropic';
+  }
+  if (lowered.includes('google')) {
+    return 'google';
+  }
+  if (lowered.includes('kimi')) {
+    return 'kimi';
+  }
+
+  return undefined;
+}
+
+function extractMessage(err: unknown): string | undefined {
+  if (err instanceof Error && typeof err.message === 'string') {
+    const trimmed = err.message.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (typeof err === 'string') {
+    const trimmed = err.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  return undefined;
+}
 
 /**
- * Returns a human-readable message for common SDK errors.
- * In debug mode (logger.debugMode = true), returns the full error message.
- * Otherwise, returns a graceful, user-friendly message.
+ * Formats SDK errors from model providers into a consistent message so agent logs
+ * can surface status codes alongside concise descriptions.
+ *
+ * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
+ * Google responses. When the error is not a known class, it inspects common
+ * HTTP-shaped fields and falls back to a best-effort summary.
  */
-export function getSdkErrorMessage(err: unknown): string {
-  const isDebugMode = getConfig<boolean>('texra.logger.debugMode', false);
-
-  // In debug mode, always show the full error message
-  if (isDebugMode) {
-    return err instanceof Error ? err.message : String(err);
+export function formatProviderHttpError(
+  err: unknown,
+): ProviderHttpErrorDetails {
+  const nativeMessage = matchNativeMessageError(err);
+  if (nativeMessage) {
+    return nativeMessage;
   }
 
-  // In normal mode, provide graceful error messages
-  const errorMapping: [new (...args: any[]) => any, string][] = [
-    [OpenAIRateLimitError, 'Rate limit exceeded.'],
-    [AnthropicRateLimitError, 'Rate limit exceeded.'],
-    [OpenAIConnectionTimeoutError, 'Connection timed out.'],
-    [AnthropicConnectionTimeoutError, 'Connection timed out.'],
-    [OpenAIConnectionError, 'Connection error.'],
-    [AnthropicConnectionError, 'Connection error.'],
-    [OpenAIAuthenticationError, 'Authentication failed.'],
-    [AnthropicAuthenticationError, 'Authentication failed.'],
-    [OpenAIPermissionDeniedError, 'Permission denied.'],
-    [AnthropicPermissionDeniedError, 'Permission denied.'],
-    [OpenAIBadRequestError, 'Bad request.'],
-    [AnthropicBadRequestError, 'Bad request.'],
-    [OpenAINotFoundError, 'Resource not found.'],
-    [AnthropicNotFoundError, 'Resource not found.'],
-    [OpenAIConflictError, 'Conflict error.'],
-    [AnthropicConflictError, 'Conflict error.'],
-    [OpenAIUnprocessableEntityError, 'Unprocessable entity.'],
-    [AnthropicUnprocessableEntityError, 'Unprocessable entity.'],
-    [OpenAIInternalServerError, 'Internal server error.'],
-    [AnthropicInternalServerError, 'Internal server error.'],
-    [OpenAIUserAbortError, 'Request aborted.'],
-    [AnthropicUserAbortError, 'Request aborted.'],
-  ];
-
-  for (const [ErrorClass, message] of errorMapping) {
-    if (err instanceof ErrorClass) {
-      return message;
-    }
+  const nativeHttp = matchNativeHttpError(err);
+  if (nativeHttp) {
+    return nativeHttp;
   }
-  const maybeCode = err as { code?: number; status?: number } | undefined;
-  const code = maybeCode?.code ?? maybeCode?.status;
-  if (typeof code === 'number') {
-    const codeMapping: Record<number, string> = {
-      400: 'Bad request.',
-      401: 'Authentication failed.',
-      403: 'Permission denied.',
-      404: 'Resource not found.',
-      409: 'Conflict error.',
-      422: 'Unprocessable entity.',
-      429: 'Rate limit exceeded.',
-      500: 'Internal server error.',
-      503: 'Service unavailable.',
-      504: 'Deadline exceeded.',
+
+  const statusCode = detectStatusCode(err);
+  const statusText = detectStatusText(err, statusCode);
+  const provider = detectProvider(err);
+
+  const fallbackMessage = statusCode
+    ? STATUS_DESCRIPTIONS[statusCode]
+    : undefined;
+  const finalMessage =
+    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+
+  if (!statusCode) {
+    return {
+      message: finalMessage,
+      provider,
     };
-    const mapped = codeMapping[code];
-    if (mapped) {
-      return mapped;
-    }
-  }
-  if (err instanceof OpenAIAPIError || err instanceof AnthropicAPIError) {
-    return 'API error occurred.';
-  }
-  if ((err as Error)?.name === 'ClientError') {
-    return 'Google GenAI client error occurred.';
-  }
-  if ((err as Error)?.name === 'ServerError') {
-    return 'Google GenAI server error occurred.';
   }
 
-  return 'An unexpected error occurred.';
+  const prefix = `HTTP ${statusCode}${statusText ? ` ${statusText}` : ''}`;
+  return {
+    message: `${prefix} – ${finalMessage}`,
+    statusCode,
+    statusText,
+    provider,
+  };
+}
+
+export function getSdkErrorMessage(err: unknown): string {
+  return formatProviderHttpError(err).message;
 }

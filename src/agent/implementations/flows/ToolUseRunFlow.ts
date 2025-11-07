@@ -5,21 +5,31 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import {
+  AgentSharedStore,
+  createSharedStore,
+} from '@agent/core/AgentSharedStore';
+import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
-import type { AgentRunShared } from '@agent/implementations/flows/common/types';
-import type { AgentLogStage } from '@logger/AgentLogger';
+import type {
+  AgentLifecycleState,
+  AgentRunHooks,
+  AgentRunShared,
+} from '@agent/implementations/flows/common/types';
 import {
   beginLifecyclePhase,
   failLifecycle,
   setLifecyclePhase,
   setLifecycleStatus,
 } from '@agent/implementations/flows/common/lifecycle';
+import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
+import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
+import { BaseRunStateSchema } from '@agent/implementations/flows/common/types';
+import { z } from 'zod';
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
@@ -42,34 +52,36 @@ interface ToolUseFinalizePrep<C> {
   lifecycle: ToolUseRunLifecycle;
 }
 
-interface ToolUseFinalizeExecResult {
-  snapshotError?: unknown;
-  endError?: unknown;
-}
+export type ToolUseRunPhase =
+  | 'idle'
+  | 'init'
+  | 'prepare'
+  | 'cycle'
+  | 'finalize';
 
-type ToolUseRunPhase = 'idle' | 'init' | 'prepare' | 'cycle' | 'finalize';
-type ToolUseRunStatus = 'pending' | 'running' | 'error' | 'completed';
+export type ToolUseRunLifecycle = AgentLifecycleState<ToolUseRunPhase>;
 
-export interface ToolUseRunLifecycle {
-  phase: ToolUseRunPhase;
-  status: ToolUseRunStatus;
-  error?: unknown;
-}
+const ToolUseRunStateSchemaBase = BaseRunStateSchema.extend({
+  toolState: z.instanceof(AgentWorkspaceState).nullable(),
+  cycleOptions: z.any().nullable(),
+  shouldSkipCycle: z.boolean(),
+  store: z.instanceof(AgentSharedStore).nullable(),
+  nextRoundIndex: z.number().nonnegative(),
+});
 
-export interface ToolUseRunState<C = unknown> {
+type ToolUseRunStateStruct = z.infer<typeof ToolUseRunStateSchemaBase>;
+
+export type ToolUseRunState<C = unknown> = Omit<
+  ToolUseRunStateStruct,
+  'cycleOptions' | 'store' | 'toolState' | 'messages'
+> & {
   messages: ProviderMessage[];
   toolState: AgentWorkspaceState | null;
   cycleOptions: ToolUseCycleOptions<C> | null;
-  shouldSkipCycle: boolean;
   store: AgentSharedStore | null;
-  runState: AgentRunState;
-  nextRoundIndex: number;
-}
+};
 
-export interface ToolUseRunHooks<C = unknown> {
-  start(): Promise<AgentLogStage | undefined>;
-  init(runStage: AgentLogStage | undefined): Promise<void>;
-  initializeClient(): Promise<void>;
+export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   prepareState(): Promise<{
     messages: ProviderMessage[];
     toolState: AgentWorkspaceState;
@@ -91,8 +103,6 @@ export interface ToolUseRunHooks<C = unknown> {
     followUp: string,
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]>;
-  end(status: 'stopped' | 'error'): Promise<void>;
-  cleanup(): Promise<void>;
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 
@@ -159,20 +169,17 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared.state.toolState = toolState;
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
+
     if (!shared.state.store) {
-      const roundState = new ConversationRoundState(
-        shared.state.nextRoundIndex,
-      );
-      shared.state.store = new AgentSharedStore({
-        round: roundState,
-        run: shared.state.runState,
-        workspace: toolState,
-        user: shared.agent.getUserVarChannels(),
+      shared.state.store = createSharedStore({
+        roundIndex: shared.state.nextRoundIndex,
+        runState: shared.state.runState,
+        workspaceState: toolState,
+        userChannels: shared.agent.getUserVarChannels(),
+        onRoundFinalized: shared.agent.getUsageRecorder('tool-use'),
       });
     } else {
-      shared.state.store.setRound(
-        new ConversationRoundState(shared.state.nextRoundIndex),
-      );
+      shared.state.store.resetRound(shared.state.nextRoundIndex);
     }
 
     beginLifecyclePhase(shared.lifecycle, 'cycle');
@@ -255,73 +262,22 @@ class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
     };
   }
 
-  async exec(
-    prepRes: ToolUseFinalizePrep<C>,
-  ): Promise<ToolUseFinalizeExecResult> {
+  async exec(prepRes: ToolUseFinalizePrep<C>): Promise<void> {
     const status = prepRes.lifecycle.status === 'error' ? 'error' : 'stopped';
-    const result: ToolUseFinalizeExecResult = {};
-
-    try {
-      await prepRes.hooks.clearPersistedSnapshot();
-    } catch (error) {
-      result.snapshotError = error;
-    }
-
-    try {
-      await prepRes.hooks.end(status);
-    } catch (error) {
-      result.endError = error;
-    }
-
-    return result;
-  }
-
-  async post(
-    shared: ToolUseRunShared<C>,
-    prepRes: ToolUseFinalizePrep<C>,
-    execRes: ToolUseFinalizeExecResult,
-  ): Promise<string | undefined> {
-    const errors: unknown[] = [];
-
-    if (shared.lifecycle.error) {
-      errors.push(shared.lifecycle.error);
-    }
-
-    if (execRes.snapshotError) {
-      errors.push(execRes.snapshotError);
-    }
-
-    if (execRes.endError) {
-      errors.push(execRes.endError);
-    }
-
-    let error = errors[0];
-
-    try {
-      await prepRes.hooks.cleanup();
-    } catch (cleanupError: unknown) {
-      errors.push(cleanupError);
-      if (!error) {
-        error = cleanupError;
-      }
-    }
-
-    if (errors.length > 1) {
-      errors.slice(1).forEach((err) => {
+    await finalizeLifecycle({
+      lifecycle: prepRes.lifecycle,
+      runFinalize: async () => {
+        await prepRes.hooks.clearPersistedSnapshot();
+        await prepRes.hooks.end(status);
+      },
+      runCleanup: () => Promise.resolve(prepRes.hooks.cleanup()),
+      onSuccess: () => setLifecycleStatus(prepRes.lifecycle, 'completed'),
+      onSecondaryError: (error) =>
         prepRes.hooks.logFinalizeWarning?.(
           'Additional finalize error encountered.',
-          err,
-        );
-      });
-    }
-
-    if (error) {
-      failLifecycle(shared.lifecycle, error);
-    } else {
-      setLifecycleStatus(shared.lifecycle, 'completed');
-    }
-
-    return undefined;
+          error,
+        ),
+    });
   }
 }
 
@@ -337,13 +293,14 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   const cycleNode = new ToolUseCycleNode<C>();
   const finalizeNode = new ToolUseFinalizeNode<C>();
 
-  initNode.on(FlowTransition.EXECUTE, prepareNode);
-  initNode.on(FlowTransition.FINALIZE, finalizeNode);
-
-  prepareNode.on(FlowTransition.EXECUTE, cycleNode);
-  prepareNode.on(FlowTransition.FINALIZE, finalizeNode);
-
-  cycleNode.on(FlowTransition.FINALIZE, finalizeNode);
-
-  return new Flow<ToolUseRunShared<C>>(initNode);
+  return buildRunFlow({
+    init: initNode,
+    finalize: finalizeNode,
+    links: [
+      { from: initNode, on: FlowTransition.EXECUTE, to: prepareNode },
+      { from: prepareNode, on: FlowTransition.EXECUTE, to: cycleNode },
+      { from: prepareNode, on: FlowTransition.FINALIZE },
+      { from: cycleNode, on: FlowTransition.FINALIZE },
+    ],
+  });
 }

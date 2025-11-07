@@ -7,7 +7,7 @@ import {
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -18,9 +18,11 @@ import {
   type ReflectionRunLifecycle,
   type ReflectionRunShared,
   type ReflectionRunState,
+  type ReflectionRunPhase,
 } from '@agent/implementations/flows/ReflectionRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
@@ -67,13 +69,13 @@ export interface RoundOutputOptions {
 
 export interface ReflectionRoundContext {
   roundIndex: number;
-  globalState: AgentRunState;
+  runState: AgentRunState;
   messages: any[];
 }
 
 export interface ReflectionRoundResult {
   roundState: ConversationRoundState;
-  globalState: AgentRunState;
+  runState: AgentRunState;
   messages: any[];
   shouldContinue: boolean;
   toolState: AgentWorkspaceState;
@@ -89,7 +91,7 @@ export interface AgentRuntimeXmlExports {
 interface RoundPipelineContext {
   roundIndex: number;
   roundState: ConversationRoundState;
-  globalState: AgentRunState;
+  runState: AgentRunState;
   toolState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
@@ -223,13 +225,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private async handleRoundCompletion(
     currRound: number,
     stateRound: ConversationRoundState,
-    stateGlobal: AgentRunState,
+    runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
     const { outputFile, endTurn, stage } = options;
 
     const execute = async (scope: AgentLogStage | undefined) => {
-      await this.handleOutput(currRound, stateRound, stateGlobal, {
+      await this.handleOutput(currRound, stateRound, runState, {
         ...options,
         stage: scope,
       });
@@ -256,8 +258,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Processes output files for current round.
    * This method orchestrates the overall output processing flow with clear separation of concerns:
-   * 1. Usage tracking via trackRoundUsage
-   * 2. LaTeX diff operations via diffManager.handleLatexdiffofOutput (only when endTurn is true)
+   * - LaTeX diff operations via diffManager.handleLatexdiffofOutput (only when endTurn is true)
    *
    * The actual file processing is handled separately in processOutputFiles.
    *
@@ -266,13 +267,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected async handleOutput(
     currRound: number,
     stateRound: ConversationRoundState,
-    stateGlobal: AgentRunState,
+    _runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, stage } = options;
-    // Record usage statistics at the end of each round
-    await this.trackRoundUsage(stateGlobal);
-
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
@@ -304,7 +302,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    *
    * @param currRound - Zero-based index of the round being executed.
    * @param stateRound - Mutable state scoped to the current round of execution.
-   * @param stateGlobal - Shared agent state that spans all rounds.
+   * @param runState - Shared agent state that spans all rounds.
    * @param toolState - Current tool invocation state passed between rounds.
    * @param preparedMessages - Messages prepared for the model before execution.
    * @param prefill - Initial text inserted into the model response buffer.
@@ -314,7 +312,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private async runRoundPipeline({
     roundIndex,
     roundState,
-    globalState,
+    runState,
     toolState,
     preparedMessages,
     prefill,
@@ -330,13 +328,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         prefill,
       );
 
+    const store = createSharedStore({
+      roundIndex: roundState.roundIndex,
+      roundState,
+      runState,
+      workspaceState: toolState,
+      userChannels: this.userVarChannels,
+      onRoundFinalized: this.getUsageRecorder('workflow'),
+    });
+
     if (!endTurn) {
-      const store = new AgentSharedStore({
-        round: roundState,
-        run: globalState,
-        workspace: toolState,
-        user: this.userVarChannels,
-      });
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
@@ -354,13 +355,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       );
 
-      if (roundIndex === 0) {
-        this.logger.debug(`stateGlobal: ${JSON.stringify(store.run)}`);
-      }
-
       return {
         roundState: store.round,
-        globalState: store.run,
+        runState: store.run,
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
         toolState: store.workspace,
@@ -368,10 +365,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       };
     }
 
+    await store.finalizeRound();
+
     const artifacts = await this.handleRoundCompletion(
       roundIndex,
-      roundState,
-      globalState,
+      store.round,
+      store.run,
       {
         outputFile: outputPath,
         endTurn,
@@ -379,8 +378,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
 
     return {
-      roundState,
-      globalState,
+      roundState: store.round,
+      runState: store.run,
       messages: updatedMessages,
       shouldContinue: endTurn,
       toolState,
@@ -404,7 +403,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   private async prepareRoundContext(
     currRound: number,
-    _stateGlobal: AgentRunState,
+    _runState: AgentRunState,
     messages: any[],
     toolState: AgentWorkspaceState,
   ): Promise<{
@@ -545,7 +544,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   public async runReflectionRound({
     roundIndex,
-    globalState,
+    runState,
     messages,
   }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
     this.logger.debug(`Processing round ${roundIndex}`);
@@ -560,17 +559,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           prepareAgentWorkspaceState: () =>
             this.prepareAgentWorkspaceState(roundIndex, toolState),
           prepareRoundContext: () =>
-            this.prepareRoundContext(
-              roundIndex,
-              globalState,
-              messages,
-              toolState,
-            ),
+            this.prepareRoundContext(roundIndex, runState, messages, toolState),
           runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
             this.runRoundPipeline({
               roundIndex,
               roundState: stateRound,
-              globalState,
+              runState,
               toolState,
               preparedMessages,
               prefill,
@@ -578,7 +572,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,
-            globalState,
+            runState,
             messages,
             shouldContinue: true,
             toolState,
@@ -608,11 +602,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       documents: [],
       singleOutputFile: null,
     };
-    const lifecycle: ReflectionRunLifecycle = {
-      phase: 'idle',
-      status: 'pending',
-      error: undefined,
-    };
+    const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();
 
@@ -625,7 +615,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           currentRound: 0,
           continueRounds: true,
           messages: [],
-          globalState: new AgentRunState(),
+          runState: new AgentRunState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),
       extendHooks: (baseHooks: AgentRunHooks) => {

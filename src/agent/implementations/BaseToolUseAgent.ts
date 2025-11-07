@@ -7,9 +7,7 @@ import { runToolUseCycle } from '../core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
 import type { IModelHandler } from '../modelHandlers';
 import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
-import { getSystemPromptWithRules } from '../utils/promptHelpers';
-import { renderPrompt } from '../utils/promptUtils';
-import { TOOL_USE_INSTRUCTIONS } from '../utils/toolUsePrompt';
+import { buildInitialToolUsePrompts } from '../utils/PromptBuilder';
 // Base class for tool-use agents
 
 // Standard library imports
@@ -22,9 +20,11 @@ import {
   type ToolUseRunLifecycle,
   type ToolUseRunShared,
   type ToolUseRunState,
+  type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import type { ToolDefinition } from '@model';
 import { BaseTool } from '@tools/core/base';
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
@@ -44,9 +44,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
   private followUpQueue: string[] = [];
   private followUpResolver: ((v: string | null) => void) | null = null;
-  private messages: ProviderMessage[] = [];
-  private toolState: AgentWorkspaceState | null = null;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
+  private activeState: ToolUseRunState<C> | null = null;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -138,66 +137,69 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   }
 
   public async run(): Promise<void> {
-    const lifecycle: ToolUseRunLifecycle = {
-      phase: 'idle',
-      status: 'pending',
-      error: undefined,
-    };
+    const lifecycle = createLifecycleState<ToolUseRunPhase>('idle');
 
-    await runAgentFlow<ToolUseRunShared<C>>({
-      agent: this,
-      lifecycle,
-      createState: () =>
-        ({
-          messages: this.messages,
-          toolState: this.toolState,
-          cycleOptions: null,
-          shouldSkipCycle: false,
-          store: null,
-          runState: new AgentRunState(),
-          nextRoundIndex: 0,
-        }) satisfies ToolUseRunState<C>,
-      createFlow: () => createToolUseRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => ({
-        ...baseHooks,
-        start: async () => undefined,
-        init: (runStage) => this.init(runStage, { createStage: false }),
-        prepareState: () => this.prepareInitialSessionState(),
-        buildCycleOptions: (toolState) =>
-          this.buildToolUseCycleOptions(toolState),
-        runCycle: (options, messages, store) =>
-          runToolUseCycle({
-            options,
-            messages,
-            store,
-          }),
-        checkInterruption: () => this.checkInterruption(),
-        hasQueuedFollowUp: () => this.followUpQueue.length > 0,
-        enterWaitingState: () => this.enterWaitingState(),
-        clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-        waitForFollowUp: () => this.waitForFollowUp(),
-        markRunning: () => this.markRunning(),
-        applyFollowUp: async (followUp, messages) => {
-          this.logger.userMessage(followUp);
-          const updatedMessages =
-            await this.modelHandler.createUserFollowUpMessages(
+    try {
+      await runAgentFlow<ToolUseRunShared<C>>({
+        agent: this,
+        lifecycle,
+        hookOverrides: {
+          start: async () => undefined,
+        },
+        createState: () => {
+          const state: ToolUseRunState<C> = {
+            messages: [],
+            toolState: null,
+            cycleOptions: null,
+            shouldSkipCycle: false,
+            store: null,
+            runState: new AgentRunState(),
+            nextRoundIndex: 0,
+          };
+          this.activeState = state;
+          return state;
+        },
+        createFlow: () => createToolUseRunFlow<C>(),
+        extendHooks: (baseHooks: AgentRunHooks) => ({
+          ...baseHooks,
+          init: (runStage) => this.init(runStage, { createStage: false }),
+          prepareState: () => this.prepareInitialSessionState(),
+          buildCycleOptions: (toolState) =>
+            this.buildToolUseCycleOptions(toolState),
+          runCycle: (options, messages, store) =>
+            runToolUseCycle({
+              options,
               messages,
-              followUp,
-            );
-          this.messages = updatedMessages;
-          return updatedMessages;
-        },
-        end: async (status) => {
-          await baseHooks.end(status);
-        },
-        cleanup: async () => {
-          await baseHooks.cleanup();
-        },
-        logFinalizeWarning: (message, error) => {
-          this.logger.warn(message, undefined, undefined, error);
-        },
-      }),
-    });
+              store,
+            }),
+          checkInterruption: () => this.checkInterruption(),
+          hasQueuedFollowUp: () => this.followUpQueue.length > 0,
+          enterWaitingState: () => this.enterWaitingState(),
+          clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
+          waitForFollowUp: () => this.waitForFollowUp(),
+          markRunning: () => this.markRunning(),
+          applyFollowUp: async (followUp, messages) => {
+            this.logger.userMessage(followUp);
+            const updatedMessages =
+              await this.modelHandler.createUserFollowUpMessages(
+                messages,
+                followUp,
+              );
+            this.getActiveState().messages = updatedMessages;
+            return updatedMessages;
+          },
+          logFinalizeWarning: (message, error) => {
+            this.logger.warn(message, undefined, undefined, error);
+          },
+          cleanup: async () => {
+            await baseHooks.cleanup();
+            this.activeState = null;
+          },
+        }),
+      });
+    } finally {
+      this.activeState = null;
+    }
   }
 
   private async prepareInitialSessionState(): Promise<{
@@ -205,6 +207,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     toolState: AgentWorkspaceState;
     shouldSkipCycle: boolean;
   }> {
+    const state = this.getActiveState();
     if (this.resumeSnapshot) {
       this.logger.debug('Resuming tool-use session from saved state.');
       const snapshot = this.resumeSnapshot;
@@ -226,8 +229,9 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         toolState = new AgentWorkspaceState();
       }
 
-      this.messages = messages;
-      this.toolState = toolState;
+      state.messages = messages;
+      state.toolState = toolState;
+      state.shouldSkipCycle = true;
 
       return {
         messages,
@@ -236,30 +240,27 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       };
     }
 
-    const initialRequest = Array.isArray(this.agentPrompt.userRequest)
-      ? (this.agentPrompt.userRequest[0] ?? '')
-      : this.agentPrompt.userRequest;
-
-    const [systemPrompt, userRequest, userPrefix] = await Promise.all([
-      getSystemPromptWithRules(
-        `${this.agentPrompt.systemPrompt}\n${TOOL_USE_INSTRUCTIONS}`,
+    const { systemPrompt, userPrefix, userRequest, instructionSuffix } =
+      await buildInitialToolUsePrompts(
+        this.agentPrompt,
         this.userVars,
-      ),
-      renderPrompt(initialRequest, this.userVars),
-      renderPrompt(this.agentPrompt.userPrefix, this.userVars),
-    ]);
+        this.logger,
+      );
 
     const messages = await this.modelHandler.initializeMessages(
       userPrefix,
       userRequest,
       undefined,
-      systemPrompt,
+      systemPrompt
+        ? `${systemPrompt}\n${instructionSuffix}`
+        : instructionSuffix,
     );
 
     const toolState = new AgentWorkspaceState();
 
-    this.messages = messages;
-    this.toolState = toolState;
+    state.messages = messages;
+    state.toolState = toolState;
+    state.shouldSkipCycle = false;
 
     return {
       messages,
@@ -288,9 +289,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       toolState,
       modelName: this.agentConfig.model,
-      onUsageRecorded: async ({ run }) => {
-        await this.trackRoundUsage(run, { runKind: 'tool-use' });
-      },
     };
   }
 
@@ -302,7 +300,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
     const stream = this.getStreamTabId();
     const executionId = this.getExecutionId();
-    const state = this.toolState;
+    const { toolState, messages } = this.getActiveState();
 
     await ToolUseSessionPersistence.maybePersistIdleSnapshot({
       executionId,
@@ -310,8 +308,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       agentName: this.agentConfig.agent,
       model: this.agentConfig.model,
       session: this.getSessionMetadata(),
-      messages: this.messages,
-      toolState: state ?? null,
+      messages,
+      toolState: toolState ?? null,
       hasQueuedFollowUps: () => this.followUpQueue.length > 0,
     });
 
@@ -331,5 +329,12 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private async clearPersistedSnapshot(): Promise<void> {
     const executionId = this.getExecutionId();
     await ToolUseSessionPersistence.clearPersistedSnapshot(executionId);
+  }
+
+  private getActiveState(): ToolUseRunState<C> {
+    if (!this.activeState) {
+      throw new Error('Tool-use run state is not initialized.');
+    }
+    return this.activeState;
   }
 }

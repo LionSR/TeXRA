@@ -101,6 +101,24 @@ export class MainViewState {
   setDefaults() {
     this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
 
+    const workflowAgentDefault = getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      DEFAULT_WORKFLOW_AGENT,
+    );
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      workflowAgentDefault,
+    );
+
+    const toolUseAgentDefault = getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      DEFAULT_TOOL_USE_AGENT,
+    );
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      toolUseAgentDefault,
+    );
+
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
       fileList.setVisibility(id, toggleId, false);

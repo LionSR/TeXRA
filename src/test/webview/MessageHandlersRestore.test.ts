@@ -267,6 +267,7 @@ function loadMessageHandlerModule(dom: JSDOM) {
     '@common/webview/commands.js': 'commands',
     '@common/webviewContext.js': 'webviewContext',
     '@common/BaseWebviewMessageHandler.js': 'baseHandler',
+    '@agent/core/AgentDataclass': 'agentDataclass',
   };
 
   code = code.replace(
@@ -330,6 +331,8 @@ function loadMessageHandlerModule(dom: JSDOM) {
       toolUse: 'toolUseAgentSelect',
     },
     AGENT_SELECT_LIST: ['workflowAgentSelect', 'toolUseAgentSelect'],
+    normalizeSessionType: (type: string) =>
+      type === 'toolUse' ? 'toolUse' : 'workflow',
   };
 
   const domUtilsMock = {
@@ -435,6 +438,12 @@ function loadMessageHandlerModule(dom: JSDOM) {
       BaseWebviewMessageHandler: class {
         setup() {}
         cleanup() {}
+      },
+    },
+    agentDataclass: {
+      AgentCategory: {
+        Workflow: 'workflow',
+        ToolUse: 'toolUse',
       },
     },
   };
@@ -601,5 +610,60 @@ describe('MainViewMessageHandler state restoration', () => {
     assert.deepEqual(mocks.mainViewStateUpdateCalls.pop(), {
       inputFiles: ['beta.tex'],
     });
+  });
+
+  it('restores tool-use agent selection from session agent category metadata', () => {
+    const dom = createTestDom(`
+      <vscode-single-select id="sessionType" value="workflow">
+        <vscode-option value="workflow">Workflow</vscode-option>
+        <vscode-option value="toolUse">Tool Use</vscode-option>
+      </vscode-single-select>
+      <vscode-single-select id="workflowAgentSelect">
+        <vscode-option value="agent-a">Agent A</vscode-option>
+        <vscode-option value="agent-b">Agent B</vscode-option>
+      </vscode-single-select>
+      <vscode-single-select id="toolUseAgentSelect">
+        <vscode-option value="agent-a">Agent A</vscode-option>
+        <vscode-option value="agent-b">Agent B</vscode-option>
+      </vscode-single-select>
+      <input id="model" />
+      <textarea id="instruction"></textarea>
+      <vscode-radio-group id="sessionTypeToggle">
+        <vscode-radio data-session-type="workflow" value="workflow"></vscode-radio>
+        <vscode-radio data-session-type="toolUse" value="toolUse"></vscode-radio>
+      </vscode-radio-group>
+    `);
+
+    const { MainViewMessageHandler, mocks } = loadMessageHandlerModule(dom);
+    const handler = new MainViewMessageHandler();
+
+    handler._handleStateRestoration({
+      agentConfig: {
+        session: { agentCategory: 'toolUse' },
+        agent: 'agent-b',
+      },
+    });
+
+    const sessionTypeSelect = dom.window.document.getElementById(
+      'sessionType',
+    ) as HTMLInputElement | null;
+    const workflowAgentSelect = dom.window.document.getElementById(
+      'workflowAgentSelect',
+    ) as HTMLInputElement | null;
+    const toolUseAgentSelect = dom.window.document.getElementById(
+      'toolUseAgentSelect',
+    ) as HTMLInputElement | null;
+
+    assert.strictEqual(sessionTypeSelect?.value, 'toolUse');
+    assert.strictEqual(workflowAgentSelect?.value ?? '', '');
+    assert.strictEqual(toolUseAgentSelect?.value, 'agent-b');
+
+    const savedState = mocks.mainViewStateSetCalls[0];
+    assert.strictEqual(savedState.sessionType, 'toolUse');
+    assert.strictEqual(savedState.agent, 'agent-b');
+    assert.strictEqual(savedState.toolUseAgent, 'agent-b');
+    assert.strictEqual(savedState.workflowAgent, '');
+
+    assert.strictEqual(mocks.restoreCalled(), true);
   });
 });

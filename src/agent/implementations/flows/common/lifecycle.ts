@@ -1,13 +1,23 @@
-import type { AgentRunLifecycleBase } from './types';
+import type { AgentLifecycleState } from './types';
 
-export function setLifecyclePhase<L extends AgentRunLifecycleBase>(
+export function createLifecycleState<Phase extends string>(
+  phase: Phase,
+): AgentLifecycleState<Phase> {
+  return {
+    phase,
+    status: 'pending',
+    error: undefined,
+  };
+}
+
+export function setLifecyclePhase<L extends AgentLifecycleState<string>>(
   lifecycle: L,
   phase: L['phase'],
 ): void {
   lifecycle.phase = phase;
 }
 
-export function beginLifecyclePhase<L extends AgentRunLifecycleBase>(
+export function beginLifecyclePhase<L extends AgentLifecycleState<string>>(
   lifecycle: L,
   phase: L['phase'],
 ): void {
@@ -16,7 +26,7 @@ export function beginLifecyclePhase<L extends AgentRunLifecycleBase>(
   lifecycle.error = undefined;
 }
 
-export function failLifecycle<L extends AgentRunLifecycleBase>(
+export function failLifecycle<L extends AgentLifecycleState<string>>(
   lifecycle: L,
   error: unknown,
 ): void {
@@ -24,7 +34,7 @@ export function failLifecycle<L extends AgentRunLifecycleBase>(
   lifecycle.error = error;
 }
 
-export function setLifecycleStatus<L extends AgentRunLifecycleBase>(
+export function setLifecycleStatus<L extends AgentLifecycleState<string>>(
   lifecycle: L,
   status: L['status'],
 ): void {
@@ -34,7 +44,7 @@ export function setLifecycleStatus<L extends AgentRunLifecycleBase>(
   }
 }
 
-export function completeLifecycle<L extends AgentRunLifecycleBase>(
+export function completeLifecycle<L extends AgentLifecycleState<string>>(
   lifecycle: L,
 ): void {
   setLifecycleStatus(lifecycle, 'completed');

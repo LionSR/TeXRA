@@ -1,6 +1,5 @@
 // Local imports - agent components
 import { AgentSharedStore } from './AgentSharedStore';
-import { AgentRunState, ConversationRoundState } from './AgentState';
 import { AgentWorkspaceState } from './AgentWorkspaceState';
 
 // Local imports - flow orchestration
@@ -24,19 +23,12 @@ export interface ToolUseCycleOptions<C = unknown>
   toolRegistry: Record<string, BaseTool<any>>;
   toolState: AgentWorkspaceState;
   modelName?: string;
-  onUsageRecorded?: (event: ToolUseUsageEvent) => Promise<void> | void;
 }
 
 export interface ToolUseCycleContext<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
-}
-
-export interface ToolUseUsageEvent {
-  run: AgentRunState;
-  round: ConversationRoundState;
-  endTurn: boolean;
 }
 
 export async function runToolUseCycle<C = unknown>(

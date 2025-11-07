@@ -6,7 +6,6 @@ import { FlowTransition } from './FlowTransitions';
 
 // Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import { ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
@@ -423,27 +422,19 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     }
 
     const completedRound = store.round;
-    store.finalizeRound();
+    await store.finalizeRound();
     store.run.incrementRounds();
-
-    await Promise.resolve(
-      options.onUsageRecorded?.({
-        run: store.run,
-        round: completedRound,
-        endTurn: execRes.endTurn,
-      }),
-    );
 
     const nextRoundIndex = completedRound.roundIndex + 1;
 
     if (execRes.endTurn) {
       state.shouldStop = true;
       state.stopReason = execRes.stopReason;
-      store.setRound(new ConversationRoundState(nextRoundIndex));
+      store.resetRound(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
 
-    store.setRound(new ConversationRoundState(nextRoundIndex));
+    store.resetRound(nextRoundIndex);
     return undefined;
   }
 }
