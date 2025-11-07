@@ -101,6 +101,24 @@ export class MainViewState {
   setDefaults() {
     this.applySessionType(SESSION_TYPES.WORKFLOW, { skipSave: true });
 
+    const workflowAgentDefault = getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      DEFAULT_WORKFLOW_AGENT,
+    );
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      workflowAgentDefault,
+    );
+
+    const toolUseAgentDefault = getSelectDefaultValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      DEFAULT_TOOL_USE_AGENT,
+    );
+    safeSetElementValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      toolUseAgentDefault,
+    );
+
     MULTIPLE_SELECTIONS.forEach((id) => {
       const toggleId = `toggle${capitalize(id)}`;
       fileList.setVisibility(id, toggleId, false);
@@ -140,27 +158,26 @@ export class MainViewState {
         commit: 'HEAD',
       };
 
-      const legacyAgent = previousState.agent;
-      const legacyToolUse = previousState.isToolUseAgent === true;
-      const normalizedValues = {
-        sessionType: previousState.sessionType
-          ? previousState.sessionType
-          : legacyToolUse
-            ? SESSION_TYPES.TOOL_USE
-            : defaults.sessionType,
-        workflowAgent:
-          previousState.workflowAgent ??
-          (!legacyToolUse ? legacyAgent : undefined) ??
-          defaults.workflowAgent,
-        toolUseAgent:
-          previousState.toolUseAgent ??
-          (legacyToolUse ? legacyAgent : undefined) ??
-          defaults.toolUseAgent,
-      };
+      const normalizedSessionType = normalizeSessionType(
+        previousState.sessionType ?? defaults.sessionType,
+      );
+
+      safeSetElementValue('sessionType', normalizedSessionType);
+      safeSetElementValue(
+        'workflowAgent',
+        previousState.workflowAgent ?? defaults.workflowAgent,
+      );
+      safeSetElementValue(
+        'toolUseAgent',
+        previousState.toolUseAgent ?? defaults.toolUseAgent,
+      );
 
       VALUE_ELEMENTS.forEach((id) => {
-        if (id in normalizedValues) {
-          safeSetElementValue(id, normalizedValues[id]);
+        if (
+          id === 'sessionType' ||
+          id === 'workflowAgent' ||
+          id === 'toolUseAgent'
+        ) {
           return;
         }
         safeSetElementValue(id, previousState[id] ?? defaults[id] ?? '');
@@ -211,10 +228,7 @@ export class MainViewState {
         setChevronIcon(toggleLatexdiffs, visible);
       }
 
-      this.applySessionType(
-        normalizedValues.sessionType ?? defaults.sessionType,
-        { skipSave: true },
-      );
+      this.applySessionType(normalizedSessionType, { skipSave: true });
     } else {
       this.setDefaults();
     }

@@ -1,6 +1,8 @@
 // Local imports - progress view
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
@@ -25,30 +27,30 @@ export class OutputFilesManager extends PersistentMapManager<
   private totalFilesProcessed = 0;
   private totalFilesRemoved = 0;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.OUTPUT_FILES);
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.OUTPUT_FILES, storage);
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
   /** Add output files for a stream and round */
-  addFiles(
+  async addFiles(
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
-  ): void {
+  ): Promise<void> {
     const existing = this.ensureStreamFiles(stream);
 
     for (const [round, files] of Object.entries(filesByRound)) {
       existing[Number(round)] = files;
     }
 
-    this.save();
+    await this.save();
   }
 
   /** Update missing outputs for a stream */
-  updateMissingOutputs(
+  async updateMissingOutputs(
     stream: StreamTabId,
     filesByRound: { [key: number]: string[] },
-  ): void {
+  ): Promise<void> {
     const streamMissing = this.ensureMissingOutputs(stream);
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -56,7 +58,7 @@ export class OutputFilesManager extends PersistentMapManager<
       streamMissing[roundNum] = files;
     }
 
-    this.saveMissingOutputs();
+    await this.saveMissingOutputs();
   }
 
   /** Get output files for a stream */
@@ -78,30 +80,30 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Clear output files for a stream */
-  clearFiles(stream: StreamTabId): void {
-    this.delete(stream);
+  async clearFiles(stream: StreamTabId): Promise<void> {
+    await this.delete(stream);
   }
 
   /** Clear missing outputs for a stream */
-  clearMissingOutputs(stream: StreamTabId): void {
+  async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     if (!this._missingOutputs.delete(stream)) {
       return;
     }
-    this.saveMissingOutputs();
+    await this.saveMissingOutputs();
   }
 
   /** Delete all files for a stream */
-  deleteStream(stream: StreamTabId): void {
-    super.delete(stream);
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await super.delete(stream);
     this._missingOutputs.delete(stream);
-    this.saveMissingOutputs();
+    await this.saveMissingOutputs();
   }
 
   /** Clear all output files */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
     this._missingOutputs.clear();
-    this.saveMissingOutputs();
+    await this.saveMissingOutputs();
   }
 
   /** Get all output files */
@@ -143,7 +145,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
-    const saved = await this.persistence.load<{
+    const saved = this.storage.get<{
       [key: string]: { [key: number]: string[] };
     }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
 
@@ -164,9 +166,9 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Save missing outputs to persistence */
-  saveMissingOutputs(): void {
+  async saveMissingOutputs(): Promise<void> {
     const obj = Object.fromEntries(this._missingOutputs.entries());
-    this.persistence.save(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+    await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
   }
 
   private ensureStreamFiles(stream: StreamTabId): {

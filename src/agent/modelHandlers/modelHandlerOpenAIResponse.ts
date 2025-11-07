@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import OpenAI, { toFile } from 'openai';
+import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 import type {
   EasyInputMessage,
   Response,
@@ -51,7 +51,10 @@ import {
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { ModelConfig, ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
@@ -189,11 +192,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         userContent.push(...mediaContent);
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error processing media files: ${getSdkErrorMessage(err)}`,
+          `Error processing media files: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
       }
     }
@@ -245,11 +249,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         roundContent.push(...formattedMediaContent);
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          `Error processing media files for follow-up round: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
       }
     }
@@ -425,11 +430,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
+      const formattedError = formatProviderHttpError(err);
+
+      if (
+        err instanceof APIConnectionTimeoutError ||
+        formattedError.message.includes('Request timed out')
+      ) {
+        this.logger.warn(
+          `Timed out uploading file ${filename}. Falling back to inline payload.`,
+        );
+        return;
+      }
+
       this.logger.error(
-        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
+        `Failed to upload file ${filename}: ${formattedError.message}`,
         undefined,
-        undefined,
-        err,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+        formattedError,
       );
       throw err;
     } finally {
@@ -609,11 +626,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.sentMessages = messages.length;
       return response;
     } catch (err) {
+      const formattedError = formatProviderHttpError(err);
       this.logger.error(
-        `Error in createResponse: ${getSdkErrorMessage(err)}`,
+        `Error in createResponse: ${formattedError.message}`,
         undefined,
-        undefined,
-        err,
+        MESSAGE_TYPES.PROGRESS_STATUS,
+        formattedError,
       );
       throw err;
     }
@@ -1380,11 +1398,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           isImage: mimeType.startsWith('image/'),
         });
       } catch (err) {
+        const formattedError = formatProviderHttpError(err);
         this.logger.error(
-          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
           undefined,
-          undefined,
-          err,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          formattedError,
         );
       } finally {
         if (buffer) {

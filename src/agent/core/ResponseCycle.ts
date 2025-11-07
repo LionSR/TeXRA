@@ -54,6 +54,7 @@ export async function runResponseCycle<C = unknown>(
       responseTime: undefined,
       stopReason: undefined,
       processedResponse: undefined,
+      roundFinalized: false,
     } satisfies ResponseCycleState,
   };
 
