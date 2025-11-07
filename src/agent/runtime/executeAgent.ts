@@ -43,7 +43,7 @@ import { getStreamTabId } from '@/logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createCandidate,
@@ -335,12 +335,22 @@ export async function executeAgentWithLogging<T extends IAgent>(
   let agent: T | undefined;
   let executionContext: AgentExecutionContext | undefined;
   let contextLogger: AgentLogger | undefined;
+  let runDirectory: string | undefined;
   try {
+    if (executionId) {
+      await ensureRunDir(executionId);
+      runDirectory = getRunDir(executionId);
+    }
+
     const contextFactory = (init: AgentExecutionContextInit) => {
       if (executionContext?.streamId === init.streamId) {
+        executionContext.setRunDirectory(runDirectory);
         return executionContext;
       }
-      executionContext = new AgentExecutionContext(init);
+      executionContext = new AgentExecutionContext({
+        ...init,
+        runDir: runDirectory,
+      });
       return executionContext;
     };
 
@@ -354,9 +364,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
     contextLogger = executionContext.logger;
     const sessionMetadata = agent.getSessionMetadata();
 
-    if (executionId) {
-      await ensureRunDir(executionId);
-    }
+    executionContext?.setRunDirectory(runDirectory);
 
     // Get the full stream tab ID
     const config = agent.config;

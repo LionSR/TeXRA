@@ -27,6 +27,9 @@ export class DirectAgent extends BaseReflectionAgent {
       this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
+      {
+        baseDir: this.getRunOutputsDir(),
+      },
     );
   }
 

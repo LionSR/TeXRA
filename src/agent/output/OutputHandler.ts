@@ -65,6 +65,8 @@ export class OutputHandler implements IOutputHandler {
   public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
+  private readonly resolveOutputsDir: () => string | undefined;
+  private readonly resolveRunRoot: () => string | undefined;
 
   constructor(
     agentSetting: AgentSetting,
@@ -72,6 +74,10 @@ export class OutputHandler implements IOutputHandler {
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
+    options?: {
+      getRunOutputsDir?: () => string | undefined;
+      getRunRootDir?: () => string | undefined;
+    },
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -85,11 +91,15 @@ export class OutputHandler implements IOutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+    this.resolveOutputsDir = options?.getRunOutputsDir ?? (() => undefined);
+    this.resolveRunRoot =
+      options?.getRunRootDir ?? options?.getRunOutputsDir ?? (() => undefined);
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
       this.agentConfig,
       this.logger,
+      () => this.getOutputsDir(),
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
@@ -97,9 +107,42 @@ export class OutputHandler implements IOutputHandler {
       this.baseFiles,
       this.logger,
       this.channel,
+      () => this.getRunRoot(),
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
+  }
+
+  private getOutputsDir(): string | undefined {
+    return this.resolveOutputsDir();
+  }
+
+  private getRunRoot(): string | undefined {
+    return this.resolveRunRoot();
+  }
+
+  private isManagedPath(filePath: string): boolean {
+    const outputsDir = this.getOutputsDir();
+    if (!outputsDir) {
+      return false;
+    }
+    const normalizedDir = path.resolve(outputsDir);
+    const normalizedFile = path.resolve(filePath);
+    return normalizedFile.startsWith(normalizedDir);
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    if (path.isAbsolute(filePath) || this.isManagedPath(filePath)) {
+      return AbsoluteFS.exists(filePath);
+    }
+    return WorkspaceFS.exists(filePath);
+  }
+
+  private async readFile(filePath: string): Promise<string> {
+    if (path.isAbsolute(filePath) || this.isManagedPath(filePath)) {
+      return AbsoluteFS.read(filePath);
+    }
+    return WorkspaceFS.read(filePath);
   }
 
   private async withOutputStage<T>(
@@ -288,13 +331,21 @@ export class OutputHandler implements IOutputHandler {
           return;
         }
 
-        const checks = expected.map(async (file) => ({
-          file,
-          exists: path.isAbsolute(file)
-            ? await AbsoluteFS.exists(file)
-            : await WorkspaceFS.exists(file),
-        }));
-        const results = await Promise.all(checks);
+        const mapping = this.getRoundMapping(currRound);
+        const results = await Promise.all(
+          expected.map(async (file) => {
+            if (await this.fileExists(file)) {
+              return { file, exists: true } as const;
+            }
+
+            const mapped = mapping.baseToOutput.get(file);
+            if (mapped && (await this.fileExists(mapped))) {
+              return { file, exists: true } as const;
+            }
+
+            return { file, exists: false } as const;
+          }),
+        );
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
         if (missing.length > 0) {
@@ -306,11 +357,11 @@ export class OutputHandler implements IOutputHandler {
                 this.agentConfig.model,
                 'xml',
                 currRound,
+                undefined,
+                { baseDir: this.getOutputsDir() },
               );
 
-          const xmlExists = path.isAbsolute(xmlPath)
-            ? await AbsoluteFS.exists(xmlPath)
-            : await WorkspaceFS.exists(xmlPath);
+          const xmlExists = await this.fileExists(xmlPath);
 
           const missingOutputsData = {
             missing,
@@ -590,7 +641,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await WorkspaceFS.read(rawOutputPath);
+        const rawContent = await this.readFile(rawOutputPath);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 

@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -25,7 +25,39 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
+    private readonly resolveOutputsDir: () => string | undefined,
   ) {}
+
+  private getOutputsDir(): string | undefined {
+    return this.resolveOutputsDir();
+  }
+
+  private isManagedPath(filePath: string): boolean {
+    const outputsDir = this.getOutputsDir();
+    if (!outputsDir) {
+      return false;
+    }
+    const normalizedDir = path.resolve(outputsDir);
+    const normalizedFile = path.resolve(filePath);
+    return normalizedFile.startsWith(normalizedDir);
+  }
+
+  private async readFile(filePath: string): Promise<string> {
+    if (path.isAbsolute(filePath) || this.isManagedPath(filePath)) {
+      return AbsoluteFS.read(filePath);
+    }
+    return WorkspaceFS.read(filePath);
+  }
+
+  private async writeFile(filePath: string, content: string): Promise<void> {
+    if (path.isAbsolute(filePath) || this.isManagedPath(filePath)) {
+      await AbsoluteFS.ensureDir(path.dirname(filePath));
+      await AbsoluteFS.write(filePath, content);
+      return;
+    }
+    await WorkspaceFS.ensureDir(path.dirname(filePath));
+    await WorkspaceFS.write(filePath, content);
+  }
 
   async processXmlContent(content: string): Promise<string> {
     content = replacementEngine.applyNonRegex(content);
@@ -129,7 +161,7 @@ export class XmlOutputManager {
     const { dir, name } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await this.readFile(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -139,7 +171,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await WorkspaceFS.write(texFile, namedDocumentContent);
+      await this.writeFile(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -159,7 +191,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await WorkspaceFS.write(texFile, latexDocument);
+        await this.writeFile(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -175,7 +207,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await this.readFile(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -268,8 +300,10 @@ export class XmlOutputManager {
         model,
         extension,
         currRound,
+        undefined,
+        { baseDir: this.getOutputsDir() },
       );
-      await WorkspaceFS.write(texFile, doc.content.trim());
+      await this.writeFile(texFile, doc.content.trim());
       outputFiles.push({ source, path: texFile });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -287,7 +321,7 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await WorkspaceFS.read(outputFile);
+    const xmlContent = await this.readFile(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -318,7 +352,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.read(filePath);
+    let content = await this.readFile(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -335,6 +369,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.write(filePath, content);
+    await this.writeFile(filePath, content);
   }
 }

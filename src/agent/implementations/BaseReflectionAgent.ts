@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
@@ -51,7 +54,7 @@ import type { ToolDefinition } from '@model';
 import { getConfig } from '@utils/config';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 /**
  * Options for handling round output.
@@ -172,9 +175,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logId,
       this.baseFiles,
       this.logger,
+      {
+        getRunOutputsDir: () => this.getRunOutputsDir(),
+        getRunRootDir: () => this.context.runDirectory,
+      },
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
+  }
+
+  protected getRunOutputsDir(): string | undefined {
+    const runDir = this.context.runDirectory;
+    return runDir ? path.join(runDir, 'outputs') : undefined;
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -320,6 +332,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill,
     outputPath,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
+    await AbsoluteFS.ensureDir(path.dirname(outputPath));
+
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,

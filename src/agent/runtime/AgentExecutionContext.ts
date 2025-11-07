@@ -12,6 +12,7 @@ import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 export interface AgentExecutionContextInit {
   streamId: StreamTabId;
   executionId?: ExecutionId;
+  runDir?: string;
 }
 
 /**
@@ -20,10 +21,12 @@ export interface AgentExecutionContextInit {
 export class AgentExecutionContext {
   public readonly logger: AgentLogger;
   public readonly usageReporter: AgentUsageReporter;
+  private runDirectoryPath?: string;
 
   constructor(private readonly init: AgentExecutionContextInit) {
     this.logger = new AgentLogger(init.streamId, true);
     this.usageReporter = new AgentUsageReporter(this.logger, init.streamId);
+    this.runDirectoryPath = init.runDir;
   }
 
   get streamId(): StreamTabId {
@@ -32,6 +35,14 @@ export class AgentExecutionContext {
 
   get executionId(): ExecutionId | undefined {
     return this.init.executionId;
+  }
+
+  get runDirectory(): string | undefined {
+    return this.runDirectoryPath;
+  }
+
+  setRunDirectory(dir: string | undefined): void {
+    this.runDirectoryPath = dir;
   }
 
   stage(

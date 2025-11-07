@@ -1,4 +1,5 @@
 // Standard library imports
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 // Local imports - agent
@@ -9,6 +10,7 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -35,8 +37,67 @@ export class LatexDiffManager {
     private readonly logger: AgentLogger,
     private readonly channel: string,
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
+    private readonly resolveRunRoot?: () => string | undefined,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);
+    this.runMirrorCache = new Map();
+  }
+
+  private readonly runMirrorCache: Map<string, string>;
+
+  private getRunRoot(): string | undefined {
+    return this.resolveRunRoot ? this.resolveRunRoot() : undefined;
+  }
+
+  private isManagedPath(filePath: string): boolean {
+    const runRoot = this.getRunRoot();
+    if (!runRoot) {
+      return false;
+    }
+    const normalizedRoot = path.resolve(runRoot);
+    const normalizedFile = path.resolve(filePath);
+    return normalizedFile.startsWith(normalizedRoot);
+  }
+
+  private async ensureRunLocalPath(filePath: string): Promise<string> {
+    if (!filePath || this.isManagedPath(filePath)) {
+      return filePath;
+    }
+
+    const runRoot = this.getRunRoot();
+    if (!runRoot) {
+      return filePath;
+    }
+
+    const cached = this.runMirrorCache.get(filePath);
+    if (cached) {
+      return cached;
+    }
+
+    if (!(await AbsoluteFS.exists(filePath))) {
+      return filePath;
+    }
+
+    const workspaceRoot = WorkspaceFS.getPath();
+    const relative = workspaceRoot
+      ? path.relative(workspaceRoot, path.resolve(filePath))
+      : path.basename(filePath);
+    const mirrorDir = path.join(runRoot, 'workspace');
+    const targetPath = path.join(mirrorDir, relative);
+
+    await AbsoluteFS.ensureDir(path.dirname(targetPath));
+
+    try {
+      await fs.symlink(filePath, targetPath);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== 'EEXIST') {
+        await AbsoluteFS.copy(filePath, targetPath, { overwrite: true });
+      }
+    }
+
+    this.runMirrorCache.set(filePath, targetPath);
+    return targetPath;
   }
 
   private logLatexdiffResult(
@@ -121,24 +182,26 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
+          const basePath = await this.ensureRunLocalPath(baseFile);
+          const outputPath = await this.ensureRunLocalPath(outputFile);
           const result = await this.latexdiffService.runDiffForRound(
-            baseFile,
-            outputFile,
+            basePath,
+            outputPath,
             currRound,
           );
           this.logLatexdiffResult(result, 'round-diff');
           aggregated.push({
-            base: baseFile,
-            revised: outputFile,
+            base: basePath,
+            revised: outputPath,
             output: result.diffFileName
-              ? path.join(path.dirname(baseFile), result.diffFileName)
+              ? path.join(path.dirname(basePath), result.diffFileName)
               : '',
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
           });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
-              path.dirname(baseFile),
+              path.dirname(basePath),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -172,23 +235,25 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
+          const prevPath = await this.ensureRunLocalPath(prevOutputFile);
+          const currPath = await this.ensureRunLocalPath(currOutputFile);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevOutputFile,
-            currOutputFile,
+            prevPath,
+            currPath,
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
           aggregated.push({
-            base: prevOutputFile,
-            revised: currOutputFile,
+            base: prevPath,
+            revised: currPath,
             output: result.diffFileName
-              ? path.join(path.dirname(prevOutputFile), result.diffFileName)
+              ? path.join(path.dirname(prevPath), result.diffFileName)
               : '',
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
           });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
-              path.dirname(prevOutputFile),
+              path.dirname(prevPath),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
