@@ -71,7 +71,7 @@ describe('Progress event modules', () => {
       streamStatus: new Map(),
       setStreamStatus: () => {},
       sendInstructionUpdate: () => {},
-      updateLogContentForStream: () => {},
+      refreshStreamSurface: () => {},
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
