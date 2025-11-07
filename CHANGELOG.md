@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.34.3] - 2025-11-06
+## [0.34.3] - 2025-11-07
 
 ### Features
 
@@ -50,6 +50,8 @@ All notable changes to this project will be documented in this file.
   the approvals workflow.
 - Prevent YAML log loaders from failing when generated files expose quick
   actions.
+- Fall back to inline file upload when OpenAI Files API times out to prevent
+  request failures.
 
 ## [0.34.2] - 2025-10-31
 
