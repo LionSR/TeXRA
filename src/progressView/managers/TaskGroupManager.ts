@@ -1,6 +1,8 @@
 // Local imports - progress view persistence
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -26,8 +28,8 @@ export class TaskGroupManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.TASK_GROUPS, 'texra.logGroups');
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.TASK_GROUPS, storage);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
@@ -140,23 +142,7 @@ export class TaskGroupManager extends PersistentMapManager<
       return new Map();
     }
 
-    const entries = Object.entries(
-      data as Record<string, (TaskGroup & { id?: string }) | undefined>,
-    );
-    const groups = new Map<string, TaskGroup>();
-
-    for (const [key, value] of entries) {
-      if (!value) {
-        continue;
-      }
-
-      const group: TaskGroup = {
-        ...value,
-        id: value.id ?? key,
-      } as TaskGroup;
-      groups.set(key, group);
-    }
-
-    return groups;
+    const entries = Object.entries(data as Record<string, TaskGroup>);
+    return new Map(entries as [string, TaskGroup][]);
   }
 }

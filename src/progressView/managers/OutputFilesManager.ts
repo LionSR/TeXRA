@@ -1,6 +1,8 @@
 // Local imports - progress view
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
@@ -25,8 +27,8 @@ export class OutputFilesManager extends PersistentMapManager<
   private totalFilesProcessed = 0;
   private totalFilesRemoved = 0;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.OUTPUT_FILES);
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.OUTPUT_FILES, storage);
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
@@ -143,7 +145,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
-    const saved = await this.persistence.load<{
+    const saved = this.storage.get<{
       [key: string]: { [key: number]: string[] };
     }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
 
@@ -166,7 +168,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Save missing outputs to persistence */
   saveMissingOutputs(): void {
     const obj = Object.fromEntries(this._missingOutputs.entries());
-    this.persistence.save(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+    void this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
   }
 
   private ensureStreamFiles(stream: StreamTabId): {
