@@ -123,7 +123,26 @@
 }
 
 .run-summary {
-  opacity: var(--opacity-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  flex-wrap: wrap;
+  margin-left: var(--spacing-small);
+}
+
+.run-summary[aria-hidden='true'] {
+  display: none;
+}
+
+.usage-summary__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  font-size: var(--font-size-sm);
+}
+
+.usage-summary__icon {
+  font-size: var(--font-size-sm);
 }
 
 /* Status indicator styling */
@@ -202,26 +221,10 @@
   flex-shrink: 0;
 }
 
-/* Files usage header */
-.files-usage-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
-  padding: var(--spacing-small) var(--spacing-small);
-  margin-bottom: var(--spacing-medium);
-  background-color: var(--vscode-sideBarSectionHeader-background);
-  border-radius: var(--border-radius-small);
-  font-size: var(--font-size-sm);
-}
-
-.files-usage-label {
-  font-weight: 600;
-  color: var(--vscode-foreground);
-}
-
-.files-usage-stats {
+.files-empty {
+  padding: var(--spacing-small);
   color: var(--vscode-descriptionForeground);
-  opacity: var(--opacity-subtle);
+  font-size: var(--font-size-sm);
 }
 
 .file-item {

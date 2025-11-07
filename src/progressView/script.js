@@ -20,6 +20,7 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('DOMContentLoaded', () => {
   validateTemplates([
     'fileItemTemplate',
+    'usageSummaryBadgeTemplate',
     'usageTemplate',
     'bulletTemplate',
     'streamTabTemplate',

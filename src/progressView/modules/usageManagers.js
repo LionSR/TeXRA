@@ -27,8 +27,64 @@ export class UsageSummary {
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
-    // Clear the summary - we're showing total usage in the files section now
-    this._summaryElem.textContent = '';
+    const inputTokens = Number(totals?.inputTokens ?? 0) || 0;
+    const outputTokens = Number(totals?.outputTokens ?? 0) || 0;
+    const cost = Number(totals?.cost ?? 0) || 0;
+
+    if (!inputTokens && !outputTokens && !cost) {
+      this._summaryElem.replaceChildren();
+      this._summaryElem.setAttribute('aria-hidden', 'true');
+      return;
+    }
+
+    const badgeTemplate = document.getElementById('usageSummaryBadgeTemplate');
+    const createBadge = (iconName, value, ariaLabel) => {
+      /** @type {HTMLElement | null} */
+      let badge = null;
+      if (badgeTemplate instanceof HTMLTemplateElement) {
+        const clone = badgeTemplate.content.cloneNode(true);
+        badge = clone.querySelector('vscode-badge');
+        if (badge) {
+          const icon = badge.querySelector('.usage-summary__icon');
+          const text = badge.querySelector('.usage-summary__value');
+          if (icon) {
+            icon.classList.add(`codicon-${iconName}`);
+          }
+          if (text) {
+            text.textContent = value;
+          }
+        }
+      }
+
+      if (!badge) {
+        badge = document.createElement('vscode-badge');
+        badge.classList.add('usage-summary__badge');
+        badge.setAttribute('appearance', 'secondary');
+        const icon = document.createElement('i');
+        icon.className = `usage-summary__icon codicon codicon-${iconName}`;
+        icon.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.className = 'usage-summary__value';
+        text.textContent = value;
+        badge.append(icon, text);
+      }
+
+      badge.setAttribute('aria-label', ariaLabel);
+      return badge;
+    };
+
+    const inputText = formatTokens(inputTokens);
+    const outputText = formatTokens(outputTokens);
+    const costText = `$${cost.toFixed(3)}`;
+
+    const badges = [
+      createBadge('arrow-up', inputText, `Input tokens: ${inputText}`),
+      createBadge('arrow-down', outputText, `Output tokens: ${outputText}`),
+      createBadge('symbol-number', costText, `Cost: ${costText}`),
+    ].filter(Boolean);
+
+    this._summaryElem.replaceChildren(...badges);
+    this._summaryElem.setAttribute('aria-hidden', 'false');
   }
 
   /**

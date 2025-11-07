@@ -94,7 +94,13 @@
                 class="status-indicator stopped"
                 data-status="Ready"
               ></span>
-              <span id="runSummary" class="run-summary"></span>
+              <span
+                id="runSummary"
+                class="run-summary"
+                role="status"
+                aria-live="polite"
+                aria-hidden="true"
+              ></span>
             </div>
             <vscode-toolbar-container
               id="toolbarContainer"
@@ -219,6 +225,12 @@
                 ></vscode-toolbar-button>
               </vscode-toolbar-container>
             </div>
+          </template>
+          <template id="usageSummaryBadgeTemplate">
+            <vscode-badge class="usage-summary__badge" appearance="secondary">
+              <i class="usage-summary__icon codicon" aria-hidden="true"></i>
+              <span class="usage-summary__value"></span>
+            </vscode-badge>
           </template>
           <template id="usageTemplate">
             <span class="group-usage">
