@@ -367,7 +367,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
       baseParams.tool_choice = 'auto';
     }
 
-    if (this.config.fullName.includes('deepseek-chat')) {
+    if (
+      this.config.fullName === 'deepseek-chat' &&
+      !this.config.capabilities.supportsReasoning
+    ) {
       this.logger.debug(
         'Setting max_tokens to 8192 for DeepSeek-chat models from the official api',
       );
