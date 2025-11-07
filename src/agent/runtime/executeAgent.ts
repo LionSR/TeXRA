@@ -34,6 +34,7 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
+import { StreamStatusService } from './StreamStatusService';
 
 // Local imports - errors
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
@@ -379,8 +380,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus =
-      provider?.eventHandler.getStreamStatus(activeStreamId);
+    const currentStatus = StreamStatusService.get(activeStreamId);
     if (!isResume && currentStatus === 'running') {
       const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
@@ -411,10 +411,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 stream: activeStreamId,
                 session: metadata,
               });
-              bus.emit('updateStreamStatus', {
-                stream: activeStreamId,
-                status: 'running',
-              });
+              StreamStatusService.set(activeStreamId, 'running');
 
               if (!isResume) {
                 const viewVisible = provider?.isViewVisible() ?? false;
@@ -493,18 +490,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
           await agent.run();
           logger.debug(`Task completed successfully`);
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'stopped',
-          });
+          StreamStatusService.set(activeStreamId, 'stopped');
         } catch (err) {
           logger.error(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
           );
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'error',
-          });
+          StreamStatusService.set(activeStreamId, 'error');
           throw err;
         }
       },

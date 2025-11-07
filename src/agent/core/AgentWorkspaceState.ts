@@ -1,3 +1,8 @@
+// Third-party imports
+import { z } from 'zod';
+
+// Workspace assembly state keeps track of the model's textual output so the
+// agent can resume mid-conversation without rebuilding strings from scratch.
 export class ResponseAssemblyState {
   public lastResponse = '';
   public accumulatedOutput = '';
@@ -45,22 +50,22 @@ export class DocumentStatsState {
   }
 }
 
-export interface AgentWorkspaceSnapshot {
-  assembly: {
-    lastResponse: string;
-    accumulatedOutput: string;
-  };
-  media: {
-    files: string[];
-  };
-  reasoning: {
-    thinkingBlocks: any[];
-    thinkingAdded: boolean;
-  };
-  document: {
-    texcountStats: string | null;
-  };
-}
+export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
+  assembly: z.strictObject({
+    lastResponse: z.string(),
+    accumulatedOutput: z.string(),
+  }),
+  media: z.strictObject({ files: z.array(z.string()) }),
+  reasoning: z.strictObject({
+    thinkingBlocks: z.array(z.unknown()),
+    thinkingAdded: z.boolean(),
+  }),
+  document: z.strictObject({ texcountStats: z.string().nullable() }),
+});
+
+export type AgentWorkspaceSnapshot = z.infer<
+  typeof AgentWorkspaceStateSnapshotSchema
+>;
 
 export class AgentWorkspaceState {
   public readonly assembly = new ResponseAssemblyState();
