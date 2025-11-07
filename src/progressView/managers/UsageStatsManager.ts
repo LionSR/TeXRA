@@ -1,7 +1,8 @@
 // Local imports - progress view
-// Local imports
-import { PersistentMapManager } from '../persistence/PersistentMapManager';
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '../persistence/PersistentMapManager';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types
@@ -19,35 +20,42 @@ export class UsageStatsManager extends PersistentMapManager<
 > {
   private readonly logger: AgentLogger;
 
-  constructor(persistence: StatePersistenceManager) {
-    super(persistence, WorkspaceStateKey.USAGE_STATS);
+  constructor(storage?: StateStorage) {
+    super(WorkspaceStateKey.USAGE_STATS, storage);
     this.logger = new AgentLogger('UsageStatsManager');
   }
 
   /**
    * Update usage statistics for a stream
    */
-  updateStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    this.add(stream, { ...usage });
+  async updateStreamUsage(
+    stream: StreamTabId,
+    usage: TokenUsageStats,
+  ): Promise<void> {
+    await this.add(stream, this.sanitizeUsage(usage));
   }
 
   /**
    * Add usage to existing stream statistics
    */
-  addToStreamUsage(stream: StreamTabId, usage: TokenUsageStats): void {
-    const existing = this.get(stream) || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
+  async addToStreamUsage(
+    stream: StreamTabId,
+    usage: TokenUsageStats,
+  ): Promise<void> {
+    const existing = this.get(stream);
+    if (existing) {
+      const current = this.sanitizeUsage(existing);
+      const incoming = this.sanitizeUsage(usage);
+      const updated: TokenUsageStats = {
+        inputTokens: current.inputTokens + incoming.inputTokens,
+        outputTokens: current.outputTokens + incoming.outputTokens,
+        cost: current.cost + incoming.cost,
+      };
+      await this.add(stream, updated);
+      return;
+    }
 
-    const updated: TokenUsageStats = {
-      inputTokens: existing.inputTokens + (usage.inputTokens || 0),
-      outputTokens: existing.outputTokens + (usage.outputTokens || 0),
-      cost: existing.cost + (usage.cost || 0),
-    };
-
-    this.add(stream, updated);
+    await this.add(stream, this.sanitizeUsage(usage));
   }
 
   /**
@@ -60,15 +68,15 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Delete usage statistics for a stream
    */
-  deleteStream(stream: StreamTabId): void {
-    this.delete(stream);
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await this.delete(stream);
   }
 
   /**
    * Clear all usage statistics
    */
-  clear(): void {
-    super.clear();
+  async clear(): Promise<void> {
+    await super.clear();
   }
 
   /**
@@ -82,19 +90,17 @@ export class UsageStatsManager extends PersistentMapManager<
    * Calculate total usage across all streams
    */
   getTotalUsage(): TokenUsageStats {
-    const total: TokenUsageStats = {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cost = 0;
 
     for (const usage of this.items.values()) {
-      total.inputTokens += usage.inputTokens || 0;
-      total.outputTokens += usage.outputTokens || 0;
-      total.cost += usage.cost || 0;
+      inputTokens += usage.inputTokens;
+      outputTokens += usage.outputTokens;
+      cost += usage.cost;
     }
 
-    return total;
+    return { inputTokens, outputTokens, cost };
   }
 
   /**
@@ -128,15 +134,31 @@ export class UsageStatsManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<TokenUsageStats> {
-    const usage = (data as TokenUsageStats) || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
+    if (!data || typeof data !== 'object') {
+      return this.zeroUsage();
+    }
+
+    const candidate = data as Partial<TokenUsageStats>;
+    return this.sanitizeUsage({
+      inputTokens: candidate.inputTokens ?? NaN,
+      outputTokens: candidate.outputTokens ?? NaN,
+      cost: candidate.cost ?? NaN,
+    });
+  }
+
+  private sanitizeUsage(usage: TokenUsageStats): TokenUsageStats {
     return {
-      inputTokens: usage.inputTokens || 0,
-      outputTokens: usage.outputTokens || 0,
-      cost: usage.cost || 0,
+      inputTokens: this.toSafeNumber(usage.inputTokens),
+      outputTokens: this.toSafeNumber(usage.outputTokens),
+      cost: this.toSafeNumber(usage.cost),
     };
+  }
+
+  private toSafeNumber(value: number): number {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  private zeroUsage(): TokenUsageStats {
+    return { inputTokens: 0, outputTokens: 0, cost: 0 };
   }
 }

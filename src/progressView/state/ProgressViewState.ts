@@ -7,10 +7,9 @@ import {
   WorkflowTaskStateManager,
   ToolUseTaskStateManager,
 } from '../managers';
-// Local imports
-import { StatePersistenceManager } from '../persistence/StatePersistenceManager';
+import type { StateStorage } from '../persistence/PersistentMapManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { WorkspaceStateKey } from '@common/state/stateManager';
+import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
@@ -52,20 +51,25 @@ export class ProgressViewState {
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
   private readonly toolUseTaskStates: ToolUseTaskStateManager;
-  private readonly persistence: StatePersistenceManager;
+  private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
-  constructor(persistence: StatePersistenceManager) {
-    this.persistence = persistence;
+  constructor(storage?: StateStorage) {
+    const resolvedStorage = storage ?? workspaceSM;
+    if (!resolvedStorage) {
+      throw new Error('workspace state manager is not initialized');
+    }
+
+    this.storage = resolvedStorage;
     this.logger = new AgentLogger('ProgressViewState');
     this.workflowTaskStates = new WorkflowTaskStateManager();
     this.toolUseTaskStates = new ToolUseTaskStateManager();
 
     // Initialize focused managers
-    this._streamTabs = new StreamTabsManager(persistence);
-    this._taskGroups = new TaskGroupManager(persistence);
-    this._outputFiles = new OutputFilesManager(persistence);
-    this._usageStats = new UsageStatsManager(persistence);
+    this._streamTabs = new StreamTabsManager(resolvedStorage);
+    this._taskGroups = new TaskGroupManager(resolvedStorage);
+    this._outputFiles = new OutputFilesManager(resolvedStorage);
+    this._usageStats = new UsageStatsManager(resolvedStorage);
   }
 
   // Manager accessors - provide direct access to focused managers
@@ -241,11 +245,13 @@ export class ProgressViewState {
   }
 
   // Stream cleanup operations
-  clearStream(stream: StreamTabId): void {
-    this._streamTabs.delete(stream);
-    this._taskGroups.deleteStream(stream);
-    this._outputFiles.deleteStream(stream);
-    this._usageStats.deleteStream(stream);
+  async clearStream(stream: StreamTabId): Promise<void> {
+    await Promise.all([
+      this._streamTabs.delete(stream),
+      this._taskGroups.deleteStream(stream),
+      this._outputFiles.deleteStream(stream),
+      this._usageStats.deleteStream(stream),
+    ]);
     this.workflowTaskStates.delete(stream);
     this.toolUseTaskStates.delete(stream);
     this._executionIds.delete(stream);
@@ -264,13 +270,15 @@ export class ProgressViewState {
   }
 
   // Stream content erasure (clear content but keep the stream tab and re-run capability)
-  eraseStreamContent(stream: StreamTabId): void {
+  async eraseStreamContent(stream: StreamTabId): Promise<void> {
     // Clear visual content but keep the stream tab
-    this._streamTabs.clearContent(stream);
+    await this._streamTabs.clearContent(stream);
 
     // Clear display-related data (matching original eraseStream behavior)
-    this._taskGroups.deleteStream(stream);
-    this._outputFiles.deleteStream(stream);
+    await Promise.all([
+      this._taskGroups.deleteStream(stream),
+      this._outputFiles.deleteStream(stream),
+    ]);
     this.clearSessionKindHint(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
@@ -278,11 +286,13 @@ export class ProgressViewState {
     // NOTE: Missing outputs are also preserved (not cleared in original)
   }
 
-  clearAll(): void {
-    this._streamTabs.clear();
-    this._taskGroups.clear();
-    this._outputFiles.clear();
-    this._usageStats.clear();
+  async clearAll(): Promise<void> {
+    await Promise.all([
+      this._streamTabs.clear(),
+      this._taskGroups.clear(),
+      this._outputFiles.clear(),
+      this._usageStats.clear(),
+    ]);
     this.workflowTaskStates.clear();
     this.toolUseTaskStates.clear();
     this._executionIds.clear();
@@ -320,7 +330,7 @@ export class ProgressViewState {
    * Load active stream from persistence
    */
   private async loadActiveStream(): Promise<void> {
-    const savedActiveStream = await this.persistence.load<string>(
+    const savedActiveStream = this.storage.get<string>(
       WorkspaceStateKey.ACTIVE_STREAM_TAB,
       '',
     );
@@ -336,7 +346,7 @@ export class ProgressViewState {
    * Load task states from persistence
    */
   private async loadTaskStates(): Promise<void> {
-    const savedTaskStates = await this.persistence.load<{
+    const savedTaskStates = this.storage.get<{
       workflow?: Record<string, TaskState>;
       toolUse?: Record<string, TaskState>;
     }>(WorkspaceStateKey.TASK_STATES, {});
@@ -371,9 +381,10 @@ export class ProgressViewState {
    * Load execution IDs from persistence
    */
   private async loadExecutionIds(): Promise<void> {
-    const savedIds = await this.persistence.loadWithMigration<{
-      [key: string]: string;
-    }>(WorkspaceStateKey.EXECUTION_IDS, WorkspaceStateKey.TASK_IDS, {});
+    const savedIds = this.storage.get<Record<string, ExecutionId>>(
+      WorkspaceStateKey.EXECUTION_IDS,
+      {},
+    );
 
     if (savedIds && Object.keys(savedIds).length > 0) {
       this._executionIds = new Map(Object.entries(savedIds));
@@ -389,7 +400,7 @@ export class ProgressViewState {
    * Save active stream to persistence
    */
   private saveActiveStream(): void {
-    this.persistence.save(
+    void this.storage.update(
       WorkspaceStateKey.ACTIVE_STREAM_TAB,
       this._activeStream,
     );
@@ -401,7 +412,7 @@ export class ProgressViewState {
   private saveTaskStates(): void {
     const workflowStates = this.workflowTaskStates.toObject();
     const toolUseStates = this.toolUseTaskStates.toObject();
-    this.persistence.save(WorkspaceStateKey.TASK_STATES, {
+    void this.storage.update(WorkspaceStateKey.TASK_STATES, {
       workflow: workflowStates,
       toolUse: toolUseStates,
     });
@@ -420,7 +431,7 @@ export class ProgressViewState {
    */
   private saveExecutionIds(): void {
     const executionIdsObj = Object.fromEntries(this._executionIds.entries());
-    this.persistence.save(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
+    void this.storage.update(WorkspaceStateKey.EXECUTION_IDS, executionIdsObj);
   }
 
   private async loadStreamSortOrder(): Promise<void> {
@@ -428,21 +439,21 @@ export class ProgressViewState {
       'texra.progressBoard.streamSortOrder',
       'time',
     );
-    this._streamSortOrder = await this.persistence.load(
+    this._streamSortOrder = this.storage.get(
       WorkspaceStateKey.STREAM_SORT_ORDER,
       configDefault,
     );
   }
 
   private saveStreamSortOrder(): void {
-    this.persistence.save(
+    void this.storage.update(
       WorkspaceStateKey.STREAM_SORT_ORDER,
       this._streamSortOrder,
     );
   }
 
   private async loadAgentTypeFilter(): Promise<void> {
-    const savedFilter = await this.persistence.load<string>(
+    const savedFilter = this.storage.get<string>(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       'all',
     );
@@ -452,7 +463,7 @@ export class ProgressViewState {
   }
 
   private saveAgentTypeFilter(): void {
-    this.persistence.save(
+    void this.storage.update(
       WorkspaceStateKey.STREAM_AGENT_FILTER,
       this._agentTypeFilter,
     );

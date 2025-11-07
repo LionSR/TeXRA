@@ -49,18 +49,18 @@ export function createStreamStatusEvents(
     'StreamStatusEvents',
   );
 
-  const handleSetActiveStream = (
+  const handleSetActiveStream = async (
     payload: ProgressEventPayloads['setActiveStream'],
     state: ProgressViewState,
     updater: WebviewUpdater,
-  ): void => {
+  ): Promise<void> => {
     const { stream, session } = payload;
 
     if (!stream) {
       return;
     }
 
-    state.streamTabs.ensureStream(stream);
+    await state.streamTabs.ensureStream(stream);
 
     if (session) {
       state.setSessionKindHint(stream, session.agentCategory);
