@@ -1,3 +1,6 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - progress view
 import {
   PersistentMapManager,
@@ -19,10 +22,9 @@ import type { OutputFileInfo } from '@agent/output/types';
  */
 export class OutputFilesManager extends PersistentMapManager<
   StreamTabId,
-  { [key: number]: OutputFileInfo[] }
+  Map<number, OutputFileInfo[]>
 > {
-  private _missingOutputs: Map<StreamTabId, { [key: number]: string[] }> =
-    new Map();
+  private _missingOutputs: Map<StreamTabId, Map<number, string[]>> = new Map();
   private readonly logger: AgentLogger;
   private totalFilesProcessed = 0;
   private totalFilesRemoved = 0;
@@ -37,10 +39,14 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    const existing = this.ensureStreamFiles(stream);
+    let existing = this.items.get(stream);
+    if (!existing) {
+      existing = new Map();
+      this.items.set(stream, existing);
+    }
 
     for (const [round, files] of Object.entries(filesByRound)) {
-      existing[Number(round)] = files;
+      existing.set(Number(round), files);
     }
 
     await this.save();
@@ -51,32 +57,30 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
-    const streamMissing = this.ensureMissingOutputs(stream);
+    let streamMissing = this._missingOutputs.get(stream);
+    if (!streamMissing) {
+      streamMissing = new Map();
+      this._missingOutputs.set(stream, streamMissing);
+    }
 
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = parseInt(round, 10);
-      streamMissing[roundNum] = files;
+      streamMissing.set(roundNum, files);
     }
 
     await this.saveMissingOutputs();
   }
 
   /** Get output files for a stream */
-  getFiles(stream: StreamTabId): { [key: number]: OutputFileInfo[] } {
+  getFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
     const files = this.items.get(stream);
-    if (files) {
-      return files;
-    }
-    return {};
+    return files ? new Map(files) : new Map();
   }
 
   /** Get missing outputs for a stream */
-  getMissingOutputs(stream: StreamTabId): { [key: number]: string[] } {
+  getMissingOutputs(stream: StreamTabId): Map<number, string[]> {
     const missing = this._missingOutputs.get(stream);
-    if (missing) {
-      return missing;
-    }
-    return {};
+    return missing ? new Map(missing) : new Map();
   }
 
   /** Clear output files for a stream */
@@ -107,26 +111,22 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Get all output files */
-  getAllFiles(): Map<StreamTabId, { [key: number]: OutputFileInfo[] }> {
+  getAllFiles(): Map<StreamTabId, Map<number, OutputFileInfo[]>> {
     return this.getAll();
   }
 
   /** Get all missing outputs */
-  getAllMissingOutputs(): Map<StreamTabId, { [key: number]: string[] }> {
+  getAllMissingOutputs(): Map<StreamTabId, Map<number, string[]>> {
     return new Map(this._missingOutputs);
   }
 
   /** Set all output files (used during loading) */
-  setAllFiles(
-    files: Map<StreamTabId, { [key: number]: OutputFileInfo[] }>,
-  ): void {
+  setAllFiles(files: Map<StreamTabId, Map<number, OutputFileInfo[]>>): void {
     this.setAll(files);
   }
 
   /** Set all missing outputs (used during loading) */
-  setAllMissingOutputs(
-    missing: Map<StreamTabId, { [key: number]: string[] }>,
-  ): void {
+  setAllMissingOutputs(missing: Map<StreamTabId, Map<number, string[]>>): void {
     this._missingOutputs = new Map(missing);
   }
 
@@ -150,60 +150,81 @@ export class OutputFilesManager extends PersistentMapManager<
     }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
 
     if (saved && Object.keys(saved).length > 0) {
-      const processed = new Map<StreamTabId, { [key: number]: string[] }>();
+      this._missingOutputs = this.deserializeMissingOutputs(saved);
+      return;
+    }
 
-      for (const [stream, rounds] of Object.entries(saved)) {
-        const roundMap = Object.fromEntries(
-          Object.entries(rounds).map(([r, files]) => [parseInt(r, 10), files]),
-        );
-        processed.set(stream, roundMap);
-      }
-
-      this._missingOutputs = processed;
-    } else {
+    const migrated = await this.migrateLegacyMissingOutputs();
+    if (!migrated) {
       this._missingOutputs.clear();
     }
   }
 
   /** Save missing outputs to persistence */
   async saveMissingOutputs(): Promise<void> {
-    const obj = Object.fromEntries(this._missingOutputs.entries());
+    const obj = Object.fromEntries(
+      Array.from(this._missingOutputs.entries(), ([stream, rounds]) => [
+        stream,
+        Object.fromEntries(rounds.entries()),
+      ]),
+    );
     await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
   }
 
-  private ensureStreamFiles(stream: StreamTabId): {
-    [key: number]: OutputFileInfo[];
-  } {
-    let files = this.items.get(stream);
-    if (!files) {
-      files = {};
-      this.items.set(stream, files);
+  private deserializeMissingOutputs(saved: {
+    [key: string]: { [key: number]: string[] };
+  }): Map<StreamTabId, Map<number, string[]>> {
+    const processed = new Map<StreamTabId, Map<number, string[]>>();
+
+    for (const [stream, rounds] of Object.entries(saved)) {
+      const roundEntries = Object.entries(rounds).map(
+        ([round, files]) => [parseInt(round, 10), files] as [number, string[]],
+      );
+      processed.set(stream, new Map(roundEntries));
     }
-    return files;
+
+    return processed;
   }
 
-  private ensureMissingOutputs(stream: StreamTabId): {
-    [key: number]: string[];
-  } {
-    let missing = this._missingOutputs.get(stream);
-    if (!missing) {
-      missing = {};
-      this._missingOutputs.set(stream, missing);
+  private async migrateLegacyMissingOutputs(): Promise<boolean> {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspacePath) {
+      return false;
     }
-    return missing;
+
+    const legacyKey = `${WorkspaceStateKey.MISSING_OUTPUTS}.${workspacePath}`;
+    const legacy = this.storage.get<{
+      [key: string]: { [key: number]: string[] };
+    }>(legacyKey, {});
+
+    if (!legacy || Object.keys(legacy).length === 0) {
+      return false;
+    }
+
+    this._missingOutputs = this.deserializeMissingOutputs(legacy);
+    await this.saveMissingOutputs();
+    await this.storage.update(legacyKey, undefined as never);
+    return true;
+  }
+
+  protected override serialize(
+    value: Map<number, OutputFileInfo[]>,
+    _key: StreamTabId,
+  ): unknown {
+    return Object.fromEntries(value.entries());
   }
 
   /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
     streamId: StreamTabId,
-  ): Promise<{ [key: number]: OutputFileInfo[] }> {
+  ): Promise<Map<number, OutputFileInfo[]>> {
     if (!data || typeof data !== 'object') {
-      return {};
+      return new Map();
     }
 
     const rounds = data as Record<string, unknown>;
-    const roundMap: { [key: number]: OutputFileInfo[] } = {};
+    const roundMap = new Map<number, OutputFileInfo[]>();
 
     for (const [roundKey, value] of Object.entries(rounds)) {
       const round = Number.parseInt(roundKey, 10);
@@ -221,10 +242,10 @@ export class OutputFilesManager extends PersistentMapManager<
           this.totalFilesRemoved += removed;
         }
         if (filtered.length > 0) {
-          roundMap[round] = filtered;
+          roundMap.set(round, filtered);
         }
       } catch {
-        roundMap[round] = infos;
+        roundMap.set(round, infos);
       }
     }
 

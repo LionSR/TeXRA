@@ -614,7 +614,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           totalRounds,
           currentRound: 0,
           continueRounds: true,
-          messages: [],
+          conversation: [],
           runState: new AgentRunState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),

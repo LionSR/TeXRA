@@ -2,10 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent core
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { AgentType } from '@agent/core/AgentDataclass';
-import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
   executeAgentWithLogging,
@@ -23,16 +22,17 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - persistence helpers
 import { getToolUsePersistenceEnabled } from '@utils/config';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { STATUS } from '@progressView/modules/constants.js';
-import { isToolUseTaskState } from '@logger/TaskState';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
-import {
-  ToolUseResumeQueue,
-  type ToolUseSessionSnapshot,
-} from './ToolUseResumeQueue';
+import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
+import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';
 import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
-import { type SaveToolUseSnapshotPayload } from './ToolUseSnapshotTypes';
+import {
+  type SaveToolUseSnapshotPayload,
+  type ToolUseSessionSnapshot,
+} from './ToolUseSnapshotTypes';
+import type { FollowUpQueue } from './FollowUpQueue';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STATUS } from '@progressView/modules/constants.js';
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);
@@ -40,30 +40,10 @@ const logger = new AgentLogger(CHANNEL);
 interface PersistSnapshotArgs {
   executionId: ExecutionId | undefined;
   streamId: StreamTabId;
-  agentName: string;
-  model: string;
-  session: AgentSessionDescriptor;
+  agentConfig: AgentConfig;
   messages: ProviderMessage[];
-  toolState: AgentWorkspaceState | null;
-  hasQueuedFollowUps: () => boolean;
-}
-
-function rememberSnapshot(snapshot: ToolUseSessionSnapshot): void {
-  ToolUseResumeQueue.cacheSnapshot(snapshot);
-}
-
-function rememberSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
-  ToolUseResumeQueue.registerPendingSnapshots(snapshots);
-}
-
-function forgetSnapshot(
-  executionId: ExecutionId,
-): ToolUseSessionSnapshot | undefined {
-  return ToolUseResumeQueue.clearPendingSnapshotByExecution(executionId);
-}
-
-function forgetSnapshotForStream(streamId: StreamTabId): void {
-  ToolUseResumeQueue.consumeSnapshotForStream(streamId);
+  store: AgentSharedStore | null;
+  queue: FollowUpQueue;
 }
 
 async function buildToolUseAgent(
@@ -74,25 +54,12 @@ async function buildToolUseAgent(
   agentType: AgentType;
   context: AgentExecutionContext;
 }> {
-  const provider = ProgressViewProvider.getInstance();
-  if (!provider) {
-    throw new Error('Progress view provider is not initialized.');
-  }
+  const config: AgentConfig = snapshot.agentConfig;
 
-  const taskState = provider.state.getTaskState(snapshot.streamId);
-  if (!taskState) {
-    throw new Error('No saved task state found for stream.');
-  }
-
-  if (!isToolUseTaskState(taskState)) {
-    throw new Error('Saved task state is not a tool-use session.');
-  }
-
-  const fullConfig = AgentConfigSchema.parse(taskState.agentConfig);
   const { agent, agentType, context } =
     await prepareAgentInstance<BaseToolUseAgent>({
-      agentName: fullConfig.agent,
-      configPayload: fullConfig,
+      agentName: config.agent,
+      configPayload: config,
       executionId: snapshot.executionId as ExecutionId,
       contextFactory,
     });
@@ -109,39 +76,6 @@ export interface ResumeAgentResult {
   lostFollowUps?: number;
 }
 
-async function persistSnapshot(
-  payload: SaveToolUseSnapshotPayload,
-  hasQueuedFollowUps: () => boolean,
-): Promise<ToolUseSessionSnapshot | null> {
-  await ToolUseSnapshotStore.save(payload);
-
-  if (hasQueuedFollowUps()) {
-    await ToolUseSnapshotStore.delete(payload.executionId);
-    logger.debug(
-      `Aborted persistence for execution ${payload.executionId} because a follow-up arrived.`,
-    );
-    return null;
-  }
-
-  const stored = await ToolUseSnapshotStore.load(payload.executionId);
-  if (!stored) {
-    logger.debug(
-      `Snapshot for execution ${payload.executionId} was not readable after save.`,
-    );
-    return null;
-  }
-
-  if (hasQueuedFollowUps()) {
-    await ToolUseSnapshotStore.delete(payload.executionId);
-    logger.debug(
-      `Aborted caching for execution ${payload.executionId} because a follow-up arrived post-persistence.`,
-    );
-    return null;
-  }
-
-  return stored;
-}
-
 export const ToolUseSessionPersistence = {
   isEnabled(): boolean {
     return getToolUsePersistenceEnabled();
@@ -152,62 +86,54 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    rememberSnapshots(snapshots);
+    ToolUseSnapshotCache.registerSnapshots(snapshots);
   },
 
   clearAllPersistedSnapshots(): void {
-    ToolUseResumeQueue.clearAllPendingSnapshots();
+    ToolUseSnapshotCache.clearAll();
   },
 
   async maybePersistIdleSnapshot({
     executionId,
     streamId,
-    agentName,
-    model,
-    session,
+    agentConfig,
     messages,
-    toolState,
-    hasQueuedFollowUps,
+    store,
+    queue,
   }: PersistSnapshotArgs): Promise<boolean> {
-    if (!this.isEnabled() || !executionId || !toolState) {
+    if (!this.isEnabled() || !executionId || !store) {
       return false;
     }
 
-    if (hasQueuedFollowUps()) {
+    if (!queue.isEmpty()) {
       return false;
     }
 
     const payload: SaveToolUseSnapshotPayload = {
       executionId,
       streamId,
-      agentName,
-      model,
-      session: {
-        agentType: session.agentType ?? AgentType.ToolUse,
-        agentCategory: session.agentCategory,
-      },
+      agentConfig,
       messages,
-      toolState,
+      store,
     };
 
-    const stored = await persistSnapshot(payload, hasQueuedFollowUps);
+    const outcome = await queue.runIfIdle(() =>
+      ToolUseSnapshotStore.save(payload),
+    );
+    const stored = outcome.result;
     if (!stored) {
       return false;
     }
 
-    // Cache before the final follow-up check so resume dispatch can find the
-    // snapshot immediately after persistence succeeds.
-    rememberSnapshot(stored);
-
-    if (hasQueuedFollowUps()) {
-      forgetSnapshot(executionId);
-      await ToolUseSnapshotStore.delete(executionId);
+    if (outcome.aborted) {
+      await ToolUseSnapshotStore.delete(payload.executionId);
       logger.debug(
-        `Dropped cached snapshot for execution ${executionId} because a follow-up arrived immediately after persistence.`,
+        `Dropped snapshot for execution ${payload.executionId} because a follow-up arrived during persistence.`,
       );
       return false;
     }
 
+    ToolUseSnapshotCache.cacheSnapshot(stored);
     return true;
   },
 
@@ -218,7 +144,7 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    forgetSnapshot(executionId);
+    ToolUseSnapshotCache.clearByExecution(executionId);
 
     await ToolUseSnapshotStore.delete(executionId);
   },
@@ -231,15 +157,8 @@ export const ToolUseSessionPersistence = {
       return { success: false };
     }
 
-    const provider = ProgressViewProvider.getInstance();
-    if (!provider) {
-      return { success: false };
-    }
-
     const streamId = snapshot.streamId as StreamTabId;
-    const existingStatus = provider.eventHandler.getStreamStatus(
-      snapshot.streamId,
-    );
+    const existingStatus = StreamStatusService.get(streamId);
 
     if (
       existingStatus === STATUS.RUNNING ||
@@ -248,13 +167,13 @@ export const ToolUseSessionPersistence = {
       return { success: false };
     }
 
-    ToolUseResumeQueue.setResumingSession(streamId);
-    provider.eventHandler.setStreamStatus(snapshot.streamId, STATUS.RESUMING);
+    ToolUseFollowUpQueue.markResuming(streamId);
+    StreamStatusService.set(streamId, STATUS.RESUMING);
 
     let queuedFollowUps: string[] = [];
     try {
       await executeAgentWithLogging(
-        snapshot.agentName,
+        snapshot.agentConfig.agent,
         async (contextFactory) => {
           const { agent, agentType, context } = await buildToolUseAgent(
             snapshot,
@@ -266,7 +185,7 @@ export const ToolUseSessionPersistence = {
             agent.appendFollowUp(followUp);
           }
 
-          queuedFollowUps = ToolUseResumeQueue.drainQueuedFollowUps(streamId);
+          queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
           for (const queuedFollowUp of queuedFollowUps) {
             agent.appendFollowUp(queuedFollowUp);
           }
@@ -277,14 +196,14 @@ export const ToolUseSessionPersistence = {
         { resume: true },
       );
 
-      forgetSnapshotForStream(streamId);
+      ToolUseSnapshotCache.clearByStream(streamId);
 
       return { success: true };
     } catch (error) {
       const lostFollowUps =
         queuedFollowUps.length > 0
           ? queuedFollowUps
-          : ToolUseResumeQueue.drainQueuedFollowUps(streamId);
+          : ToolUseFollowUpQueue.drain(streamId);
 
       const baseMessage = logErrorMessage(
         CHANNEL,
@@ -299,13 +218,10 @@ export const ToolUseSessionPersistence = {
 
       return { success: false, lostFollowUps: lostCount };
     } finally {
-      ToolUseResumeQueue.clearResumingSession(streamId);
-      const status = provider.eventHandler.getStreamStatus(snapshot.streamId);
+      ToolUseFollowUpQueue.clearResuming(streamId);
+      const status = StreamStatusService.get(streamId);
       if (status === STATUS.RESUMING) {
-        provider.eventHandler.setStreamStatus(
-          snapshot.streamId,
-          STATUS.WAITING,
-        );
+        StreamStatusService.set(streamId, STATUS.WAITING);
       }
     }
   },
@@ -320,4 +236,4 @@ function formatLostFollowUpSuffix(count: number): string {
   return ` ${count} queued ${label} lost.`;
 }
 
-export type { ToolUseSessionSnapshot } from './ToolUseResumeQueue';
+export type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';

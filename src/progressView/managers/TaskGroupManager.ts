@@ -11,6 +11,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
 import { TaskGroup } from '@logger/LogTypes';
+import { STATUS } from '../modules/constants.js';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;
@@ -29,7 +30,7 @@ export class TaskGroupManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.TASK_GROUPS, storage);
+    super(WorkspaceStateKey.TASK_GROUPS, storage, ['texra.logGroups']);
     this.logger = new AgentLogger('TaskGroupManager');
   }
 
@@ -78,6 +79,35 @@ export class TaskGroupManager extends PersistentMapManager<
     Object.assign(group, updates);
     streamGroups.set(groupId, group);
     await this.save();
+  }
+
+  async endRunningGroups(now: number = Date.now()): Promise<StreamTabId[]> {
+    const affected: StreamTabId[] = [];
+
+    for (const [streamId, groups] of this.items.entries()) {
+      let updated = false;
+
+      for (const group of groups.values()) {
+        if (group.status === STATUS.RUNNING) {
+          group.status = STATUS.ERROR;
+          group.endTime = now;
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        affected.push(streamId);
+        this.logger.debug(
+          `Marked running task groups in stream ${streamId} as ERROR after reload`,
+        );
+      }
+    }
+
+    if (affected.length > 0) {
+      await this.save();
+    }
+
+    return affected;
   }
 
   /**

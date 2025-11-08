@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - agent
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
-import { bus } from '@eventBus/ProgressEventBus';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -27,7 +27,7 @@ async function handleStopAgent(stream: string) {
   }
 
   // Update the UI status
-  bus.emit('updateStreamStatus', { stream, status: 'stopped' });
+  StreamStatusService.set(stream, 'stopped');
 }
 
 export const agentCommands = {
