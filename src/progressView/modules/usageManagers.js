@@ -92,7 +92,7 @@ export class UsageGroupManager {
         return;
       }
       // Determine the group level by checking for the 'top-level' class
-      const level = groupHeader.classList.contains('top-level')
+      const level = groupHeader?.classList?.contains('top-level')
         ? TaskGroupLevel.ROOT
         : TaskGroupLevel.NESTED;
       this.insertUsageElement(groupHeader, usageElem, level);
