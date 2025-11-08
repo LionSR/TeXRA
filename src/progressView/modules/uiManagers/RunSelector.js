@@ -35,11 +35,12 @@ export class RunSelector {
 
   _initializeDropdown() {
     if (this._dropdown) {
-      return;
+      this._dropdown.removeEventListener('change', this._changeHandler);
     }
 
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
     if (!dropdown) {
+      this._dropdown = null;
       return;
     }
 
