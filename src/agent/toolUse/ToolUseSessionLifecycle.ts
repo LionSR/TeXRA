@@ -56,7 +56,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
       return;
     }
 
-    await ToolUseSessionPersistence.maybePersistIdleSnapshot({
+    const persisted = await ToolUseSessionPersistence.maybePersistIdleSnapshot({
       executionId,
       streamId: this.agent.getStreamTabId(),
       agentConfig: this.agent.config,
@@ -65,7 +65,9 @@ export class ToolUseSessionLifecycle<C = unknown> {
       queue: this.followUps,
     });
 
-    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
+    if (persisted) {
+      StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
+    }
   }
 
   async markRunning(): Promise<void> {
