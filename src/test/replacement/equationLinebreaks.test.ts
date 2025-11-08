@@ -53,4 +53,19 @@ describe('equation environment linebreak normalization', () => {
 
     assert.strictEqual(result, expected);
   });
+
+  it('fixes duplicated begin/end environment wrappers', () => {
+    const input = String.raw`\\begin{begin{eqnarray}}
+x = y\\
+\\end{end{eqnarray}}`;
+    const expected = String.raw`\\begin{eqnarray}
+x = y\\
+\\end{eqnarray}`;
+
+    const result = applyReplacements(input, EQUATION_STYLE_REPLACEMENTS, {
+      processMathUnicode: false,
+    });
+
+    assert.strictEqual(result, expected);
+  });
 });
