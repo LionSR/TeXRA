@@ -113,7 +113,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
         this.handleFilterStreams.bind(this),
@@ -235,12 +234,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handlePackStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await this.handleFileOperation(message.stream, taskState, 'texra.pack');
-    });
-  }
-
-  private async handleCleanStream(message: any): Promise<void> {
-    await this.withToolbarTaskState(message.stream, async (taskState) => {
-      await this.handleFileOperation(message.stream, taskState, 'texra.clean');
     });
   }
 
@@ -533,11 +526,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
 
-    for (const infos of generated.values()) {
-      for (const info of infos) {
-        allFiles.add(info.path);
-        if (info.original) {
-          allFiles.add(info.original);
+    for (const rounds of generated.values()) {
+      for (const infos of rounds.values()) {
+        for (const info of infos) {
+          allFiles.add(info.path);
+          if (info.original) {
+            allFiles.add(info.original);
+          }
         }
       }
     }

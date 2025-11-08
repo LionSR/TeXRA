@@ -36,15 +36,27 @@ export class UsageSummary {
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
   computeTotal() {
-    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const group of taskGroups.values()) {
-      if (group.usage) {
-        totals.inputTokens += group.usage.inputTokens || 0;
-        totals.outputTokens += group.usage.outputTokens || 0;
-        totals.cost += group.usage.cost || 0;
+    const activeRunId =
+      progressViewState.getActiveRunId() ||
+      progressViewState.getFallbackRunId();
+    if (activeRunId) {
+      const usage = progressViewState.getRunUsage(activeRunId);
+      if (usage) {
+        return {
+          inputTokens: usage.inputTokens || 0,
+          outputTokens: usage.outputTokens || 0,
+          cost: usage.cost || 0,
+        };
       }
     }
+
+    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+    const allUsage = progressViewState.getAllRunUsage();
+    allUsage.forEach((usage) => {
+      totals.inputTokens += usage?.inputTokens || 0;
+      totals.outputTokens += usage?.outputTokens || 0;
+      totals.cost += usage?.cost || 0;
+    });
     return totals;
   }
 }

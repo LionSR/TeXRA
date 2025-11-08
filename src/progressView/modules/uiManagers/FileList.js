@@ -50,15 +50,6 @@ export class FileList {
       return;
     }
 
-    if (!filesByRound || Object.keys(filesByRound).length === 0) {
-      container.textContent = 'No generated files';
-      return;
-    }
-
-    // Add total usage header
-    const usageHeader = document.createElement('div');
-    usageHeader.className = 'files-usage-header';
-
     // Calculate total usage from all groups
     const totals = this.usageSummary?.computeTotal() || {
       inputTokens: 0,
@@ -67,6 +58,8 @@ export class FileList {
     };
 
     if (totals.inputTokens || totals.outputTokens || totals.cost) {
+      const usageHeader = document.createElement('div');
+      usageHeader.className = 'files-usage-header';
       usageHeader.innerHTML = `
         <span class="files-usage-label">Total Usage:</span>
         <span class="files-usage-stats">
@@ -76,6 +69,14 @@ export class FileList {
         </span>
       `;
       container.appendChild(usageHeader);
+    }
+
+    if (!filesByRound || Object.keys(filesByRound).length === 0) {
+      const emptyMessage = document.createElement('div');
+      emptyMessage.className = 'files-empty-state';
+      emptyMessage.textContent = 'No generated files';
+      container.appendChild(emptyMessage);
+      return;
     }
 
     const rounds = Object.keys(filesByRound)

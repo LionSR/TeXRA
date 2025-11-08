@@ -225,6 +225,13 @@ export class ProgressViewState {
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
+    this.activeRunId = null;
+    this.activeSessionKind = 'workflow';
+    this.runInstructions = new Map();
+    this.runFiles = new Map();
+    this.runMissingOutputs = new Map();
+    this.runUsage = new Map();
+    this.pendingInstruction = null;
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -266,6 +273,196 @@ export class ProgressViewState {
     } catch (e) {
       console.error('Failed to save state:', e);
     }
+  }
+
+  setActiveRunId(runId) {
+    this.activeRunId = runId || null;
+  }
+
+  getActiveRunId() {
+    return this.activeRunId;
+  }
+
+  getFallbackRunId() {
+    if (this.activeRunId) {
+      return this.activeRunId;
+    }
+
+    for (const map of [
+      this.runFiles,
+      this.runUsage,
+      this.runInstructions,
+      this.runMissingOutputs,
+    ]) {
+      for (const runId of map.keys()) {
+        if (runId) {
+          return runId;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  getPendingInstruction() {
+    return this.pendingInstruction;
+  }
+
+  setPendingInstruction(instruction) {
+    if (!instruction || typeof instruction.text !== 'string') {
+      this.pendingInstruction = null;
+      return;
+    }
+
+    const text = instruction.text.trim();
+    if (!text) {
+      this.pendingInstruction = null;
+      return;
+    }
+
+    this.pendingInstruction = {
+      text,
+      metadata: instruction.metadata,
+    };
+  }
+
+  consumePendingInstruction() {
+    const pending = this.pendingInstruction;
+    this.pendingInstruction = null;
+    return pending;
+  }
+
+  clearPendingInstruction() {
+    this.pendingInstruction = null;
+  }
+
+  setRunInstruction(runId, instruction) {
+    if (!runId) {
+      return;
+    }
+    const text = instruction?.text ?? '';
+    if (typeof text !== 'string' || !text.trim()) {
+      this.runInstructions.delete(runId);
+      return;
+    }
+
+    const normalizedText = text.trim();
+
+    const normalizedInstruction = {
+      text: normalizedText,
+      metadata: instruction?.metadata,
+    };
+    this.runInstructions.set(runId, normalizedInstruction);
+    if (
+      this.pendingInstruction &&
+      this.pendingInstruction.text === normalizedText
+    ) {
+      this.pendingInstruction = null;
+    }
+  }
+
+  clearRunInstruction(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runInstructions.delete(runId);
+  }
+
+  getRunInstruction(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runInstructions.get(runId) || null;
+  }
+
+  clearRunInstructions() {
+    this.runInstructions.clear();
+    this.clearPendingInstruction();
+  }
+
+  setRunFiles(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.set(runId, filesByRound || {});
+  }
+
+  getRunFiles(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runFiles.get(runId) || null;
+  }
+
+  clearRunFiles() {
+    this.runFiles.clear();
+  }
+
+  deleteRunFiles(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.delete(runId);
+  }
+
+  setRunMissingOutputs(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.set(runId, filesByRound || {});
+  }
+
+  getRunMissingOutputs(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runMissingOutputs.get(runId) || null;
+  }
+
+  clearRunMissingOutputs() {
+    this.runMissingOutputs.clear();
+  }
+
+  setRunUsage(runId, usage) {
+    if (!runId) {
+      return;
+    }
+    const normalized = {
+      inputTokens: Number(usage?.inputTokens) || 0,
+      outputTokens: Number(usage?.outputTokens) || 0,
+      cost: Number(usage?.cost) || 0,
+    };
+    if (
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0
+    ) {
+      this.runUsage.delete(runId);
+      return;
+    }
+    this.runUsage.set(runId, normalized);
+  }
+
+  getRunUsage(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runUsage.get(runId) || null;
+  }
+
+  getAllRunUsage() {
+    return new Map(this.runUsage);
+  }
+
+  clearRunUsage() {
+    this.runUsage.clear();
+  }
+
+  deleteRunMissingOutputs(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.delete(runId);
   }
 }
 

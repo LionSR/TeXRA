@@ -8,6 +8,7 @@ import { FileList } from './uiManagers/FileList.js';
 import { Status } from './uiManagers/Status.js';
 import { StreamTabs } from './uiManagers/StreamTabs.js';
 import { Placeholder } from './uiManagers/Placeholder.js';
+import { RunSelector } from './uiManagers/RunSelector.js';
 import { InstructionPanel } from './uiManagers/InstructionPanel.js';
 import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
@@ -22,6 +23,7 @@ import { vscode } from '@common/webviewContext.js';
 class ProgressViewDomHandler extends BaseDomHandler {
   constructor() {
     const usageSummary = new UsageSummary();
+    const runSelector = new RunSelector();
     super({
       streamTabs: new StreamTabs(),
       toolbar: new Toolbar(),
@@ -29,7 +31,8 @@ class ProgressViewDomHandler extends BaseDomHandler {
       usageSummary,
       usageGroup: new UsageGroupManager(usageSummary),
       fileList: new FileList(usageSummary),
-      taskGroups: new TaskGroupDomManager(),
+      runSelector,
+      taskGroups: new TaskGroupDomManager(runSelector),
       logEntries: new LogEntryManager(),
       events: new EventsManager(),
       placeholder: new Placeholder(),

@@ -64,10 +64,12 @@ export interface ProgressEventPayloads {
   updateStreamStatus: { stream: StreamTabId; status: StreamStatusOrReady };
   addOutputFiles: {
     stream: StreamTabId;
+    groupId?: string;
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
   updateMissingOutputs: {
     stream: StreamTabId;
+    groupId?: string;
     filesByRound: { [key: number]: string[] };
   };
   clearMissingOutputs: StreamTabId;
@@ -79,7 +81,11 @@ export interface ProgressEventPayloads {
     usage: TokenUsageStats;
   };
   clearTaskOutput: StreamTabId;
-  updateStreamUsage: { stream: StreamTabId; usage: TokenUsageStats };
+  updateStreamUsage: {
+    stream: StreamTabId;
+    usage: TokenUsageStats;
+    runId?: string;
+  };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

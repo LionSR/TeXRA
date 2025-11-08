@@ -10,11 +10,12 @@ import { createFromTemplate } from '@common/templateUtils.js';
  * Manages task group DOM operations.
  */
 export class TaskGroupDomManager {
-  constructor() {
+  constructor(runSelector) {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
     this.toggleListeners = new Map();
+    this.runSelector = runSelector || null;
   }
 
   /**
@@ -33,58 +34,72 @@ export class TaskGroupDomManager {
         this.groupElements.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
-        this.updateGroup({
-          groupId: group.id,
-          updates: {
-            status: group.status,
-            endTime: group.endTime,
-          },
-        });
+        if (group.parentGroupId) {
+          this.updateGroup({
+            groupId: group.id,
+            updates: {
+              status: group.status,
+              endTime: group.endTime,
+            },
+          });
+        }
         return;
       }
     }
 
-    const detailsElem = createFromTemplate('groupDetailsTemplate');
-    if (!detailsElem) {
+    const baseGroupElement = createFromTemplate('groupDetailsTemplate');
+    if (!baseGroupElement) {
       console.error(
         'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
       );
       return;
     }
-    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
 
-    const headerElement = this.headerFormatter.create(group);
-    if (!headerElement) {
-      console.error(
-        'TaskGroupDomManager.addGroup: failed to create group header',
-      );
-      detailsElem.remove();
-      return;
-    }
-
-    const groupContainer = detailsElem.querySelector('.log-group-content');
+    const groupContainer = baseGroupElement.querySelector('.log-group-content');
     if (!groupContainer) {
       console.error(
         'TaskGroupDomManager.addGroup: missing group content container',
       );
-      detailsElem.remove();
+      baseGroupElement.remove();
       return;
     }
     groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
+    const isRootGroup = !group.parentGroupId;
+    let detailsElem = null;
+
+    if (isRootGroup) {
+      detailsElem = baseGroupElement;
+      detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+      detailsElem.classList.add('log-run');
+      detailsElem.dataset.runId = group.id;
+    } else {
+      const headerElement = this.headerFormatter.create(group);
+      if (!headerElement) {
+        console.error(
+          'TaskGroupDomManager.addGroup: failed to create group header',
+        );
+        baseGroupElement.remove();
+        return;
+      }
+
+      detailsElem = document.createElement('details');
+      detailsElem.className = 'log-group';
+      detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+      detailsElem.appendChild(headerElement);
+      detailsElem.appendChild(groupContainer);
+
+      const isCollapsed = progressViewState.toggleStates.get(group.id);
+      detailsElem.open = isCollapsed !== true;
+
+      const toggleListener = () => {
+        progressViewState.toggleStates.set(group.id, !detailsElem.open);
+      };
+      detailsElem.addEventListener('toggle', toggleListener);
+      this.toggleListeners.set(group.id, toggleListener);
+    }
+
     progressViewState.taskGroups.set(group.id, group);
-
-    const isCollapsed = progressViewState.toggleStates.get(group.id);
-    detailsElem.open = isCollapsed !== true;
-
-    detailsElem.prepend(headerElement);
-
-    const toggleListener = () => {
-      progressViewState.toggleStates.set(group.id, !detailsElem.open);
-    };
-    detailsElem.addEventListener('toggle', toggleListener);
-    this.toggleListeners.set(group.id, toggleListener);
-
     this.groupElements.set(group.id, detailsElem);
 
     // Insert the group at the right position in the parent
@@ -119,7 +134,6 @@ export class TaskGroupDomManager {
       timestamp: group.startTime,
     });
 
-    // For top-level groups, update current group and collapse the previous active group
     if (!group.parentGroupId) {
       progressViewState.currentGroupId = group.id;
       this.collapsePreviousActiveGroup();
@@ -217,6 +231,24 @@ export class TaskGroupDomManager {
     progressViewState.taskGroups.set(groupId, group);
   }
 
+  showRun(groupId) {
+    const hasTarget = Boolean(groupId && this.groupElements.has(groupId));
+
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
+        continue;
+      }
+
+      const group = progressViewState.taskGroups.get(id);
+      if (!group || group.parentGroupId) {
+        continue;
+      }
+
+      const shouldShow = hasTarget ? id === groupId : true;
+      element.hidden = !shouldShow;
+    }
+  }
+
   /**
    * Collapse a group and all of its child groups recursively
    * @private
@@ -234,8 +266,10 @@ export class TaskGroupDomManager {
     // Collapse this group
     const detailsElem = this.groupElements.get(groupId);
     if (detailsElem) {
-      detailsElem.open = false;
-      progressViewState.toggleStates.set(groupId, true);
+      if (detailsElem instanceof HTMLDetailsElement) {
+        detailsElem.open = false;
+        progressViewState.toggleStates.set(groupId, true);
+      }
     }
   }
 
@@ -253,13 +287,25 @@ export class TaskGroupDomManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, detailsElem] of this.groupElements.entries()) {
-      if (!detailsElem || !detailsElem.open) {
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
         continue;
       }
 
       const group = progressViewState.taskGroups.get(id);
       if (!group) {
+        continue;
+      }
+
+      const isRootGroup = !group.parentGroupId;
+      if (isRootGroup) {
+        if (element.hidden) {
+          continue;
+        }
+      } else if (
+        !(element instanceof HTMLDetailsElement) ||
+        element.open !== true
+      ) {
         continue;
       }
 
@@ -284,7 +330,15 @@ export class TaskGroupDomManager {
       this.previousActiveGroupId &&
       this.previousActiveGroupId !== currentId
     ) {
-      this.collapseGroupAndChildren(this.previousActiveGroupId);
+      const previousElement = this.groupElements.get(
+        this.previousActiveGroupId,
+      );
+      const previousGroup = progressViewState.taskGroups.get(
+        this.previousActiveGroupId,
+      );
+      if (previousElement && previousGroup?.parentGroupId) {
+        this.collapseGroupAndChildren(this.previousActiveGroupId);
+      }
     }
 
     // Update the previous ID to current for next time
@@ -323,6 +377,9 @@ export class TaskGroupDomManager {
     this.groupElements.clear();
     this.toggleListeners.clear();
     this.previousActiveGroupId = null;
+    if (this.runSelector) {
+      this.runSelector.clear();
+    }
   }
 
   _removeToggleListener(groupId) {

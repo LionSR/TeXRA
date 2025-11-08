@@ -8,8 +8,11 @@ import { STATUS } from '../modules/constants.js';
 
 // Local imports
 import { ProgressViewState } from '../state/ProgressViewState';
+import { DEFAULT_RUN_ID } from '../constants';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -119,6 +122,19 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKindHint = this.state.getSessionKindHint(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
+    const runId = this.ensureActiveRunId(stream);
+
+    if (runId) {
+      if (instructionUpdate) {
+        void this.state.runInstructions.setInstruction(
+          stream,
+          runId,
+          instructionUpdate,
+        );
+      } else {
+        void this.state.runInstructions.setInstruction(stream, runId, null);
+      }
+    }
 
     if (instructionUpdate) {
       this.webviewUpdater.updateInstruction(
@@ -146,23 +162,41 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    this.webviewUpdater.updateLogContent(stream, messages, groups);
+    const activeRunId = this.ensureActiveRunId(stream);
+
+    const runInstructions = Object.fromEntries(
+      this.state.runInstructions.getInstructions(stream).entries(),
+    );
+
+    const filesByRun = this.formatRunOutputs(
+      this.state.outputFiles.getFiles(stream),
+    );
+    const missingByRun = this.formatRunStringOutputs(
+      this.state.outputFiles.getMissingOutputs(stream),
+    );
+    const usageByRun = Object.fromEntries(
+      this.state.usageStats.getRunUsage(stream).entries(),
+    ) as Record<string, TokenUsageStats>;
+
+    this.webviewUpdater.updateLogContent(stream, messages, groups, {
+      runInstructions,
+      activeRunId,
+      runFiles: filesByRun,
+      runMissingOutputs: missingByRun,
+      runUsage: usageByRun,
+    });
 
     // Send output files for current stream
-    const files = Object.fromEntries(
-      this.state.outputFiles.getFiles(stream).entries(),
-    );
-    this.webviewUpdater.updateFiles(stream, files);
+    this.webviewUpdater.updateFiles(stream, filesByRun);
 
     // Send missing outputs for current stream
-    const missing = Object.fromEntries(
-      this.state.outputFiles.getMissingOutputs(stream).entries(),
-    );
-    this.webviewUpdater.updateMissingOutputs(stream, missing);
+    this.webviewUpdater.updateMissingOutputs(stream, missingByRun);
 
     // Send usage for current stream
-    const usage = this.state.usageStats.getStreamUsage(stream);
-    this.webviewUpdater.updateUsage(usage);
+    const usage = Object.fromEntries(
+      this.state.usageStats.getRunUsage(stream).entries(),
+    ) as Record<string, TokenUsageStats>;
+    this.webviewUpdater.updateUsage(stream, usage);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;
@@ -207,6 +241,88 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStatus(status);
       }
     }
+  }
+
+  private ensureActiveRunId(stream: StreamTabId): string | null {
+    let runId = this.state.getActiveRunId(stream);
+    if (runId) {
+      return runId;
+    }
+
+    runId = this.resolveLatestRunId(stream);
+    if (runId) {
+      this.state.setActiveRunId(stream, runId);
+      return runId;
+    }
+
+    if (this.shouldUseDefaultRun(stream)) {
+      this.state.setActiveRunId(stream, DEFAULT_RUN_ID);
+      return DEFAULT_RUN_ID;
+    }
+
+    return null;
+  }
+
+  private shouldUseDefaultRun(stream: StreamTabId): boolean {
+    const taskState = this.state.getTaskState(stream);
+    const category =
+      taskState?.session?.agentCategory ??
+      this.state.getSessionKindHint(stream);
+    if (category === AgentCategory.ToolUse) {
+      return true;
+    }
+
+    const files = this.state.outputFiles.getFiles(stream);
+    if (files.has(DEFAULT_RUN_ID)) {
+      return true;
+    }
+
+    const usage = this.state.usageStats.getRunUsage(stream);
+    if (usage.has(DEFAULT_RUN_ID)) {
+      return true;
+    }
+
+    const instructions = this.state.runInstructions.getInstructions(stream);
+    return instructions.has(DEFAULT_RUN_ID);
+  }
+
+  private resolveLatestRunId(stream: StreamTabId): string | null {
+    const groups = this.state.taskGroups.getStreamGroups(stream);
+    let latestId: string | null = null;
+    let latestTime = -Infinity;
+
+    for (const group of groups.values()) {
+      if (group.parentGroupId) {
+        continue;
+      }
+      const start = typeof group.startTime === 'number' ? group.startTime : 0;
+      if (start >= latestTime) {
+        latestId = group.id;
+        latestTime = start;
+      }
+    }
+
+    return latestId;
+  }
+
+  private formatRunOutputs(
+    runs: Map<string, Map<number, OutputFileInfo[]>>,
+  ): Record<string, { [key: number]: OutputFileInfo[] }> {
+    const payload: Record<string, { [key: number]: OutputFileInfo[] }> = {};
+    for (const [runId, rounds] of runs.entries()) {
+      payload[runId] = Object.fromEntries(rounds.entries());
+    }
+    return payload;
+  }
+
+  private formatRunStringOutputs(
+    runs: Map<string, Map<number, string[]>>,
+  ): Record<string, { [key: number]: string[] }> {
+    const payload: Record<string, { [key: number]: string[] }> = {};
+    for (const [runId, rounds] of runs.entries()) {
+      payload[runId] = Object.fromEntries(rounds.entries());
+    }
+    return payload;
   }
 
   /**

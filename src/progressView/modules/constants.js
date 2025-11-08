@@ -26,6 +26,8 @@ export const ELEMENT_IDS = {
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
+  RUN_SELECTOR: 'runSelector',
+  RUN_SELECTOR_CONTAINER: 'runSelectorRow',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
   INSTRUCTION_CONTAINER: 'instructionContainer',
@@ -43,7 +45,6 @@ export const ELEMENT_IDS = {
   RESTORE_STATE_BTN: 'restoreStateBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
-  CLEAN_STREAM_BTN: 'cleanStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
   ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
@@ -64,6 +65,8 @@ export const GROUP_DOM_IDS = Object.freeze({
   HEADER_PREFIX: 'group-header-',
   CONTENT_PREFIX: 'group-content-',
 });
+
+export const DEFAULT_RUN_ID = '__default__';
 
 // Constants for layout configuration
 export const MAX_HEIGHT = 400;
@@ -125,14 +128,6 @@ const WORKFLOW_TOOLBAR = [
     command: COMMANDS.PACK_STREAM,
     title: 'Pack the output for this agent into the History folder',
     className: 'pack-button',
-    disabled: true,
-  },
-  {
-    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
-    icon: 'trash',
-    command: COMMANDS.CLEAN_STREAM,
-    title: 'Clean the output for this agent',
-    className: 'clean-button',
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },

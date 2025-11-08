@@ -67,6 +67,10 @@ export function createTaskGroupEvents(
 
       await state.taskGroups.addGroup(stream, groupId, group);
 
+      if (!parentGroupId) {
+        state.setActiveRunId(stream, groupId);
+      }
+
       if (updater.isAvailable() && stream === state.activeStream) {
         updater.addTaskGroup(stream, group);
       }
