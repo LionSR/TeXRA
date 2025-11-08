@@ -19,4 +19,5 @@ export interface RoundFileMapping {
   baseToOutput: Map<string, string>;
   prevToOutput: Map<string, string>;
   originByOutput: Map<string, string | undefined>;
+  workspaceByOutput: Map<string, string>;
 }

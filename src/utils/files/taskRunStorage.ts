@@ -5,6 +5,7 @@ import { promises as fs } from 'fs';
 // Local imports - storage
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
+import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
@@ -85,13 +86,33 @@ async function ensureParentDir(filePath: string): Promise<void> {
   await fs.mkdir(parentDir, { recursive: true });
 }
 
-async function copyToTarget(
+async function moveToTarget(
   source: string,
   destination: string,
 ): Promise<void> {
   await ensureParentDir(destination);
-  await fs.copyFile(source, destination);
-  await fs.rm(source, { force: true });
+  await fs.rm(destination, { recursive: true, force: true });
+
+  try {
+    await fs.rename(source, destination);
+    return;
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+
+    if (err.code && err.code !== 'EXDEV' && err.code !== 'EISDIR') {
+      throw err;
+    }
+
+    const stats = await fs.lstat(source);
+    if (stats.isDirectory()) {
+      await fs.cp(source, destination, { recursive: true });
+      await fs.rm(source, { recursive: true, force: true });
+      return;
+    }
+
+    await fs.copyFile(source, destination);
+    await fs.rm(source, { force: true });
+  }
 }
 
 async function createSymlink(
@@ -100,29 +121,43 @@ async function createSymlink(
 ): Promise<void> {
   await ensureParentDir(destination);
   try {
-    await fs.rm(destination, { force: true });
+    await fs.symlink(source, destination);
   } catch (error) {
-    // Ignore cleanup errors
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'EEXIST') {
+      await fs.rm(destination, { recursive: true, force: true });
+      await fs.symlink(source, destination);
+      return;
+    }
+    throw err;
   }
-  await fs.symlink(source, destination);
 }
 
 export class TaskRunFileService {
-  constructor(private readonly executionId?: ExecutionId) {}
+  private readonly useRunStorage: boolean;
+
+  constructor(private readonly executionId?: ExecutionId) {
+    const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
+      'texra.agentOutputs.storageMode',
+      'workspace',
+    );
+    this.useRunStorage =
+      storageMode === 'taskRunStorage' && isValidExecutionId(executionId);
+  }
 
   public hasRunDirectory(): boolean {
-    return isValidExecutionId(this.executionId);
+    return this.useRunStorage;
   }
 
   public getRunDirectory(): string | undefined {
-    if (!this.executionId) {
+    if (!this.executionId || !this.useRunStorage) {
       return undefined;
     }
     return getRunDir(this.executionId);
   }
 
   public async ensureRunDirectory(): Promise<void> {
-    if (!this.executionId) {
+    if (!this.executionId || !this.useRunStorage) {
       return;
     }
     await ensureRunDir(this.executionId);
@@ -151,7 +186,7 @@ export class TaskRunFileService {
         : target;
     const workspaceRelative = toWorkspaceRelative(absoluteSource);
 
-    if (!this.executionId) {
+    if (!this.executionId || !this.useRunStorage) {
       return {
         storagePath: absoluteSource,
         workspacePath: absoluteSource,
@@ -161,7 +196,7 @@ export class TaskRunFileService {
 
     await this.ensureRunDirectory();
     const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
-    await copyToTarget(absoluteSource, absolute);
+    await moveToTarget(absoluteSource, absolute);
     return {
       storagePath: absolute,
       workspacePath: absoluteSource,
@@ -179,7 +214,7 @@ export class TaskRunFileService {
         ? WorkspaceFS.fullPath(workspaceFile)
         : workspaceFile;
 
-    if (!this.executionId) {
+    if (!this.executionId || !this.useRunStorage) {
       return {
         storagePath: absoluteSource,
         workspacePath: absoluteSource,
@@ -202,7 +237,7 @@ export class TaskRunFileService {
         ? WorkspaceFS.fullPath(target)
         : target;
 
-    if (!this.executionId) {
+    if (!this.executionId || !this.useRunStorage) {
       return absoluteSource;
     }
 

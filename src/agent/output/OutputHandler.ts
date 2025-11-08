@@ -242,10 +242,26 @@ export class OutputHandler implements IOutputHandler {
       this.getNamedOutputs(currRound).map((p) => [p.path, p.source]),
     );
 
+    const workspaceByOutput = new Map<string, string>();
+    for (const entry of this.getNamedOutputs(currRound)) {
+      if (entry.workspacePath) {
+        workspaceByOutput.set(entry.path, entry.workspacePath);
+      }
+    }
+
+    if (currRound > 0) {
+      for (const entry of this.getNamedOutputs(currRound - 1)) {
+        if (entry.workspacePath) {
+          workspaceByOutput.set(entry.path, entry.workspacePath);
+        }
+      }
+    }
+
     const mapping: RoundFileMapping = {
       baseToOutput,
       prevToOutput,
       originByOutput,
+      workspaceByOutput,
     };
     this.roundMappings[currRound] = mapping;
     return mapping;

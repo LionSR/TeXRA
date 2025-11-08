@@ -123,29 +123,21 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
-          const baseForDiff = this.fileService.hasRunDirectory()
-            ? (await this.fileService.mirrorWorkspaceFile(baseFile)).storagePath
-            : baseFile;
+          const outputForDiff =
+            mapping.workspaceByOutput.get(outputFile) ?? outputFile;
+          const baseForDiff = baseFile;
           const cwd = path.dirname(baseForDiff);
           const result = await this.latexdiffService.runDiffForRound(
             baseForDiff,
-            outputFile,
+            outputForDiff,
             currRound,
             undefined,
             { cwd },
           );
           this.logLatexdiffResult(result, 'round-diff');
-          aggregated.push({
-            base: baseFile,
-            revised: outputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(baseForDiff), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
+          let diffPath = '';
           if (result.success && result.diffFileName) {
-            const diffPath = path.join(
+            diffPath = path.join(
               path.dirname(baseForDiff),
               result.diffFileName,
             );
@@ -156,7 +148,20 @@ export class LatexDiffManager {
               buildDir,
               true,
             );
+            if (this.fileService.hasRunDirectory()) {
+              const relocation =
+                await this.fileService.relocateToRunStorage(diffPath);
+              diffPath = relocation.storagePath;
+              await this.fileService.relocateToRunStorage(buildDir);
+            }
           }
+          aggregated.push({
+            base: baseFile,
+            revised: outputForDiff,
+            output: diffPath,
+            status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
+          });
         }
       }
 
@@ -180,26 +185,22 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const cwd = path.dirname(prevOutputFile);
+          const prevForDiff =
+            mapping.workspaceByOutput.get(prevOutputFile) ?? prevOutputFile;
+          const currForDiff =
+            mapping.workspaceByOutput.get(currOutputFile) ?? currOutputFile;
+          const cwd = path.dirname(prevForDiff);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevOutputFile,
-            currOutputFile,
+            prevForDiff,
+            currForDiff,
             undefined,
             { cwd },
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
-          aggregated.push({
-            base: prevOutputFile,
-            revised: currOutputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(prevOutputFile), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
+          let diffPath = '';
           if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(prevOutputFile),
+            diffPath = path.join(
+              path.dirname(prevForDiff),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -209,7 +210,20 @@ export class LatexDiffManager {
               buildDir,
               true,
             );
+            if (this.fileService.hasRunDirectory()) {
+              const relocation =
+                await this.fileService.relocateToRunStorage(diffPath);
+              diffPath = relocation.storagePath;
+              await this.fileService.relocateToRunStorage(buildDir);
+            }
           }
+          aggregated.push({
+            base: prevForDiff,
+            revised: currForDiff,
+            output: diffPath,
+            status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
+          });
         }
       } else if (!generateBetweenRoundDiffs) {
         this.logger.debug(
