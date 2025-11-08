@@ -6,7 +6,7 @@ import {
 } from './constants';
 
 const EQUATION_ENVIRONMENT_PATTERN =
-  '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|split\\*?)';
+  '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
 
 const convertFencedLatexBlock: ReplacementFunction = (
   match,
@@ -367,8 +367,8 @@ export const EQUATION_STYLE_REPLACEMENTS: ReplacementCategory = {
       '$1$2',
 
     // Fix duplicated begin/end wrappers such as \begin{begin{align}}
-    '\\\\begin\\{begin\\{([a-zA-Z*]+)\\}\\}': '\\begin{$1}',
-    '\\\\end\\{end\\{([a-zA-Z*]+)\\}\\}': '\\end{$1}',
+    [`\\\\begin\\{begin\\{(${EQUATION_ENVIRONMENT_PATTERN})\\}\\}`]: '\\begin{$1}',
+    [`\\\\end\\{end\\{(${EQUATION_ENVIRONMENT_PATTERN})\\}\\}`]: '\\end{$1}',
 
     // Fix inconsistent blank lines after environments (universally preferred)
     '(\\\\end\\{(equation|align|figure|table|itemize|enumerate|description)\\})([A-Za-z])':
