@@ -40,6 +40,10 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       debugLogger: (message) => this.logger.debug(`[openrouter] ${message}`),
     });
 
+    // The OpenRouter SDK exposes a different client surface than the OpenAI SDK,
+    // but the base handler contract requires an OpenAI-compatible reference.
+    // We only rely on the overridden createResponse implementation, so we cast
+    // the client to satisfy the base signature without leaking OpenRouter types.
     return client as unknown as OpenAI;
   }
 
@@ -53,6 +57,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     signal?: AbortSignal,
     tools?: ToolDefinition[],
   ): Promise<any> {
+    // Downcast to the concrete OpenRouter client so we can call the SDK directly.
     const openRouterClient = client as unknown as OpenRouterClient;
     const useStreaming = this.getStreamingConfig();
     const routerMessages = convertMessagesToOpenRouter(
@@ -62,9 +67,9 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     );
 
     const params: ChatGenerationParams = {
-      messages: routerMessages as any,
+      messages: routerMessages,
       model: this.config.openrouterFullName ?? this.config.fullName,
-    } as any;
+    };
 
     if (this.isOReasoningModel) {
       params.maxCompletionTokens = this.config.maxOutputTokens;
@@ -90,8 +95,8 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenRouterTools(tools) as any;
-      params.toolChoice = 'auto' as ChatGenerationParams['toolChoice'];
+      params.tools = toOpenRouterTools(tools) as ChatGenerationParams['tools'];
+      params.toolChoice = 'auto';
     }
 
     if (endTag) {
@@ -185,70 +190,100 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     );
     return reasoning;
   }
-}
 
-/**
- * Handler for Anthropic models using OpenAI-compatible API via OpenRouter.
- */
-export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
-  updateMessageContentWithPrefill(
+  override updateMessageContentWithPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
-    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
-    if (lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        const updatedText =
-          toolState.assembly?.accumulatedOutput ??
-          `${bestConnector}${newResponse}`;
-        const lastIndex = lastMessage.content.length - 1;
-        const lastPart = lastMessage.content.at(-1);
-        if (lastPart && typeof lastPart === 'object' && 'text' in lastPart) {
-          lastMessage.content[lastIndex] = {
-            ...lastPart,
-            text: updatedText,
-          };
-        } else {
-          lastMessage.content = [
-            ...lastMessage.content,
-            { type: 'text', text: updatedText },
-          ];
-        }
-      } else if (typeof lastMessage.content === 'string') {
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      super.updateMessageContentWithPrefill(
+        messages,
+        bestConnector,
+        newResponse,
+        toolState,
+      );
+      return;
+    }
+
+    const updatedText =
+      toolState.assembly?.accumulatedOutput ?? `${bestConnector}${newResponse}`;
+
+    if (Array.isArray(lastMessage.content)) {
+      if (lastMessage.content.length === 0) {
+        lastMessage.content = [{ type: 'text', text: updatedText }];
+        return;
+      }
+
+      const lastIndex = lastMessage.content.length - 1;
+      const lastPart = lastMessage.content[lastIndex];
+      if (lastPart && typeof lastPart === 'object' && 'text' in lastPart) {
         lastMessage.content = [
-          {
-            type: 'text',
-            text:
-              toolState.assembly?.accumulatedOutput ??
-              `${bestConnector}${newResponse}`,
-          },
+          ...lastMessage.content.slice(0, lastIndex),
+          { ...lastPart, text: updatedText },
+        ];
+      } else {
+        lastMessage.content = [
+          ...lastMessage.content,
+          { type: 'text', text: updatedText },
         ];
       }
+      return;
     }
+
+    lastMessage.content = [{ type: 'text', text: updatedText }];
   }
 
-  /** Updates message content for models with prefill support. */
-  updateMessageContentWithoutPrefill(
+  override updateMessageContentWithoutPrefill(
     messages: any[],
     bestConnector: string,
     newResponse: string,
     toolState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
-    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
-      messages.push({
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            text: toolState.assembly.accumulatedOutput,
-          },
-        ],
-      });
+    const secondLastMessage = messages.at(-2);
+    const fallbackText =
+      toolState.assembly?.accumulatedOutput ?? `${bestConnector}${newResponse}`;
+
+    if (
+      !lastMessage ||
+      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
+    ) {
+      this.logger.error(
+        'Last message is not a user or system message - unexpected format',
+      );
+      return;
     }
+
+    if (this.containCutOffMessage(lastMessage.content)) {
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
+        if (Array.isArray(secondLastMessage.content)) {
+          secondLastMessage.content = [
+            ...secondLastMessage.content,
+            { type: 'text', text: fallbackText },
+          ];
+        } else {
+          this.logger.error('Second last message content is not a list');
+          secondLastMessage.content = [{ type: 'text', text: fallbackText }];
+        }
+
+        if (messages.at(-1)?.role === 'user') {
+          messages.pop();
+        } else {
+          this.logger.error(
+            'Last message is not a user message - unexpected format',
+          );
+        }
+      }
+      return;
+    }
+
+    messages.push({
+      role: 'assistant',
+      content: [{ type: 'text', text: fallbackText }],
+    });
   }
 }
 

@@ -1,81 +1,155 @@
+import type { ChatGenerationParams } from '@openrouter/sdk/models/chatgenerationparams';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Local imports - agent components
 import type { ExtendedCompletionUsage } from '@agent/core/ResponseUsage';
 
-export type OpenRouterMessage = Record<string, unknown>;
-export type OpenRouterChatResponse = Record<string, any>;
+export interface OpenRouterToolCall {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
 
-function normalizeContent(
-  content: ChatCompletionMessageParam['content'],
-): ChatCompletionMessageParam['content'] {
-  if (Array.isArray(content)) {
-    return content.map((part: any) => {
-      if (!part || typeof part !== 'object') {
-        return part;
-      }
+export interface OpenRouterBaseContentPart {
+  type: string;
+}
 
-      if (part.type === 'text') {
-        return { type: 'text', text: part.text ?? '' };
-      }
+export interface OpenRouterTextContentPart extends OpenRouterBaseContentPart {
+  type: 'text';
+  text: string;
+}
 
-      if (part.type === 'image_url') {
-        const { imageUrl, image_url, ...rest } = part;
-        const normalized: Record<string, unknown> = {
-          ...rest,
-          type: 'image_url',
-        };
+export interface OpenRouterImageContentPart extends OpenRouterBaseContentPart {
+  type: 'image_url';
+  imageUrl?: unknown;
+}
 
-        const payload = imageUrl ?? image_url;
-        if (payload !== undefined) {
-          normalized.imageUrl = payload;
-        }
+export interface OpenRouterAudioContentPart extends OpenRouterBaseContentPart {
+  type: 'input_audio';
+  inputAudio?: unknown;
+}
 
-        return normalized;
-      }
+export type OpenRouterContentPart =
+  | OpenRouterTextContentPart
+  | OpenRouterImageContentPart
+  | OpenRouterAudioContentPart
+  | string;
 
-      if (part.type === 'input_audio') {
-        const { inputAudio, input_audio, ...rest } = part;
-        const normalized: Record<string, unknown> = {
-          ...rest,
-          type: 'input_audio',
-        };
+type OpenRouterMessagesPayload = NonNullable<ChatGenerationParams['messages']>;
 
-        const payload = inputAudio ?? input_audio;
-        if (payload !== undefined) {
-          normalized.inputAudio = payload;
-        }
+export interface OpenRouterMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string | OpenRouterContentPart[];
+  name?: string;
+  toolCalls?: OpenRouterToolCall[];
+  toolCallId?: string;
+  reasoning?: unknown;
+  refusal?: unknown;
+}
 
-        return normalized;
-      }
+export interface OpenRouterChoiceMessage {
+  content?: unknown;
+  toolCalls?: OpenRouterToolCall[];
+  reasoning?: unknown;
+  refusal?: unknown;
+  name?: string;
+}
 
-      return part;
-    });
+export interface OpenRouterChoice {
+  index?: number;
+  finishReason?: string | null;
+  logprobs?: unknown;
+  message?: OpenRouterChoiceMessage;
+}
+
+export interface OpenRouterChatResponse {
+  id?: string;
+  object?: string;
+  created?: number;
+  model?: string;
+  systemFingerprint?: string | null;
+  choices?: OpenRouterChoice[];
+  usage?: Record<string, any>;
+}
+
+function toOpenRouterText(text: unknown): OpenRouterTextContentPart {
+  return { type: 'text', text: typeof text === 'string' ? text : '' };
+}
+
+function convertStructuredPart(
+  part: Record<string, unknown>,
+): OpenRouterContentPart {
+  if (part.type === 'text') {
+    return toOpenRouterText(part.text);
   }
 
-  return content ?? '';
+  if (part.type === 'image_url') {
+    const payload =
+      (part as { imageUrl?: unknown }).imageUrl ??
+      (part as { image_url?: unknown }).image_url;
+    return {
+      type: 'image_url',
+      imageUrl: payload,
+    } satisfies OpenRouterImageContentPart;
+  }
+
+  if (part.type === 'input_audio') {
+    const payload =
+      (part as { inputAudio?: unknown }).inputAudio ??
+      (part as { input_audio?: unknown }).input_audio;
+    return {
+      type: 'input_audio',
+      inputAudio: payload,
+    } satisfies OpenRouterAudioContentPart;
+  }
+
+  return toOpenRouterText((part as { text?: string }).text);
+}
+
+/**
+ * Converts OpenAI-style message content into the OpenRouter representation.
+ */
+function convertContent(
+  content: ChatCompletionMessageParam['content'],
+): string | OpenRouterContentPart[] {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.map((part) =>
+    convertStructuredPart(part as Record<string, unknown>),
+  );
 }
 
 export function convertMessagesToOpenRouter(
   messages: ChatCompletionMessageParam[],
-): OpenRouterMessage[] {
+): OpenRouterMessagesPayload {
   return messages.map((message) => {
     if (message.role === 'assistant') {
-      const payload: Record<string, unknown> = {
+      const payload: OpenRouterMessage = {
         role: 'assistant',
-        content: normalizeContent(message.content),
+        content: convertContent(message.content),
       };
 
       const toolCalls = (message as any).tool_calls;
       if (Array.isArray(toolCalls)) {
-        payload.toolCalls = toolCalls.map((call: any) => ({
-          id: call.id ?? '',
-          type: 'function',
-          function: {
-            name: call.function?.name ?? '',
-            arguments: call.function?.arguments ?? '',
-          },
-        }));
+        payload.toolCalls = toolCalls.map(
+          (call: any): OpenRouterToolCall => ({
+            id: call.id ?? '',
+            type: 'function',
+            function: {
+              name: call.function?.name ?? '',
+              arguments: call.function?.arguments ?? '',
+            },
+          }),
+        );
       }
 
       if ((message as any).reasoning) {
@@ -104,9 +178,9 @@ export function convertMessagesToOpenRouter(
       } satisfies OpenRouterMessage;
     }
 
-    const base: Record<string, unknown> = {
+    const base: OpenRouterMessage = {
       role: message.role,
-      content: normalizeContent(message.content),
+      content: convertContent(message.content),
     };
 
     if (typeof (message as any).name === 'string') {
@@ -114,9 +188,12 @@ export function convertMessagesToOpenRouter(
     }
 
     return base;
-  });
+  }) as OpenRouterMessagesPayload;
 }
 
+/**
+ * Converts OpenRouter message content back into OpenAI-compatible parts.
+ */
 function toOpenAIContent(content: any): ChatCompletionMessageParam['content'] {
   if (
     typeof content === 'string' ||
@@ -130,19 +207,26 @@ function toOpenAIContent(content: any): ChatCompletionMessageParam['content'] {
     return '';
   }
 
-  return content.map((part: any) => {
-    if (part?.type === 'text') {
+  return content.map((part: OpenRouterContentPart) => {
+    if (typeof part === 'string') {
+      return { type: 'text', text: part };
+    }
+
+    if (part.type === 'text') {
       return { type: 'text', text: part.text ?? '' };
     }
 
-    if (part?.type === 'image_url') {
-      return { type: 'image_url', image_url: part.imageUrl ?? part.image_url };
+    if (part.type === 'image_url') {
+      return {
+        type: 'image_url',
+        image_url: (part as OpenRouterImageContentPart).imageUrl,
+      };
     }
 
-    if (part?.type === 'input_audio') {
+    if (part.type === 'input_audio') {
       return {
         type: 'input_audio',
-        input_audio: part.inputAudio ?? part.input_audio,
+        input_audio: (part as OpenRouterAudioContentPart).inputAudio,
       };
     }
 
@@ -150,6 +234,9 @@ function toOpenAIContent(content: any): ChatCompletionMessageParam['content'] {
   });
 }
 
+/**
+ * Maps OpenRouter usage statistics into the OpenAI extended usage structure.
+ */
 function mapUsage(usage: any): ExtendedCompletionUsage | null {
   if (!usage) {
     return null;
@@ -207,32 +294,33 @@ export function convertChatResponseToOpenAI(
     created: response.created,
     model: response.model,
     system_fingerprint: response.systemFingerprint ?? undefined,
-    choices: (response.choices ?? []).map((choice: any) => ({
-      index: choice.index,
-      finish_reason: choice.finishReason ?? null,
-      message: {
-        role: 'assistant',
-        content: toOpenAIContent(choice.message?.content),
-        ...(Array.isArray(choice.message?.toolCalls)
-          ? {
-              tool_calls: choice.message.toolCalls.map((call: any) => ({
-                id: call.id ?? '',
-                type: call.type ?? 'function',
-                function: {
-                  name: call.function?.name ?? '',
-                  arguments: call.function?.arguments ?? '',
-                },
-              })),
-            }
-          : {}),
-        ...(choice.message?.reasoning
-          ? { reasoning: choice.message.reasoning }
-          : {}),
-        ...(choice.message?.refusal ? { refusal: choice.message.refusal } : {}),
-        ...(choice.message?.name ? { name: choice.message.name } : {}),
-      },
-      ...(choice.logprobs ? { logprobs: choice.logprobs } : {}),
-    })),
+    choices: (response.choices ?? []).map((choice) => {
+      const message = choice.message ?? {};
+      const toolCalls = Array.isArray(message.toolCalls)
+        ? message.toolCalls.map((call) => ({
+            id: call.id ?? '',
+            type: call.type ?? 'function',
+            function: {
+              name: call.function?.name ?? '',
+              arguments: call.function?.arguments ?? '',
+            },
+          }))
+        : undefined;
+
+      return {
+        index: choice.index,
+        finish_reason: choice.finishReason ?? null,
+        message: {
+          role: 'assistant',
+          content: toOpenAIContent(message.content),
+          ...(toolCalls ? { tool_calls: toolCalls } : {}),
+          ...(message.reasoning ? { reasoning: message.reasoning } : {}),
+          ...(message.refusal ? { refusal: message.refusal } : {}),
+          ...(message.name ? { name: message.name } : {}),
+        },
+        ...(choice.logprobs ? { logprobs: choice.logprobs } : {}),
+      };
+    }),
     ...(usage ? { usage } : {}),
   };
 }
@@ -240,10 +328,8 @@ export function convertChatResponseToOpenAI(
 export interface StreamState {
   content: string[];
   reasoning: string[];
-  toolCalls: Map<
-    string,
-    { id: string; type: string; function: { name: string; arguments: string } }
-  >;
+  toolCalls: Map<string, OpenRouterToolCall>;
+  toolCallCounter: number;
   lastChunk?: any;
   finishReason?: string | null;
 }
@@ -253,19 +339,24 @@ export function createStreamState(): StreamState {
     content: [],
     reasoning: [],
     toolCalls: new Map(),
+    toolCallCounter: 0,
   };
 }
 
-function keyForCall(call: any): string {
+function keyForCall(state: StreamState, call: any): string {
   if (call.index !== undefined) {
     return String(call.index);
   }
   if (call.id) {
     return call.id;
   }
-  return `${Date.now()}-${Math.random()}`;
+  state.toolCallCounter += 1;
+  return `generated-${state.toolCallCounter}`;
 }
 
+/**
+ * Accumulates a streaming chunk from the OpenRouter SDK into an intermediate state.
+ */
 export function accumulateStreamChunk(
   state: StreamState,
   chunk: any,
@@ -294,7 +385,7 @@ export function accumulateStreamChunk(
 
   if (Array.isArray(delta.toolCalls)) {
     for (const call of delta.toolCalls) {
-      const key = keyForCall(call);
+      const key = keyForCall(state, call);
       const existing = state.toolCalls.get(key);
       if (!existing) {
         state.toolCalls.set(key, {
@@ -321,6 +412,9 @@ export function accumulateStreamChunk(
   return { content, reasoning };
 }
 
+/**
+ * Creates a synthetic ChatResponse from the aggregated streaming state.
+ */
 export function finalizeStream(
   state: StreamState,
   fallbackModel: string,

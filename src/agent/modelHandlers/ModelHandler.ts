@@ -365,16 +365,17 @@ export abstract class ModelHandler<
   }
 
   get isOReasoningModel(): boolean {
-    return (
-      this.config.provider === ModelProvider.OPENAI &&
-      this.capabilities.supportsReasoning
-    );
+    if (!this.capabilities.supportsReasoning) {
+      return false;
+    }
+
+    return this.config.provider !== ModelProvider.XAI;
   }
 
   get isGrokReasoningModel(): boolean {
     return (
-      this.config.provider === ModelProvider.XAI &&
-      this.capabilities.supportsReasoning
+      this.capabilities.supportsReasoning &&
+      this.config.provider === ModelProvider.XAI
     );
   }
 
