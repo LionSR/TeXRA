@@ -18,6 +18,7 @@ import type { AgentFilter } from '../types';
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import type { TaskGroup } from '@logger/LogTypes';
 
 // Types
 import {
@@ -175,6 +176,101 @@ export class ProgressViewState {
       return;
     }
     this.saveActiveRunIds();
+  }
+
+  resolveRunId(stream: StreamTabId, requested?: string | null): string | null {
+    const preferred = requested ?? null;
+    if (preferred) {
+      this.setActiveRunId(stream, preferred);
+      return preferred;
+    }
+
+    const current = this.getActiveRunId(stream);
+    if (current) {
+      return current;
+    }
+
+    const candidates = this.collectRunCandidates(stream);
+    if (candidates.size === 1) {
+      const [only] = Array.from(candidates);
+      if (only) {
+        this.setActiveRunId(stream, only);
+        return only;
+      }
+    }
+
+    const latest = this.findLatestRunId(stream);
+    if (latest) {
+      this.setActiveRunId(stream, latest);
+      return latest;
+    }
+
+    return null;
+  }
+
+  private collectRunCandidates(stream: StreamTabId): Set<string> {
+    const candidates = new Set<string>();
+
+    const instructionRuns = this._runInstructions.getInstructions(stream);
+    for (const runId of instructionRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const fileRuns = this._outputFiles.getFiles(stream);
+    for (const runId of fileRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const missingRuns = this._outputFiles.getMissingOutputs(stream);
+    for (const runId of missingRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const usageRuns = this._usageStats.getRunUsage(stream);
+    for (const runId of usageRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    return candidates;
+  }
+
+  private findLatestRunId(stream: StreamTabId): string | null {
+    const groups = this._taskGroups.getStreamGroups(stream);
+    let latest: { id: string; start: number } | null = null;
+
+    for (const group of groups.values()) {
+      if (group.parentGroupId) {
+        continue;
+      }
+
+      const startTime = this.normalizeStartTime(group);
+      if (!latest || startTime >= latest.start) {
+        latest = { id: group.id, start: startTime };
+      }
+    }
+
+    return latest?.id ?? null;
+  }
+
+  private normalizeStartTime(group: TaskGroup): number {
+    if (typeof group.startTime === 'number') {
+      return group.startTime;
+    }
+
+    if (typeof group.startTime === 'string') {
+      const parsed = Date.parse(group.startTime);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    return 0;
   }
 
   private loadActiveRunIds(): void {

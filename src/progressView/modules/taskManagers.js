@@ -88,6 +88,8 @@ export class TaskGroupDomManager {
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.appendChild(headerElement);
       detailsElem.appendChild(groupContainer);
+      baseGroupElement.replaceChildren();
+      baseGroupElement.remove();
 
       const isCollapsed = progressViewState.toggleStates.get(group.id);
       detailsElem.open = isCollapsed !== true;

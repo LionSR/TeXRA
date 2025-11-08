@@ -21,39 +21,79 @@ export class RunSelector {
     this._changeHandler = this._handleChange.bind(this);
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
+    this._domReady = document.readyState !== 'loading';
+    this._initScheduled = false;
 
-    if (document.readyState === 'loading') {
+    if (this._domReady) {
+      this._scheduleInitialize();
+    } else {
       document.addEventListener(
         'DOMContentLoaded',
         () => {
-          this._initializeDropdown();
+          this._domReady = true;
+          this.initialize();
         },
         { once: true },
       );
-    } else {
-      this._initializeDropdown();
     }
   }
 
+  initialize() {
+    if (!this._domReady) {
+      return;
+    }
+
+    this._initScheduled = false;
+    this._initializeDropdown();
+    this._syncVisibility();
+  }
+
+  _scheduleInitialize() {
+    if (this._initScheduled) {
+      return;
+    }
+
+    this._initScheduled = true;
+    queueMicrotask(() => this.initialize());
+  }
+
   _initializeDropdown() {
+    if (!this._domReady) {
+      return;
+    }
+
     if (this._dropdown) {
       this._dropdown.removeEventListener('change', this._changeHandler);
       this._dropdown = null;
     }
 
-    this._container = null;
-
-    this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
+    const container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
+    if (container) {
+      this._container = container;
+    }
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
     if (!dropdown) {
-      this._syncVisibility();
       return;
     }
 
     dropdown.addEventListener('change', this._changeHandler);
     this._dropdown = dropdown;
     this._renderOptions();
-    this._syncVisibility();
+    this._applyActiveValue();
+  }
+
+  _ensureDropdown() {
+    if (this._dropdown) {
+      return true;
+    }
+
+    if (!this._domReady) {
+      this._scheduleInitialize();
+      return false;
+    }
+
+    this._initializeDropdown();
+    return Boolean(this._dropdown);
   }
 
   _handleChange() {
@@ -70,6 +110,11 @@ export class RunSelector {
 
   onDidChange(callback) {
     this._onDidChange = typeof callback === 'function' ? callback : null;
+    return () => {
+      if (this._onDidChange === callback) {
+        this._onDidChange = null;
+      }
+    };
   }
 
   addRun(group) {
@@ -83,13 +128,12 @@ export class RunSelector {
       startTime: group.startTime,
     });
 
-    if (this._dropdown) {
+    if (this._ensureDropdown()) {
       this._renderOptions();
       this._applyActiveValue();
-      this._syncVisibility();
-    } else {
-      this._syncVisibility();
     }
+
+    this._syncVisibility();
   }
 
   setRuns(groups = []) {
@@ -104,18 +148,17 @@ export class RunSelector {
       }
     });
 
-    if (this._dropdown) {
+    if (this._ensureDropdown()) {
       this._renderOptions();
       this._applyActiveValue();
-      this._syncVisibility();
-    } else {
-      this._syncVisibility();
     }
+
+    this._syncVisibility();
   }
 
   setActiveRun(groupId) {
     this._pendingActiveId = groupId || null;
-    if (this._dropdown) {
+    if (this._ensureDropdown()) {
       this._applyActiveValue();
     }
   }
@@ -137,10 +180,12 @@ export class RunSelector {
       this._pendingActiveId = null;
     }
 
-    if (this._dropdown) {
+    if (this._ensureDropdown()) {
       this._renderOptions();
       this._applyActiveValue();
     }
+
+    this._syncVisibility();
   }
 
   clear() {
@@ -241,19 +286,30 @@ export class RunSelector {
   _syncVisibility() {
     const hasRuns = this._runs.size > 0 && this._isDisplayEnabled;
 
-    const dropdown =
-      this._dropdown || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
+    if (hasRuns) {
+      this._ensureDropdown();
+    }
+
+    if (!this._container && this._domReady) {
+      const containerElem = safeGetElementById(
+        ELEMENT_IDS.RUN_SELECTOR_CONTAINER,
+      );
+      if (containerElem) {
+        this._container = containerElem;
+      }
+    }
+
+    const container = this._container;
+    if (container) {
+      container.toggleAttribute('hidden', !hasRuns);
+      container.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
+    }
+
+    const dropdown = this._dropdown;
     if (dropdown) {
       dropdown.disabled = !hasRuns;
       dropdown.hidden = !hasRuns;
       dropdown.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
-    }
-
-    const container =
-      this._container || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
-    if (container) {
-      container.toggleAttribute('hidden', !hasRuns);
-      container.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
     }
   }
 
@@ -272,5 +328,6 @@ export class RunSelector {
     this._onDidChange = null;
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
+    this._initScheduled = false;
   }
 }
