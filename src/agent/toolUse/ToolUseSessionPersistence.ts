@@ -46,24 +46,6 @@ interface PersistSnapshotArgs {
   queue: FollowUpQueue;
 }
 
-function rememberSnapshot(snapshot: ToolUseSessionSnapshot): void {
-  ToolUseSnapshotCache.cacheSnapshot(snapshot);
-}
-
-function rememberSnapshots(snapshots: ToolUseSessionSnapshot[]): void {
-  ToolUseSnapshotCache.registerSnapshots(snapshots);
-}
-
-function forgetSnapshot(
-  executionId: ExecutionId,
-): ToolUseSessionSnapshot | undefined {
-  return ToolUseSnapshotCache.clearByExecution(executionId);
-}
-
-function forgetSnapshotForStream(streamId: StreamTabId): void {
-  ToolUseSnapshotCache.clearByStream(streamId);
-}
-
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
   contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
@@ -104,7 +86,7 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    rememberSnapshots(snapshots);
+    ToolUseSnapshotCache.registerSnapshots(snapshots);
   },
 
   clearAllPersistedSnapshots(): void {
@@ -135,30 +117,24 @@ export const ToolUseSessionPersistence = {
       store,
     };
 
-    let aborted = false;
-    const unsubscribe = queue.onEnqueue(() => {
-      aborted = true;
-    });
-
-    try {
-      const stored = await ToolUseSnapshotStore.save(payload);
-      if (!stored) {
-        return false;
-      }
-
-      if (aborted || !queue.isEmpty()) {
-        await ToolUseSnapshotStore.delete(payload.executionId);
-        logger.debug(
-          `Dropped snapshot for execution ${payload.executionId} because a follow-up arrived during persistence.`,
-        );
-        return false;
-      }
-
-      rememberSnapshot(stored);
-      return true;
-    } finally {
-      unsubscribe();
+    const outcome = await queue.runIfIdle(() =>
+      ToolUseSnapshotStore.save(payload),
+    );
+    const stored = outcome.result;
+    if (!stored) {
+      return false;
     }
+
+    if (outcome.aborted) {
+      await ToolUseSnapshotStore.delete(payload.executionId);
+      logger.debug(
+        `Dropped snapshot for execution ${payload.executionId} because a follow-up arrived during persistence.`,
+      );
+      return false;
+    }
+
+    ToolUseSnapshotCache.cacheSnapshot(stored);
+    return true;
   },
 
   async clearPersistedSnapshot(
@@ -168,7 +144,7 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    forgetSnapshot(executionId);
+    ToolUseSnapshotCache.clearByExecution(executionId);
 
     await ToolUseSnapshotStore.delete(executionId);
   },
@@ -220,7 +196,7 @@ export const ToolUseSessionPersistence = {
         { resume: true },
       );
 
-      forgetSnapshotForStream(streamId);
+      ToolUseSnapshotCache.clearByStream(streamId);
 
       return { success: true };
     } catch (error) {

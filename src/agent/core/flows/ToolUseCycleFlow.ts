@@ -123,80 +123,65 @@ type RawToolCallPayload = z.infer<typeof RawToolCallPayloadSchema>;
 
 const ToolCallPayloadSchema =
   RawToolCallPayloadSchema.transform<NormalizedToolCall>((payload) => {
-    const callId = pickFirstIdentifier(payload);
+    const trim = (value?: string | null) =>
+      typeof value === 'string' ? value.trim() : '';
+
+    const callId = [
+      payload.call_id,
+      payload.tool_call_id,
+      payload.tool_use_id,
+      payload.id,
+    ]
+      .map((candidate) => trim(candidate))
+      .find((candidate) => candidate.length > 0);
+
     if (!callId) {
       throw new Error('Tool call is missing an identifier.');
     }
 
-    const name = pickFirstName(payload);
+    const name = [payload.name, payload.function?.name]
+      .map((candidate) => trim(candidate))
+      .find((candidate) => candidate.length > 0);
+
     if (!name) {
       throw new Error('Tool call is missing a name.');
+    }
+
+    const argumentSources: Array<unknown> = [
+      payload.input,
+      payload.arguments,
+      payload.function?.arguments,
+    ];
+
+    let input: unknown = {};
+    for (const candidate of argumentSources) {
+      if (candidate === undefined || candidate === null) {
+        continue;
+      }
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        if (!trimmed) {
+          input = {};
+          break;
+        }
+        try {
+          input = JSON.parse(trimmed);
+        } catch {
+          input = trimmed;
+        }
+        break;
+      }
+      input = candidate;
+      break;
     }
 
     return {
       callId,
       name,
-      input: resolveArguments(payload),
+      input,
       raw: payload,
     };
   });
-
-function pickFirstIdentifier(payload: RawToolCallPayload): string | undefined {
-  const candidates = [
-    payload.call_id,
-    payload.tool_call_id,
-    payload.tool_use_id,
-    payload.id,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string') {
-      const trimmed = candidate.trim();
-      if (trimmed) {
-        return trimmed;
-      }
-    }
-  }
-  return undefined;
-}
-
-function pickFirstName(payload: RawToolCallPayload): string | undefined {
-  const candidates = [payload.name, payload.function?.name];
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string') {
-      const trimmed = candidate.trim();
-      if (trimmed) {
-        return trimmed;
-      }
-    }
-  }
-  return undefined;
-}
-
-function resolveArguments(payload: RawToolCallPayload): unknown {
-  const candidates = [
-    payload.input,
-    payload.arguments,
-    payload.function?.arguments,
-  ];
-  for (const candidate of candidates) {
-    if (candidate === undefined || candidate === null) {
-      continue;
-    }
-    if (typeof candidate === 'string') {
-      const trimmed = candidate.trim();
-      if (!trimmed) {
-        return {};
-      }
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        return trimmed;
-      }
-    }
-    return candidate;
-  }
-  return {};
-}
 
 function normalizeToolCallError(
   toolName: string,
