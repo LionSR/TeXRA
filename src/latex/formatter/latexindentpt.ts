@@ -8,7 +8,7 @@ import { sync as globSync } from 'glob';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import { runToolWithCheck } from '@utils/system';
@@ -25,10 +25,8 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     );
 
     const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      logger.error(CHANNEL, 'No workspace path found');
-      return false;
-    }
+    const isWorkspaceFile =
+      !!workspacePath && filePath.startsWith(workspacePath);
 
     // Get latexindent config from settings
     const latexindentConfig = getConfig<string>(
@@ -62,49 +60,60 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
 
     // Get all backup files matching the patterns, relative to workspace
-    const backupPatterns = [
-      `${fileBaseName}.tex.bak*`,
-      `${fileBaseName}.tex.bak`,
-      `${fileBaseName}.bak*`,
-      `${fileBaseName}.bak`,
-    ].map((pattern) => path.join(fileDir, pattern).replace(/\\/g, '/')); // Normalize to forward slashes for glob
-
-    logger.debug(CHANNEL, `Backup patterns: ${JSON.stringify(backupPatterns)}`);
-
-    // Clean up backup files from workspace directory
-    for (const pattern of backupPatterns) {
-      logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
-      const backupFiles = globSync(pattern, {
-        cwd: workspacePath,
-        nodir: true,
-        absolute: false, // Get paths relative to workspace
-      });
+    if (isWorkspaceFile && workspacePath) {
+      const backupPatterns = [
+        `${fileBaseName}.tex.bak*`,
+        `${fileBaseName}.tex.bak`,
+        `${fileBaseName}.bak*`,
+        `${fileBaseName}.bak`,
+      ].map((pattern) => path.join(fileDir, pattern).replace(/\\/g, '/'));
 
       logger.debug(
         CHANNEL,
-        `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
+        `Backup patterns: ${JSON.stringify(backupPatterns)}`,
       );
 
-      for (const backupFile of backupFiles) {
-        try {
-          await WorkspaceFS.delete(backupFile);
-          logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-        } catch (err) {
-          logger.warn(
-            CHANNEL,
-            `Error removing backup file ${backupFile}: ${err}`,
-          );
+      for (const pattern of backupPatterns) {
+        logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
+        const backupFiles = globSync(pattern, {
+          cwd: workspacePath,
+          nodir: true,
+          absolute: false,
+        });
+
+        logger.debug(
+          CHANNEL,
+          `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
+        );
+
+        for (const backupFile of backupFiles) {
+          try {
+            await WorkspaceFS.delete(backupFile);
+            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+          } catch (err) {
+            logger.warn(
+              CHANNEL,
+              `Error removing backup file ${backupFile}: ${err}`,
+            );
+          }
         }
       }
+    } else {
+      logger.debug(
+        CHANNEL,
+        `Skipping workspace backup cleanup for ${filePath} (outside workspace)`,
+      );
     }
 
-    // Clean up indent.log
     const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
     try {
-      await WorkspaceFS.delete(indentLogPath);
+      if (isWorkspaceFile) {
+        await WorkspaceFS.delete(indentLogPath);
+      } else {
+        await AbsoluteFS.delete(indentLogPath);
+      }
       logger.debug(CHANNEL, 'Removed indent.log');
     } catch (err) {
-      // Ignore error if indent.log doesn't exist
       logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
     }
 

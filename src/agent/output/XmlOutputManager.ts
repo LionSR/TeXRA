@@ -270,7 +270,7 @@ export class XmlOutputManager {
         currRound,
       );
       await WorkspaceFS.write(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
+      outputFiles.push({ source, path: texFile, workspacePath: texFile });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -297,6 +297,7 @@ export class XmlOutputManager {
     return {
       source: original || this.agentConfig.inputFile,
       path: processedOutputFile,
+      workspacePath: processedOutputFile,
     };
   }
 

@@ -38,7 +38,12 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  AbsoluteFS,
+  TaskRunFileService,
+  readFlexible,
+} from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
   extractMultipleTextFromTag,
@@ -65,6 +70,7 @@ export class OutputHandler implements IOutputHandler {
   public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
+  private readonly fileService: TaskRunFileService;
 
   constructor(
     agentSetting: AgentSetting,
@@ -72,6 +78,7 @@ export class OutputHandler implements IOutputHandler {
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
+    fileService?: TaskRunFileService,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -85,6 +92,7 @@ export class OutputHandler implements IOutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+    this.fileService = fileService || new TaskRunFileService();
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
@@ -97,6 +105,7 @@ export class OutputHandler implements IOutputHandler {
       this.baseFiles,
       this.logger,
       this.channel,
+      this.fileService,
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
@@ -186,12 +195,16 @@ export class OutputHandler implements IOutputHandler {
         )?.[0] || null;
       const originalFile = mapping.originByOutput.get(file) || null;
       const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+      const workspacePath = this.getNamedOutputs(currRound).find(
+        (p) => p.path === file,
+      )?.workspacePath;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBase,
         file,
       );
       infos.push({
         path: file,
+        workspacePath: workspacePath ?? null,
         base: baseFile,
         prev: prevFile,
         original: originalFile,
@@ -254,6 +267,35 @@ export class OutputHandler implements IOutputHandler {
     this.invalidateRoundMapping(round + 1);
   }
 
+  private async relocateRoundArtifacts(
+    rawOutputPath: string,
+    processed: NamedOutputFile[],
+  ): Promise<{
+    raw: string;
+    processed: NamedOutputFile[];
+  }> {
+    let relocatedRaw = rawOutputPath;
+    if (rawOutputPath) {
+      const relocation =
+        await this.fileService.relocateToRunStorage(rawOutputPath);
+      relocatedRaw = relocation.storagePath;
+    }
+
+    const relocatedProcessed: NamedOutputFile[] = [];
+    for (const entry of processed) {
+      const relocation = await this.fileService.relocateToRunStorage(
+        entry.path,
+      );
+      relocatedProcessed.push({
+        ...entry,
+        path: relocation.storagePath,
+        workspacePath: entry.workspacePath ?? relocation.workspacePath,
+      });
+    }
+
+    return { raw: relocatedRaw, processed: relocatedProcessed };
+  }
+
   /**
    * Set output files and mappings for a round, invalidating the cache.
    * @param round The round number
@@ -290,9 +332,9 @@ export class OutputHandler implements IOutputHandler {
 
         const checks = expected.map(async (file) => ({
           file,
-          exists: path.isAbsolute(file)
-            ? await AbsoluteFS.exists(file)
-            : await WorkspaceFS.exists(file),
+          exists: await AbsoluteFS.exists(
+            this.fileService.resolveExpectedPath(file),
+          ),
         }));
         const results = await Promise.all(checks);
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
@@ -308,9 +350,8 @@ export class OutputHandler implements IOutputHandler {
                 currRound,
               );
 
-          const xmlExists = path.isAbsolute(xmlPath)
-            ? await AbsoluteFS.exists(xmlPath)
-            : await WorkspaceFS.exists(xmlPath);
+          const resolvedXmlPath = this.fileService.resolveExpectedPath(xmlPath);
+          const xmlExists = await AbsoluteFS.exists(resolvedXmlPath);
 
           const missingOutputsData = {
             missing,
@@ -356,7 +397,11 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         this.ensureRound(currRound);
-        this.rawOutputs[currRound] = outputFile || null;
+        if (!this.rawOutputs[currRound]) {
+          this.rawOutputs[currRound] = outputFile
+            ? this.fileService.resolveExpectedPath(outputFile)
+            : null;
+        }
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
 
@@ -430,14 +475,6 @@ export class OutputHandler implements IOutputHandler {
                 `Indented multiple output files: ${processedFiles.join(',')}`,
               );
 
-              this.setRoundOutputs(currRound, processedFiles, processedPairs);
-              await this.captureXmlSummary(
-                currRound,
-                outputFile,
-                processedPairs,
-                scope,
-              );
-
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
@@ -445,6 +482,25 @@ export class OutputHandler implements IOutputHandler {
                   this.logger,
                 );
               }
+
+              const relocated = await this.relocateRoundArtifacts(
+                outputFile,
+                processedPairs,
+              );
+              const relocatedFiles = relocated.processed.map((p) => p.path);
+              this.setRoundOutputs(
+                currRound,
+                relocatedFiles,
+                relocated.processed,
+              );
+              await this.captureXmlSummary(
+                currRound,
+                relocated.raw,
+                relocated.processed,
+                scope,
+              );
+              outputFile = relocated.raw;
+              this.rawOutputs[currRound] = relocated.raw;
               return;
             }
 
@@ -453,6 +509,12 @@ export class OutputHandler implements IOutputHandler {
             );
             this.setRoundOutputs(currRound, [], []);
             await this.captureXmlSummary(currRound, outputFile, [], scope);
+            if (outputFile) {
+              const relocation =
+                await this.fileService.relocateToRunStorage(outputFile);
+              outputFile = relocation.storagePath;
+              this.rawOutputs[currRound] = relocation.storagePath;
+            }
           } catch (err) {
             this.logger.debug(
               `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
@@ -492,13 +554,22 @@ export class OutputHandler implements IOutputHandler {
                 `Indented single output file: ${processed.path}`,
               );
 
-              this.setRoundOutputs(currRound, [processed.path], [processed]);
+              const relocated = await this.relocateRoundArtifacts(outputFile, [
+                processed,
+              ]);
+              this.setRoundOutputs(
+                currRound,
+                relocated.processed.map((p) => p.path),
+                relocated.processed,
+              );
               await this.captureXmlSummary(
                 currRound,
-                outputFile,
-                [processed],
+                relocated.raw,
+                relocated.processed,
                 scope,
               );
+              outputFile = relocated.raw;
+              this.rawOutputs[currRound] = relocated.raw;
             } else {
               this.logger.debug(
                 `No processed file was generated from ${outputFile}`,
@@ -590,7 +661,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await WorkspaceFS.read(rawOutputPath);
+        const rawContent = await readFlexible(rawOutputPath);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 

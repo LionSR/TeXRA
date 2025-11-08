@@ -9,6 +9,7 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
+import { TaskRunFileService } from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -34,6 +35,7 @@ export class LatexDiffManager {
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
+    private readonly fileService: TaskRunFileService,
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);
@@ -121,24 +123,30 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
+          const baseForDiff = this.fileService.hasRunDirectory()
+            ? (await this.fileService.mirrorWorkspaceFile(baseFile)).storagePath
+            : baseFile;
+          const cwd = path.dirname(baseForDiff);
           const result = await this.latexdiffService.runDiffForRound(
-            baseFile,
+            baseForDiff,
             outputFile,
             currRound,
+            undefined,
+            { cwd },
           );
           this.logLatexdiffResult(result, 'round-diff');
           aggregated.push({
             base: baseFile,
             revised: outputFile,
             output: result.diffFileName
-              ? path.join(path.dirname(baseFile), result.diffFileName)
+              ? path.join(path.dirname(baseForDiff), result.diffFileName)
               : '',
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
           });
           if (result.success && result.diffFileName) {
             const diffPath = path.join(
-              path.dirname(baseFile),
+              path.dirname(baseForDiff),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -172,9 +180,12 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
+          const cwd = path.dirname(prevOutputFile);
           const result = await this.latexdiffService.runDiffBetweenRounds(
             prevOutputFile,
             currOutputFile,
+            undefined,
+            { cwd },
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
           aggregated.push({

@@ -1,8 +1,10 @@
 // Standard library imports
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 // Local imports - storage
 import { StorageFS } from './storageFS';
+import { WorkspaceFS } from './workspaceFS';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
@@ -38,6 +40,175 @@ export function getRunDir(id: ExecutionId): string {
     throw new Error(`Invalid execution ID: ${id}`);
   }
   return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
+}
+
+function toWorkspaceRelative(target: string): string {
+  if (!target) {
+    return '';
+  }
+
+  if (!path.isAbsolute(target)) {
+    return target;
+  }
+
+  const workspaceRoot = WorkspaceFS.getPath();
+  if (workspaceRoot && target.startsWith(workspaceRoot)) {
+    return path.relative(workspaceRoot, target);
+  }
+
+  return path.basename(target);
+}
+
+export function getRunRelativePath(id: ExecutionId, target: string): string {
+  if (!isValidExecutionId(id)) {
+    throw new Error(`Invalid execution ID: ${id}`);
+  }
+
+  const relative = toWorkspaceRelative(target);
+  const normalized = relative === '.' ? '' : relative;
+  return path.join(TASK_RUNS_DIR, id, normalized);
+}
+
+export function getRunStoragePath(
+  id: ExecutionId,
+  target: string,
+): { relative: string; absolute: string } {
+  const relativePath = getRunRelativePath(id, target);
+  return {
+    relative: relativePath,
+    absolute: StorageFS.fullPath(relativePath),
+  };
+}
+
+async function ensureParentDir(filePath: string): Promise<void> {
+  const parentDir = path.dirname(filePath);
+  await fs.mkdir(parentDir, { recursive: true });
+}
+
+async function copyToTarget(
+  source: string,
+  destination: string,
+): Promise<void> {
+  await ensureParentDir(destination);
+  await fs.copyFile(source, destination);
+  await fs.rm(source, { force: true });
+}
+
+async function createSymlink(
+  source: string,
+  destination: string,
+): Promise<void> {
+  await ensureParentDir(destination);
+  try {
+    await fs.rm(destination, { force: true });
+  } catch (error) {
+    // Ignore cleanup errors
+  }
+  await fs.symlink(source, destination);
+}
+
+export class TaskRunFileService {
+  constructor(private readonly executionId?: ExecutionId) {}
+
+  public hasRunDirectory(): boolean {
+    return isValidExecutionId(this.executionId);
+  }
+
+  public getRunDirectory(): string | undefined {
+    if (!this.executionId) {
+      return undefined;
+    }
+    return getRunDir(this.executionId);
+  }
+
+  public async ensureRunDirectory(): Promise<void> {
+    if (!this.executionId) {
+      return;
+    }
+    await ensureRunDir(this.executionId);
+  }
+
+  public getWorkspaceDisplayPath(target: string): string {
+    const absolute = path.isAbsolute(target)
+      ? target
+      : WorkspaceFS.fullPath(target);
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (!workspaceRoot) {
+      return absolute;
+    }
+    return path.relative(workspaceRoot, absolute);
+  }
+
+  public async relocateToRunStorage(target: string): Promise<{
+    storagePath: string;
+    workspacePath: string;
+    relativePath: string;
+  }> {
+    const absoluteSource = path.isAbsolute(target)
+      ? target
+      : WorkspaceFS.getPath()
+        ? WorkspaceFS.fullPath(target)
+        : target;
+    const workspaceRelative = toWorkspaceRelative(absoluteSource);
+
+    if (!this.executionId) {
+      return {
+        storagePath: absoluteSource,
+        workspacePath: absoluteSource,
+        relativePath: workspaceRelative,
+      };
+    }
+
+    await this.ensureRunDirectory();
+    const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
+    await copyToTarget(absoluteSource, absolute);
+    return {
+      storagePath: absolute,
+      workspacePath: absoluteSource,
+      relativePath: workspaceRelative,
+    };
+  }
+
+  public async mirrorWorkspaceFile(workspaceFile: string): Promise<{
+    storagePath: string;
+    workspacePath: string;
+  }> {
+    const absoluteSource = path.isAbsolute(workspaceFile)
+      ? workspaceFile
+      : WorkspaceFS.getPath()
+        ? WorkspaceFS.fullPath(workspaceFile)
+        : workspaceFile;
+
+    if (!this.executionId) {
+      return {
+        storagePath: absoluteSource,
+        workspacePath: absoluteSource,
+      };
+    }
+
+    await this.ensureRunDirectory();
+    const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
+    await createSymlink(absoluteSource, absolute);
+    return {
+      storagePath: absolute,
+      workspacePath: absoluteSource,
+    };
+  }
+
+  public resolveExpectedPath(target: string): string {
+    const absoluteSource = path.isAbsolute(target)
+      ? target
+      : WorkspaceFS.getPath()
+        ? WorkspaceFS.fullPath(target)
+        : target;
+
+    if (!this.executionId) {
+      return absoluteSource;
+    }
+
+    const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
+    return absolute;
+  }
 }
 
 /**

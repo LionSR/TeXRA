@@ -11,6 +11,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import { TaskRunFileService } from '@utils/files';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -69,6 +70,7 @@ describe('LatexDiffManager mapping reuse', () => {
       0,
       baseFiles,
       logger,
+      new TaskRunFileService(),
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
@@ -95,6 +97,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseFiles,
       testLogger,
       'channel',
+      new TaskRunFileService(),
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
@@ -132,6 +135,7 @@ describe('LatexDiffManager mapping reuse', () => {
       0,
       baseFiles,
       logger,
+      new TaskRunFileService(),
     );
 
     handler.outputFiles[0] = [path.join('workspace', 'paper_r0.tex')];
@@ -163,6 +167,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseFiles,
       testLogger,
       'channel',
+      new TaskRunFileService(),
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
