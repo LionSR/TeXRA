@@ -9,6 +9,7 @@ import {
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -28,9 +29,11 @@ export class OutputFilesManager extends PersistentMapManager<
     StreamTabId,
     Map<string, Map<number, string[]>>
   > = new Map();
+  private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
+    this.logger = new AgentLogger('OutputFilesManager');
   }
 
   /** Add output files for a stream and round */
@@ -56,6 +59,9 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = Number.parseInt(round, 10);
       if (Number.isNaN(roundNum)) {
+        this.logger.warn(
+          `Invalid round number '${round}' for stream ${stream}`,
+        );
         continue;
       }
       runRounds.set(roundNum, files);
@@ -87,6 +93,9 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [round, files] of Object.entries(filesByRound)) {
       const roundNum = Number.parseInt(round, 10);
       if (Number.isNaN(roundNum)) {
+        this.logger.warn(
+          `Invalid missing-output round '${round}' for stream ${stream}`,
+        );
         continue;
       }
       runMissing.set(roundNum, files);

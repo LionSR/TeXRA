@@ -27,8 +27,31 @@ export class UsageSummary {
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
-    // Clear the summary - we're showing total usage in the files section now
-    this._summaryElem.textContent = '';
+    const inputTokens = totals?.inputTokens ?? 0;
+    const outputTokens = totals?.outputTokens ?? 0;
+    const cost = totals?.cost ?? 0;
+
+    if (!inputTokens && !outputTokens && !cost) {
+      this._summaryElem.textContent = '';
+      this._summaryElem.removeAttribute('aria-label');
+      return;
+    }
+
+    const parts = [
+      `${formatTokens(inputTokens)}`,
+      `${formatTokens(outputTokens)}`,
+      `$${cost.toFixed(3)}`,
+    ];
+
+    this._summaryElem.innerHTML = `
+      <i class="codicon codicon-meter"></i>
+      <span class="run-summary__label">Total usage:</span>
+      <span class="run-summary__value">${parts.join(' · ')}</span>
+    `;
+    this._summaryElem.setAttribute(
+      'aria-label',
+      `Total usage ${parts.join(', ')}`,
+    );
   }
 
   /**

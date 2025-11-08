@@ -7,7 +7,7 @@
   border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
   background-color: var(
-    --vscode-sideBarSectionHeader-background,
+    --vscode-editorWidget-background,
     var(--vscode-editor-background)
   );
 }
@@ -28,8 +28,10 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-tiny);
-  font-weight: 500;
-  color: var(--vscode-descriptionForeground);
+  font-weight: 400;
+  color: var(--vscode-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .instruction-panel__title .codicon {
