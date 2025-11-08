@@ -51,6 +51,9 @@ export interface IModelHandler<
   /** Check if output streaming is enabled. */
   isOutputStreamingEnabled(): boolean;
 
+  /** Determine if the replacement engine should process responses. */
+  shouldApplyReplacementEngine(): boolean;
+
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 

@@ -11,9 +11,6 @@ export { ModelHandlerDeepSeek } from './modelHandlerDeepSeek';
 export { ModelHandlerXAI } from './modelHandlerXAI';
 export { ModelHandlerKimi } from './modelHandlerKimi';
 export { ModelHandlerDashScope } from './modelHandlerDashScope';
-export {
-  ModelHandlerOpenRouter,
-  ModelHandlerAnthropicViaOpenRouter,
-} from './modelHandlerOpenRouter';
+export { ModelHandlerOpenRouter } from './modelHandlerOpenRouter';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';

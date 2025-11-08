@@ -436,7 +436,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       let processedResponse: string | undefined;
       let bestConnector: string | undefined;
       if (newResponse) {
-        processedResponse = replacementEngine.applyAll(newResponse);
+        processedResponse = options.modelHandler.shouldApplyReplacementEngine()
+          ? replacementEngine.applyAll(newResponse)
+          : newResponse;
 
         if (!repetitionResult.massiveRepetitionDetected) {
           const connector = await bestConnectionMethod(

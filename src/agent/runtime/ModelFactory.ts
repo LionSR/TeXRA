@@ -8,7 +8,6 @@ import {
   ModelHandlerKimi,
   ModelHandlerDashScope,
   ModelHandlerOpenRouter,
-  ModelHandlerAnthropicViaOpenRouter,
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
 } from '@agent/modelHandlers';
@@ -47,10 +46,6 @@ export class ModelFactory {
         config.openrouterFullName = `${config.provider}/${config.fullName}`;
       }
 
-      // Route to appropriate OpenRouter handler
-      if (config.provider === ModelProvider.ANTHROPIC) {
-        return new ModelHandlerAnthropicViaOpenRouter(config);
-      }
       return new ModelHandlerOpenRouter(config);
     }
 

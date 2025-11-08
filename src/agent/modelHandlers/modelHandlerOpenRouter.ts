@@ -33,6 +33,119 @@ import { K_SLICE } from '@utils/config';
  * Handler for models accessed through OpenRouter.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
+  override shouldApplyReplacementEngine(): boolean {
+    return false;
+  }
+
+  override async initializeMessages(
+    userPrefix: string,
+    userRequest: string,
+    _mediaFiles?: string[],
+    systemPrompt?: string,
+  ): Promise<any[]> {
+    return super.initializeMessages(
+      userPrefix,
+      userRequest,
+      undefined,
+      systemPrompt,
+    );
+  }
+
+  override async createRoundMessages(
+    messages: any[],
+    userMessage: string,
+    _mediaFiles?: string[],
+  ): Promise<any[]> {
+    return super.createRoundMessages(messages, userMessage, undefined);
+  }
+
+  override async createMediaMessage(_mediaFiles: string[]): Promise<any[]> {
+    return [];
+  }
+
+  override updateMessageContentWithPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: AgentWorkspaceState,
+  ): void {
+    if (!this.config.capabilities.supportsAssistantPrefill) {
+      super.updateMessageContentWithPrefill(
+        messages,
+        bestConnector,
+        newResponse,
+        toolState,
+      );
+      return;
+    }
+
+    const lastMessage = messages.at(-1);
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      return;
+    }
+
+    if (Array.isArray(lastMessage.content)) {
+      const updatedText =
+        toolState.assembly?.accumulatedOutput ??
+        `${bestConnector}${newResponse}`;
+      const lastIndex = lastMessage.content.length - 1;
+      const lastPart = lastMessage.content.at(-1);
+      if (lastPart && typeof lastPart === 'object' && 'text' in lastPart) {
+        lastMessage.content[lastIndex] = {
+          ...lastPart,
+          text: updatedText,
+        };
+      } else {
+        lastMessage.content = [
+          ...lastMessage.content,
+          { type: 'text', text: updatedText },
+        ];
+      }
+      return;
+    }
+
+    if (typeof lastMessage.content === 'string') {
+      lastMessage.content = [
+        {
+          type: 'text',
+          text:
+            toolState.assembly?.accumulatedOutput ??
+            `${bestConnector}${newResponse}`,
+        },
+      ];
+    }
+  }
+
+  override updateMessageContentWithoutPrefill(
+    messages: any[],
+    bestConnector: string,
+    newResponse: string,
+    toolState: AgentWorkspaceState,
+  ): void {
+    if (this.config.capabilities.supportsAssistantPrefill) {
+      const lastMessage = messages.at(-1);
+      if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
+        messages.push({
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: toolState.assembly.accumulatedOutput,
+            },
+          ],
+        });
+      }
+      return;
+    }
+
+    super.updateMessageContentWithoutPrefill(
+      messages,
+      bestConnector,
+      newResponse,
+      toolState,
+    );
+  }
+
   override async getClient(): Promise<OpenAI> {
     const baseURL = this.getBaseUrl();
     const client = await createOpenRouterClient({
@@ -184,57 +297,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       `OpenRouter reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
     );
     return reasoning;
-  }
-}
-
-/**
- * Handler for Anthropic models using OpenAI-compatible API via OpenRouter.
- */
-export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
-  updateMessageContentWithPrefill(
-    messages: any[],
-    bestConnector: string,
-    newResponse: string,
-    toolState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
-    // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
-    if (lastMessage.role === 'assistant') {
-      if (Array.isArray(lastMessage.content)) {
-        const lastPart = lastMessage.content.at(-1);
-        if (lastPart && typeof lastPart === 'object' && 'text' in lastPart) {
-          lastPart.text = `${bestConnector}${newResponse}`;
-        }
-      } else if (typeof lastMessage.content === 'string') {
-        lastMessage.content = [
-          {
-            type: 'text',
-            text: toolState.assembly.accumulatedOutput,
-          },
-        ];
-      }
-    }
-  }
-
-  /** Updates message content for models with prefill support. */
-  updateMessageContentWithoutPrefill(
-    messages: any[],
-    bestConnector: string,
-    newResponse: string,
-    toolState: AgentWorkspaceState,
-  ): void {
-    const lastMessage = messages.at(-1);
-    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
-      messages.push({
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            text: toolState.assembly.accumulatedOutput,
-          },
-        ],
-      });
-    }
   }
 }
 

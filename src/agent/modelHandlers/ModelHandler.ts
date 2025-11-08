@@ -136,6 +136,11 @@ export abstract class ModelHandler<
     return this.outputStreaming;
   }
 
+  /** Indicates whether the replacement engine should transform responses. */
+  public shouldApplyReplacementEngine(): boolean {
+    return true;
+  }
+
   /**
    * Enables or disables Progress view updates.
    */

@@ -6,6 +6,42 @@ import type { ExtendedCompletionUsage } from '@agent/core/ResponseUsage';
 export type OpenRouterMessage = Record<string, unknown>;
 export type OpenRouterChatResponse = Record<string, any>;
 
+function normalizeContent(
+  content: ChatCompletionMessageParam['content'],
+): ChatCompletionMessageParam['content'] {
+  if (!Array.isArray(content)) {
+    return content ?? '';
+  }
+
+  return content.map((part: any) => {
+    if (!part || typeof part !== 'object') {
+      return part;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(part, 'image_url')) {
+      const { image_url, ...rest } = part as Record<string, unknown> & {
+        image_url?: unknown;
+      };
+      return {
+        ...rest,
+        imageUrl: image_url,
+      };
+    }
+
+    if (Object.prototype.hasOwnProperty.call(part, 'input_audio')) {
+      const { input_audio, ...rest } = part as Record<string, unknown> & {
+        input_audio?: unknown;
+      };
+      return {
+        ...rest,
+        inputAudio: input_audio,
+      };
+    }
+
+    return part;
+  });
+}
+
 export function convertMessagesToOpenRouter(
   messages: ChatCompletionMessageParam[],
 ): OpenRouterMessage[] {
@@ -13,7 +49,7 @@ export function convertMessagesToOpenRouter(
     if (message.role === 'assistant') {
       const payload: Record<string, unknown> = {
         role: 'assistant',
-        content: message.content ?? '',
+        content: normalizeContent(message.content),
       };
 
       const toolCalls = (message as any).tool_calls;
@@ -56,7 +92,7 @@ export function convertMessagesToOpenRouter(
 
     const base: Record<string, unknown> = {
       role: message.role,
-      content: message.content ?? '',
+      content: normalizeContent(message.content),
     };
 
     if (typeof (message as any).name === 'string') {
@@ -81,22 +117,37 @@ function toOpenAIContent(content: any): ChatCompletionMessageParam['content'] {
   }
 
   return content.map((part: any) => {
-    if (part?.type === 'text') {
-      return { type: 'text', text: part.text ?? '' };
+    if (!part || typeof part !== 'object') {
+      return part;
     }
 
-    if (part?.type === 'image_url') {
-      return { type: 'image_url', image_url: part.imageUrl ?? part.image_url };
-    }
-
-    if (part?.type === 'input_audio') {
+    if (
+      Object.prototype.hasOwnProperty.call(part, 'imageUrl') &&
+      !Object.prototype.hasOwnProperty.call(part, 'image_url')
+    ) {
+      const { imageUrl, ...rest } = part as Record<string, unknown> & {
+        imageUrl?: unknown;
+      };
       return {
-        type: 'input_audio',
-        input_audio: part.inputAudio ?? part.input_audio,
+        ...rest,
+        image_url: imageUrl,
       };
     }
 
-    return { type: 'text', text: '' };
+    if (
+      Object.prototype.hasOwnProperty.call(part, 'inputAudio') &&
+      !Object.prototype.hasOwnProperty.call(part, 'input_audio')
+    ) {
+      const { inputAudio, ...rest } = part as Record<string, unknown> & {
+        inputAudio?: unknown;
+      };
+      return {
+        ...rest,
+        input_audio: inputAudio,
+      };
+    }
+
+    return part;
   });
 }
 
