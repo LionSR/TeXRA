@@ -22,7 +22,7 @@ export class StreamTabsManager extends PersistentMapManager<
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
-    super(WorkspaceStateKey.STREAM_TABS, storage);
+    super(WorkspaceStateKey.STREAM_TABS, storage, ['texra.logStreams']);
     this.logger = new AgentLogger('StreamTabsManager');
   }
 
