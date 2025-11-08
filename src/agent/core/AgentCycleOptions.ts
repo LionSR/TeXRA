@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - agent configuration
 import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
@@ -15,6 +18,12 @@ export interface UserVariableChannels {
   transient: Record<string, any>;
   output: Record<string, any>;
 }
+
+export const UserVariableChannelsSchema = z.strictObject({
+  input: z.record(z.string(), z.unknown()),
+  transient: z.record(z.string(), z.unknown()),
+  output: z.record(z.string(), z.unknown()),
+});
 
 export interface AgentCycleBaseOptions<C = unknown> {
   modelHandler: IModelHandler<any, any, any, any, C>;

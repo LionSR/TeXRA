@@ -39,8 +39,6 @@ export async function runToolUseCycle<C = unknown>(
     store: context.store,
     state: {
       messages: context.messages,
-      toolState: context.options.toolState,
-      iteration: context.store.round.roundIndex,
       shouldStop: false,
       response: undefined,
       responseTime: undefined,
