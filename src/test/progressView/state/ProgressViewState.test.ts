@@ -1,6 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - progress view
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
@@ -10,6 +13,8 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { WorkflowTaskState } from '@logger/TaskState';
+import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 class FakeStorage implements StateStorage {
   public readonly saved: { key: string; value: unknown }[] = [];
@@ -221,6 +226,173 @@ describe('ProgressViewState.load', () => {
     assert.equal(
       serializedState.agentConfig.session.agentCategory,
       AgentCategory.Workflow,
+    );
+  });
+
+  it('migrates workspace-scoped progress view data saved under legacy keys', async () => {
+    const storage = new FakeStorage();
+    const state = new ProgressViewState(storage);
+    const workspacePath = '/fake/workspace';
+    const originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    (vscode.workspace as any).workspaceFolders = [
+      { uri: { fsPath: workspacePath } },
+    ] as vscode.WorkspaceFolder[];
+
+    const streamId = 'legacy-stream';
+    const groupId = 'legacy-group';
+
+    const logEntry: LogMessageData = {
+      id: 'log-1' as any,
+      text: 'legacy message',
+      level: 'info',
+      timestamp: 1700000000000,
+    };
+
+    const taskGroup: TaskGroup = {
+      id: groupId as any,
+      name: 'Legacy group',
+      startTime: 1700000000000,
+      status: 'running',
+    };
+
+    const usage: TokenUsageStats = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cost: 1,
+    };
+
+    await storage.update(`texra.taskStates.${workspacePath}`, {
+      [streamId]: {
+        agentConfig: {
+          model: 'test-model',
+          agent: 'legacy-agent',
+          instruction: 'Restore me',
+          agentType: AgentType.Direct,
+          agentCategory: AgentCategory.Workflow,
+          inputFile: 'main.tex',
+          outputFiles: [],
+          useMultipleOutputs: false,
+        },
+        activeFiles: {
+          input: true,
+          reference: false,
+          auxiliary: false,
+          media: false,
+          output: false,
+        },
+      },
+    });
+
+    await storage.update(`texra.logStreams.${workspacePath}`, {
+      [streamId]: [logEntry],
+    });
+
+    await storage.update(`texra.logGroups.${workspacePath}`, {
+      [streamId]: {
+        [groupId]: taskGroup,
+      },
+    });
+
+    await storage.update(`texra.outputFiles.${workspacePath}`, {
+      [streamId]: {
+        0: [
+          {
+            path: 'out.tex',
+          },
+        ],
+      },
+    });
+
+    await storage.update(`texra.missingOutputs.${workspacePath}`, {
+      [streamId]: {
+        0: ['missing.tex'],
+      },
+    });
+
+    await storage.update(`texra.usageStats.${workspacePath}`, {
+      [streamId]: usage,
+    });
+
+    await storage.update(`texra.executionIds.${workspacePath}`, {
+      [streamId]: 'exec-1',
+    });
+
+    storage.saved.length = 0;
+
+    try {
+      await state.load();
+    } finally {
+      (vscode.workspace as any).workspaceFolders = originalWorkspaceFolders;
+    }
+
+    const messages = state.streamTabs.getMessages(streamId);
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].text, 'legacy message');
+
+    const restoredGroup = state.taskGroups.getGroup(streamId, groupId);
+    assert.ok(restoredGroup);
+    assert.equal(restoredGroup!.name, 'Legacy group');
+
+    const files = state.outputFiles.getFiles(streamId);
+    const roundFiles = files.get(0);
+    assert.ok(roundFiles);
+    assert.equal(roundFiles![0].path, 'out.tex');
+
+    const missing = state.outputFiles.getMissingOutputs(streamId);
+    const roundMissing = missing.get(0);
+    assert.ok(roundMissing);
+    assert.deepStrictEqual(roundMissing, ['missing.tex']);
+
+    const restoredUsage = state.usageStats.getStreamUsage(streamId);
+    assert.ok(restoredUsage);
+    assert.deepStrictEqual(restoredUsage, usage);
+
+    const restoredTaskState = state.getTaskState(streamId);
+    assert.ok(restoredTaskState);
+    assert.equal(
+      restoredTaskState!.session.agentCategory,
+      AgentCategory.Workflow,
+    );
+
+    const executionId = state.getExecutionId(streamId);
+    assert.equal(executionId, 'exec-1');
+
+    const savedKeys = storage.saved.map((entry) => entry.key);
+    assert.ok(savedKeys.includes(WorkspaceStateKey.STREAM_TABS));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.TASK_GROUPS));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.OUTPUT_FILES));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.MISSING_OUTPUTS));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.USAGE_STATS));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.TASK_STATES));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.EXECUTION_IDS));
+
+    assert.ok(
+      savedKeys.includes(`texra.logStreams.${workspacePath}`),
+      'expected legacy stream key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.logGroups.${workspacePath}`),
+      'expected legacy group key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.outputFiles.${workspacePath}`),
+      'expected legacy output key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.missingOutputs.${workspacePath}`),
+      'expected legacy missing output key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.usageStats.${workspacePath}`),
+      'expected legacy usage key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.taskStates.${workspacePath}`),
+      'expected legacy task state key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.executionIds.${workspacePath}`),
+      'expected legacy execution id key to be cleared',
     );
   });
 });
