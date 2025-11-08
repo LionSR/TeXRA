@@ -225,6 +225,12 @@ export class ProgressViewState {
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
+    this.activeRunId = null;
+    this.activeSessionKind = 'workflow';
+    this.runInstructions = new Map();
+    this.runFiles = new Map();
+    this.runMissingOutputs = new Map();
+    this.runUsage = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -266,6 +272,137 @@ export class ProgressViewState {
     } catch (e) {
       console.error('Failed to save state:', e);
     }
+  }
+
+  setActiveRunId(runId) {
+    this.activeRunId = runId || null;
+  }
+
+  getActiveRunId() {
+    return this.activeRunId;
+  }
+
+  setRunInstruction(runId, instruction) {
+    if (!runId) {
+      return;
+    }
+    const text = instruction?.text ?? '';
+    if (typeof text !== 'string' || !text.trim()) {
+      this.runInstructions.delete(runId);
+      return;
+    }
+
+    const normalizedInstruction = {
+      text,
+      metadata: instruction?.metadata,
+    };
+    this.runInstructions.set(runId, normalizedInstruction);
+  }
+
+  clearRunInstruction(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runInstructions.delete(runId);
+  }
+
+  getRunInstruction(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runInstructions.get(runId) || null;
+  }
+
+  clearRunInstructions() {
+    this.runInstructions.clear();
+  }
+
+  setRunFiles(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.set(runId, filesByRound || {});
+  }
+
+  getRunFiles(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runFiles.get(runId) || null;
+  }
+
+  clearRunFiles() {
+    this.runFiles.clear();
+  }
+
+  deleteRunFiles(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.delete(runId);
+  }
+
+  deleteRunUsage(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runUsage.delete(runId);
+  }
+
+  setRunMissingOutputs(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.set(runId, filesByRound || {});
+  }
+
+  getRunMissingOutputs(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runMissingOutputs.get(runId) || null;
+  }
+
+  clearRunMissingOutputs() {
+    this.runMissingOutputs.clear();
+  }
+
+  setRunUsage(runId, usage) {
+    if (!runId) {
+      return;
+    }
+    const normalized = {
+      inputTokens: Number(usage?.inputTokens) || 0,
+      outputTokens: Number(usage?.outputTokens) || 0,
+      cost: Number(usage?.cost) || 0,
+    };
+    if (
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0
+    ) {
+      this.runUsage.delete(runId);
+      return;
+    }
+    this.runUsage.set(runId, normalized);
+  }
+
+  getRunUsage(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runUsage.get(runId) || null;
+  }
+
+  clearRunUsage() {
+    this.runUsage.clear();
+  }
+
+  deleteRunMissingOutputs(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.delete(runId);
   }
 }
 

@@ -3,6 +3,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '../persistence/PersistentMapManager';
+import { DEFAULT_RUN_ID } from '../constants';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types
@@ -14,9 +15,11 @@ import { AgentLogger } from '@logger/AgentLogger';
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
  */
+type RunUsageMap = Map<string, TokenUsageStats>;
+
 export class UsageStatsManager extends PersistentMapManager<
   StreamTabId,
-  TokenUsageStats
+  RunUsageMap
 > {
   private readonly logger: AgentLogger;
 
@@ -28,62 +31,128 @@ export class UsageStatsManager extends PersistentMapManager<
   /**
    * Update usage statistics for a stream
    */
-  async updateStreamUsage(
+  async setRunUsage(
     stream: StreamTabId,
+    runId: string,
     usage: TokenUsageStats,
   ): Promise<void> {
-    await this.add(stream, this.sanitizeUsage(usage));
-  }
-
-  /**
-   * Add usage to existing stream statistics
-   */
-  async addToStreamUsage(
-    stream: StreamTabId,
-    usage: TokenUsageStats,
-  ): Promise<void> {
-    const existing = this.get(stream);
-    if (existing) {
-      const current = this.sanitizeUsage(existing);
-      const incoming = this.sanitizeUsage(usage);
-      const updated: TokenUsageStats = {
-        inputTokens: current.inputTokens + incoming.inputTokens,
-        outputTokens: current.outputTokens + incoming.outputTokens,
-        cost: current.cost + incoming.cost,
-      };
-      await this.add(stream, updated);
+    if (!runId) {
       return;
     }
 
-    await this.add(stream, this.sanitizeUsage(usage));
+    const normalized = this.sanitizeUsage(usage);
+    const current =
+      this.items.get(stream) ?? new Map<string, TokenUsageStats>();
+    if (
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0
+    ) {
+      current.delete(runId);
+    } else {
+      current.set(runId, normalized);
+    }
+
+    if (current.size === 0) {
+      this.items.delete(stream);
+    } else {
+      this.items.set(stream, current);
+    }
+
+    await this.save();
+  }
+
+  /**
+   * Delete usage statistics for a specific run within a stream
+   */
+  async deleteRunUsage(stream: StreamTabId, runId: string): Promise<void> {
+    if (!runId) {
+      return;
+    }
+
+    const existing = this.items.get(stream);
+    if (!existing) {
+      return;
+    }
+
+    existing.delete(runId);
+    if (existing.size === 0) {
+      this.items.delete(stream);
+    }
+
+    await this.save();
   }
 
   /**
    * Get usage statistics for a stream
    */
-  getStreamUsage(stream: StreamTabId): TokenUsageStats | undefined {
-    return this.get(stream);
+  getRunUsage(stream: StreamTabId): RunUsageMap {
+    return new Map(this.items.get(stream) ?? []);
+  }
+
+  /**
+   * Get total usage across all runs for a stream
+   */
+  getStreamTotals(stream: StreamTabId): TokenUsageStats | undefined {
+    const runs = this.items.get(stream);
+    if (!runs || runs.size === 0) {
+      return undefined;
+    }
+
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let cost = 0;
+
+    for (const usage of runs.values()) {
+      inputTokens += usage.inputTokens;
+      outputTokens += usage.outputTokens;
+      cost += usage.cost;
+    }
+
+    return { inputTokens, outputTokens, cost };
   }
 
   /**
    * Delete usage statistics for a stream
    */
   async deleteStream(stream: StreamTabId): Promise<void> {
-    await this.delete(stream);
-  }
-
-  /**
-   * Clear all usage statistics
-   */
-  async clear(): Promise<void> {
-    await super.clear();
+    await super.delete(stream);
   }
 
   /**
    * Set all usage statistics (used during loading)
    */
-  setAll(stats: Map<StreamTabId, TokenUsageStats>): void {
-    super.setAll(stats);
+  setAll(
+    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
+  ): void {
+    const normalized: Map<StreamTabId, RunUsageMap> = new Map();
+
+    for (const [stream, value] of stats.entries()) {
+      if (value instanceof Map) {
+        normalized.set(stream, new Map(value));
+        continue;
+      }
+
+      if (!value || typeof value !== 'object') {
+        continue;
+      }
+
+      const candidate = value as TokenUsageStats;
+      const usage = this.sanitizeUsage(candidate);
+      if (
+        usage.inputTokens === 0 &&
+        usage.outputTokens === 0 &&
+        usage.cost === 0
+      ) {
+        continue;
+      }
+
+      const runMap: RunUsageMap = new Map();
+      runMap.set(DEFAULT_RUN_ID, usage);
+      normalized.set(stream, runMap);
+    }
+
+    super.setAll(normalized);
   }
 
   /**
@@ -95,9 +164,11 @@ export class UsageStatsManager extends PersistentMapManager<
     let cost = 0;
 
     for (const usage of this.items.values()) {
-      inputTokens += usage.inputTokens;
-      outputTokens += usage.outputTokens;
-      cost += usage.cost;
+      for (const runUsage of usage.values()) {
+        inputTokens += runUsage.inputTokens;
+        outputTokens += runUsage.outputTokens;
+        cost += runUsage.cost;
+      }
     }
 
     return { inputTokens, outputTokens, cost };
@@ -130,20 +201,57 @@ export class UsageStatsManager extends PersistentMapManager<
   }
 
   /** Normalize loaded usage records */
+  protected override serialize(value: RunUsageMap, _key: StreamTabId): unknown {
+    return Object.fromEntries(value.entries());
+  }
+
   protected override async deserialize(
     data: unknown,
     _key: StreamTabId,
-  ): Promise<TokenUsageStats> {
+  ): Promise<RunUsageMap> {
     if (!data || typeof data !== 'object') {
-      return this.zeroUsage();
+      return new Map();
     }
 
-    const candidate = data as Partial<TokenUsageStats>;
-    return this.sanitizeUsage({
-      inputTokens: candidate.inputTokens ?? NaN,
-      outputTokens: candidate.outputTokens ?? NaN,
-      cost: candidate.cost ?? NaN,
-    });
+    const entries = Object.entries(data as Record<string, unknown>);
+    const looksLikeRunMap = entries.every(
+      ([, value]) => value && typeof value === 'object',
+    );
+
+    if (!looksLikeRunMap) {
+      const candidate = data as Partial<TokenUsageStats>;
+      const normalized = this.sanitizeUsage({
+        inputTokens: candidate.inputTokens ?? NaN,
+        outputTokens: candidate.outputTokens ?? NaN,
+        cost: candidate.cost ?? NaN,
+      });
+      const map: RunUsageMap = new Map();
+      if (
+        normalized.inputTokens !== 0 ||
+        normalized.outputTokens !== 0 ||
+        normalized.cost !== 0
+      ) {
+        map.set(DEFAULT_RUN_ID, normalized);
+      }
+      return map;
+    }
+
+    const runMap: RunUsageMap = new Map();
+    for (const [runId, rawUsage] of entries) {
+      if (!rawUsage || typeof rawUsage !== 'object') {
+        continue;
+      }
+      const candidate = rawUsage as Partial<TokenUsageStats>;
+      runMap.set(
+        runId,
+        this.sanitizeUsage({
+          inputTokens: candidate.inputTokens ?? NaN,
+          outputTokens: candidate.outputTokens ?? NaN,
+          cost: candidate.cost ?? NaN,
+        }),
+      );
+    }
+    return runMap;
   }
 
   private sanitizeUsage(usage: TokenUsageStats): TokenUsageStats {
@@ -156,9 +264,5 @@ export class UsageStatsManager extends PersistentMapManager<
 
   private toSafeNumber(value: number): number {
     return Number.isFinite(value) ? value : 0;
-  }
-
-  private zeroUsage(): TokenUsageStats {
-    return { inputTokens: 0, outputTokens: 0, cost: 0 };
   }
 }

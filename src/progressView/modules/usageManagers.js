@@ -18,34 +18,74 @@ export class UsageSummary {
    * "Round" groups. Falls back to the provided usage if given.
    * @param {Object} [usage] - Optional pre-computed usage totals
    */
-  update(usage) {
+  update(usage, activeRunId) {
     // Cache the summary element
     if (!this._summaryElem) {
       this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
     // If usage is not provided, compute it from existing log groups
-    const totals = usage ?? this.computeTotal();
+    const totals = usage ?? this.computeTotal(activeRunId);
 
-    // Clear the summary - we're showing total usage in the files section now
-    this._summaryElem.textContent = '';
+    if (!totals) {
+      this._summaryElem.textContent = '';
+      return;
+    }
+
+    const { inputTokens = 0, outputTokens = 0, cost = 0 } = totals;
+    if (inputTokens === 0 && outputTokens === 0 && cost === 0) {
+      this._summaryElem.textContent = '';
+      return;
+    }
+
+    const formattedInput = formatTokens(inputTokens);
+    const formattedOutput = formatTokens(outputTokens);
+    const formattedCost = cost ? `$${cost.toFixed(3)}` : '$0.000';
+    this._summaryElem.textContent = `Total Usage: ${formattedInput}, ${formattedOutput}, ${formattedCost}`;
   }
 
   /**
    * Compute total usage from all groups
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
-  computeTotal() {
-    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const group of taskGroups.values()) {
-      if (group.usage) {
-        totals.inputTokens += group.usage.inputTokens || 0;
-        totals.outputTokens += group.usage.outputTokens || 0;
-        totals.cost += group.usage.cost || 0;
+  computeTotal(runId) {
+    const targetRunId = runId || progressViewState.getActiveRunId();
+    if (targetRunId) {
+      const usage = progressViewState.getRunUsage(targetRunId);
+      if (usage) {
+        return {
+          inputTokens: usage.inputTokens || 0,
+          outputTokens: usage.outputTokens || 0,
+          cost: usage.cost || 0,
+        };
       }
     }
-    return totals;
+
+    const fallbackUsage = this._findFallbackUsage();
+    if (fallbackUsage) {
+      return fallbackUsage;
+    }
+
+    return null;
+  }
+
+  _findFallbackUsage() {
+    const iterator = progressViewState.runUsage?.entries?.();
+    if (!iterator) {
+      return null;
+    }
+    const first = iterator.next();
+    if (first && !first.done) {
+      const [, usage] = first.value;
+      if (usage) {
+        return {
+          inputTokens: usage.inputTokens || 0,
+          outputTokens: usage.outputTokens || 0,
+          cost: usage.cost || 0,
+        };
+      }
+    }
+    return null;
   }
 }
 
