@@ -27,7 +27,6 @@ export class Status {
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.ERASE_STREAM_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -39,7 +38,6 @@ export class Status {
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
-          ELEMENT_IDS.ERASE_STREAM_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -48,7 +46,6 @@ export class Status {
         label: 'Ready',
         enable: [
           ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.ERASE_STREAM_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -58,7 +55,6 @@ export class Status {
         enable: [
           ELEMENT_IDS.STOP_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
-          ELEMENT_IDS.ERASE_STREAM_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
@@ -107,11 +103,6 @@ export class Status {
     ).filter(Boolean);
 
     setElementsDisabled(buttons, true);
-    // Always enable the erase button regardless of status
-    const eraseButton = document.getElementById(ELEMENT_IDS.ERASE_STREAM_BTN);
-    if (eraseButton) {
-      setElementsDisabled([eraseButton], false);
-    }
 
     statusIndicator.className = 'status-indicator';
     statusIndicator.dataset.status = 'Ready';
