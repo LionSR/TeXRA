@@ -228,6 +228,8 @@ export class ProgressViewState {
     this.activeRunId = null;
     this.activeSessionKind = 'workflow';
     this.runInstructions = new Map();
+    this.runFiles = new Map();
+    this.runMissingOutputs = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -312,6 +314,56 @@ export class ProgressViewState {
 
   clearRunInstructions() {
     this.runInstructions.clear();
+  }
+
+  setRunFiles(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.set(runId, filesByRound || {});
+  }
+
+  getRunFiles(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runFiles.get(runId) || null;
+  }
+
+  clearRunFiles() {
+    this.runFiles.clear();
+  }
+
+  deleteRunFiles(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runFiles.delete(runId);
+  }
+
+  setRunMissingOutputs(runId, filesByRound) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.set(runId, filesByRound || {});
+  }
+
+  getRunMissingOutputs(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runMissingOutputs.get(runId) || null;
+  }
+
+  clearRunMissingOutputs() {
+    this.runMissingOutputs.clear();
+  }
+
+  deleteRunMissingOutputs(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runMissingOutputs.delete(runId);
   }
 }
 
