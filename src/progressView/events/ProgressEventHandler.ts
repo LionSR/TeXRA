@@ -11,6 +11,7 @@ import { ProgressViewState } from '../state/ProgressViewState';
 import { buildStreamInfos } from '../streamInfoUtils';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -172,12 +173,16 @@ export class ProgressEventHandler {
     const missingByRun = this.formatRunStringOutputs(
       this.state.outputFiles.getMissingOutputs(stream),
     );
+    const usageByRun = Object.fromEntries(
+      this.state.usageStats.getRunUsage(stream).entries(),
+    ) as Record<string, TokenUsageStats>;
 
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,
       runFiles: filesByRun,
       runMissingOutputs: missingByRun,
+      runUsage: usageByRun,
     });
 
     // Send output files for current stream
@@ -187,8 +192,10 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateMissingOutputs(stream, missingByRun);
 
     // Send usage for current stream
-    const usage = this.state.usageStats.getStreamUsage(stream);
-    this.webviewUpdater.updateUsage(usage);
+    const usage = Object.fromEntries(
+      this.state.usageStats.getRunUsage(stream).entries(),
+    ) as Record<string, TokenUsageStats>;
+    this.webviewUpdater.updateUsage(stream, usage);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;

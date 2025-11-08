@@ -135,17 +135,25 @@
   min-width: 0;
 }
 
-.run-selector-label {
-  color: var(--vscode-descriptionForeground);
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
 .run-selector {
   min-width: 180px;
   max-width: 260px;
   flex-shrink: 0;
+}
+
+.run-selector-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.run-selector-title .codicon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 #activeStreamName,

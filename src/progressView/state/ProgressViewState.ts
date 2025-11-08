@@ -330,14 +330,17 @@ export class ProgressViewState {
       this._taskGroups.clear(),
       this._outputFiles.clear(),
       this._usageStats.clear(),
+      this._runInstructions.clear(),
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this._activeRunIds.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
     this.saveExecutionIds();
+    this.saveActiveRunIds();
     this.cleanupToolUseAgentRegistry();
   }
 

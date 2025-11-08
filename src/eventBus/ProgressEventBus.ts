@@ -81,7 +81,11 @@ export interface ProgressEventPayloads {
     usage: TokenUsageStats;
   };
   clearTaskOutput: StreamTabId;
-  updateStreamUsage: { stream: StreamTabId; usage: TokenUsageStats };
+  updateStreamUsage: {
+    stream: StreamTabId;
+    usage: TokenUsageStats;
+    runId?: string;
+  };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;
