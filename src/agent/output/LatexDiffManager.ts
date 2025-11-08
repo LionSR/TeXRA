@@ -56,7 +56,10 @@ export class LatexDiffManager {
     }
     const normalizedRoot = path.resolve(runRoot);
     const normalizedFile = path.resolve(filePath);
-    return normalizedFile.startsWith(normalizedRoot);
+    return (
+      normalizedFile === normalizedRoot ||
+      normalizedFile.startsWith(`${normalizedRoot}${path.sep}`)
+    );
   }
 
   private async ensureRunLocalPath(filePath: string): Promise<string> {
@@ -74,29 +77,67 @@ export class LatexDiffManager {
       return cached;
     }
 
-    if (!(await AbsoluteFS.exists(filePath))) {
+    let sourcePath = filePath;
+    let sourceExists = false;
+
+    if (path.isAbsolute(filePath)) {
+      sourceExists = await AbsoluteFS.exists(filePath);
+    } else {
+      try {
+        sourcePath = WorkspaceFS.fullPath(filePath);
+        sourceExists = await WorkspaceFS.exists(filePath);
+      } catch {
+        sourcePath = path.resolve(filePath);
+        sourceExists = await AbsoluteFS.exists(sourcePath);
+      }
+    }
+
+    if (!sourceExists) {
       return filePath;
     }
 
     const workspaceRoot = WorkspaceFS.getPath();
-    const relative = workspaceRoot
-      ? path.relative(workspaceRoot, path.resolve(filePath))
-      : path.basename(filePath);
+    let relative = workspaceRoot
+      ? path.relative(workspaceRoot, sourcePath)
+      : path.basename(sourcePath);
+
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+      relative = path.basename(sourcePath);
+    }
+
     const mirrorDir = path.join(runRoot, 'workspace');
     const targetPath = path.join(mirrorDir, relative);
 
     await AbsoluteFS.ensureDir(path.dirname(targetPath));
 
     try {
-      await fs.symlink(filePath, targetPath);
+      await fs.symlink(sourcePath, targetPath);
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
-      if (err.code !== 'EEXIST') {
-        await AbsoluteFS.copy(filePath, targetPath, { overwrite: true });
+      if (err.code === 'EEXIST') {
+        const stats = await fs.lstat(targetPath);
+        if (stats.isSymbolicLink()) {
+          const linkTarget = await fs.readlink(targetPath);
+          const resolvedTarget = path.isAbsolute(linkTarget)
+            ? linkTarget
+            : path.resolve(path.dirname(targetPath), linkTarget);
+          if (resolvedTarget !== sourcePath) {
+            await AbsoluteFS.delete(targetPath, { recursive: false });
+            await fs.symlink(sourcePath, targetPath);
+          }
+        } else {
+          await AbsoluteFS.delete(targetPath, { recursive: true });
+          await AbsoluteFS.copy(sourcePath, targetPath, { overwrite: true });
+        }
+      } else {
+        await AbsoluteFS.copy(sourcePath, targetPath, { overwrite: true });
       }
     }
 
     this.runMirrorCache.set(filePath, targetPath);
+    if (sourcePath !== filePath) {
+      this.runMirrorCache.set(sourcePath, targetPath);
+    }
     return targetPath;
   }
 

@@ -330,7 +330,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill,
     outputPath,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
-    await AbsoluteFS.ensureDir(path.dirname(outputPath));
+    const outputDir = path.dirname(outputPath);
+    if (outputDir && outputDir !== '.' && outputDir !== path.sep) {
+      if (path.isAbsolute(outputDir)) {
+        await AbsoluteFS.ensureDir(outputDir);
+      } else {
+        await WorkspaceFS.ensureDir(outputDir);
+      }
+    }
 
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
