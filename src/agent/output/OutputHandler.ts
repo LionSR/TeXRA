@@ -107,6 +107,7 @@ export class OutputHandler implements IOutputHandler {
       this.baseFiles,
       this.logger,
       this.channel,
+      undefined,
       () => this.getRunRoot(),
     );
     this.diffStatsManager = new DiffStatsManager();

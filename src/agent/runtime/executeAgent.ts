@@ -364,8 +364,6 @@ export async function executeAgentWithLogging<T extends IAgent>(
     contextLogger = executionContext.logger;
     const sessionMetadata = agent.getSessionMetadata();
 
-    executionContext?.setRunDirectory(runDirectory);
-
     // Get the full stream tab ID
     const config = agent.config;
     const metadata = config.session;
