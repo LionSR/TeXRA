@@ -2,6 +2,7 @@ export * from './AgentConfig';
 export * from './AgentDataclass';
 export * from './AgentState';
 export * from './AgentSharedStore';
+export * from './AgentSharedStoreRegistry';
 export * from './ToolConfig';
 export * from './AgentWorkspaceState';
 export * from './ResponseUsage';

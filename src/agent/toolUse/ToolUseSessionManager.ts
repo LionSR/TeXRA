@@ -1,4 +1,4 @@
-export { ToolUseResumeQueue as ToolUseSessionManager } from './ToolUseResumeQueue';
+export { ToolUseSnapshotCache as ToolUseSessionManager } from './ToolUseSnapshotCache';
 export type {
   ToolUseSessionSnapshot,
   SaveToolUseSnapshotPayload,
