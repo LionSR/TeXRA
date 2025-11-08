@@ -12,7 +12,8 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { AgentFilter } from '../types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 
 // Types
 import {
@@ -339,53 +340,60 @@ export class ProgressViewState {
 
     this.taskStates.clear();
 
+    if (!raw || typeof raw !== 'object') {
+      this.cleanupToolUseAgentRegistry();
+      return;
+    }
+
+    const container = raw as Record<string, unknown>;
+    const buckets: Record<string, unknown>[] = [];
+
+    if (
+      typeof container.workflow === 'object' ||
+      typeof container.toolUse === 'object'
+    ) {
+      if (container.workflow && typeof container.workflow === 'object') {
+        buckets.push(container.workflow as Record<string, unknown>);
+      }
+      if (container.toolUse && typeof container.toolUse === 'object') {
+        buckets.push(container.toolUse as Record<string, unknown>);
+      }
+    } else {
+      buckets.push(container);
+    }
+
+    let migratedLegacyState = false;
     let loaded = 0;
-    const isTaskState = (value: unknown): value is TaskState => {
-      if (!value || typeof value !== 'object') {
-        return false;
-      }
-      return (
-        isWorkflowTaskState(value as TaskState) ||
-        isToolUseTaskState(value as TaskState)
-      );
-    };
 
-    const addFromRecord = (record: unknown): void => {
-      if (!record || typeof record !== 'object') {
-        return;
-      }
-
-      for (const [stream, value] of Object.entries(
-        record as Record<string, unknown>,
-      )) {
-        if (!isTaskState(value)) {
+    for (const record of buckets) {
+      for (const [stream, rawState] of Object.entries(record)) {
+        if (!rawState || typeof rawState !== 'object') {
           continue;
         }
 
-        this.taskStates.set(stream as StreamTabId, cloneTaskState(value));
+        const state = rawState as TaskState;
+
+        if (!state.session) {
+          const agentConfig = (state as { agentConfig?: any }).agentConfig;
+          if (!agentConfig || typeof agentConfig !== 'object') {
+            continue;
+          }
+
+          const session = resolveAgentSessionDescriptor(
+            agentConfig.agentType as AgentType | undefined,
+            agentConfig.agentCategory as AgentCategory | undefined,
+          );
+
+          state.session = session;
+          state.agentConfig = { ...agentConfig, session };
+          migratedLegacyState = true;
+        } else if (!state.agentConfig.session) {
+          state.agentConfig = { ...state.agentConfig, session: state.session };
+          migratedLegacyState = true;
+        }
+
+        this.taskStates.set(stream as StreamTabId, cloneTaskState(state));
         loaded += 1;
-      }
-    };
-
-    let migratedLegacyState = false;
-
-    if (raw && typeof raw === 'object') {
-      const container = raw as Record<string, unknown>;
-      const workflow = container['workflow'];
-      const toolUse = container['toolUse'];
-
-      const hasLegacyShape =
-        (!!workflow &&
-          typeof workflow === 'object' &&
-          !isTaskState(workflow)) ||
-        (!!toolUse && typeof toolUse === 'object' && !isTaskState(toolUse));
-
-      if (hasLegacyShape) {
-        migratedLegacyState = true;
-        addFromRecord(workflow);
-        addFromRecord(toolUse);
-      } else {
-        addFromRecord(container);
       }
     }
 
