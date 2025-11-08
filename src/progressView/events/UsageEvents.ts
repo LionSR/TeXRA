@@ -19,6 +19,25 @@ interface RunUsageComputationContext {
   rootCache?: Map<string, string | null>;
 }
 
+const createEmptyTotals = () => ({
+  inputTokens: 0,
+  outputTokens: 0,
+  cost: 0,
+});
+
+const applyUsage = (
+  target: { inputTokens: number; outputTokens: number; cost: number },
+  usage: TaskGroup['usage'],
+) => {
+  if (!usage) {
+    return;
+  }
+
+  target.inputTokens += usage.inputTokens ?? 0;
+  target.outputTokens += usage.outputTokens ?? 0;
+  target.cost += usage.cost ?? 0;
+};
+
 function findRootGroupId(
   groupId: string,
   context: RunUsageComputationContext,
@@ -54,12 +73,11 @@ function computeRunUsageTotals(
   runId: string,
   context: RunUsageComputationContext,
 ): { inputTokens: number; outputTokens: number; cost: number } {
-  const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-  const aggregatedTotals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+  const directTotals = createEmptyTotals();
+  const aggregatedTotals = createEmptyTotals();
   const { groups } = context;
+  const rootCache = context.rootCache ?? (context.rootCache = new Map());
 
-  let hasDirectChildUsage = false;
-  let aggregatedUsageFound = false;
   let runUsage: TaskGroup['usage'] | undefined;
 
   for (const group of groups.values()) {
@@ -68,37 +86,46 @@ function computeRunUsageTotals(
       continue;
     }
 
-    if (group.parentGroupId === runId) {
-      totals.inputTokens += usage.inputTokens ?? 0;
-      totals.outputTokens += usage.outputTokens ?? 0;
-      totals.cost += usage.cost ?? 0;
-      hasDirectChildUsage = true;
-      continue;
-    }
-
     if (group.id === runId) {
       runUsage = usage;
       continue;
     }
 
-    const rootId = findRootGroupId(group.id, context);
+    if (group.parentGroupId === runId) {
+      applyUsage(directTotals, usage);
+      continue;
+    }
+
+    if (!group.parentGroupId) {
+      continue;
+    }
+
+    const rootId = findRootGroupId(group.id, { ...context, rootCache });
     if (rootId === runId) {
-      aggregatedTotals.inputTokens += usage.inputTokens ?? 0;
-      aggregatedTotals.outputTokens += usage.outputTokens ?? 0;
-      aggregatedTotals.cost += usage.cost ?? 0;
-      aggregatedUsageFound = true;
+      applyUsage(aggregatedTotals, usage);
     }
   }
 
-  if (hasDirectChildUsage) {
-    return totals;
-  }
-
-  if (aggregatedUsageFound) {
-    return aggregatedTotals;
-  }
+  const hasDirect =
+    directTotals.inputTokens !== 0 ||
+    directTotals.outputTokens !== 0 ||
+    directTotals.cost !== 0;
+  const hasAggregated =
+    aggregatedTotals.inputTokens !== 0 ||
+    aggregatedTotals.outputTokens !== 0 ||
+    aggregatedTotals.cost !== 0;
 
   if (runUsage) {
+    if (hasDirect) {
+      applyUsage(directTotals, runUsage);
+      return directTotals;
+    }
+
+    if (hasAggregated) {
+      applyUsage(aggregatedTotals, runUsage);
+      return aggregatedTotals;
+    }
+
     return {
       inputTokens: runUsage.inputTokens ?? 0,
       outputTokens: runUsage.outputTokens ?? 0,
@@ -106,7 +133,15 @@ function computeRunUsageTotals(
     };
   }
 
-  return totals;
+  if (hasDirect) {
+    return directTotals;
+  }
+
+  if (hasAggregated) {
+    return aggregatedTotals;
+  }
+
+  return createEmptyTotals();
 }
 
 async function refreshRunUsage(
@@ -151,41 +186,7 @@ export function createUsageEvents(
     stream: string,
     requestedRunId: string | null | undefined,
     state: ProgressViewState,
-  ): string | null => {
-    if (requestedRunId) {
-      return requestedRunId;
-    }
-
-    const active = state.getActiveRunId(stream);
-    if (active) {
-      return active;
-    }
-
-    const usageEntries = state.usageStats.getRunUsage(stream);
-    if (usageEntries.size === 1) {
-      const onlyRun = usageEntries.keys().next().value ?? null;
-      if (onlyRun) {
-        return onlyRun;
-      }
-    }
-
-    const fileRuns = state.outputFiles.getFiles(stream);
-    if (fileRuns.size === 1) {
-      const onlyRun = fileRuns.keys().next().value ?? null;
-      if (onlyRun) {
-        return onlyRun;
-      }
-    }
-
-    const groups = state.taskGroups.getStreamGroups(stream);
-    for (const group of groups.values()) {
-      if (!group.parentGroupId) {
-        return group.id;
-      }
-    }
-
-    return null;
-  };
+  ): string | null => state.resolveRunId(stream, requestedRunId ?? null);
 
   return {
     register(

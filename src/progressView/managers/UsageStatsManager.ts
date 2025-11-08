@@ -3,6 +3,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '../persistence/PersistentMapManager';
+import { normalizeRunId } from '../constants/runIds';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types
@@ -14,8 +15,6 @@ import { AgentLogger } from '@logger/AgentLogger';
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
  */
-const DEFAULT_RUN_ID = '__default__';
-
 type RunUsageMap = Map<string, TokenUsageStats>;
 
 export class UsageStatsManager extends PersistentMapManager<
@@ -149,7 +148,7 @@ export class UsageStatsManager extends PersistentMapManager<
       }
 
       const runMap: RunUsageMap = new Map();
-      runMap.set(DEFAULT_RUN_ID, usage);
+      runMap.set(normalizeRunId(null), usage);
       normalized.set(stream, runMap);
     }
 
@@ -232,7 +231,7 @@ export class UsageStatsManager extends PersistentMapManager<
         normalized.outputTokens !== 0 ||
         normalized.cost !== 0
       ) {
-        map.set(DEFAULT_RUN_ID, normalized);
+        map.set(normalizeRunId(null), normalized);
       }
       return map;
     }
