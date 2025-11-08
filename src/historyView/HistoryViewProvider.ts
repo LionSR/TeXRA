@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common webview
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
+import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
 
 // Local imports - history view components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';
@@ -28,41 +29,10 @@ export class HistoryViewProvider
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'historyView'),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'styles',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'modules',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'webview',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'node_modules',
-          '@vscode',
-          'codicons',
-          'dist',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'node_modules',
-          '@vscode-elements',
-          'elements',
-          'dist',
-        ),
-      ],
+      localResourceRoots: getSharedLocalResourceRoots(
+        this.context,
+        'historyView',
+      ),
     };
 
     super.resolveWebviewViewInternal(webviewView);
@@ -86,41 +56,10 @@ export class HistoryViewProvider
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(this.context.extensionUri, 'src', 'historyView'),
-          vscode.Uri.joinPath(
-            this.context.extensionUri,
-            'src',
-            'common',
-            'styles',
-          ),
-          vscode.Uri.joinPath(
-            this.context.extensionUri,
-            'src',
-            'common',
-            'modules',
-          ),
-          vscode.Uri.joinPath(
-            this.context.extensionUri,
-            'src',
-            'common',
-            'webview',
-          ),
-          vscode.Uri.joinPath(
-            this.context.extensionUri,
-            'node_modules',
-            '@vscode',
-            'codicons',
-            'dist',
-          ),
-          vscode.Uri.joinPath(
-            this.context.extensionUri,
-            'node_modules',
-            '@vscode-elements',
-            'elements',
-            'dist',
-          ),
-        ],
+        localResourceRoots: getSharedLocalResourceRoots(
+          this.context,
+          'historyView',
+        ),
       },
     );
 

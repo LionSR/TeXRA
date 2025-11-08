@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
+import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
 
 // Local imports - webview
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
@@ -125,41 +126,7 @@ export class MainViewProvider
   resolveWebviewView(webviewView: vscode.WebviewView) {
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this.context.extensionUri, 'src', 'webview'),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'styles',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'modules',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'src',
-          'common',
-          'webview',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'node_modules',
-          '@vscode',
-          'codicons',
-          'dist',
-        ),
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'node_modules',
-          '@vscode-elements',
-          'elements',
-          'dist',
-        ),
-      ],
+      localResourceRoots: getSharedLocalResourceRoots(this.context, 'webview'),
     };
 
     super.resolveWebviewViewInternal(webviewView);
@@ -189,56 +156,38 @@ export class MainViewProvider
     });
 
     // Check if there's state to restore from the command
-    const hasStateToRestore = await vscode.commands.executeCommand(
+    const hasStateToRestore = await vscode.commands.executeCommand<boolean>(
       'vscode.getContextKeyValue',
       'texra.hasStateToRestore',
     );
 
-    if (hasStateToRestore) {
-      try {
-        // Get the stored state
-        const storedState = await vscode.commands.executeCommand(
-          'vscode.getContextKeyValue',
-          'texra.stateToRestore',
-        );
+    if (!hasStateToRestore) {
+      return;
+    }
 
-        let state: unknown = storedState;
-        if (typeof storedState === 'string') {
-          try {
-            state = JSON.parse(storedState);
-          } catch (parseError) {
-            console.warn(
-              'Failed to parse legacy state stored as JSON string:',
-              parseError,
-            );
-            state = undefined;
-          }
-        }
+    try {
+      const state = (await vscode.commands.executeCommand(
+        'vscode.getContextKeyValue',
+        'texra.stateToRestore',
+      )) as unknown;
 
-        if (state && typeof state === 'object' && !Array.isArray(state)) {
-          // Send the state to the webview
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-            state,
-          });
-
-          console.log('Restored state from context');
-        }
-      } catch (error) {
-        console.error('Error restoring state from context:', error);
-      } finally {
-        // Clear the stored state regardless of success to avoid loops
-        await vscode.commands.executeCommand(
-          'setContext',
-          'texra.hasStateToRestore',
-          false,
-        );
-        await vscode.commands.executeCommand(
-          'setContext',
-          'texra.stateToRestore',
-          undefined,
-        );
+      if (state) {
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+          state,
+        });
       }
+    } finally {
+      await vscode.commands.executeCommand(
+        'setContext',
+        'texra.hasStateToRestore',
+        false,
+      );
+      await vscode.commands.executeCommand(
+        'setContext',
+        'texra.stateToRestore',
+        undefined,
+      );
     }
   }
 }
