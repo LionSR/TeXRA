@@ -230,6 +230,7 @@ export class ProgressViewState {
     this.runInstructions = new Map();
     this.runFiles = new Map();
     this.runMissingOutputs = new Map();
+    this.runUsage = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -357,6 +358,37 @@ export class ProgressViewState {
 
   clearRunMissingOutputs() {
     this.runMissingOutputs.clear();
+  }
+
+  setRunUsage(runId, usage) {
+    if (!runId) {
+      return;
+    }
+    const normalized = {
+      inputTokens: Number(usage?.inputTokens) || 0,
+      outputTokens: Number(usage?.outputTokens) || 0,
+      cost: Number(usage?.cost) || 0,
+    };
+    if (
+      normalized.inputTokens === 0 &&
+      normalized.outputTokens === 0 &&
+      normalized.cost === 0
+    ) {
+      this.runUsage.delete(runId);
+      return;
+    }
+    this.runUsage.set(runId, normalized);
+  }
+
+  getRunUsage(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runUsage.get(runId) || null;
+  }
+
+  clearRunUsage() {
+    this.runUsage.clear();
   }
 
   deleteRunMissingOutputs(runId) {

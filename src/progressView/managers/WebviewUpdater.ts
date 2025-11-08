@@ -102,6 +102,7 @@ export class WebviewUpdater {
       activeRunId?: string | null;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
       runMissingOutputs?: Record<string, { [key: number]: string[] }>;
+      runUsage?: Record<string, TokenUsageStats>;
     },
   ): void {
     const webview = this.getWebview();
@@ -116,6 +117,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runFiles: extras?.runFiles,
       runMissingOutputs: extras?.runMissingOutputs,
+      runUsage: extras?.runUsage,
     });
   }
 
@@ -214,13 +216,17 @@ export class WebviewUpdater {
   /**
    * Update usage statistics
    */
-  updateUsage(usage?: TokenUsageStats): void {
+  updateUsage(
+    stream: StreamTabId,
+    usageByRun: Record<string, TokenUsageStats>,
+  ): void {
     const webview = this.getWebview();
     if (!webview) return;
 
     webview.postMessage({
       command: COMMANDS.UPDATE_USAGE,
-      usage,
+      stream,
+      usageByRun,
     });
   }
 
@@ -365,8 +371,10 @@ export class WebviewUpdater {
       this.updateMissingOutputs(activeStream, missing);
 
       // Update usage for active stream
-      const usage = state.usageStats.getStreamUsage(activeStream);
-      this.updateUsage(usage);
+      const usage = Object.fromEntries(
+        state.usageStats.getRunUsage(activeStream).entries(),
+      ) as Record<string, TokenUsageStats>;
+      this.updateUsage(activeStream, usage);
 
       const taskState = state.getTaskState(activeStream);
       const instructionUpdate =
@@ -383,7 +391,7 @@ export class WebviewUpdater {
       this.updateLogContent('', [], []);
       this.updateFiles('', {});
       this.updateMissingOutputs('', {});
-      this.updateUsage(undefined);
+      this.updateUsage('', {});
       this.clearInstruction('');
     }
 
