@@ -6,13 +6,14 @@ import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
-import { ToolUseSessionCoordinator } from '@agent/toolUse/ToolUseSessionCoordinator';
 import {
   resumeFromSnapshot,
   sendFollowUp,
 } from '@agent/toolUse/ToolUseFollowUpCoordinator';
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 
 describe('ToolUseFollowUpCoordinator', () => {
   const streamId = 'stream-follow-up' as StreamTabId;
@@ -42,30 +43,29 @@ describe('ToolUseFollowUpCoordinator', () => {
     lastUpdated: Date.now(),
   };
 
-  const originalHandleFollowUp = ToolUseSessionCoordinator.handleFollowUp;
-  const originalResume = ToolUseSessionCoordinator.resumeFromSnapshot;
+  const originalGetAgent = AgentRegistry.getToolUseAgent;
+  const originalResume = ToolUseSessionPersistence.resumeFromSnapshot;
 
   afterEach(() => {
-    ToolUseSessionCoordinator.handleFollowUp = originalHandleFollowUp;
-    ToolUseSessionCoordinator.resumeFromSnapshot = originalResume;
+    (AgentRegistry as any).getToolUseAgent = originalGetAgent;
+    ToolUseSessionPersistence.resumeFromSnapshot = originalResume;
   });
 
-  it('delegates follow-up handling to the session coordinator', async () => {
-    const calls: { streamId: StreamTabId; text: string }[] = [];
-    ToolUseSessionCoordinator.handleFollowUp = async (
-      sid,
-      text,
-    ): Promise<void> => {
-      calls.push({ streamId: sid, text });
-    };
+  it('sends follow-ups to active agents', async () => {
+    const calls: string[] = [];
+    (AgentRegistry as any).getToolUseAgent = () => ({
+      appendFollowUp: (text: string) => {
+        calls.push(text);
+      },
+    });
 
     await sendFollowUp(streamId, 'hello');
 
-    assert.deepEqual(calls, [{ streamId, text: 'hello' }]);
+    assert.deepEqual(calls, ['hello']);
   });
 
   it('resumes from snapshot through the session coordinator', async () => {
-    ToolUseSessionCoordinator.resumeFromSnapshot = async (snap, followUp) => {
+    ToolUseSessionPersistence.resumeFromSnapshot = async (snap, followUp) => {
       assert.equal(snap, snapshot);
       assert.equal(followUp, 'next');
       return { success: true };

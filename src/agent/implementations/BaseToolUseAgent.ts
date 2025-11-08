@@ -38,7 +38,6 @@ import {
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
-import { AgentConversationState } from '@agent/core/AgentConversationState';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;
@@ -137,7 +136,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         },
         createState: () => {
           const state: ToolUseRunState<C> = {
-            conversation: new AgentConversationState<ProviderMessage>(),
+            conversation: [],
             cycleOptions: null,
             shouldSkipCycle: false,
             store: null,
@@ -171,8 +170,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
                 messages,
                 followUp,
               );
-            this.getActiveState().conversation.replace(updatedMessages);
-            return this.getActiveState().conversation.all();
+            this.getActiveState().conversation = [...updatedMessages];
+            return this.getActiveState().conversation;
           },
           logFinalizeWarning: (message, error) => {
             this.logger.warn(message, undefined, undefined, error);
@@ -206,7 +205,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         onRoundFinalized: this.getUsageRecorder('tool-use'),
       });
 
-      state.conversation.replace(messages);
+      state.conversation = [...messages];
       state.store = store;
       state.runState = store.run;
       state.shouldSkipCycle = true;
@@ -240,7 +239,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       onRoundFinalized: this.getUsageRecorder('tool-use'),
     });
 
-    state.conversation.replace(messages);
+    state.conversation = [...messages];
     state.store = store;
     state.shouldSkipCycle = false;
 
@@ -274,7 +273,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   private async enterWaitingState(): Promise<void> {
     await this.sessionLifecycle.enterWaitingState(
-      this.getActiveState().conversation.all(),
+      this.getActiveState().conversation,
     );
   }
 
