@@ -231,6 +231,7 @@ export class ProgressViewState {
     this.runFiles = new Map();
     this.runMissingOutputs = new Map();
     this.runUsage = new Map();
+    this.pendingInstructions = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -282,6 +283,45 @@ export class ProgressViewState {
     return this.activeRunId;
   }
 
+  setPendingInstruction(streamId, instruction) {
+    if (!streamId || !instruction || !instruction.text) {
+      return;
+    }
+
+    const text = instruction.text.trim();
+    if (!text) {
+      this.pendingInstructions.delete(streamId);
+      return;
+    }
+
+    this.pendingInstructions.set(streamId, {
+      text,
+      metadata: instruction.metadata,
+    });
+  }
+
+  takePendingInstruction(streamId) {
+    if (!streamId) {
+      return null;
+    }
+    const pending = this.pendingInstructions.get(streamId) || null;
+    if (pending) {
+      this.pendingInstructions.delete(streamId);
+    }
+    return pending;
+  }
+
+  clearPendingInstruction(streamId) {
+    if (!streamId) {
+      return;
+    }
+    this.pendingInstructions.delete(streamId);
+  }
+
+  clearAllPendingInstructions() {
+    this.pendingInstructions.clear();
+  }
+
   setRunInstruction(runId, instruction) {
     if (!runId) {
       return;
@@ -315,6 +355,7 @@ export class ProgressViewState {
 
   clearRunInstructions() {
     this.runInstructions.clear();
+    this.clearAllPendingInstructions();
   }
 
   setRunFiles(runId, filesByRound) {

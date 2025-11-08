@@ -112,6 +112,9 @@
   align-items: center;
   gap: var(--spacing-small);
   font-size: var(--font-size-sm);
+  padding: var(--spacing-tiny) var(--spacing-small);
+  border-radius: var(--border-radius-medium);
+  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
 }
 
 /* Header layout */
@@ -147,8 +150,10 @@
   gap: var(--spacing-tiny);
   color: var(--vscode-descriptionForeground);
   font-size: var(--font-size-sm);
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .run-selector-title .codicon {
@@ -169,7 +174,26 @@
 }
 
 .run-summary {
-  opacity: var(--opacity-subtle);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
+
+.run-summary .codicon {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.run-summary__label {
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.run-summary__value {
+  color: var(--vscode-foreground);
 }
 
 /* Status indicator styling */
