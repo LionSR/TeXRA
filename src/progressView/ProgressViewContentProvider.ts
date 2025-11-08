@@ -32,6 +32,7 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
     { key: 'fileListUri', path: 'modules/uiManagers/FileList.js' },
     { key: 'eventsUri', path: 'modules/uiManagers/EventsManager.js' },
     { key: 'placeholderUri', path: 'modules/uiManagers/Placeholder.js' },
+    { key: 'runSelectorUri', path: 'modules/uiManagers/RunSelector.js' },
     {
       key: 'instructionPanelUri',
       path: 'modules/uiManagers/InstructionPanel.js',
