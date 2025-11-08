@@ -1,3 +1,6 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - progress view
 import {
   PersistentMapManager,
@@ -147,18 +150,12 @@ export class OutputFilesManager extends PersistentMapManager<
     }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
 
     if (saved && Object.keys(saved).length > 0) {
-      const processed = new Map<StreamTabId, Map<number, string[]>>();
+      this._missingOutputs = this.deserializeMissingOutputs(saved);
+      return;
+    }
 
-      for (const [stream, rounds] of Object.entries(saved)) {
-        const roundEntries = Object.entries(rounds).map(
-          ([round, files]) =>
-            [parseInt(round, 10), files] as [number, string[]],
-        );
-        processed.set(stream, new Map(roundEntries));
-      }
-
-      this._missingOutputs = processed;
-    } else {
+    const migrated = await this.migrateLegacyMissingOutputs();
+    if (!migrated) {
       this._missingOutputs.clear();
     }
   }
@@ -172,6 +169,42 @@ export class OutputFilesManager extends PersistentMapManager<
       ]),
     );
     await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+  }
+
+  private deserializeMissingOutputs(saved: {
+    [key: string]: { [key: number]: string[] };
+  }): Map<StreamTabId, Map<number, string[]>> {
+    const processed = new Map<StreamTabId, Map<number, string[]>>();
+
+    for (const [stream, rounds] of Object.entries(saved)) {
+      const roundEntries = Object.entries(rounds).map(
+        ([round, files]) => [parseInt(round, 10), files] as [number, string[]],
+      );
+      processed.set(stream, new Map(roundEntries));
+    }
+
+    return processed;
+  }
+
+  private async migrateLegacyMissingOutputs(): Promise<boolean> {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspacePath) {
+      return false;
+    }
+
+    const legacyKey = `${WorkspaceStateKey.MISSING_OUTPUTS}.${workspacePath}`;
+    const legacy = this.storage.get<{
+      [key: string]: { [key: number]: string[] };
+    }>(legacyKey, {});
+
+    if (!legacy || Object.keys(legacy).length === 0) {
+      return false;
+    }
+
+    this._missingOutputs = this.deserializeMissingOutputs(legacy);
+    await this.saveMissingOutputs();
+    await this.storage.update(legacyKey, undefined as never);
+    return true;
   }
 
   protected override serialize(
