@@ -1,3 +1,6 @@
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - progress view
 import {
   StreamTabsManager,
@@ -336,16 +339,18 @@ export class ProgressViewState {
    * Load task states from persistence
    */
   private async loadTaskStates(): Promise<void> {
-    const raw = this.storage.get<unknown>(WorkspaceStateKey.TASK_STATES, {});
+    const raw = await this.loadRecordWithLegacyFallback(
+      WorkspaceStateKey.TASK_STATES,
+    );
 
     this.taskStates.clear();
 
-    if (!raw || typeof raw !== 'object') {
+    if (Object.keys(raw).length === 0) {
       this.cleanupToolUseAgentRegistry();
       return;
     }
 
-    const container = raw as Record<string, unknown>;
+    const container = raw;
     const buckets: Record<string, unknown>[] = [];
 
     if (
@@ -412,19 +417,60 @@ export class ProgressViewState {
    * Load execution IDs from persistence
    */
   private async loadExecutionIds(): Promise<void> {
-    const savedIds = this.storage.get<Record<string, ExecutionId>>(
+    const savedIdsRecord = await this.loadRecordWithLegacyFallback(
       WorkspaceStateKey.EXECUTION_IDS,
-      {},
     );
 
-    if (savedIds && Object.keys(savedIds).length > 0) {
-      this._executionIds = new Map(Object.entries(savedIds));
-      this.logger.debug(
-        `Loaded execution IDs for ${this._executionIds.size} streams`,
-      );
+    const entries = Object.entries(savedIdsRecord).filter(
+      (entry): entry is [StreamTabId, ExecutionId] =>
+        typeof entry[1] === 'string' && entry[1].length > 0,
+    );
+
+    if (entries.length > 0) {
+      this._executionIds = new Map(entries);
+      this.logger.debug(`Loaded execution IDs for ${entries.length} streams`);
     } else {
       this._executionIds.clear();
     }
+  }
+
+  private async loadRecordWithLegacyFallback(
+    key: WorkspaceStateKey,
+    legacyRoots: string[] = [],
+  ): Promise<Record<string, unknown>> {
+    const current = this.storage.get<unknown>(key);
+    if (
+      current &&
+      typeof current === 'object' &&
+      !Array.isArray(current) &&
+      Object.keys(current as Record<string, unknown>).length > 0
+    ) {
+      return current as Record<string, unknown>;
+    }
+
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (workspacePath) {
+      for (const root of [key as string, ...legacyRoots]) {
+        const legacyKey = `${root}.${workspacePath}`;
+        const legacy = this.storage.get<unknown>(legacyKey);
+        if (
+          legacy &&
+          typeof legacy === 'object' &&
+          !Array.isArray(legacy) &&
+          Object.keys(legacy as Record<string, unknown>).length > 0
+        ) {
+          await this.storage.update(key, legacy as Record<string, unknown>);
+          await this.storage.update(legacyKey, undefined as never);
+          return legacy as Record<string, unknown>;
+        }
+      }
+    }
+
+    if (current && typeof current === 'object' && !Array.isArray(current)) {
+      return current as Record<string, unknown>;
+    }
+
+    return {};
   }
 
   /**
