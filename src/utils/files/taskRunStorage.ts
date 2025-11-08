@@ -57,6 +57,14 @@ function toWorkspaceRelative(target: string): string {
     return path.relative(workspaceRoot, target);
   }
 
+  const normalized = path.normalize(target);
+  const segments = normalized.split(path.sep).filter(Boolean);
+  const runDirIndex = segments.lastIndexOf(TASK_RUNS_DIR);
+  if (runDirIndex >= 0) {
+    const remainder = segments.slice(runDirIndex + 2);
+    return remainder.length > 0 ? remainder.join(path.sep) : '';
+  }
+
   return path.basename(target);
 }
 
@@ -129,8 +137,32 @@ async function createSymlink(
       await fs.symlink(source, destination);
       return;
     }
+    if (err.code && ['EPERM', 'EACCES', 'EINVAL'].includes(err.code)) {
+      const stats = await fs.lstat(source);
+      if (stats.isDirectory()) {
+        await fs.cp(source, destination, { recursive: true });
+      } else {
+        await fs.copyFile(source, destination);
+      }
+      return;
+    }
     throw err;
   }
+}
+
+const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
+
+function shouldSkipRelocation(relativePath: string): boolean {
+  if (!relativePath) {
+    return false;
+  }
+
+  const segments = relativePath.split(path.sep).filter(Boolean);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  return IGNORED_WORKSPACE_ROOTS.has(segments[0]);
 }
 
 export class TaskRunFileService {
@@ -185,6 +217,14 @@ export class TaskRunFileService {
         ? WorkspaceFS.fullPath(target)
         : target;
     const workspaceRelative = toWorkspaceRelative(absoluteSource);
+
+    if (shouldSkipRelocation(workspaceRelative)) {
+      return {
+        storagePath: absoluteSource,
+        workspacePath: absoluteSource,
+        relativePath: workspaceRelative,
+      };
+    }
 
     if (!this.executionId || !this.useRunStorage) {
       return {

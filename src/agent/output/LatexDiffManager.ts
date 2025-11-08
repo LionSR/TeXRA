@@ -9,7 +9,7 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { TaskRunFileService } from '@utils/files';
+import { TaskRunFileService, existsFlexible } from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -39,6 +39,51 @@ export class LatexDiffManager {
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);
+  }
+
+  private async resolveDiffInput(
+    workspaceCandidate: string | undefined,
+    fallback: string,
+  ): Promise<{
+    actual: string | null;
+    workspaceDir?: string;
+    displayPath: string;
+  }> {
+    const preferredExists = workspaceCandidate
+      ? await existsFlexible(workspaceCandidate)
+      : false;
+
+    if (preferredExists && workspaceCandidate) {
+      return {
+        actual: workspaceCandidate,
+        workspaceDir: path.dirname(workspaceCandidate),
+        displayPath:
+          this.fileService.getWorkspaceDisplayPath(workspaceCandidate),
+      };
+    }
+
+    const fallbackExists = await existsFlexible(fallback);
+    if (fallbackExists) {
+      const displaySource = workspaceCandidate ?? fallback;
+      return {
+        actual: fallback,
+        workspaceDir:
+          preferredExists && workspaceCandidate
+            ? path.dirname(workspaceCandidate)
+            : undefined,
+        displayPath: this.fileService.getWorkspaceDisplayPath(displaySource),
+      };
+    }
+
+    const displaySource = workspaceCandidate ?? fallback;
+    return {
+      actual: null,
+      workspaceDir:
+        preferredExists && workspaceCandidate
+          ? path.dirname(workspaceCandidate)
+          : undefined,
+      displayPath: this.fileService.getWorkspaceDisplayPath(displaySource),
+    };
   }
 
   private logLatexdiffResult(
@@ -123,13 +168,30 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
-          const outputForDiff =
-            mapping.workspaceByOutput.get(outputFile) ?? outputFile;
+          const resolved = await this.resolveDiffInput(
+            mapping.workspaceByOutput.get(outputFile),
+            outputFile,
+          );
           const baseForDiff = baseFile;
           const cwd = path.dirname(baseForDiff);
+
+          if (!resolved.actual) {
+            this.logger.warn(
+              `Skipping latexdiff for ${outputFile} - file not found after relocation`,
+            );
+            aggregated.push({
+              base: this.fileService.getWorkspaceDisplayPath(baseForDiff),
+              revised: resolved.displayPath,
+              output: '',
+              status: 'error',
+              message: 'Revised file missing for latexdiff',
+            });
+            continue;
+          }
+
           const result = await this.latexdiffService.runDiffForRound(
             baseForDiff,
-            outputForDiff,
+            resolved.actual,
             currRound,
             undefined,
             { cwd },
@@ -156,8 +218,8 @@ export class LatexDiffManager {
             }
           }
           aggregated.push({
-            base: baseFile,
-            revised: outputForDiff,
+            base: this.fileService.getWorkspaceDisplayPath(baseForDiff),
+            revised: resolved.displayPath,
             output: diffPath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
@@ -185,14 +247,35 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const prevForDiff =
-            mapping.workspaceByOutput.get(prevOutputFile) ?? prevOutputFile;
-          const currForDiff =
-            mapping.workspaceByOutput.get(currOutputFile) ?? currOutputFile;
-          const cwd = path.dirname(prevForDiff);
+          const prevResolved = await this.resolveDiffInput(
+            mapping.workspaceByOutput.get(prevOutputFile),
+            prevOutputFile,
+          );
+          const currResolved = await this.resolveDiffInput(
+            mapping.workspaceByOutput.get(currOutputFile),
+            currOutputFile,
+          );
+
+          if (!prevResolved.actual || !currResolved.actual) {
+            this.logger.warn(
+              `Skipping between-round latexdiff - missing files for ${prevOutputFile} or ${currOutputFile}`,
+            );
+            aggregated.push({
+              base: prevResolved.displayPath,
+              revised: currResolved.displayPath,
+              output: '',
+              status: 'error',
+              message: 'One or more round files missing for latexdiff',
+            });
+            continue;
+          }
+
+          const workspaceCwd =
+            prevResolved.workspaceDir ?? currResolved.workspaceDir;
+          const cwd = workspaceCwd ?? path.dirname(prevResolved.actual);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevForDiff,
-            currForDiff,
+            prevResolved.actual,
+            currResolved.actual,
             undefined,
             { cwd },
           );
@@ -200,7 +283,7 @@ export class LatexDiffManager {
           let diffPath = '';
           if (result.success && result.diffFileName) {
             diffPath = path.join(
-              path.dirname(prevForDiff),
+              path.dirname(prevResolved.actual),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -218,8 +301,8 @@ export class LatexDiffManager {
             }
           }
           aggregated.push({
-            base: prevForDiff,
-            revised: currForDiff,
+            base: prevResolved.displayPath,
+            revised: currResolved.displayPath,
             output: diffPath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
