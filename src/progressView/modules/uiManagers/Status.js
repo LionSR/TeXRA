@@ -25,7 +25,6 @@ export class Status {
         enable: [
           ELEMENT_IDS.RUN_AGAIN_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
-          ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,
@@ -38,7 +37,6 @@ export class Status {
         enable: [
           ELEMENT_IDS.RUN_AGAIN_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
-          ELEMENT_IDS.CLEAN_STREAM_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.DIFF_STREAM_BTN,
           ELEMENT_IDS.ERASE_STREAM_BTN,

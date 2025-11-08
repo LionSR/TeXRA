@@ -20,6 +20,7 @@ export class RunSelector {
     this._onDidChange = null;
     this._changeHandler = this._handleChange.bind(this);
     this._pendingActiveId = null;
+    this._isDisplayEnabled = true;
 
     if (document.readyState === 'loading') {
       document.addEventListener(
@@ -37,13 +38,12 @@ export class RunSelector {
   _initializeDropdown() {
     if (this._dropdown) {
       this._dropdown.removeEventListener('change', this._changeHandler);
+      this._dropdown = null;
     }
 
-    this._container =
-      this._container || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
+    this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
     if (!dropdown) {
-      this._dropdown = null;
       this._syncVisibility();
       return;
     }
@@ -51,6 +51,7 @@ export class RunSelector {
     dropdown.addEventListener('change', this._changeHandler);
     this._dropdown = dropdown;
     this._renderOptions();
+    this._syncVisibility();
   }
 
   _handleChange() {
@@ -83,9 +84,10 @@ export class RunSelector {
     if (this._dropdown) {
       this._renderOptions();
       this._applyActiveValue();
+      this._syncVisibility();
+    } else {
+      this._syncVisibility();
     }
-
-    this._syncVisibility();
   }
 
   setRuns(groups = []) {
@@ -103,9 +105,10 @@ export class RunSelector {
     if (this._dropdown) {
       this._renderOptions();
       this._applyActiveValue();
+      this._syncVisibility();
+    } else {
+      this._syncVisibility();
     }
-
-    this._syncVisibility();
   }
 
   setActiveRun(groupId) {
@@ -187,15 +190,22 @@ export class RunSelector {
 
     this._dropdown.value = targetId ?? '';
     this._pendingActiveId = this._dropdown.value || null;
-    this._syncVisibility();
   }
 
   _getSortedRuns() {
     return Array.from(this._runs.values()).sort((a, b) => {
       const aTime =
-        typeof a.startTime === 'number' ? a.startTime : Date.parse(a.startTime);
+        typeof a.startTime === 'number'
+          ? a.startTime
+          : a.startTime
+            ? Date.parse(a.startTime)
+            : 0;
       const bTime =
-        typeof b.startTime === 'number' ? b.startTime : Date.parse(b.startTime);
+        typeof b.startTime === 'number'
+          ? b.startTime
+          : b.startTime
+            ? Date.parse(b.startTime)
+            : 0;
       const safeATime = Number.isNaN(aTime) ? 0 : aTime;
       const safeBTime = Number.isNaN(bTime) ? 0 : bTime;
       if (safeATime === safeBTime) {
@@ -209,10 +219,6 @@ export class RunSelector {
     const timestamp = this._formatTimestamp(group.startTime);
     if (timestamp) {
       return timestamp;
-    }
-    const name = typeof group.name === 'string' ? group.name.trim() : '';
-    if (name) {
-      return name;
     }
     return 'Session';
   }
@@ -231,7 +237,7 @@ export class RunSelector {
   }
 
   _syncVisibility() {
-    const hasRuns = this._runs.size > 0;
+    const hasRuns = this._runs.size > 0 && this._isDisplayEnabled;
 
     const dropdown =
       this._dropdown || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
@@ -249,6 +255,11 @@ export class RunSelector {
     }
   }
 
+  setDisplayEnabled(shouldDisplay) {
+    this._isDisplayEnabled = Boolean(shouldDisplay);
+    this._syncVisibility();
+  }
+
   cleanup() {
     if (this._dropdown) {
       this._dropdown.removeEventListener('change', this._changeHandler);
@@ -258,5 +269,6 @@ export class RunSelector {
     this._runs.clear();
     this._onDidChange = null;
     this._pendingActiveId = null;
+    this._isDisplayEnabled = true;
   }
 }
