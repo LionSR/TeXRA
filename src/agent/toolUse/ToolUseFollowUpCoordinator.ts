@@ -1,20 +1,23 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent persistence
-import {
-  ToolUseSessionPersistence,
-  type ToolUseSessionSnapshot,
-  type ResumeAgentResult,
-} from '@agent/toolUse/ToolUseSessionPersistence';
-import { ToolUseResumeQueue } from '@agent/toolUse/ToolUseResumeQueue';
+// Local imports - logging
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - agent coordination
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
-// Local imports - utilities
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+// Local imports - persistence
+import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';
+import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
+import {
+  ToolUseSessionPersistence,
+  type ResumeAgentResult,
+  type ToolUseSessionSnapshot,
+} from './ToolUseSessionPersistence';
 
-const CHANNEL = 'toolUseFollowUpCoordinator';
+const logger = new AgentLogger('ToolUseFollowUpCoordinator');
 
 export async function sendFollowUp(
   streamId: StreamTabId,
@@ -24,43 +27,45 @@ export async function sendFollowUp(
   if (agent) {
     try {
       agent.appendFollowUp(text);
-    } catch (err) {
-      await showLoggedErrorMessage(CHANNEL, 'Failed to send follow-up', err);
+    } catch (error) {
+      logger.error(
+        'Failed to send follow-up to active agent.',
+        undefined,
+        undefined,
+        error,
+      );
+      await vscode.window.showErrorMessage(
+        `Failed to send follow-up: ${(error as Error).message}`,
+      );
     }
     return;
   }
 
-  if (ToolUseResumeQueue.isResumingSession(streamId)) {
-    if (ToolUseResumeQueue.enqueueFollowUpWhileResuming(streamId, text)) {
-      console.log(
-        `[${CHANNEL}] queued follow-up while stream ${streamId} is resuming`,
-      );
+  if (ToolUseFollowUpQueue.isResuming(streamId)) {
+    if (ToolUseFollowUpQueue.enqueue(streamId, text)) {
+      logger.debug(`Queued follow-up while stream ${streamId} is resuming.`);
       return;
     }
   }
 
-  const pendingSnapshot = ToolUseResumeQueue.getSnapshotForStream(streamId);
+  const pendingSnapshot = ToolUseSnapshotCache.getByStream(streamId);
   if (pendingSnapshot) {
-    console.log(`[${CHANNEL}] resuming agent lazily for stream ${streamId}`);
-    await resumeFromSnapshot(pendingSnapshot, text);
+    logger.debug(`Resuming agent lazily for stream ${streamId}.`);
+    await ToolUseSessionPersistence.resumeFromSnapshot(pendingSnapshot, text);
     return;
   }
 
-  console.log(`[${CHANNEL}] no active session found for stream ${streamId}`);
+  logger.debug(`No active session found for follow-up on stream ${streamId}.`);
   void vscode.window.showWarningMessage(
     'No active tool-use session found for this follow-up.',
   );
 }
 
-export async function resumeFromSnapshot(
+export function resumeFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   followUp?: string,
 ): Promise<ResumeAgentResult> {
-  if (!snapshot) {
-    return { success: false };
-  }
-
-  return await ToolUseSessionPersistence.resumeFromSnapshot(snapshot, followUp);
+  return ToolUseSessionPersistence.resumeFromSnapshot(snapshot, followUp);
 }
 
-export type { ResumeAgentResult } from '@agent/toolUse/ToolUseSessionPersistence';
+export type { ResumeAgentResult } from './ToolUseSessionPersistence';

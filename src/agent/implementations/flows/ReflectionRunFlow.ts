@@ -25,24 +25,18 @@ import {
 } from '@agent/implementations/flows/common/lifecycle';
 import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
 import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
-import { BaseRunStateSchema } from '@agent/implementations/flows/common/types';
-import { z } from 'zod';
 
 export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 
 export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
-const ReflectionRunStateSchemaBase = BaseRunStateSchema.extend({
-  totalRounds: z.number().nonnegative(),
-  currentRound: z.number().nonnegative(),
-  continueRounds: z.boolean(),
-});
-
-type ReflectionRunStateStruct = z.infer<typeof ReflectionRunStateSchemaBase>;
-
-export type ReflectionRunState = Omit<ReflectionRunStateStruct, 'messages'> & {
-  messages: any[];
-};
+export interface ReflectionRunState {
+  conversation: any[];
+  runState: AgentRunState;
+  totalRounds: number;
+  currentRound: number;
+  continueRounds: boolean;
+}
 
 export interface ReflectionRunHooks extends AgentRunHooks {
   resetPromptBuilder(): void;
@@ -87,7 +81,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       state,
       shouldFinalize,
       roundIndex: state.currentRound,
-      messages: state.messages,
+      messages: state.conversation,
       runState: state.runState,
     };
   }
@@ -104,7 +98,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       const result = await prepRes.agent.runReflectionRound({
         roundIndex: prepRes.roundIndex,
         runState: prepRes.state.runState,
-        messages: prepRes.state.messages,
+        messages: prepRes.state.conversation,
       } satisfies ReflectionRoundContext);
 
       return {
@@ -155,7 +149,7 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
         result.outputArtifacts;
     }
     shared.state.runState = result.runState;
-    shared.state.messages = result.messages;
+    shared.state.conversation = [...result.messages];
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
     shared.state.runState.incrementRounds();

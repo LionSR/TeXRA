@@ -1,6 +1,3 @@
-import { z } from 'zod';
-
-import { AgentRunState } from '@agent/core/AgentState';
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
@@ -15,11 +12,6 @@ export interface AgentLifecycleState<Phase extends string> {
   status: AgentLifecycleStatus;
   error?: unknown;
 }
-
-export const BaseRunStateSchema = z.object({
-  messages: z.array(z.any()),
-  runState: z.instanceof(AgentRunState),
-});
 
 export interface AgentRunShared<
   A extends BaseAgent<any>,
