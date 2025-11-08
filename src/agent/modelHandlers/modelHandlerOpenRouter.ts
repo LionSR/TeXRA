@@ -201,15 +201,29 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
     if (lastMessage.role === 'assistant') {
       if (Array.isArray(lastMessage.content)) {
+        const updatedText =
+          toolState.assembly?.accumulatedOutput ??
+          `${bestConnector}${newResponse}`;
+        const lastIndex = lastMessage.content.length - 1;
         const lastPart = lastMessage.content.at(-1);
         if (lastPart && typeof lastPart === 'object' && 'text' in lastPart) {
-          lastPart.text = `${bestConnector}${newResponse}`;
+          lastMessage.content[lastIndex] = {
+            ...lastPart,
+            text: updatedText,
+          };
+        } else {
+          lastMessage.content = [
+            ...lastMessage.content,
+            { type: 'text', text: updatedText },
+          ];
         }
       } else if (typeof lastMessage.content === 'string') {
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.assembly.accumulatedOutput,
+            text:
+              toolState.assembly?.accumulatedOutput ??
+              `${bestConnector}${newResponse}`,
           },
         ];
       }

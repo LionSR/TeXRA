@@ -6,6 +6,56 @@ import type { ExtendedCompletionUsage } from '@agent/core/ResponseUsage';
 export type OpenRouterMessage = Record<string, unknown>;
 export type OpenRouterChatResponse = Record<string, any>;
 
+function normalizeContent(
+  content: ChatCompletionMessageParam['content'],
+): ChatCompletionMessageParam['content'] {
+  if (Array.isArray(content)) {
+    return content.map((part: any) => {
+      if (!part || typeof part !== 'object') {
+        return part;
+      }
+
+      if (part.type === 'text') {
+        return { type: 'text', text: part.text ?? '' };
+      }
+
+      if (part.type === 'image_url') {
+        const { imageUrl, image_url, ...rest } = part;
+        const normalized: Record<string, unknown> = {
+          ...rest,
+          type: 'image_url',
+        };
+
+        const payload = imageUrl ?? image_url;
+        if (payload !== undefined) {
+          normalized.imageUrl = payload;
+        }
+
+        return normalized;
+      }
+
+      if (part.type === 'input_audio') {
+        const { inputAudio, input_audio, ...rest } = part;
+        const normalized: Record<string, unknown> = {
+          ...rest,
+          type: 'input_audio',
+        };
+
+        const payload = inputAudio ?? input_audio;
+        if (payload !== undefined) {
+          normalized.inputAudio = payload;
+        }
+
+        return normalized;
+      }
+
+      return part;
+    });
+  }
+
+  return content ?? '';
+}
+
 export function convertMessagesToOpenRouter(
   messages: ChatCompletionMessageParam[],
 ): OpenRouterMessage[] {
@@ -13,7 +63,7 @@ export function convertMessagesToOpenRouter(
     if (message.role === 'assistant') {
       const payload: Record<string, unknown> = {
         role: 'assistant',
-        content: message.content ?? '',
+        content: normalizeContent(message.content),
       };
 
       const toolCalls = (message as any).tool_calls;
@@ -56,7 +106,7 @@ export function convertMessagesToOpenRouter(
 
     const base: Record<string, unknown> = {
       role: message.role,
-      content: message.content ?? '',
+      content: normalizeContent(message.content),
     };
 
     if (typeof (message as any).name === 'string') {
