@@ -4,10 +4,24 @@ import type { AgentLogger } from '@logger/AgentLogger';
 export function createErrorBoundary(
   logger: AgentLogger,
   moduleName: string,
-): (context: string, fn: () => void) => void {
-  return (context: string, fn: () => void): void => {
+): (context: string, fn: () => unknown | Promise<unknown>) => void {
+  return (context: string, fn: () => unknown | Promise<unknown>): void => {
     try {
-      fn();
+      const result = fn();
+      if (result && typeof (result as Promise<unknown>).catch === 'function') {
+        void (result as Promise<unknown>).catch((error) => {
+          const details =
+            error instanceof Error
+              ? { message: error.message, stack: error.stack, error }
+              : { error };
+          logger.error(
+            `[${moduleName}] ${context}`,
+            undefined,
+            undefined,
+            details,
+          );
+        });
+      }
     } catch (error) {
       const details =
         error instanceof Error

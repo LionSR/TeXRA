@@ -173,14 +173,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleDeleteStream(message: any): Promise<void> {
     // Delete persisted session data if any
     await this.deleteSessionSnapshot(message.stream);
-    this.provider.state.clearStream(message.stream);
+    await this.provider.state.clearStream(message.stream);
     this.provider.updateWebview();
   }
 
   private async handleEraseStream(message: any): Promise<void> {
     // Delete persisted session data when erasing stream
     await this.deleteSessionSnapshot(message.stream);
-    this.provider.state.eraseStreamContent(message.stream);
+    await this.provider.state.eraseStreamContent(message.stream);
     this.provider.updateWebview();
   }
 
@@ -203,7 +203,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       await this.deleteSessionSnapshot(stream);
     }
 
-    this.provider.state.clearAll();
+    await this.provider.state.clearAll();
     this.provider.updateWebview();
   }
 
@@ -533,14 +533,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
 
-    for (const [round, infos] of Object.entries(generated)) {
-      if (!Array.isArray(infos)) {
-        this.logger.warn(
-          `Skipping invalid output metadata for stream ${stream}, round ${round}`,
-        );
-        continue;
-      }
-
+    for (const infos of generated.values()) {
       for (const info of infos) {
         allFiles.add(info.path);
         if (info.original) {

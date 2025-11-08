@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
+import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
 
 // Local imports - progress view
 import { ProgressEventHandler } from './events/ProgressEventHandler';
@@ -10,9 +11,6 @@ import { WebviewUpdater } from './managers';
 
 // @ts-ignore - Import JavaScript module
 import { STATUS } from './modules/constants.js';
-
-// Local imports - new architecture
-import { StatePersistenceManager } from './persistence/StatePersistenceManager';
 
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
@@ -77,10 +75,7 @@ export class ProgressViewProvider
     this.logger = new AgentLogger('ProgressViewProvider');
 
     // Initialize new modular architecture
-    const persistenceManager = new StatePersistenceManager(
-      context.workspaceState,
-    );
-    this.state = new ProgressViewState(persistenceManager);
+    this.state = new ProgressViewState();
     this.webviewUpdater = new WebviewUpdater(() => this._view?.webview);
     this.eventHandler = new ProgressEventHandler(
       this.state,
@@ -139,26 +134,10 @@ export class ProgressViewProvider
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
-      localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, 'src', 'progressView'),
-        vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'styles'),
-        vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'modules'),
-        vscode.Uri.joinPath(this._extensionUri, 'src', 'common', 'webview'),
-        vscode.Uri.joinPath(
-          this._extensionUri,
-          'node_modules',
-          '@vscode',
-          'codicons',
-          'dist',
-        ),
-        vscode.Uri.joinPath(
-          this._extensionUri,
-          'node_modules',
-          '@vscode-elements',
-          'elements',
-          'dist',
-        ),
-      ],
+      localResourceRoots: getSharedLocalResourceRoots(
+        this.context,
+        'progressView',
+      ),
     };
 
     webviewView.title = this._viewTitle;
@@ -243,18 +222,6 @@ export class ProgressViewProvider
     }
   }
 
-  // Public API methods - these delegate to the new architecture
-
-  /**
-   * Clear task output (legacy compatibility)
-   */
-  public clearTaskOutput(streamTabId: StreamTabId): void {
-    const didUpdate = this.state.clearOutputState(streamTabId);
-    if (didUpdate) {
-      this.updateWebview();
-    }
-  }
-
   public showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
     this.pendingApprovalPrompts.set(prompt.requestId, prompt);
 
@@ -308,42 +275,16 @@ export class ProgressViewProvider
     const affectedStreams =
       this.eventHandler.resetRunningTasksToError(waitingStreams);
 
-    // Also check ALL streams for running groups, not just affected streams
-    // This ensures we catch any groups that might be running even if stream status is not
-    for (const [streamId, groups] of this.state.taskGroups.getAll().entries()) {
-      if (groups.size > 0) {
-        let groupsUpdated = false;
-        for (const [groupId, group] of groups.entries()) {
-          if (group.status === STATUS.RUNNING) {
-            // Update the group to ERROR status with current end time
-            const endTime = Date.now();
-            this.state.taskGroups.updateGroup({
-              stream: streamId,
-              groupId,
-              updates: {
-                status: STATUS.ERROR,
-                endTime,
-              },
-            });
+    const streamsWithRunningGroups =
+      await this.state.taskGroups.endRunningGroups(Date.now());
 
-            this.logger.debug(
-              `Group ${groupId} in stream ${streamId} set to ERROR due to webview reload`,
-            );
-            groupsUpdated = true;
-          }
-        }
-
-        // If we updated groups but the stream wasn't in affected streams,
-        // we should still ensure the webview updates
-        if (groupsUpdated && !affectedStreams.includes(streamId)) {
-          this.logger.debug(
-            `Stream ${streamId} had running groups but wasn't marked as affected`,
-          );
-        }
+    for (const streamId of streamsWithRunningGroups) {
+      if (!affectedStreams.includes(streamId)) {
+        this.logger.debug(
+          `Stream ${streamId} had running groups but wasn't marked as affected`,
+        );
       }
     }
-
-    // The TaskGroupManager.updateGroup() method automatically saves state
   }
 
   /**
@@ -351,24 +292,22 @@ export class ProgressViewProvider
    * Now properly focused on just updating log content with groups
    */
   public updateLogContent(stream: string): void {
-    if (!this.webviewUpdater.isAvailable()) return;
-
-    // If no stream is provided or stream doesn't exist, use the first available stream
-    if (!stream || !this.state.streamTabs.has(stream)) {
-      const streams = this.state.streamTabs.keys();
-      stream = streams[0] ?? '';
-    }
-
-    if (!this.state.streamTabs.has(stream)) {
+    if (!this.webviewUpdater.isAvailable()) {
       return;
     }
 
-    // Update only log content and groups (focused responsibility)
-    const messages = this.state.streamTabs.getMessages(stream);
-    const groups = Array.from(
-      this.state.taskGroups.getStreamGroups(stream).values(),
-    );
-    this.webviewUpdater.updateLogContent(stream, messages, groups);
+    const targetStream = this.state.streamTabs.has(stream)
+      ? stream
+      : (this.state.streamTabs.keys()[0] ?? '');
+
+    if (!targetStream) {
+      this.webviewUpdater.updateLogContent('', [], []);
+      return;
+    }
+
+    this.eventHandler.refreshStreamSurface(targetStream, {
+      updateInstruction: false,
+    });
   }
 
   /**

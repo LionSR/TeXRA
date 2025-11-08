@@ -60,8 +60,8 @@ export class ProgressEventHandler {
       streamStatus: this._streamStatus,
       setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
       sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
-      updateLogContentForStream: (stream, options) =>
-        this.updateLogContentForStream(stream, options),
+      refreshStreamSurface: (stream, options) =>
+        this.refreshStreamSurface(stream, options),
     });
     this.outputEvents = createOutputEvents({
       logger: this.logger,
@@ -132,9 +132,9 @@ export class ProgressEventHandler {
   }
 
   /**
-   * Update log content for a specific stream
+   * Refresh all webview surface data for a specific stream.
    */
-  private updateLogContentForStream(
+  public refreshStreamSurface(
     stream: string,
     options: { updateInstruction?: boolean } = {},
   ): void {
@@ -149,11 +149,15 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateLogContent(stream, messages, groups);
 
     // Send output files for current stream
-    const files = this.state.outputFiles.getFiles(stream);
+    const files = Object.fromEntries(
+      this.state.outputFiles.getFiles(stream).entries(),
+    );
     this.webviewUpdater.updateFiles(stream, files);
 
     // Send missing outputs for current stream
-    const missing = this.state.outputFiles.getMissingOutputs(stream);
+    const missing = Object.fromEntries(
+      this.state.outputFiles.getMissingOutputs(stream).entries(),
+    );
     this.webviewUpdater.updateMissingOutputs(stream, missing);
 
     // Send usage for current stream
@@ -216,10 +220,10 @@ export class ProgressEventHandler {
    * Initialize a stream when task group events arrive before dedicated
    * status or activation events, preserving any existing status metadata.
    */
-  private initializeStreamForTaskGroup(stream: string): void {
+  private async initializeStreamForTaskGroup(stream: string): Promise<void> {
     const existingStatus = this._streamStatus.get(stream);
 
-    this.state.streamTabs.ensureStream(stream);
+    await this.state.streamTabs.ensureStream(stream);
 
     if (!existingStatus) {
       this.setStreamStatus(stream, STATUS.RUNNING);
@@ -238,7 +242,7 @@ export class ProgressEventHandler {
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
-      this.updateLogContentForStream(stream, { updateInstruction: false });
+      this.refreshStreamSurface(stream, { updateInstruction: false });
       this.sendInstructionUpdate(stream);
     }
   }

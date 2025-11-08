@@ -34,11 +34,16 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
+import { StreamStatusService } from './StreamStatusService';
+
+// Local imports - errors
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 
 // Local imports - utilities
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getStreamTabId } from '@/logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -381,8 +386,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
-    const currentStatus =
-      provider?.eventHandler.getStreamStatus(activeStreamId);
+    const currentStatus = StreamStatusService.get(activeStreamId);
     if (!isResume && currentStatus === 'running') {
       const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
@@ -413,10 +417,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 stream: activeStreamId,
                 session: metadata,
               });
-              bus.emit('updateStreamStatus', {
-                stream: activeStreamId,
-                status: 'running',
-              });
+              StreamStatusService.set(activeStreamId, 'running');
 
               if (!isResume) {
                 const viewVisible = provider?.isViewVisible() ?? false;
@@ -495,30 +496,27 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
           await agent.run();
           logger.debug(`Task completed successfully`);
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'stopped',
-          });
+          StreamStatusService.set(activeStreamId, 'stopped');
         } catch (err) {
           logger.error(
             `Task failed: ${err instanceof Error ? err.message : String(err)}`,
           );
-          bus.emit('updateStreamStatus', {
-            stream: activeStreamId,
-            status: 'error',
-          });
+          StreamStatusService.set(activeStreamId, 'error');
           throw err;
         }
       },
       { skip: isResume },
     );
   } catch (err) {
-    const errorMsg = `Error executing agent ${agentName}: ${err instanceof Error ? err.message : String(err)}`;
+    const formattedError = formatProviderHttpError(err);
+    const rawErrorMessage = err instanceof Error ? err.message : String(err);
+    const errorMsg = `Error executing agent ${agentName}: ${formattedError.message}`;
+    const errorData = { ...formattedError, rawMessage: rawErrorMessage };
 
     // Check if the error is related to missing API key
     if (
-      errorMsg.includes('Missing API key') ||
-      errorMsg.includes('API key not found')
+      rawErrorMessage.includes('Missing API key') ||
+      rawErrorMessage.includes('API key not found')
     ) {
       const setKey = 'Set API Key';
       const openGuide = 'Open Settings Guide';
@@ -553,7 +551,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withExistingGroup(
           fallbackGroupId,
           async () => {
-            agentLoggerFallback.error(errorMsg);
+            agentLoggerFallback.error(
+              errorMsg,
+              undefined,
+              MESSAGE_TYPES.PROGRESS_STATUS,
+              errorData,
+            );
           },
           { label: `Error: ${agentName}` },
         );
@@ -561,7 +564,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withScope(
           `Error: ${agentName}`,
           async () => {
-            agentLoggerFallback.error(errorMsg);
+            agentLoggerFallback.error(
+              errorMsg,
+              undefined,
+              MESSAGE_TYPES.PROGRESS_STATUS,
+              errorData,
+            );
           },
           { errorStatus: 'error' },
         );
@@ -571,7 +579,12 @@ export async function executeAgentWithLogging<T extends IAgent>(
     await logger.withScope(
       `Error: ${agentName}`,
       async () => {
-        logger.error(errorMsg);
+        logger.error(
+          errorMsg,
+          undefined,
+          MESSAGE_TYPES.PROGRESS_STATUS,
+          errorData,
+        );
       },
       { errorStatus: 'error' },
     );

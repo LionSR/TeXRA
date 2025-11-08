@@ -27,7 +27,7 @@ interface OutputEventsShared {
   logger: AgentLogger;
 }
 
-type FilesByRound<T> = { [key: number]: T[] };
+type FilesByRound<T> = Map<number, T[]>;
 
 interface ActiveStreamOutputUpdate {
   state: ProgressViewState;
@@ -50,11 +50,17 @@ const updateActiveStreamOutputs = ({
   }
 
   if (updates.files !== undefined) {
-    updater.updateFiles(stream, updates.files ?? {});
+    const payload = updates.files
+      ? Object.fromEntries(updates.files.entries())
+      : {};
+    updater.updateFiles(stream, payload);
   }
 
   if (updates.missing !== undefined) {
-    updater.updateMissingOutputs(stream, updates.missing ?? {});
+    const payload = updates.missing
+      ? Object.fromEntries(updates.missing.entries())
+      : {};
+    updater.updateMissingOutputs(stream, payload);
   }
 };
 
@@ -65,8 +71,8 @@ const registerOutputFileListeners = (
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable[] => {
   const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
-    withErrorBoundary('failed to handle addOutputFiles', () => {
-      state.outputFiles.addFiles(stream, filesByRound);
+    withErrorBoundary('failed to handle addOutputFiles', async () => {
+      await state.outputFiles.addFiles(stream, filesByRound);
       const files = state.outputFiles.getFiles(stream);
       updateActiveStreamOutputs({
         state,
@@ -80,8 +86,8 @@ const registerOutputFileListeners = (
   const updateMissing = bus.on(
     'updateMissingOutputs',
     ({ stream, filesByRound }) => {
-      withErrorBoundary('failed to handle updateMissingOutputs', () => {
-        state.outputFiles.updateMissingOutputs(stream, filesByRound);
+      withErrorBoundary('failed to handle updateMissingOutputs', async () => {
+        await state.outputFiles.updateMissingOutputs(stream, filesByRound);
         const missing = state.outputFiles.getMissingOutputs(stream);
         updateActiveStreamOutputs({
           state,
@@ -94,25 +100,25 @@ const registerOutputFileListeners = (
   );
 
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
-    withErrorBoundary('failed to handle clearMissingOutputs', () => {
-      state.outputFiles.clearMissingOutputs(stream);
+    withErrorBoundary('failed to handle clearMissingOutputs', async () => {
+      await state.outputFiles.clearMissingOutputs(stream);
       updateActiveStreamOutputs({
         state,
         updater,
         stream,
-        updates: { missing: {} },
+        updates: { missing: new Map() },
       });
     });
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
-    withErrorBoundary('failed to handle clearOutputFiles', () => {
-      state.outputFiles.clearFiles(stream);
+    withErrorBoundary('failed to handle clearOutputFiles', async () => {
+      await state.outputFiles.clearFiles(stream);
       updateActiveStreamOutputs({
         state,
         updater,
         stream,
-        updates: { files: {} },
+        updates: { files: new Map() },
       });
     });
   });
@@ -125,12 +131,16 @@ const registerOutputFileListeners = (
 const registerClearTaskOutput = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
+  updater: WebviewUpdater,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable => {
   return new vscode.Disposable(
     bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
       withErrorBoundary('failed to handle clearTaskOutput', () => {
-        state.clearOutputState(streamTabId);
+        const cleared = state.clearOutputState(streamTabId);
+        if (cleared && updater.isAvailable()) {
+          updater.updateAll(state);
+        }
       });
     }),
   );
@@ -153,7 +163,9 @@ export function createOutputEvents(
         updater,
         withErrorBoundary,
       );
-      disposables.push(registerClearTaskOutput(bus, state, withErrorBoundary));
+      disposables.push(
+        registerClearTaskOutput(bus, state, updater, withErrorBoundary),
+      );
       return disposables;
     },
   };

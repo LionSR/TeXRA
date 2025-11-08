@@ -1,16 +1,22 @@
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
-export interface AgentRunLifecycleBase {
-  phase: string;
-  status: 'pending' | 'running' | 'error' | 'completed';
+export type AgentLifecycleStatus =
+  | 'pending'
+  | 'running'
+  | 'error'
+  | 'completed';
+
+export interface AgentLifecycleState<Phase extends string> {
+  phase: Phase;
+  status: AgentLifecycleStatus;
   error?: unknown;
 }
 
 export interface AgentRunShared<
   A extends BaseAgent<any>,
   State,
-  Lifecycle extends AgentRunLifecycleBase,
+  Lifecycle extends AgentLifecycleState<string>,
   Hooks extends AgentRunHooks,
 > {
   agent: A;

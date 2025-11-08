@@ -3,9 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-
-// Local imports - agent
-import { AgentType } from '@agent/core/AgentDataclass';
+import { ZodError } from 'zod';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -20,7 +18,6 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
-  normalizeSnapshot,
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
@@ -44,88 +41,35 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
-const migrationState: {
-  promise: Promise<void> | null;
-  completed: boolean;
-} = {
-  promise: null,
-  completed: false,
-};
-
-async function migrateLegacySnapshots(): Promise<void> {
-  if (migrationState.completed) {
-    return;
-  }
-
-  if (!migrationState.promise) {
-    migrationState.promise = (async () => {
-      const entries = await StorageFS.readDir(STORAGE_DIR);
-
-      for (const [name, type] of entries) {
-        if (type !== vscode.FileType.File || !name.endsWith('.json')) {
-          continue;
-        }
-
-        const relativePath = path.join(STORAGE_DIR, name);
-        const stored = await StorageFS.readJson<unknown>(relativePath);
-        const parsed = ToolUseSessionSnapshotSchema.safeParse(stored);
-        if (!parsed.success) {
-          logger.debug(`Skipping migration for ${name}: validation failed`);
-          continue;
-        }
-        try {
-          await StorageFS.writeJson(relativePath, parsed.data);
-          logger.debug(`Migrated legacy snapshot ${name}`);
-        } catch (error) {
-          logger.debug(
-            `Skipping migration for ${name}: write failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
-      }
-    })()
-      .catch((error) => {
-        logger.debug(
-          `Legacy snapshot migration failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      })
-      .finally(() => {
-        migrationState.completed = true;
-      });
-  }
-
-  await migrationState.promise;
-}
-
-let persistenceEnabled: boolean | null = null;
-let storageReady = false;
-let cleanupPerformed = false;
-
 async function ensureInitialized(): Promise<boolean> {
-  if (persistenceEnabled === null) {
-    persistenceEnabled = getToolUsePersistenceEnabled();
-  }
-
-  if (!persistenceEnabled) {
+  if (!getToolUsePersistenceEnabled()) {
+    storageState = null;
     return false;
   }
 
-  if (!storageReady) {
+  if (!storageState) {
+    storageState = { dirReady: false, cleanupDone: false };
+  }
+
+  if (!storageState.dirReady) {
     await StorageFS.ensureDir(STORAGE_DIR);
-    storageReady = true;
+    storageState.dirReady = true;
   }
 
-  if (!cleanupPerformed) {
+  if (!storageState.cleanupDone) {
     await cleanupExpiredSnapshots();
-    cleanupPerformed = true;
+    storageState.cleanupDone = true;
   }
 
-  await migrateLegacySnapshots();
   return true;
 }
+
+interface StorageState {
+  dirReady: boolean;
+  cleanupDone: boolean;
+}
+
+let storageState: StorageState | null = null;
 
 export const ToolUseSnapshotStore = {
   /**
@@ -142,9 +86,11 @@ export const ToolUseSnapshotStore = {
    * Validates the payload and skips saving on validation failure.
    * @param payload Snapshot data to persist.
    */
-  async save(payload: SaveToolUseSnapshotPayload): Promise<void> {
+  async save(
+    payload: SaveToolUseSnapshotPayload,
+  ): Promise<ToolUseSessionSnapshot | null> {
     if (!(await ensureInitialized())) {
-      return;
+      return null;
     }
     if (!isValidExecutionId(payload.executionId)) {
       throw new Error(`Invalid execution id: ${payload.executionId}`);
@@ -154,19 +100,15 @@ export const ToolUseSnapshotStore = {
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId: payload.executionId,
       streamId: payload.streamId,
-      agentName: payload.agentName,
-      model: payload.model,
-      session: {
-        agentType: payload.session.agentType ?? AgentType.ToolUse,
-        agentCategory: payload.session.agentCategory,
-      },
+      agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
-      toolState: payload.toolState.toJSON(),
+      store: payload.store.toJSON(),
       lastUpdated: Date.now(),
     } as const;
 
     const validated = ToolUseSessionSnapshotSchema.parse(snapshot);
     await StorageFS.writeJson(getSnapshotPath(payload.executionId), validated);
+    return validated;
   },
 
   /**
@@ -185,8 +127,7 @@ export const ToolUseSnapshotStore = {
     try {
       const stored =
         await StorageFS.readJson<ToolUseSessionSnapshot>(snapshotPath);
-      const parsed = ToolUseSessionSnapshotSchema.parse(stored);
-      return normalizeSnapshot(parsed);
+      return ToolUseSessionSnapshotSchema.parse(stored);
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
@@ -194,6 +135,14 @@ export const ToolUseSnapshotStore = {
       ) {
         return null;
       }
+
+      if (error instanceof ZodError || error instanceof SyntaxError) {
+        logger.warn(
+          `Skipping invalid snapshot at ${snapshotPath}: ${error.message}`,
+        );
+        return null;
+      }
+
       throw error;
     }
   },
