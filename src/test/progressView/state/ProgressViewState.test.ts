@@ -261,6 +261,28 @@ describe('ProgressViewState.load', () => {
       cost: 1,
     };
 
+    await storage.update(`texra.taskStates.${workspacePath}`, {
+      [streamId]: {
+        agentConfig: {
+          model: 'test-model',
+          agent: 'legacy-agent',
+          instruction: 'Restore me',
+          agentType: AgentType.Direct,
+          agentCategory: AgentCategory.Workflow,
+          inputFile: 'main.tex',
+          outputFiles: [],
+          useMultipleOutputs: false,
+        },
+        activeFiles: {
+          input: true,
+          reference: false,
+          auxiliary: false,
+          media: false,
+          output: false,
+        },
+      },
+    });
+
     await storage.update(`texra.logStreams.${workspacePath}`, {
       [streamId]: [logEntry],
     });
@@ -289,6 +311,10 @@ describe('ProgressViewState.load', () => {
 
     await storage.update(`texra.usageStats.${workspacePath}`, {
       [streamId]: usage,
+    });
+
+    await storage.update(`texra.executionIds.${workspacePath}`, {
+      [streamId]: 'exec-1',
     });
 
     storage.saved.length = 0;
@@ -321,12 +347,24 @@ describe('ProgressViewState.load', () => {
     assert.ok(restoredUsage);
     assert.deepStrictEqual(restoredUsage, usage);
 
+    const restoredTaskState = state.getTaskState(streamId);
+    assert.ok(restoredTaskState);
+    assert.equal(
+      restoredTaskState!.session.agentCategory,
+      AgentCategory.Workflow,
+    );
+
+    const executionId = state.getExecutionId(streamId);
+    assert.equal(executionId, 'exec-1');
+
     const savedKeys = storage.saved.map((entry) => entry.key);
     assert.ok(savedKeys.includes(WorkspaceStateKey.STREAM_TABS));
     assert.ok(savedKeys.includes(WorkspaceStateKey.TASK_GROUPS));
     assert.ok(savedKeys.includes(WorkspaceStateKey.OUTPUT_FILES));
     assert.ok(savedKeys.includes(WorkspaceStateKey.MISSING_OUTPUTS));
     assert.ok(savedKeys.includes(WorkspaceStateKey.USAGE_STATS));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.TASK_STATES));
+    assert.ok(savedKeys.includes(WorkspaceStateKey.EXECUTION_IDS));
 
     assert.ok(
       savedKeys.includes(`texra.logStreams.${workspacePath}`),
@@ -347,6 +385,14 @@ describe('ProgressViewState.load', () => {
     assert.ok(
       savedKeys.includes(`texra.usageStats.${workspacePath}`),
       'expected legacy usage key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.taskStates.${workspacePath}`),
+      'expected legacy task state key to be cleared',
+    );
+    assert.ok(
+      savedKeys.includes(`texra.executionIds.${workspacePath}`),
+      'expected legacy execution id key to be cleared',
     );
   });
 });
