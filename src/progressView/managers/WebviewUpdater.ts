@@ -327,11 +327,15 @@ export class WebviewUpdater {
       this.updateLogContent(activeStream, messages, groups);
 
       // Update files for active stream
-      const files = state.outputFiles.getFiles(activeStream);
+      const files = Object.fromEntries(
+        state.outputFiles.getFiles(activeStream).entries(),
+      );
       this.updateFiles(activeStream, files);
 
       // Update missing outputs for active stream
-      const missing = state.outputFiles.getMissingOutputs(activeStream);
+      const missing = Object.fromEntries(
+        state.outputFiles.getMissingOutputs(activeStream).entries(),
+      );
       this.updateMissingOutputs(activeStream, missing);
 
       // Update usage for active stream

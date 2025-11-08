@@ -9,9 +9,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 // Local imports - agent
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-
-// Local imports - utils
-import { agentConfigToTaskState } from '@utils/config';
+import type { WorkflowTaskState } from '@logger/TaskState';
 
 class FakeStorage implements StateStorage {
   public readonly saved: { key: string; value: unknown }[] = [];
@@ -51,7 +49,20 @@ describe('ProgressViewState.clearOutputState', () => {
       useMultipleOutputs: true,
     });
 
-    const workflowState = agentConfigToTaskState(config);
+    const workflowState: WorkflowTaskState = {
+      agentConfig: config,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
+      activeFiles: {
+        input: true,
+        reference: false,
+        auxiliary: false,
+        media: false,
+        output: true,
+      },
+    };
     const streamId = 'stream-1';
     state.setTaskState(streamId, workflowState);
 
@@ -64,10 +75,8 @@ describe('ProgressViewState.clearOutputState', () => {
     const lastSave = storage.saved[storage.saved.length - 1];
     assert.equal(lastSave.key, WorkspaceStateKey.TASK_STATES);
 
-    const savedState = lastSave.value as {
-      workflow: Record<string, any>;
-    };
-    const storedWorkflow = savedState.workflow[streamId];
+    const savedState = lastSave.value as Record<string, any>;
+    const storedWorkflow = savedState[streamId];
     assert.deepStrictEqual(storedWorkflow.agentConfig.outputFiles, []);
     assert.equal(storedWorkflow.agentConfig.useMultipleOutputs, false);
     assert.equal(storedWorkflow.activeFiles.output, false);
@@ -88,7 +97,20 @@ describe('ProgressViewState.clearOutputState', () => {
       inputFile: 'main.tex',
     });
 
-    const workflowState = agentConfigToTaskState(config);
+    const workflowState: WorkflowTaskState = {
+      agentConfig: config,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
+      activeFiles: {
+        input: true,
+        reference: false,
+        auxiliary: false,
+        media: false,
+        output: false,
+      },
+    };
     const streamId = 'stream-2';
     state.setTaskState(streamId, workflowState);
 
@@ -116,7 +138,20 @@ describe('ProgressViewState.clearOutputState', () => {
       outputFiles: undefined,
     });
 
-    const workflowState = agentConfigToTaskState(config);
+    const workflowState: WorkflowTaskState = {
+      agentConfig: config,
+      session: {
+        ...config.session!,
+        agentCategory: AgentCategory.Workflow,
+      },
+      activeFiles: {
+        input: true,
+        reference: false,
+        auxiliary: false,
+        media: false,
+        output: false,
+      },
+    };
     const streamId = 'stream-3';
     state.setTaskState(streamId, workflowState);
 
