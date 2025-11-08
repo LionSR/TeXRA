@@ -6,7 +6,10 @@
   display: none;
   border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
-  background-color: var(--vscode-editor-background);
+  background-color: var(
+    --vscode-sideBarSectionHeader-background,
+    var(--vscode-editor-background)
+  );
 }
 
 .instruction-panel.is-visible {
@@ -22,7 +25,16 @@
 }
 
 .instruction-panel__title {
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+
+.instruction-panel__title .codicon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .instruction-panel__actions {

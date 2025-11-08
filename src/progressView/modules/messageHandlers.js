@@ -65,6 +65,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.taskGroups.showRun(runId);
     this._refreshInstructionForActiveRun();
     this._refreshOutputsForActiveRun();
+    this._refreshUsageForActiveRun();
   }
 
   _refreshInstructionForActiveRun() {
@@ -96,6 +97,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const filesByRound = state.getRunFiles(activeRunId) || {};
     dom.fileList.update(filesByRound);
+  }
+
+  _refreshUsageForActiveRun() {
+    dom.usageSummary.update();
   }
 
   _createHandlers() {
@@ -208,6 +213,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunInstructions();
       state.clearRunFiles();
       state.clearRunMissingOutputs();
+      state.clearRunUsage();
       state.setActiveRunId(null);
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -215,6 +221,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     this._refreshInstructionForActiveRun();
+    this._refreshUsageForActiveRun();
   }
 
   handleUpdateLogs(message) {
@@ -225,6 +232,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunInstructions();
       state.clearRunFiles();
       state.clearRunMissingOutputs();
+      state.clearRunUsage();
       const previousRunId = state.getActiveRunId();
       state.setActiveRunId(null);
       logContent.innerHTML = '';
@@ -261,6 +269,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
               state.setRunMissingOutputs(runId, files);
             },
           );
+        }
+
+        if (message.runUsage) {
+          Object.entries(message.runUsage).forEach(([runId, usage]) => {
+            state.setRunUsage(runId, usage);
+          });
         }
 
         if (parentGroups.length > 0) {
@@ -300,6 +314,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.usageSummary.update();
       this._refreshInstructionForActiveRun();
       this._refreshOutputsForActiveRun();
+      this._refreshUsageForActiveRun();
     }
 
     this._updatePlaceholderVisibility();
@@ -314,6 +329,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunInstructions();
     state.clearRunFiles();
     state.clearRunMissingOutputs();
+    state.clearRunUsage();
     state.setActiveRunId(null);
     if (logContent) {
       logContent.innerHTML = '';
@@ -413,7 +429,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateUsage(message) {
-    dom.usageSummary.update(message.usage);
+    if (message.stream && message.stream !== state.activeStream) {
+      return;
+    }
+
+    state.clearRunUsage();
+    const usageByRun = message.usageByRun || {};
+    Object.entries(usageByRun).forEach(([runId, usage]) => {
+      state.setRunUsage(runId, usage);
+    });
+    this._refreshUsageForActiveRun();
   }
 
   handleUpdateGroupUsage(message) {
