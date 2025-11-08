@@ -10,11 +10,13 @@ import { createFromTemplate } from '@common/templateUtils.js';
  * Manages task group DOM operations.
  */
 export class TaskGroupDomManager {
-  constructor() {
+  constructor(runSelector) {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
     this.toggleListeners = new Map();
+    this.runSelector = runSelector || null;
+    this.runContainers = new Map();
   }
 
   /**
@@ -44,86 +46,157 @@ export class TaskGroupDomManager {
       }
     }
 
-    const detailsElem = createFromTemplate('groupDetailsTemplate');
-    if (!detailsElem) {
-      console.error(
-        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
-      );
-      return;
-    }
-    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
-
-    const headerElement = this.headerFormatter.create(group);
-    if (!headerElement) {
-      console.error(
-        'TaskGroupDomManager.addGroup: failed to create group header',
-      );
-      detailsElem.remove();
-      return;
-    }
-
-    const groupContainer = detailsElem.querySelector('.log-group-content');
-    if (!groupContainer) {
-      console.error(
-        'TaskGroupDomManager.addGroup: missing group content container',
-      );
-      detailsElem.remove();
-      return;
-    }
-    groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
-
-    progressViewState.taskGroups.set(group.id, group);
-
-    const isCollapsed = progressViewState.toggleStates.get(group.id);
-    detailsElem.open = isCollapsed !== true;
-
-    detailsElem.prepend(headerElement);
-
-    const toggleListener = () => {
-      progressViewState.toggleStates.set(group.id, !detailsElem.open);
-    };
-    detailsElem.addEventListener('toggle', toggleListener);
-    this.toggleListeners.set(group.id, toggleListener);
-
-    this.groupElements.set(group.id, detailsElem);
-
-    // Insert the group at the right position in the parent
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (!container) {
       console.error(
         'TaskGroupDomManager.addGroup: missing log content container',
       );
-      this._removeToggleListener(group.id);
-      this.groupElements.delete(group.id);
       return;
     }
 
-    if (group.parentGroupId) {
-      const parentDetails = this.groupElements.get(group.parentGroupId);
-      const parentGroupContent =
-        parentDetails?.querySelector('.log-group-content');
-      if (parentGroupContent) {
-        insertChronologically({
-          container: parentGroupContent,
-          element: detailsElem,
-          timestamp: group.startTime,
-        });
+    progressViewState.taskGroups.set(group.id, group);
+
+    const isRootGroup = !group.parentGroupId;
+    let elementToInsert = null;
+
+    if (isRootGroup) {
+      const runElement = this._createRunContainer(group);
+      if (!runElement) {
         return;
       }
+
+      this.groupElements.set(group.id, runElement);
+      this.runContainers.set(group.id, runElement);
+      elementToInsert = runElement;
+    } else {
+      const detailsElem = this._createNestedGroupElement(group);
+      if (!detailsElem) {
+        return;
+      }
+
+      const toggleListener = () => {
+        progressViewState.toggleStates.set(group.id, !detailsElem.open);
+      };
+      detailsElem.addEventListener('toggle', toggleListener);
+      this.toggleListeners.set(group.id, toggleListener);
+
+      this.groupElements.set(group.id, detailsElem);
+      elementToInsert = detailsElem;
     }
 
-    // For top-level groups, insert in chronological order
+    if (isRootGroup) {
+      insertChronologically({
+        container,
+        element: elementToInsert,
+        timestamp: group.startTime,
+        getChildTimestamp: TaskGroupDomManager._getRunTimestamp,
+      });
+
+      if (this.runSelector) {
+        this.runSelector.registerRun({
+          id: group.id,
+          startTime: group.startTime,
+        });
+      }
+      return;
+    }
+
+    const parentContent = this._resolveParentContent(group.parentGroupId);
+    if (parentContent) {
+      insertChronologically({
+        container: parentContent,
+        element: elementToInsert,
+        timestamp: group.startTime,
+      });
+      return;
+    }
+
     insertChronologically({
       container,
-      element: detailsElem,
+      element: elementToInsert,
       timestamp: group.startTime,
     });
+  }
 
-    // For top-level groups, update current group and collapse the previous active group
-    if (!group.parentGroupId) {
-      progressViewState.currentGroupId = group.id;
-      this.collapsePreviousActiveGroup();
+  _createRunContainer(group) {
+    const runSection = createFromTemplate('groupDetailsTemplate');
+    if (!runSection) {
+      console.error(
+        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
+      );
+      return null;
     }
+
+    runSection.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+    runSection.classList.add('log-run');
+    runSection.dataset.runId = group.id;
+    if (group.startTime !== undefined && group.startTime !== null) {
+      runSection.dataset.runStart = String(group.startTime);
+    }
+    runSection.hidden = false;
+    runSection.setAttribute('aria-hidden', 'false');
+
+    const groupContainer = runSection.querySelector('.log-group-content');
+    if (!groupContainer) {
+      console.error(
+        'TaskGroupDomManager.addGroup: missing group content container',
+      );
+      runSection.remove();
+      return null;
+    }
+
+    groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
+    groupContainer.dataset.groupId = group.id;
+    groupContainer.classList.add('log-run-content');
+
+    return runSection;
+  }
+
+  _createNestedGroupElement(group) {
+    const headerElement = this.headerFormatter.create(group);
+    if (!headerElement) {
+      console.error(
+        'TaskGroupDomManager.addGroup: failed to create group header',
+      );
+      return null;
+    }
+
+    const detailsElem = document.createElement('details');
+    detailsElem.classList.add('log-group');
+    detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
+
+    const isCollapsed = progressViewState.toggleStates.get(group.id);
+    detailsElem.open = isCollapsed !== true;
+
+    detailsElem.appendChild(headerElement);
+
+    const contentContainer = document.createElement('div');
+    contentContainer.className = 'log-group-content';
+    contentContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
+    detailsElem.appendChild(contentContainer);
+
+    return detailsElem;
+  }
+
+  _resolveParentContent(parentGroupId) {
+    if (!parentGroupId) {
+      return null;
+    }
+    return document.getElementById(
+      `${GROUP_DOM_IDS.CONTENT_PREFIX}${parentGroupId}`,
+    );
+  }
+
+  static _getRunTimestamp(child) {
+    if (!child) {
+      return null;
+    }
+    const start = child.dataset?.runStart;
+    if (!start) {
+      return null;
+    }
+    const parsed = Number(start);
+    return Number.isNaN(parsed) ? null : parsed;
   }
 
   /**
@@ -167,6 +240,11 @@ export class TaskGroupDomManager {
 
     const detailsElem = this.groupElements.get(groupId);
     if (!detailsElem) {
+      return;
+    }
+
+    if (detailsElem.classList?.contains('log-run')) {
+      this.runContainers.set(groupId, detailsElem);
       return;
     }
 
@@ -233,7 +311,7 @@ export class TaskGroupDomManager {
 
     // Collapse this group
     const detailsElem = this.groupElements.get(groupId);
-    if (detailsElem) {
+    if (detailsElem && 'open' in detailsElem) {
       detailsElem.open = false;
       progressViewState.toggleStates.set(groupId, true);
     }
@@ -322,7 +400,28 @@ export class TaskGroupDomManager {
     }
     this.groupElements.clear();
     this.toggleListeners.clear();
+    this.runContainers.clear();
+    if (this.runSelector) {
+      this.runSelector.clear();
+    }
     this.previousActiveGroupId = null;
+  }
+
+  showRun(runId) {
+    if (this.runContainers.size === 0) {
+      return;
+    }
+
+    const activeId = runId || null;
+    for (const [id, element] of this.runContainers.entries()) {
+      if (!element) {
+        continue;
+      }
+      const shouldShow = !activeId || id === activeId;
+      element.hidden = !shouldShow;
+      element.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      element.classList.toggle('is-active-run', shouldShow);
+    }
   }
 
   _removeToggleListener(groupId) {

@@ -46,6 +46,7 @@
           "./modules/uiManagers/FileList.js": "${fileListUri}",
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
+          "./modules/uiManagers/RunSelector.js": "${runSelectorUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
@@ -89,6 +90,12 @@
           <div class="log-header">
             <div class="header-left">
               <span id="activeStreamName"></span>
+              <vscode-dropdown
+                id="runSelector"
+                class="run-selector"
+                aria-label="Select run"
+                hidden
+              ></vscode-dropdown>
               <span
                 id="statusIndicator"
                 class="status-indicator stopped"
@@ -353,9 +360,9 @@
             </details>
           </template>
           <template id="groupDetailsTemplate">
-            <details class="log-group">
+            <section class="log-group">
               <div class="log-group-content"></div>
-            </details>
+            </section>
           </template>
           <template id="groupHeaderTemplate">
             <summary class="log-group-header">

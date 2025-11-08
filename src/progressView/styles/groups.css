@@ -54,6 +54,20 @@
   margin-left: var(--spacing-small);
 }
 
+.log-run {
+  margin: 0;
+  padding: 0;
+}
+
+.log-run[hidden] {
+  display: none !important;
+}
+
+.log-run-content {
+  padding-left: 0;
+  border-left: none;
+}
+
 .log-group-header.top-level .group-time {
   flex-grow: 1;
   margin-left: 0;

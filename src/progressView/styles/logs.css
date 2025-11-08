@@ -122,6 +122,16 @@
   margin-left: auto;
 }
 
+.run-selector {
+  min-width: 12rem;
+  max-width: 18rem;
+  flex-shrink: 0;
+}
+
+.run-selector[hidden] {
+  display: none;
+}
+
 .run-summary {
   opacity: var(--opacity-subtle);
 }

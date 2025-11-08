@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
+import { COMMANDS, STATUS, ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
 import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
@@ -43,6 +43,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ...createThemeHandlers(),
       ...this._createHandlers(),
     };
+    dom.runSelector.setOnRunChange((runId) =>
+      this._handleRunSelectionChange(runId),
+    );
   }
 
   /**
@@ -54,6 +57,47 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.placeholder.show();
     } else {
       dom.placeholder.hide();
+    }
+  }
+
+  _handleRunSelectionChange(runId) {
+    state.setActiveRun(runId || null);
+    dom.taskGroups.showRun(runId || null);
+    this._refreshInstructionForRun(runId);
+  }
+
+  _refreshInstructionForRun(runId) {
+    if (!runId) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const instruction = state.getRunInstruction(runId);
+    const text = instruction?.text ?? '';
+    const sessionKind = instruction?.sessionKind || 'workflow';
+
+    if (!text.trim() || sessionKind === 'toolUse') {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    dom.instructionPanel.show(text, instruction?.metadata);
+  }
+
+  _removeToolUseInstructionMessage(runId) {
+    if (!runId) {
+      return;
+    }
+    const runContent = document.getElementById(
+      `${GROUP_DOM_IDS.CONTENT_PREFIX}${runId}`,
+    );
+    const target =
+      runContent || document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    const existingInstruction = target?.querySelector(
+      '.user-message-container[data-instruction="true"]',
+    );
+    if (existingInstruction) {
+      existingInstruction.remove();
     }
   }
 
@@ -170,9 +214,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
+      const previousRunId = state.getActiveRun();
       dom.taskGroups.clear();
       state.taskGroups.clear();
-      logContent.innerHTML = '';
+      state.clearRunInstructions();
+      state.setActiveRun(null);
+      if (logContent) {
+        logContent.innerHTML = '';
+      }
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
@@ -183,6 +232,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
       }
+      const runIds = dom.runSelector.getRunIds();
+      let nextRunId = null;
+      if (previousRunId && runIds.includes(previousRunId)) {
+        nextRunId = previousRunId;
+      } else if (runIds.length > 0) {
+        nextRunId = runIds[runIds.length - 1];
+      }
+      dom.runSelector.setActiveRun(nextRunId);
+      state.setActiveRun(nextRunId);
+      dom.taskGroups.showRun(nextRunId);
+      this._refreshInstructionForRun(nextRunId);
+
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
       );
@@ -212,6 +273,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.taskGroups.clear();
     state.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
+    state.clearRunInstructions();
+    state.setActiveRun(null);
+    dom.runSelector.setActiveRun(null);
+    dom.taskGroups.showRun(null);
+    dom.instructionPanel.hide();
     if (logContent) {
       logContent.innerHTML = '';
     }
@@ -274,6 +340,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
+      if (!message.group.parentGroupId) {
+        const runId = message.group.id;
+        dom.runSelector.setActiveRun(runId);
+        state.setActiveRun(runId);
+        dom.taskGroups.showRun(runId);
+        this._refreshInstructionForRun(runId);
+      }
       scrollToBottom(logContent);
     }
   }
@@ -358,50 +431,68 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const payload = message.instruction;
     const text = payload?.text ?? '';
+    const metadata = payload?.metadata ?? {};
+    const sessionKind = message.sessionKind || 'workflow';
+    const runId = state.getActiveRun() || dom.runSelector.getActiveRunId();
+
+    if (runId) {
+      if (!text.trim()) {
+        state.setRunInstruction(runId, null);
+        this._removeToolUseInstructionMessage(runId);
+      } else {
+        state.setRunInstruction(runId, {
+          text,
+          metadata,
+          sessionKind,
+        });
+      }
+    }
 
     if (!text.trim()) {
       dom.instructionPanel.hide();
       return;
     }
 
-    const sessionKind = message.sessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
     if (isToolUseAgent) {
       // For Tool Use agents, show instruction as a user message in chat
       dom.instructionPanel.hide();
 
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        // Check if instruction message already exists
-        const existingInstruction = logContent.querySelector(
+      const runContent = runId
+        ? document.getElementById(`${GROUP_DOM_IDS.CONTENT_PREFIX}${runId}`)
+        : document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+
+      if (runContent) {
+        const existingInstruction = runContent.querySelector(
           '.user-message-container[data-instruction="true"]',
         );
-        if (!existingInstruction) {
-          const userMessage = this._entryFormatter.format({
-            id: `instruction-${activeStream}`,
-            messageType: 'userMessage',
-            text: text,
-            timestamp: Date.now(),
-            groupId: undefined,
-          });
+        if (existingInstruction) {
+          existingInstruction.remove();
+        }
 
-          if (userMessage) {
-            userMessage.dataset.instruction = 'true';
-            // Insert at the beginning of the log content
-            if (logContent.firstChild) {
-              logContent.insertBefore(userMessage, logContent.firstChild);
-            } else {
-              logContent.appendChild(userMessage);
-            }
+        const userMessage = this._entryFormatter.format({
+          id: `instruction-${activeStream}`,
+          messageType: 'userMessage',
+          text,
+          timestamp: Date.now(),
+          groupId: runId,
+        });
+
+        if (userMessage) {
+          userMessage.dataset.instruction = 'true';
+          if (runContent.firstChild) {
+            runContent.insertBefore(userMessage, runContent.firstChild);
+          } else {
+            runContent.appendChild(userMessage);
           }
         }
       }
     } else {
       // For Workflow agents, show in instruction panel
-      const metadata = payload?.metadata ?? {};
-      dom.instructionPanel.show(text, metadata);
     }
+
+    this._refreshInstructionForRun(runId);
   }
 
   handleDeleteStream(message) {
@@ -411,6 +502,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (message.stream === state.activeStream) {
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
+        state.clearRunInstructions();
+        state.setActiveRun(null);
+        dom.runSelector.setActiveRun(null);
+        dom.taskGroups.showRun(null);
         dom.instructionPanel.hide();
       }
     }
@@ -419,6 +514,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteAll() {
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
+    state.clearRunInstructions();
+    state.setActiveRun(null);
+    dom.runSelector.setActiveRun(null);
+    dom.taskGroups.showRun(null);
     dom.instructionPanel.hide();
   }
 

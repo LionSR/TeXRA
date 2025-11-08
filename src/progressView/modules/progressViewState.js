@@ -225,6 +225,8 @@ export class ProgressViewState {
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
+    this.activeRunId = null;
+    this.runInstructions = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -247,6 +249,36 @@ export class ProgressViewState {
 
   resetExecutionIdAvailability() {
     this.executionIdAvailability.clear();
+  }
+
+  setActiveRun(runId) {
+    this.activeRunId = runId ?? null;
+  }
+
+  getActiveRun() {
+    return this.activeRunId;
+  }
+
+  setRunInstruction(runId, instruction) {
+    if (!runId) {
+      return;
+    }
+    if (!instruction || !instruction.text?.trim()) {
+      this.runInstructions.delete(runId);
+      return;
+    }
+    this.runInstructions.set(runId, instruction);
+  }
+
+  getRunInstruction(runId) {
+    if (!runId) {
+      return undefined;
+    }
+    return this.runInstructions.get(runId);
+  }
+
+  clearRunInstructions() {
+    this.runInstructions.clear();
   }
 
   /** Load saved state from VS Code storage. */
