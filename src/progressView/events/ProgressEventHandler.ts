@@ -123,16 +123,14 @@ export class ProgressEventHandler {
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
     const runId = this.ensureActiveRunId(stream);
 
-    if (runId) {
-      if (instructionUpdate) {
-        void this.state.runInstructions.setInstruction(
-          stream,
-          runId,
-          instructionUpdate,
-        );
-      } else {
-        void this.state.runInstructions.setInstruction(stream, runId, null);
-      }
+    if (runId && instructionUpdate) {
+      void this.state.runInstructions.setInstruction(
+        stream,
+        runId,
+        instructionUpdate,
+      );
+    } else if (runId) {
+      void this.state.runInstructions.deleteRun(stream, runId);
     }
 
     if (instructionUpdate) {
