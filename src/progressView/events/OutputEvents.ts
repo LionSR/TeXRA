@@ -27,7 +27,7 @@ interface OutputEventsShared {
   logger: AgentLogger;
 }
 
-type FilesByRound<T> = { [key: number]: T[] };
+type FilesByRound<T> = Map<number, T[]>;
 
 interface ActiveStreamOutputUpdate {
   state: ProgressViewState;
@@ -50,11 +50,17 @@ const updateActiveStreamOutputs = ({
   }
 
   if (updates.files !== undefined) {
-    updater.updateFiles(stream, updates.files ?? {});
+    const payload = updates.files
+      ? Object.fromEntries(updates.files.entries())
+      : {};
+    updater.updateFiles(stream, payload);
   }
 
   if (updates.missing !== undefined) {
-    updater.updateMissingOutputs(stream, updates.missing ?? {});
+    const payload = updates.missing
+      ? Object.fromEntries(updates.missing.entries())
+      : {};
+    updater.updateMissingOutputs(stream, payload);
   }
 };
 
@@ -100,7 +106,7 @@ const registerOutputFileListeners = (
         state,
         updater,
         stream,
-        updates: { missing: {} },
+        updates: { missing: new Map() },
       });
     });
   });
@@ -112,7 +118,7 @@ const registerOutputFileListeners = (
         state,
         updater,
         stream,
-        updates: { files: {} },
+        updates: { files: new Map() },
       });
     });
   });
@@ -125,12 +131,16 @@ const registerOutputFileListeners = (
 const registerClearTaskOutput = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
+  updater: WebviewUpdater,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable => {
   return new vscode.Disposable(
     bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
       withErrorBoundary('failed to handle clearTaskOutput', () => {
-        state.clearOutputState(streamTabId);
+        const cleared = state.clearOutputState(streamTabId);
+        if (cleared && updater.isAvailable()) {
+          updater.updateAll(state);
+        }
       });
     }),
   );
@@ -153,7 +163,9 @@ export function createOutputEvents(
         updater,
         withErrorBoundary,
       );
-      disposables.push(registerClearTaskOutput(bus, state, withErrorBoundary));
+      disposables.push(
+        registerClearTaskOutput(bus, state, updater, withErrorBoundary),
+      );
       return disposables;
     },
   };
