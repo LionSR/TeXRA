@@ -283,6 +283,30 @@ export class ProgressViewState {
     return this.activeRunId;
   }
 
+  resolveActiveRunId() {
+    if (this.activeRunId) {
+      return this.activeRunId;
+    }
+
+    const fallbackSources = [
+      this.runUsage,
+      this.runFiles,
+      this.runMissingOutputs,
+      this.runInstructions,
+    ];
+
+    for (const source of fallbackSources) {
+      if (source.size === 1) {
+        const candidate = source.keys().next().value;
+        if (candidate) {
+          return candidate;
+        }
+      }
+    }
+
+    return null;
+  }
+
   setPendingInstruction(streamId, instruction) {
     if (!streamId || !instruction || !instruction.text) {
       return;

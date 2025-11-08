@@ -41,6 +41,8 @@ export class RunSelector {
       this._dropdown = null;
     }
 
+    this._container = null;
+
     this._container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
     if (!dropdown) {

@@ -9,8 +9,7 @@
   color: var(--vscode-testing-iconFailed, #f14c4c);
 }
 
-.pack-button,
-.clear-button {
+.pack-button {
   margin-left: var(--spacing-tiny);
 }
 
