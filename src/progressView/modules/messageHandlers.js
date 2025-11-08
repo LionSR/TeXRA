@@ -43,9 +43,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ...createThemeHandlers(),
       ...this._createHandlers(),
     };
-    dom.runSelector.onDidChange((runId) =>
+    this._runSelectorDispose = dom.runSelector.onDidChange((runId) =>
       this._handleRunSelectionChange(runId),
     );
+    window.addEventListener(
+      'unload',
+      () => {
+        this.dispose();
+      },
+      { once: true },
+    );
+  }
+
+  dispose() {
+    if (typeof this._runSelectorDispose === 'function') {
+      this._runSelectorDispose();
+      this._runSelectorDispose = null;
+    }
   }
 
   /**
