@@ -61,6 +61,7 @@ export class ProgressViewSink implements LogEventSink {
       status: 'running',
       endTime: undefined,
       parentGroupId: event.parentGroupId,
+      instruction: event.instruction,
     });
   }
 

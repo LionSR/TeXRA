@@ -20,6 +20,7 @@ export interface AgentExecutionContextInit {
 export class AgentExecutionContext {
   public readonly logger: AgentLogger;
   public readonly usageReporter: AgentUsageReporter;
+  private activeRootGroupId?: string;
 
   constructor(private readonly init: AgentExecutionContextInit) {
     this.logger = new AgentLogger(init.streamId, true);
@@ -32,6 +33,14 @@ export class AgentExecutionContext {
 
   get executionId(): ExecutionId | undefined {
     return this.init.executionId;
+  }
+
+  setActiveRootGroupId(groupId: string | undefined): void {
+    this.activeRootGroupId = groupId;
+  }
+
+  getActiveRootGroupId(): string | undefined {
+    return this.activeRootGroupId;
   }
 
   stage(

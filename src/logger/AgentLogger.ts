@@ -9,6 +9,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import * as logger from './logUtils';
 import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
+import type { TaskGroupInstruction } from './LogTypes';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -25,6 +26,8 @@ export interface LoggerScopeOptions {
   successStatus?: 'stopped' | 'error';
   errorStatus?: 'stopped' | 'error';
   id?: string;
+  instruction?: TaskGroupInstruction;
+  onStart?: (groupId?: string) => void;
 }
 
 export interface AgentLoggerStageOptions extends LoggerScopeOptions {
@@ -337,12 +340,15 @@ export class AgentLogger {
       parentGroupId,
       id,
       parent,
+      instruction,
+      onStart,
     } = options as AgentLoggerStageOptions;
 
     const resolvedParent =
       parent?.id ?? parentGroupId ?? this.resolveActiveGroupId();
 
     if (skip) {
+      onStart?.(resolvedParent);
       return new AgentLogStageHandle(this, {
         id: undefined,
         skip: true,
@@ -352,7 +358,13 @@ export class AgentLogger {
       });
     }
 
-    const groupId = await this.startGroup(groupName, id, resolvedParent);
+    const groupId = await this.startGroup(
+      groupName,
+      id,
+      resolvedParent,
+      instruction,
+    );
+    onStart?.(groupId);
     return new AgentLogStageHandle(this, {
       id: groupId,
       skip: false,
@@ -455,6 +467,7 @@ export class AgentLogger {
     groupName: string,
     id?: string,
     parentGroupId?: string,
+    instruction?: TaskGroupInstruction,
   ): Promise<string> {
     await sleep(SHORT_SLEEP_MS);
     return logger.startGroup(
@@ -463,6 +476,7 @@ export class AgentLogger {
       id,
       parentGroupId,
       this.isAgentLogger,
+      instruction,
     );
   }
 

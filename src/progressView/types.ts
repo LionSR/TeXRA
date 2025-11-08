@@ -2,6 +2,7 @@
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { InstructionHints } from '@logger/LogTypes';
 
 export interface StreamUITraits {
   /** Canonical session grouping for the stream. */
@@ -29,10 +30,7 @@ export interface StreamTabInfo {
 
 export type AgentFilter = AgentTypeFilter;
 
-export interface InstructionMetadata {
-  showToggle?: boolean;
-  expanded?: boolean;
-}
+export interface InstructionMetadata extends InstructionHints {}
 
 export interface InstructionUpdate {
   text: string;

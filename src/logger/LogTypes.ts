@@ -3,8 +3,21 @@
  */
 
 // Local imports
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';
+
+export interface InstructionHints {
+  showToggle?: boolean;
+  expanded?: boolean;
+}
+
+export interface TaskGroupInstruction {
+  text: string;
+  executionId?: ExecutionId;
+  updatedAt?: number;
+  hints?: InstructionHints;
+}
 
 export interface TaskGroup {
   /** Unique identifier for the group */
@@ -21,6 +34,8 @@ export interface TaskGroup {
   parentGroupId?: TaskGroupId;
   /** Optional usage stats attached to the group */
   usage?: TokenUsageStats;
+  /** Optional instruction metadata associated with the group */
+  instruction?: TaskGroupInstruction;
 }
 
 export interface LogMessageData {

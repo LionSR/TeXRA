@@ -24,6 +24,7 @@ import {
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
+import type { TaskGroupInstruction } from '@logger/LogTypes';
 import { getConfig } from '@utils/config';
 // Local imports - agents
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -61,6 +62,8 @@ export class ProgressViewState {
   private _agentTypeFilter: AgentFilter = 'all';
   private readonly taskStates = new Map<StreamTabId, TaskState>();
   private _executionIds: Map<StreamTabId, ExecutionId> = new Map();
+  private readonly taskGroupIds = new Map<StreamTabId, string>();
+  private readonly taskGroupInstructions = new Map<StreamTabId, TaskGroupInstruction>();
   /**
    * Ephemeral session-kind hints keyed by stream ID.
    *
@@ -192,9 +195,26 @@ export class ProgressViewState {
   }
 
   // Task state management
-  setTaskState(streamTabId: StreamTabId, taskState: TaskState): void {
+  setTaskState(
+    streamTabId: StreamTabId,
+    taskState: TaskState,
+    metadata?: {
+      taskGroupId?: string;
+      instruction?: TaskGroupInstruction;
+    },
+  ): void {
     this.taskStates.set(streamTabId, cloneTaskState(taskState));
     this.clearSessionKindHint(streamTabId);
+    if (metadata?.taskGroupId) {
+      this.taskGroupIds.set(streamTabId, metadata.taskGroupId);
+    } else {
+      this.taskGroupIds.delete(streamTabId);
+    }
+    if (metadata?.instruction) {
+      this.taskGroupInstructions.set(streamTabId, metadata.instruction);
+    } else {
+      this.taskGroupInstructions.delete(streamTabId);
+    }
     this.saveTaskStates();
     this.cleanupToolUseAgentRegistry();
   }
@@ -204,6 +224,16 @@ export class ProgressViewState {
     return stored ? cloneTaskState(stored) : undefined;
   }
 
+  getTaskGroupId(streamTabId: StreamTabId): string | undefined {
+    return this.taskGroupIds.get(streamTabId);
+  }
+
+  getTaskGroupInstruction(
+    streamTabId: StreamTabId,
+  ): TaskGroupInstruction | undefined {
+    return this.taskGroupInstructions.get(streamTabId);
+  }
+
   clearTaskState(streamTabId: StreamTabId): void {
     const didDelete = this.taskStates.delete(streamTabId);
     this.clearSessionKindHint(streamTabId);
@@ -211,6 +241,8 @@ export class ProgressViewState {
       this.saveTaskStates();
       this.cleanupToolUseAgentRegistry();
     }
+    this.taskGroupIds.delete(streamTabId);
+    this.taskGroupInstructions.delete(streamTabId);
   }
 
   getAllTaskStates(): Map<StreamTabId, TaskState> {
@@ -248,6 +280,8 @@ export class ProgressViewState {
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.taskGroupIds.delete(stream);
+    this.taskGroupInstructions.delete(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -290,6 +324,8 @@ export class ProgressViewState {
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this.taskGroupIds.clear();
+    this.taskGroupInstructions.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();

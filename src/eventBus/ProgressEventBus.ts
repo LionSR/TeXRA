@@ -12,6 +12,7 @@ import type {
   LogMessageData,
   LogMessageUpdate,
   TaskGroup,
+  TaskGroupInstruction,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 
@@ -35,6 +36,7 @@ interface AddTaskGroupPayload {
   status: TaskGroupStatus;
   endTime?: number;
   parentGroupId?: string;
+  instruction?: TaskGroupInstruction;
 }
 
 interface UpdateTaskGroupPayload {
@@ -53,6 +55,8 @@ interface SetTaskStatePayload {
   streamTabId: StreamTabId;
   executionId?: ExecutionId;
   taskState: TaskState;
+  taskGroupId?: string;
+  instruction?: TaskGroupInstruction;
 }
 
 export interface ProgressEventPayloads {
@@ -65,10 +69,12 @@ export interface ProgressEventPayloads {
   addOutputFiles: {
     stream: StreamTabId;
     filesByRound: { [key: number]: OutputFileInfo[] };
+    taskGroupId?: string;
   };
   updateMissingOutputs: {
     stream: StreamTabId;
     filesByRound: { [key: number]: string[] };
+    taskGroupId?: string;
   };
   clearMissingOutputs: StreamTabId;
   clearOutputFiles: StreamTabId;
@@ -77,9 +83,14 @@ export interface ProgressEventPayloads {
     stream: StreamTabId;
     groupId: string;
     usage: TokenUsageStats;
+    taskGroupId?: string;
   };
   clearTaskOutput: StreamTabId;
-  updateStreamUsage: { stream: StreamTabId; usage: TokenUsageStats };
+  updateStreamUsage: {
+    stream: StreamTabId;
+    usage: TokenUsageStats;
+    taskGroupId?: string;
+  };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

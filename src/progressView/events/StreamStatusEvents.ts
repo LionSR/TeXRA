@@ -93,9 +93,10 @@ export function createStreamStatusEvents(
     state: ProgressViewState,
     updater: WebviewUpdater,
   ): void => {
-    const { streamTabId, executionId, taskState } = data;
+    const { streamTabId, executionId, taskState, taskGroupId, instruction } =
+      data;
 
-    state.setTaskState(streamTabId, taskState);
+    state.setTaskState(streamTabId, taskState, { taskGroupId, instruction });
     state.clearSessionKindHint(streamTabId);
 
     const normalizedState = state.getTaskState(streamTabId);

@@ -4,6 +4,7 @@ import Transport from 'winston-transport';
 
 // Local imports - logger
 import { getColorForLevel } from '../utils/levelColors';
+import type { TaskGroupInstruction } from '@logger/LogTypes';
 import type {
   LogEventSink,
   LogGroupFinishedEvent,
@@ -27,6 +28,7 @@ interface TransportGroup {
   status: 'running' | 'error' | 'stopped';
   parentGroupId?: string;
   endTime?: number;
+  instruction?: TaskGroupInstruction;
 }
 
 export class VSCodeTransport extends Transport {
@@ -66,7 +68,12 @@ export class VSCodeTransport extends Transport {
     callback();
   }
 
-  startGroup(groupName: string, id: string, parentGroupId?: string): string {
+  startGroup(
+    groupName: string,
+    id: string,
+    parentGroupId?: string,
+    instruction?: TaskGroupInstruction,
+  ): string {
     const now = Date.now();
     const group: TransportGroup = {
       id,
@@ -74,6 +81,7 @@ export class VSCodeTransport extends Transport {
       startTime: now,
       status: 'running',
       parentGroupId,
+      instruction,
     };
     this.groups.set(id, group);
     this.activeGroupId = id;
@@ -84,6 +92,7 @@ export class VSCodeTransport extends Transport {
       groupName,
       startTime: now,
       parentGroupId,
+      instruction,
     });
 
     return id;

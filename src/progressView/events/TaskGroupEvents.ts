@@ -48,6 +48,7 @@ export function createTaskGroupEvents(
         status,
         endTime,
         parentGroupId,
+        instruction,
       } = data;
 
       const hasStream = state.streamTabs.has(stream);
@@ -63,6 +64,7 @@ export function createTaskGroupEvents(
         endTime,
         status,
         parentGroupId,
+        instruction,
       };
 
       await state.taskGroups.addGroup(stream, groupId, group);

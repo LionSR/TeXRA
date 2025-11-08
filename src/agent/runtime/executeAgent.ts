@@ -44,6 +44,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { buildTaskGroupInstruction } from '@logger/utils/instructionMetadata';
 import { getStreamTabId } from '@/logger/streamUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -386,9 +387,15 @@ export async function executeAgentWithLogging<T extends IAgent>(
       throw new Error(errorMsg);
     }
 
-    await logger.withScope(
-      `Task: ${agentName}@${config.model}`,
-      async () => {
+    const instructionMetadata = buildTaskGroupInstruction(
+      config.instruction ?? '',
+      executionId,
+    );
+
+    try {
+      await logger.withScope(
+        `Task: ${agentName}@${config.model}`,
+        async () => {
         try {
           await logger.withScope(
             `Task Details`,
@@ -469,6 +476,8 @@ export async function executeAgentWithLogging<T extends IAgent>(
                   streamTabId: activeStreamId,
                   executionId,
                   taskState: agentConfigToTaskState(config),
+                  taskGroupId: executionContext?.getActiveRootGroupId(),
+                  instruction: instructionMetadata,
                 });
                 logger.debug(`Task state stored for stream: ${activeStreamId}`);
               }
@@ -499,8 +508,15 @@ export async function executeAgentWithLogging<T extends IAgent>(
           throw err;
         }
       },
-      { skip: isResume },
-    );
+        {
+          skip: isResume,
+          instruction: instructionMetadata,
+          onStart: (groupId) => executionContext?.setActiveRootGroupId(groupId),
+        },
+      );
+    } finally {
+      executionContext?.setActiveRootGroupId(undefined);
+    }
   } catch (err) {
     const formattedError = formatProviderHttpError(err);
     const rawErrorMessage = err instanceof Error ? err.message : String(err);

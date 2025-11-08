@@ -2,6 +2,7 @@
 // (none)
 
 // Local imports - logger
+import type { TaskGroupInstruction } from '@logger/LogTypes';
 import type { MessageType } from '../messageTypes';
 
 export interface LogMessageEvent {
@@ -20,6 +21,7 @@ export interface LogGroupStartedEvent {
   groupName: string;
   startTime: number;
   parentGroupId?: string;
+  instruction?: TaskGroupInstruction;
 }
 
 export interface LogGroupFinishedEvent {

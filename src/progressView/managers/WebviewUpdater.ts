@@ -22,6 +22,7 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
+import { computeInstructionHints } from '@logger/utils/instructionMetadata';
 import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
@@ -52,23 +53,12 @@ export class WebviewUpdater {
       return undefined;
     }
 
-    const metadata = WebviewUpdater.computeInstructionMetadata(normalized);
+    const metadata = computeInstructionHints(normalized);
     const payload: InstructionUpdate = { text: normalized };
     if (metadata) {
       payload.metadata = metadata;
     }
     return payload;
-  }
-
-  private static computeInstructionMetadata(
-    text: string,
-  ): InstructionUpdate['metadata'] | undefined {
-    const lineCount = text.split(/\r?\n/).length;
-    const shouldShowToggle = lineCount > 6 || text.length > 600;
-    if (!shouldShowToggle) {
-      return undefined;
-    }
-    return { showToggle: true };
   }
 
   /**

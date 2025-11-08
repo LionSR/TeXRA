@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 // Local imports - logger
 import { registry } from './LogChannelRegistry';
 import type { MessageType } from './messageTypes';
+import type { TaskGroupInstruction } from './LogTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 
 type ChannelKey = string;
@@ -158,11 +159,12 @@ export function startGroup(
   id?: string,
   parentGroupId?: string,
   isAgent = false,
+  instruction?: TaskGroupInstruction,
 ): string {
   const transport = getOrCreateTransport(channel, isAgent);
   const groupId = id ?? randomUUID();
   pushGroupContext(channel, groupId, isAgent);
-  return transport.startGroup(groupName, groupId, parentGroupId);
+  return transport.startGroup(groupName, groupId, parentGroupId, instruction);
 }
 
 export function endGroup(
