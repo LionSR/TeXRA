@@ -6,6 +6,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '../persistence/PersistentMapManager';
+import { normalizeRunId } from '../constants/runIds';
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
@@ -15,7 +16,14 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 
-const DEFAULT_RUN_ID = '__default__';
+const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<OutputFileInfo>;
+  return typeof candidate.path === 'string' && candidate.path.length > 0;
+};
 
 /**
  * Manages output files collection with persistence and file existence validation.
@@ -42,7 +50,7 @@ export class OutputFilesManager extends PersistentMapManager<
     groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    const runId = groupId ?? DEFAULT_RUN_ID;
+    const runId = normalizeRunId(groupId);
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -64,7 +72,15 @@ export class OutputFilesManager extends PersistentMapManager<
         );
         continue;
       }
-      runRounds.set(roundNum, files);
+      const normalizedFiles = (Array.isArray(files) ? files : []).filter(
+        (file) => isValidOutputFile(file),
+      );
+      if (normalizedFiles.length === 0) {
+        runRounds.delete(roundNum);
+        continue;
+      }
+
+      runRounds.set(roundNum, normalizedFiles);
     }
 
     await this.save();
@@ -76,7 +92,7 @@ export class OutputFilesManager extends PersistentMapManager<
     groupId: string | null | undefined,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
-    const runId = groupId ?? DEFAULT_RUN_ID;
+    const runId = normalizeRunId(groupId);
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -125,7 +141,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
   ): Promise<void> {
-    const runId = groupId ?? DEFAULT_RUN_ID;
+    const runId = normalizeRunId(groupId);
     const runs = this.items.get(stream);
     if (!runs) {
       return;
@@ -153,7 +169,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
   ): Promise<void> {
-    const runId = groupId ?? DEFAULT_RUN_ID;
+    const runId = normalizeRunId(groupId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
       return;
@@ -273,7 +289,7 @@ export class OutputFilesManager extends PersistentMapManager<
           raw as Record<string, unknown>,
         );
         if (rounds.size > 0) {
-          runMap.set(DEFAULT_RUN_ID, rounds);
+          runMap.set(normalizeRunId(null), rounds);
         }
       } else {
         for (const [runId, value] of entries) {
@@ -316,7 +332,7 @@ export class OutputFilesManager extends PersistentMapManager<
     > = {};
 
     for (const [stream, rounds] of Object.entries(legacy)) {
-      converted[stream] = { [DEFAULT_RUN_ID]: rounds };
+      converted[stream] = { [normalizeRunId(null)]: rounds };
     }
 
     this._missingOutputs = this.deserializeMissingOutputs(converted);
@@ -327,6 +343,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   private deserializeRoundMap<T>(
     record: Record<string, unknown>,
+    validator?: (value: unknown) => value is T,
   ): Map<number, T[]> {
     const roundMap = new Map<number, T[]>();
 
@@ -336,7 +353,15 @@ export class OutputFilesManager extends PersistentMapManager<
         continue;
       }
 
-      roundMap.set(round, value as T[]);
+      if (!validator) {
+        roundMap.set(round, value as T[]);
+        continue;
+      }
+
+      const filtered = (value as unknown[]).filter((entry) => validator(entry));
+      if (filtered.length > 0) {
+        roundMap.set(round, filtered as T[]);
+      }
     }
 
     return roundMap;
@@ -373,9 +398,12 @@ export class OutputFilesManager extends PersistentMapManager<
     const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
 
     if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(record);
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(
+        record,
+        isValidOutputFile,
+      );
       if (rounds.size > 0) {
-        runMap.set(DEFAULT_RUN_ID, rounds);
+        runMap.set(normalizeRunId(null), rounds);
       }
       return runMap;
     }
@@ -387,6 +415,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         value as Record<string, unknown>,
+        isValidOutputFile,
       );
       if (rounds.size > 0) {
         runMap.set(runId, rounds);

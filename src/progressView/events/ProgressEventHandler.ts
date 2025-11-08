@@ -121,7 +121,7 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKindHint = this.state.getSessionKindHint(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
-    const runId = this.ensureActiveRunId(stream);
+    const runId = this.state.resolveRunId(stream);
 
     if (runId && instructionUpdate) {
       void this.state.runInstructions.setInstruction(
@@ -159,7 +159,7 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    let activeRunId = this.ensureActiveRunId(stream);
+    const activeRunId = this.state.resolveRunId(stream);
 
     const runInstructions = Object.fromEntries(
       this.state.runInstructions.getInstructions(stream).entries(),
@@ -174,36 +174,6 @@ export class ProgressEventHandler {
     const usageByRun = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
-
-    const candidateRunIds = new Set<string>();
-    for (const key of Object.keys(runInstructions)) {
-      if (key) {
-        candidateRunIds.add(key);
-      }
-    }
-    for (const key of Object.keys(filesByRun)) {
-      if (key) {
-        candidateRunIds.add(key);
-      }
-    }
-    for (const key of Object.keys(missingByRun)) {
-      if (key) {
-        candidateRunIds.add(key);
-      }
-    }
-    for (const key of Object.keys(usageByRun)) {
-      if (key) {
-        candidateRunIds.add(key);
-      }
-    }
-
-    if (!activeRunId && candidateRunIds.size === 1) {
-      const [onlyRunId] = Array.from(candidateRunIds);
-      if (onlyRunId) {
-        activeRunId = onlyRunId;
-        this.state.setActiveRunId(stream, onlyRunId);
-      }
-    }
 
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
@@ -268,38 +238,6 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStatus(status);
       }
     }
-  }
-
-  private ensureActiveRunId(stream: StreamTabId): string | null {
-    let runId = this.state.getActiveRunId(stream);
-    if (runId) {
-      return runId;
-    }
-
-    runId = this.resolveLatestRunId(stream);
-    if (runId) {
-      this.state.setActiveRunId(stream, runId);
-    }
-    return runId;
-  }
-
-  private resolveLatestRunId(stream: StreamTabId): string | null {
-    const groups = this.state.taskGroups.getStreamGroups(stream);
-    let latestId: string | null = null;
-    let latestTime = -Infinity;
-
-    for (const group of groups.values()) {
-      if (group.parentGroupId) {
-        continue;
-      }
-      const start = typeof group.startTime === 'number' ? group.startTime : 0;
-      if (start >= latestTime) {
-        latestId = group.id;
-        latestTime = start;
-      }
-    }
-
-    return latestId;
   }
 
   private formatRunOutputs(
