@@ -16,11 +16,6 @@
 }
 
 /* Minimal styling for top-level task headers */
-.log-group-header.top-level {
-  border-left: var(--border-thin) solid var(--vscode-panel-border);
-  border-right: var(--border-thin) solid var(--vscode-panel-border);
-}
-
 .log-group-header.running {
   border-left-color: var(--vscode-statusBarItem-warningBackground);
 }
@@ -61,11 +56,6 @@
   font-size: var(--font-size-sm);
   opacity: var(--opacity-subtle);
   margin-left: var(--spacing-small);
-}
-
-.log-group-header.top-level .group-time {
-  flex-grow: 1;
-  margin-left: 0;
 }
 
 .group-start-time,

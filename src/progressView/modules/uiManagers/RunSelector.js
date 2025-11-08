@@ -15,6 +15,7 @@ const RUN_LABEL_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
 export class RunSelector {
   constructor() {
     this._dropdown = null;
+    this._container = null;
     this._runs = new Map();
     this._onDidChange = null;
     this._changeHandler = this._handleChange.bind(this);
@@ -38,9 +39,12 @@ export class RunSelector {
       this._dropdown.removeEventListener('change', this._changeHandler);
     }
 
+    this._container =
+      this._container || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
     const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
     if (!dropdown) {
       this._dropdown = null;
+      this._syncVisibility();
       return;
     }
 
@@ -80,6 +84,8 @@ export class RunSelector {
       this._renderOptions();
       this._applyActiveValue();
     }
+
+    this._syncVisibility();
   }
 
   setRuns(groups = []) {
@@ -98,6 +104,8 @@ export class RunSelector {
       this._renderOptions();
       this._applyActiveValue();
     }
+
+    this._syncVisibility();
   }
 
   setActiveRun(groupId) {
@@ -139,6 +147,8 @@ export class RunSelector {
       this._dropdown.value = '';
       this._syncVisibility();
     }
+
+    this._syncVisibility();
   }
 
   _renderOptions() {
@@ -226,14 +236,22 @@ export class RunSelector {
   }
 
   _syncVisibility() {
-    if (!this._dropdown) {
-      return;
+    const hasRuns = this._runs.size > 0;
+
+    const dropdown =
+      this._dropdown || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
+    if (dropdown) {
+      dropdown.disabled = !hasRuns;
+      dropdown.hidden = !hasRuns;
+      dropdown.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
     }
 
-    const hasRuns = this._runs.size > 0;
-    this._dropdown.disabled = !hasRuns;
-    this._dropdown.hidden = !hasRuns;
-    this._dropdown.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
+    const container =
+      this._container || safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
+    if (container) {
+      container.toggleAttribute('hidden', !hasRuns);
+      container.setAttribute('aria-hidden', hasRuns ? 'false' : 'true');
+    }
   }
 
   cleanup() {
@@ -241,6 +259,7 @@ export class RunSelector {
       this._dropdown.removeEventListener('change', this._changeHandler);
     }
     this._dropdown = null;
+    this._container = null;
     this._runs.clear();
     this._onDidChange = null;
     this._pendingActiveId = null;
