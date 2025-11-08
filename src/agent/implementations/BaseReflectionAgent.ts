@@ -8,7 +8,6 @@ import {
 } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
-import { AgentConversationState } from '@agent/core/AgentConversationState';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -615,7 +614,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           totalRounds,
           currentRound: 0,
           continueRounds: true,
-          conversation: new AgentConversationState<any>(),
+          conversation: [],
           runState: new AgentRunState(),
         }) satisfies ReflectionRunState,
       createFlow: () => createReflectionRunFlow<C>(),

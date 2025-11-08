@@ -3,35 +3,28 @@ import { AgentSharedStoreRegistry } from '@agent/core/AgentSharedStoreRegistry';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STATUS } from '@progressView/modules/constants.js';
 
 // Local imports - agent implementation
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 export class ToolUseSessionLifecycle<C = unknown> {
-  private readonly followUps = new FollowUpQueue();
+  private readonly followUps: FollowUpQueue;
   private store: AgentSharedStore | null = null;
 
-  constructor(private readonly agent: BaseToolUseAgent<C>) {}
+  constructor(private readonly agent: BaseToolUseAgent<C>) {
+    this.followUps = ToolUseFollowUpQueue.acquire(agent.getStreamTabId());
+  }
 
   setStore(store: AgentSharedStore | null): void {
     const streamId = this.agent.getStreamTabId();
     const executionId = this.agent.getExecutionId();
 
-    if (this.store) {
-      if (executionId) {
-        AgentSharedStoreRegistry.unregisterByExecution(executionId);
-      } else {
-        AgentSharedStoreRegistry.unregisterByStream(streamId);
-      }
-    }
-
     this.store = store;
-
-    if (store && executionId) {
-      AgentSharedStoreRegistry.register(streamId, executionId, store);
-    }
+    AgentSharedStoreRegistry.set(streamId, executionId, store);
   }
 
   getStore(): AgentSharedStore | null {
@@ -72,11 +65,11 @@ export class ToolUseSessionLifecycle<C = unknown> {
       queue: this.followUps,
     });
 
-    StreamStatusService.set(this.agent.getStreamTabId(), 'waiting');
+    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
   }
 
   async markRunning(): Promise<void> {
-    StreamStatusService.set(this.agent.getStreamTabId(), 'running');
+    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.RUNNING);
   }
 
   async clearPersistedSnapshot(): Promise<void> {
@@ -91,7 +84,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
   }
 
   dispose(): void {
-    this.followUps.dispose();
     this.setStore(null);
+    ToolUseFollowUpQueue.release(this.agent.getStreamTabId());
   }
 }

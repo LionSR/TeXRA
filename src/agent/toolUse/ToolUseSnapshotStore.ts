@@ -41,28 +41,35 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
-let storageReady = false;
-let cleanupPerformed = false;
-
 async function ensureInitialized(): Promise<boolean> {
-  const persistenceEnabled = getToolUsePersistenceEnabled();
-  if (!persistenceEnabled) {
-    storageReady = false;
-    cleanupPerformed = false;
+  if (!getToolUsePersistenceEnabled()) {
+    storageState = null;
     return false;
   }
 
-  if (!storageReady) {
-    await StorageFS.ensureDir(STORAGE_DIR);
-    storageReady = true;
+  if (!storageState) {
+    storageState = { dirReady: false, cleanupDone: false };
   }
 
-  if (!cleanupPerformed) {
-    await cleanupExpiredSnapshots();
-    cleanupPerformed = true;
+  if (!storageState.dirReady) {
+    await StorageFS.ensureDir(STORAGE_DIR);
+    storageState.dirReady = true;
   }
+
+  if (!storageState.cleanupDone) {
+    await cleanupExpiredSnapshots();
+    storageState.cleanupDone = true;
+  }
+
   return true;
 }
+
+interface StorageState {
+  dirReady: boolean;
+  cleanupDone: boolean;
+}
+
+let storageState: StorageState | null = null;
 
 export const ToolUseSnapshotStore = {
   /**

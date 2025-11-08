@@ -66,6 +66,29 @@ export class FollowUpQueue {
     };
   }
 
+  async runIfIdle<T>(
+    work: () => Promise<T>,
+  ): Promise<{ aborted: boolean; result?: T }> {
+    if (!this.isEmpty()) {
+      return { aborted: true };
+    }
+
+    let aborted = false;
+    const unsubscribe = this.onEnqueue(() => {
+      aborted = true;
+    });
+
+    try {
+      const result = await work();
+      if (aborted || !this.isEmpty()) {
+        return { aborted: true, result };
+      }
+      return { aborted: false, result };
+    } finally {
+      unsubscribe();
+    }
+  }
+
   private notifyListeners(): void {
     for (const listener of Array.from(this.listeners)) {
       listener();
