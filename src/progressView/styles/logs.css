@@ -112,9 +112,7 @@
   align-items: center;
   gap: var(--spacing-small);
   font-size: var(--font-size-sm);
-  padding: var(--spacing-tiny) var(--spacing-small);
-  border-radius: var(--border-radius-medium);
-  background-color: var(--vscode-sideBarSectionHeader-background, transparent);
+  padding: 0;
 }
 
 /* Header layout */
@@ -150,10 +148,8 @@
   gap: var(--spacing-tiny);
   color: var(--vscode-descriptionForeground);
   font-size: var(--font-size-sm);
-  font-weight: 400;
+  font-weight: 500;
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
 }
 
 .run-selector-title .codicon {
@@ -188,8 +184,8 @@
 }
 
 .run-summary__label {
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
 }
 
 .run-summary__value {

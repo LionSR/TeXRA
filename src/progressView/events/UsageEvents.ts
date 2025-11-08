@@ -16,14 +16,25 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 interface RunUsageComputationContext {
   groups: Map<string, TaskGroup>;
+  rootCache?: Map<string, string | null>;
 }
 
 function findRootGroupId(
   groupId: string,
-  { groups }: RunUsageComputationContext,
+  context: RunUsageComputationContext,
 ): string | null {
+  const { groups } = context;
+  if (!context.rootCache) {
+    context.rootCache = new Map();
+  }
+
+  if (context.rootCache.has(groupId)) {
+    return context.rootCache.get(groupId) ?? null;
+  }
+
   let current = groups.get(groupId);
   if (!current) {
+    context.rootCache.set(groupId, null);
     return null;
   }
 
@@ -35,6 +46,7 @@ function findRootGroupId(
     current = parent;
   }
 
+  context.rootCache.set(groupId, current ? current.id : null);
   return current ? current.id : null;
 }
 
@@ -43,58 +55,55 @@ function computeRunUsageTotals(
   context: RunUsageComputationContext,
 ): { inputTokens: number; outputTokens: number; cost: number } {
   const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
+  const aggregatedTotals = { inputTokens: 0, outputTokens: 0, cost: 0 };
   const { groups } = context;
 
   let hasDirectChildUsage = false;
+  let aggregatedUsageFound = false;
+  let runUsage: TaskGroup['usage'] | undefined;
 
   for (const group of groups.values()) {
-    if (group.parentGroupId !== runId) {
+    const usage = group.usage;
+    if (!usage) {
       continue;
     }
 
-    if (!group.usage) {
+    if (group.parentGroupId === runId) {
+      totals.inputTokens += usage.inputTokens ?? 0;
+      totals.outputTokens += usage.outputTokens ?? 0;
+      totals.cost += usage.cost ?? 0;
+      hasDirectChildUsage = true;
       continue;
     }
 
-    totals.inputTokens += group.usage.inputTokens ?? 0;
-    totals.outputTokens += group.usage.outputTokens ?? 0;
-    totals.cost += group.usage.cost ?? 0;
-    hasDirectChildUsage = true;
+    if (group.id === runId) {
+      runUsage = usage;
+      continue;
+    }
+
+    const rootId = findRootGroupId(group.id, context);
+    if (rootId === runId) {
+      aggregatedTotals.inputTokens += usage.inputTokens ?? 0;
+      aggregatedTotals.outputTokens += usage.outputTokens ?? 0;
+      aggregatedTotals.cost += usage.cost ?? 0;
+      aggregatedUsageFound = true;
+    }
   }
 
   if (hasDirectChildUsage) {
     return totals;
   }
 
-  for (const group of groups.values()) {
-    if (group.id === runId) {
-      continue;
-    }
-
-    if (findRootGroupId(group.id, context) !== runId) {
-      continue;
-    }
-
-    if (!group.usage) {
-      continue;
-    }
-
-    totals.inputTokens += group.usage.inputTokens ?? 0;
-    totals.outputTokens += group.usage.outputTokens ?? 0;
-    totals.cost += group.usage.cost ?? 0;
+  if (aggregatedUsageFound) {
+    return aggregatedTotals;
   }
 
-  if (
-    totals.inputTokens === 0 &&
-    totals.outputTokens === 0 &&
-    totals.cost === 0
-  ) {
-    const runGroup = groups.get(runId);
-    if (runGroup?.usage) {
-      totals.inputTokens = runGroup.usage.inputTokens ?? 0;
-      totals.outputTokens = runGroup.usage.outputTokens ?? 0;
-      totals.cost = runGroup.usage.cost ?? 0;
-    }
+  if (runUsage) {
+    return {
+      inputTokens: runUsage.inputTokens ?? 0,
+      outputTokens: runUsage.outputTokens ?? 0,
+      cost: runUsage.cost ?? 0,
+    };
   }
 
   return totals;
@@ -138,6 +147,45 @@ export function createUsageEvents(
   shared: UsageEventsShared,
 ): UsageEventsModule {
   const withErrorBoundary = createErrorBoundary(shared.logger, 'UsageEvents');
+  const resolveTargetRunId = (
+    stream: string,
+    requestedRunId: string | null | undefined,
+    state: ProgressViewState,
+  ): string | null => {
+    if (requestedRunId) {
+      return requestedRunId;
+    }
+
+    const active = state.getActiveRunId(stream);
+    if (active) {
+      return active;
+    }
+
+    const usageEntries = state.usageStats.getRunUsage(stream);
+    if (usageEntries.size === 1) {
+      const onlyRun = usageEntries.keys().next().value ?? null;
+      if (onlyRun) {
+        return onlyRun;
+      }
+    }
+
+    const fileRuns = state.outputFiles.getFiles(stream);
+    if (fileRuns.size === 1) {
+      const onlyRun = fileRuns.keys().next().value ?? null;
+      if (onlyRun) {
+        return onlyRun;
+      }
+    }
+
+    const groups = state.taskGroups.getStreamGroups(stream);
+    for (const group of groups.values()) {
+      if (!group.parentGroupId) {
+        return group.id;
+      }
+    }
+
+    return null;
+  };
 
   return {
     register(
@@ -172,10 +220,16 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, usage, runId }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            const targetRunId =
-              runId ?? state.getActiveRunId(stream) ?? undefined;
+            const targetRunId = resolveTargetRunId(stream, runId, state);
             if (!targetRunId) {
+              shared.logger.warn(
+                `Skipping updateStreamUsage for ${stream}: unable to resolve run ID`,
+              );
               return;
+            }
+
+            if (!state.getActiveRunId(stream)) {
+              state.setActiveRunId(stream, targetRunId);
             }
             await state.usageStats.setRunUsage(stream, targetRunId, usage);
             if (state.activeStream === stream && updater.isAvailable()) {

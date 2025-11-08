@@ -39,7 +39,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
-    groupId: string | undefined,
+    groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
     const runId = groupId ?? DEFAULT_RUN_ID;
@@ -73,7 +73,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Update missing outputs for a stream */
   async updateMissingOutputs(
     stream: StreamTabId,
-    groupId: string | undefined,
+    groupId: string | null | undefined,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
     const runId = groupId ?? DEFAULT_RUN_ID;
@@ -123,7 +123,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   async clearRunFiles(
     stream: StreamTabId,
-    groupId: string | undefined,
+    groupId: string | null | undefined,
   ): Promise<void> {
     const runId = groupId ?? DEFAULT_RUN_ID;
     const runs = this.items.get(stream);
@@ -151,7 +151,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   async clearRunMissingOutputs(
     stream: StreamTabId,
-    groupId: string | undefined,
+    groupId: string | null | undefined,
   ): Promise<void> {
     const runId = groupId ?? DEFAULT_RUN_ID;
     const runs = this._missingOutputs.get(stream);

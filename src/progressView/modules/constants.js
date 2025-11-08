@@ -46,7 +46,6 @@ export const ELEMENT_IDS = {
   DIFF_STREAM_BTN: 'diffStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
-  ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
@@ -129,14 +128,6 @@ const WORKFLOW_TOOLBAR = [
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },
-  {
-    id: ELEMENT_IDS.ERASE_STREAM_BTN,
-    icon: 'clear-all',
-    command: COMMANDS.ERASE_STREAM,
-    title: 'Erase the stream output for this agent',
-    className: 'clear-button',
-    disabled: false,
-  },
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
@@ -159,14 +150,6 @@ const TOOL_USE_TOOLBAR = [
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },
-  {
-    id: ELEMENT_IDS.ERASE_STREAM_BTN,
-    icon: 'clear-all',
-    command: COMMANDS.ERASE_STREAM,
-    title: 'Erase the stream output for this agent',
-    className: 'clear-button',
-    disabled: false,
-  },
 ];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
