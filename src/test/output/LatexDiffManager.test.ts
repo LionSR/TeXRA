@@ -95,6 +95,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseFiles,
       testLogger,
       'channel',
+      undefined,
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
@@ -163,6 +164,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseFiles,
       testLogger,
       'channel',
+      undefined,
       {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,

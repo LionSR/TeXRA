@@ -13,7 +13,7 @@ import {
   logErrorMessage,
   formatError,
 } from '@common/errors/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -29,6 +29,8 @@ export interface LaTeXdiffResult {
   success: boolean;
   diffFileName?: string;
   message?: string;
+  outputPath?: string;
+  workspacePath?: string;
 }
 
 export interface LaTeXdiffMultipleResult {
@@ -50,7 +52,10 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
-  constructor(private readonly channel: string = CHANNEL) {
+  constructor(
+    private readonly channel: string = CHANNEL,
+    private readonly defaultRunFiles?: TaskRunFileService,
+  ) {
     this.fileNameManager = new DiffFileNameManager();
     this.fileProcessor = new DiffFileProcessor(channel);
     this.commandExecutor = new DiffCommandExecutor(
@@ -72,6 +77,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
+    options?: { runFiles?: TaskRunFileService },
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';
@@ -82,62 +88,89 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
+      const runFiles = options?.runFiles ?? this.defaultRunFiles;
+      const inputAbsolute = path.isAbsolute(inputFile)
+        ? inputFile
+        : WorkspaceFS.fullPath(inputFile);
+      const editedAbsolute = path.isAbsolute(editedFile)
+        ? editedFile
+        : WorkspaceFS.fullPath(editedFile);
+
       if (
-        !(await WorkspaceFS.exists(inputFile)) ||
-        !(await WorkspaceFS.exists(editedFile))
+        !(await WorkspaceFS.exists(inputAbsolute)) ||
+        !(await WorkspaceFS.exists(editedAbsolute))
       ) {
-        const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
+        const message = `One or both files do not exist. Input: ${inputAbsolute}, Edited: ${editedAbsolute}`;
         logger.warn(this.channel, message);
         return { success: false, message };
       }
 
       // Validate document structure
-      if (!(await this.validateDocumentStructure(inputFile, editedFile))) {
+      if (
+        !(await this.validateDocumentStructure(inputAbsolute, editedAbsolute))
+      ) {
         return {
           success: false,
           message: 'Files missing document environment',
         };
       }
 
+      let diffInput = inputAbsolute;
+      let diffEdited = editedAbsolute;
+
+      if (runFiles) {
+        if (!runFiles.isInRunDir(diffInput)) {
+          diffInput = await runFiles.ensureWorkspaceSymlink(diffInput);
+        }
+        if (!runFiles.isInRunDir(diffEdited)) {
+          diffEdited = await runFiles.ensureWorkspaceSymlink(diffEdited);
+        }
+      }
+
       diffFileName = this.fileNameManager.generateDiffFileName(
-        inputFile,
-        editedFile,
+        diffInput,
+        diffEdited,
         suffix,
       );
-      outputPath = path.join(path.dirname(inputFile), diffFileName);
+      outputPath = path.join(path.dirname(diffInput), diffFileName);
 
       logger.debug(
         this.channel,
-        `Running latexdiff for ${inputFile} and ${editedFile}`,
+        `Running latexdiff for ${diffInput} and ${diffEdited}`,
       );
 
       // Format files if requested
       if (runIndent) {
-        await this.formatFiles([inputFile, editedFile]);
+        await this.formatFiles([diffInput, diffEdited]);
       }
 
       // Execute latexdiff command
       const result = await this.commandExecutor.executeDiff(
-        inputFile,
-        editedFile,
-        { mathMarkup },
+        diffInput,
+        diffEdited,
+        { mathMarkup, cwd: runFiles?.getRoot() },
       );
       if (!result.stdout) {
         throw new Error('Latexdiff produced no output');
       }
 
       // Write and process output
+      await AbsoluteFS.ensureDir(path.dirname(outputPath));
       await WorkspaceFS.write(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
       logger.debug(
         this.channel,
-        `Latexdiff succeeded: ${inputFile} -> ${editedFile}`,
+        `Latexdiff succeeded: ${diffInput} -> ${diffEdited}`,
       );
 
       return {
         success: true,
         diffFileName,
+        outputPath,
+        workspacePath: runFiles
+          ? runFiles.getWorkspacePathFromStorage(outputPath)
+          : outputPath,
         message: `LaTeXdiff completed successfully: ${diffFileName}`,
       };
     } catch (err) {
@@ -149,7 +182,11 @@ export class LaTeXdiffService {
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
-      return { success: false, message };
+      return {
+        success: false,
+        message,
+        outputPath: outputPath || undefined,
+      };
     }
   }
 
@@ -263,6 +300,7 @@ export class LaTeXdiffService {
     outputFile: string,
     _round: number,
     mathMarkup?: MathMarkupOption,
+    options?: { runFiles?: TaskRunFileService },
   ): Promise<LaTeXdiffResult> {
     try {
       if (
@@ -275,6 +313,7 @@ export class LaTeXdiffService {
           '_diff',
           false,
           mathMarkup,
+          options,
         );
       }
 
@@ -292,6 +331,7 @@ export class LaTeXdiffService {
     outputFile1: string,
     outputFile2: string,
     mathMarkup?: MathMarkupOption,
+    options?: { runFiles?: TaskRunFileService },
   ): Promise<LaTeXdiffResult> {
     try {
       if (
@@ -316,6 +356,7 @@ export class LaTeXdiffService {
           diffSuffix,
           false,
           mathMarkup,
+          options,
         );
       }
 

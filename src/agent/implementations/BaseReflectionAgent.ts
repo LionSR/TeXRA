@@ -53,7 +53,11 @@ import type { ToolDefinition } from '@model';
 import { getConfig } from '@utils/config';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  TaskRunFileService,
+  WorkspaceFS,
+  isValidExecutionId,
+} from '@utils/files';
 
 /**
  * Options for handling round output.
@@ -123,6 +127,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     documents: [],
     singleOutputFile: null,
   };
+  protected readonly runFileService?: TaskRunFileService;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -142,6 +147,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       context,
     );
     this.agentSetting = workflowSetting;
+
+    if (this.executionId && isValidExecutionId(this.executionId)) {
+      this.runFileService = new TaskRunFileService(this.executionId);
+    }
 
     // Initialize basic attributes
     const numRounds = this.getTotalRounds();
@@ -174,6 +183,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logId,
       this.baseFiles,
       this.logger,
+      this.runFileService,
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);

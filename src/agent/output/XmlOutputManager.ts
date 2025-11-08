@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, WorkspaceFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -25,7 +25,32 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
+    private readonly runFiles?: TaskRunFileService,
   ) {}
+
+  private resolveWorkspaceAbsolute(filePath: string): string {
+    return path.isAbsolute(filePath)
+      ? filePath
+      : WorkspaceFS.fullPath(filePath);
+  }
+
+  private getStorageDirForWorkspace(filePath: string): string {
+    const workspaceAbsolute = this.resolveWorkspaceAbsolute(filePath);
+    return this.runFiles
+      ? this.runFiles.getStorageDirForWorkspaceFile(workspaceAbsolute)
+      : path.dirname(workspaceAbsolute);
+  }
+
+  private getWorkspacePathForStorage(storagePath: string): string {
+    return this.runFiles
+      ? this.runFiles.getWorkspacePathFromStorage(storagePath)
+      : storagePath;
+  }
+
+  private async writeFile(target: string, content: string): Promise<void> {
+    await AbsoluteFS.ensureDir(path.dirname(target));
+    await WorkspaceFS.write(target, content);
+  }
 
   async processXmlContent(content: string): Promise<string> {
     content = replacementEngine.applyNonRegex(content);
@@ -139,7 +164,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await WorkspaceFS.write(texFile, namedDocumentContent);
+      await this.writeFile(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -159,7 +184,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await WorkspaceFS.write(texFile, latexDocument);
+        await this.writeFile(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -260,17 +285,27 @@ export class XmlOutputManager {
         continue;
       }
 
-      const { ext } = path.parse(source);
+      const workspaceSource = this.resolveWorkspaceAbsolute(source);
+      const { ext } = path.parse(workspaceSource);
       const extension = ext.replace('.', '') || 'tex';
       const texFile = getOutputFileName(
-        source,
+        workspaceSource,
         agent,
         model,
         extension,
         currRound,
+        undefined,
+        {
+          outputDir: this.getStorageDirForWorkspace(workspaceSource),
+        },
       );
-      await WorkspaceFS.write(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
+      await this.writeFile(texFile, doc.content.trim());
+      outputFiles.push({
+        source: workspaceSource,
+        workspaceSource,
+        path: texFile,
+        workspacePath: this.getWorkspacePathForStorage(texFile),
+      });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -294,9 +329,15 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
+    const resolvedOriginal = original
+      ? this.resolveWorkspaceAbsolute(original)
+      : this.agentConfig.inputFile;
+
     return {
-      source: original || this.agentConfig.inputFile,
+      source: resolvedOriginal,
+      workspaceSource: resolvedOriginal,
       path: processedOutputFile,
+      workspacePath: this.getWorkspacePathForStorage(processedOutputFile),
     };
   }
 
@@ -335,6 +376,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.write(filePath, content);
+    await this.writeFile(filePath, content);
   }
 }

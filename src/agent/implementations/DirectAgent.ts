@@ -27,6 +27,10 @@ export class DirectAgent extends BaseReflectionAgent {
       this.agentSetting.outputExt,
       currRound,
       this.agentConfig.editedFile || undefined,
+      {
+        outputDir:
+          this.runFileService?.getStorageDirForWorkspaceFile(baseOutputFile),
+      },
     );
   }
 

@@ -34,6 +34,7 @@ const ERROR_MESSAGES = {
  */
 interface DiffExecutionOptions {
   mathMarkup?: MathMarkupOption;
+  cwd?: string;
 }
 
 export class DiffCommandExecutor {
@@ -56,6 +57,7 @@ export class DiffCommandExecutor {
           options?.mathMarkup,
         ),
       'latexdiff',
+      options,
     );
   }
 
@@ -73,6 +75,7 @@ export class DiffCommandExecutor {
           options?.mathMarkup,
         ),
       'latexdiff-vc',
+      options,
     );
   }
 
@@ -132,11 +135,13 @@ export class DiffCommandExecutor {
   private async executeWithFallback(
     commandBuilder: (useFlatten: boolean) => string[],
     commandType: string,
+    options?: DiffExecutionOptions,
   ): Promise<ExecResult> {
     logger.debug(this.channel, `Attempting ${commandType} with --flatten flag`);
     let result = await executeCommand(commandBuilder(true), {
       channel: this.channel,
       timeout: this.timeoutMs,
+      cwd: options?.cwd,
     });
 
     if (!result.success) {
@@ -158,6 +163,7 @@ export class DiffCommandExecutor {
         result = await executeCommand(commandBuilder(false), {
           channel: this.channel,
           timeout: this.timeoutMs,
+          cwd: options?.cwd,
         });
 
         if (!result.success) {

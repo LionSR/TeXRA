@@ -38,7 +38,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - utilities
 import { replaceInputCommands, createFileMapping } from '@utils/files';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { WorkspaceFS, AbsoluteFS, TaskRunFileService } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
   extractMultipleTextFromTag,
@@ -65,6 +65,7 @@ export class OutputHandler implements IOutputHandler {
   public readonly diffManager: LatexDiffManager;
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
+  private readonly runFiles?: TaskRunFileService;
 
   constructor(
     agentSetting: AgentSetting,
@@ -72,6 +73,7 @@ export class OutputHandler implements IOutputHandler {
     logId: number,
     baseFiles: string[] = [],
     logger?: AgentLogger,
+    runFiles?: TaskRunFileService,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -85,11 +87,13 @@ export class OutputHandler implements IOutputHandler {
     this.baseFiles = baseFiles;
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
+    this.runFiles = runFiles;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
       this.agentConfig,
       this.logger,
+      this.runFiles,
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
@@ -97,6 +101,7 @@ export class OutputHandler implements IOutputHandler {
       this.baseFiles,
       this.logger,
       this.channel,
+      this.runFiles,
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
@@ -184,14 +189,20 @@ export class OutputHandler implements IOutputHandler {
         Array.from(mapping.prevToOutput.entries()).find(
           ([, out]) => out === file,
         )?.[0] || null;
+      const workspacePath = mapping.workspaceByOutput.get(file) || null;
       const originalFile = mapping.originByOutput.get(file) || null;
-      const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
+      const diffBase = getEffectiveBaseFile(
+        baseFile,
+        originalFile,
+        workspacePath ?? file,
+      );
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBase,
         file,
       );
       infos.push({
         path: file,
+        workspacePath,
         base: baseFile,
         prev: prevFile,
         original: originalFile,
@@ -225,14 +236,19 @@ export class OutputHandler implements IOutputHandler {
             true,
           )
         : new Map<string, string>();
+    const namedOutputs = this.getNamedOutputs(currRound);
     const originByOutput = new Map(
-      this.getNamedOutputs(currRound).map((p) => [p.path, p.source]),
+      namedOutputs.map((p) => [p.path, p.workspaceSource ?? p.source]),
+    );
+    const workspaceByOutput = new Map(
+      namedOutputs.map((p) => [p.path, p.workspacePath ?? p.path]),
     );
 
     const mapping: RoundFileMapping = {
       baseToOutput,
       prevToOutput,
       originByOutput,
+      workspaceByOutput,
     };
     this.roundMappings[currRound] = mapping;
     return mapping;
@@ -306,6 +322,12 @@ export class OutputHandler implements IOutputHandler {
                 this.agentConfig.model,
                 'xml',
                 currRound,
+                this.agentConfig.editedFile || undefined,
+                {
+                  outputDir: this.runFiles?.getStorageDirForWorkspaceFile(
+                    this.agentConfig.inputFile,
+                  ),
+                },
               );
 
           const xmlExists = path.isAbsolute(xmlPath)
@@ -468,9 +490,14 @@ export class OutputHandler implements IOutputHandler {
           this.logger.debug(`Processing single output for ${outputFile}`);
 
           try {
+            const workspaceFallback = this.runFiles
+              ? this.runFiles.getWorkspacePathFromStorage(outputFile)
+              : outputFile;
             let processed: NamedOutputFile = {
-              source: outputFile,
+              source: workspaceFallback,
+              workspaceSource: workspaceFallback,
               path: outputFile,
+              workspacePath: workspaceFallback,
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>

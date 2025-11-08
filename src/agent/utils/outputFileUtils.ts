@@ -18,6 +18,7 @@ export function getOutputFileName(
   outputExt: string,
   currRound: number,
   editedFile?: string,
+  options?: { outputDir?: string },
 ): string {
   const { dir, name: fileName } = path.parse(inputFile);
   const agentFirstNameChunk = agent.split('_')[0];
@@ -30,5 +31,6 @@ export function getOutputFileName(
   }
 
   const outputBaseName = `${fileName}_${agentFirstNameChunk}_r${newRound}_${model}.${outputExt}`;
-  return path.join(dir, outputBaseName);
+  const targetDir = options?.outputDir ?? dir;
+  return path.join(targetDir, outputBaseName);
 }

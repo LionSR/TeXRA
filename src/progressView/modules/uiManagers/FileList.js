@@ -117,7 +117,7 @@ export class FileList {
         const statsSpan = clone.querySelector('.file-stats');
 
         // Use original name if available, otherwise use generated path
-        const displayPath = file.original || file.path;
+        const displayPath = file.workspacePath || file.original || file.path;
         const basename = getBasename(displayPath);
         const idx = Math.max(
           displayPath.lastIndexOf('/'),
@@ -131,12 +131,15 @@ export class FileList {
           fileItem.dataset.original = file.original || '';
           fileItem.dataset.base = file.base || '';
           fileItem.dataset.round = round;
+          if (file.workspacePath) {
+            fileItem.dataset.workspace = file.workspacePath;
+          }
         }
 
         // Set the file path display
         if (dirSpan) dirSpan.textContent = dirPath;
         if (basenameSpan) basenameSpan.textContent = basename;
-        if (filePathSpan) filePathSpan.title = file.path;
+        if (filePathSpan) filePathSpan.title = displayPath;
 
         // Handle file stats
         if (statsSpan) {

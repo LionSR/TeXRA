@@ -98,7 +98,9 @@ export class MergeAgent extends DirectAgent {
 
     // Construct output filename
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
-    const outputPath = path.join(inputDir, outputFile);
+    const targetDir =
+      this.runFileService?.getStorageDirForWorkspaceFile(inputFile) || inputDir;
+    const outputPath = path.join(targetDir, outputFile);
     return outputPath;
   }
 

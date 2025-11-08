@@ -25,6 +25,10 @@ export class CoTAgent extends BaseReflectionAgent {
       fileExtension,
       currRound,
       this.agentConfig.editedFile || undefined,
+      {
+        outputDir:
+          this.runFileService?.getStorageDirForWorkspaceFile(baseOutputFile),
+      },
     );
   }
 

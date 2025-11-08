@@ -1,4 +1,5 @@
 // Standard library imports
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 // Local imports - filesystem
@@ -19,6 +20,10 @@ export class AbsoluteFS extends BaseFS {
     if (!path.isAbsolute(resolvedPath)) {
       throw new Error(`Path must be absolute: ${original}`);
     }
+  }
+
+  public static async symlink(target: string, linkPath: string): Promise<void> {
+    await fs.symlink(target, linkPath, 'file');
   }
 }
 

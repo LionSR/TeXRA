@@ -9,7 +9,11 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import {
+  TaskRunFileService,
+  WorkspaceFS,
+  extractExecutionIdFromPath,
+} from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
@@ -63,6 +67,21 @@ async function ensureLatexdiffToolInstalled(
   return false;
 }
 
+function resolveRunFileService(
+  ...paths: string[]
+): TaskRunFileService | undefined {
+  for (const candidate of paths) {
+    if (!candidate) {
+      continue;
+    }
+    const executionId = extractExecutionIdFromPath(candidate);
+    if (executionId) {
+      return new TaskRunFileService(executionId);
+    }
+  }
+  return undefined;
+}
+
 /**
  * Prompts the user to select a math markup granularity for latexdiff operations.
  * @returns The selected math markup option, or undefined if the user cancels.
@@ -104,11 +123,12 @@ async function promptForLatexdiffMathMarkup(): Promise<
 async function openLatexdiffResult(
   basePath: string,
   diffFileName: string,
+  explicitPath?: string,
 ): Promise<string | undefined> {
   const baseDirectory = path.extname(basePath)
     ? path.dirname(basePath)
     : basePath;
-  const diffFilePath = path.join(baseDirectory, diffFileName);
+  const diffFilePath = explicitPath || path.join(baseDirectory, diffFileName);
 
   if (!(await WorkspaceFS.exists(diffFilePath))) {
     await showLoggedMessage(
@@ -188,6 +208,7 @@ async function handleLatexdiff(
       `Running latexdiff with math markup mode: ${mathMarkup}`,
     );
 
+    const runFiles = resolveRunFileService(fileToUse, editedFile);
     // Get the result from LaTeXdiffService
     const result = await service.runDiff(
       fileToUse,
@@ -195,13 +216,18 @@ async function handleLatexdiff(
       '_diff',
       false,
       mathMarkup,
+      { runFiles },
     );
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    await openLatexdiffResult(fileToUse, result.diffFileName);
+    await openLatexdiffResult(
+      fileToUse,
+      result.diffFileName,
+      result.outputPath,
+    );
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -498,6 +524,7 @@ async function handleRunLatexdiff(config: any) {
           message?: string;
           basePath?: string;
           diffFileName?: string;
+          outputPath?: string;
         }> = [];
 
         // Process each input file and its outputs
@@ -506,6 +533,11 @@ async function handleRunLatexdiff(config: any) {
             increment: 0,
             message: `Running diffs for ${path.basename(inputFile)}...`,
           });
+
+          const runFiles = resolveRunFileService(
+            inputFile,
+            ...roundOutputs.values(),
+          );
 
           // Sort rounds to ensure we process them in order
           const rounds = Array.from(roundOutputs.keys()).sort((a, b) => a - b);
@@ -525,6 +557,7 @@ async function handleRunLatexdiff(config: any) {
               outputFile,
               round,
               mathMarkup,
+              { runFiles },
             );
 
             results.push({
@@ -532,6 +565,7 @@ async function handleRunLatexdiff(config: any) {
               message: result.message,
               basePath: inputFile,
               diffFileName: result.diffFileName,
+              outputPath: result.outputPath,
             });
 
             completedOperations++;
@@ -560,6 +594,7 @@ async function handleRunLatexdiff(config: any) {
                 currentFile,
                 nextFile,
                 mathMarkup,
+                { runFiles },
               );
 
               results.push({
@@ -567,6 +602,7 @@ async function handleRunLatexdiff(config: any) {
                 message: result.message,
                 basePath: currentFile,
                 diffFileName: result.diffFileName,
+                outputPath: result.outputPath,
               });
 
               completedOperations++;
@@ -602,6 +638,7 @@ async function handleRunLatexdiff(config: any) {
             const diffFilePath = await openLatexdiffResult(
               result.basePath,
               result.diffFileName,
+              result.outputPath,
             );
             if (diffFilePath) {
               logger.debug(
