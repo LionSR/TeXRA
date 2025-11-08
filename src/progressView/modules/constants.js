@@ -27,6 +27,7 @@ export const ELEMENT_IDS = {
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
   RUN_SELECTOR: 'runSelector',
+  RUN_SELECTOR_CONTAINER: 'runSelectorRow',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
   INSTRUCTION_CONTAINER: 'instructionContainer',

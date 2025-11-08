@@ -88,28 +88,40 @@
       <vscode-split-layout initial-handle-position="80%">
         <div slot="start" class="content-area">
           <div class="log-header">
-            <div class="header-left">
-              <div class="stream-header">
-                <span id="activeStreamName"></span>
-                <vscode-single-select
-                  id="runSelector"
-                  class="run-selector"
-                  aria-label="Select run"
-                  disabled
-                  hidden
-                ></vscode-single-select>
+            <div class="log-header__primary">
+              <div class="header-left">
+                <div class="stream-header">
+                  <span id="activeStreamName"></span>
+                </div>
+                <span
+                  id="statusIndicator"
+                  class="status-indicator stopped"
+                  data-status="Ready"
+                ></span>
+                <span id="runSummary" class="run-summary"></span>
               </div>
-              <span
-                id="statusIndicator"
-                class="status-indicator stopped"
-                data-status="Ready"
-              ></span>
-              <span id="runSummary" class="run-summary"></span>
+              <vscode-toolbar-container
+                id="toolbarContainer"
+                class="header-actions"
+              ></vscode-toolbar-container>
             </div>
-            <vscode-toolbar-container
-              id="toolbarContainer"
-              class="header-actions"
-            ></vscode-toolbar-container>
+            <div
+              class="log-header__secondary"
+              id="runSelectorRow"
+              hidden
+              aria-hidden="true"
+            >
+              <vscode-label class="run-selector-label" for="runSelector"
+                >Session</vscode-label
+              >
+              <vscode-single-select
+                id="runSelector"
+                class="run-selector"
+                aria-label="Select session"
+                disabled
+                hidden
+              ></vscode-single-select>
+            </div>
           </div>
           <div
             id="instructionContainer"
