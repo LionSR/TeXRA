@@ -1,51 +1,45 @@
 // Local imports - agent state
 import type { AgentSharedStore } from './AgentSharedStore';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-
-interface RegistryEntry {
-  streamId: StreamTabId;
-  executionId: ExecutionId;
-  store: AgentSharedStore;
-}
+import { StreamExecutionIndex } from './StreamExecutionIndex';
 
 class SharedStoreRegistry {
-  private readonly byExecution = new Map<ExecutionId, RegistryEntry>();
-  private readonly byStream = new Map<StreamTabId, RegistryEntry>();
+  private readonly index = new StreamExecutionIndex<AgentSharedStore>();
 
-  register(entry: RegistryEntry): void {
-    this.byExecution.set(entry.executionId, entry);
-    this.byStream.set(entry.streamId, entry);
+  set(
+    streamId: StreamTabId,
+    executionId: ExecutionId | undefined,
+    store: AgentSharedStore | null,
+  ): void {
+    if (!executionId) {
+      return;
+    }
+    if (!store) {
+      this.index.deleteByExecution(executionId);
+      this.index.deleteByStream(streamId);
+      return;
+    }
+    this.index.set(streamId, executionId, store);
   }
 
   unregisterByExecution(executionId: ExecutionId): void {
-    const entry = this.byExecution.get(executionId);
-    if (!entry) {
-      return;
-    }
-    this.byExecution.delete(executionId);
-    this.byStream.delete(entry.streamId);
+    this.index.deleteByExecution(executionId);
   }
 
   unregisterByStream(streamId: StreamTabId): void {
-    const entry = this.byStream.get(streamId);
-    if (!entry) {
-      return;
-    }
-    this.byStream.delete(streamId);
-    this.byExecution.delete(entry.executionId);
+    this.index.deleteByStream(streamId);
   }
 
   getByStream(streamId: StreamTabId): AgentSharedStore | undefined {
-    return this.byStream.get(streamId)?.store;
+    return this.index.getByStream(streamId);
   }
 
   getByExecution(executionId: ExecutionId): AgentSharedStore | undefined {
-    return this.byExecution.get(executionId)?.store;
+    return this.index.getByExecution(executionId);
   }
 
   clear(): void {
-    this.byExecution.clear();
-    this.byStream.clear();
+    this.index.clear();
   }
 }
 
@@ -57,7 +51,14 @@ export const AgentSharedStoreRegistry = {
     executionId: ExecutionId,
     store: AgentSharedStore,
   ): void {
-    registry.register({ streamId, executionId, store });
+    registry.set(streamId, executionId, store);
+  },
+  set(
+    streamId: StreamTabId,
+    executionId: ExecutionId | undefined,
+    store: AgentSharedStore | null,
+  ): void {
+    registry.set(streamId, executionId, store);
   },
   unregisterByExecution(executionId: ExecutionId): void {
     registry.unregisterByExecution(executionId);
