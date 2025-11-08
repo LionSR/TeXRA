@@ -39,6 +39,15 @@
     var(--vscode-editorGroupHeader-tabsBorder);
 }
 
+.log-run {
+  border: none;
+}
+
+.log-run > .log-group-content {
+  padding-left: 0;
+  border-left: none;
+}
+
 .group-status-icon {
   margin-right: var(--spacing-small);
 }
