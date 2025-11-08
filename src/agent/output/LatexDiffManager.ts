@@ -49,6 +49,9 @@ export class LatexDiffManager {
     workspaceDir?: string;
     displayPath: string;
   }> {
+    const workspaceDir = workspaceCandidate
+      ? path.dirname(workspaceCandidate)
+      : path.dirname(fallback);
     const preferredExists = workspaceCandidate
       ? await existsFlexible(workspaceCandidate)
       : false;
@@ -56,7 +59,7 @@ export class LatexDiffManager {
     if (preferredExists && workspaceCandidate) {
       return {
         actual: workspaceCandidate,
-        workspaceDir: path.dirname(workspaceCandidate),
+        workspaceDir,
         displayPath:
           this.fileService.getWorkspaceDisplayPath(workspaceCandidate),
       };
@@ -64,25 +67,21 @@ export class LatexDiffManager {
 
     const fallbackExists = await existsFlexible(fallback);
     if (fallbackExists) {
-      const displaySource = workspaceCandidate ?? fallback;
       return {
         actual: fallback,
-        workspaceDir:
-          preferredExists && workspaceCandidate
-            ? path.dirname(workspaceCandidate)
-            : undefined,
-        displayPath: this.fileService.getWorkspaceDisplayPath(displaySource),
+        workspaceDir,
+        displayPath: this.fileService.getWorkspaceDisplayPath(
+          workspaceCandidate ?? fallback,
+        ),
       };
     }
 
-    const displaySource = workspaceCandidate ?? fallback;
     return {
       actual: null,
-      workspaceDir:
-        preferredExists && workspaceCandidate
-          ? path.dirname(workspaceCandidate)
-          : undefined,
-      displayPath: this.fileService.getWorkspaceDisplayPath(displaySource),
+      workspaceDir: workspaceCandidate ? workspaceDir : undefined,
+      displayPath: this.fileService.getWorkspaceDisplayPath(
+        workspaceCandidate ?? fallback,
+      ),
     };
   }
 

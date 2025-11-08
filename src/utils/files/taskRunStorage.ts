@@ -53,16 +53,30 @@ function toWorkspaceRelative(target: string): string {
   }
 
   const workspaceRoot = WorkspaceFS.getPath();
-  if (workspaceRoot && target.startsWith(workspaceRoot)) {
-    return path.relative(workspaceRoot, target);
+  if (workspaceRoot) {
+    const relativeToWorkspace = path.relative(workspaceRoot, target);
+    if (
+      relativeToWorkspace &&
+      !relativeToWorkspace.startsWith('..') &&
+      !path.isAbsolute(relativeToWorkspace)
+    ) {
+      return relativeToWorkspace;
+    }
+    if (relativeToWorkspace === '') {
+      return '';
+    }
   }
 
-  const normalized = path.normalize(target);
-  const segments = normalized.split(path.sep).filter(Boolean);
-  const runDirIndex = segments.lastIndexOf(TASK_RUNS_DIR);
-  if (runDirIndex >= 0) {
-    const remainder = segments.slice(runDirIndex + 2);
-    return remainder.length > 0 ? remainder.join(path.sep) : '';
+  const storageRoot = StorageFS.fullPath('');
+  const normalizedTarget = path.normalize(target);
+  if (storageRoot && normalizedTarget.startsWith(storageRoot)) {
+    const relativeToStorage = path.relative(storageRoot, normalizedTarget);
+    const storageSegments = relativeToStorage.split(path.sep).filter(Boolean);
+    const taskRunIndex = storageSegments.indexOf(TASK_RUNS_DIR);
+    if (taskRunIndex >= 0) {
+      const remainder = storageSegments.slice(taskRunIndex + 2);
+      return remainder.length > 0 ? remainder.join(path.sep) : '';
+    }
   }
 
   return path.basename(target);
@@ -98,6 +112,12 @@ async function moveToTarget(
   source: string,
   destination: string,
 ): Promise<void> {
+  const resolvedSource = path.resolve(source);
+  const resolvedDestination = path.resolve(destination);
+  if (resolvedSource === resolvedDestination) {
+    return;
+  }
+
   await ensureParentDir(destination);
   await fs.rm(destination, { recursive: true, force: true });
 
@@ -108,7 +128,12 @@ async function moveToTarget(
     const err = error as NodeJS.ErrnoException;
 
     if (err.code && err.code !== 'EXDEV' && err.code !== 'EISDIR') {
-      throw err;
+      throw Object.assign(
+        new Error(
+          `Failed to move ${resolvedSource} to ${resolvedDestination}: ${err.message}`,
+        ),
+        { cause: err },
+      );
     }
 
     const stats = await fs.lstat(source);
@@ -138,6 +163,9 @@ async function createSymlink(
       return;
     }
     if (err.code && ['EPERM', 'EACCES', 'EINVAL'].includes(err.code)) {
+      console.debug(
+        `[TaskRunFileService] Falling back to copy ${source} -> ${destination} due to ${err.code}`,
+      );
       const stats = await fs.lstat(source);
       if (stats.isDirectory()) {
         await fs.cp(source, destination, { recursive: true });
