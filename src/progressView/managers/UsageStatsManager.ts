@@ -124,9 +124,7 @@ export class UsageStatsManager extends PersistentMapManager<
    * Set all usage statistics (used during loading)
    */
   setAll(
-    stats:
-      | Map<StreamTabId, RunUsageMap>
-      | Map<StreamTabId, TokenUsageStats>,
+    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
   ): void {
     const normalized: Map<StreamTabId, RunUsageMap> = new Map();
 
