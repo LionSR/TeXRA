@@ -2,22 +2,14 @@
 // (none needed)
 
 // Local imports - models
-import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
-import {
-  type TaskState,
-  isWorkflowTaskState,
-  isToolUseTaskState,
-} from '@logger/TaskState';
+import { type AgentConfig } from '@agent/core/AgentConfig';
+import { type TaskState } from '@logger/TaskState';
 import {
   AgentCategory,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
 import { FILE_TYPES, type FileType } from './constants';
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function createActiveFilesFromArrays(
   src: Record<string, any>,
@@ -78,54 +70,4 @@ export function agentConfigToTaskState(config: AgentConfig): TaskState {
     session: workflowSession,
     activeFiles: createActiveFilesFromArrays(config),
   };
-}
-
-/**
- * Converts a generic object to a TaskState object
- * This is useful when receiving serialized data from the UI
- *
- * @param obj The object to convert
- * @returns A TaskState representing the same configuration
- */
-export function objectToTaskState(obj: Record<string, any>): TaskState {
-  const nestedConfig = isObjectRecord(obj.agentConfig)
-    ? (obj.agentConfig as Record<string, unknown>)
-    : null;
-
-  const configSource = nestedConfig ?? obj;
-  const sessionFromConfig = isObjectRecord(configSource.session)
-    ? configSource.session
-    : undefined;
-  const sessionFromRoot =
-    sessionFromConfig ??
-    (isObjectRecord(obj.session)
-      ? (obj.session as Record<string, unknown>)
-      : undefined);
-
-  if (!sessionFromRoot) {
-    throw new Error(
-      'Task state payload is missing canonical session metadata.',
-    );
-  }
-
-  const configInput: Record<string, unknown> = {
-    ...configSource,
-    session: sessionFromRoot,
-  };
-
-  const normalizedConfig = parseAgentConfig(configInput);
-  const taskState = agentConfigToTaskState(normalizedConfig);
-
-  if (isWorkflowTaskState(taskState)) {
-    if (isObjectRecord(obj.activeFiles)) {
-      taskState.activeFiles = obj.activeFiles as Record<FileType, boolean>;
-    }
-  } else if (
-    isToolUseTaskState(taskState) &&
-    isObjectRecord(obj.toolSessionState)
-  ) {
-    taskState.toolSessionState = { ...obj.toolSessionState };
-  }
-
-  return taskState;
 }
