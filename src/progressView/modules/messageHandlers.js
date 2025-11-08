@@ -64,6 +64,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.setActiveRunId(runId);
     dom.taskGroups.showRun(runId);
     this._refreshInstructionForActiveRun();
+    this._refreshOutputsForActiveRun();
   }
 
   _refreshInstructionForActiveRun() {
@@ -84,6 +85,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     } else {
       dom.instructionPanel.hide();
     }
+  }
+
+  _refreshOutputsForActiveRun() {
+    const activeRunId = state.getActiveRunId();
+    if (!activeRunId) {
+      dom.fileList.update({});
+      return;
+    }
+
+    const filesByRound = state.getRunFiles(activeRunId) || {};
+    dom.fileList.update(filesByRound);
   }
 
   _createHandlers() {
@@ -194,6 +206,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       state.clearRunInstructions();
+      state.clearRunFiles();
+      state.clearRunMissingOutputs();
       state.setActiveRunId(null);
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
@@ -209,12 +223,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.clear();
       state.taskGroups.clear();
       state.clearRunInstructions();
+      state.clearRunFiles();
+      state.clearRunMissingOutputs();
       const previousRunId = state.getActiveRunId();
       state.setActiveRunId(null);
       logContent.innerHTML = '';
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
+        dom.runSelector.setRuns(parentGroups);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
@@ -222,12 +239,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
 
+        if (message.runInstructions) {
+          Object.entries(message.runInstructions).forEach(
+            ([runId, instruction]) => {
+              if (runId) {
+                state.setRunInstruction(runId, instruction);
+              }
+            },
+          );
+        }
+
+        if (message.runFiles) {
+          Object.entries(message.runFiles).forEach(([runId, files]) => {
+            state.setRunFiles(runId, files);
+          });
+        }
+
+        if (message.runMissingOutputs) {
+          Object.entries(message.runMissingOutputs).forEach(
+            ([runId, files]) => {
+              state.setRunMissingOutputs(runId, files);
+            },
+          );
+        }
+
         if (parentGroups.length > 0) {
           const runIds = parentGroups.map((group) => group.id);
           const preferredRun =
-            previousRunId && runIds.includes(previousRunId)
-              ? previousRunId
-              : runIds[runIds.length - 1];
+            message.activeRunId && runIds.includes(message.activeRunId)
+              ? message.activeRunId
+              : previousRunId && runIds.includes(previousRunId)
+                ? previousRunId
+                : runIds[runIds.length - 1];
           state.setActiveRunId(preferredRun);
           dom.runSelector.setActiveRun(preferredRun);
           dom.taskGroups.showRun(preferredRun);
@@ -256,6 +299,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
       this._refreshInstructionForActiveRun();
+      this._refreshOutputsForActiveRun();
     }
 
     this._updatePlaceholderVisibility();
@@ -268,6 +312,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
     state.clearRunInstructions();
+    state.clearRunFiles();
+    state.clearRunMissingOutputs();
     state.setActiveRunId(null);
     if (logContent) {
       logContent.innerHTML = '';
@@ -336,9 +382,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (message.group && !message.group.parentGroupId) {
         state.setActiveRunId(message.group.id);
         state.clearRunInstruction(message.group.id);
+        state.deleteRunFiles(message.group.id);
+        state.deleteRunMissingOutputs(message.group.id);
         dom.runSelector.setActiveRun(message.group.id);
         dom.taskGroups.showRun(message.group.id);
         this._refreshInstructionForActiveRun();
+        this._refreshOutputsForActiveRun();
       }
       scrollToBottom(logContent);
     }
@@ -377,12 +426,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateFiles(message) {
     if (message.stream === state.activeStream) {
-      dom.fileList.update(message.files);
+      state.clearRunFiles();
+      const filesByRun = message.filesByRun || {};
+      Object.entries(filesByRun).forEach(([runId, files]) => {
+        state.setRunFiles(runId, files);
+      });
+      this._refreshOutputsForActiveRun();
     }
   }
 
   handleUpdateMissingOutputs(message) {
-    // State persisted server-side - no direct DOM updates needed
+    if (message.stream === state.activeStream) {
+      state.clearRunMissingOutputs();
+      const filesByRun = message.filesByRun || {};
+      Object.entries(filesByRun).forEach(([runId, files]) => {
+        state.setRunMissingOutputs(runId, files);
+      });
+    }
   }
 
   handleShowToolEditApproval(message) {
@@ -499,6 +559,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
         state.clearRunInstructions();
+        state.clearRunFiles();
+        state.clearRunMissingOutputs();
         state.setActiveRunId(null);
         dom.runSelector.clear();
       }
@@ -510,6 +572,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
     state.clearRunInstructions();
+    state.clearRunFiles();
+    state.clearRunMissingOutputs();
     state.setActiveRunId(null);
     dom.runSelector.clear();
   }
