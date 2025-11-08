@@ -74,7 +74,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const activeRunId = state.getActiveRunId();
+    const activeRunId = state.resolveActiveRunId();
     if (!activeRunId) {
       dom.instructionPanel.hide();
       return;
@@ -89,13 +89,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _refreshOutputsForActiveRun() {
-    const activeRunId = state.getActiveRunId();
-    if (!activeRunId) {
-      dom.fileList.update({});
-      return;
-    }
-
-    const filesByRound = state.getRunFiles(activeRunId) || {};
+    const activeRunId = state.resolveActiveRunId();
+    const filesByRound = activeRunId
+      ? state.getRunFiles(activeRunId) || {}
+      : {};
     dom.fileList.update(filesByRound);
   }
 
@@ -295,6 +292,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           dom.taskGroups.showRun(preferredRun);
         } else {
           dom.taskGroups.showRun(null);
+        }
+
+        const resolvedRunId = state.resolveActiveRunId();
+        if (resolvedRunId && state.getActiveRunId() !== resolvedRunId) {
+          state.setActiveRunId(resolvedRunId);
         }
       } else {
         dom.taskGroups.showRun(null);
@@ -509,8 +511,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     state.activeSessionKind = sessionKind;
 
-    const activeRunId =
-      state.getActiveRunId() || dom.runSelector.getActiveRunId();
+    let activeRunId = state.getActiveRunId();
+    if (!activeRunId) {
+      activeRunId =
+        dom.runSelector.getActiveRunId() || state.resolveActiveRunId();
+      if (activeRunId) {
+        state.setActiveRunId(activeRunId);
+      }
+    }
 
     if (activeRunId) {
       if (typeof text === 'string' && text.trim()) {

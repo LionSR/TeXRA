@@ -64,7 +64,7 @@ const registerOutputFileListeners = (
     'addOutputFiles',
     ({ stream, groupId, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        await state.outputFiles.addFiles(stream, groupId, filesByRound);
+        await state.outputFiles.addFiles(stream, groupId ?? null, filesByRound);
         updateActiveStreamOutputs(state, updater, stream);
       });
     },
@@ -76,7 +76,7 @@ const registerOutputFileListeners = (
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
         await state.outputFiles.updateMissingOutputs(
           stream,
-          groupId,
+          groupId ?? null,
           filesByRound,
         );
         updateActiveStreamOutputs(state, updater, stream);

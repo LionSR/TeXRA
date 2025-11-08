@@ -159,7 +159,7 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    const activeRunId = this.ensureActiveRunId(stream);
+    let activeRunId = this.ensureActiveRunId(stream);
 
     const runInstructions = Object.fromEntries(
       this.state.runInstructions.getInstructions(stream).entries(),
@@ -174,6 +174,36 @@ export class ProgressEventHandler {
     const usageByRun = Object.fromEntries(
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
+
+    const candidateRunIds = new Set<string>();
+    for (const key of Object.keys(runInstructions)) {
+      if (key) {
+        candidateRunIds.add(key);
+      }
+    }
+    for (const key of Object.keys(filesByRun)) {
+      if (key) {
+        candidateRunIds.add(key);
+      }
+    }
+    for (const key of Object.keys(missingByRun)) {
+      if (key) {
+        candidateRunIds.add(key);
+      }
+    }
+    for (const key of Object.keys(usageByRun)) {
+      if (key) {
+        candidateRunIds.add(key);
+      }
+    }
+
+    if (!activeRunId && candidateRunIds.size === 1) {
+      const [onlyRunId] = Array.from(candidateRunIds);
+      if (onlyRunId) {
+        activeRunId = onlyRunId;
+        this.state.setActiveRunId(stream, onlyRunId);
+      }
+    }
 
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,

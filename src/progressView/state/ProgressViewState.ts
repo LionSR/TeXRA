@@ -305,25 +305,6 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
-  // Stream content erasure (clear content but keep the stream tab and re-run capability)
-  async eraseStreamContent(stream: StreamTabId): Promise<void> {
-    // Clear visual content but keep the stream tab
-    await this._streamTabs.clearContent(stream);
-
-    // Clear display-related data (matching original eraseStream behavior)
-    await Promise.all([
-      this._taskGroups.deleteStream(stream),
-      this._outputFiles.deleteStream(stream),
-      this._runInstructions.clearStream(stream),
-    ]);
-    this.clearSessionKindHint(stream);
-    this.clearActiveRun(stream);
-
-    // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
-    // NOTE: Preserve usageStats - these were not cleared in original implementation
-    // NOTE: Missing outputs are also preserved (not cleared in original)
-  }
-
   async clearAll(): Promise<void> {
     await Promise.all([
       this._streamTabs.clear(),
