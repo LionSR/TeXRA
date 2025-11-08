@@ -15,6 +15,7 @@ import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { WorkflowTaskState } from '@logger/TaskState';
 import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 
 class FakeStorage implements StateStorage {
   public readonly saved: { key: string; value: unknown }[] = [];
@@ -334,12 +335,21 @@ describe('ProgressViewState.load', () => {
     assert.equal(restoredGroup!.name, 'Legacy group');
 
     const files = state.outputFiles.getFiles(streamId);
-    const roundFiles = files.get(0);
+    const firstRun = files.entries().next().value;
+    assert.ok(firstRun);
+    const [, runRounds] = firstRun as [string, Map<number, OutputFileInfo[]>];
+    const roundFiles = runRounds.get(0);
     assert.ok(roundFiles);
     assert.equal(roundFiles![0].path, 'out.tex');
 
     const missing = state.outputFiles.getMissingOutputs(streamId);
-    const roundMissing = missing.get(0);
+    const firstMissingRun = missing.entries().next().value;
+    assert.ok(firstMissingRun);
+    const [, missingRounds] = firstMissingRun as [
+      string,
+      Map<number, string[]>,
+    ];
+    const roundMissing = missingRounds.get(0);
     assert.ok(roundMissing);
     assert.deepStrictEqual(roundMissing, ['missing.tex']);
 

@@ -65,6 +65,7 @@ export interface RoundOutputOptions {
   outputFile: string;
   endTurn: boolean;
   stage?: AgentLogStage;
+  runGroupId?: string | null;
 }
 
 export interface ReflectionRoundContext {
@@ -228,11 +229,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<RoundOutputArtifacts> {
-    const { outputFile, endTurn, stage } = options;
+    const runGroupId =
+      options.runGroupId ??
+      this.runStage?.id ??
+      this.getLastRunGroupId() ??
+      null;
+    this.outputHandler.setActiveRun(runGroupId);
+
+    const baseOptions: RoundOutputOptions = {
+      ...options,
+      runGroupId,
+    };
+
+    const { outputFile, endTurn, stage } = baseOptions;
 
     const execute = async (scope: AgentLogStage | undefined) => {
       await this.handleOutput(currRound, stateRound, runState, {
-        ...options,
+        ...baseOptions,
         stage: scope,
       });
 
@@ -271,6 +284,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     options: RoundOutputOptions,
   ): Promise<string[]> {
     const { outputFile, endTurn, stage } = options;
+    this.outputHandler.setActiveRun(options.runGroupId);
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
@@ -338,6 +352,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     });
 
     if (!endTurn) {
+      const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
@@ -352,6 +367,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         {
           outputFile: outputPath,
           endTurn: cycleResult.endTurn,
+          runGroupId,
         },
       );
 
@@ -367,6 +383,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     await store.finalizeRound();
 
+    const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
     const artifacts = await this.handleRoundCompletion(
       roundIndex,
       store.round,
@@ -374,6 +391,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       {
         outputFile: outputPath,
         endTurn,
+        runGroupId,
       },
     );
 

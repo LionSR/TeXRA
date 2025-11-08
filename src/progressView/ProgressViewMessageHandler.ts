@@ -533,11 +533,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generated = this.provider.state.outputFiles.getFiles(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
 
-    for (const infos of generated.values()) {
-      for (const info of infos) {
-        allFiles.add(info.path);
-        if (info.original) {
-          allFiles.add(info.original);
+    for (const rounds of generated.values()) {
+      for (const infos of rounds.values()) {
+        for (const info of infos) {
+          allFiles.add(info.path);
+          if (info.original) {
+            allFiles.add(info.original);
+          }
         }
       }
     }

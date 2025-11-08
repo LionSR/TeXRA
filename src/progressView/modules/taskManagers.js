@@ -34,9 +34,7 @@ export class TaskGroupDomManager {
         this.groupElements.delete(group.id);
       } else {
         progressViewState.taskGroups.set(group.id, group);
-        if (!group.parentGroupId) {
-          this.runSelector?.addRun(group);
-        } else {
+        if (group.parentGroupId) {
           this.updateGroup({
             groupId: group.id,
             updates: {
@@ -271,8 +269,10 @@ export class TaskGroupDomManager {
     // Collapse this group
     const detailsElem = this.groupElements.get(groupId);
     if (detailsElem) {
-      detailsElem.open = false;
-      progressViewState.toggleStates.set(groupId, true);
+      if (detailsElem instanceof HTMLDetailsElement) {
+        detailsElem.open = false;
+        progressViewState.toggleStates.set(groupId, true);
+      }
     }
   }
 
@@ -290,13 +290,25 @@ export class TaskGroupDomManager {
     let latestGroup = null;
     let latestTime = 0;
 
-    for (const [id, detailsElem] of this.groupElements.entries()) {
-      if (!detailsElem || !detailsElem.open) {
+    for (const [id, element] of this.groupElements.entries()) {
+      if (!element) {
         continue;
       }
 
       const group = progressViewState.taskGroups.get(id);
       if (!group) {
+        continue;
+      }
+
+      const isRootGroup = !group.parentGroupId;
+      if (isRootGroup) {
+        if (element.hidden) {
+          continue;
+        }
+      } else if (
+        !(element instanceof HTMLDetailsElement) ||
+        element.open !== true
+      ) {
         continue;
       }
 
@@ -321,7 +333,15 @@ export class TaskGroupDomManager {
       this.previousActiveGroupId &&
       this.previousActiveGroupId !== currentId
     ) {
-      this.collapseGroupAndChildren(this.previousActiveGroupId);
+      const previousElement = this.groupElements.get(
+        this.previousActiveGroupId,
+      );
+      const previousGroup = progressViewState.taskGroups.get(
+        this.previousActiveGroupId,
+      );
+      if (previousElement && previousGroup?.parentGroupId) {
+        this.collapseGroupAndChildren(this.previousActiveGroupId);
+      }
     }
 
     // Update the previous ID to current for next time

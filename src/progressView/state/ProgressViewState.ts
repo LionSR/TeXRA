@@ -7,6 +7,7 @@ import {
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
+  RunInstructionManager,
 } from '../managers';
 import type { StateStorage } from '../persistence/PersistentMapManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
@@ -56,6 +57,7 @@ export class ProgressViewState {
   private _taskGroups: TaskGroupManager;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
+  private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
@@ -70,6 +72,7 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
+  private _activeRunIds: Map<StreamTabId, string | null> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -86,6 +89,7 @@ export class ProgressViewState {
     this._taskGroups = new TaskGroupManager(resolvedStorage);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
     this._usageStats = new UsageStatsManager(resolvedStorage);
+    this._runInstructions = new RunInstructionManager(resolvedStorage);
   }
 
   // Manager accessors - provide direct access to focused managers
@@ -103,6 +107,10 @@ export class ProgressViewState {
 
   get usageStats(): UsageStatsManager {
     return this._usageStats;
+  }
+
+  get runInstructions(): RunInstructionManager {
+    return this._runInstructions;
   }
 
   // Active stream management
@@ -151,6 +159,38 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  setActiveRunId(stream: StreamTabId, runId: string | null): void {
+    this._activeRunIds.set(stream, runId);
+    this.saveActiveRunIds();
+  }
+
+  getActiveRunId(stream: StreamTabId): string | null {
+    return this._activeRunIds.get(stream) ?? null;
+  }
+
+  clearActiveRun(stream: StreamTabId): void {
+    if (!this._activeRunIds.delete(stream)) {
+      return;
+    }
+    this.saveActiveRunIds();
+  }
+
+  private loadActiveRunIds(): void {
+    const stored = this.storage.get<Record<string, string | null>>(
+      WorkspaceStateKey.ACTIVE_RUN_IDS,
+      {},
+    );
+
+    this._activeRunIds = new Map(
+      Object.entries(stored).map(([stream, runId]) => [stream, runId ?? null]),
+    );
+  }
+
+  private saveActiveRunIds(): void {
+    const serialized = Object.fromEntries(this._activeRunIds.entries());
+    void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, serialized);
   }
 
   /**
@@ -244,10 +284,12 @@ export class ProgressViewState {
       this._taskGroups.deleteStream(stream),
       this._outputFiles.deleteStream(stream),
       this._usageStats.deleteStream(stream),
+      this._runInstructions.clearStream(stream),
     ]);
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveRun(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -272,8 +314,10 @@ export class ProgressViewState {
     await Promise.all([
       this._taskGroups.deleteStream(stream),
       this._outputFiles.deleteStream(stream),
+      this._runInstructions.clearStream(stream),
     ]);
     this.clearSessionKindHint(stream);
+    this.clearActiveRun(stream);
 
     // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
     // NOTE: Preserve usageStats - these were not cleared in original implementation
@@ -307,6 +351,7 @@ export class ProgressViewState {
       this._taskGroups.load(),
       this._outputFiles.load(),
       this._usageStats.load(),
+      this._runInstructions.load(),
     ]);
 
     // Load dependent state after basic state is loaded
@@ -316,6 +361,7 @@ export class ProgressViewState {
       this.loadExecutionIds(),
       this.loadStreamSortOrder(),
       this.loadAgentTypeFilter(),
+      this.loadActiveRunIds(),
     ]);
   }
 
