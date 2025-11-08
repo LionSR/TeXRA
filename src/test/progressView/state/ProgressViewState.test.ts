@@ -162,3 +162,65 @@ describe('ProgressViewState.clearOutputState', () => {
     assert.deepStrictEqual(storage.saved, []);
   });
 });
+
+describe('ProgressViewState.load', () => {
+  it('restores legacy task states lacking session metadata', async () => {
+    const storage = new FakeStorage();
+    const state = new ProgressViewState(storage);
+
+    const streamId = 'legacy-stream';
+    const config = parseAgentConfig({
+      model: 'test-model',
+      agent: 'legacy-agent',
+      instruction: 'Restore me',
+      agentType: AgentType.Direct,
+      inputFile: 'main.tex',
+    });
+
+    const legacyConfig = { ...config } as Record<string, unknown>;
+    delete legacyConfig.session;
+
+    const legacyTaskState = {
+      agentConfig: legacyConfig,
+      activeFiles: {
+        input: true,
+        reference: false,
+        auxiliary: false,
+        media: false,
+        output: false,
+      },
+    };
+
+    await storage.update(WorkspaceStateKey.TASK_STATES, {
+      workflow: {
+        [streamId]: legacyTaskState,
+      },
+    });
+
+    storage.saved.length = 0;
+
+    await state.load();
+
+    const restored = state.getTaskState(streamId);
+    assert.ok(restored, 'expected legacy task state to be restored');
+    assert.equal(restored!.session.agentCategory, AgentCategory.Workflow);
+    assert.equal(
+      restored!.agentConfig.session.agentCategory,
+      AgentCategory.Workflow,
+    );
+
+    const persistedEntry = storage.saved.find(
+      (entry) => entry.key === WorkspaceStateKey.TASK_STATES,
+    );
+    assert.ok(persistedEntry, 'expected canonicalized task states to be saved');
+
+    const serialized = persistedEntry!.value as Record<string, any>;
+    assert.deepStrictEqual(Object.keys(serialized), [streamId]);
+    const serializedState = serialized[streamId];
+    assert.equal(serializedState.session.agentCategory, AgentCategory.Workflow);
+    assert.equal(
+      serializedState.agentConfig.session.agentCategory,
+      AgentCategory.Workflow,
+    );
+  });
+});
