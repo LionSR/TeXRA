@@ -353,9 +353,13 @@ describe('ProgressViewState.load', () => {
     assert.ok(roundMissing);
     assert.deepStrictEqual(roundMissing, ['missing.tex']);
 
-    const restoredUsage = state.usageStats.getStreamUsage(streamId);
+    const restoredUsage = state.usageStats.getRunUsage(streamId);
     assert.ok(restoredUsage);
-    assert.deepStrictEqual(restoredUsage, usage);
+    const [, usageTotals] = restoredUsage.entries().next().value as [
+      string,
+      TokenUsageStats,
+    ];
+    assert.deepStrictEqual(usageTotals, usage);
 
     const restoredTaskState = state.getTaskState(streamId);
     assert.ok(restoredTaskState);

@@ -111,16 +111,19 @@
               hidden
               aria-hidden="true"
             >
-              <vscode-label class="run-selector-label" for="runSelector"
-                >Session</vscode-label
-              >
+              <div class="run-selector-title" aria-hidden="true">
+                <i class="codicon codicon-history"></i>
+                <span>Sessions</span>
+              </div>
               <vscode-single-select
                 id="runSelector"
                 class="run-selector"
                 aria-label="Select session"
                 disabled
                 hidden
-              ></vscode-single-select>
+              >
+                <span slot="placeholder">No sessions</span>
+              </vscode-single-select>
             </div>
           </div>
           <div
@@ -129,7 +132,10 @@
             aria-hidden="true"
           >
             <div class="instruction-panel__header">
-              <span class="instruction-panel__title">Instructions</span>
+              <span class="instruction-panel__title">
+                <i class="codicon codicon-notebook"></i>
+                <span>Instructions</span>
+              </span>
               <vscode-toolbar-container class="instruction-panel__actions">
                 <vscode-toolbar-button
                   id="instructionCopyBtn"
