@@ -1,22 +1,22 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'daily'
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: 'chore'
+      include: 'scope'
     ignore:
-      - dependency-name: "@types/node"
-      - dependency-name: "@types/vscode"
+      - dependency-name: '@types/node'
+      - dependency-name: '@types/vscode'
     groups:
       dev-dependencies:
         patterns:
-          - "@typescript-eslint/*"
-          - "eslint*"
-          - "prettier"
+          - '@typescript-eslint/*'
+          - 'eslint*'
+          - 'prettier'
         update-types:
-          - "minor"
-          - "patch"
+          - 'minor'
+          - 'patch'
