@@ -95,10 +95,23 @@
   padding: var(--spacing-tiny) var(--spacing-small);
   font-size: var(--font-size-sm);
   display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
+  flex-direction: column;
+  gap: var(--spacing-small);
   color: var(--vscode-descriptionForeground);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.log-header__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.log-header__secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-size: var(--font-size-sm);
 }
 
 /* Header layout */
@@ -122,9 +135,16 @@
   min-width: 0;
 }
 
+.run-selector-label {
+  color: var(--vscode-descriptionForeground);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
 .run-selector {
-  min-width: 160px;
-  max-width: 220px;
+  min-width: 180px;
+  max-width: 260px;
   flex-shrink: 0;
 }
 

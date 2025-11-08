@@ -72,6 +72,7 @@ export class TaskGroupDomManager {
       detailsElem = baseGroupElement;
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.classList.add('log-run');
+      detailsElem.dataset.runId = group.id;
     } else {
       const headerElement = this.headerFormatter.create(group);
       if (!headerElement) {
@@ -100,10 +101,6 @@ export class TaskGroupDomManager {
 
     progressViewState.taskGroups.set(group.id, group);
     this.groupElements.set(group.id, detailsElem);
-
-    if (isRootGroup && this.runSelector) {
-      this.runSelector.addRun(group);
-    }
 
     // Insert the group at the right position in the parent
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);

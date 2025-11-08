@@ -380,6 +380,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
       if (message.group && !message.group.parentGroupId) {
+        dom.runSelector.addRun(message.group);
         state.setActiveRunId(message.group.id);
         state.clearRunInstruction(message.group.id);
         state.deleteRunFiles(message.group.id);
