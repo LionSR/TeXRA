@@ -5,13 +5,9 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local imports - agent components
-import {
-  AgentSharedStore,
-  createSharedStore,
-} from '@agent/core/AgentSharedStore';
+import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { BaseToolUseAgent } from '../BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
@@ -28,12 +24,10 @@ import {
 } from '@agent/implementations/flows/common/lifecycle';
 import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
 import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
-import { BaseRunStateSchema } from '@agent/implementations/flows/common/types';
-import { z } from 'zod';
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
-  toolState: AgentWorkspaceState;
+  store: AgentSharedStore;
   shouldSkipCycle: boolean;
   cycleOptions: ToolUseCycleOptions<C>;
 }
@@ -61,33 +55,21 @@ export type ToolUseRunPhase =
 
 export type ToolUseRunLifecycle = AgentLifecycleState<ToolUseRunPhase>;
 
-const ToolUseRunStateSchemaBase = BaseRunStateSchema.extend({
-  toolState: z.instanceof(AgentWorkspaceState).nullable(),
-  cycleOptions: z.any().nullable(),
-  shouldSkipCycle: z.boolean(),
-  store: z.instanceof(AgentSharedStore).nullable(),
-  nextRoundIndex: z.number().nonnegative(),
-});
-
-type ToolUseRunStateStruct = z.infer<typeof ToolUseRunStateSchemaBase>;
-
-export type ToolUseRunState<C = unknown> = Omit<
-  ToolUseRunStateStruct,
-  'cycleOptions' | 'store' | 'toolState' | 'messages'
-> & {
-  messages: ProviderMessage[];
-  toolState: AgentWorkspaceState | null;
+export interface ToolUseRunState<C = unknown> {
+  conversation: ProviderMessage[];
   cycleOptions: ToolUseCycleOptions<C> | null;
+  shouldSkipCycle: boolean;
   store: AgentSharedStore | null;
-};
+  runState: AgentRunState;
+}
 
 export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
   prepareState(): Promise<{
     messages: ProviderMessage[];
-    toolState: AgentWorkspaceState;
+    store: AgentSharedStore;
     shouldSkipCycle: boolean;
   }>;
-  buildCycleOptions(toolState: AgentWorkspaceState): ToolUseCycleOptions<C>;
+  buildCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C>;
   runCycle(
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
@@ -124,21 +106,7 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   ): Promise<ToolUsePrepareExecResult<C>> {
     try {
       const prepared = await shared.hooks.prepareState();
-      if (!prepared) {
-        return {
-          error: new Error(
-            'Failed to prepare tool-use run: prepareState returned no result',
-          ),
-        };
-      }
-      const cycleOptions = shared.hooks.buildCycleOptions(prepared.toolState);
-      if (!cycleOptions) {
-        return {
-          error: new Error(
-            'Failed to prepare tool-use run: buildCycleOptions returned no result',
-          ),
-        };
-      }
+      const cycleOptions = shared.hooks.buildCycleOptions(prepared.store);
       return {
         result: {
           ...prepared,
@@ -163,24 +131,11 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    const { messages, toolState, shouldSkipCycle, cycleOptions } =
-      execRes.result;
-    shared.state.messages = messages;
-    shared.state.toolState = toolState;
+    const { messages, store, shouldSkipCycle, cycleOptions } = execRes.result;
+    shared.state.conversation = [...messages];
     shared.state.shouldSkipCycle = shouldSkipCycle;
     shared.state.cycleOptions = cycleOptions;
-
-    if (!shared.state.store) {
-      shared.state.store = createSharedStore({
-        roundIndex: shared.state.nextRoundIndex,
-        runState: shared.state.runState,
-        workspaceState: toolState,
-        userChannels: shared.agent.getUserVarChannels(),
-        onRoundFinalized: shared.agent.getUsageRecorder('tool-use'),
-      });
-    } else {
-      shared.state.store.resetRound(shared.state.nextRoundIndex);
-    }
+    shared.state.store = store;
 
     beginLifecyclePhase(shared.lifecycle, 'cycle');
 
@@ -204,8 +159,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
           if (!state.store) {
             throw new Error('Tool-use store is not initialized.');
           }
-          await hooks.runCycle(cycleOptions, state.messages, state.store);
-          state.nextRoundIndex = state.store.round.roundIndex;
+          await hooks.runCycle(cycleOptions, state.conversation, state.store);
         } else {
           state.shouldSkipCycle = false;
         }
@@ -229,9 +183,9 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
         await hooks.clearPersistedSnapshot();
         const updatedMessages = await hooks.applyFollowUp(
           followUp,
-          state.messages,
+          state.conversation,
         );
-        state.messages = updatedMessages;
+        state.conversation = [...updatedMessages];
       }
     } catch (error) {
       return { error };

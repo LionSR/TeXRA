@@ -41,30 +41,35 @@ function getSnapshotPath(executionId: ExecutionId): string {
   return path.join(STORAGE_DIR, `${executionId}.json`);
 }
 
-let persistenceEnabled: boolean | null = null;
-let storageReady = false;
-let cleanupPerformed = false;
-
 async function ensureInitialized(): Promise<boolean> {
-  if (persistenceEnabled === null) {
-    persistenceEnabled = getToolUsePersistenceEnabled();
-  }
-
-  if (!persistenceEnabled) {
+  if (!getToolUsePersistenceEnabled()) {
+    storageState = null;
     return false;
   }
 
-  if (!storageReady) {
-    await StorageFS.ensureDir(STORAGE_DIR);
-    storageReady = true;
+  if (!storageState) {
+    storageState = { dirReady: false, cleanupDone: false };
   }
 
-  if (!cleanupPerformed) {
-    await cleanupExpiredSnapshots();
-    cleanupPerformed = true;
+  if (!storageState.dirReady) {
+    await StorageFS.ensureDir(STORAGE_DIR);
+    storageState.dirReady = true;
   }
+
+  if (!storageState.cleanupDone) {
+    await cleanupExpiredSnapshots();
+    storageState.cleanupDone = true;
+  }
+
   return true;
 }
+
+interface StorageState {
+  dirReady: boolean;
+  cleanupDone: boolean;
+}
+
+let storageState: StorageState | null = null;
 
 export const ToolUseSnapshotStore = {
   /**
@@ -81,9 +86,11 @@ export const ToolUseSnapshotStore = {
    * Validates the payload and skips saving on validation failure.
    * @param payload Snapshot data to persist.
    */
-  async save(payload: SaveToolUseSnapshotPayload): Promise<void> {
+  async save(
+    payload: SaveToolUseSnapshotPayload,
+  ): Promise<ToolUseSessionSnapshot | null> {
     if (!(await ensureInitialized())) {
-      return;
+      return null;
     }
     if (!isValidExecutionId(payload.executionId)) {
       throw new Error(`Invalid execution id: ${payload.executionId}`);
@@ -93,16 +100,15 @@ export const ToolUseSnapshotStore = {
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId: payload.executionId,
       streamId: payload.streamId,
-      agentName: payload.agentName,
-      model: payload.model,
-      session: { ...payload.session },
+      agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
-      toolState: payload.toolState.toJSON(),
+      store: payload.store.toJSON(),
       lastUpdated: Date.now(),
     } as const;
 
     const validated = ToolUseSessionSnapshotSchema.parse(snapshot);
     await StorageFS.writeJson(getSnapshotPath(payload.executionId), validated);
+    return validated;
   },
 
   /**
