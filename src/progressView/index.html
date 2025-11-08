@@ -48,6 +48,7 @@
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
+          "./modules/uiManagers/RunSelector.js": "${runSelectorUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
           "./modules/katexMacros.js": "${katexMacrosUri}",
           "@common/webviewContext.js": "${webviewContextUri}",
@@ -94,7 +95,17 @@
                 class="status-indicator stopped"
                 data-status="Ready"
               ></span>
-              <span id="runSummary" class="run-summary"></span>
+              <div
+                id="runSelectorContainer"
+                class="run-selector-container"
+                hidden
+              >
+                <vscode-dropdown
+                  id="runSelector"
+                  class="run-selector__dropdown"
+                ></vscode-dropdown>
+                <span id="runSummary" class="run-summary"></span>
+              </div>
             </div>
             <vscode-toolbar-container
               id="toolbarContainer"

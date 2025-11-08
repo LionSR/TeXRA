@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ]);
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
+  progressViewDomHandler.runSelector.setup();
   // Setup UI event listeners
   progressViewDomHandler.events.setupEventListeners();
   progressViewDomHandler.followUpInput.setup();

@@ -126,6 +126,27 @@
   opacity: var(--opacity-subtle);
 }
 
+.run-selector-container {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 0;
+}
+
+.run-selector-container .run-summary {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-selector-container[hidden] {
+  display: none;
+}
+
+.run-selector__dropdown {
+  min-width: 200px;
+  flex-shrink: 0;
+}
+
 /* Status indicator styling */
 .status-indicator {
   width: var(--spacing-medium);

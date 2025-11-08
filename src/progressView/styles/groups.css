@@ -115,3 +115,17 @@
   background-color: var(--vscode-panel-border);
   display: none; /* Start hidden, only show on advanced view option */
 }
+
+.run-group--hidden {
+  display: none;
+}
+
+#logContent.run-selector-active .run-group > .log-group-header {
+  display: none;
+}
+
+#logContent.run-selector-active .run-group > .log-group-content {
+  border-left: none;
+  padding-left: 0;
+  margin-left: 0;
+}

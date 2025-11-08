@@ -40,6 +40,7 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       key: 'followUpInputManagerUri',
       path: 'modules/uiManagers/FollowUpInputManager.js',
     },
+    { key: 'runSelectorUri', path: 'modules/uiManagers/RunSelector.js' },
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {

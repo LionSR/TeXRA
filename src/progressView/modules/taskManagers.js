@@ -10,11 +10,13 @@ import { createFromTemplate } from '@common/templateUtils.js';
  * Manages task group DOM operations.
  */
 export class TaskGroupDomManager {
-  constructor() {
+  constructor(runSelector) {
     this.headerFormatter = new TaskGroupHeaderFormatter();
     this.previousActiveGroupId = null;
     this.groupElements = new Map();
     this.toggleListeners = new Map();
+    this.runSelector = runSelector || null;
+    this.rootGroupIds = new Set();
   }
 
   /**
@@ -74,8 +76,18 @@ export class TaskGroupDomManager {
 
     progressViewState.taskGroups.set(group.id, group);
 
-    const isCollapsed = progressViewState.toggleStates.get(group.id);
-    detailsElem.open = isCollapsed !== true;
+    const isRootGroup = !group.parentGroupId;
+    if (isRootGroup) {
+      this.rootGroupIds.add(group.id);
+      detailsElem.classList.add('run-group');
+    }
+
+    if (isRootGroup && this.runSelector) {
+      detailsElem.open = true;
+    } else {
+      const isCollapsed = progressViewState.toggleStates.get(group.id);
+      detailsElem.open = isCollapsed !== true;
+    }
 
     detailsElem.prepend(headerElement);
 
@@ -120,9 +132,13 @@ export class TaskGroupDomManager {
     });
 
     // For top-level groups, update current group and collapse the previous active group
-    if (!group.parentGroupId) {
+    if (isRootGroup) {
       progressViewState.currentGroupId = group.id;
-      this.collapsePreviousActiveGroup();
+      if (this.runSelector) {
+        this.runSelector.registerRun(group);
+      } else {
+        this.collapsePreviousActiveGroup();
+      }
     }
   }
 
@@ -323,6 +339,37 @@ export class TaskGroupDomManager {
     this.groupElements.clear();
     this.toggleListeners.clear();
     this.previousActiveGroupId = null;
+    this.rootGroupIds.clear();
+  }
+
+  /**
+   * Show only the selected run (or all runs when runId is null).
+   * @param {string|null} runId
+   */
+  showRun(runId) {
+    const target = runId || null;
+    for (const id of this.rootGroupIds) {
+      const element = this.groupElements.get(id);
+      if (!element) {
+        continue;
+      }
+      const shouldShow = !target || id === target;
+      element.classList.toggle('run-group--hidden', !shouldShow);
+      element.style.display = shouldShow ? '' : 'none';
+      if (shouldShow) {
+        element.open = true;
+      }
+    }
+  }
+
+  /**
+   * Retrieve the content container for a group by ID.
+   * @param {string} groupId
+   * @returns {HTMLElement|null}
+   */
+  getGroupContainer(groupId) {
+    const detailsElem = this.groupElements.get(groupId);
+    return detailsElem?.querySelector('.log-group-content') ?? null;
   }
 
   _removeToggleListener(groupId) {

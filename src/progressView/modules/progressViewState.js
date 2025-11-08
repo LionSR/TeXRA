@@ -215,6 +215,77 @@ class ExecutionIdAvailability {
 }
 
 /**
+ * Tracks run-level state such as selection and stored instructions.
+ */
+class RunState {
+  constructor() {
+    this.selectedRunId = null;
+    this.instructions = new Map();
+  }
+
+  setSelectedRun(runId) {
+    this.selectedRunId = runId || null;
+  }
+
+  getSelectedRunId() {
+    return this.selectedRunId;
+  }
+
+  setInstruction(runId, instruction) {
+    if (!runId) {
+      return;
+    }
+
+    const text = instruction?.text?.trim();
+    if (!text) {
+      this.instructions.delete(runId);
+      return;
+    }
+
+    this.instructions.set(runId, {
+      text,
+      metadata: instruction?.metadata,
+      sessionKind: instruction?.sessionKind,
+    });
+  }
+
+  getInstruction(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.instructions.get(runId) || null;
+  }
+
+  deleteRun(runId) {
+    if (!runId) {
+      return;
+    }
+    this.instructions.delete(runId);
+    if (this.selectedRunId === runId) {
+      this.selectedRunId = null;
+    }
+  }
+
+  retainRuns(runIds) {
+    const keep = new Set(runIds);
+    for (const key of this.instructions.keys()) {
+      if (!keep.has(key)) {
+        this.instructions.delete(key);
+      }
+    }
+
+    if (this.selectedRunId && !keep.has(this.selectedRunId)) {
+      this.selectedRunId = null;
+    }
+  }
+
+  clear() {
+    this.instructions.clear();
+    this.selectedRunId = null;
+  }
+}
+
+/**
  * Manages progress view state and handles persistence.
  */
 export class ProgressViewState {
@@ -231,6 +302,7 @@ export class ProgressViewState {
     this.toggleStates = new ToggleStates(() => this.saveToggleStates());
     this.streamStatuses = new StreamStatuses();
     this.executionIdAvailability = new ExecutionIdAvailability();
+    this.runState = new RunState();
   }
 
   setExecutionIdAvailable(stream, hasExecutionId) {

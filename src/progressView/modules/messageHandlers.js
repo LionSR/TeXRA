@@ -170,19 +170,25 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
+      dom.runSelector.beginUpdate();
       dom.taskGroups.clear();
       state.taskGroups.clear();
       logContent.innerHTML = '';
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
+        const rootIds = parentGroups.map((g) => g.id);
+        state.runState.retainRuns(rootIds);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
         childGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
+      } else {
+        state.runState.retainRuns([]);
       }
+      dom.runSelector.finalizeUpdate();
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
       );
@@ -212,6 +218,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.taskGroups.clear();
     state.taskGroups.clear();
     state.toggleStates.clearSelection(groupIds);
+    state.runState.clear();
+    dom.runSelector.clear();
     if (logContent) {
       logContent.innerHTML = '';
     }
@@ -358,49 +366,74 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     const payload = message.instruction;
     const text = payload?.text ?? '';
+    const runId = state.currentGroupId;
 
     if (!text.trim()) {
-      dom.instructionPanel.hide();
+      if (runId) {
+        state.runState.setInstruction(runId, null);
+      }
+      if (!runId || state.runState.getSelectedRunId() === runId) {
+        dom.instructionPanel.hide();
+      }
       return;
     }
 
     const sessionKind = message.sessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
+    if (runId) {
+      state.runState.setInstruction(runId, {
+        text,
+        metadata: payload?.metadata,
+        sessionKind,
+      });
+    }
+
     if (isToolUseAgent) {
       // For Tool Use agents, show instruction as a user message in chat
       dom.instructionPanel.hide();
 
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      if (logContent) {
-        // Check if instruction message already exists
-        const existingInstruction = logContent.querySelector(
-          '.user-message-container[data-instruction="true"]',
-        );
-        if (!existingInstruction) {
-          const userMessage = this._entryFormatter.format({
-            id: `instruction-${activeStream}`,
-            messageType: 'userMessage',
-            text: text,
-            timestamp: Date.now(),
-            groupId: undefined,
-          });
+      const container =
+        (runId && dom.taskGroups.getGroupContainer(runId)) ||
+        document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+      if (container) {
+        const instructionSelector = runId
+          ? `.user-message-container[data-instruction="${runId}"]`
+          : '.user-message-container[data-instruction="stream"]';
+        const existingInstruction =
+          container.querySelector(instructionSelector);
+        if (existingInstruction) {
+          existingInstruction.remove();
+        }
 
-          if (userMessage) {
-            userMessage.dataset.instruction = 'true';
-            // Insert at the beginning of the log content
-            if (logContent.firstChild) {
-              logContent.insertBefore(userMessage, logContent.firstChild);
-            } else {
-              logContent.appendChild(userMessage);
-            }
+        const userMessage = this._entryFormatter.format({
+          id: `instruction-${activeStream}-${runId || 'default'}`,
+          messageType: 'userMessage',
+          text,
+          timestamp: Date.now(),
+          groupId: runId || undefined,
+        });
+
+        if (userMessage) {
+          userMessage.dataset.instruction = runId || 'stream';
+          if (container.firstChild) {
+            container.insertBefore(userMessage, container.firstChild);
+          } else {
+            container.appendChild(userMessage);
           }
         }
       }
     } else {
       // For Workflow agents, show in instruction panel
       const metadata = payload?.metadata ?? {};
-      dom.instructionPanel.show(text, metadata);
+      const selectedRun = state.runState.getSelectedRunId();
+      if (!selectedRun || selectedRun === runId) {
+        dom.instructionPanel.show(text, metadata);
+        if (!selectedRun && runId) {
+          state.runState.setSelectedRun(runId);
+          dom.runSelector.select(runId);
+        }
+      }
     }
   }
 
@@ -412,6 +445,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
+        state.runState.clear();
+        dom.runSelector.clear();
       }
     }
   }
@@ -420,6 +455,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
+    state.runState.clear();
+    dom.runSelector.clear();
   }
 
   handleFollowUpTextPolished(message) {
