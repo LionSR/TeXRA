@@ -110,6 +110,24 @@
   min-width: 0;
 }
 
+.stream-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 0;
+}
+
+.stream-header #activeStreamName {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-selector {
+  min-width: 160px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
 #activeStreamName,
 #runSummary {
   overflow: hidden;

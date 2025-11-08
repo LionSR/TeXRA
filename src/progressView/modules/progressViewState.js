@@ -225,6 +225,9 @@ export class ProgressViewState {
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
     this.approvalBypassActive = false;
+    this.activeRunId = null;
+    this.activeSessionKind = 'workflow';
+    this.runInstructions = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -266,6 +269,49 @@ export class ProgressViewState {
     } catch (e) {
       console.error('Failed to save state:', e);
     }
+  }
+
+  setActiveRunId(runId) {
+    this.activeRunId = runId || null;
+  }
+
+  getActiveRunId() {
+    return this.activeRunId;
+  }
+
+  setRunInstruction(runId, instruction) {
+    if (!runId) {
+      return;
+    }
+    const text = instruction?.text ?? '';
+    if (typeof text !== 'string' || !text.trim()) {
+      this.runInstructions.delete(runId);
+      return;
+    }
+
+    const normalizedInstruction = {
+      text,
+      metadata: instruction?.metadata,
+    };
+    this.runInstructions.set(runId, normalizedInstruction);
+  }
+
+  clearRunInstruction(runId) {
+    if (!runId) {
+      return;
+    }
+    this.runInstructions.delete(runId);
+  }
+
+  getRunInstruction(runId) {
+    if (!runId) {
+      return null;
+    }
+    return this.runInstructions.get(runId) || null;
+  }
+
+  clearRunInstructions() {
+    this.runInstructions.clear();
   }
 }
 
