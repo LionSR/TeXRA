@@ -145,7 +145,6 @@ export class RunSelector {
     if (this._dropdown) {
       this._dropdown.innerHTML = '';
       this._dropdown.value = '';
-      this._syncVisibility();
     }
 
     this._syncVisibility();
@@ -207,19 +206,15 @@ export class RunSelector {
   }
 
   _formatRunLabel(group) {
-    const name = typeof group.name === 'string' ? group.name.trim() : '';
     const timestamp = this._formatTimestamp(group.startTime);
-
-    if (name && timestamp) {
-      return `${name} • ${timestamp}`;
+    if (timestamp) {
+      return timestamp;
     }
+    const name = typeof group.name === 'string' ? group.name.trim() : '';
     if (name) {
       return name;
     }
-    if (timestamp) {
-      return `Run • ${timestamp}`;
-    }
-    return 'Run';
+    return 'Session';
   }
 
   _formatTimestamp(value) {
