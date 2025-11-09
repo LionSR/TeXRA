@@ -150,8 +150,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Stream management
   SWITCH_STREAM: 'switchStream',
   DELETE_STREAM: 'deleteStream',
-  STOP_STREAM: 'stopStream',
   ERASE_STREAM: 'eraseStream',
+  CLEAN_STREAM: 'cleanStream',
+  STOP_STREAM: 'stopStream',
   UPDATE_STREAMS: 'updateStreams',
   DELETE_ALL: 'deleteAll',
 
@@ -184,7 +185,6 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_AGAIN: 'runAgain',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
-  CLEAN_STREAM: 'cleanStream',
   SORT_STREAMS: 'sortStreams',
   FILTER_STREAMS: 'filterStreams',
   RESTORE_STATE: 'restoreState',

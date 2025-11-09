@@ -105,7 +105,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleSwitchStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]:
         this.handleDeleteStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.ERASE_STREAM]: this.handleEraseStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: this.handleDeleteAll.bind(this),
       [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: this.handleStopStream.bind(this),
 
@@ -113,7 +112,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
-      [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
         this.handleFilterStreams.bind(this),
@@ -177,13 +175,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     this.provider.updateWebview();
   }
 
-  private async handleEraseStream(message: any): Promise<void> {
-    // Delete persisted session data when erasing stream
-    await this.deleteSessionSnapshot(message.stream);
-    await this.provider.state.eraseStreamContent(message.stream);
-    this.provider.updateWebview();
-  }
-
   private async handleDeleteAll(_message: any): Promise<void> {
     // Show confirmation dialog
     const confirmation = await vscode.window.showWarningMessage(
@@ -235,12 +226,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handlePackStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await this.handleFileOperation(message.stream, taskState, 'texra.pack');
-    });
-  }
-
-  private async handleCleanStream(message: any): Promise<void> {
-    await this.withToolbarTaskState(message.stream, async (taskState) => {
-      await this.handleFileOperation(message.stream, taskState, 'texra.clean');
     });
   }
 
@@ -530,17 +515,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const generated = this.provider.state.outputFiles.getFiles(stream);
-    const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
-
-    for (const infos of generated.values()) {
-      for (const info of infos) {
-        allFiles.add(info.path);
-        if (info.original) {
-          allFiles.add(info.original);
-        }
-      }
-    }
+    const generatedPaths =
+      this.provider.state.outputFiles.getKnownFilePaths(stream);
+    const allFiles = new Set<string>([
+      ...taskState.agentConfig.outputFiles,
+      ...generatedPaths,
+    ]);
 
     const outputFilesArray = Array.from(allFiles);
     const useMultipleOutputs =

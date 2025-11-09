@@ -1,5 +1,5 @@
 // Local imports - progress view
-import { COMMANDS, STATUS, ELEMENT_IDS } from './constants.js';
+import { COMMANDS, STATUS, ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
 import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
@@ -43,6 +43,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       ...createThemeHandlers(),
       ...this._createHandlers(),
     };
+    this._runSelectorDispose = dom.runSelector.onDidChange((runId) =>
+      this._handleRunSelectionChange(runId),
+    );
+    window.addEventListener(
+      'unload',
+      () => {
+        this.dispose();
+      },
+      { once: true },
+    );
+  }
+
+  dispose() {
+    if (typeof this._runSelectorDispose === 'function') {
+      this._runSelectorDispose();
+      this._runSelectorDispose = null;
+    }
   }
 
   /**
@@ -57,11 +74,55 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  _handleRunSelectionChange(runId) {
+    const activeStream = state.activeStream || null;
+    if (activeStream) {
+      state.setActiveRunId(activeStream, runId);
+    }
+    dom.taskGroups.showRun(runId);
+    this._refreshInstructionForActiveRun();
+    this._refreshOutputsForActiveRun();
+    this._refreshUsageForActiveRun();
+  }
+
+  _refreshInstructionForActiveRun() {
+    if (state.activeSessionKind === 'toolUse') {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const stream = state.activeStream || null;
+    const activeRunId = state.resolveActiveRunId(stream);
+    if (!activeRunId) {
+      dom.instructionPanel.hide();
+      return;
+    }
+
+    const instruction = state.getRunInstruction(stream, activeRunId);
+    if (instruction && instruction.text) {
+      dom.instructionPanel.show(instruction.text, instruction.metadata);
+    } else {
+      dom.instructionPanel.hide();
+    }
+  }
+
+  _refreshOutputsForActiveRun() {
+    const stream = state.activeStream || null;
+    const activeRunId = state.resolveActiveRunId(stream);
+    const filesByRound = activeRunId
+      ? state.getRunFiles(stream, activeRunId) || {}
+      : {};
+    dom.fileList.update(filesByRound);
+  }
+
+  _refreshUsageForActiveRun() {
+    dom.usageSummary.update();
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
       [COMMANDS.UPDATE_LOGS]: (m) => this.handleUpdateLogs(m),
-      [COMMANDS.CLEAR_LOGS]: () => this.handleClearLogs(),
       [COMMANDS.APPEND_LOG]: (m) => this.handleAppendLog(m),
       [COMMANDS.UPDATE_LOG]: (m) => this.handleUpdateLog(m),
       [COMMANDS.ADD_TASK_GROUP]: (m) => this.handleAddTaskGroup(m),
@@ -144,6 +205,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       'workflow'; // Default fallback
     const isToolAgent = sessionKind === 'toolUse';
 
+    state.activeSessionKind = sessionKind;
+
+    dom.runSelector.setDisplayEnabled(
+      Boolean(message.activeStream) && !isToolAgent,
+    );
+
     const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
     if (container) {
       container.classList.toggle('is-visible', isToolAgent);
@@ -161,10 +228,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (!message.activeStream) {
       dom.status.update(STATUS.READY);
       dom.instructionPanel.hide();
+      dom.runSelector.clear();
+      state.clearRunInstructions();
+      state.clearRunFiles();
+      state.clearRunMissingOutputs();
+      state.clearRunUsage();
+      state.clearAllActiveRuns();
+      state.clearAllPendingInstructions();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
       dom.status.update(streamStatus || STATUS.STOPPED);
     }
+
+    this._refreshInstructionForActiveRun();
+    this._refreshUsageForActiveRun();
   }
 
   handleUpdateLogs(message) {
@@ -172,16 +249,79 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       dom.taskGroups.clear();
       state.taskGroups.clear();
+      state.clearRunInstructions(message.stream);
+      state.clearRunFiles(message.stream);
+      state.clearRunMissingOutputs(message.stream);
+      state.clearRunUsage(message.stream);
+      state.clearPendingInstruction(state.activeStream);
+      const previousRunId = state.getActiveRunId(message.stream);
+      state.clearActiveRun(message.stream);
       logContent.innerHTML = '';
       if (message.groups && message.groups.length > 0) {
         const parentGroups = message.groups.filter((g) => !g.parentGroupId);
         const childGroups = message.groups.filter((g) => g.parentGroupId);
+        dom.runSelector.setRuns(parentGroups);
         parentGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
         childGroups
           .sort((a, b) => a.startTime - b.startTime)
           .forEach((g) => dom.taskGroups.addGroup(g));
+
+        if (message.runInstructions) {
+          Object.entries(message.runInstructions).forEach(
+            ([runId, instruction]) => {
+              if (runId) {
+                state.setRunInstruction(message.stream, runId, instruction);
+              }
+            },
+          );
+        }
+
+        if (message.runFiles) {
+          Object.entries(message.runFiles).forEach(([runId, files]) => {
+            state.setRunFiles(message.stream, runId, files);
+          });
+        }
+
+        if (message.runMissingOutputs) {
+          Object.entries(message.runMissingOutputs).forEach(
+            ([runId, files]) => {
+              state.setRunMissingOutputs(message.stream, runId, files);
+            },
+          );
+        }
+
+        if (message.runUsage) {
+          Object.entries(message.runUsage).forEach(([runId, usage]) => {
+            state.setRunUsage(message.stream, runId, usage);
+          });
+        }
+
+        if (parentGroups.length > 0) {
+          const runIds = parentGroups.map((group) => group.id);
+          const preferredRun =
+            message.activeRunId && runIds.includes(message.activeRunId)
+              ? message.activeRunId
+              : previousRunId && runIds.includes(previousRunId)
+                ? previousRunId
+                : runIds[runIds.length - 1];
+          state.setActiveRunId(message.stream, preferredRun);
+          dom.runSelector.setActiveRun(preferredRun);
+          dom.taskGroups.showRun(preferredRun);
+        } else {
+          dom.taskGroups.showRun(null);
+        }
+
+        const resolvedRunId = state.resolveActiveRunId(message.stream);
+        if (
+          resolvedRunId &&
+          state.getActiveRunId(message.stream) !== resolvedRunId
+        ) {
+          state.setActiveRunId(message.stream, resolvedRunId);
+        }
+      } else {
+        dom.taskGroups.showRun(null);
       }
       const sortedMessages = [...message.messages].sort(
         (a, b) => a.timestamp - b.timestamp,
@@ -201,19 +341,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
       // Recalculate cumulative usage after loading groups
       dom.usageSummary.update();
-    }
-
-    this._updatePlaceholderVisibility();
-  }
-
-  handleClearLogs() {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
-    dom.taskGroups.clear();
-    state.taskGroups.clear();
-    state.toggleStates.clearSelection(groupIds);
-    if (logContent) {
-      logContent.innerHTML = '';
+      this._refreshInstructionForActiveRun();
+      this._refreshOutputsForActiveRun();
+      this._refreshUsageForActiveRun();
     }
 
     this._updatePlaceholderVisibility();
@@ -274,6 +404,31 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       dom.taskGroups.addGroup(message.group);
+      if (message.group && !message.group.parentGroupId) {
+        dom.runSelector.addRun(message.group);
+        const newRunId = message.group.id;
+        const targetStream = state.activeStream || message.stream || null;
+        if (targetStream) {
+          state.setActiveRunId(targetStream, newRunId);
+        }
+        const pending = targetStream
+          ? state.takePendingInstruction(targetStream)
+          : null;
+        if (pending) {
+          state.setRunInstruction(targetStream, newRunId, pending);
+        } else if (targetStream) {
+          state.clearRunInstruction(targetStream, newRunId);
+        }
+        if (targetStream) {
+          state.deleteRunFiles(targetStream, message.group.id);
+          state.deleteRunMissingOutputs(targetStream, message.group.id);
+        }
+        dom.runSelector.setActiveRun(newRunId);
+        dom.taskGroups.showRun(newRunId);
+        this._refreshInstructionForActiveRun();
+        this._refreshOutputsForActiveRun();
+        this._refreshUsageForActiveRun();
+      }
       scrollToBottom(logContent);
     }
   }
@@ -297,7 +452,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateUsage(message) {
-    dom.usageSummary.update(message.usage);
+    if (message.stream && message.stream !== state.activeStream) {
+      return;
+    }
+
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
+
+    state.clearRunUsage(targetStream);
+    const usageByRun = message.usageByRun || {};
+    Object.entries(usageByRun).forEach(([runId, usage]) => {
+      state.setRunUsage(targetStream, runId, usage);
+    });
+    this._refreshUsageForActiveRun();
   }
 
   handleUpdateGroupUsage(message) {
@@ -311,12 +480,33 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateFiles(message) {
     if (message.stream === state.activeStream) {
-      dom.fileList.update(message.files);
+      const targetStream = message.stream || state.activeStream || null;
+      if (!targetStream) {
+        return;
+      }
+
+      state.clearRunFiles(targetStream);
+      const filesByRun = message.filesByRun || {};
+      Object.entries(filesByRun).forEach(([runId, files]) => {
+        state.setRunFiles(targetStream, runId, files);
+      });
+      this._refreshOutputsForActiveRun();
     }
   }
 
   handleUpdateMissingOutputs(message) {
-    // State persisted server-side - no direct DOM updates needed
+    if (message.stream === state.activeStream) {
+      const targetStream = message.stream || state.activeStream || null;
+      if (!targetStream) {
+        return;
+      }
+
+      state.clearRunMissingOutputs(targetStream);
+      const filesByRun = message.filesByRun || {};
+      Object.entries(filesByRun).forEach(([runId, files]) => {
+        state.setRunMissingOutputs(targetStream, runId, files);
+      });
+    }
   }
 
   handleShowToolEditApproval(message) {
@@ -356,62 +546,111 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const payload = message.instruction;
+    const payload = message.instruction || null;
     const text = payload?.text ?? '';
-
-    if (!text.trim()) {
-      dom.instructionPanel.hide();
-      return;
-    }
-
-    const sessionKind = message.sessionKind || 'workflow';
+    const metadata = payload?.metadata;
+    const sessionKind =
+      message.sessionKind || state.activeSessionKind || 'workflow';
     const isToolUseAgent = sessionKind === 'toolUse';
 
+    state.activeSessionKind = sessionKind;
+
+    let activeRunId = state.getActiveRunId(activeStream);
+    if (!activeRunId) {
+      activeRunId =
+        dom.runSelector.getActiveRunId() ||
+        state.resolveActiveRunId(activeStream);
+      if (activeRunId) {
+        state.setActiveRunId(activeStream, activeRunId);
+      }
+    }
+
+    if (activeRunId) {
+      if (typeof text === 'string' && text.trim()) {
+        state.setRunInstruction(activeStream, activeRunId, {
+          text,
+          metadata,
+        });
+      } else {
+        state.clearRunInstruction(activeStream, activeRunId);
+      }
+      state.clearPendingInstruction(activeStream);
+    }
+
     if (isToolUseAgent) {
-      // For Tool Use agents, show instruction as a user message in chat
       dom.instructionPanel.hide();
+      state.clearPendingInstruction(activeStream);
+
+      if (!text || !text.trim()) {
+        this._refreshInstructionForActiveRun();
+        return;
+      }
 
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       if (logContent) {
-        // Check if instruction message already exists
-        const existingInstruction = logContent.querySelector(
+        const targetContentId = activeRunId
+          ? `${GROUP_DOM_IDS.CONTENT_PREFIX}${activeRunId}`
+          : null;
+        const targetContainer = targetContentId
+          ? document.getElementById(targetContentId)
+          : logContent;
+        const scope = targetContainer || logContent;
+
+        const existingInstruction = scope.querySelector(
           '.user-message-container[data-instruction="true"]',
         );
+
         if (!existingInstruction) {
           const userMessage = this._entryFormatter.format({
-            id: `instruction-${activeStream}`,
+            id: `instruction-${activeStream}-${activeRunId || 'default'}`,
             messageType: 'userMessage',
-            text: text,
+            text,
             timestamp: Date.now(),
-            groupId: undefined,
+            groupId: activeRunId || undefined,
           });
 
           if (userMessage) {
             userMessage.dataset.instruction = 'true';
-            // Insert at the beginning of the log content
-            if (logContent.firstChild) {
-              logContent.insertBefore(userMessage, logContent.firstChild);
+            if (scope.firstChild) {
+              scope.insertBefore(userMessage, scope.firstChild);
             } else {
-              logContent.appendChild(userMessage);
+              scope.appendChild(userMessage);
             }
           }
         }
       }
-    } else {
-      // For Workflow agents, show in instruction panel
-      const metadata = payload?.metadata ?? {};
-      dom.instructionPanel.show(text, metadata);
+
+      return;
     }
+
+    if (!activeRunId) {
+      if (typeof text === 'string' && text.trim()) {
+        state.setPendingInstruction(activeStream, { text, metadata });
+        dom.instructionPanel.show(text, metadata);
+      } else {
+        state.clearPendingInstruction(activeStream);
+        dom.instructionPanel.hide();
+      }
+      return;
+    }
+
+    this._refreshInstructionForActiveRun();
   }
 
   handleDeleteStream(message) {
     if (message.stream) {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
+      state.clearActiveRun(message.stream);
+      state.clearRunInstructions(message.stream);
+      state.clearRunFiles(message.stream);
+      state.clearRunMissingOutputs(message.stream);
+      state.clearRunUsage(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
+        dom.runSelector.clear();
       }
     }
   }
@@ -420,6 +659,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
+    state.clearRunInstructions();
+    state.clearRunFiles();
+    state.clearRunMissingOutputs();
+    state.clearAllActiveRuns();
+    dom.runSelector.clear();
   }
 
   handleFollowUpTextPolished(message) {
