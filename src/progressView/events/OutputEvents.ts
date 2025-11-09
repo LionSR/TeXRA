@@ -7,7 +7,6 @@ import type { ProgressViewState } from '../state/ProgressViewState';
 
 // Local imports - agent
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
 
 // Local imports - events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -27,41 +26,32 @@ interface OutputEventsShared {
   logger: AgentLogger;
 }
 
-type FilesByRound<T> = Map<number, T[]>;
-
-interface ActiveStreamOutputUpdate {
-  state: ProgressViewState;
-  updater: WebviewUpdater;
-  stream: string;
-  updates: {
-    files?: FilesByRound<OutputFileInfo> | undefined;
-    missing?: FilesByRound<string> | undefined;
-  };
-}
-
-const updateActiveStreamOutputs = ({
-  state,
-  updater,
-  stream,
-  updates,
-}: ActiveStreamOutputUpdate): void => {
+const updateActiveStreamOutputs = (
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+  stream: string,
+): void => {
   if (state.activeStream !== stream || !updater.isAvailable()) {
     return;
   }
 
-  if (updates.files !== undefined) {
-    const payload = updates.files
-      ? Object.fromEntries(updates.files.entries())
-      : {};
-    updater.updateFiles(stream, payload);
-  }
+  const filesByRun = state.outputFiles.getFiles(stream);
+  const filesPayload = Object.fromEntries(
+    Array.from(filesByRun.entries(), ([runId, rounds]) => [
+      runId,
+      Object.fromEntries(rounds.entries()),
+    ]),
+  );
+  updater.updateFiles(stream, filesPayload);
 
-  if (updates.missing !== undefined) {
-    const payload = updates.missing
-      ? Object.fromEntries(updates.missing.entries())
-      : {};
-    updater.updateMissingOutputs(stream, payload);
-  }
+  const missingByRun = state.outputFiles.getMissingOutputs(stream);
+  const missingPayload = Object.fromEntries(
+    Array.from(missingByRun.entries(), ([runId, rounds]) => [
+      runId,
+      Object.fromEntries(rounds.entries()),
+    ]),
+  );
+  updater.updateMissingOutputs(stream, missingPayload);
 };
 
 const registerOutputFileListeners = (
@@ -70,31 +60,26 @@ const registerOutputFileListeners = (
   updater: WebviewUpdater,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable[] => {
-  const addFiles = bus.on('addOutputFiles', ({ stream, filesByRound }) => {
-    withErrorBoundary('failed to handle addOutputFiles', async () => {
-      await state.outputFiles.addFiles(stream, filesByRound);
-      const files = state.outputFiles.getFiles(stream);
-      updateActiveStreamOutputs({
-        state,
-        updater,
-        stream,
-        updates: { files },
+  const addFiles = bus.on(
+    'addOutputFiles',
+    ({ stream, groupId, filesByRound }) => {
+      withErrorBoundary('failed to handle addOutputFiles', async () => {
+        await state.outputFiles.addFiles(stream, groupId ?? null, filesByRound);
+        updateActiveStreamOutputs(state, updater, stream);
       });
-    });
-  });
+    },
+  );
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, filesByRound }) => {
+    ({ stream, groupId, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-        await state.outputFiles.updateMissingOutputs(stream, filesByRound);
-        const missing = state.outputFiles.getMissingOutputs(stream);
-        updateActiveStreamOutputs({
-          state,
-          updater,
+        await state.outputFiles.updateMissingOutputs(
           stream,
-          updates: { missing },
-        });
+          groupId ?? null,
+          filesByRound,
+        );
+        updateActiveStreamOutputs(state, updater, stream);
       });
     },
   );
@@ -102,24 +87,14 @@ const registerOutputFileListeners = (
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
     withErrorBoundary('failed to handle clearMissingOutputs', async () => {
       await state.outputFiles.clearMissingOutputs(stream);
-      updateActiveStreamOutputs({
-        state,
-        updater,
-        stream,
-        updates: { missing: new Map() },
-      });
+      updateActiveStreamOutputs(state, updater, stream);
     });
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
     withErrorBoundary('failed to handle clearOutputFiles', async () => {
       await state.outputFiles.clearFiles(stream);
-      updateActiveStreamOutputs({
-        state,
-        updater,
-        stream,
-        updates: { files: new Map() },
-      });
+      updateActiveStreamOutputs(state, updater, stream);
     });
   });
 

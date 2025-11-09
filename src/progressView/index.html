@@ -46,6 +46,7 @@
           "./modules/uiManagers/FileList.js": "${fileListUri}",
           "./modules/uiManagers/EventsManager.js": "${eventsUri}",
           "./modules/uiManagers/Placeholder.js": "${placeholderUri}",
+          "./modules/uiManagers/RunSelector.js": "${runSelectorUri}",
           "./modules/uiManagers/InstructionPanel.js": "${instructionPanelUri}",
           "./modules/uiManagers/FollowUpInputManager.js": "${followUpInputManagerUri}",
           "./modules/handlers/themeHandlers.js": "${themeHandlersUri}",
@@ -87,19 +88,43 @@
       <vscode-split-layout initial-handle-position="80%">
         <div slot="start" class="content-area">
           <div class="log-header">
-            <div class="header-left">
-              <span id="activeStreamName"></span>
-              <span
-                id="statusIndicator"
-                class="status-indicator stopped"
-                data-status="Ready"
-              ></span>
-              <span id="runSummary" class="run-summary"></span>
+            <div class="log-header__primary">
+              <div class="header-left">
+                <div class="stream-header">
+                  <span id="activeStreamName"></span>
+                </div>
+                <span
+                  id="statusIndicator"
+                  class="status-indicator stopped"
+                  data-status="Ready"
+                ></span>
+                <span id="runSummary" class="run-summary"></span>
+              </div>
+              <vscode-toolbar-container
+                id="toolbarContainer"
+                class="header-actions"
+              ></vscode-toolbar-container>
             </div>
-            <vscode-toolbar-container
-              id="toolbarContainer"
-              class="header-actions"
-            ></vscode-toolbar-container>
+            <div
+              class="log-header__secondary"
+              id="runSelectorRow"
+              hidden
+              aria-hidden="true"
+            >
+              <div class="run-selector-title" aria-hidden="true">
+                <i class="codicon codicon-history"></i>
+                <span>Sessions</span>
+              </div>
+              <vscode-single-select
+                id="runSelector"
+                class="run-selector"
+                aria-label="Select session"
+                disabled
+                hidden
+              >
+                <span slot="placeholder">No sessions</span>
+              </vscode-single-select>
+            </div>
           </div>
           <div
             id="instructionContainer"
@@ -107,7 +132,10 @@
             aria-hidden="true"
           >
             <div class="instruction-panel__header">
-              <span class="instruction-panel__title">Instructions</span>
+              <span class="instruction-panel__title">
+                <i class="codicon codicon-notebook"></i>
+                <span>Instructions</span>
+              </span>
               <vscode-toolbar-container class="instruction-panel__actions">
                 <vscode-toolbar-button
                   id="instructionCopyBtn"
@@ -353,9 +381,9 @@
             </details>
           </template>
           <template id="groupDetailsTemplate">
-            <details class="log-group">
+            <div class="log-group">
               <div class="log-group-content"></div>
-            </details>
+            </div>
           </template>
           <template id="groupHeaderTemplate">
             <summary class="log-group-header">

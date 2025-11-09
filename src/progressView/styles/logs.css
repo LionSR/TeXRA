@@ -95,10 +95,24 @@
   padding: var(--spacing-tiny) var(--spacing-small);
   font-size: var(--font-size-sm);
   display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
+  flex-direction: column;
+  gap: var(--spacing-small);
   color: var(--vscode-descriptionForeground);
   border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.log-header__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.log-header__secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  font-size: var(--font-size-sm);
+  padding: 0;
 }
 
 /* Header layout */
@@ -108,6 +122,39 @@
   gap: var(--spacing-medium);
   flex: 1;
   min-width: 0;
+}
+
+.stream-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  min-width: 0;
+}
+
+.stream-header #activeStreamName {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-selector {
+  min-width: 180px;
+  max-width: 260px;
+  flex-shrink: 0;
+}
+
+.run-selector-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.run-selector-title .codicon {
+  font-size: 16px;
+  line-height: 1;
 }
 
 #activeStreamName,
@@ -123,7 +170,26 @@
 }
 
 .run-summary {
-  opacity: var(--opacity-subtle);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-tiny);
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
+
+.run-summary .codicon {
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.run-summary__label {
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+
+.run-summary__value {
+  color: var(--vscode-foreground);
 }
 
 /* Status indicator styling */
