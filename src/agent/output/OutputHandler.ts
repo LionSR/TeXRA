@@ -296,16 +296,24 @@ export class OutputHandler implements IOutputHandler {
     const workspaceByOutput = new Map<string, string>();
     const storageByOutput = new Map<string, string>();
 
-    const registerEntry = (entry: NamedOutputFile) => {
+    const registerEntry = (
+      entry: NamedOutputFile,
+      { skipIfExists = false }: { skipIfExists?: boolean } = {},
+    ) => {
       const key = entry.relativePath ?? entry.path;
-      if (entry.workspacePath) {
+      if (skipIfExists && storageByOutput.has(key)) {
+        return;
+      }
+      if (entry.workspacePath && !workspaceByOutput.has(key)) {
         workspaceByOutput.set(key, entry.workspacePath);
       }
-      storageByOutput.set(key, entry.path);
+      if (!storageByOutput.has(key) || !skipIfExists) {
+        storageByOutput.set(key, entry.path);
+      }
     };
 
-    currentNamed.forEach(registerEntry);
-    prevNamed.forEach(registerEntry);
+    currentNamed.forEach((entry) => registerEntry(entry));
+    prevNamed.forEach((entry) => registerEntry(entry, { skipIfExists: true }));
 
     const mapping: RoundFileMapping = {
       baseToOutput,
@@ -631,17 +639,22 @@ export class OutputHandler implements IOutputHandler {
                 await this.xmlManager.processSingleXmlOutput(outputFile);
             }
 
-            if (processed && processed.path) {
+            const hasProcessedPath = Boolean(processed && processed.path);
+
+            if (hasProcessedPath && processed.path) {
               await this.indentLatexFile(processed.path);
               this.logger.debug(
                 `Indented single output file: ${processed.path}`,
               );
+            }
 
-              const relocated = await this.relocateRoundArtifacts(outputFile, [
-                processed,
-              ]);
-              const relocatedFiles = relocated.processed.map((p) => p.path);
+            const relocation = await this.relocateRoundArtifacts(
+              outputFile,
+              hasProcessedPath && processed.path ? [processed] : [],
+            );
+            const relocatedFiles = relocation.processed.map((p) => p.path);
 
+            if (hasProcessedPath) {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
@@ -653,23 +666,23 @@ export class OutputHandler implements IOutputHandler {
               this.setRoundOutputs(
                 currRound,
                 relocatedFiles,
-                relocated.processed,
+                relocation.processed,
               );
-              await this.captureXmlSummary(
-                currRound,
-                relocated.raw,
-                relocated.processed,
-                scope,
-              );
-              outputFile = relocated.raw;
-              this.rawOutputs[currRound] = relocated.raw;
             } else {
               this.logger.debug(
                 `No processed file was generated from ${outputFile}`,
               );
               this.setRoundOutputs(currRound, [], []);
-              await this.captureXmlSummary(currRound, outputFile, [], scope);
             }
+
+            await this.captureXmlSummary(
+              currRound,
+              relocation.raw,
+              relocation.processed,
+              scope,
+            );
+            outputFile = relocation.raw;
+            this.rawOutputs[currRound] = relocation.raw;
           } catch (err) {
             this.logger.debug(
               `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
