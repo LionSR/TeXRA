@@ -69,6 +69,12 @@ function findRootGroupId(
   return current ? current.id : null;
 }
 
+/**
+ * Compute total usage for a run by preferring direct child task groups when
+ * available. Nested descendants are folded into the totals only when the run
+ * lacks immediate child usage, mirroring how the progress view surfaces usage
+ * at the top level while avoiding double-counting nested data.
+ */
 function computeRunUsageTotals(
   runId: string,
   context: RunUsageComputationContext,
@@ -76,7 +82,8 @@ function computeRunUsageTotals(
   const directTotals = createEmptyTotals();
   const aggregatedTotals = createEmptyTotals();
   const { groups } = context;
-  const rootCache = context.rootCache ?? (context.rootCache = new Map());
+  const rootCache = context.rootCache ?? new Map<string, string | null>();
+  context.rootCache = rootCache;
 
   let runUsage: TaskGroup['usage'] | undefined;
 
