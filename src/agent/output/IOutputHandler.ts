@@ -67,4 +67,5 @@ export interface IOutputHandler {
 
   getRoundArtifacts(round: number): Promise<RoundOutputArtifacts>;
   getRoundXmlSummary(round: number): OutputXmlSummary;
+  setActiveRun(runId?: string | null): void;
 }
