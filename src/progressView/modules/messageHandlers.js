@@ -77,9 +77,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   _handleRunSelectionChange(runId) {
     const activeStream = state.activeStream || null;
     if (activeStream) {
-      state.setActiveRunId(runId, activeStream);
-    } else {
-      state.setActiveRunId(runId);
+      state.setActiveRunId(activeStream, runId);
     }
     dom.taskGroups.showRun(runId);
     this._refreshInstructionForActiveRun();
@@ -100,7 +98,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const instruction = state.getRunInstruction(activeRunId);
+    const instruction = state.getRunInstruction(stream, activeRunId);
     if (instruction && instruction.text) {
       dom.instructionPanel.show(instruction.text, instruction.metadata);
     } else {
@@ -112,7 +110,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const stream = state.activeStream || null;
     const activeRunId = state.resolveActiveRunId(stream);
     const filesByRound = activeRunId
-      ? state.getRunFiles(activeRunId) || {}
+      ? state.getRunFiles(stream, activeRunId) || {}
       : {};
     dom.fileList.update(filesByRound);
   }
@@ -251,10 +249,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.stream === state.activeStream) {
       dom.taskGroups.clear();
       state.taskGroups.clear();
-      state.clearRunInstructions();
-      state.clearRunFiles();
-      state.clearRunMissingOutputs();
-      state.clearRunUsage();
+      state.clearRunInstructions(message.stream);
+      state.clearRunFiles(message.stream);
+      state.clearRunMissingOutputs(message.stream);
+      state.clearRunUsage(message.stream);
       state.clearPendingInstruction(state.activeStream);
       const previousRunId = state.getActiveRunId(message.stream);
       state.clearActiveRun(message.stream);
@@ -274,7 +272,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           Object.entries(message.runInstructions).forEach(
             ([runId, instruction]) => {
               if (runId) {
-                state.setRunInstruction(runId, instruction);
+                state.setRunInstruction(message.stream, runId, instruction);
               }
             },
           );
@@ -282,21 +280,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
         if (message.runFiles) {
           Object.entries(message.runFiles).forEach(([runId, files]) => {
-            state.setRunFiles(runId, files);
+            state.setRunFiles(message.stream, runId, files);
           });
         }
 
         if (message.runMissingOutputs) {
           Object.entries(message.runMissingOutputs).forEach(
             ([runId, files]) => {
-              state.setRunMissingOutputs(runId, files);
+              state.setRunMissingOutputs(message.stream, runId, files);
             },
           );
         }
 
         if (message.runUsage) {
           Object.entries(message.runUsage).forEach(([runId, usage]) => {
-            state.setRunUsage(runId, usage);
+            state.setRunUsage(message.stream, runId, usage);
           });
         }
 
@@ -308,7 +306,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
               : previousRunId && runIds.includes(previousRunId)
                 ? previousRunId
                 : runIds[runIds.length - 1];
-          state.setActiveRunId(preferredRun, message.stream);
+          state.setActiveRunId(message.stream, preferredRun);
           dom.runSelector.setActiveRun(preferredRun);
           dom.taskGroups.showRun(preferredRun);
         } else {
@@ -320,7 +318,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           resolvedRunId &&
           state.getActiveRunId(message.stream) !== resolvedRunId
         ) {
-          state.setActiveRunId(resolvedRunId, message.stream);
+          state.setActiveRunId(message.stream, resolvedRunId);
         }
       } else {
         dom.taskGroups.showRun(null);
@@ -409,15 +407,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       if (message.group && !message.group.parentGroupId) {
         dom.runSelector.addRun(message.group);
         const newRunId = message.group.id;
-        state.setActiveRunId(newRunId, state.activeStream);
-        const pending = state.takePendingInstruction(state.activeStream);
-        if (pending) {
-          state.setRunInstruction(newRunId, pending);
-        } else {
-          state.clearRunInstruction(newRunId);
+        const targetStream = state.activeStream || message.stream || null;
+        if (targetStream) {
+          state.setActiveRunId(targetStream, newRunId);
         }
-        state.deleteRunFiles(message.group.id);
-        state.deleteRunMissingOutputs(message.group.id);
+        const pending = targetStream
+          ? state.takePendingInstruction(targetStream)
+          : null;
+        if (pending) {
+          state.setRunInstruction(targetStream, newRunId, pending);
+        } else if (targetStream) {
+          state.clearRunInstruction(targetStream, newRunId);
+        }
+        if (targetStream) {
+          state.deleteRunFiles(targetStream, message.group.id);
+          state.deleteRunMissingOutputs(targetStream, message.group.id);
+        }
         dom.runSelector.setActiveRun(newRunId);
         dom.taskGroups.showRun(newRunId);
         this._refreshInstructionForActiveRun();
@@ -451,10 +456,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    state.clearRunUsage();
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
+
+    state.clearRunUsage(targetStream);
     const usageByRun = message.usageByRun || {};
     Object.entries(usageByRun).forEach(([runId, usage]) => {
-      state.setRunUsage(runId, usage);
+      state.setRunUsage(targetStream, runId, usage);
     });
     this._refreshUsageForActiveRun();
   }
@@ -470,10 +480,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateFiles(message) {
     if (message.stream === state.activeStream) {
-      state.clearRunFiles();
+      const targetStream = message.stream || state.activeStream || null;
+      if (!targetStream) {
+        return;
+      }
+
+      state.clearRunFiles(targetStream);
       const filesByRun = message.filesByRun || {};
       Object.entries(filesByRun).forEach(([runId, files]) => {
-        state.setRunFiles(runId, files);
+        state.setRunFiles(targetStream, runId, files);
       });
       this._refreshOutputsForActiveRun();
     }
@@ -481,10 +496,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateMissingOutputs(message) {
     if (message.stream === state.activeStream) {
-      state.clearRunMissingOutputs();
+      const targetStream = message.stream || state.activeStream || null;
+      if (!targetStream) {
+        return;
+      }
+
+      state.clearRunMissingOutputs(targetStream);
       const filesByRun = message.filesByRun || {};
       Object.entries(filesByRun).forEach(([runId, files]) => {
-        state.setRunMissingOutputs(runId, files);
+        state.setRunMissingOutputs(targetStream, runId, files);
       });
     }
   }
@@ -541,15 +561,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.runSelector.getActiveRunId() ||
         state.resolveActiveRunId(activeStream);
       if (activeRunId) {
-        state.setActiveRunId(activeRunId, activeStream);
+        state.setActiveRunId(activeStream, activeRunId);
       }
     }
 
     if (activeRunId) {
       if (typeof text === 'string' && text.trim()) {
-        state.setRunInstruction(activeRunId, { text, metadata });
+        state.setRunInstruction(activeStream, activeRunId, {
+          text,
+          metadata,
+        });
       } else {
-        state.clearRunInstruction(activeRunId);
+        state.clearRunInstruction(activeStream, activeRunId);
       }
       state.clearPendingInstruction(activeStream);
     }
@@ -619,13 +642,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       state.clearActiveRun(message.stream);
+      state.clearRunInstructions(message.stream);
+      state.clearRunFiles(message.stream);
+      state.clearRunMissingOutputs(message.stream);
+      state.clearRunUsage(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
-        state.clearRunInstructions();
-        state.clearRunFiles();
-        state.clearRunMissingOutputs();
         dom.runSelector.clear();
       }
     }
