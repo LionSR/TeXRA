@@ -9,7 +9,11 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { TaskRunFileService, existsFlexible } from '@utils/files';
+import {
+  TaskRunFileService,
+  existsFlexible,
+  toAbsolutePath,
+} from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -42,21 +46,28 @@ export class LatexDiffManager {
   }
 
   private async resolveDiffInput(
-    workspaceCandidate: string | undefined,
-    fallback: string,
+    actualPath: string,
+    workspaceCandidate?: string,
   ): Promise<{
     actual: string | null;
     workspaceDir?: string;
     displayPath: string;
   }> {
     const workspaceDir = workspaceCandidate
-      ? path.dirname(workspaceCandidate)
-      : path.dirname(fallback);
-    const preferredExists = workspaceCandidate
-      ? await existsFlexible(workspaceCandidate)
-      : false;
+      ? path.dirname(toAbsolutePath(workspaceCandidate))
+      : undefined;
 
-    if (preferredExists && workspaceCandidate) {
+    if (await existsFlexible(actualPath)) {
+      return {
+        actual: actualPath,
+        workspaceDir,
+        displayPath: this.fileService.getWorkspaceDisplayPath(
+          workspaceCandidate ?? actualPath,
+        ),
+      };
+    }
+
+    if (workspaceCandidate && (await existsFlexible(workspaceCandidate))) {
       return {
         actual: workspaceCandidate,
         workspaceDir,
@@ -65,22 +76,11 @@ export class LatexDiffManager {
       };
     }
 
-    const fallbackExists = await existsFlexible(fallback);
-    if (fallbackExists) {
-      return {
-        actual: fallback,
-        workspaceDir,
-        displayPath: this.fileService.getWorkspaceDisplayPath(
-          workspaceCandidate ?? fallback,
-        ),
-      };
-    }
-
     return {
       actual: null,
-      workspaceDir: workspaceCandidate ? workspaceDir : undefined,
+      workspaceDir,
       displayPath: this.fileService.getWorkspaceDisplayPath(
-        workspaceCandidate ?? fallback,
+        workspaceCandidate ?? actualPath,
       ),
     };
   }
@@ -168,18 +168,18 @@ export class LatexDiffManager {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
           const resolved = await this.resolveDiffInput(
-            mapping.workspaceByOutput.get(outputFile),
             outputFile,
+            mapping.workspaceByOutput.get(outputFile),
           );
-          const baseForDiff = baseFile;
-          const cwd = path.dirname(baseForDiff);
+          const baseAbsolute = toAbsolutePath(baseFile);
+          const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
 
           if (!resolved.actual) {
             this.logger.warn(
               `Skipping latexdiff for ${outputFile} - file not found after relocation`,
             );
             aggregated.push({
-              base: this.fileService.getWorkspaceDisplayPath(baseForDiff),
+              base: this.fileService.getWorkspaceDisplayPath(baseFile),
               revised: resolved.displayPath,
               output: '',
               status: 'error',
@@ -189,7 +189,7 @@ export class LatexDiffManager {
           }
 
           const result = await this.latexdiffService.runDiffForRound(
-            baseForDiff,
+            baseAbsolute,
             resolved.actual,
             currRound,
             undefined,
@@ -199,7 +199,7 @@ export class LatexDiffManager {
           let diffPath = '';
           if (result.success && result.diffFileName) {
             diffPath = path.join(
-              path.dirname(baseForDiff),
+              path.dirname(baseAbsolute),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -217,7 +217,7 @@ export class LatexDiffManager {
             }
           }
           aggregated.push({
-            base: this.fileService.getWorkspaceDisplayPath(baseForDiff),
+            base: this.fileService.getWorkspaceDisplayPath(baseFile),
             revised: resolved.displayPath,
             output: diffPath,
             status: result.success ? 'success' : 'error',
@@ -247,12 +247,12 @@ export class LatexDiffManager {
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
           const prevResolved = await this.resolveDiffInput(
-            mapping.workspaceByOutput.get(prevOutputFile),
             prevOutputFile,
+            mapping.workspaceByOutput.get(prevOutputFile),
           );
           const currResolved = await this.resolveDiffInput(
-            mapping.workspaceByOutput.get(currOutputFile),
             currOutputFile,
+            mapping.workspaceByOutput.get(currOutputFile),
           );
 
           if (!prevResolved.actual || !currResolved.actual) {
@@ -271,7 +271,8 @@ export class LatexDiffManager {
 
           const workspaceCwd =
             prevResolved.workspaceDir ?? currResolved.workspaceDir;
-          const cwd = workspaceCwd ?? path.dirname(prevResolved.actual);
+          const cwd =
+            workspaceCwd ?? path.dirname(toAbsolutePath(prevResolved.actual));
           const result = await this.latexdiffService.runDiffBetweenRounds(
             prevResolved.actual,
             currResolved.actual,
@@ -282,7 +283,7 @@ export class LatexDiffManager {
           let diffPath = '';
           if (result.success && result.diffFileName) {
             diffPath = path.join(
-              path.dirname(prevResolved.actual),
+              path.dirname(toAbsolutePath(prevResolved.actual)),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');

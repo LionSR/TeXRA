@@ -15,6 +15,12 @@ export async function existsFlexible(target: string): Promise<boolean> {
     : WorkspaceFS.exists(target);
 }
 
+/**
+ * Check whether a file exists and contains more than a minimal amount of data.
+ *
+ * Files shorter than the threshold (default 15 bytes) are considered trivial
+ * and treated as empty artifacts.
+ */
 export async function existsAndNonTrivialFlexible(
   target: string,
   threshold: number = 15,

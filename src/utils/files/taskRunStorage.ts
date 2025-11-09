@@ -79,7 +79,7 @@ function toWorkspaceRelative(target: string): string {
     }
   }
 
-  return path.basename(target);
+  throw new Error(`Cannot make path workspace-relative: ${target}`);
 }
 
 export function getRunRelativePath(id: ExecutionId, target: string): string {
@@ -119,13 +119,18 @@ async function moveToTarget(
   }
 
   await ensureParentDir(destination);
-  await fs.rm(destination, { recursive: true, force: true });
 
   try {
-    await fs.rename(source, destination);
+    await fs.rename(resolvedSource, resolvedDestination);
     return;
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
+
+    if (err.code === 'EEXIST') {
+      await fs.rm(resolvedDestination, { recursive: true, force: true });
+      await fs.rename(resolvedSource, resolvedDestination);
+      return;
+    }
 
     if (err.code && err.code !== 'EXDEV' && err.code !== 'EISDIR') {
       throw Object.assign(
@@ -136,15 +141,15 @@ async function moveToTarget(
       );
     }
 
-    const stats = await fs.lstat(source);
+    const stats = await fs.lstat(resolvedSource);
     if (stats.isDirectory()) {
-      await fs.cp(source, destination, { recursive: true });
-      await fs.rm(source, { recursive: true, force: true });
+      await fs.cp(resolvedSource, resolvedDestination, { recursive: true });
+      await fs.rm(resolvedSource, { recursive: true, force: true });
       return;
     }
 
-    await fs.copyFile(source, destination);
-    await fs.rm(source, { force: true });
+    await fs.copyFile(resolvedSource, resolvedDestination);
+    await fs.rm(resolvedSource, { force: true });
   }
 }
 
@@ -178,6 +183,12 @@ async function createSymlink(
   }
 }
 
+/**
+ * Workspace-relative directories that should never be moved into run storage.
+ *
+ * History folders contain prior execution data that is managed separately,
+ * so keep them in place even when task-run isolation is enabled.
+ */
 const IGNORED_WORKSPACE_ROOTS = new Set(['History', 'history']);
 
 function shouldSkipRelocation(relativePath: string): boolean {

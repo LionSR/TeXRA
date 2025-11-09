@@ -299,14 +299,25 @@ export class OutputHandler implements IOutputHandler {
 
     const relocatedProcessed: NamedOutputFile[] = [];
     for (const entry of processed) {
-      const relocation = await this.fileService.relocateToRunStorage(
-        entry.path,
-      );
-      relocatedProcessed.push({
-        ...entry,
-        path: relocation.storagePath,
-        workspacePath: entry.workspacePath ?? relocation.workspacePath,
-      });
+      try {
+        const relocation = await this.fileService.relocateToRunStorage(
+          entry.path,
+        );
+        relocatedProcessed.push({
+          ...entry,
+          path: relocation.storagePath,
+          workspacePath: entry.workspacePath ?? relocation.workspacePath,
+        });
+      } catch (error) {
+        throw Object.assign(
+          new Error(
+            `Failed to relocate processed output ${entry.path}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          ),
+          { cause: error },
+        );
+      }
     }
 
     return { raw: relocatedRaw, processed: relocatedProcessed };
@@ -491,19 +502,19 @@ export class OutputHandler implements IOutputHandler {
                 `Indented multiple output files: ${processedFiles.join(',')}`,
               );
 
-              if (this.baseFiles && this.baseFiles.length > 0) {
-                await replaceInputCommands(
-                  this.baseFiles,
-                  processedFiles,
-                  this.logger,
-                );
-              }
-
               const relocated = await this.relocateRoundArtifacts(
                 outputFile,
                 processedPairs,
               );
               const relocatedFiles = relocated.processed.map((p) => p.path);
+
+              if (this.baseFiles && this.baseFiles.length > 0) {
+                await replaceInputCommands(
+                  this.baseFiles,
+                  relocatedFiles,
+                  this.logger,
+                );
+              }
               this.setRoundOutputs(
                 currRound,
                 relocatedFiles,
@@ -573,9 +584,19 @@ export class OutputHandler implements IOutputHandler {
               const relocated = await this.relocateRoundArtifacts(outputFile, [
                 processed,
               ]);
+              const relocatedFiles = relocated.processed.map((p) => p.path);
+
+              if (this.baseFiles && this.baseFiles.length > 0) {
+                await replaceInputCommands(
+                  this.baseFiles,
+                  relocatedFiles,
+                  this.logger,
+                );
+              }
+
               this.setRoundOutputs(
                 currRound,
-                relocated.processed.map((p) => p.path),
+                relocatedFiles,
                 relocated.processed,
               );
               await this.captureXmlSummary(
