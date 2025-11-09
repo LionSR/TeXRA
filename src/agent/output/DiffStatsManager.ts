@@ -4,7 +4,7 @@ import { diff_match_patch } from 'diff-match-patch';
 // Local imports - agent
 import type { DiffStats } from '@agent/types/DiffTypes';
 // Local imports
-import { WorkspaceFS } from '@utils/files';
+import { readFlexible } from '@utils/files';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
@@ -20,14 +20,14 @@ export class DiffStatsManager {
   ): Promise<DiffStats> {
     try {
       if (!baseFile) {
-        const outContent = await WorkspaceFS.read(outputFile);
+        const outContent = await readFlexible(outputFile);
         const added = this.countLines(outContent);
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        WorkspaceFS.read(baseFile),
-        WorkspaceFS.read(outputFile),
+        readFlexible(baseFile),
+        readFlexible(outputFile),
       ]);
 
       const dmp = new diff_match_patch();
