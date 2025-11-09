@@ -84,7 +84,7 @@ export interface ProgressEventPayloads {
   updateStreamUsage: {
     stream: StreamTabId;
     usage: TokenUsageStats;
-    runId?: string;
+    runId: string;
   };
 }
 

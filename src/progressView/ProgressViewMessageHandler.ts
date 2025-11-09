@@ -515,19 +515,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const generated = this.provider.state.outputFiles.getFiles(stream);
+    const generatedPaths =
+      this.provider.state.outputFiles.getKnownFilePaths(stream);
     const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
-
-    for (const rounds of generated.values()) {
-      for (const infos of rounds.values()) {
-        for (const info of infos) {
-          allFiles.add(info.path);
-          if (info.original) {
-            allFiles.add(info.original);
-          }
-        }
-      }
-    }
+    generatedPaths.forEach((path) => allFiles.add(path));
 
     const outputFilesArray = Array.from(allFiles);
     const useMultipleOutputs =

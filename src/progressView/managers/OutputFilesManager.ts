@@ -126,6 +126,31 @@ export class OutputFilesManager extends PersistentMapManager<
     return runs ? new Map(runs) : new Map();
   }
 
+  /**
+   * Return a flattened set of file paths known for the provided stream.
+   * Includes both generated artifacts and their original counterparts.
+   */
+  getKnownFilePaths(stream: StreamTabId): Set<string> {
+    const paths = new Set<string>();
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return paths;
+    }
+
+    for (const runRounds of runs.values()) {
+      for (const infos of runRounds.values()) {
+        for (const info of infos) {
+          paths.add(info.path);
+          if (info.original) {
+            paths.add(info.original);
+          }
+        }
+      }
+    }
+
+    return paths;
+  }
+
   /** Get missing outputs for a stream */
   getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
     const missing = this._missingOutputs.get(stream);
@@ -349,7 +374,11 @@ export class OutputFilesManager extends PersistentMapManager<
 
     for (const [roundKey, value] of Object.entries(record)) {
       const round = Number.parseInt(roundKey, 10);
-      if (Number.isNaN(round) || !Array.isArray(value)) {
+      if (Number.isNaN(round)) {
+        this.logger.warn(`Invalid round number '${roundKey}' during load`);
+        continue;
+      }
+      if (!Array.isArray(value)) {
         continue;
       }
 

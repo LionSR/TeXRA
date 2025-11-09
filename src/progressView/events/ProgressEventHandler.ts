@@ -121,7 +121,9 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKindHint = this.state.getSessionKindHint(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
-    const runId = this.state.resolveRunId(stream);
+    const runId = this.state.resolveRunId(stream, undefined, {
+      persist: false,
+    });
 
     if (runId && instructionUpdate) {
       void this.state.runInstructions.setInstruction(
@@ -159,7 +161,9 @@ export class ProgressEventHandler {
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
     );
-    const activeRunId = this.state.resolveRunId(stream);
+    const activeRunId = this.state.resolveRunId(stream, undefined, {
+      persist: false,
+    });
 
     const runInstructions = Object.fromEntries(
       this.state.runInstructions.getInstructions(stream).entries(),
