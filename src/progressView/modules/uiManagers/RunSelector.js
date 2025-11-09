@@ -40,6 +40,7 @@ export class RunSelector {
 
   initialize() {
     if (!this._domReady) {
+      this._initScheduled = false;
       return;
     }
 
@@ -54,7 +55,13 @@ export class RunSelector {
     }
 
     this._initScheduled = true;
-    queueMicrotask(() => this.initialize());
+    queueMicrotask(() => {
+      if (!this._domReady) {
+        this._initScheduled = false;
+        return;
+      }
+      this.initialize();
+    });
   }
 
   _initializeDropdown() {

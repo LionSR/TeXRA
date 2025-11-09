@@ -226,6 +226,7 @@ export class ProgressViewState {
     this.currentGroupId = null;
     this.approvalBypassActive = false;
     this.activeRunId = null;
+    this.runIdsByStream = new Map();
     this.activeSessionKind = 'workflow';
     this.runInstructions = new Map();
     this.runFiles = new Map();
@@ -275,17 +276,62 @@ export class ProgressViewState {
     }
   }
 
-  setActiveRunId(runId) {
+  setActiveRunId(runId, streamId) {
+    const targetStream = streamId || this.activeStream || null;
+    if (targetStream) {
+      if (runId) {
+        this.runIdsByStream.set(targetStream, runId);
+      } else {
+        this.runIdsByStream.delete(targetStream);
+      }
+    }
     this.activeRunId = runId || null;
   }
 
-  getActiveRunId() {
-    return this.activeRunId;
-  }
+  getActiveRunId(streamId) {
+    if (streamId) {
+      return this.runIdsByStream.get(streamId) || null;
+    }
 
-  resolveActiveRunId() {
     if (this.activeRunId) {
       return this.activeRunId;
+    }
+
+    const activeStream = this.activeStream || null;
+    if (!activeStream) {
+      return null;
+    }
+
+    return this.runIdsByStream.get(activeStream) || null;
+  }
+
+  clearActiveRun(streamId) {
+    const targetStream = streamId || this.activeStream || null;
+    if (!targetStream) {
+      this.activeRunId = null;
+      return;
+    }
+
+    this.runIdsByStream.delete(targetStream);
+    if (targetStream === this.activeStream) {
+      this.activeRunId = null;
+    }
+  }
+
+  clearAllActiveRuns() {
+    this.runIdsByStream.clear();
+    this.activeRunId = null;
+  }
+
+  resolveActiveRunId(streamId) {
+    const targetStream = streamId || this.activeStream || null;
+    if (!targetStream) {
+      return null;
+    }
+
+    const current = this.getActiveRunId(targetStream);
+    if (current) {
+      return current;
     }
 
     const fallbackSources = [
@@ -299,6 +345,7 @@ export class ProgressViewState {
       if (source.size === 1) {
         const candidate = source.keys().next().value;
         if (candidate) {
+          this.setActiveRunId(candidate, targetStream);
           return candidate;
         }
       }
