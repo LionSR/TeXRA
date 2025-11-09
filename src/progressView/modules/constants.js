@@ -26,6 +26,8 @@ export const ELEMENT_IDS = {
   GENERATED_FILES: 'generatedFiles',
   STREAM_TABS: 'streamTabs',
   ACTIVE_STREAM_NAME: 'activeStreamName',
+  RUN_SELECTOR: 'runSelector',
+  RUN_SELECTOR_CONTAINER: 'runSelectorRow',
   STATUS_INDICATOR: 'statusIndicator',
   RUN_SUMMARY: 'runSummary',
   INSTRUCTION_CONTAINER: 'instructionContainer',
@@ -43,9 +45,7 @@ export const ELEMENT_IDS = {
   RESTORE_STATE_BTN: 'restoreStateBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   PACK_STREAM_BTN: 'packStreamBtn',
-  CLEAN_STREAM_BTN: 'cleanStreamBtn',
   OPEN_TASK_STORAGE_BTN: 'openTaskStorageBtn',
-  ERASE_STREAM_BTN: 'eraseStreamBtn',
   FOLLOW_UP_CONTAINER: 'followUpContainer',
   FOLLOW_UP_INPUT: 'followUpInput',
   RECORD_FOLLOW_UP_BTN: 'recordFollowUpBtn',
@@ -127,23 +127,7 @@ const WORKFLOW_TOOLBAR = [
     className: 'pack-button',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
-    icon: 'trash',
-    command: COMMANDS.CLEAN_STREAM,
-    title: 'Clean the output for this agent',
-    className: 'clean-button',
-    disabled: true,
-  },
   { ...OPEN_TASK_STORAGE_BUTTON },
-  {
-    id: ELEMENT_IDS.ERASE_STREAM_BTN,
-    icon: 'clear-all',
-    command: COMMANDS.ERASE_STREAM,
-    title: 'Erase the stream output for this agent',
-    className: 'clear-button',
-    disabled: false,
-  },
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
@@ -166,14 +150,6 @@ const TOOL_USE_TOOLBAR = [
     disabled: true,
   },
   { ...OPEN_TASK_STORAGE_BUTTON },
-  {
-    id: ELEMENT_IDS.ERASE_STREAM_BTN,
-    icon: 'clear-all',
-    command: COMMANDS.ERASE_STREAM,
-    title: 'Erase the stream output for this agent',
-    className: 'clear-button',
-    disabled: false,
-  },
 ];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
