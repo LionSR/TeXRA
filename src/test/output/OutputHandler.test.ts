@@ -29,6 +29,9 @@ class MockOutputHandler extends OutputHandler {
     return [
       {
         path: `out${round}.tex`,
+        relativePath: `out${round}.tex`,
+        displayLabel: `out${round}.tex`,
+        displayDir: '',
         base: null,
         prev: null,
         original: null,
@@ -146,6 +149,7 @@ describe('OutputHandler.getRoundMapping', () => {
       {
         source: path.join('workspace', 'chapter_r0.tex'),
         path: path.join('workspace', 'chapter_r0.tex'),
+        relativePath: path.join('workspace', 'chapter_r0.tex'),
       },
     ];
 
@@ -181,7 +185,15 @@ describe('OutputHandler.finalizeRound', () => {
     assert.ok(handler.validateCalled);
     assert.equal(events.length, 1);
     assert.deepEqual(events[0].filesByRound[0], [
-      { path: 'out0.tex', base: null, prev: null, original: null },
+      {
+        path: 'out0.tex',
+        relativePath: 'out0.tex',
+        displayLabel: 'out0.tex',
+        displayDir: '',
+        base: null,
+        prev: null,
+        original: null,
+      },
     ]);
     dispose();
   });
@@ -221,6 +233,7 @@ describe('OutputHandler XML summaries', () => {
     handler.xmlManager.processSingleXmlOutput = async () => ({
       source: 'input.tex',
       path: 'output.tex',
+      relativePath: 'output.tex',
     });
 
     (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (
@@ -261,8 +274,16 @@ describe('OutputHandler XML summaries', () => {
 
     handler.indentLatexFiles = async () => {};
     handler.xmlManager.processMultipleXmlOutputs = async () => [
-      { source: 'draft.tex', path: 'draft.tex' },
-      { source: 'notes.tex', path: 'notes.tex' },
+      {
+        source: 'draft.tex',
+        path: 'draft.tex',
+        relativePath: 'draft.tex',
+      },
+      {
+        source: 'notes.tex',
+        path: 'notes.tex',
+        relativePath: 'notes.tex',
+      },
     ];
 
     (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (

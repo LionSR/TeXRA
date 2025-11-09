@@ -70,7 +70,12 @@ import type { ToolFileAttachment } from '@tools/result';
 import { K_SLICE } from '@utils/config';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  existsAndNonTrivialFlexible,
+  readFlexible,
+  writeFlexible,
+} from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 type GoogleRole = 'user' | 'model';
@@ -877,7 +882,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
 
-    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
+    if (!(await existsAndNonTrivialFlexible(outputFile))) {
       this.logger.debug(
         `Output file ${outputFile} does not exist or is empty.`,
       );
@@ -904,7 +909,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Output file ${outputFile} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await WorkspaceFS.read(outputFile);
+    let fileContent = await readFlexible(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -916,7 +921,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await WorkspaceFS.write(outputFile, fileContent);
+    await writeFlexible(outputFile, fileContent);
     this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
     messages.push({
       role: 'model',
