@@ -4,6 +4,7 @@ import { EventEmitter } from 'events';
 // Local imports - agent
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { TaskRunSessionMetadata } from '@utils/files';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
@@ -66,6 +67,7 @@ export interface ProgressEventPayloads {
     stream: StreamTabId;
     groupId?: string;
     filesByRound: { [key: number]: OutputFileInfo[] };
+    session?: TaskRunSessionMetadata;
   };
   updateMissingOutputs: {
     stream: StreamTabId;

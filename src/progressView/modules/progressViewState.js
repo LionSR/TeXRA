@@ -233,6 +233,7 @@ export class ProgressViewState {
     this.runFiles = new Map();
     this.runMissingOutputs = new Map();
     this.runUsage = new Map();
+    this.runMetadata = new Map();
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -558,6 +559,15 @@ export class ProgressViewState {
     streamMap.set(runId, filesByRound || {});
   }
 
+  setRunMetadata(streamId, runId, metadata) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null || !runId || !metadata) {
+      return;
+    }
+    const streamMap = this._getStreamMap(this.runMetadata, targetStream, true);
+    streamMap.set(runId, metadata);
+  }
+
   getRunFiles(streamId, runId) {
     const targetStream = this._resolveStreamId(streamId);
     if (targetStream == null || !runId) {
@@ -570,6 +580,15 @@ export class ProgressViewState {
     return streamMap.get(runId) || null;
   }
 
+  getRunMetadata(streamId) {
+    const targetStream = this._resolveStreamId(streamId);
+    if (targetStream == null) {
+      return null;
+    }
+    const streamMap = this.runMetadata.get(targetStream);
+    return streamMap ? new Map(streamMap) : null;
+  }
+
   clearRunFiles(streamId) {
     if (streamId !== undefined && streamId !== null) {
       const targetStream = this._resolveStreamId(streamId);
@@ -577,10 +596,12 @@ export class ProgressViewState {
         return;
       }
       this.runFiles.delete(targetStream);
+      this.runMetadata.delete(targetStream);
       return;
     }
 
     this.runFiles.clear();
+    this.runMetadata.clear();
   }
 
   deleteRunFiles(streamId, runId) {
@@ -595,6 +616,14 @@ export class ProgressViewState {
     streamMap.delete(runId);
     if (streamMap.size === 0) {
       this.runFiles.delete(targetStream);
+    }
+
+    const metadataMap = this.runMetadata.get(targetStream);
+    if (metadataMap) {
+      metadataMap.delete(runId);
+      if (metadataMap.size === 0) {
+        this.runMetadata.delete(targetStream);
+      }
     }
   }
 

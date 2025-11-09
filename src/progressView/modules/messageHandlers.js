@@ -112,7 +112,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const filesByRound = activeRunId
       ? state.getRunFiles(stream, activeRunId) || {}
       : {};
-    dom.fileList.update(filesByRound);
+    const runMetadata = state.getRunMetadata(stream);
+    const sessionMetadata =
+      activeRunId && runMetadata ? runMetadata.get(activeRunId) || null : null;
+    dom.fileList.update(filesByRound, sessionMetadata);
   }
 
   _refreshUsageForActiveRun() {
@@ -489,6 +492,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const filesByRun = message.filesByRun || {};
       Object.entries(filesByRun).forEach(([runId, files]) => {
         state.setRunFiles(targetStream, runId, files);
+      });
+      const metadataByRun = message.metadataByRun || {};
+      Object.entries(metadataByRun).forEach(([runId, metadata]) => {
+        if (metadata) {
+          state.setRunMetadata(targetStream, runId, metadata);
+        }
       });
       this._refreshOutputsForActiveRun();
     }

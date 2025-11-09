@@ -270,7 +270,12 @@ export class XmlOutputManager {
         currRound,
       );
       await writeFlexible(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile, workspacePath: texFile });
+      outputFiles.push({
+        source,
+        path: texFile,
+        workspacePath: texFile,
+        displayName: path.basename(source),
+      });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -298,6 +303,7 @@ export class XmlOutputManager {
       source: original || this.agentConfig.inputFile,
       path: processedOutputFile,
       workspacePath: processedOutputFile,
+      displayName: original ? path.basename(original) : undefined,
     };
   }
 

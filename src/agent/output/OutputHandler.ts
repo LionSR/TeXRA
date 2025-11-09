@@ -42,7 +42,9 @@ import {
   WorkspaceFS,
   AbsoluteFS,
   TaskRunFileService,
+  TaskRunFileDescriptor,
   readFlexible,
+  existsFlexible,
 } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
@@ -51,6 +53,15 @@ import {
 } from '@utils/text/xmlUtils';
 
 // Local imports - types
+
+async function findFirstExistingPath(paths: string[]): Promise<string | null> {
+  for (const candidate of paths) {
+    if (await existsFlexible(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
 
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler implements IOutputHandler {
@@ -201,16 +212,33 @@ export class OutputHandler implements IOutputHandler {
         )?.[0] || null;
       const originalFile = mapping.originByOutput.get(file) || null;
       const diffBase = getEffectiveBaseFile(baseFile, originalFile, file);
-      const workspacePath = this.getNamedOutputs(currRound).find(
+      const namedEntry = this.getNamedOutputs(currRound).find(
         (p) => p.path === file,
-      )?.workspacePath;
+      );
+      const workspacePath = namedEntry?.workspacePath ?? null;
+      const runStoragePath = namedEntry?.runStoragePath ?? null;
+      const relativePath = namedEntry?.relativePath ?? null;
+      const displayName =
+        namedEntry?.displayName ??
+        (originalFile
+          ? path.basename(originalFile)
+          : path.basename(workspacePath ?? file));
+      const displayPath =
+        relativePath ??
+        (workspacePath
+          ? WorkspaceFS.relativePath(workspacePath)
+          : (runStoragePath ?? file));
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBase,
         file,
       );
       infos.push({
         path: file,
-        workspacePath: workspacePath ?? null,
+        workspacePath,
+        runStoragePath,
+        relativePath,
+        displayName,
+        displayPath,
         base: baseFile,
         prev: prevFile,
         original: originalFile,
@@ -293,26 +321,41 @@ export class OutputHandler implements IOutputHandler {
     rawOutputPath: string,
     processed: NamedOutputFile[],
   ): Promise<{
-    raw: string;
+    raw: TaskRunFileDescriptor | null;
     processed: NamedOutputFile[];
   }> {
-    let relocatedRaw = rawOutputPath;
+    let relocatedRaw: TaskRunFileDescriptor | null = null;
     if (rawOutputPath) {
-      const relocation =
-        await this.fileService.relocateToRunStorage(rawOutputPath);
-      relocatedRaw = relocation.storagePath;
+      relocatedRaw = await this.fileService.relocateToRunStorage(rawOutputPath);
     }
 
     const relocatedProcessed: NamedOutputFile[] = [];
     for (const entry of processed) {
       try {
-        const relocation = await this.fileService.relocateToRunStorage(
+        const descriptor = await this.fileService.relocateToRunStorage(
           entry.path,
         );
+        const displayName =
+          entry.displayName ??
+          (entry.source
+            ? path.basename(entry.source)
+            : path.basename(descriptor.displayPath));
+        const relativePath =
+          entry.relativePath ??
+          descriptor.workspaceRelative ??
+          descriptor.runRelative ??
+          null;
+
         relocatedProcessed.push({
           ...entry,
-          path: relocation.storagePath,
-          workspacePath: entry.workspacePath ?? relocation.workspacePath,
+          path: descriptor.actualPath,
+          workspacePath:
+            entry.workspacePath ??
+            descriptor.workspacePath ??
+            descriptor.actualPath,
+          runStoragePath: descriptor.runStoragePath ?? null,
+          relativePath,
+          displayName,
         });
       } catch (error) {
         throw Object.assign(
@@ -433,9 +476,19 @@ export class OutputHandler implements IOutputHandler {
       async (scope) => {
         this.ensureRound(currRound);
         if (!this.rawOutputs[currRound]) {
-          this.rawOutputs[currRound] = outputFile
-            ? this.fileService.resolveExpectedPath(outputFile)
-            : null;
+          if (!outputFile) {
+            this.rawOutputs[currRound] = null;
+          } else {
+            const expectedPath =
+              this.fileService.resolveExpectedPath(outputFile);
+            const candidates = [outputFile];
+            if (expectedPath !== outputFile) {
+              candidates.push(expectedPath);
+            }
+
+            const existingPath = await findFirstExistingPath(candidates);
+            this.rawOutputs[currRound] = existingPath ?? outputFile;
+          }
         }
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -459,6 +512,7 @@ export class OutputHandler implements IOutputHandler {
           stream: this.channel,
           groupId: this.currentRunId ?? undefined,
           filesByRound: { [currRound]: fileInfos },
+          session: this.fileService.getSessionMetadata(),
         });
 
         for (const { path: filePath } of fileInfos) {
@@ -529,14 +583,15 @@ export class OutputHandler implements IOutputHandler {
                 relocatedFiles,
                 relocated.processed,
               );
+              const relocatedRawPath = relocated.raw?.actualPath ?? outputFile;
               await this.captureXmlSummary(
                 currRound,
-                relocated.raw,
+                relocatedRawPath,
                 relocated.processed,
                 scope,
               );
-              outputFile = relocated.raw;
-              this.rawOutputs[currRound] = relocated.raw;
+              outputFile = relocatedRawPath;
+              this.rawOutputs[currRound] = relocatedRawPath;
               return;
             }
 
@@ -548,8 +603,8 @@ export class OutputHandler implements IOutputHandler {
             if (outputFile) {
               const relocation =
                 await this.fileService.relocateToRunStorage(outputFile);
-              outputFile = relocation.storagePath;
-              this.rawOutputs[currRound] = relocation.storagePath;
+              outputFile = relocation.actualPath;
+              this.rawOutputs[currRound] = relocation.actualPath;
             }
           } catch (err) {
             this.logger.debug(
@@ -569,6 +624,7 @@ export class OutputHandler implements IOutputHandler {
             let processed: NamedOutputFile = {
               source: outputFile,
               path: outputFile,
+              displayName: path.basename(outputFile),
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>
@@ -608,14 +664,15 @@ export class OutputHandler implements IOutputHandler {
                 relocatedFiles,
                 relocated.processed,
               );
+              const relocatedRawPath = relocated.raw?.actualPath ?? outputFile;
               await this.captureXmlSummary(
                 currRound,
-                relocated.raw,
+                relocatedRawPath,
                 relocated.processed,
                 scope,
               );
-              outputFile = relocated.raw;
-              this.rawOutputs[currRound] = relocated.raw;
+              outputFile = relocatedRawPath;
+              this.rawOutputs[currRound] = relocatedRawPath;
             } else {
               this.logger.debug(
                 `No processed file was generated from ${outputFile}`,

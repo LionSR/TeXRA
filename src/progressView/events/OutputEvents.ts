@@ -42,7 +42,9 @@ const updateActiveStreamOutputs = (
       Object.fromEntries(rounds.entries()),
     ]),
   );
-  updater.updateFiles(stream, filesPayload);
+  const metadataByRun = state.outputFiles.getRunMetadata(stream);
+  const metadataPayload = Object.fromEntries(metadataByRun.entries());
+  updater.updateFiles(stream, filesPayload, metadataPayload);
 
   const missingByRun = state.outputFiles.getMissingOutputs(stream);
   const missingPayload = Object.fromEntries(
@@ -62,9 +64,14 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, groupId, filesByRound }) => {
+    ({ stream, groupId, filesByRound, session }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        await state.outputFiles.addFiles(stream, groupId ?? null, filesByRound);
+        await state.outputFiles.addFiles(
+          stream,
+          groupId ?? null,
+          filesByRound,
+          session,
+        );
         updateActiveStreamOutputs(state, updater, stream);
       });
     },

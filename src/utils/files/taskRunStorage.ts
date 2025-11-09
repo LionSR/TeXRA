@@ -15,6 +15,21 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
  */
 export const TASK_RUNS_DIR = 'taskRuns';
 
+export interface TaskRunSessionMetadata {
+  storageMode: 'workspace' | 'taskRunStorage';
+  runDirectory?: string | null;
+  runRelativeRoot?: string | null;
+}
+
+export interface TaskRunFileDescriptor {
+  actualPath: string;
+  workspacePath?: string | null;
+  workspaceRelative?: string | null;
+  runStoragePath?: string | null;
+  runRelative?: string | null;
+  displayPath: string;
+}
+
 /**
  * Validate an execution ID to ensure it's safe for use in file paths.
  * Acts as a type guard to ensure the ID is defined and non-empty.
@@ -80,6 +95,15 @@ function toWorkspaceRelative(target: string): string {
   }
 
   throw new Error(`Cannot make path workspace-relative: ${target}`);
+}
+
+function tryMakeWorkspaceRelative(target: string): string | null {
+  try {
+    const relative = toWorkspaceRelative(target);
+    return relative;
+  } catch {
+    return null;
+  }
 }
 
 export function getRunRelativePath(id: ExecutionId, target: string): string {
@@ -153,6 +177,37 @@ async function moveToTarget(
   }
 }
 
+async function recreateWorkspaceLink(
+  originalPath: string,
+  storagePath: string,
+): Promise<void> {
+  const workspaceRoot = WorkspaceFS.getPath();
+  if (!workspaceRoot) {
+    return;
+  }
+
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  const normalizedOriginal = path.resolve(originalPath);
+  const relativeToWorkspace = path.relative(
+    normalizedWorkspaceRoot,
+    normalizedOriginal,
+  );
+  if (
+    relativeToWorkspace.startsWith('..') ||
+    path.isAbsolute(relativeToWorkspace)
+  ) {
+    return;
+  }
+
+  try {
+    await createSymlink(storagePath, originalPath);
+  } catch (error) {
+    console.warn(
+      `[TaskRunFileService] Failed to mirror ${storagePath} back to ${originalPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function createSymlink(
   source: string,
   destination: string,
@@ -205,15 +260,16 @@ function shouldSkipRelocation(relativePath: string): boolean {
 }
 
 export class TaskRunFileService {
+  private readonly storageMode: 'workspace' | 'taskRunStorage';
   private readonly useRunStorage: boolean;
 
   constructor(private readonly executionId?: ExecutionId) {
-    const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
+    this.storageMode = getConfig<'workspace' | 'taskRunStorage'>(
       'texra.agentOutputs.storageMode',
       'workspace',
     );
     this.useRunStorage =
-      storageMode === 'taskRunStorage' && isValidExecutionId(executionId);
+      this.storageMode === 'taskRunStorage' && isValidExecutionId(executionId);
   }
 
   public hasRunDirectory(): boolean {
@@ -227,6 +283,18 @@ export class TaskRunFileService {
     return getRunDir(this.executionId);
   }
 
+  public getSessionMetadata(): TaskRunSessionMetadata {
+    if (!this.executionId || !this.useRunStorage) {
+      return { storageMode: this.storageMode };
+    }
+
+    return {
+      storageMode: this.storageMode,
+      runDirectory: getRunDir(this.executionId),
+      runRelativeRoot: path.join(TASK_RUNS_DIR, this.executionId),
+    };
+  }
+
   public async ensureRunDirectory(): Promise<void> {
     if (!this.executionId || !this.useRunStorage) {
       return;
@@ -234,87 +302,109 @@ export class TaskRunFileService {
     await ensureRunDir(this.executionId);
   }
 
-  public getWorkspaceDisplayPath(target: string): string {
-    const absolute = path.isAbsolute(target)
-      ? target
-      : WorkspaceFS.fullPath(target);
-    const workspaceRoot = WorkspaceFS.getPath();
-    if (!workspaceRoot) {
-      return absolute;
+  private resolveAbsolute(target: string): string {
+    if (path.isAbsolute(target)) {
+      return path.resolve(target);
     }
-    return path.relative(workspaceRoot, absolute);
+
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (workspaceRoot) {
+      return path.resolve(WorkspaceFS.fullPath(target));
+    }
+
+    return path.resolve(target);
   }
 
-  public async relocateToRunStorage(target: string): Promise<{
-    storagePath: string;
-    workspacePath: string;
-    relativePath: string;
-  }> {
-    const absoluteSource = path.isAbsolute(target)
-      ? target
-      : WorkspaceFS.getPath()
-        ? WorkspaceFS.fullPath(target)
-        : target;
-    const workspaceRelative = toWorkspaceRelative(absoluteSource);
+  private describeLocation(
+    actualPath: string,
+    workspacePath?: string | null,
+  ): TaskRunFileDescriptor {
+    const normalizedActual = path.resolve(actualPath);
+    const normalizedWorkspace = workspacePath
+      ? path.resolve(workspacePath)
+      : undefined;
+
+    const workspaceRelative = normalizedWorkspace
+      ? tryMakeWorkspaceRelative(normalizedWorkspace)
+      : tryMakeWorkspaceRelative(normalizedActual);
+
+    let runStoragePath: string | null = null;
+    let runRelative: string | null = null;
+
+    if (this.executionId && this.useRunStorage) {
+      const storageRoot = path.resolve(StorageFS.fullPath(''));
+      const inStorage =
+        normalizedActual === storageRoot ||
+        normalizedActual.startsWith(`${storageRoot}${path.sep}`);
+
+      if (inStorage) {
+        runStoragePath = normalizedActual;
+        runRelative = tryMakeWorkspaceRelative(normalizedActual);
+      }
+    }
+
+    const displayPath =
+      workspaceRelative ??
+      (runRelative && this.executionId
+        ? path.join(TASK_RUNS_DIR, this.executionId, runRelative)
+        : normalizedActual);
+
+    return {
+      actualPath: normalizedActual,
+      workspacePath: normalizedWorkspace ?? null,
+      workspaceRelative,
+      runStoragePath,
+      runRelative,
+      displayPath,
+    };
+  }
+
+  public getWorkspaceDisplayPath(target: string): string {
+    const descriptor = this.describeLocation(this.resolveAbsolute(target));
+    return descriptor.displayPath;
+  }
+
+  public async relocateToRunStorage(
+    target: string,
+  ): Promise<TaskRunFileDescriptor> {
+    const absoluteSource = this.resolveAbsolute(target);
+    const workspaceRelative = tryMakeWorkspaceRelative(absoluteSource) ?? '';
 
     if (shouldSkipRelocation(workspaceRelative)) {
-      return {
-        storagePath: absoluteSource,
-        workspacePath: absoluteSource,
-        relativePath: workspaceRelative,
-      };
+      return this.describeLocation(absoluteSource, absoluteSource);
     }
 
     if (!this.executionId || !this.useRunStorage) {
-      return {
-        storagePath: absoluteSource,
-        workspacePath: absoluteSource,
-        relativePath: workspaceRelative,
-      };
+      return this.describeLocation(absoluteSource, absoluteSource);
     }
 
     await this.ensureRunDirectory();
     const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
-    await moveToTarget(absoluteSource, absolute);
-    return {
-      storagePath: absolute,
-      workspacePath: absoluteSource,
-      relativePath: workspaceRelative,
-    };
+    const resolvedSource = path.resolve(absoluteSource);
+    await moveToTarget(resolvedSource, absolute);
+    if (resolvedSource !== absolute) {
+      await recreateWorkspaceLink(resolvedSource, absolute);
+    }
+    return this.describeLocation(absolute, resolvedSource);
   }
 
-  public async mirrorWorkspaceFile(workspaceFile: string): Promise<{
-    storagePath: string;
-    workspacePath: string;
-  }> {
-    const absoluteSource = path.isAbsolute(workspaceFile)
-      ? workspaceFile
-      : WorkspaceFS.getPath()
-        ? WorkspaceFS.fullPath(workspaceFile)
-        : workspaceFile;
+  public async mirrorWorkspaceFile(
+    workspaceFile: string,
+  ): Promise<TaskRunFileDescriptor> {
+    const absoluteSource = this.resolveAbsolute(workspaceFile);
 
     if (!this.executionId || !this.useRunStorage) {
-      return {
-        storagePath: absoluteSource,
-        workspacePath: absoluteSource,
-      };
+      return this.describeLocation(absoluteSource, absoluteSource);
     }
 
     await this.ensureRunDirectory();
     const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
     await createSymlink(absoluteSource, absolute);
-    return {
-      storagePath: absolute,
-      workspacePath: absoluteSource,
-    };
+    return this.describeLocation(absolute, absoluteSource);
   }
 
   public resolveExpectedPath(target: string): string {
-    const absoluteSource = path.isAbsolute(target)
-      ? target
-      : WorkspaceFS.getPath()
-        ? WorkspaceFS.fullPath(target)
-        : target;
+    const absoluteSource = this.resolveAbsolute(target);
 
     if (!this.executionId || !this.useRunStorage) {
       return absoluteSource;

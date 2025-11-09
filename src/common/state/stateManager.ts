@@ -8,6 +8,7 @@ export enum WorkspaceStateKey {
   STREAM_TABS = 'texra.streamTabs',
   TASK_GROUPS = 'texra.taskGroups',
   OUTPUT_FILES = 'texra.outputFiles',
+  OUTPUT_RUN_METADATA = 'texra.outputRunMetadata',
   MISSING_OUTPUTS = 'texra.missingOutputs',
   RUN_INSTRUCTIONS = 'texra.runInstructions',
   RUN_USAGE = 'texra.runUsage',

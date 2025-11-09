@@ -15,6 +15,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { TaskRunSessionMetadata } from '@utils/files';
 
 const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
   if (!value || typeof value !== 'object') {
@@ -37,6 +38,8 @@ export class OutputFilesManager extends PersistentMapManager<
     StreamTabId,
     Map<string, Map<number, string[]>>
   > = new Map();
+  private _runMetadata: Map<StreamTabId, Map<string, TaskRunSessionMetadata>> =
+    new Map();
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
@@ -49,6 +52,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
+    session?: TaskRunSessionMetadata,
   ): Promise<void> {
     const runId = normalizeRunId(groupId);
 
@@ -83,7 +87,19 @@ export class OutputFilesManager extends PersistentMapManager<
       runRounds.set(roundNum, normalizedFiles);
     }
 
+    if (session) {
+      let streamMetadata = this._runMetadata.get(stream);
+      if (!streamMetadata) {
+        streamMetadata = new Map();
+        this._runMetadata.set(stream, streamMetadata);
+      }
+      streamMetadata.set(runId, session);
+    }
+
     await this.save();
+    if (session) {
+      await this.saveRunMetadata();
+    }
   }
 
   /** Update missing outputs for a stream */
@@ -126,6 +142,12 @@ export class OutputFilesManager extends PersistentMapManager<
     return runs ? new Map(runs) : new Map();
   }
 
+  /** Get stored metadata for a stream */
+  getRunMetadata(stream: StreamTabId): Map<string, TaskRunSessionMetadata> {
+    const metadata = this._runMetadata.get(stream);
+    return metadata ? new Map(metadata) : new Map();
+  }
+
   /**
    * Return a flattened set of file paths known for the provided stream.
    * Includes both generated artifacts and their original counterparts.
@@ -160,6 +182,9 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Clear output files for a stream */
   async clearFiles(stream: StreamTabId): Promise<void> {
     await this.delete(stream);
+    if (this._runMetadata.delete(stream)) {
+      await this.saveRunMetadata();
+    }
   }
 
   async clearRunFiles(
@@ -175,6 +200,17 @@ export class OutputFilesManager extends PersistentMapManager<
     const removed = runs.delete(runId);
     if (runs.size === 0) {
       this.items.delete(stream);
+    }
+
+    const metadata = this._runMetadata.get(stream);
+    if (metadata) {
+      const metaRemoved = metadata.delete(runId);
+      if (metadata.size === 0) {
+        this._runMetadata.delete(stream);
+      }
+      if (metaRemoved) {
+        await this.saveRunMetadata();
+      }
     }
 
     if (removed) {
@@ -214,6 +250,9 @@ export class OutputFilesManager extends PersistentMapManager<
   async deleteStream(stream: StreamTabId): Promise<void> {
     await super.delete(stream);
     this._missingOutputs.delete(stream);
+    if (this._runMetadata.delete(stream)) {
+      await this.saveRunMetadata();
+    }
     await this.saveMissingOutputs();
   }
 
@@ -221,12 +260,19 @@ export class OutputFilesManager extends PersistentMapManager<
   async clear(): Promise<void> {
     await super.clear();
     this._missingOutputs.clear();
+    this._runMetadata.clear();
     await this.saveMissingOutputs();
+    await this.saveRunMetadata();
   }
 
   /** Get all output files */
   getAllFiles(): Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>> {
     return this.getAll();
+  }
+
+  /** Get all stored run metadata */
+  getAllRunMetadata(): Map<StreamTabId, Map<string, TaskRunSessionMetadata>> {
+    return new Map(this._runMetadata);
   }
 
   /** Get all missing outputs */
@@ -241,6 +287,12 @@ export class OutputFilesManager extends PersistentMapManager<
     this.setAll(files);
   }
 
+  setAllRunMetadata(
+    metadata: Map<StreamTabId, Map<string, TaskRunSessionMetadata>>,
+  ): void {
+    this._runMetadata = new Map(metadata);
+  }
+
   /** Set all missing outputs (used during loading) */
   setAllMissingOutputs(
     missing: Map<StreamTabId, Map<string, Map<number, string[]>>>,
@@ -252,6 +304,7 @@ export class OutputFilesManager extends PersistentMapManager<
   async load(): Promise<void> {
     await super.load();
     await this.loadMissingOutputs();
+    await this.loadRunMetadata();
   }
 
   /** Load missing outputs from persistence */
@@ -272,6 +325,20 @@ export class OutputFilesManager extends PersistentMapManager<
     }
   }
 
+  private async loadRunMetadata(): Promise<void> {
+    const saved = this.storage.get<Record<string, unknown>>(
+      WorkspaceStateKey.OUTPUT_RUN_METADATA,
+      {},
+    );
+
+    if (saved && Object.keys(saved).length > 0) {
+      this._runMetadata = this.deserializeRunMetadata(saved);
+      return;
+    }
+
+    this._runMetadata.clear();
+  }
+
   /** Save missing outputs to persistence */
   async saveMissingOutputs(): Promise<void> {
     const obj = Object.fromEntries(
@@ -286,6 +353,76 @@ export class OutputFilesManager extends PersistentMapManager<
       ]),
     );
     await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+  }
+
+  async saveRunMetadata(): Promise<void> {
+    const obj = Object.fromEntries(
+      Array.from(this._runMetadata.entries(), ([stream, runs]) => [
+        stream,
+        Object.fromEntries(runs.entries()),
+      ]),
+    );
+    await this.storage.update(WorkspaceStateKey.OUTPUT_RUN_METADATA, obj);
+  }
+
+  private deserializeRunMetadata(
+    saved: Record<string, unknown>,
+  ): Map<StreamTabId, Map<string, TaskRunSessionMetadata>> {
+    const processed = new Map<
+      StreamTabId,
+      Map<string, TaskRunSessionMetadata>
+    >();
+
+    for (const [stream, raw] of Object.entries(saved)) {
+      if (!raw || typeof raw !== 'object') {
+        processed.set(stream as StreamTabId, new Map());
+        continue;
+      }
+
+      const entries = Object.entries(raw as Record<string, unknown>);
+      const runMap = new Map<string, TaskRunSessionMetadata>();
+
+      for (const [runId, value] of entries) {
+        if (!value || typeof value !== 'object') {
+          continue;
+        }
+
+        const session = this.normalizeSessionMetadata(
+          value as Record<string, unknown>,
+        );
+        if (session) {
+          runMap.set(runId, session);
+        }
+      }
+
+      processed.set(stream as StreamTabId, runMap);
+    }
+
+    return processed;
+  }
+
+  private normalizeSessionMetadata(
+    candidate: Record<string, unknown>,
+  ): TaskRunSessionMetadata | null {
+    const mode = candidate.storageMode;
+    if (mode !== 'workspace' && mode !== 'taskRunStorage') {
+      return null;
+    }
+
+    const runDirectory =
+      typeof candidate.runDirectory === 'string'
+        ? candidate.runDirectory
+        : undefined;
+    const runRelativeRoot =
+      typeof candidate.runRelativeRoot === 'string'
+        ? candidate.runRelativeRoot
+        : undefined;
+
+    return {
+      storageMode: mode,
+      runDirectory,
+      runRelativeRoot,
+    };
   }
 
   private deserializeMissingOutputs(

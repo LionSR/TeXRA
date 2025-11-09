@@ -38,7 +38,7 @@ export class FileList {
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
    */
-  update(filesByRound) {
+  update(filesByRound, sessionMetadata = null) {
     const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
     if (!container) return;
 
@@ -117,13 +117,15 @@ export class FileList {
         const statsSpan = clone.querySelector('.file-stats');
 
         // Use original name if available, otherwise use generated path
-        const displayPath = file.workspacePath || file.original || file.path;
-        const basename = getBasename(displayPath);
+        const displayPath =
+          file.displayPath || file.workspacePath || file.original || file.path;
+        const relativeDisplay = file.relativePath || displayPath;
+        const basename = file.displayName || getBasename(relativeDisplay);
         const idx = Math.max(
-          displayPath.lastIndexOf('/'),
-          displayPath.lastIndexOf('\\'),
+          relativeDisplay.lastIndexOf('/'),
+          relativeDisplay.lastIndexOf('\\'),
         );
-        const dirPath = idx >= 0 ? displayPath.slice(0, idx + 1) : '';
+        const dirPath = idx >= 0 ? relativeDisplay.slice(0, idx + 1) : '';
 
         // Set file data attributes
         if (fileItem) {

@@ -5,11 +5,18 @@ export interface NamedOutputFile {
   source: string;
   path: string;
   workspacePath?: string;
+  runStoragePath?: string | null;
+  relativePath?: string | null;
+  displayName?: string | null;
 }
 
 export interface OutputFileInfo extends DiffStats {
   path: string;
   workspacePath?: string | null;
+  runStoragePath?: string | null;
+  relativePath?: string | null;
+  displayName?: string | null;
+  displayPath?: string | null;
   base?: string | null;
   prev?: string | null;
   original?: string | null;

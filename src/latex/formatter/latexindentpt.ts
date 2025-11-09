@@ -25,8 +25,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     );
 
     const workspacePath = WorkspaceFS.getPath();
+    const absoluteFilePath = path.isAbsolute(filePath)
+      ? filePath
+      : workspacePath
+        ? path.join(workspacePath, filePath)
+        : path.resolve(filePath);
     const isWorkspaceFile =
-      !!workspacePath && filePath.startsWith(workspacePath);
+      !!workspacePath && absoluteFilePath.startsWith(workspacePath);
 
     // Get latexindent config from settings
     const latexindentConfig = getConfig<string>(
@@ -52,8 +57,8 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     await sleep(100);
 
     // Setup cleanup patterns relative to workspace
-    const fileBaseName = path.basename(filePath, '.tex');
-    const fileDir = path.dirname(filePath);
+    const fileBaseName = path.basename(absoluteFilePath, '.tex');
+    const fileDir = path.dirname(absoluteFilePath);
 
     logger.debug(CHANNEL, `File base name: ${fileBaseName}`);
     logger.debug(CHANNEL, `File directory: ${fileDir}`);
@@ -76,9 +81,8 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       for (const pattern of backupPatterns) {
         logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
         const backupFiles = globSync(pattern, {
-          cwd: workspacePath,
           nodir: true,
-          absolute: false,
+          absolute: true,
         });
 
         logger.debug(
@@ -88,8 +92,11 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
         for (const backupFile of backupFiles) {
           try {
-            await WorkspaceFS.delete(backupFile);
-            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+            await AbsoluteFS.delete(backupFile);
+            const displayPath = workspacePath
+              ? WorkspaceFS.relativePath(backupFile)
+              : backupFile;
+            logger.debug(CHANNEL, `Removed backup file: ${displayPath}`);
           } catch (err) {
             logger.warn(
               CHANNEL,
@@ -105,14 +112,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       );
     }
 
-    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
+    const indentLogPath = path.join(fileDir, 'indent.log');
     try {
-      if (isWorkspaceFile) {
-        await WorkspaceFS.delete(indentLogPath);
-      } else {
-        await AbsoluteFS.delete(indentLogPath);
-      }
-      logger.debug(CHANNEL, 'Removed indent.log');
+      await AbsoluteFS.delete(indentLogPath);
+      const displayPath = workspacePath
+        ? WorkspaceFS.relativePath(indentLogPath)
+        : indentLogPath;
+      logger.debug(CHANNEL, `Removed indent.log at ${displayPath}`);
     } catch (err) {
       logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
     }

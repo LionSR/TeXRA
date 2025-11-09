@@ -15,6 +15,7 @@ import type {
   ToolEditApprovalPrompt,
 } from '../types';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { TaskRunSessionMetadata } from '@utils/files';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
@@ -155,6 +156,7 @@ export class WebviewUpdater {
   updateFiles(
     stream: StreamTabId,
     filesByRun: Record<string, { [key: number]: OutputFileInfo[] }>,
+    metadataByRun?: Record<string, TaskRunSessionMetadata>,
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -163,6 +165,7 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_FILES,
       stream,
       filesByRun,
+      metadataByRun,
     });
   }
 

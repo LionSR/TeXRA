@@ -183,6 +183,7 @@ describe('OutputHandler.finalizeRound', () => {
     assert.deepEqual(events[0].filesByRound[0], [
       { path: 'out0.tex', base: null, prev: null, original: null },
     ]);
+    assert.deepEqual(events[0].session, { storageMode: 'workspace' });
     dispose();
   });
 
