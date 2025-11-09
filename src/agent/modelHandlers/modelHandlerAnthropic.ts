@@ -92,7 +92,12 @@ import replacementEngine from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  existsAndNonTrivialFlexible,
+  readFlexible,
+  writeFlexible,
+} from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -1107,16 +1112,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
 
-    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
+    if (!(await existsAndNonTrivialFlexible(outputFile))) {
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
           toolState.assembly.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await WorkspaceFS.write(outputFile, prefill);
+          await writeFlexible(outputFile, prefill);
         } else if (workflowSetting.outputExt === 'xml') {
-          await WorkspaceFS.write(outputFile, prefill + '\n');
+          await writeFlexible(outputFile, prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -1142,7 +1147,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await WorkspaceFS.read(outputFile);
+    let fileContent = await readFlexible(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -1154,7 +1159,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await WorkspaceFS.write(outputFile, fileContent);
+    await writeFlexible(outputFile, fileContent);
 
     // Update the toolState with the actual file content
     toolState.assembly.updateAccumulatedOutput(fileContent);
