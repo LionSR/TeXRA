@@ -178,10 +178,22 @@ export class ProgressViewState {
     this.saveActiveRunIds();
   }
 
-  resolveRunId(stream: StreamTabId, requested?: string | null): string | null {
+  resolveRunId(
+    stream: StreamTabId,
+    requested?: string | null,
+    options?: { persist?: boolean },
+  ): string | null {
+    const persist = options?.persist ?? true;
     const preferred = requested ?? null;
+
+    const candidates = this.collectRunCandidates(stream);
     if (preferred) {
-      this.setActiveRunId(stream, preferred);
+      if (!candidates.has(preferred)) {
+        return null;
+      }
+      if (persist) {
+        this.setActiveRunId(stream, preferred);
+      }
       return preferred;
     }
 
@@ -190,18 +202,21 @@ export class ProgressViewState {
       return current;
     }
 
-    const candidates = this.collectRunCandidates(stream);
     if (candidates.size === 1) {
       const [only] = Array.from(candidates);
       if (only) {
-        this.setActiveRunId(stream, only);
+        if (persist) {
+          this.setActiveRunId(stream, only);
+        }
         return only;
       }
     }
 
     const latest = this.findLatestRunId(stream);
     if (latest) {
-      this.setActiveRunId(stream, latest);
+      if (persist) {
+        this.setActiveRunId(stream, latest);
+      }
       return latest;
     }
 
@@ -236,6 +251,13 @@ export class ProgressViewState {
     for (const runId of usageRuns.keys()) {
       if (runId) {
         candidates.add(runId);
+      }
+    }
+
+    const groups = this._taskGroups.getStreamGroups(stream);
+    for (const group of groups.values()) {
+      if (!group.parentGroupId) {
+        candidates.add(group.id);
       }
     }
 
