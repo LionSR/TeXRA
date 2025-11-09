@@ -38,7 +38,11 @@ export interface ExtendedTokenUsageStats extends TokenUsageStats {
  */
 export const StreamUsageMessageSchema = z.object({
   command: z.literal('updateUsage'),
-  usage: TokenUsageStatsSchema.optional(),
+  stream: z.string(),
+  usageByRun: z
+    .record(z.string(), TokenUsageStatsSchema)
+    .default({})
+    .optional(),
 });
 
 export type StreamUsageMessage = z.infer<typeof StreamUsageMessageSchema>;

@@ -7,6 +7,7 @@ import {
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
+  RunInstructionManager,
 } from '../managers';
 import type { StateStorage } from '../persistence/PersistentMapManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
@@ -17,6 +18,7 @@ import type { AgentFilter } from '../types';
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import type { TaskGroup } from '@logger/LogTypes';
 
 // Types
 import {
@@ -56,6 +58,7 @@ export class ProgressViewState {
   private _taskGroups: TaskGroupManager;
   private _outputFiles: OutputFilesManager;
   private _usageStats: UsageStatsManager;
+  private _runInstructions: RunInstructionManager;
   private _activeStream: StreamTabId = '';
   private _streamSortOrder = 'time';
   private _agentTypeFilter: AgentFilter = 'all';
@@ -70,6 +73,7 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
+  private _activeRunIds: Map<StreamTabId, string | null> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -86,6 +90,7 @@ export class ProgressViewState {
     this._taskGroups = new TaskGroupManager(resolvedStorage);
     this._outputFiles = new OutputFilesManager(resolvedStorage);
     this._usageStats = new UsageStatsManager(resolvedStorage);
+    this._runInstructions = new RunInstructionManager(resolvedStorage);
   }
 
   // Manager accessors - provide direct access to focused managers
@@ -103,6 +108,10 @@ export class ProgressViewState {
 
   get usageStats(): UsageStatsManager {
     return this._usageStats;
+  }
+
+  get runInstructions(): RunInstructionManager {
+    return this._runInstructions;
   }
 
   // Active stream management
@@ -151,6 +160,155 @@ export class ProgressViewState {
 
   clearSessionKindHint(streamTabId: StreamTabId): void {
     this._sessionCategoryHints.delete(streamTabId);
+  }
+
+  setActiveRunId(stream: StreamTabId, runId: string | null): void {
+    this._activeRunIds.set(stream, runId);
+    this.saveActiveRunIds();
+  }
+
+  getActiveRunId(stream: StreamTabId): string | null {
+    return this._activeRunIds.get(stream) ?? null;
+  }
+
+  clearActiveRun(stream: StreamTabId): void {
+    if (!this._activeRunIds.delete(stream)) {
+      return;
+    }
+    this.saveActiveRunIds();
+  }
+
+  resolveRunId(
+    stream: StreamTabId,
+    requested?: string | null,
+    options?: { persist?: boolean },
+  ): string | null {
+    const persist = options?.persist ?? true;
+    const preferred = requested ?? null;
+
+    const candidates = this.collectRunCandidates(stream);
+    if (preferred) {
+      if (!candidates.has(preferred)) {
+        return null;
+      }
+      if (persist) {
+        this.setActiveRunId(stream, preferred);
+      }
+      return preferred;
+    }
+
+    const current = this.getActiveRunId(stream);
+    if (current) {
+      return current;
+    }
+
+    if (candidates.size === 1) {
+      const [only] = Array.from(candidates);
+      if (only) {
+        if (persist) {
+          this.setActiveRunId(stream, only);
+        }
+        return only;
+      }
+    }
+
+    const latest = this.findLatestRunId(stream);
+    if (latest) {
+      if (persist) {
+        this.setActiveRunId(stream, latest);
+      }
+      return latest;
+    }
+
+    return null;
+  }
+
+  private collectRunCandidates(stream: StreamTabId): Set<string> {
+    const candidates = new Set<string>();
+
+    const instructionRuns = this._runInstructions.getInstructions(stream);
+    for (const runId of instructionRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const fileRuns = this._outputFiles.getFiles(stream);
+    for (const runId of fileRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const missingRuns = this._outputFiles.getMissingOutputs(stream);
+    for (const runId of missingRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const usageRuns = this._usageStats.getRunUsage(stream);
+    for (const runId of usageRuns.keys()) {
+      if (runId) {
+        candidates.add(runId);
+      }
+    }
+
+    const groups = this._taskGroups.getStreamGroups(stream);
+    for (const group of groups.values()) {
+      if (!group.parentGroupId) {
+        candidates.add(group.id);
+      }
+    }
+
+    return candidates;
+  }
+
+  private findLatestRunId(stream: StreamTabId): string | null {
+    const groups = this._taskGroups.getStreamGroups(stream);
+    let latest: { id: string; start: number } | null = null;
+
+    for (const group of groups.values()) {
+      if (group.parentGroupId) {
+        continue;
+      }
+
+      const startTime = this.normalizeStartTime(group);
+      if (!latest || startTime >= latest.start) {
+        latest = { id: group.id, start: startTime };
+      }
+    }
+
+    return latest?.id ?? null;
+  }
+
+  private normalizeStartTime(group: TaskGroup): number {
+    if (typeof group.startTime === 'number') {
+      return group.startTime;
+    }
+
+    if (typeof group.startTime === 'string') {
+      const parsed = Date.parse(group.startTime);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+
+    return 0;
+  }
+
+  private loadActiveRunIds(): void {
+    const stored = this.storage.get<Record<string, string | null>>(
+      WorkspaceStateKey.ACTIVE_RUN_IDS,
+      {},
+    );
+
+    this._activeRunIds = new Map(
+      Object.entries(stored).map(([stream, runId]) => [stream, runId ?? null]),
+    );
+  }
+
+  private saveActiveRunIds(): void {
+    const serialized = Object.fromEntries(this._activeRunIds.entries());
+    void this.storage.update(WorkspaceStateKey.ACTIVE_RUN_IDS, serialized);
   }
 
   /**
@@ -244,10 +402,12 @@ export class ProgressViewState {
       this._taskGroups.deleteStream(stream),
       this._outputFiles.deleteStream(stream),
       this._usageStats.deleteStream(stream),
+      this._runInstructions.clearStream(stream),
     ]);
     const removedState = this.taskStates.delete(stream);
     this._executionIds.delete(stream);
     this.clearSessionKindHint(stream);
+    this.clearActiveRun(stream);
 
     // Update active stream if necessary
     if (this._activeStream === stream) {
@@ -263,37 +423,23 @@ export class ProgressViewState {
     this.saveExecutionIds();
   }
 
-  // Stream content erasure (clear content but keep the stream tab and re-run capability)
-  async eraseStreamContent(stream: StreamTabId): Promise<void> {
-    // Clear visual content but keep the stream tab
-    await this._streamTabs.clearContent(stream);
-
-    // Clear display-related data (matching original eraseStream behavior)
-    await Promise.all([
-      this._taskGroups.deleteStream(stream),
-      this._outputFiles.deleteStream(stream),
-    ]);
-    this.clearSessionKindHint(stream);
-
-    // NOTE: Preserve taskStates and executionIds - these are needed for re-run functionality
-    // NOTE: Preserve usageStats - these were not cleared in original implementation
-    // NOTE: Missing outputs are also preserved (not cleared in original)
-  }
-
   async clearAll(): Promise<void> {
     await Promise.all([
       this._streamTabs.clear(),
       this._taskGroups.clear(),
       this._outputFiles.clear(),
       this._usageStats.clear(),
+      this._runInstructions.clear(),
     ]);
     this.taskStates.clear();
     this._executionIds.clear();
     this._sessionCategoryHints.clear();
+    this._activeRunIds.clear();
     this._activeStream = '';
     this.saveActiveStream();
     this.saveTaskStates();
     this.saveExecutionIds();
+    this.saveActiveRunIds();
     this.cleanupToolUseAgentRegistry();
   }
 
@@ -307,6 +453,7 @@ export class ProgressViewState {
       this._taskGroups.load(),
       this._outputFiles.load(),
       this._usageStats.load(),
+      this._runInstructions.load(),
     ]);
 
     // Load dependent state after basic state is loaded
@@ -316,6 +463,7 @@ export class ProgressViewState {
       this.loadExecutionIds(),
       this.loadStreamSortOrder(),
       this.loadAgentTypeFilter(),
+      this.loadActiveRunIds(),
     ]);
   }
 
