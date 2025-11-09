@@ -53,35 +53,39 @@ export class LatexDiffManager {
     workspaceDir?: string;
     displayPath: string;
   }> {
-    const workspaceDir = workspaceCandidate
-      ? path.dirname(toAbsolutePath(workspaceCandidate))
+    const workspaceAbsolute = workspaceCandidate
+      ? toAbsolutePath(workspaceCandidate)
       : undefined;
+    const workspaceExists = workspaceCandidate
+      ? await existsFlexible(workspaceCandidate)
+      : false;
+    const workspaceDir = workspaceAbsolute
+      ? path.dirname(workspaceAbsolute)
+      : undefined;
+    const displayPath = this.fileService.getWorkspaceDisplayPath(
+      workspaceCandidate ?? actualPath,
+    );
 
-    if (await existsFlexible(actualPath)) {
+    if (workspaceAbsolute && workspaceExists) {
       return {
-        actual: actualPath,
+        actual: workspaceAbsolute,
         workspaceDir,
-        displayPath: this.fileService.getWorkspaceDisplayPath(
-          workspaceCandidate ?? actualPath,
-        ),
+        displayPath,
       };
     }
 
-    if (workspaceCandidate && (await existsFlexible(workspaceCandidate))) {
+    if (await existsFlexible(actualPath)) {
       return {
-        actual: workspaceCandidate,
+        actual: toAbsolutePath(actualPath),
         workspaceDir,
-        displayPath:
-          this.fileService.getWorkspaceDisplayPath(workspaceCandidate),
+        displayPath,
       };
     }
 
     return {
       actual: null,
       workspaceDir,
-      displayPath: this.fileService.getWorkspaceDisplayPath(
-        workspaceCandidate ?? actualPath,
-      ),
+      displayPath,
     };
   }
 

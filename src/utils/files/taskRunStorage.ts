@@ -153,6 +153,37 @@ async function moveToTarget(
   }
 }
 
+async function recreateWorkspaceLink(
+  originalPath: string,
+  storagePath: string,
+): Promise<void> {
+  const workspaceRoot = WorkspaceFS.getPath();
+  if (!workspaceRoot) {
+    return;
+  }
+
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  const normalizedOriginal = path.resolve(originalPath);
+  const relativeToWorkspace = path.relative(
+    normalizedWorkspaceRoot,
+    normalizedOriginal,
+  );
+  if (
+    relativeToWorkspace.startsWith('..') ||
+    path.isAbsolute(relativeToWorkspace)
+  ) {
+    return;
+  }
+
+  try {
+    await createSymlink(storagePath, originalPath);
+  } catch (error) {
+    console.warn(
+      `[TaskRunFileService] Failed to mirror ${storagePath} back to ${originalPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 async function createSymlink(
   source: string,
   destination: string,
@@ -275,10 +306,14 @@ export class TaskRunFileService {
 
     await this.ensureRunDirectory();
     const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
-    await moveToTarget(absoluteSource, absolute);
+    const resolvedSource = path.resolve(absoluteSource);
+    await moveToTarget(resolvedSource, absolute);
+    if (resolvedSource !== absolute) {
+      await recreateWorkspaceLink(resolvedSource, absolute);
+    }
     return {
       storagePath: absolute,
-      workspacePath: absoluteSource,
+      workspacePath: resolvedSource,
       relativePath: workspaceRelative,
     };
   }
