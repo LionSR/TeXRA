@@ -59,6 +59,7 @@ class MockHandler extends ModelHandlerDeepSeek {
                 {
                   id: 'c1',
                   type: 'function',
+                  input: '',
                   function: { name: 'echo', arguments: '{"value":"hello"}' },
                 },
               ],
