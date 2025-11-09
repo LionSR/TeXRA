@@ -8,7 +8,12 @@ import * as nunjucks from 'nunjucks';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import {
+  ensureDirFlexible,
+  existsFlexible,
+  readFlexible,
+  writeFlexible,
+} from '@utils/files';
 import { renderPrompt } from '@agent/utils/promptUtils';
 import { getConfig } from '@utils/config';
 
@@ -58,7 +63,7 @@ export class TikzPictureManager {
     channel: string = this.channel,
   ): Promise<[string, string[]][]> {
     try {
-      const content = await WorkspaceFS.read(latexFile);
+      const content = await readFlexible(latexFile);
 
       // Regular expressions to match figure environments and tikzpictures
       const figurePattern =
@@ -117,7 +122,7 @@ export class TikzPictureManager {
       const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
       const filePath = path.join(buildDir, filename);
 
-      await WorkspaceFS.write(filePath, standaloneContent);
+      await writeFlexible(filePath, standaloneContent);
       logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
 
       return filePath;
@@ -144,7 +149,7 @@ export class TikzPictureManager {
       const inputDir = path.dirname(latexFile);
       const inputName = path.parse(path.basename(latexFile)).name;
       const buildDir = path.join(inputDir, 'build', inputName);
-      await WorkspaceFS.createDir(buildDir);
+      await ensureDirFlexible(buildDir);
 
       logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
       const labeledTikzPictures = await this.extract(latexFile, channel);
@@ -175,7 +180,7 @@ export class TikzPictureManager {
           await compileLatex2Pdf(texFile, channel);
 
           const pdfFile = texFile.replace(/\.tex$/, '.pdf');
-          if (await WorkspaceFS.exists(pdfFile)) {
+          if (await existsFlexible(pdfFile)) {
             compiledFiles.push(pdfFile);
             logger.debug(channel, `Successfully compiled: ${pdfFile}`);
           }

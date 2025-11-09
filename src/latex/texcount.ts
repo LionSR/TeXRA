@@ -2,7 +2,7 @@
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { existsFlexible, readFlexible } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -15,7 +15,7 @@ logger.initialize(CHANNEL);
  */
 async function hasChinesePackages(filePath: string): Promise<boolean> {
   try {
-    const content = await WorkspaceFS.read(filePath);
+    const content = await readFlexible(filePath);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -71,7 +71,7 @@ async function validateTexFile(
   filePath: string,
   channel: string,
 ): Promise<ValidationResult> {
-  if (!(await WorkspaceFS.exists(filePath))) {
+  if (!(await existsFlexible(filePath))) {
     const reason = `File ${filePath} does not exist.`;
     logger.warn(channel, reason);
     return { valid: false, reason };

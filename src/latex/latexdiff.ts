@@ -13,7 +13,7 @@ import {
   logErrorMessage,
   formatError,
 } from '@common/errors/errorHandlingUtils';
-import { WorkspaceFS } from '@utils/files';
+import { existsFlexible, readFlexible, writeFlexible } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -72,6 +72,7 @@ export class LaTeXdiffService {
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
+    options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     let diffFileName = '';
     let outputPath = '';
@@ -82,10 +83,9 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      if (
-        !(await WorkspaceFS.exists(inputFile)) ||
-        !(await WorkspaceFS.exists(editedFile))
-      ) {
+      const inputExists = await existsFlexible(inputFile);
+      const editedExists = await existsFlexible(editedFile);
+      if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
         return { success: false, message };
@@ -120,14 +120,14 @@ export class LaTeXdiffService {
       const result = await this.commandExecutor.executeDiff(
         inputFile,
         editedFile,
-        { mathMarkup },
+        { mathMarkup, cwd: options?.cwd },
       );
       if (!result.stdout) {
         throw new Error('Latexdiff produced no output');
       }
 
       // Write and process output
-      await WorkspaceFS.write(outputPath, result.stdout);
+      await writeFlexible(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
       logger.debug(
@@ -263,18 +263,19 @@ export class LaTeXdiffService {
     outputFile: string,
     _round: number,
     mathMarkup?: MathMarkupOption,
+    options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      if (
-        (await WorkspaceFS.exists(baseFile)) &&
-        (await WorkspaceFS.exists(outputFile))
-      ) {
+      const baseExists = await existsFlexible(baseFile);
+      const outputExists = await existsFlexible(outputFile);
+      if (baseExists && outputExists) {
         return await this.runDiff(
           baseFile,
           outputFile,
           '_diff',
           false,
           mathMarkup,
+          options,
         );
       }
 
@@ -292,12 +293,12 @@ export class LaTeXdiffService {
     outputFile1: string,
     outputFile2: string,
     mathMarkup?: MathMarkupOption,
+    options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      if (
-        (await WorkspaceFS.exists(outputFile1)) &&
-        (await WorkspaceFS.exists(outputFile2))
-      ) {
+      const firstExists = await existsFlexible(outputFile1);
+      const secondExists = await existsFlexible(outputFile2);
+      if (firstExists && secondExists) {
         const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
         const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
 
@@ -316,6 +317,7 @@ export class LaTeXdiffService {
           diffSuffix,
           false,
           mathMarkup,
+          options,
         );
       }
 
@@ -333,7 +335,7 @@ export class LaTeXdiffService {
     ...files: string[]
   ): Promise<boolean> {
     for (const file of files) {
-      const content = await WorkspaceFS.read(file);
+      const content = await readFlexible(file);
       if (
         !content.includes('\\begin{document}') ||
         !content.includes('\\end{document}')

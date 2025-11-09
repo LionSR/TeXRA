@@ -61,7 +61,12 @@ import type { ToolFileAttachment } from '@tools/result';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import { WorkspaceFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  existsAndNonTrivialFlexible,
+  readFlexible,
+  writeFlexible,
+} from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 interface UploadedOpenAIResponseAttachment {
@@ -1053,7 +1058,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
-    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
+    if (!(await existsAndNonTrivialFlexible(outputFile))) {
       const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage) {
@@ -1073,7 +1078,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    let fileContent = await WorkspaceFS.read(outputFile);
+    let fileContent = await readFlexible(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     const scratchpad = await xmlUtils.extractScratchpad(
@@ -1084,7 +1089,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await WorkspaceFS.write(outputFile, fileContent);
+    await writeFlexible(outputFile, fileContent);
 
     messages.push(this.createAssistantMessage(fileContent));
 
@@ -1101,7 +1106,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       toolState.assembly.updateAccumulatedOutput(fileContent);
     } else {
       toolState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await WorkspaceFS.write(outputFile, toolState.assembly.accumulatedOutput);
+      await writeFlexible(outputFile, toolState.assembly.accumulatedOutput);
     }
 
     const state = new ConversationRoundState(0);
