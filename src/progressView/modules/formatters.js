@@ -1011,17 +1011,20 @@ export class LogEntryFormatter {
 
     let items = '';
     entries.forEach((d) => {
-      const basePath = String(d.base ?? '');
-      const revisedPath = String(d.revised ?? '');
-      const outputPath = String(d.output ?? '');
+      const baseLabel = String(d.baseLabel ?? '');
+      const revisedLabel = String(d.revisedLabel ?? '');
+      const basePath = d.basePath ? String(d.basePath) : '';
+      const revisedPath = d.revisedPath ? String(d.revisedPath) : '';
+      const diffPath = d.diffPath ? String(d.diffPath) : '';
       const msg = d.message ? String(d.message) : '';
 
       const baseEsc = encodeHtml(basePath);
       const revisedEsc = encodeHtml(revisedPath);
-      const outputEsc = encodeHtml(outputPath);
-
-      const baseName = getBasename(basePath);
-      const revisedName = getBasename(revisedPath);
+      const diffEsc = encodeHtml(diffPath);
+      const baseName = encodeHtml(baseLabel || getBasename(basePath));
+      const revisedName = encodeHtml(
+        revisedLabel || getBasename(revisedPath || basePath),
+      );
 
       let icon = 'codicon-question';
       if (d.status === 'success') {
@@ -1032,11 +1035,17 @@ export class LogEntryFormatter {
 
       const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
 
-      items += `<li class="detail-item"><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
-        baseName,
-      )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
-        revisedName,
-      )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
+      const baseLink = basePath
+        ? `<span class="file-link clickable-link" data-file="${baseEsc}">${baseName}</span>`
+        : `<span>${baseName}</span>`;
+      const revisedLink = revisedPath
+        ? `<span class="file-link clickable-link" data-file="${revisedEsc}">${revisedName}</span>`
+        : `<span>${revisedName}</span>`;
+      const diffLink = diffPath
+        ? `<span class="file-link clickable-link" data-file="${diffEsc}">diff</span>`
+        : '<span>diff</span>';
+
+      items += `<li class="detail-item"><i class="codicon ${icon}"${titleAttr}></i> ${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})</li>`;
     });
 
     const summary =

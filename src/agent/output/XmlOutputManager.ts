@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { WorkspaceFS } from '@utils/files';
+import { readFlexible, writeFlexible } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -129,7 +129,7 @@ export class XmlOutputManager {
     const { dir, name } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await readFlexible(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -139,7 +139,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await WorkspaceFS.write(texFile, namedDocumentContent);
+      await writeFlexible(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -159,7 +159,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await WorkspaceFS.write(texFile, latexDocument);
+        await writeFlexible(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -175,7 +175,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await readFlexible(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -269,8 +269,13 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      await WorkspaceFS.write(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
+      await writeFlexible(texFile, doc.content.trim());
+      outputFiles.push({
+        source,
+        path: texFile,
+        relativePath: texFile,
+        workspacePath: texFile,
+      });
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -287,7 +292,7 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await WorkspaceFS.read(outputFile);
+    const xmlContent = await readFlexible(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -297,6 +302,8 @@ export class XmlOutputManager {
     return {
       source: original || this.agentConfig.inputFile,
       path: processedOutputFile,
+      relativePath: processedOutputFile,
+      workspacePath: processedOutputFile,
     };
   }
 
@@ -318,7 +325,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.read(filePath);
+    let content = await readFlexible(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -335,6 +342,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.write(filePath, content);
+    await writeFlexible(filePath, content);
   }
 }
