@@ -517,8 +517,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   ): Promise<void> {
     const generatedPaths =
       this.provider.state.outputFiles.getKnownFilePaths(stream);
-    const allFiles = new Set<string>(taskState.agentConfig.outputFiles);
-    generatedPaths.forEach((path) => allFiles.add(path));
+    const allFiles = new Set<string>([
+      ...taskState.agentConfig.outputFiles,
+      ...generatedPaths,
+    ]);
 
     const outputFilesArray = Array.from(allFiles);
     const useMultipleOutputs =

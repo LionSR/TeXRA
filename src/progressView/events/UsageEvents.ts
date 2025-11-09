@@ -71,9 +71,11 @@ function findRootGroupId(
 
 /**
  * Compute total usage for a run by preferring direct child task groups when
- * available. Nested descendants are folded into the totals only when the run
- * lacks immediate child usage, mirroring how the progress view surfaces usage
- * at the top level while avoiding double-counting nested data.
+ * available. This mirrors the progress view layout: if the run surfaces
+ * per-round usage, that aggregate is displayed; otherwise we fall back to the
+ * deepest descendants or the run's own usage. The strategy intentionally avoids
+ * combining the run's usage with child totals to prevent double-counting when
+ * agents report rollups at multiple levels.
  */
 function computeRunUsageTotals(
   runId: string,
@@ -82,10 +84,12 @@ function computeRunUsageTotals(
   const directTotals = createEmptyTotals();
   const aggregatedTotals = createEmptyTotals();
   const { groups } = context;
-  const rootCache = context.rootCache ?? new Map<string, string | null>();
-  context.rootCache = rootCache;
+  context.rootCache = context.rootCache ?? new Map<string, string | null>();
+  const rootCache = context.rootCache;
 
   let runUsage: TaskGroup['usage'] | undefined;
+  let hasDirectChildren = false;
+  let hasAggregatedDescendants = false;
 
   for (const group of groups.values()) {
     const usage = group.usage;
@@ -99,6 +103,7 @@ function computeRunUsageTotals(
     }
 
     if (group.parentGroupId === runId) {
+      hasDirectChildren = true;
       applyUsage(directTotals, usage);
       continue;
     }
@@ -109,27 +114,17 @@ function computeRunUsageTotals(
 
     const rootId = findRootGroupId(group.id, { ...context, rootCache });
     if (rootId === runId) {
+      hasAggregatedDescendants = true;
       applyUsage(aggregatedTotals, usage);
     }
   }
 
-  const hasDirect =
-    directTotals.inputTokens !== 0 ||
-    directTotals.outputTokens !== 0 ||
-    directTotals.cost !== 0;
-  const hasAggregated =
-    aggregatedTotals.inputTokens !== 0 ||
-    aggregatedTotals.outputTokens !== 0 ||
-    aggregatedTotals.cost !== 0;
-
   if (runUsage) {
-    if (hasDirect) {
-      applyUsage(directTotals, runUsage);
+    if (hasDirectChildren) {
       return directTotals;
     }
 
-    if (hasAggregated) {
-      applyUsage(aggregatedTotals, runUsage);
+    if (hasAggregatedDescendants) {
       return aggregatedTotals;
     }
 
@@ -140,11 +135,11 @@ function computeRunUsageTotals(
     };
   }
 
-  if (hasDirect) {
+  if (hasDirectChildren) {
     return directTotals;
   }
 
-  if (hasAggregated) {
+  if (hasAggregatedDescendants) {
     return aggregatedTotals;
   }
 

@@ -59,11 +59,10 @@ export class UsageSummary {
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
   computeTotal() {
-    const activeRunId = progressViewState.resolveActiveRunId(
-      progressViewState.activeStream,
-    );
-    if (activeRunId) {
-      const usage = progressViewState.getRunUsage(activeRunId);
+    const stream = progressViewState.activeStream;
+    const activeRunId = progressViewState.resolveActiveRunId(stream);
+    if (stream && activeRunId) {
+      const usage = progressViewState.getRunUsage(stream, activeRunId);
       if (usage) {
         return {
           inputTokens: usage.inputTokens || 0,

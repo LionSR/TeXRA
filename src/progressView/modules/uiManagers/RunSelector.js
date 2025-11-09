@@ -54,6 +54,10 @@ export class RunSelector {
       return;
     }
 
+    if (!this._domReady) {
+      return;
+    }
+
     this._initScheduled = true;
     queueMicrotask(() => {
       if (!this._domReady) {
