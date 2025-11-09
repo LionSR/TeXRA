@@ -212,6 +212,87 @@ describe('OutputHandler.finalizeRound', () => {
   });
 });
 
+describe('OutputHandler relocation helpers', () => {
+  it('skips relocating processed entries that match the raw output path', async () => {
+    const handler = new OutputHandler(
+      baseSetting,
+      baseConfig,
+      0,
+      [],
+      new AgentLogger('TestRelocationHandler'),
+    );
+
+    (
+      handler as unknown as { cleanupLatexBackups: () => Promise<void> }
+    ).cleanupLatexBackups = async () => {};
+
+    const relocations: string[] = [];
+    const relocationFor = (target: string) => ({
+      storagePath: `/storage/${target}`,
+      relativePath: `rel/${target}`,
+      workspacePath: `/workspace/${target}`,
+    });
+
+    (
+      handler as unknown as {
+        fileService: { relocateToRunStorage: (path: string) => Promise<any> };
+      }
+    ).fileService = {
+      relocateToRunStorage: async (target: string) => {
+        relocations.push(target);
+        return relocationFor(target);
+      },
+    };
+
+    type NamedList = Array<{
+      source: string;
+      path: string;
+      relativePath: string;
+      workspacePath?: string;
+    }>;
+
+    const processed: NamedList = [
+      {
+        source: 'output.xml',
+        path: 'output.tex',
+        relativePath: 'output.tex',
+      },
+      {
+        source: 'output.xml',
+        path: 'summary.tex',
+        relativePath: 'summary.tex',
+        workspacePath: 'workspace/summary.tex',
+      },
+    ];
+
+    const result = await (
+      handler as unknown as {
+        relocateRoundArtifacts: (
+          rawOutputPath: string,
+          processed: NamedList,
+        ) => Promise<{ raw: string; processed: NamedList }>;
+      }
+    ).relocateRoundArtifacts('output.tex', processed);
+
+    assert.deepEqual(relocations, ['output.tex', 'summary.tex']);
+    assert.strictEqual(result.raw, '/storage/output.tex');
+    assert.deepEqual(result.processed, [
+      {
+        source: 'output.xml',
+        path: '/storage/output.tex',
+        relativePath: 'rel/output.tex',
+        workspacePath: '/workspace/output.tex',
+      },
+      {
+        source: 'output.xml',
+        path: '/storage/summary.tex',
+        relativePath: 'rel/summary.tex',
+        workspacePath: 'workspace/summary.tex',
+      },
+    ]);
+  });
+});
+
 describe('OutputHandler XML summaries', () => {
   const originalRead = WorkspaceFS.read;
 

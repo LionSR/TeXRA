@@ -97,4 +97,24 @@ suite('taskRunStorage moveToTarget', () => {
 
     await assert.rejects(fs.stat(sourceDir));
   });
+
+  test('retries move when destination path includes a blocking file (ENOTDIR)', async () => {
+    const tmpRoot = await createTempDir('texra-run-');
+    const sourceDir = path.join(tmpRoot, 'source3');
+    const destDir = path.join(tmpRoot, 'dest3');
+
+    await fs.mkdir(sourceDir, { recursive: true });
+    await fs.writeFile(path.join(sourceDir, 'file.txt'), 'content');
+
+    await fs.writeFile(destDir, 'stale-file');
+
+    await withPatchedRename('ENOTDIR', async () => {
+      await moveToTarget(sourceDir, destDir);
+    });
+
+    const destEntries = await fs.readdir(destDir);
+    assert.deepEqual(destEntries.sort(), ['file.txt']);
+
+    await assert.rejects(fs.stat(sourceDir));
+  });
 });
