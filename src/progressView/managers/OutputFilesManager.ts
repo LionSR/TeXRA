@@ -6,15 +6,24 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '../persistence/PersistentMapManager';
+import { normalizeRunId } from '../constants/runIds';
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFS } from '@utils/files';
 
 // Types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+
+const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<OutputFileInfo>;
+  return typeof candidate.path === 'string' && candidate.path.length > 0;
+};
 
 /**
  * Manages output files collection with persistence and file existence validation.
@@ -22,12 +31,13 @@ import type { OutputFileInfo } from '@agent/output/types';
  */
 export class OutputFilesManager extends PersistentMapManager<
   StreamTabId,
-  Map<number, OutputFileInfo[]>
+  Map<string, Map<number, OutputFileInfo[]>>
 > {
-  private _missingOutputs: Map<StreamTabId, Map<number, string[]>> = new Map();
+  private _missingOutputs: Map<
+    StreamTabId,
+    Map<string, Map<number, string[]>>
+  > = new Map();
   private readonly logger: AgentLogger;
-  private totalFilesProcessed = 0;
-  private totalFilesRemoved = 0;
 
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
@@ -37,16 +47,40 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
+    groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    let existing = this.items.get(stream);
-    if (!existing) {
-      existing = new Map();
-      this.items.set(stream, existing);
+    const runId = normalizeRunId(groupId);
+
+    let streamRuns = this.items.get(stream);
+    if (!streamRuns) {
+      streamRuns = new Map();
+      this.items.set(stream, streamRuns);
+    }
+
+    let runRounds = streamRuns.get(runId);
+    if (!runRounds) {
+      runRounds = new Map();
+      streamRuns.set(runId, runRounds);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
-      existing.set(Number(round), files);
+      const roundNum = Number.parseInt(round, 10);
+      if (Number.isNaN(roundNum)) {
+        this.logger.warn(
+          `Invalid round number '${round}' for stream ${stream}`,
+        );
+        continue;
+      }
+      const normalizedFiles = (Array.isArray(files) ? files : []).filter(
+        (file) => isValidOutputFile(file),
+      );
+      if (normalizedFiles.length === 0) {
+        runRounds.delete(roundNum);
+        continue;
+      }
+
+      runRounds.set(roundNum, normalizedFiles);
     }
 
     await this.save();
@@ -55,30 +89,70 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Update missing outputs for a stream */
   async updateMissingOutputs(
     stream: StreamTabId,
+    groupId: string | null | undefined,
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
+    const runId = normalizeRunId(groupId);
+
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
       streamMissing = new Map();
       this._missingOutputs.set(stream, streamMissing);
     }
 
+    let runMissing = streamMissing.get(runId);
+    if (!runMissing) {
+      runMissing = new Map();
+      streamMissing.set(runId, runMissing);
+    }
+
     for (const [round, files] of Object.entries(filesByRound)) {
-      const roundNum = parseInt(round, 10);
-      streamMissing.set(roundNum, files);
+      const roundNum = Number.parseInt(round, 10);
+      if (Number.isNaN(roundNum)) {
+        this.logger.warn(
+          `Invalid missing-output round '${round}' for stream ${stream}`,
+        );
+        continue;
+      }
+      runMissing.set(roundNum, files);
     }
 
     await this.saveMissingOutputs();
   }
 
   /** Get output files for a stream */
-  getFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
-    const files = this.items.get(stream);
-    return files ? new Map(files) : new Map();
+  getFiles(stream: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> {
+    const runs = this.items.get(stream);
+    return runs ? new Map(runs) : new Map();
+  }
+
+  /**
+   * Return a flattened set of file paths known for the provided stream.
+   * Includes both generated artifacts and their original counterparts.
+   */
+  getKnownFilePaths(stream: StreamTabId): Set<string> {
+    const paths = new Set<string>();
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return paths;
+    }
+
+    for (const runRounds of runs.values()) {
+      for (const infos of runRounds.values()) {
+        for (const info of infos) {
+          paths.add(info.path);
+          if (info.original) {
+            paths.add(info.original);
+          }
+        }
+      }
+    }
+
+    return paths;
   }
 
   /** Get missing outputs for a stream */
-  getMissingOutputs(stream: StreamTabId): Map<number, string[]> {
+  getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
     const missing = this._missingOutputs.get(stream);
     return missing ? new Map(missing) : new Map();
   }
@@ -88,12 +162,52 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.delete(stream);
   }
 
+  async clearRunFiles(
+    stream: StreamTabId,
+    groupId: string | null | undefined,
+  ): Promise<void> {
+    const runId = normalizeRunId(groupId);
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return;
+    }
+
+    const removed = runs.delete(runId);
+    if (runs.size === 0) {
+      this.items.delete(stream);
+    }
+
+    if (removed) {
+      await this.save();
+    }
+  }
+
   /** Clear missing outputs for a stream */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
     if (!this._missingOutputs.delete(stream)) {
       return;
     }
     await this.saveMissingOutputs();
+  }
+
+  async clearRunMissingOutputs(
+    stream: StreamTabId,
+    groupId: string | null | undefined,
+  ): Promise<void> {
+    const runId = normalizeRunId(groupId);
+    const runs = this._missingOutputs.get(stream);
+    if (!runs) {
+      return;
+    }
+
+    const removed = runs.delete(runId);
+    if (runs.size === 0) {
+      this._missingOutputs.delete(stream);
+    }
+
+    if (removed) {
+      await this.saveMissingOutputs();
+    }
   }
 
   /** Delete all files for a stream */
@@ -111,43 +225,41 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /** Get all output files */
-  getAllFiles(): Map<StreamTabId, Map<number, OutputFileInfo[]>> {
+  getAllFiles(): Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>> {
     return this.getAll();
   }
 
   /** Get all missing outputs */
-  getAllMissingOutputs(): Map<StreamTabId, Map<number, string[]>> {
+  getAllMissingOutputs(): Map<StreamTabId, Map<string, Map<number, string[]>>> {
     return new Map(this._missingOutputs);
   }
 
   /** Set all output files (used during loading) */
-  setAllFiles(files: Map<StreamTabId, Map<number, OutputFileInfo[]>>): void {
+  setAllFiles(
+    files: Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>>,
+  ): void {
     this.setAll(files);
   }
 
   /** Set all missing outputs (used during loading) */
-  setAllMissingOutputs(missing: Map<StreamTabId, Map<number, string[]>>): void {
+  setAllMissingOutputs(
+    missing: Map<StreamTabId, Map<string, Map<number, string[]>>>,
+  ): void {
     this._missingOutputs = new Map(missing);
   }
 
   /** Load output files from persistence and clean up missing files */
   async load(): Promise<void> {
-    this.totalFilesProcessed = 0;
-    this.totalFilesRemoved = 0;
     await super.load();
     await this.loadMissingOutputs();
-    if (this.totalFilesRemoved > 0) {
-      this.logger.info(
-        `File cleanup completed: processed ${this.totalFilesProcessed} files, removed ${this.totalFilesRemoved} missing files`,
-      );
-    }
   }
 
   /** Load missing outputs from persistence */
   private async loadMissingOutputs(): Promise<void> {
-    const saved = this.storage.get<{
-      [key: string]: { [key: number]: string[] };
-    }>(WorkspaceStateKey.MISSING_OUTPUTS, {});
+    const saved = this.storage.get<Record<string, unknown>>(
+      WorkspaceStateKey.MISSING_OUTPUTS,
+      {},
+    );
 
     if (saved && Object.keys(saved).length > 0) {
       this._missingOutputs = this.deserializeMissingOutputs(saved);
@@ -163,24 +275,62 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Save missing outputs to persistence */
   async saveMissingOutputs(): Promise<void> {
     const obj = Object.fromEntries(
-      Array.from(this._missingOutputs.entries(), ([stream, rounds]) => [
+      Array.from(this._missingOutputs.entries(), ([stream, runs]) => [
         stream,
-        Object.fromEntries(rounds.entries()),
+        Object.fromEntries(
+          Array.from(runs.entries(), ([runId, rounds]) => [
+            runId,
+            Object.fromEntries(rounds.entries()),
+          ]),
+        ),
       ]),
     );
     await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
   }
 
-  private deserializeMissingOutputs(saved: {
-    [key: string]: { [key: number]: string[] };
-  }): Map<StreamTabId, Map<number, string[]>> {
-    const processed = new Map<StreamTabId, Map<number, string[]>>();
+  private deserializeMissingOutputs(
+    saved: Record<string, unknown>,
+  ): Map<StreamTabId, Map<string, Map<number, string[]>>> {
+    const processed = new Map<
+      StreamTabId,
+      Map<string, Map<number, string[]>>
+    >();
 
-    for (const [stream, rounds] of Object.entries(saved)) {
-      const roundEntries = Object.entries(rounds).map(
-        ([round, files]) => [parseInt(round, 10), files] as [number, string[]],
+    for (const [stream, raw] of Object.entries(saved)) {
+      if (!raw || typeof raw !== 'object') {
+        processed.set(stream, new Map());
+        continue;
+      }
+
+      const entries = Object.entries(raw as Record<string, unknown>);
+      const looksLegacy = entries.every(
+        ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
       );
-      processed.set(stream, new Map(roundEntries));
+
+      const runMap = new Map<string, Map<number, string[]>>();
+
+      if (looksLegacy) {
+        const rounds = this.deserializeRoundMap<string>(
+          raw as Record<string, unknown>,
+        );
+        if (rounds.size > 0) {
+          runMap.set(normalizeRunId(null), rounds);
+        }
+      } else {
+        for (const [runId, value] of entries) {
+          if (!value || typeof value !== 'object') {
+            continue;
+          }
+          const rounds = this.deserializeRoundMap<string>(
+            value as Record<string, unknown>,
+          );
+          if (rounds.size > 0) {
+            runMap.set(runId, rounds);
+          }
+        }
+      }
+
+      processed.set(stream, runMap);
     }
 
     return processed;
@@ -201,54 +351,106 @@ export class OutputFilesManager extends PersistentMapManager<
       return false;
     }
 
-    this._missingOutputs = this.deserializeMissingOutputs(legacy);
+    const converted: Record<
+      string,
+      Record<string, { [key: number]: string[] }>
+    > = {};
+
+    for (const [stream, rounds] of Object.entries(legacy)) {
+      converted[stream] = { [normalizeRunId(null)]: rounds };
+    }
+
+    this._missingOutputs = this.deserializeMissingOutputs(converted);
     await this.saveMissingOutputs();
     await this.storage.update(legacyKey, undefined as never);
     return true;
   }
 
+  private deserializeRoundMap<T>(
+    record: Record<string, unknown>,
+    validator?: (value: unknown) => value is T,
+  ): Map<number, T[]> {
+    const roundMap = new Map<number, T[]>();
+
+    for (const [roundKey, value] of Object.entries(record)) {
+      const round = Number.parseInt(roundKey, 10);
+      if (Number.isNaN(round)) {
+        this.logger.warn(`Invalid round number '${roundKey}' during load`);
+        continue;
+      }
+      if (!Array.isArray(value)) {
+        continue;
+      }
+
+      if (!validator) {
+        roundMap.set(round, value as T[]);
+        continue;
+      }
+
+      const filtered = (value as unknown[]).filter((entry) => validator(entry));
+      if (filtered.length > 0) {
+        roundMap.set(round, filtered as T[]);
+      }
+    }
+
+    return roundMap;
+  }
+
   protected override serialize(
-    value: Map<number, OutputFileInfo[]>,
+    value: Map<string, Map<number, OutputFileInfo[]>>,
     _key: StreamTabId,
   ): unknown {
-    return Object.fromEntries(value.entries());
+    const runs = Object.fromEntries(
+      Array.from(value.entries(), ([runId, rounds]) => [
+        runId,
+        Object.fromEntries(rounds.entries()),
+      ]),
+    );
+    return runs;
   }
 
   /** Validate and normalize loaded output files */
   protected override async deserialize(
     data: unknown,
-    streamId: StreamTabId,
-  ): Promise<Map<number, OutputFileInfo[]>> {
+    _streamId: StreamTabId,
+  ): Promise<Map<string, Map<number, OutputFileInfo[]>>> {
     if (!data || typeof data !== 'object') {
       return new Map();
     }
 
-    const rounds = data as Record<string, unknown>;
-    const roundMap = new Map<number, OutputFileInfo[]>();
+    const record = data as Record<string, unknown>;
+    const entries = Object.entries(record);
+    const looksLegacy = entries.every(
+      ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
+    );
 
-    for (const [roundKey, value] of Object.entries(rounds)) {
-      const round = Number.parseInt(roundKey, 10);
-      if (Number.isNaN(round) || !Array.isArray(value)) {
+    const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
+
+    if (looksLegacy) {
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(
+        record,
+        isValidOutputFile,
+      );
+      if (rounds.size > 0) {
+        runMap.set(normalizeRunId(null), rounds);
+      }
+      return runMap;
+    }
+
+    for (const [runId, value] of entries) {
+      if (!value || typeof value !== 'object') {
         continue;
       }
 
-      const infos = value as OutputFileInfo[];
-      this.totalFilesProcessed += infos.length;
-
-      try {
-        const filtered = await WorkspaceFS.filterExistingFiles(infos);
-        const removed = infos.length - filtered.length;
-        if (removed > 0) {
-          this.totalFilesRemoved += removed;
-        }
-        if (filtered.length > 0) {
-          roundMap.set(round, filtered);
-        }
-      } catch {
-        roundMap.set(round, infos);
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(
+        value as Record<string, unknown>,
+        isValidOutputFile,
+      );
+      if (rounds.size > 0) {
+        runMap.set(runId, rounds);
       }
     }
 
-    return roundMap;
+    return runMap;
   }
 }

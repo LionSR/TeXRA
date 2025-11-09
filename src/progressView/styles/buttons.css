@@ -9,20 +9,13 @@
   color: var(--vscode-testing-iconFailed, #f14c4c);
 }
 
-.pack-button,
-.clean-button,
-.clear-button {
+.pack-button {
   margin-left: var(--spacing-tiny);
 }
 
 .run-button {
   margin-left: var(--spacing-tiny);
   color: var(--vscode-testing-runAction, #2ea043);
-}
-
-/* Codicon override for trash icon */
-.codicon-trash:before {
-  content: '\eb9f';
 }
 
 #toolbarContainer .toolbar-button--hidden {

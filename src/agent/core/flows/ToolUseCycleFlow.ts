@@ -161,8 +161,7 @@ const ToolCallPayloadSchema =
       if (typeof candidate === 'string') {
         const trimmed = candidate.trim();
         if (!trimmed) {
-          input = {};
-          break;
+          continue;
         }
         try {
           input = JSON.parse(trimmed);

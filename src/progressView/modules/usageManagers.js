@@ -27,8 +27,31 @@ export class UsageSummary {
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
-    // Clear the summary - we're showing total usage in the files section now
-    this._summaryElem.textContent = '';
+    const inputTokens = totals?.inputTokens ?? 0;
+    const outputTokens = totals?.outputTokens ?? 0;
+    const cost = totals?.cost ?? 0;
+
+    if (!inputTokens && !outputTokens && !cost) {
+      this._summaryElem.textContent = '';
+      this._summaryElem.removeAttribute('aria-label');
+      return;
+    }
+
+    const parts = [
+      `${formatTokens(inputTokens)}`,
+      `${formatTokens(outputTokens)}`,
+      `$${cost.toFixed(3)}`,
+    ];
+
+    this._summaryElem.innerHTML = `
+      <i class="codicon codicon-meter"></i>
+      <span class="run-summary__label">Total usage:</span>
+      <span class="run-summary__value">${parts.join(' · ')}</span>
+    `;
+    this._summaryElem.setAttribute(
+      'aria-label',
+      `Total usage ${parts.join(', ')}`,
+    );
   }
 
   /**
@@ -36,16 +59,20 @@ export class UsageSummary {
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
   computeTotal() {
-    const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const group of taskGroups.values()) {
-      if (group.usage) {
-        totals.inputTokens += group.usage.inputTokens || 0;
-        totals.outputTokens += group.usage.outputTokens || 0;
-        totals.cost += group.usage.cost || 0;
+    const stream = progressViewState.activeStream;
+    const activeRunId = progressViewState.resolveActiveRunId(stream);
+    if (stream && activeRunId) {
+      const usage = progressViewState.getRunUsage(stream, activeRunId);
+      if (usage) {
+        return {
+          inputTokens: usage.inputTokens || 0,
+          outputTokens: usage.outputTokens || 0,
+          cost: usage.cost || 0,
+        };
       }
     }
-    return totals;
+
+    return { inputTokens: 0, outputTokens: 0, cost: 0 };
   }
 }
 
