@@ -54,7 +54,21 @@ export async function writeFlexible(
     return;
   }
 
-  await WorkspaceFS.write(target, content);
+  try {
+    await WorkspaceFS.write(target, content);
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code !== 'ELOOP') {
+      throw error;
+    }
+
+    const absoluteTarget = WorkspaceFS.fullPath(target);
+    await AbsoluteFS.delete(absoluteTarget, {
+      recursive: true,
+      useTrash: false,
+    });
+    await WorkspaceFS.write(target, content);
+  }
 }
 
 export async function ensureDirFlexible(target: string): Promise<void> {

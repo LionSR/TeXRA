@@ -129,7 +129,8 @@ export async function moveToTarget(
     if (
       err.code === 'EEXIST' ||
       err.code === 'EISDIR' ||
-      err.code === 'ENOTEMPTY'
+      err.code === 'ENOTEMPTY' ||
+      err.code === 'ENOTDIR'
     ) {
       await fs.rm(resolvedDestination, { recursive: true, force: true });
       await fs.rename(resolvedSource, resolvedDestination);

@@ -180,7 +180,9 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  private async cleanupLatexBackups(originalPath?: string | null): Promise<void> {
+  private async cleanupLatexBackups(
+    originalPath?: string | null,
+  ): Promise<void> {
     if (!originalPath) {
       return;
     }
@@ -399,16 +401,34 @@ export class OutputHandler implements IOutputHandler {
     processed: NamedOutputFile[];
   }> {
     let relocatedRaw = rawOutputPath;
+    let rawRelocation:
+      | {
+          storagePath: string;
+          relativePath: string;
+          workspacePath: string;
+        }
+      | undefined;
+
     if (rawOutputPath) {
       await this.cleanupLatexBackups(rawOutputPath);
-      const relocation =
+      rawRelocation =
         await this.fileService.relocateToRunStorage(rawOutputPath);
-      relocatedRaw = relocation.storagePath;
+      relocatedRaw = rawRelocation.storagePath;
     }
 
     const relocatedProcessed: NamedOutputFile[] = [];
     for (const entry of processed) {
       try {
+        if (rawRelocation && entry.path === rawOutputPath) {
+          relocatedProcessed.push({
+            ...entry,
+            path: rawRelocation.storagePath,
+            relativePath: rawRelocation.relativePath,
+            workspacePath: entry.workspacePath ?? rawRelocation.workspacePath,
+          });
+          continue;
+        }
+
         await this.cleanupLatexBackups(entry.path);
         const relocation = await this.fileService.relocateToRunStorage(
           entry.path,
