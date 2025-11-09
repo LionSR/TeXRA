@@ -135,9 +135,13 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     }
 
     const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
+    const indentLogWorkspacePath =
+      isWorkspaceFile && workspacePath
+        ? WorkspaceFS.relativePath(indentLogPath)
+        : null;
     try {
-      if (isWorkspaceFile) {
-        await WorkspaceFS.delete(indentLogPath);
+      if (isWorkspaceFile && indentLogWorkspacePath) {
+        await WorkspaceFS.delete(indentLogWorkspacePath);
       } else {
         await AbsoluteFS.delete(indentLogPath);
       }
