@@ -71,6 +71,7 @@ export class OutputHandler implements IOutputHandler {
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
+  private currentRunId: string | null;
 
   constructor(
     agentSetting: AgentSetting,
@@ -109,6 +110,11 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
+    this.currentRunId = null;
+  }
+
+  public setActiveRun(runId?: string | null): void {
+    this.currentRunId = runId ?? null;
   }
 
   private async withOutputStage<T>(
@@ -398,6 +404,7 @@ export class OutputHandler implements IOutputHandler {
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
+            groupId: this.currentRunId ?? undefined,
             filesByRound: { [currRound]: [] },
           });
           return;
@@ -448,6 +455,7 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
+          groupId: this.currentRunId ?? undefined,
           filesByRound: { [currRound]: missing },
         });
       },
@@ -495,6 +503,7 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
+          groupId: this.currentRunId ?? undefined,
           filesByRound: { [currRound]: fileInfos },
         });
 
@@ -675,6 +684,7 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
+              groupId: this.currentRunId ?? undefined,
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, [], []);
