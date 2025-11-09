@@ -169,6 +169,66 @@ describe('OutputHandler.getRoundMapping', () => {
   });
 });
 
+describe('OutputHandler.processOutputFiles', () => {
+  const originalRead = WorkspaceFS.read;
+
+  afterEach(() => {
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read =
+      originalRead;
+  });
+
+  it('processes XML for direct agents without scratchpad prefills', async () => {
+    const directSetting: AgentSetting = {
+      ...baseSetting,
+      agentType: AgentType.Direct,
+      prefills: [],
+    };
+    const handler = new OutputHandler(
+      directSetting,
+      baseConfig,
+      0,
+      [],
+      new AgentLogger('TestDirectXmlProcessing'),
+    );
+
+    const processedCalls: string[] = [];
+    handler.indentLatexFile = async () => {};
+    handler.xmlManager.processSingleXmlOutput = async (filePath: string) => {
+      processedCalls.push(filePath);
+      return {
+        source: 'input.tex',
+        path: 'output.tex',
+        workspacePath: 'output.tex',
+      };
+    };
+
+    (handler as unknown as { fileService: any }).fileService = {
+      hasRunDirectory: () => false,
+      resolveExpectedPath: (target: string) => target,
+      relocateToRunStorage: async (target: string) => ({
+        storagePath: target,
+        workspacePath: target,
+        relativePath: target,
+      }),
+      getWorkspaceDisplayPath: (target: string) => target,
+    };
+
+    (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (
+      filePath: string,
+    ) => {
+      if (filePath === 'out.xml') {
+        return '<document>\\section{A}</document>';
+      }
+      return '';
+    };
+
+    await handler.processOutputFiles('out.xml', 0);
+
+    assert.deepEqual(processedCalls, ['out.xml']);
+    assert.deepEqual(handler.ensureRound(0), ['output.tex']);
+  });
+});
+
 describe('OutputHandler.finalizeRound', () => {
   it('emits addOutputFiles and validates when endTurn', async () => {
     const handler = new MockOutputHandler(baseSetting, baseConfig);

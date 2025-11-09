@@ -59,23 +59,29 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     logger.debug(CHANNEL, `File directory: ${fileDir}`);
     logger.debug(CHANNEL, `Workspace path: ${workspacePath}`);
 
-    // Get all backup files matching the patterns, relative to workspace
-    if (isWorkspaceFile && workspacePath) {
-      const backupPatterns = [
-        `${fileBaseName}.tex.bak*`,
-        `${fileBaseName}.tex.bak`,
-        `${fileBaseName}.bak*`,
-        `${fileBaseName}.bak`,
-      ].map((pattern) => path.join(fileDir, pattern).replace(/\\/g, '/'));
+    const backupPatterns = [
+      `${fileBaseName}.tex.bak*`,
+      `${fileBaseName}.tex.bak`,
+      `${fileBaseName}.bak*`,
+      `${fileBaseName}.bak`,
+    ];
 
+    const cleanupTargets = new Set<string>();
+
+    if (workspacePath && isWorkspaceFile) {
+      const relativeDir = path.relative(workspacePath, fileDir);
       logger.debug(
         CHANNEL,
-        `Backup patterns: ${JSON.stringify(backupPatterns)}`,
+        `Workspace backup patterns: ${JSON.stringify(backupPatterns)}`,
       );
 
       for (const pattern of backupPatterns) {
-        logger.debug(CHANNEL, `Searching for pattern: ${pattern}`);
-        const backupFiles = globSync(pattern, {
+        const globPattern = path.join(relativeDir, pattern).replace(/\\/g, '/');
+        logger.debug(
+          CHANNEL,
+          `Searching workspace backups with pattern: ${globPattern}`,
+        );
+        const backupFiles = globSync(globPattern, {
           cwd: workspacePath,
           nodir: true,
           absolute: false,
@@ -83,26 +89,49 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
         logger.debug(
           CHANNEL,
-          `Found backup files for pattern ${pattern}: ${JSON.stringify(backupFiles)}`,
+          `Found workspace backup files: ${JSON.stringify(backupFiles)}`,
         );
-
-        for (const backupFile of backupFiles) {
-          try {
-            await WorkspaceFS.delete(backupFile);
-            logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
-          } catch (err) {
-            logger.warn(
-              CHANNEL,
-              `Error removing backup file ${backupFile}: ${err}`,
-            );
-          }
-        }
+        backupFiles.forEach((file) => cleanupTargets.add(file));
       }
     } else {
       logger.debug(
         CHANNEL,
-        `Skipping workspace backup cleanup for ${filePath} (outside workspace)`,
+        `Collecting backups outside workspace for ${filePath}`,
       );
+
+      for (const pattern of backupPatterns) {
+        const globPattern = path.join(fileDir, pattern).replace(/\\/g, '/');
+        logger.debug(
+          CHANNEL,
+          `Searching external backups with pattern: ${globPattern}`,
+        );
+        const backupFiles = globSync(globPattern, {
+          nodir: true,
+          absolute: true,
+        });
+
+        logger.debug(
+          CHANNEL,
+          `Found external backup files: ${JSON.stringify(backupFiles)}`,
+        );
+        backupFiles.forEach((file) => cleanupTargets.add(file));
+      }
+    }
+
+    for (const backupFile of cleanupTargets) {
+      try {
+        if (isWorkspaceFile && workspacePath) {
+          await WorkspaceFS.delete(backupFile);
+        } else {
+          await AbsoluteFS.delete(backupFile);
+        }
+        logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
+      } catch (err) {
+        logger.warn(
+          CHANNEL,
+          `Error removing backup file ${backupFile}: ${err}`,
+        );
+      }
     }
 
     const indentLogPath = path.join(path.dirname(filePath), 'indent.log');

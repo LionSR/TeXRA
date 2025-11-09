@@ -43,6 +43,7 @@ import {
   AbsoluteFS,
   TaskRunFileService,
   readFlexible,
+  existsFlexible,
 } from '@utils/files';
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
@@ -433,9 +434,27 @@ export class OutputHandler implements IOutputHandler {
       async (scope) => {
         this.ensureRound(currRound);
         if (!this.rawOutputs[currRound]) {
-          this.rawOutputs[currRound] = outputFile
-            ? this.fileService.resolveExpectedPath(outputFile)
-            : null;
+          let resolved: string | null = null;
+          if (outputFile) {
+            const candidates: string[] = [];
+            if (this.fileService.hasRunDirectory()) {
+              candidates.push(this.fileService.resolveExpectedPath(outputFile));
+            }
+            candidates.push(outputFile);
+
+            for (const candidate of candidates) {
+              if (candidate && (await existsFlexible(candidate))) {
+                resolved = candidate;
+                break;
+              }
+            }
+
+            if (!resolved) {
+              resolved = outputFile;
+            }
+          }
+
+          this.rawOutputs[currRound] = resolved;
         }
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -575,13 +594,24 @@ export class OutputHandler implements IOutputHandler {
                 /<scratchpad\s*>/i.test(prefill),
               ) ?? false;
             const shouldProcessXml =
-              this.agentSetting.agentType === AgentType.CoT ||
-              (this.agentSetting.agentType === AgentType.Direct &&
+              !!this.agentSetting.documentTag &&
+              (this.agentSetting.agentType === AgentType.CoT ||
+                this.agentSetting.agentType === AgentType.Direct ||
                 hasScratchpadPrefill);
 
             if (shouldProcessXml) {
-              processed =
-                await this.xmlManager.processSingleXmlOutput(outputFile);
+              try {
+                processed =
+                  await this.xmlManager.processSingleXmlOutput(outputFile);
+              } catch (err) {
+                this.logger.debug(
+                  `Failed to process XML output for ${outputFile}: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                  undefined,
+                  MESSAGE_TYPES.INTERNAL,
+                );
+              }
             }
 
             if (processed && processed.path) {

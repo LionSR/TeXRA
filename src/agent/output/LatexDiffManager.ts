@@ -52,6 +52,7 @@ export class LatexDiffManager {
     actual: string | null;
     workspaceDir?: string;
     displayPath: string;
+    openPath: string | null;
   }> {
     const workspaceAbsolute = workspaceCandidate
       ? toAbsolutePath(workspaceCandidate)
@@ -71,6 +72,7 @@ export class LatexDiffManager {
         actual: workspaceAbsolute,
         workspaceDir,
         displayPath,
+        openPath: workspaceAbsolute,
       };
     }
 
@@ -79,6 +81,7 @@ export class LatexDiffManager {
         actual: toAbsolutePath(actualPath),
         workspaceDir,
         displayPath,
+        openPath: toAbsolutePath(actualPath),
       };
     }
 
@@ -86,6 +89,7 @@ export class LatexDiffManager {
       actual: null,
       workspaceDir,
       displayPath,
+      openPath: workspaceAbsolute ?? null,
     };
   }
 
@@ -127,8 +131,11 @@ export class LatexDiffManager {
     );
     const aggregated: Array<{
       base: string;
+      baseDisplay?: string;
       revised: string;
+      revisedDisplay?: string;
       output: string;
+      outputDisplay?: string;
       status: 'success' | 'error';
       message?: string;
     }> = [];
@@ -175,6 +182,10 @@ export class LatexDiffManager {
             outputFile,
             mapping.workspaceByOutput.get(outputFile),
           );
+          const baseResolved = await this.resolveDiffInput(
+            baseFile,
+            mapping.workspaceByOutput.get(baseFile),
+          );
           const baseAbsolute = toAbsolutePath(baseFile);
           const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
 
@@ -183,9 +194,12 @@ export class LatexDiffManager {
               `Skipping latexdiff for ${outputFile} - file not found after relocation`,
             );
             aggregated.push({
-              base: this.fileService.getWorkspaceDisplayPath(baseFile),
-              revised: resolved.displayPath,
+              base: baseResolved.openPath ?? baseFile,
+              baseDisplay: baseResolved.displayPath,
+              revised: resolved.openPath ?? outputFile,
+              revisedDisplay: resolved.displayPath,
               output: '',
+              outputDisplay: '',
               status: 'error',
               message: 'Revised file missing for latexdiff',
             });
@@ -220,10 +234,17 @@ export class LatexDiffManager {
               await this.fileService.relocateToRunStorage(buildDir);
             }
           }
+          const diffDisplay = diffPath
+            ? this.fileService.getWorkspaceDisplayPath(diffPath)
+            : '';
+
           aggregated.push({
-            base: this.fileService.getWorkspaceDisplayPath(baseFile),
-            revised: resolved.displayPath,
+            base: baseResolved.openPath ?? baseFile,
+            baseDisplay: baseResolved.displayPath,
+            revised: resolved.openPath ?? outputFile,
+            revisedDisplay: resolved.displayPath,
             output: diffPath,
+            outputDisplay: diffDisplay,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
           });
@@ -264,9 +285,12 @@ export class LatexDiffManager {
               `Skipping between-round latexdiff - missing files for ${prevOutputFile} or ${currOutputFile}`,
             );
             aggregated.push({
-              base: prevResolved.displayPath,
-              revised: currResolved.displayPath,
+              base: prevResolved.openPath ?? prevOutputFile,
+              baseDisplay: prevResolved.displayPath,
+              revised: currResolved.openPath ?? currOutputFile,
+              revisedDisplay: currResolved.displayPath,
               output: '',
+              outputDisplay: '',
               status: 'error',
               message: 'One or more round files missing for latexdiff',
             });
@@ -304,10 +328,17 @@ export class LatexDiffManager {
               await this.fileService.relocateToRunStorage(buildDir);
             }
           }
+          const diffDisplay = diffPath
+            ? this.fileService.getWorkspaceDisplayPath(diffPath)
+            : '';
+
           aggregated.push({
-            base: prevResolved.displayPath,
-            revised: currResolved.displayPath,
+            base: prevResolved.openPath ?? prevOutputFile,
+            baseDisplay: prevResolved.displayPath,
+            revised: currResolved.openPath ?? currOutputFile,
+            revisedDisplay: currResolved.displayPath,
             output: diffPath,
+            outputDisplay: diffDisplay,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
           });
