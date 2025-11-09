@@ -33,10 +33,14 @@ import { ToolResult, toolResult } from '@tools/result';
 import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {
+  public readonly calls: Array<{ value: string }> = [];
+
   constructor() {
     super({ name: 'echo' }, z.object({ value: z.string() }));
   }
+
   protected async execute(input: { value: string }): Promise<ToolResult> {
+    this.calls.push(input);
     return toolResult({ output: input.value });
   }
 }
@@ -180,6 +184,111 @@ describe('runToolUseCycle DeepSeek', () => {
       role: 'tool',
       tool_call_id: 'c1',
       content: JSON.stringify({ output: 'hello' }),
+    });
+  });
+
+  it('falls back to function.arguments when other fields are empty', async () => {
+    class EmptyInputHandler extends MockHandler {
+      override extractToolUse(resp: any): string | null {
+        const original = super.extractToolUse(resp);
+        if (!original) {
+          return original;
+        }
+        const parsed = JSON.parse(original);
+        return JSON.stringify({
+          ...parsed,
+          input: '',
+          arguments: '',
+          function: {
+            name: parsed.name ?? 'echo',
+            arguments: '{"value":"fallback"}',
+          },
+        });
+      }
+    }
+
+    const config: ModelConfig = {
+      name: 'ds',
+      fullName: 'ds',
+      provider: ModelProvider.DEEPSEEK,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+    const handler = new EmptyInputHandler(config);
+    const logger = new AgentLogger('TestHandler', true);
+    const tool = new EchoTool();
+    const toolRegistry = { echo: tool };
+    const setting: AgentSetting = {
+      agentType: AgentType.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      filePatternsContain: [],
+      tools: [{ name: 'echo' }],
+    };
+    const prompt: AgentPrompt = {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+    };
+    const toolState = new AgentWorkspaceState();
+    const options: ToolUseCycleOptions<OpenAI> = {
+      modelHandler: handler,
+      agentSetting: setting,
+      agentPrompt: prompt,
+      userVars: {},
+      userVarChannels: {
+        input: Object.freeze({}) as Readonly<Record<string, any>>,
+        transient: {},
+        output: {},
+      },
+      logger,
+      client: {} as OpenAI,
+      toolRegistry,
+      checkInterruption: () => false,
+      setAbortController: () => {},
+      toolState,
+      modelName: 'ds',
+      context: new AgentExecutionContext({
+        streamId: 'tool-use-deepseek-empty' as StreamTabId,
+      }),
+    };
+    const store = new AgentSharedStore({
+      round: new ConversationRoundState(0),
+      run: new AgentRunState(),
+      workspace: toolState,
+      user: options.userVarChannels,
+    });
+    const events: any[] = [];
+    const dispose = bus.on('addLogMessage', (e) => events.push(e));
+    const messages: ProviderMessage[] = [];
+
+    await runToolUseCycle({ options, messages, store });
+    dispose();
+
+    assert.deepEqual(tool.calls, [{ value: 'fallback' }]);
+
+    const toolEvents = events.filter(
+      (e) => e.logMessage.messageType === MESSAGE_TYPES.TOOL_USE,
+    );
+    assert.equal(toolEvents.length, 2);
+    const structuredLog = toolEvents.find(
+      (e) => e.logMessage.data && e.logMessage.data.tool === 'echo',
+    );
+    assert.ok(structuredLog, 'Tool use log entry missing structured payload');
+    assert.deepEqual(structuredLog?.logMessage.data?.input, {
+      value: 'fallback',
+    });
+    assert.deepEqual(structuredLog?.logMessage.data?.output, {
+      output: 'fallback',
     });
   });
 });
