@@ -65,6 +65,7 @@ class MockHandler extends ModelHandlerOpenAIResponse {
             type: 'function_call',
             call_id: 'c1',
             name: 'echo',
+            input: '',
             arguments: '{"value":"hello"}',
           },
         ],
