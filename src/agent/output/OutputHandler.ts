@@ -180,6 +180,55 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
+  private async cleanupLatexBackups(originalPath?: string | null): Promise<void> {
+    if (!originalPath) {
+      return;
+    }
+
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (!workspaceRoot) {
+      return;
+    }
+
+    const absolutePath = path.isAbsolute(originalPath)
+      ? originalPath
+      : path.join(workspaceRoot, originalPath);
+
+    if (!absolutePath.startsWith(workspaceRoot)) {
+      return;
+    }
+
+    const { dir, base, name } = path.parse(absolutePath);
+    const backupCandidates = new Set<string>([
+      path.join(dir, `${base}.bak`),
+      path.join(dir, `${base}.bak0`),
+      path.join(dir, `${base}.bak1`),
+      path.join(dir, `${name}.bak`),
+      path.join(dir, `${name}.bak0`),
+      path.join(dir, `${name}.bak1`),
+    ]);
+
+    for (const candidate of backupCandidates) {
+      const relative = path.relative(workspaceRoot, candidate);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        continue;
+      }
+
+      try {
+        if (await WorkspaceFS.exists(relative)) {
+          await WorkspaceFS.delete(relative);
+          this.logger.debug(`Removed latexindent backup ${relative}`);
+        }
+      } catch (error) {
+        this.logger.debug(
+          `Failed to remove latexindent backup ${relative}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+  }
+
   /**
    * Gather mapping and diff statistics for output files of a round.
    */
@@ -351,6 +400,7 @@ export class OutputHandler implements IOutputHandler {
   }> {
     let relocatedRaw = rawOutputPath;
     if (rawOutputPath) {
+      await this.cleanupLatexBackups(rawOutputPath);
       const relocation =
         await this.fileService.relocateToRunStorage(rawOutputPath);
       relocatedRaw = relocation.storagePath;
@@ -359,6 +409,7 @@ export class OutputHandler implements IOutputHandler {
     const relocatedProcessed: NamedOutputFile[] = [];
     for (const entry of processed) {
       try {
+        await this.cleanupLatexBackups(entry.path);
         const relocation = await this.fileService.relocateToRunStorage(
           entry.path,
         );
@@ -600,6 +651,7 @@ export class OutputHandler implements IOutputHandler {
             this.setRoundOutputs(currRound, [], []);
             await this.captureXmlSummary(currRound, outputFile, [], scope);
             if (outputFile) {
+              await this.cleanupLatexBackups(outputFile);
               const relocation =
                 await this.fileService.relocateToRunStorage(outputFile);
               outputFile = relocation.storagePath;
