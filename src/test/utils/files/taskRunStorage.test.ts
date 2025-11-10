@@ -130,7 +130,7 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
   let workspaceRoot: string;
   let storageRoot: string;
   let originalGetConfig: typeof configModule.getConfig;
-  let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
+  let originalWorkspaceFolders: vscode.WorkspaceFolder[] | undefined;
   let originalWorkspaceGetPath: typeof WorkspaceFS.getPath;
   let originalWorkspaceFullPath: typeof WorkspaceFS.fullPath;
   let originalStorageFullPath: typeof StorageFS.fullPath;
@@ -153,7 +153,9 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
         ? ('taskRunStorage' as T)
         : (defaultValue as T)) as typeof configModule.getConfig;
 
-    originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    originalWorkspaceFolders = vscode.workspace.workspaceFolders
+      ? [...vscode.workspace.workspaceFolders]
+      : undefined;
     (
       vscode.workspace as unknown as {
         workspaceFolders?: vscode.WorkspaceFolder[];

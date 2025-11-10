@@ -1,9 +1,15 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
+
+const CHANNEL = 'flexibleFS';
+logger.initialize(CHANNEL);
 
 function isAbsolute(target: string): boolean {
   return path.isAbsolute(target);
@@ -19,7 +25,9 @@ export async function existsFlexible(target: string): Promise<boolean> {
  * Check whether a file exists and contains more than a minimal amount of data.
  *
  * Files shorter than the threshold (default 15 bytes) are considered trivial
- * and treated as empty artifacts.
+ * and treated as empty artifacts. The value loosely matches the size of empty
+ * LaTeX scaffolds produced by latexindent so we can quickly skip placeholder
+ * outputs without scanning their contents.
  */
 export async function existsAndNonTrivialFlexible(
   target: string,
@@ -63,6 +71,10 @@ export async function writeFlexible(
     }
 
     const absoluteTarget = WorkspaceFS.fullPath(target);
+    logger.warn(
+      CHANNEL,
+      `Detected circular symlink while writing ${absoluteTarget}, replacing with direct copy`,
+    );
     await AbsoluteFS.delete(absoluteTarget, {
       recursive: true,
       useTrash: false,
