@@ -4,6 +4,15 @@ export { TikzPictureManager, tikzPictureManager } from './TikzPictureManager';
 // Export figure extraction functionality
 export { extractFigurePathsFromLatex } from './extractFigure';
 
+// Export bibliography extraction helpers
+export {
+  extractBibliographyContext,
+  loadBibliographyEntries,
+  summarizeBibliographyEntries,
+  type BibliographyEntriesResult,
+  type BibliographyReferenceResult,
+} from './extractBibliography';
+
 // Export text connection functionality
 export {
   bestConnectionMethod,
