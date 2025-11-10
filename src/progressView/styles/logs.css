@@ -268,26 +268,18 @@
   flex-shrink: 0;
 }
 
-/* Files usage header */
-.files-usage-header {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-medium);
-  padding: var(--spacing-small) var(--spacing-small);
-  margin-bottom: var(--spacing-medium);
+.usage-summary-footer {
+  border-top: 1px solid var(--vscode-panel-border);
   background-color: var(--vscode-sideBarSectionHeader-background);
-  border-radius: var(--border-radius-small);
+  padding: var(--spacing-small) var(--spacing-medium);
+  display: flex;
+  justify-content: flex-end;
   font-size: var(--font-size-sm);
-}
-
-.files-usage-label {
-  font-weight: 600;
-  color: var(--vscode-foreground);
-}
-
-.files-usage-stats {
   color: var(--vscode-descriptionForeground);
-  opacity: var(--opacity-subtle);
+}
+
+.usage-summary-footer .run-summary {
+  margin-left: auto;
 }
 
 .file-item {

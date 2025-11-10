@@ -98,7 +98,6 @@
                   class="status-indicator stopped"
                   data-status="Ready"
                 ></span>
-                <span id="runSummary" class="run-summary"></span>
               </div>
               <vscode-toolbar-container
                 id="toolbarContainer"
@@ -170,6 +169,9 @@
             class="log-container"
           ></vscode-scrollable>
           <div id="generatedFiles" class="files-container"></div>
+          <div class="usage-summary-footer" hidden>
+            <span id="runSummary" class="run-summary"></span>
+          </div>
           <div id="followUpContainer" class="follow-up-container">
             <vscode-textarea
               id="followUpInput"

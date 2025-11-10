@@ -1,7 +1,6 @@
 // Local imports - progress view
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
-import { formatTokens } from '../formatters.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
@@ -10,9 +9,6 @@ import { getBasename } from '@common/pathUtils.js';
  * Manages file list rendering.
  */
 export class FileList {
-  constructor(usageSummary = null) {
-    this.usageSummary = usageSummary;
-  }
   /**
    * Get the effective base file for comparison operations.
    * @param {string|null|undefined} base - The explicit base file path
@@ -53,29 +49,6 @@ export class FileList {
     if (!filesByRound || Object.keys(filesByRound).length === 0) {
       container.textContent = 'No generated files';
       return;
-    }
-
-    // Add total usage header
-    const usageHeader = document.createElement('div');
-    usageHeader.className = 'files-usage-header';
-
-    // Calculate total usage from all groups
-    const totals = this.usageSummary?.computeTotal() || {
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-    };
-
-    if (totals.inputTokens || totals.outputTokens || totals.cost) {
-      usageHeader.innerHTML = `
-        <span class="files-usage-label">Total Usage:</span>
-        <span class="files-usage-stats">
-          <i class="codicon codicon-arrow-up"></i> ${formatTokens(totals.inputTokens)},
-          <i class="codicon codicon-arrow-down"></i> ${formatTokens(totals.outputTokens)},
-          $${totals.cost.toFixed(3)}
-        </span>
-      `;
-      container.appendChild(usageHeader);
     }
 
     const rounds = Object.keys(filesByRound)
