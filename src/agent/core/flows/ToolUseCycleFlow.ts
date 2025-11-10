@@ -89,6 +89,9 @@ const RawToolCallPayloadSchema = z
       })
       .optional(),
     input: z.unknown().optional(),
+    args: z
+      .union([z.string(), z.record(z.string(), z.unknown())])
+      .optional(),
     arguments: z
       .union([z.string(), z.record(z.string(), z.unknown())])
       .optional(),
@@ -149,6 +152,7 @@ const ToolCallPayloadSchema =
 
     const argumentSources: Array<unknown> = [
       payload.input,
+      payload.args,
       payload.arguments,
       payload.function?.arguments,
     ];
