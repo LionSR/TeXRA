@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { ProgressViewProvider } from './ProgressViewProvider';
-import { normalizeRunId } from './constants/runIds';
 import {
   BaseViewMessageHandler,
   MessageHandler,
@@ -111,6 +110,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: this.handleRunNew.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
@@ -206,21 +206,41 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleRunAgain(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
-      await vscode.commands.executeCommand(
-        'texra.execute',
-        taskState.agentConfig,
-      );
+      const executionId = this.provider.state.getExecutionId(message.stream);
+      if (!executionId) {
+        this.logger.warn(
+          this.channel,
+          `Resume requested for ${message.stream} without an execution ID`,
+        );
+        return;
+      }
+
+      await safeExecuteCommand('texra.execute', [
+        {
+          config: taskState.agentConfig,
+          executionId,
+          stream: message.stream,
+          resume: true,
+        },
+      ]);
+    });
+  }
+
+  private async handleRunNew(message: any): Promise<void> {
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
+      await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
     });
   }
 
   private async handleDiffStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
-      const runId = this.provider.state.getActiveRunId(message.stream);
-      const runs = this.provider.state.outputFiles.getFiles(message.stream);
-      const runKey = normalizeRunId(runId ?? null);
-      const runRounds = runs.get(runKey);
-      const outputsByRound = runRounds
-        ? Object.fromEntries(runRounds.entries())
+      const executionId = this.provider.state.getExecutionId(message.stream);
+      const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
+        executionId,
+        runId: this.provider.state.getActiveRunId(message.stream),
+      });
+      const outputsByRound = runOutputs
+        ? Object.fromEntries(runOutputs.entries())
         : undefined;
 
       await vscode.commands.executeCommand('texra.runLatexdiff', {
@@ -230,7 +250,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
         streamId: message.stream,
-        runId,
+        runId:
+          executionId ?? this.provider.state.getActiveRunId(message.stream),
         outputsByRound,
       });
     });

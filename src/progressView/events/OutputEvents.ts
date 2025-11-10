@@ -62,9 +62,16 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, groupId, filesByRound }) => {
+    ({ stream, groupId, executionId, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        await state.outputFiles.addFiles(stream, groupId ?? null, filesByRound);
+        await state.outputFiles.addFiles(
+          stream,
+          groupId ?? null,
+          filesByRound,
+          {
+            executionId,
+          },
+        );
         updateActiveStreamOutputs(state, updater, stream);
       });
     },
@@ -72,12 +79,13 @@ const registerOutputFileListeners = (
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, groupId, filesByRound }) => {
+    ({ stream, groupId, executionId, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
         await state.outputFiles.updateMissingOutputs(
           stream,
           groupId ?? null,
           filesByRound,
+          { executionId },
         );
         updateActiveStreamOutputs(state, updater, stream);
       });

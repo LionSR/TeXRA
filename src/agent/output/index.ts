@@ -1,4 +1,9 @@
 export * from './OutputHandler';
 export * from './IOutputHandler';
-export { NamedOutputFile } from './types';
+export {
+  NamedOutputFile,
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundOutputArtifacts,
+} from './types';
 export { getOutputFileName } from '@agent/utils/outputFileUtils';

@@ -9,6 +9,7 @@ import {
   UsageStatsManager,
   RunInstructionManager,
 } from '../managers';
+import { normalizeRunId } from '../constants/runIds';
 import type { StateStorage } from '../persistence/PersistentMapManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
@@ -19,6 +20,7 @@ import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { TaskGroup } from '@logger/LogTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 
 // Types
 import {
@@ -378,6 +380,29 @@ export class ProgressViewState {
         cloneTaskState(state),
       ]),
     );
+  }
+
+  getRunOutputFiles(
+    stream: StreamTabId,
+    options: { executionId?: ExecutionId; runId?: string | null } = {},
+  ): Map<number, OutputFileInfo[]> | undefined {
+    if (options.executionId) {
+      const byExecution = this._outputFiles.getRunByExecution(
+        stream,
+        options.executionId,
+      );
+      if (byExecution) {
+        return byExecution;
+      }
+    }
+
+    const candidateRunId =
+      options.runId ?? this.getActiveRunId(stream) ?? undefined;
+    if (!candidateRunId) {
+      return undefined;
+    }
+
+    return this._outputFiles.getRun(stream, normalizeRunId(candidateRunId));
   }
 
   // Execution ID management
