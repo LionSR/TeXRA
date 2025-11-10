@@ -2,11 +2,17 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+// Local imports - log
+import * as logger from '@logger/logUtils';
+
 // Local imports - storage
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+const CHANNEL = 'taskRunStorage';
+logger.initialize(CHANNEL);
 
 /**
  * Directory name for storing task run artifacts.
@@ -24,10 +30,15 @@ export const TASK_RUNS_DIR = 'taskRuns';
 export function isValidExecutionId(
   id: ExecutionId | undefined,
 ): id is ExecutionId {
-  if (!id) return false;
-  // Ensure ID doesn't contain path traversal characters or other unsafe patterns
-  const invalidPatterns = ['..', '/', '\\', '\0'];
-  return !invalidPatterns.some((pattern) => id.includes(pattern));
+  if (!id) {
+    return false;
+  }
+
+  if (id.includes('..')) {
+    return false;
+  }
+
+  return /^[A-Za-z0-9._-]+$/.test(id);
 }
 
 /**
@@ -56,14 +67,10 @@ function toWorkspaceRelative(target: string): string {
   if (workspaceRoot) {
     const relativeToWorkspace = path.relative(workspaceRoot, target);
     if (
-      relativeToWorkspace &&
       !relativeToWorkspace.startsWith('..') &&
       !path.isAbsolute(relativeToWorkspace)
     ) {
       return relativeToWorkspace;
-    }
-    if (relativeToWorkspace === '') {
-      return '';
     }
   }
 
@@ -132,6 +139,10 @@ export async function moveToTarget(
       err.code === 'ENOTEMPTY' ||
       err.code === 'ENOTDIR'
     ) {
+      logger.warn(
+        CHANNEL,
+        `Replacing existing path while moving into run storage: ${resolvedDestination}`,
+      );
       await fs.rm(resolvedDestination, { recursive: true, force: true });
       await fs.rename(resolvedSource, resolvedDestination);
       return;
@@ -176,8 +187,9 @@ async function createSymlink(
       err.code &&
       ['EPERM', 'EACCES', 'EINVAL', 'ENOTSUP'].includes(err.code)
     ) {
-      console.debug(
-        `[TaskRunFileService] Falling back to copy ${source} -> ${destination} due to ${err.code}`,
+      logger.warn(
+        CHANNEL,
+        `Falling back to copy ${source} -> ${destination} due to ${err.code}`,
       );
       const stats = await fs.lstat(source);
       if (stats.isDirectory()) {
@@ -266,6 +278,7 @@ export class TaskRunFileService {
       return;
     }
 
+    const executionId = this.executionId;
     if (this.hasPreparedSnapshot) {
       return;
     }
@@ -274,9 +287,9 @@ export class TaskRunFileService {
 
     const workspaceRoot = WorkspaceFS.getPath();
 
-    for (const target of baseFiles) {
+    const captureTasks = baseFiles.map(async (target) => {
       if (!target) {
-        continue;
+        return;
       }
 
       const absoluteSource = path.isAbsolute(target)
@@ -286,35 +299,35 @@ export class TaskRunFileService {
           : null;
 
       if (!absoluteSource || !path.isAbsolute(absoluteSource)) {
-        continue;
+        return;
       }
 
       let workspaceRelative: string;
       try {
         workspaceRelative = toWorkspaceRelative(absoluteSource);
       } catch {
-        continue;
+        return;
       }
 
       if (!workspaceRelative || shouldSkipRelocation(workspaceRelative)) {
-        continue;
+        return;
       }
 
       try {
         const stats = await fs.stat(absoluteSource);
         if (!stats.isFile()) {
-          continue;
+          return;
         }
 
         const snapshotTarget = path.join('original', workspaceRelative);
         const { absolute: snapshotAbsolute } = getRunStoragePath(
-          this.executionId,
+          executionId,
           snapshotTarget,
         );
 
         try {
           await fs.stat(snapshotAbsolute);
-          continue;
+          return;
         } catch (error) {
           const err = error as NodeJS.ErrnoException;
           if (err.code && err.code !== 'ENOENT') {
@@ -332,7 +345,7 @@ export class TaskRunFileService {
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err?.code === 'ENOENT') {
-          continue;
+          return;
         }
         throw Object.assign(
           new Error(
@@ -343,9 +356,19 @@ export class TaskRunFileService {
           { cause: error },
         );
       }
-    }
+    });
+
+    await Promise.all(captureTasks);
 
     this.hasPreparedSnapshot = true;
+  }
+
+  /**
+   * Convert an absolute or storage path back into a workspace-relative path.
+   * @param target Path that may point to run storage or the workspace.
+   */
+  public getWorkspaceRelativePath(target: string): string {
+    return toWorkspaceRelative(target);
   }
 
   public getWorkspaceDisplayPath(target: string): string {
@@ -405,6 +428,10 @@ export class TaskRunFileService {
     return { actual: workspace, workspace, storage };
   }
 
+  /**
+   * Move a workspace artifact into the active run directory when enabled.
+   * @param target Absolute or workspace-relative file that should relocate.
+   */
   public async relocateToRunStorage(target: string): Promise<{
     storagePath: string;
     workspacePath: string;
@@ -443,6 +470,10 @@ export class TaskRunFileService {
     };
   }
 
+  /**
+   * Ensure a workspace dependency is reachable from run storage via symlink.
+   * @param workspaceFile File that should be accessible during the run.
+   */
   public async mirrorWorkspaceFile(workspaceFile: string): Promise<{
     storagePath: string;
     workspacePath: string;
