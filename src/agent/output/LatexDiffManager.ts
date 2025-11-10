@@ -122,7 +122,7 @@ export class LatexDiffManager {
     try {
       await this.fileService.mirrorWorkspaceFile(target);
     } catch (error) {
-      this.logger.debug(
+      this.logger.warn(
         `Unable to mirror workspace dependency ${target}: ${
           error instanceof Error ? error.message : String(error)
         }`,

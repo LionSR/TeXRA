@@ -232,15 +232,34 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const absolutePath = path.isAbsolute(originalPath)
-      ? originalPath
-      : path.join(workspaceRoot, originalPath);
+    let workspaceAbsolute: string | null = null;
 
-    if (!absolutePath.startsWith(workspaceRoot)) {
+    if (path.isAbsolute(originalPath)) {
+      workspaceAbsolute = originalPath;
+      if (!workspaceAbsolute.startsWith(workspaceRoot)) {
+        try {
+          const workspaceRelative =
+            this.fileService.getWorkspaceRelativePath(originalPath);
+          workspaceAbsolute = workspaceRelative
+            ? path.join(workspaceRoot, workspaceRelative)
+            : workspaceRoot;
+        } catch {
+          workspaceAbsolute = null;
+        }
+      }
+    } else {
+      workspaceAbsolute = path.join(workspaceRoot, originalPath);
+    }
+
+    if (
+      !workspaceAbsolute ||
+      workspaceAbsolute === workspaceRoot ||
+      !workspaceAbsolute.startsWith(workspaceRoot)
+    ) {
       return;
     }
 
-    const { dir, base, name } = path.parse(absolutePath);
+    const { dir, base, name } = path.parse(workspaceAbsolute);
     const backupCandidates = new Set<string>([
       path.join(dir, `${base}.bak`),
       path.join(dir, `${base}.bak0`),
@@ -284,6 +303,15 @@ export class OutputHandler implements IOutputHandler {
     const namedByStorage = new Map(
       this.getNamedOutputs(currRound).map((entry) => [entry.path, entry]),
     );
+    const baseByOutput = new Map<string, string>();
+    const prevByOutput = new Map<string, string>();
+
+    mapping.baseToOutput.forEach((output, base) => {
+      baseByOutput.set(output, base);
+    });
+    mapping.prevToOutput.forEach((output, prev) => {
+      prevByOutput.set(output, prev);
+    });
 
     for (const file of roundOutputs) {
       const named = namedByStorage.get(file);
@@ -291,14 +319,8 @@ export class OutputHandler implements IOutputHandler {
         ? (named.relativePath ?? named.path)
         : this.fileService.getWorkspaceDisplayPath(file);
 
-      const baseEntry = Array.from(mapping.baseToOutput.entries()).find(
-        ([, out]) => out === relativeKey,
-      );
-      const prevEntry = Array.from(mapping.prevToOutput.entries()).find(
-        ([, out]) => out === relativeKey,
-      );
-      const baseFile = baseEntry ? baseEntry[0] : null;
-      const prevFile = prevEntry ? prevEntry[0] : null;
+      const baseFile = baseByOutput.get(relativeKey) ?? null;
+      const prevFile = prevByOutput.get(relativeKey) ?? null;
       const originalFile = mapping.originByOutput.get(relativeKey) || null;
 
       const diffBaseRelative = getEffectiveBaseFile(
