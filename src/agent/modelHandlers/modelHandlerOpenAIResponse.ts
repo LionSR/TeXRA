@@ -87,6 +87,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   OpenAIAPIResponseUsage,
   ResponseFunctionToolCallItem
 > {
+  private isOpenRouterRoutingEnabled(): boolean {
+    return (
+      this.config.openRouterOnly ||
+      getConfig<boolean>('texra.model.useOpenRouter', false)
+    );
+  }
+
   protected override get supportsToolFileOutputs(): boolean {
     return true;
   }
@@ -407,6 +414,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI,
     content: ResponseInputFile,
   ): Promise<void> {
+    if (this.isOpenRouterRoutingEnabled()) {
+      this.logger.debug(
+        'OpenRouter routing active; skipping inline file upload.',
+      );
+      return;
+    }
+
     const fileData = content.file_data;
     if (!fileData) {
       return;
@@ -1372,6 +1386,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI,
     attachments: ToolFileAttachment[],
   ): Promise<UploadedOpenAIResponseAttachment[]> {
+    if (this.isOpenRouterRoutingEnabled()) {
+      this.logger.debug(
+        'OpenRouter routing active; skipping tool attachment uploads.',
+      );
+      return [];
+    }
+
     const uploaded: UploadedOpenAIResponseAttachment[] = [];
 
     for (const attachment of attachments) {
