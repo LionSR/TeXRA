@@ -13,7 +13,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 
 const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
@@ -55,8 +55,9 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
+    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const runId = normalizeRunId(groupId);
+    const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -97,8 +98,9 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
     filesByRound: { [key: number]: string[] },
+    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const runId = normalizeRunId(groupId);
+    const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -130,6 +132,61 @@ export class OutputFilesManager extends PersistentMapManager<
   getFiles(stream: StreamTabId): Map<string, Map<number, OutputFileInfo[]>> {
     const runs = this.items.get(stream);
     return runs ? new Map(runs) : new Map();
+  }
+
+  getRun(
+    stream: StreamTabId,
+    runId: string,
+  ): Map<number, OutputFileInfo[]> | undefined {
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return undefined;
+    }
+
+    const target = runs.get(runId);
+    if (!target) {
+      return undefined;
+    }
+
+    return new Map(
+      Array.from(target.entries(), ([round, infos]) => [
+        round,
+        infos.map((info) => ({ ...info })),
+      ]),
+    );
+  }
+
+  getRunByExecution(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+  ): Map<number, OutputFileInfo[]> | undefined {
+    const normalized = normalizeRunId(executionId);
+    const direct = this.getRun(stream, normalized);
+    if (direct) {
+      return direct;
+    }
+
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return undefined;
+    }
+
+    for (const [runKey, rounds] of runs.entries()) {
+      for (const infos of rounds.values()) {
+        if (
+          infos.some(
+            (info) =>
+              info.rawLocation?.runStorage?.storageRelativePath?.includes(
+                executionId,
+              ) || info.rawOutputPath?.includes(executionId),
+          )
+        ) {
+          return this.getRun(stream, runKey);
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**
