@@ -281,8 +281,8 @@ function shouldSkipRelocation(relativePath: string): boolean {
 }
 
 export class TaskRunFileService {
-  private readonly useRunStorage: boolean;
-  public readonly metadata: {
+  private useRunStorage: boolean;
+  public metadata: {
     mode: 'workspace' | 'taskRunStorage';
     executionId?: ExecutionId;
     runDirectory?: string | null;
@@ -290,22 +290,55 @@ export class TaskRunFileService {
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
-  constructor(private readonly executionId?: ExecutionId) {
+  constructor(executionId?: ExecutionId) {
+    this.metadata = {
+      mode: 'workspace',
+      executionId: undefined,
+      runDirectory: null,
+    };
+    this.useRunStorage = false;
+    this.updateRunContext(executionId);
+  }
+
+  private applyExecutionContext(executionId?: ExecutionId | null): void {
     const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
       'texra.agentOutputs.storageMode',
       'workspace',
     );
+    const normalizedId = executionId ?? undefined;
     const validExecutionId =
-      executionId && isValidExecutionId(executionId) ? executionId : undefined;
-    const useRunStorage =
+      normalizedId && isValidExecutionId(normalizedId)
+        ? normalizedId
+        : undefined;
+    const shouldUseRunStorage =
       storageMode === 'taskRunStorage' && Boolean(validExecutionId);
-    this.useRunStorage = useRunStorage;
-    this.metadata = {
-      mode: useRunStorage ? 'taskRunStorage' : 'workspace',
-      executionId: validExecutionId,
-      runDirectory:
-        validExecutionId && useRunStorage ? getRunDir(validExecutionId) : null,
-    };
+
+    const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
+      ? 'taskRunStorage'
+      : 'workspace';
+    const nextRunDirectory =
+      shouldUseRunStorage && validExecutionId
+        ? getRunDir(validExecutionId)
+        : null;
+
+    const contextChanged =
+      this.metadata.mode !== nextMode ||
+      this.metadata.executionId !== validExecutionId ||
+      this.metadata.runDirectory !== nextRunDirectory;
+
+    this.metadata.mode = nextMode;
+    this.metadata.executionId = validExecutionId;
+    this.metadata.runDirectory = nextRunDirectory;
+    this.useRunStorage = shouldUseRunStorage;
+
+    if (contextChanged) {
+      this.hasPreparedSnapshot = false;
+      this.mirroredDependencies.clear();
+    }
+  }
+
+  public updateRunContext(executionId?: ExecutionId | null): void {
+    this.applyExecutionContext(executionId ?? undefined);
   }
 
   private get workspaceRoot(): string | undefined {
@@ -443,6 +476,10 @@ export class TaskRunFileService {
   public async prepareRunWorkspace(baseFiles: string[]): Promise<void> {
     const executionId = this.activeExecutionId;
     if (!executionId) {
+      return;
+    }
+
+    if (!this.useRunStorage) {
       return;
     }
 
