@@ -14,7 +14,7 @@ export class UsageSummary {
   }
 
   /**
-   * Update token and cost summary in the header by aggregating usage from
+   * Update token and cost summary in the footer by aggregating usage from
    * "Round" groups. Falls back to the provided usage if given.
    * @param {Object} [usage] - Optional pre-computed usage totals
    */
@@ -24,6 +24,7 @@ export class UsageSummary {
       this._summaryElem = document.getElementById(ELEMENT_IDS.RUN_SUMMARY);
     }
     if (!this._summaryElem) return;
+    const footer = this._summaryElem.closest('.usage-summary-footer');
     // If usage is not provided, compute it from existing log groups
     const totals = usage ?? this.computeTotal();
 
@@ -34,7 +35,14 @@ export class UsageSummary {
     if (!inputTokens && !outputTokens && !cost) {
       this._summaryElem.textContent = '';
       this._summaryElem.removeAttribute('aria-label');
+      if (footer) {
+        footer.hidden = true;
+      }
       return;
+    }
+
+    if (footer) {
+      footer.hidden = false;
     }
 
     const parts = [
@@ -153,7 +161,7 @@ export class UsageGroupManager {
       this.propagateUsageToParents(groupId);
     }
 
-    // Refresh the cumulative summary displayed in the header
+    // Refresh the cumulative summary displayed in the footer
     this.usageSummary.update();
   }
 
