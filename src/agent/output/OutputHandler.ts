@@ -11,7 +11,9 @@ import { LatexDiffManager } from './LatexDiffManager';
 import type {
   NamedOutputFile,
   OutputFileInfo,
+  OutputXmlSummary,
   RoundFileMapping,
+  RoundOutputArtifacts,
 } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
@@ -315,6 +317,15 @@ export class OutputHandler implements IOutputHandler {
       prevByOutput.set(output, prev);
     });
 
+    const rawLocation = this.rawOutputs[currRound] ?? null;
+    const xmlSummary = this.getRoundXmlSummary(currRound);
+    const xmlSummarySnapshot: OutputXmlSummary = {
+      tagContents: { ...xmlSummary.tagContents },
+      documents: [...xmlSummary.documents],
+      singleOutputFile: xmlSummary.singleOutputFile,
+      sourceLocation: xmlSummary.sourceLocation ?? rawLocation ?? null,
+    };
+
     for (const file of roundOutputs) {
       const named = namedByStorage.get(file);
       const namedLocation = named?.location;
@@ -355,6 +366,10 @@ export class OutputHandler implements IOutputHandler {
       const displayDir =
         !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
 
+      const location =
+        namedLocation ??
+        this.fileService.resolveRelativePath(file, { preferWorkspace: true });
+
       infos.push({
         path: file,
         relativePath,
@@ -364,9 +379,7 @@ export class OutputHandler implements IOutputHandler {
         base: baseFile,
         prev: prevFile,
         original: originalFile,
-        location:
-          namedLocation ??
-          this.fileService.resolveRelativePath(file, { preferWorkspace: true }),
+        location,
         baseLocation: diffBaseLocation ?? null,
         prevLocation: prevFile
           ? this.fileService.resolveRelativePath(prevFile, {
@@ -378,6 +391,10 @@ export class OutputHandler implements IOutputHandler {
               preferWorkspace: true,
             })
           : null,
+        source: named?.source ?? relativePath ?? null,
+        rawOutputPath: rawLocation?.absolutePath ?? null,
+        rawLocation: rawLocation ?? null,
+        xmlSummary: xmlSummarySnapshot,
         ...stats,
       });
     }
@@ -442,6 +459,71 @@ export class OutputHandler implements IOutputHandler {
     };
     this.roundMappings[currRound] = mapping;
     return mapping;
+  }
+
+  public hydrateFromArtifacts(
+    runId: string | null | undefined,
+    rounds: Map<number, OutputFileInfo[]>,
+  ): void {
+    const normalizedRunId = runId ?? this.currentRunId ?? null;
+    if (normalizedRunId !== this.currentRunId) {
+      this.setActiveRun(normalizedRunId);
+    }
+
+    for (const [round, infos] of rounds.entries()) {
+      const normalizedInfos = Array.isArray(infos)
+        ? infos.filter((info): info is OutputFileInfo => Boolean(info))
+        : [];
+
+      const hydratedInfos = normalizedInfos.map((info) => ({
+        ...info,
+        baseLocation: info.baseLocation ?? null,
+        prevLocation: info.prevLocation ?? null,
+        originalLocation: info.originalLocation ?? null,
+        rawLocation: info.rawLocation ?? null,
+        rawOutputPath:
+          info.rawOutputPath ?? info.rawLocation?.absolutePath ?? null,
+        xmlSummary: info.xmlSummary ?? null,
+      }));
+
+      this.outputFiles[round] = hydratedInfos.map((info) => info.path);
+      this.outputMappings[round] = hydratedInfos.map((info) => ({
+        source: info.source ?? info.relativePath,
+        path: info.path,
+        relativePath: info.relativePath,
+        workspacePath: info.workspacePath ?? undefined,
+        location: info.location,
+      }));
+
+      this.roundFileInfos[round] = hydratedInfos;
+
+      const candidate = hydratedInfos[0];
+      if (candidate) {
+        let rawLocation = candidate.rawLocation ?? null;
+        if (!rawLocation && candidate.rawOutputPath) {
+          rawLocation = this.fileService.describePath(candidate.rawOutputPath);
+        }
+        this.rawOutputs[round] = rawLocation;
+
+        if (candidate.xmlSummary) {
+          this.roundXmlSummaries[round] = {
+            tagContents: { ...candidate.xmlSummary.tagContents },
+            documents: [...candidate.xmlSummary.documents],
+            singleOutputFile: candidate.xmlSummary.singleOutputFile,
+            sourceLocation:
+              candidate.xmlSummary.sourceLocation ?? rawLocation ?? null,
+          };
+        } else {
+          delete this.roundXmlSummaries[round];
+        }
+      }
+
+      if (!candidate) {
+        this.rawOutputs[round] = this.rawOutputs[round] ?? null;
+      }
+
+      this.invalidateMappingsFromRound(round);
+    }
   }
 
   private getNamedOutputs(round: number): NamedOutputFile[] {
@@ -550,6 +632,7 @@ export class OutputHandler implements IOutputHandler {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
             groupId: this.currentRunId ?? undefined,
+            executionId: this.fileService.getExecutionId(),
             filesByRound: { [currRound]: [] },
           });
           return;
@@ -601,6 +684,7 @@ export class OutputHandler implements IOutputHandler {
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
           groupId: this.currentRunId ?? undefined,
+          executionId: this.fileService.getExecutionId(),
           filesByRound: { [currRound]: missing },
         });
       },
@@ -656,6 +740,7 @@ export class OutputHandler implements IOutputHandler {
         bus.emit('addOutputFiles', {
           stream: this.channel,
           groupId: this.currentRunId ?? undefined,
+          executionId: this.fileService.getExecutionId(),
           filesByRound: { [currRound]: fileInfos },
         });
 
@@ -892,6 +977,7 @@ export class OutputHandler implements IOutputHandler {
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
               groupId: this.currentRunId ?? undefined,
+              executionId: this.fileService.getExecutionId(),
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, [], []);
@@ -1044,21 +1130,4 @@ export class OutputHandler implements IOutputHandler {
 
     await run();
   }
-}
-
-export interface RoundOutputArtifacts {
-  round: number;
-  rawOutput: FileLocation | null;
-  rawOutputPath: string | null;
-  outputFiles: string[];
-  processedFiles: NamedOutputFile[];
-  fileInfos: OutputFileInfo[];
-  xmlSummary: OutputXmlSummary;
-}
-
-export interface OutputXmlSummary {
-  tagContents: Record<string, string | string[]>;
-  documents: string[];
-  singleOutputFile: string | null;
-  sourceLocation?: FileLocation | null;
 }

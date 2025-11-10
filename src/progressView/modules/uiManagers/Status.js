@@ -23,6 +23,7 @@ export class Status {
         className: 'error',
         label: 'Error',
         enable: [
+          ELEMENT_IDS.RUN_NEW_BTN,
           ELEMENT_IDS.RUN_AGAIN_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.CLEAN_STREAM_BTN,
@@ -35,6 +36,7 @@ export class Status {
         className: 'stopped',
         label: 'Stopped',
         enable: [
+          ELEMENT_IDS.RUN_NEW_BTN,
           ELEMENT_IDS.RUN_AGAIN_BTN,
           ELEMENT_IDS.PACK_STREAM_BTN,
           ELEMENT_IDS.CLEAN_STREAM_BTN,
@@ -47,6 +49,7 @@ export class Status {
         className: 'ready',
         label: 'Ready',
         enable: [
+          ELEMENT_IDS.RUN_NEW_BTN,
           ELEMENT_IDS.RESTORE_STATE_BTN,
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
@@ -73,15 +76,29 @@ export class Status {
   }
 
   _applyExecutionAvailability() {
-    const button = document.getElementById(ELEMENT_IDS.OPEN_TASK_STORAGE_BTN);
-    if (!button) {
+    const storageButton = document.getElementById(
+      ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
+    );
+    const resumeButton = document.getElementById(ELEMENT_IDS.RUN_AGAIN_BTN);
+
+    const isAvailable = this._executionAvailable;
+
+    if (resumeButton) {
+      resumeButton.classList.toggle('toolbar-button--hidden', !isAvailable);
+      resumeButton.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+      if (!isAvailable) {
+        setElementsDisabled([resumeButton], true);
+      }
+    }
+
+    if (!storageButton) {
       return;
     }
-    const isAvailable = this._executionAvailable;
-    button.classList.toggle('toolbar-button--hidden', !isAvailable);
-    button.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
+
+    storageButton.classList.toggle('toolbar-button--hidden', !isAvailable);
+    storageButton.setAttribute('aria-hidden', isAvailable ? 'false' : 'true');
     if (!isAvailable) {
-      setElementsDisabled([button], true);
+      setElementsDisabled([storageButton], true);
     }
   }
 
@@ -140,6 +157,12 @@ export class Status {
           }
           if (
             el.id === ELEMENT_IDS.OPEN_TASK_STORAGE_BTN &&
+            !this._executionAvailable
+          ) {
+            return false;
+          }
+          if (
+            el.id === ELEMENT_IDS.RUN_AGAIN_BTN &&
             !this._executionAvailable
           ) {
             return false;
