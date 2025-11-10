@@ -125,6 +125,7 @@ export class OutputHandler implements IOutputHandler {
 
     this.currentRunId = nextRunId;
     this.openedOutputs.clear();
+    this.fileService.updateRunContext(nextRunId ?? undefined);
 
     if (nextRunId) {
       // Capture the original workspace files for this run. The helper currently
@@ -246,29 +247,12 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    let workspaceAbsolute: string | null = null;
+    const location =
+      typeof original === 'string'
+        ? this.fileService.describePath(original)
+        : original;
 
-    if (typeof original === 'string') {
-      if (path.isAbsolute(original)) {
-        workspaceAbsolute = original;
-        if (!workspaceAbsolute.startsWith(workspaceRoot)) {
-          try {
-            const workspaceRelative =
-              this.fileService.getWorkspaceRelativePath(original);
-            workspaceAbsolute = workspaceRelative
-              ? path.join(workspaceRoot, workspaceRelative)
-              : workspaceRoot;
-          } catch {
-            workspaceAbsolute = null;
-          }
-        }
-      } else {
-        workspaceAbsolute = path.join(workspaceRoot, original);
-      }
-    } else {
-      workspaceAbsolute = original.workspace?.absolutePath ?? null;
-    }
-
+    const workspaceAbsolute = location?.workspace?.absolutePath ?? null;
     if (
       !workspaceAbsolute ||
       workspaceAbsolute === workspaceRoot ||
@@ -287,8 +271,8 @@ export class OutputHandler implements IOutputHandler {
       path.join(dir, `${name}.bak1`),
     ]);
 
-    for (const candidate of backupCandidates) {
-      const relative = path.relative(workspaceRoot, candidate);
+    for (const candidateAbsolute of backupCandidates) {
+      const relative = path.relative(workspaceRoot, candidateAbsolute);
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
         continue;
       }
@@ -772,18 +756,20 @@ export class OutputHandler implements IOutputHandler {
               `No processed files were generated from ${outputFile}`,
             );
             this.setRoundOutputs(currRound, [], []);
+            if (outputFile) {
+              await this.cleanupLatexBackups(rawLocation ?? outputFile);
+              const relocationSource = rawLocation?.absolutePath ?? outputFile;
+              rawLocation = await this.fileService.relocateToRunStorage(
+                relocationSource,
+                { forceRunStorage: true },
+              );
+              rawPath = rawLocation.absolutePath;
+              outputFile = rawPath;
+            }
+            this.rawOutputs[currRound] = rawLocation ?? null;
             await this.captureXmlSummary(currRound, outputFile, [], scope);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation);
-              if (rawLocation) {
-                rawLocation = await this.fileService.relocateToRunStorage(
-                  rawLocation.absolutePath,
-                  { forceRunStorage: true },
-                );
-                rawPath = rawLocation.absolutePath;
-                outputFile = rawPath;
-                this.rawOutputs[currRound] = rawLocation;
-              }
             }
           } catch (err) {
             this.logger.debug(
@@ -792,7 +778,21 @@ export class OutputHandler implements IOutputHandler {
               MESSAGE_TYPES.INTERNAL,
             );
             this.setRoundOutputs(currRound, [], []);
+            if (outputFile) {
+              await this.cleanupLatexBackups(rawLocation ?? outputFile);
+              const relocationSource = rawLocation?.absolutePath ?? outputFile;
+              rawLocation = await this.fileService.relocateToRunStorage(
+                relocationSource,
+                { forceRunStorage: true },
+              );
+              rawPath = rawLocation.absolutePath;
+              outputFile = rawPath;
+            }
+            this.rawOutputs[currRound] = rawLocation ?? null;
             await this.captureXmlSummary(currRound, outputFile, [], scope);
+            if (outputFile) {
+              await this.cleanupLatexBackups(rawLocation);
+            }
           }
         };
 
