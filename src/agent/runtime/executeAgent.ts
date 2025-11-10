@@ -18,6 +18,7 @@ import {
   CoTAgent,
   MergeAgent,
   BaseToolUseAgent,
+  BaseReflectionAgent,
 } from '@agent/implementations';
 import {
   loadAgentSettingAndPrompts,
@@ -378,8 +379,38 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     const activeStreamId: StreamTabId = streamTabId;
 
-    // Check if this stream is already running
     const provider = ProgressViewProvider.getInstance();
+    if (isResume) {
+      StreamStatusService.set(activeStreamId, 'resuming');
+    }
+
+    if (
+      isResume &&
+      agent instanceof BaseReflectionAgent &&
+      executionId &&
+      provider
+    ) {
+      const activeRunId = provider.state.getActiveRunId(activeStreamId);
+      const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
+        executionId,
+        runId: activeRunId,
+      });
+
+      if (runOutputs) {
+        const resolvedRunId =
+          provider.state.resolveRunId(activeStreamId, activeRunId, {
+            persist: false,
+          }) ?? executionId;
+
+        await agent.hydrateOutputState({
+          executionId,
+          runId: resolvedRunId,
+          rounds: runOutputs,
+        });
+      }
+    }
+
+    // Check if this stream is already running
     const currentStatus = StreamStatusService.get(activeStreamId);
     if (!isResume && currentStatus === 'running') {
       const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
@@ -586,11 +617,11 @@ export async function executeAgentWithLogging<T extends IAgent>(
   }
 }
 
-export async function executeAgent(
+async function runAgentExecution(
   agentConfig: Partial<AgentConfig>,
-  executionId?: ExecutionId,
+  executionId: ExecutionId | undefined,
+  options: ExecuteAgentOptions,
 ): Promise<void> {
-  // Ensure required fields
   if (!agentConfig.model || !agentConfig.agent) {
     throw new Error('Missing required fields: model and/or agent');
   }
@@ -625,8 +656,25 @@ export async function executeAgent(
       return { agent, agentType, context };
     },
     executionId,
-    { resume: false },
+    options,
   );
+}
+
+export async function executeAgent(
+  agentConfig: Partial<AgentConfig>,
+  executionId?: ExecutionId,
+): Promise<void> {
+  await runAgentExecution(agentConfig, executionId, { resume: false });
+}
+
+export async function resumeAgentExecution(
+  agentConfig: Partial<AgentConfig>,
+  executionId: ExecutionId,
+): Promise<void> {
+  if (!executionId) {
+    throw new Error('Cannot resume an agent run without an execution ID.');
+  }
+  await runAgentExecution(agentConfig, executionId, { resume: true });
 }
 
 /**

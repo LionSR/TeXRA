@@ -349,6 +349,10 @@ export class TaskRunFileService {
     return this.metadata.executionId;
   }
 
+  public getExecutionId(): ExecutionId | undefined {
+    return this.activeExecutionId;
+  }
+
   public hasRunDirectory(): boolean {
     return Boolean(this.metadata.runDirectory);
   }

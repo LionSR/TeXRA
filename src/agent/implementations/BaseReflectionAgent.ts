@@ -33,6 +33,7 @@ import {
   IOutputHandler,
   type RoundOutputArtifacts,
 } from '@agent/output';
+import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
@@ -54,6 +55,7 @@ import { getConfig } from '@utils/config';
 
 // Local imports - filesystem utilities
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Options for handling round output.
@@ -125,6 +127,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     singleOutputFile: null,
   };
   protected readonly fileService: TaskRunFileService;
+  private hasHydratedOutputs = false;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -182,6 +185,27 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
 
     this.latexMediaManager = new LatexMediaManager(this.logger);
+  }
+
+  public async hydrateOutputState(params: {
+    executionId: ExecutionId;
+    runId?: string | null;
+    rounds: Map<number, OutputFileInfo[]>;
+  }): Promise<void> {
+    this.fileService.updateRunContext(params.executionId);
+    this.outputHandler.hydrateFromArtifacts(
+      params.runId ?? null,
+      params.rounds,
+    );
+
+    const sortedRounds = Array.from(params.rounds.keys()).sort((a, b) => a - b);
+
+    for (const round of sortedRounds) {
+      const artifacts = await this.outputHandler.getRoundArtifacts(round);
+      this.roundOutputArtifacts[round] = artifacts;
+    }
+
+    this.hasHydratedOutputs = params.rounds.size > 0;
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -618,12 +642,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
-    this.roundOutputArtifacts = [];
+    if (!this.hasHydratedOutputs) {
+      this.roundOutputArtifacts = [];
+    }
     this.runtimeXmlExports = {
       tagContents: {},
       documents: [],
       singleOutputFile: null,
     };
+    this.hasHydratedOutputs = false;
     const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();
