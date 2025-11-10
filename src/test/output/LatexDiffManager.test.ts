@@ -11,7 +11,9 @@ import {
 } from '@agent/core/AgentDataclass';
 import { OutputHandler } from '@agent/output';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+import type { NamedOutputFile } from '@agent/output/types';
 import { TaskRunFileService } from '@utils/files';
+import type { FileLocation } from '@utils/files/taskRunStorage';
 
 // Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
@@ -61,6 +63,36 @@ describe('LatexDiffManager mapping reuse', () => {
     return logger;
   }
 
+  function makeLocation(absolutePath: string): FileLocation {
+    const workspacePrefix = `workspace${path.sep}`;
+    const relative = absolutePath.startsWith(workspacePrefix)
+      ? absolutePath.slice(workspacePrefix.length)
+      : absolutePath;
+    return {
+      absolutePath,
+      scope: 'workspace',
+      relativePath: relative,
+      relativeScope: 'workspace',
+      workspace: {
+        absolutePath,
+        relativePath: relative,
+      },
+      runStorage: null,
+    };
+  }
+
+  function createNamedOutput(
+    filePath: string,
+    source: string = filePath,
+  ): NamedOutputFile {
+    return {
+      source,
+      path: filePath,
+      relativePath: filePath,
+      location: makeLocation(filePath),
+    };
+  }
+
   it('uses shared base mapping for round diffs', async () => {
     const logger = createLogger();
     const baseFiles = [path.join('workspace', 'chapter.tex')];
@@ -75,11 +107,7 @@ describe('LatexDiffManager mapping reuse', () => {
 
     handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
     handler.outputMappings[0] = [
-      {
-        source: path.join('workspace', 'chapter_r0.tex'),
-        path: path.join('workspace', 'chapter_r0.tex'),
-        relativePath: path.join('workspace', 'chapter_r0.tex'),
-      },
+      createNamedOutput(path.join('workspace', 'chapter_r0.tex')),
     ];
 
     const mapping = handler.getRoundMapping(0);
@@ -141,19 +169,11 @@ describe('LatexDiffManager mapping reuse', () => {
 
     handler.outputFiles[0] = [path.join('workspace', 'paper_r0.tex')];
     handler.outputMappings[0] = [
-      {
-        source: path.join('workspace', 'paper_r0.tex'),
-        path: path.join('workspace', 'paper_r0.tex'),
-        relativePath: path.join('workspace', 'paper_r0.tex'),
-      },
+      createNamedOutput(path.join('workspace', 'paper_r0.tex')),
     ];
     handler.outputFiles[1] = [path.join('workspace', 'paper_r1.tex')];
     handler.outputMappings[1] = [
-      {
-        source: path.join('workspace', 'paper_r1.tex'),
-        path: path.join('workspace', 'paper_r1.tex'),
-        relativePath: path.join('workspace', 'paper_r1.tex'),
-      },
+      createNamedOutput(path.join('workspace', 'paper_r1.tex')),
     ];
 
     const mapping = handler.getRoundMapping(1);

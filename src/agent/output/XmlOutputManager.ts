@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { readFlexible, writeFlexible } from '@utils/files';
+import { readFlexible, writeFlexible, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -25,6 +25,7 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
+    private readonly fileService: TaskRunFileService,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
@@ -234,6 +235,23 @@ export class XmlOutputManager {
     }
   }
 
+  private buildNamedOutput(
+    source: string,
+    outputPath: string,
+  ): NamedOutputFile {
+    const location = this.fileService.resolveRelativePath(outputPath, {
+      preferWorkspace: true,
+    });
+
+    return {
+      source,
+      path: location.absolutePath,
+      relativePath: location.relativePath,
+      workspacePath: location.workspace?.absolutePath ?? undefined,
+      location,
+    };
+  }
+
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
@@ -270,12 +288,7 @@ export class XmlOutputManager {
         currRound,
       );
       await writeFlexible(texFile, doc.content.trim());
-      outputFiles.push({
-        source,
-        path: texFile,
-        relativePath: texFile,
-        workspacePath: texFile,
-      });
+      outputFiles.push(this.buildNamedOutput(source, texFile));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -299,12 +312,10 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
-    return {
-      source: original || this.agentConfig.inputFile,
-      path: processedOutputFile,
-      relativePath: processedOutputFile,
-      workspacePath: processedOutputFile,
-    };
+    return this.buildNamedOutput(
+      original || this.agentConfig.inputFile,
+      processedOutputFile,
+    );
   }
 
   async processMultipleXmlOutputs(

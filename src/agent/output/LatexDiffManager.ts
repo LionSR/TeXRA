@@ -14,6 +14,7 @@ import {
   existsFlexible,
   toAbsolutePath,
 } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -47,27 +48,28 @@ export class LatexDiffManager {
 
   private async resolveDiffTarget(
     relativePath: string,
-    actualPath?: string,
-    workspaceCandidate?: string,
+    location?: FileLocation,
   ): Promise<{
     actual: string | null;
     workspaceDir?: string;
     workspaceReference?: string;
   }> {
-    const workspaceReference = workspaceCandidate
-      ? toAbsolutePath(workspaceCandidate)
+    const workspaceReference = location?.workspace?.absolutePath
+      ? toAbsolutePath(location.workspace.absolutePath)
       : relativePath
         ? this.fileService.resolveRelativePath(relativePath, {
             preferWorkspace: true,
-          }).workspace
+          }).workspace?.absolutePath
         : undefined;
 
     const workspaceDir = workspaceReference
       ? path.dirname(workspaceReference)
       : undefined;
 
-    if (actualPath && (await existsFlexible(actualPath))) {
-      return { actual: actualPath, workspaceDir, workspaceReference };
+    const actualCandidate = location?.absolutePath;
+
+    if (actualCandidate && (await existsFlexible(actualCandidate))) {
+      return { actual: actualCandidate, workspaceDir, workspaceReference };
     }
 
     if (workspaceReference && (await existsFlexible(workspaceReference))) {
@@ -138,7 +140,7 @@ export class LatexDiffManager {
     }
 
     const relocation = await this.fileService.relocateToRunStorage(diffPath);
-    return relocation.storagePath;
+    return relocation.absolutePath;
   }
 
   async handleLatexdiffofOutput(
@@ -158,6 +160,12 @@ export class LatexDiffManager {
       diffPath?: string;
       status: 'success' | 'error';
       message?: string;
+      runId?: string | null;
+      locations?: {
+        base: FileLocation | null;
+        revised: FileLocation | null;
+        diff: FileLocation | null;
+      };
     }> = [];
 
     const execute = async () => {
@@ -198,15 +206,11 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
-          const storagePath = mapping.storageByOutput.get(outputFile);
-          const resolved = await this.resolveDiffTarget(
-            outputFile,
-            storagePath,
-            mapping.workspaceByOutput.get(outputFile),
-          );
+          const location = mapping.locationByOutput.get(outputFile);
+          const resolved = await this.resolveDiffTarget(outputFile, location);
           const baseAbsolute = this.fileService.resolveRelativePath(baseFile, {
             preferWorkspace: true,
-          }).actual;
+          }).absolutePath;
           await this.ensureWorkspaceDependency(baseAbsolute);
           await this.ensureWorkspaceDependency(resolved.workspaceReference);
           const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
@@ -219,7 +223,7 @@ export class LatexDiffManager {
               baseLabel: this.fileService.getDisplayLabel(baseFile),
               basePath: baseAbsolute,
               revisedLabel: this.fileService.getDisplayLabel(baseFile),
-              revisedPath: storagePath,
+              revisedPath: location?.absolutePath,
               status: 'error',
               message: 'Revised file missing for latexdiff',
             });
@@ -253,14 +257,32 @@ export class LatexDiffManager {
               // LaTeX intermediates and can be regenerated on demand.
             }
           }
+          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
+            preferWorkspace: true,
+          });
+          const revisedLocation =
+            location ??
+            (resolved.actual
+              ? this.fileService.describePath(resolved.actual)
+              : undefined);
+          const diffLocation = diffPath
+            ? this.fileService.describePath(diffPath)
+            : undefined;
+
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(baseFile),
             basePath: baseAbsolute,
             revisedLabel: this.fileService.getDisplayLabel(baseFile),
-            revisedPath: resolved.actual ?? storagePath,
+            revisedPath: resolved.actual ?? location?.absolutePath,
             diffPath: diffPath || undefined,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
+            runId: this.fileService.metadata.executionId ?? null,
+            locations: {
+              base: baseLocation,
+              revised: revisedLocation ?? null,
+              diff: diffLocation ?? null,
+            },
           });
         }
       }
@@ -285,17 +307,15 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const prevStorage = mapping.storageByOutput.get(prevOutputFile);
-          const currStorage = mapping.storageByOutput.get(currOutputFile);
+          const prevLocation = mapping.locationByOutput.get(prevOutputFile);
+          const currLocation = mapping.locationByOutput.get(currOutputFile);
           const prevResolved = await this.resolveDiffTarget(
             prevOutputFile,
-            prevStorage,
-            mapping.workspaceByOutput.get(prevOutputFile),
+            prevLocation,
           );
           const currResolved = await this.resolveDiffTarget(
             currOutputFile,
-            currStorage,
-            mapping.workspaceByOutput.get(currOutputFile),
+            currLocation,
           );
           await this.ensureWorkspaceDependency(prevResolved.workspaceReference);
           await this.ensureWorkspaceDependency(currResolved.workspaceReference);
@@ -306,11 +326,17 @@ export class LatexDiffManager {
             );
             aggregated.push({
               baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
-              basePath: prevStorage,
+              basePath: prevLocation?.absolutePath,
               revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
-              revisedPath: currStorage,
+              revisedPath: currLocation?.absolutePath,
               status: 'error',
               message: 'One or more round files missing for latexdiff',
+              runId: this.fileService.metadata.executionId ?? null,
+              locations: {
+                base: prevLocation ?? null,
+                revised: currLocation ?? null,
+                diff: null,
+              },
             });
             continue;
           }
@@ -345,14 +371,24 @@ export class LatexDiffManager {
               // compilation output tree into run storage.
             }
           }
+          const diffLocation = diffPath
+            ? this.fileService.describePath(diffPath)
+            : undefined;
+
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
-            basePath: prevStorage,
+            basePath: prevLocation?.absolutePath,
             revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
-            revisedPath: currResolved.actual ?? currStorage,
+            revisedPath: currResolved.actual ?? currLocation?.absolutePath,
             diffPath: diffPath || undefined,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
+            runId: this.fileService.metadata.executionId ?? null,
+            locations: {
+              base: prevLocation ?? null,
+              revised: currLocation ?? null,
+              diff: diffLocation ?? null,
+            },
           });
         }
       } else if (!generateBetweenRoundDiffs) {

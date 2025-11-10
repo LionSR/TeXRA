@@ -16,6 +16,15 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { WorkspaceFS } from '@utils/files';
 
+const createLocation = (file: string) => ({
+  absolutePath: file,
+  scope: 'workspace' as const,
+  relativePath: file,
+  relativeScope: 'workspace' as const,
+  workspace: { absolutePath: file, relativePath: file },
+  runStorage: null,
+});
+
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
@@ -35,6 +44,7 @@ class MockOutputHandler extends OutputHandler {
         base: null,
         prev: null,
         original: null,
+        location: createLocation(`out${round}.tex`),
       } as any,
     ];
   }
@@ -150,6 +160,7 @@ describe('OutputHandler.getRoundMapping', () => {
         source: path.join('workspace', 'chapter_r0.tex'),
         path: path.join('workspace', 'chapter_r0.tex'),
         relativePath: path.join('workspace', 'chapter_r0.tex'),
+        location: createLocation(path.join('workspace', 'chapter_r0.tex')),
       },
     ];
 
@@ -193,6 +204,7 @@ describe('OutputHandler.finalizeRound', () => {
         base: null,
         prev: null,
         original: null,
+        location: createLocation('out0.tex'),
       },
     ]);
     dispose();
@@ -227,10 +239,35 @@ describe('OutputHandler relocation helpers', () => {
     ).cleanupLatexBackups = async () => {};
 
     const relocations: string[] = [];
-    const relocationFor = (target: string) => ({
-      storagePath: `/storage/${target}`,
-      relativePath: `rel/${target}`,
-      workspacePath: `/workspace/${target}`,
+    const makeWorkspaceLocation = (name: string) => ({
+      absolutePath: `/workspace/${name}`,
+      scope: 'workspace' as const,
+      relativePath: name,
+      relativeScope: 'workspace' as const,
+      workspace: {
+        absolutePath: `/workspace/${name}`,
+        relativePath: name,
+      },
+      runStorage: {
+        absolutePath: `/storage/${name}`,
+        relativePath: name,
+        storageRelativePath: `taskRuns/test/${name}`,
+      },
+    });
+    const makeStorageLocation = (name: string) => ({
+      absolutePath: `/storage/${name}`,
+      scope: 'runStorage' as const,
+      relativePath: name,
+      relativeScope: 'runStorage' as const,
+      workspace: {
+        absolutePath: `/workspace/${name}`,
+        relativePath: name,
+      },
+      runStorage: {
+        absolutePath: `/storage/${name}`,
+        relativePath: name,
+        storageRelativePath: `taskRuns/test/${name}`,
+      },
     });
 
     (
@@ -240,54 +277,66 @@ describe('OutputHandler relocation helpers', () => {
     ).fileService = {
       relocateToRunStorage: async (target: string) => {
         relocations.push(target);
-        return relocationFor(target);
+        const name = target.replace('/workspace/', '').replace('/storage/', '');
+        return makeStorageLocation(name);
       },
     };
 
-    type NamedList = Array<{
+    type ProcessedEntry = {
       source: string;
       path: string;
       relativePath: string;
       workspacePath?: string;
-    }>;
-
-    const processed: NamedList = [
+      location: ReturnType<typeof makeWorkspaceLocation>;
+    };
+    const processed: ProcessedEntry[] = [
       {
         source: 'output.xml',
-        path: 'output.tex',
+        path: '/workspace/output.tex',
         relativePath: 'output.tex',
+        workspacePath: '/workspace/output.tex',
+        location: makeWorkspaceLocation('output.tex'),
       },
       {
         source: 'output.xml',
-        path: 'summary.tex',
+        path: '/workspace/summary.tex',
         relativePath: 'summary.tex',
         workspacePath: 'workspace/summary.tex',
+        location: makeWorkspaceLocation('summary.tex'),
       },
     ];
 
     const result = await (
       handler as unknown as {
         relocateRoundArtifacts: (
-          rawOutputPath: string,
-          processed: NamedList,
-        ) => Promise<{ raw: string; processed: NamedList }>;
+          rawOutput: ReturnType<typeof makeWorkspaceLocation>,
+          processed: ProcessedEntry[],
+        ) => Promise<{
+          raw: ReturnType<typeof makeWorkspaceLocation>;
+          processed: ProcessedEntry[];
+        }>;
       }
-    ).relocateRoundArtifacts('output.tex', processed);
+    ).relocateRoundArtifacts(makeWorkspaceLocation('output.tex'), processed);
 
-    assert.deepEqual(relocations, ['output.tex', 'summary.tex']);
-    assert.strictEqual(result.raw, '/storage/output.tex');
+    assert.deepEqual(relocations, [
+      '/workspace/output.tex',
+      '/workspace/summary.tex',
+    ]);
+    assert.deepEqual(result.raw, makeStorageLocation('output.tex'));
     assert.deepEqual(result.processed, [
       {
         source: 'output.xml',
         path: '/storage/output.tex',
-        relativePath: 'rel/output.tex',
+        relativePath: 'output.tex',
         workspacePath: '/workspace/output.tex',
+        location: makeStorageLocation('output.tex'),
       },
       {
         source: 'output.xml',
         path: '/storage/summary.tex',
-        relativePath: 'rel/summary.tex',
+        relativePath: 'summary.tex',
         workspacePath: 'workspace/summary.tex',
+        location: makeStorageLocation('summary.tex'),
       },
     ]);
   });
@@ -315,6 +364,7 @@ describe('OutputHandler XML summaries', () => {
       source: 'input.tex',
       path: 'output.tex',
       relativePath: 'output.tex',
+      location: createLocation('output.tex'),
     });
 
     (WorkspaceFS as unknown as { read: typeof WorkspaceFS.read }).read = async (
@@ -359,11 +409,13 @@ describe('OutputHandler XML summaries', () => {
         source: 'draft.tex',
         path: 'draft.tex',
         relativePath: 'draft.tex',
+        location: createLocation('draft.tex'),
       },
       {
         source: 'notes.tex',
         path: 'notes.tex',
         relativePath: 'notes.tex',
+        location: createLocation('notes.tex'),
       },
     ];
 
