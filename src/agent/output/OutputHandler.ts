@@ -72,6 +72,7 @@ export class OutputHandler implements IOutputHandler {
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private currentRunId: string | null;
+  private runPreparation: Promise<void> | null;
 
   constructor(
     agentSetting: AgentSetting,
@@ -111,10 +112,49 @@ export class OutputHandler implements IOutputHandler {
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
     this.currentRunId = null;
+    this.runPreparation = null;
   }
 
   public setActiveRun(runId?: string | null): void {
-    this.currentRunId = runId ?? null;
+    const nextRunId = runId ?? null;
+    if (nextRunId === this.currentRunId) {
+      return;
+    }
+
+    this.currentRunId = nextRunId;
+    this.openedOutputs.clear();
+
+    if (nextRunId) {
+      // Capture the original workspace files for this run. The helper currently
+      // snapshots only the explicitly selected base files and skips broader
+      // dependency graphs (preambles, figures, etc.), which will be wired up as
+      // those detection hooks become available.
+      this.runPreparation = this.fileService.prepareRunWorkspace(
+        this.baseFiles,
+      );
+    } else {
+      this.runPreparation = null;
+    }
+  }
+
+  private async prepareRunWorkspaceIfNeeded(): Promise<void> {
+    if (!this.runPreparation) {
+      return;
+    }
+
+    try {
+      await this.runPreparation;
+    } catch (error) {
+      this.logger.debug(
+        `Failed to prepare run workspace: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+    } finally {
+      this.runPreparation = null;
+    }
   }
 
   private async withOutputStage<T>(
@@ -619,6 +659,7 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         this.ensureRound(currRound);
+        await this.prepareRunWorkspaceIfNeeded();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
