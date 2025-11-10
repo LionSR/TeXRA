@@ -3,7 +3,10 @@ import { ELEMENT_IDS } from '../constants.js';
 // Local imports - shared helpers
 import { safeGetElementById } from '@common/domUtils.js';
 
-const RUN_LABEL_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const RUN_LABEL_DATETIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: '2-digit',
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
@@ -291,7 +294,7 @@ export class RunSelector {
       return '';
     }
 
-    return RUN_LABEL_TIME_FORMATTER.format(date);
+    return RUN_LABEL_DATETIME_FORMATTER.format(date);
   }
 
   _syncVisibility() {
