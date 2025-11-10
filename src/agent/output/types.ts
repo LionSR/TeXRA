@@ -1,11 +1,15 @@
 // Local imports - agent
 import type { DiffStats } from '@agent/types/DiffTypes';
 
+// Local imports - files
+import type { FileLocation } from '@utils/files/taskRunStorage';
+
 export interface NamedOutputFile {
   source: string;
   path: string;
   relativePath: string;
   workspacePath?: string;
+  location: FileLocation;
 }
 
 export interface OutputFileInfo extends DiffStats {
@@ -17,12 +21,15 @@ export interface OutputFileInfo extends DiffStats {
   base?: string | null;
   prev?: string | null;
   original?: string | null;
+  location: FileLocation;
+  baseLocation?: FileLocation | null;
+  prevLocation?: FileLocation | null;
+  originalLocation?: FileLocation | null;
 }
 
 export interface RoundFileMapping {
   baseToOutput: Map<string, string>;
   prevToOutput: Map<string, string>;
   originByOutput: Map<string, string | undefined>;
-  workspaceByOutput: Map<string, string>;
-  storageByOutput: Map<string, string>;
+  locationByOutput: Map<string, FileLocation>;
 }
