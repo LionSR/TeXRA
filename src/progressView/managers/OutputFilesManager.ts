@@ -22,7 +22,13 @@ const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
   }
 
   const candidate = value as Partial<OutputFileInfo>;
-  return typeof candidate.path === 'string' && candidate.path.length > 0;
+  return (
+    typeof candidate.path === 'string' &&
+    candidate.path.length > 0 &&
+    typeof candidate.location === 'object' &&
+    candidate.location !== null &&
+    typeof (candidate.location as any).absolutePath === 'string'
+  );
 };
 
 /**

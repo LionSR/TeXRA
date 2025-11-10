@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { ProgressViewProvider } from './ProgressViewProvider';
+import { normalizeRunId } from './constants/runIds';
 import {
   BaseViewMessageHandler,
   MessageHandler,
@@ -213,12 +214,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleDiffStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
+      const runId = this.provider.state.getActiveRunId(message.stream);
+      const runs = this.provider.state.outputFiles.getFiles(message.stream);
+      const runKey = normalizeRunId(runId ?? null);
+      const runRounds = runs.get(runKey);
+      const outputsByRound = runRounds
+        ? Object.fromEntries(runRounds.entries())
+        : undefined;
+
       await vscode.commands.executeCommand('texra.runLatexdiff', {
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
         inputFile: taskState.agentConfig.inputFile,
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
+        streamId: message.stream,
+        runId,
+        outputsByRound,
       });
     });
   }
