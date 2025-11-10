@@ -2,8 +2,15 @@ import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import * as vscode from 'vscode';
 
-import { moveToTarget } from '@utils/files/taskRunStorage';
+import * as configModule from '@utils/config';
+import { StorageFS, WorkspaceFS } from '@utils/files';
+import {
+  moveToTarget,
+  TASK_RUNS_DIR,
+  TaskRunFileService,
+} from '@utils/files/taskRunStorage';
 
 suite('taskRunStorage moveToTarget', () => {
   async function createTempDir(prefix: string): Promise<string> {
@@ -116,5 +123,139 @@ suite('taskRunStorage moveToTarget', () => {
     assert.deepEqual(destEntries.sort(), ['file.txt']);
 
     await assert.rejects(fs.stat(sourceDir));
+  });
+});
+
+suite('TaskRunFileService prepareRunWorkspace', () => {
+  let workspaceRoot: string;
+  let storageRoot: string;
+  let originalGetConfig: typeof configModule.getConfig;
+  let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
+  let originalWorkspaceGetPath: typeof WorkspaceFS.getPath;
+  let originalWorkspaceFullPath: typeof WorkspaceFS.fullPath;
+  let originalStorageFullPath: typeof StorageFS.fullPath;
+  let originalStorageEnsureDir: typeof StorageFS.ensureDir;
+  let originalStorageExists: typeof StorageFS.exists;
+  let originalStorageCreateDir: typeof StorageFS.createDir;
+
+  setup(async () => {
+    workspaceRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'texra-workspace-'),
+    );
+    storageRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-storage-'));
+
+    originalGetConfig = configModule.getConfig;
+    (configModule as { getConfig: typeof originalGetConfig }).getConfig = (<T>(
+      key: string,
+      defaultValue?: T,
+    ) =>
+      key === 'texra.agentOutputs.storageMode'
+        ? ('taskRunStorage' as T)
+        : (defaultValue as T)) as typeof configModule.getConfig;
+
+    originalWorkspaceFolders = vscode.workspace.workspaceFolders;
+    (
+      vscode.workspace as unknown as {
+        workspaceFolders?: vscode.WorkspaceFolder[];
+      }
+    ).workspaceFolders = [
+      {
+        uri: vscode.Uri.file(workspaceRoot),
+        index: 0,
+        name: 'test-workspace',
+      },
+    ];
+
+    originalWorkspaceGetPath = WorkspaceFS.getPath;
+    originalWorkspaceFullPath = WorkspaceFS.fullPath;
+    (
+      WorkspaceFS as unknown as { getPath: typeof WorkspaceFS.getPath }
+    ).getPath = () => workspaceRoot;
+    (
+      WorkspaceFS as unknown as { fullPath: typeof WorkspaceFS.fullPath }
+    ).fullPath = ((target: string) =>
+      path.join(workspaceRoot, target)) as typeof WorkspaceFS.fullPath;
+
+    originalStorageFullPath = StorageFS.fullPath;
+    originalStorageEnsureDir = StorageFS.ensureDir;
+    originalStorageExists = StorageFS.exists;
+    originalStorageCreateDir = StorageFS.createDir;
+    (StorageFS as unknown as { fullPath: typeof StorageFS.fullPath }).fullPath =
+      ((target: string) =>
+        path.join(storageRoot, target)) as typeof StorageFS.fullPath;
+    (
+      StorageFS as unknown as { ensureDir: typeof StorageFS.ensureDir }
+    ).ensureDir = (async (target: string) => {
+      await fs.mkdir(path.join(storageRoot, target), { recursive: true });
+    }) as typeof StorageFS.ensureDir;
+    (StorageFS as unknown as { exists: typeof StorageFS.exists }).exists =
+      (async (target: string) => {
+        try {
+          await fs.stat(path.join(storageRoot, target));
+          return true;
+        } catch {
+          return false;
+        }
+      }) as typeof StorageFS.exists;
+    (
+      StorageFS as unknown as { createDir: typeof StorageFS.createDir }
+    ).createDir = (async (target: string) => {
+      await fs.mkdir(path.join(storageRoot, target), { recursive: true });
+    }) as typeof StorageFS.createDir;
+  });
+
+  teardown(async () => {
+    (configModule as { getConfig: typeof originalGetConfig }).getConfig =
+      originalGetConfig;
+    (
+      vscode.workspace as unknown as {
+        workspaceFolders?: vscode.WorkspaceFolder[];
+      }
+    ).workspaceFolders = originalWorkspaceFolders;
+    (
+      WorkspaceFS as unknown as { getPath: typeof WorkspaceFS.getPath }
+    ).getPath = originalWorkspaceGetPath;
+    (
+      WorkspaceFS as unknown as { fullPath: typeof WorkspaceFS.fullPath }
+    ).fullPath = originalWorkspaceFullPath;
+    (StorageFS as unknown as { fullPath: typeof StorageFS.fullPath }).fullPath =
+      originalStorageFullPath;
+    (
+      StorageFS as unknown as { ensureDir: typeof StorageFS.ensureDir }
+    ).ensureDir = originalStorageEnsureDir;
+    (StorageFS as unknown as { exists: typeof StorageFS.exists }).exists =
+      originalStorageExists;
+    (
+      StorageFS as unknown as { createDir: typeof StorageFS.createDir }
+    ).createDir = originalStorageCreateDir;
+
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+    await fs.rm(storageRoot, { recursive: true, force: true });
+  });
+
+  test('captures original base files once per run', async () => {
+    const baseRelative = path.join('sections', 'main.tex');
+    const basePath = path.join(workspaceRoot, baseRelative);
+    await fs.mkdir(path.dirname(basePath), { recursive: true });
+    await fs.writeFile(basePath, 'original content');
+
+    const service = new TaskRunFileService('run-1234');
+    await service.prepareRunWorkspace([baseRelative]);
+
+    const snapshotPath = path.join(
+      storageRoot,
+      TASK_RUNS_DIR,
+      'run-1234',
+      'original',
+      baseRelative,
+    );
+    const snapshotInitial = await fs.readFile(snapshotPath, 'utf-8');
+    assert.strictEqual(snapshotInitial, 'original content');
+
+    await fs.writeFile(basePath, 'updated content');
+    await service.prepareRunWorkspace([baseRelative]);
+
+    const snapshotAfter = await fs.readFile(snapshotPath, 'utf-8');
+    assert.strictEqual(snapshotAfter, 'original content');
   });
 });
