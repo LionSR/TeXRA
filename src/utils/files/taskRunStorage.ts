@@ -218,6 +218,8 @@ export class TaskRunFileService {
     mode: 'workspace' | 'taskRunStorage';
     executionId?: ExecutionId;
   };
+  private hasPreparedSnapshot = false;
+  private readonly mirroredDependencies = new Set<string>();
 
   constructor(private readonly executionId?: ExecutionId) {
     const storageMode = getConfig<'workspace' | 'taskRunStorage'>(
@@ -249,6 +251,101 @@ export class TaskRunFileService {
       return;
     }
     await ensureRunDir(this.executionId);
+  }
+
+  /**
+   * Prepare run storage before processing begins by capturing the original
+   * versions of the selected base files. This keeps an immutable copy under
+   * `taskRuns/<id>/original/` so the workspace can be restored even after the
+   * agent edits files in-place. At present this only snapshots the explicitly
+   * selected files; additional dependency linking (preambles, figures, etc.)
+   * will be layered in once the agent reports those assets.
+   */
+  public async prepareRunWorkspace(baseFiles: string[]): Promise<void> {
+    if (!this.executionId || !this.useRunStorage) {
+      return;
+    }
+
+    if (this.hasPreparedSnapshot) {
+      return;
+    }
+
+    await this.ensureRunDirectory();
+
+    const workspaceRoot = WorkspaceFS.getPath();
+
+    for (const target of baseFiles) {
+      if (!target) {
+        continue;
+      }
+
+      const absoluteSource = path.isAbsolute(target)
+        ? target
+        : workspaceRoot
+          ? path.join(workspaceRoot, target)
+          : null;
+
+      if (!absoluteSource || !path.isAbsolute(absoluteSource)) {
+        continue;
+      }
+
+      let workspaceRelative: string;
+      try {
+        workspaceRelative = toWorkspaceRelative(absoluteSource);
+      } catch {
+        continue;
+      }
+
+      if (!workspaceRelative || shouldSkipRelocation(workspaceRelative)) {
+        continue;
+      }
+
+      try {
+        const stats = await fs.stat(absoluteSource);
+        if (!stats.isFile()) {
+          continue;
+        }
+
+        const snapshotTarget = path.join('original', workspaceRelative);
+        const { absolute: snapshotAbsolute } = getRunStoragePath(
+          this.executionId,
+          snapshotTarget,
+        );
+
+        try {
+          await fs.stat(snapshotAbsolute);
+          continue;
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err.code && err.code !== 'ENOENT') {
+            throw Object.assign(
+              new Error(
+                `Failed to inspect snapshot destination ${snapshotAbsolute}: ${err.message}`,
+              ),
+              { cause: err },
+            );
+          }
+        }
+
+        await ensureParentDir(snapshotAbsolute);
+        await fs.copyFile(absoluteSource, snapshotAbsolute);
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err?.code === 'ENOENT') {
+          continue;
+        }
+        throw Object.assign(
+          new Error(
+            `Failed to capture original file ${absoluteSource}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          ),
+          { cause: error },
+        );
+      }
+    }
+
+    this.hasPreparedSnapshot = true;
   }
 
   public getWorkspaceDisplayPath(target: string): string {
@@ -350,11 +447,19 @@ export class TaskRunFileService {
     storagePath: string;
     workspacePath: string;
   }> {
+    const workspaceRoot = WorkspaceFS.getPath();
     const absoluteSource = path.isAbsolute(workspaceFile)
       ? workspaceFile
-      : WorkspaceFS.getPath()
-        ? WorkspaceFS.fullPath(workspaceFile)
-        : workspaceFile;
+      : workspaceRoot
+        ? path.join(workspaceRoot, workspaceFile)
+        : null;
+
+    if (!absoluteSource || !path.isAbsolute(absoluteSource)) {
+      return {
+        storagePath: workspaceFile,
+        workspacePath: workspaceFile,
+      };
+    }
 
     if (!this.executionId || !this.useRunStorage) {
       return {
@@ -363,9 +468,29 @@ export class TaskRunFileService {
       };
     }
 
+    let workspaceRelative: string;
+    try {
+      workspaceRelative = toWorkspaceRelative(absoluteSource);
+    } catch {
+      return {
+        storagePath: absoluteSource,
+        workspacePath: absoluteSource,
+      };
+    }
+
+    if (!workspaceRelative || shouldSkipRelocation(workspaceRelative)) {
+      return {
+        storagePath: absoluteSource,
+        workspacePath: absoluteSource,
+      };
+    }
+
     await this.ensureRunDirectory();
     const { absolute } = getRunStoragePath(this.executionId, absoluteSource);
-    await createSymlink(absoluteSource, absolute);
+    if (!this.mirroredDependencies.has(workspaceRelative)) {
+      await createSymlink(absoluteSource, absolute);
+      this.mirroredDependencies.add(workspaceRelative);
+    }
     return {
       storagePath: absolute,
       workspacePath: absoluteSource,

@@ -108,6 +108,39 @@ export class LatexDiffManager {
     );
   }
 
+  private async ensureWorkspaceDependency(
+    target?: string | null,
+  ): Promise<void> {
+    if (!target) {
+      return;
+    }
+
+    if (!(await existsFlexible(target))) {
+      return;
+    }
+
+    try {
+      await this.fileService.mirrorWorkspaceFile(target);
+    } catch (error) {
+      this.logger.debug(
+        `Unable to mirror workspace dependency ${target}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+    }
+  }
+
+  private async relocateDiffArtifact(diffPath: string): Promise<string> {
+    if (!this.fileService.hasRunDirectory()) {
+      return diffPath;
+    }
+
+    const relocation = await this.fileService.relocateToRunStorage(diffPath);
+    return relocation.storagePath;
+  }
+
   async handleLatexdiffofOutput(
     currRound: number,
     mapping: RoundFileMapping,
@@ -174,6 +207,8 @@ export class LatexDiffManager {
           const baseAbsolute = this.fileService.resolveRelativePath(baseFile, {
             preferWorkspace: true,
           }).actual;
+          await this.ensureWorkspaceDependency(baseAbsolute);
+          await this.ensureWorkspaceDependency(resolved.workspaceReference);
           const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
 
           if (!resolved.actual) {
@@ -213,10 +248,9 @@ export class LatexDiffManager {
               true,
             );
             if (this.fileService.hasRunDirectory()) {
-              const relocation =
-                await this.fileService.relocateToRunStorage(diffPath);
-              diffPath = relocation.storagePath;
-              await this.fileService.relocateToRunStorage(buildDir);
+              diffPath = await this.relocateDiffArtifact(diffPath);
+              // Leave the build directory in place; it mainly caches temporary
+              // LaTeX intermediates and can be regenerated on demand.
             }
           }
           aggregated.push({
@@ -263,6 +297,8 @@ export class LatexDiffManager {
             currStorage,
             mapping.workspaceByOutput.get(currOutputFile),
           );
+          await this.ensureWorkspaceDependency(prevResolved.workspaceReference);
+          await this.ensureWorkspaceDependency(currResolved.workspaceReference);
 
           if (!prevResolved.actual || !currResolved.actual) {
             this.logger.warn(
@@ -304,10 +340,9 @@ export class LatexDiffManager {
               true,
             );
             if (this.fileService.hasRunDirectory()) {
-              const relocation =
-                await this.fileService.relocateToRunStorage(diffPath);
-              diffPath = relocation.storagePath;
-              await this.fileService.relocateToRunStorage(buildDir);
+              diffPath = await this.relocateDiffArtifact(diffPath);
+              // Build folders stay in the workspace to avoid copying the entire
+              // compilation output tree into run storage.
             }
           }
           aggregated.push({

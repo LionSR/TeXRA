@@ -82,10 +82,13 @@ export async function extractFigurePathsFromLatex(
       .join('\n');
 
     // Find all matches in the processed content for both patterns
+    const discovered = new Set<string>();
+
     for (const pattern of figurePatterns) {
       let match;
       while ((match = pattern.exec(processedLines)) !== null) {
         const figPath = match[1];
+        let found = false;
         for (const basePath of graphicspaths) {
           const normPath = path.normalize(path.join(basePath, figPath));
           // Try with common extensions if no extension is provided
@@ -98,9 +101,17 @@ export async function extractFigurePathsFromLatex(
 
             if (await existsFlexible(pathToCheck)) {
               const relative = path.relative(latexDir, pathToCheck);
-              figurePaths.push(relative);
+              if (!discovered.has(relative)) {
+                figurePaths.push(relative);
+                discovered.add(relative);
+              }
+              found = true;
               break;
             }
+          }
+
+          if (found) {
+            break;
           }
         }
       }
