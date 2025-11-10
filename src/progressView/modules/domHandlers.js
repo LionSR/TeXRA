@@ -30,7 +30,7 @@ class ProgressViewDomHandler extends BaseDomHandler {
       status: new Status(),
       usageSummary,
       usageGroup: new UsageGroupManager(usageSummary),
-      fileList: new FileList(usageSummary),
+      fileList: new FileList(),
       runSelector,
       taskGroups: new TaskGroupDomManager(runSelector),
       logEntries: new LogEntryManager(),
