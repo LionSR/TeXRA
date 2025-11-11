@@ -24,7 +24,9 @@ const ExtractBibliographyInputSchema = z.strictObject({
   bibPath: z
     .string()
     .min(1, 'bibPath cannot be empty if provided.')
-    .describe('Optional path to a BibTeX file to include when resolving citations.')
+    .describe(
+      'Optional path to a BibTeX file to include when resolving citations.',
+    )
     .optional(),
 });
 
