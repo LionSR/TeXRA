@@ -292,4 +292,87 @@ describe('runToolUseCycle DeepSeek', () => {
       output: 'fallback',
     });
   });
+
+  it('uses args payloads when present on tool calls', async () => {
+    class ArgsOnlyHandler extends MockHandler {
+      override extractToolUse(resp: any): string | null {
+        const original = super.extractToolUse(resp);
+        if (!original) {
+          return original;
+        }
+        return JSON.stringify({
+          id: 'c1',
+          name: 'echo',
+          args: { value: 'from-args' },
+        });
+      }
+    }
+
+    const config: ModelConfig = {
+      name: 'ds',
+      fullName: 'ds',
+      provider: ModelProvider.DEEPSEEK,
+      maxOutputTokens: 10,
+      inputPrice: 0,
+      outputPrice: 0,
+      contextWindow: 1000,
+      capabilities: { ...DEFAULT_MODEL_CAPABILITIES },
+      openRouterOnly: false,
+    };
+    const handler = new ArgsOnlyHandler(config);
+    const logger = new AgentLogger('TestHandler', true);
+    const tool = new EchoTool();
+    const toolRegistry = { echo: tool };
+    const setting: AgentSetting = {
+      agentType: AgentType.ToolUse,
+      agentCategory: AgentCategory.ToolUse,
+      documentTag: 'doc',
+      temperature: 0,
+      endTag: '</doc>',
+      requiredFiles: {},
+      requiredFilesInternal: {},
+      defaultOutputFiles: [],
+      filePatternsContain: [],
+      tools: [{ name: 'echo' }],
+    };
+    const prompt: AgentPrompt = {
+      systemPrompt: '',
+      userPrefix: '',
+      userRequest: '',
+    };
+    const toolState = new AgentWorkspaceState();
+    const options: ToolUseCycleOptions<OpenAI> = {
+      modelHandler: handler,
+      agentSetting: setting,
+      agentPrompt: prompt,
+      userVars: {},
+      userVarChannels: {
+        input: Object.freeze({}) as Readonly<Record<string, any>>,
+        transient: {},
+        output: {},
+      },
+      logger,
+      client: {} as OpenAI,
+      toolRegistry,
+      checkInterruption: () => false,
+      setAbortController: () => {},
+      toolState,
+      modelName: 'ds',
+      context: new AgentExecutionContext({
+        streamId: 'tool-use-deepseek-args' as StreamTabId,
+      }),
+    };
+    const store = new AgentSharedStore({
+      round: new ConversationRoundState(0),
+      run: new AgentRunState(),
+      workspace: toolState,
+      user: options.userVarChannels,
+    });
+
+    const messages: ProviderMessage[] = [];
+
+    await runToolUseCycle({ options, messages, store });
+
+    assert.deepEqual(tool.calls, [{ value: 'from-args' }]);
+  });
 });
