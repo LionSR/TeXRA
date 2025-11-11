@@ -508,13 +508,22 @@ export class TaskRunFileService {
 
   /**
    * Prepare run storage before processing begins by capturing the original
-   * versions of the selected base files. This keeps an immutable copy under
-   * `taskRuns/<id>/original/` so the workspace can be restored even after the
-   * agent edits files in-place. At present this only snapshots the explicitly
-   * selected files; additional dependency linking (preambles, figures, etc.)
-   * will be layered in once the agent reports those assets.
+   * versions of the selected base files and mirroring any declared dependencies.
+   *
+   * Base files are copied into `taskRuns/<id>/original/` as immutable snapshots
+   * so the workspace can be restored even after the agent edits files in-place.
+   * Additional workspace dependencies (references, auxiliaries, extracted
+   * figures, etc.) are mirrored into the active run directory via symlinks so
+   * tools operating inside task-run storage can resolve them using their
+   * familiar workspace-relative paths.
    */
-  public async prepareRunWorkspace(baseFiles: string[]): Promise<void> {
+  public async prepareRunWorkspace(
+    baseFiles: string[],
+    options: {
+      linkFiles?: string[];
+      mirrorBaseFiles?: boolean;
+    } = {},
+  ): Promise<void> {
     const executionId = this.activeExecutionId;
     if (!executionId) {
       return;
@@ -529,6 +538,28 @@ export class TaskRunFileService {
     }
 
     await this.ensureRunDirectory();
+
+    const linkTargets = new Set<string>();
+    const registerLink = (candidate?: string | null) => {
+      if (!candidate) {
+        return;
+      }
+      const trimmed = candidate.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      linkTargets.add(trimmed);
+    };
+
+    if (options.mirrorBaseFiles !== false) {
+      for (const base of baseFiles) {
+        registerLink(base);
+      }
+    }
+
+    for (const extra of options.linkFiles ?? []) {
+      registerLink(extra);
+    }
 
     const captureTasks = baseFiles.map(async (target) => {
       if (!target) {
@@ -588,6 +619,24 @@ export class TaskRunFileService {
     });
 
     await Promise.all(captureTasks);
+
+    if (linkTargets.size > 0) {
+      const candidates = Array.from(linkTargets);
+      await Promise.all(
+        candidates.map(async (candidate) => {
+          try {
+            await this.mirrorWorkspaceFile(candidate);
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            logger.warn(
+              CHANNEL,
+              `Failed to mirror workspace dependency ${candidate}: ${message}`,
+            );
+          }
+        }),
+      );
+    }
 
     this.hasPreparedSnapshot = true;
   }
