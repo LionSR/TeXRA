@@ -928,7 +928,7 @@ async function runLatexdiffViaWorkspaceScan(params: {
           message: result.message,
           basePath: currentFile,
           diffFileName: result.diffFileName,
-          description: `${path.basename(baseFile)} (r${currentRound}→r${nextRound})`,
+          description: `${path.basename(currentFile)} (r${currentRound}→r${nextRound})`,
         });
 
         completedOperations += 1;

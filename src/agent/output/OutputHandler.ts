@@ -120,6 +120,47 @@ export class OutputHandler implements IOutputHandler {
     this.runPreparation = null;
   }
 
+  private collectRunSnapshotFiles(): string[] {
+    const unique = new Set<string>();
+    for (const candidate of this.baseFiles) {
+      if (!candidate) {
+        continue;
+      }
+      const trimmed = candidate.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+      unique.add(trimmed);
+    }
+    return Array.from(unique);
+  }
+
+  private collectRunSupportFiles(): string[] {
+    const extras = new Set<string>();
+    const add = (value?: string | null) => {
+      if (!value) {
+        return;
+      }
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      extras.add(trimmed);
+    };
+
+    const cfg = this.agentConfig;
+    add(cfg.referenceFile ?? undefined);
+    cfg.referenceFiles.forEach((file) => add(file));
+    add(cfg.auxiliaryFile ?? undefined);
+    cfg.auxiliaryFiles.forEach((file) => add(file));
+    add(cfg.mediaFile ?? undefined);
+    cfg.mediaFiles.forEach((file) => add(file));
+    add(cfg.inputFile ?? undefined);
+    cfg.inputFiles.forEach((file) => add(file));
+
+    return Array.from(extras);
+  }
+
   public setActiveRun(runId?: string | null): void {
     const nextRunId = runId ?? null;
     if (nextRunId === this.currentRunId) {
@@ -131,12 +172,11 @@ export class OutputHandler implements IOutputHandler {
     this.fileService.updateRunContext(nextRunId ?? undefined);
 
     if (nextRunId) {
-      // Capture the original workspace files for this run. The helper currently
-      // snapshots only the explicitly selected base files and skips broader
-      // dependency graphs (preambles, figures, etc.), which will be wired up as
-      // those detection hooks become available.
+      const snapshotTargets = this.collectRunSnapshotFiles();
+      const supportFiles = this.collectRunSupportFiles();
       this.runPreparation = this.fileService.prepareRunWorkspace(
-        this.baseFiles,
+        snapshotTargets,
+        { linkFiles: supportFiles },
       );
     } else {
       this.runPreparation = null;
