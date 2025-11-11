@@ -4,8 +4,8 @@ import * as path from 'path';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
-const DIRECTIVE_PATTERN =
-  /\\(?:bibliography|addbibresource)(?:\s*\[[^\]]*\])?\s*\{([^}]*)\}/g;
+const DIRECTIVE_PATTERN_SOURCE =
+  '\\(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}';
 const CITE_COMMANDS = [
   'cite',
   'citet',
@@ -22,10 +22,16 @@ const CITE_COMMANDS = [
   'Parencite',
   'Footcite',
 ];
-const CITATION_PATTERN = new RegExp(
-  `\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
-  'g',
-);
+function createDirectivePattern(): RegExp {
+  return new RegExp(DIRECTIVE_PATTERN_SOURCE, 'g');
+}
+
+function createCitationPattern(): RegExp {
+  return new RegExp(
+    `\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
+    'g',
+  );
+}
 const COMMENT_PATTERN = /(^|[^\\])%.*$/gm;
 
 export interface BibliographyReferenceResult {
@@ -62,8 +68,9 @@ function normalizeBibPath(baseDir: string, target: string): string {
 function collectBibliographyPaths(baseDir: string, content: string): string[] {
   const paths = new Set<string>();
   let match: RegExpExecArray | null;
+  const directivePattern = createDirectivePattern();
 
-  while ((match = DIRECTIVE_PATTERN.exec(content)) !== null) {
+  while ((match = directivePattern.exec(content)) !== null) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const normalized = normalizeBibPath(baseDir, raw);
@@ -79,8 +86,9 @@ function collectBibliographyPaths(baseDir: string, content: string): string[] {
 function collectCitationKeys(content: string): string[] {
   const keys = new Set<string>();
   let match: RegExpExecArray | null;
+  const citationPattern = createCitationPattern();
 
-  while ((match = CITATION_PATTERN.exec(content)) !== null) {
+  while ((match = citationPattern.exec(content)) !== null) {
     const block = match[1];
     for (const raw of block.split(',')) {
       const key = raw.trim();
@@ -172,14 +180,16 @@ export async function loadBibliographyEntries(
   citationKeys: string[],
 ): Promise<BibliographyEntriesResult> {
   const entries = new Map<string, string>();
-  const requestedKeys = new Set(citationKeys);
+  const hasWildcard = citationKeys.includes('*');
+  const filteredKeys = citationKeys.filter((key) => key !== '*');
+  const requestedKeys = new Set(filteredKeys);
 
   for (const filePath of bibliographyFiles) {
     const content = await WorkspaceFS.read(filePath);
     const parsed = parseBibEntries(content);
     for (const [key, value] of parsed.entries()) {
       if (
-        (requestedKeys.size === 0 || requestedKeys.has(key)) &&
+        (hasWildcard || requestedKeys.size === 0 || requestedKeys.has(key)) &&
         !entries.has(key)
       ) {
         entries.set(key, value);
@@ -187,7 +197,7 @@ export async function loadBibliographyEntries(
     }
   }
 
-  const missingKeys = citationKeys.filter((key) => !entries.has(key));
+  const missingKeys = filteredKeys.filter((key) => !entries.has(key));
 
   return {
     entries,
