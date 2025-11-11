@@ -8,12 +8,13 @@ import * as vscode from 'vscode';
 import { DiffStatsManager } from './DiffStatsManager';
 import type { IOutputHandler } from './IOutputHandler';
 import { LatexDiffManager } from './LatexDiffManager';
-import type {
-  NamedOutputFile,
-  OutputFileInfo,
-  OutputXmlSummary,
-  RoundFileMapping,
-  RoundOutputArtifacts,
+import {
+  OutputFileInfoSchema,
+  type NamedOutputFile,
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type RoundFileMapping,
+  type RoundOutputArtifacts,
 } from './types';
 import { XmlOutputManager } from './XmlOutputManager';
 
@@ -461,6 +462,85 @@ export class OutputHandler implements IOutputHandler {
     return mapping;
   }
 
+  private buildNamedOutputsFromInfos(
+    infos: OutputFileInfo[],
+  ): NamedOutputFile[] {
+    return infos.map((info) => ({
+      source: info.source ?? info.relativePath,
+      path: info.path,
+      relativePath: info.relativePath,
+      workspacePath: info.workspacePath ?? undefined,
+      location: info.location,
+    }));
+  }
+
+  private normalizeHydratedInfos(
+    round: number,
+    infos: OutputFileInfo[],
+  ): OutputFileInfo[] {
+    const normalized: OutputFileInfo[] = [];
+    for (const candidate of infos) {
+      const parsed = OutputFileInfoSchema.safeParse(candidate);
+      if (!parsed.success) {
+        this.logger.debug(
+          `Skipping invalid output file info while hydrating round ${round}: ${parsed.error.message}`,
+          undefined,
+          MESSAGE_TYPES.INTERNAL,
+        );
+        continue;
+      }
+      normalized.push(parsed.data);
+    }
+    return normalized;
+  }
+
+  private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
+    const normalized = this.normalizeHydratedInfos(round, infos);
+
+    if (normalized.length === 0) {
+      delete this.outputFiles[round];
+      delete this.outputMappings[round];
+      delete this.roundFileInfos[round];
+      delete this.roundXmlSummaries[round];
+      delete this.rawOutputs[round];
+      this.invalidateMappingsFromRound(round);
+      return;
+    }
+
+    this.roundFileInfos[round] = normalized;
+    this.outputFiles[round] = normalized.map((info) => info.path);
+    this.outputMappings[round] = this.buildNamedOutputsFromInfos(normalized);
+
+    const rawSource =
+      normalized.find((info) => info.rawLocation || info.rawOutputPath) ??
+      normalized[0];
+
+    const rawLocation =
+      rawSource?.rawLocation ??
+      (rawSource?.rawOutputPath
+        ? this.fileService.describePath(rawSource.rawOutputPath)
+        : null);
+
+    this.rawOutputs[round] = rawLocation ?? null;
+
+    const summary = normalized
+      .map((info) => info.xmlSummary ?? null)
+      .find((value) => value !== null);
+
+    if (summary) {
+      this.roundXmlSummaries[round] = {
+        tagContents: { ...summary.tagContents },
+        documents: [...summary.documents],
+        singleOutputFile: summary.singleOutputFile,
+        sourceLocation: summary.sourceLocation ?? rawLocation ?? null,
+      };
+    } else {
+      delete this.roundXmlSummaries[round];
+    }
+
+    this.invalidateMappingsFromRound(round);
+  }
+
   public hydrateFromArtifacts(
     runId: string | null | undefined,
     rounds: Map<number, OutputFileInfo[]>,
@@ -471,58 +551,8 @@ export class OutputHandler implements IOutputHandler {
     }
 
     for (const [round, infos] of rounds.entries()) {
-      const normalizedInfos = Array.isArray(infos)
-        ? infos.filter((info): info is OutputFileInfo => Boolean(info))
-        : [];
-
-      const hydratedInfos = normalizedInfos.map((info) => ({
-        ...info,
-        baseLocation: info.baseLocation ?? null,
-        prevLocation: info.prevLocation ?? null,
-        originalLocation: info.originalLocation ?? null,
-        rawLocation: info.rawLocation ?? null,
-        rawOutputPath:
-          info.rawOutputPath ?? info.rawLocation?.absolutePath ?? null,
-        xmlSummary: info.xmlSummary ?? null,
-      }));
-
-      this.outputFiles[round] = hydratedInfos.map((info) => info.path);
-      this.outputMappings[round] = hydratedInfos.map((info) => ({
-        source: info.source ?? info.relativePath,
-        path: info.path,
-        relativePath: info.relativePath,
-        workspacePath: info.workspacePath ?? undefined,
-        location: info.location,
-      }));
-
-      this.roundFileInfos[round] = hydratedInfos;
-
-      const candidate = hydratedInfos[0];
-      if (candidate) {
-        let rawLocation = candidate.rawLocation ?? null;
-        if (!rawLocation && candidate.rawOutputPath) {
-          rawLocation = this.fileService.describePath(candidate.rawOutputPath);
-        }
-        this.rawOutputs[round] = rawLocation;
-
-        if (candidate.xmlSummary) {
-          this.roundXmlSummaries[round] = {
-            tagContents: { ...candidate.xmlSummary.tagContents },
-            documents: [...candidate.xmlSummary.documents],
-            singleOutputFile: candidate.xmlSummary.singleOutputFile,
-            sourceLocation:
-              candidate.xmlSummary.sourceLocation ?? rawLocation ?? null,
-          };
-        } else {
-          delete this.roundXmlSummaries[round];
-        }
-      }
-
-      if (!candidate) {
-        this.rawOutputs[round] = this.rawOutputs[round] ?? null;
-      }
-
-      this.invalidateMappingsFromRound(round);
+      const entries = Array.isArray(infos) ? infos : [];
+      this.applyHydratedRound(round, entries);
     }
   }
 
