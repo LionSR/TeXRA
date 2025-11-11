@@ -127,7 +127,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     singleOutputFile: null,
   };
   protected readonly fileService: TaskRunFileService;
-  private hasHydratedOutputs = false;
+  private hydrationPromise: Promise<void> | null = null;
+  private hydratedRoundCount = 0;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -192,20 +193,51 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     runId?: string | null;
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
-    this.fileService.updateRunContext(params.executionId);
-    this.outputHandler.hydrateFromArtifacts(
-      params.runId ?? null,
-      params.rounds,
-    );
+    const hydration = (async () => {
+      this.hydratedRoundCount = 0;
+      this.roundOutputArtifacts = [];
+      this.fileService.updateRunContext(params.executionId);
+      this.outputHandler.hydrateFromArtifacts(
+        params.runId ?? null,
+        params.rounds,
+      );
 
-    const sortedRounds = Array.from(params.rounds.keys()).sort((a, b) => a - b);
+      const sortedRounds = Array.from(params.rounds.keys()).sort(
+        (a, b) => a - b,
+      );
 
-    for (const round of sortedRounds) {
-      const artifacts = await this.outputHandler.getRoundArtifacts(round);
-      this.roundOutputArtifacts[round] = artifacts;
+      for (const round of sortedRounds) {
+        const artifacts = await this.outputHandler.getRoundArtifacts(round);
+        this.roundOutputArtifacts[round] = artifacts;
+      }
+
+      this.hydratedRoundCount = sortedRounds.length;
+    })();
+
+    this.hydrationPromise = hydration;
+
+    try {
+      await hydration;
+    } finally {
+      if (this.hydrationPromise === hydration) {
+        this.hydrationPromise = null;
+      }
+    }
+  }
+
+  private async awaitPendingHydration(): Promise<void> {
+    const pending = this.hydrationPromise;
+    if (!pending) {
+      return;
     }
 
-    this.hasHydratedOutputs = params.rounds.size > 0;
+    try {
+      await pending;
+    } finally {
+      if (this.hydrationPromise === pending) {
+        this.hydrationPromise = null;
+      }
+    }
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -642,7 +674,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
-    if (!this.hasHydratedOutputs) {
+    await this.awaitPendingHydration();
+
+    if (this.hydratedRoundCount === 0) {
       this.roundOutputArtifacts = [];
     }
     this.runtimeXmlExports = {
@@ -650,7 +684,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       documents: [],
       singleOutputFile: null,
     };
-    this.hasHydratedOutputs = false;
+    this.hydratedRoundCount = 0;
     const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();

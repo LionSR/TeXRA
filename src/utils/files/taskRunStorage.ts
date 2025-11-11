@@ -10,9 +10,21 @@ import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { AbsoluteFS } from './absoluteFS';
+import { existsFlexible } from './flexibleFS';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
+
+const PATH_SEPARATORS = /[\\/]/;
+
+function decodePathComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 /**
  * Directory name for storing task run artifacts.
@@ -86,11 +98,30 @@ export function isValidExecutionId(
     return false;
   }
 
-  if (id.includes('..')) {
+  const decoded = decodePathComponent(id);
+
+  if (path.posix.isAbsolute(id) || path.win32.isAbsolute(id)) {
     return false;
   }
 
-  return /^[A-Za-z0-9._-]+$/.test(id);
+  if (PATH_SEPARATORS.test(id) || PATH_SEPARATORS.test(decoded)) {
+    return false;
+  }
+
+  const normalized = path.normalize(decoded);
+  if (
+    normalized.startsWith('..') ||
+    normalized.includes(`..${path.sep}`) ||
+    normalized === '..'
+  ) {
+    return false;
+  }
+
+  if (decoded.includes('..')) {
+    return false;
+  }
+
+  return /^[A-Za-z0-9._-]+$/.test(decoded);
 }
 
 /**
@@ -169,6 +200,12 @@ export function getRunStoragePaths(
 async function ensureParentDir(filePath: string): Promise<void> {
   const parentDir = path.dirname(filePath);
   await fs.mkdir(parentDir, { recursive: true });
+}
+
+async function removeIfExists(target: string): Promise<void> {
+  if (await AbsoluteFS.exists(target)) {
+    await AbsoluteFS.delete(target, { recursive: true, useTrash: false });
+  }
 }
 
 export async function moveToTarget(
@@ -690,11 +727,24 @@ export class TaskRunFileService {
 
     await this.ensureRunDirectory();
 
-    if (options.keepWorkspaceCopy) {
-      await ensureParentDir(runInfo.absolutePath);
-      await fs.copyFile(workspace.absolutePath, runInfo.absolutePath);
-    } else {
-      await moveToTarget(workspace.absolutePath, runInfo.absolutePath);
+    try {
+      if (options.keepWorkspaceCopy) {
+        await ensureParentDir(runInfo.absolutePath);
+        await fs.copyFile(workspace.absolutePath, runInfo.absolutePath);
+      } else {
+        await moveToTarget(workspace.absolutePath, runInfo.absolutePath);
+      }
+    } catch (error) {
+      await removeIfExists(runInfo.absolutePath);
+      throw error;
+    }
+
+    const persisted = await existsFlexible(runInfo.absolutePath);
+    if (!persisted) {
+      await removeIfExists(runInfo.absolutePath);
+      throw new Error(
+        `Failed to relocate ${workspace.absolutePath} into run storage at ${runInfo.absolutePath}`,
+      );
     }
 
     return createFileLocation({
