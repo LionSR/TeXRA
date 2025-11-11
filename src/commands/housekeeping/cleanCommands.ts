@@ -126,6 +126,7 @@ async function handleCleanMultiple(
 
 export async function handleClean(config: {
   streamId?: string;
+  skipProgressViewClear?: boolean;
   [key: string]: any;
 }) {
   logger.debug(
@@ -173,9 +174,12 @@ export async function handleClean(config: {
     getStreamTabId(config.agent, config.model, config.inputFile, {
       useMultipleOutputs,
     });
-  bus.emit('clearOutputFiles', streamId);
-  bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
+
+  if (!config.skipProgressViewClear) {
+    bus.emit('clearOutputFiles', streamId);
+    bus.emit('clearMissingOutputs', streamId);
+    bus.emit('clearTaskOutput', streamId);
+  }
 }
 
 export const cleanCommands = {
