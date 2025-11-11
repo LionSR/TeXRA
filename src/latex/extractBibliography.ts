@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import { parse as parseBibTeX } from '@retorquere/bibtex-parser';
+import { BibEntry, parseBibFile } from 'bibtex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
@@ -132,17 +132,79 @@ export async function extractBibliographyContext(
   };
 }
 
+function formatFieldValue(value: unknown): string {
+  if (value === undefined || value === null) {
+    return '{}';
+  }
+
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+
+  if (typeof value === 'string') {
+    return `{${value}}`;
+  }
+
+  if (typeof value === 'object') {
+    const candidate = value as { type?: string; stringify?: () => string };
+    if (typeof candidate.stringify === 'function') {
+      const rendered = candidate.stringify();
+      if (candidate.type === 'quotedstringwrapper') {
+        return `"${rendered}"`;
+      }
+
+      return `{${rendered}}`;
+    }
+
+    return `{${String(value)}}`;
+  }
+
+  return `{${String(value)}}`;
+}
+
+function formatBibEntry(
+  rawEntry: BibEntry,
+  processedEntry?: BibEntry,
+): string | null {
+  const type = rawEntry.type?.trim();
+  const key = rawEntry._id?.trim();
+
+  if (!type || !key) {
+    return null;
+  }
+
+  const lines: string[] = [`@${type}{${key},`];
+  const fieldNames = Object.keys(rawEntry.fields);
+
+  for (const fieldName of fieldNames) {
+    const processedValue =
+      processedEntry?.getField(fieldName) ?? rawEntry.fields[fieldName];
+    const serialized = formatFieldValue(processedValue);
+    lines.push(`  ${fieldName} = ${serialized},`);
+  }
+
+  if (fieldNames.length > 0) {
+    const lastIndex = lines.length - 1;
+    lines[lastIndex] = lines[lastIndex].replace(/,$/, '');
+  }
+
+  lines.push('}');
+  return lines.join('\n');
+}
+
 function parseBibEntries(content: string): Map<string, string> {
-  const library = parseBibTeX(content);
+  const library = parseBibFile(content);
   const entries = new Map<string, string>();
 
-  for (const entry of library.entries) {
-    const key = entry.key?.trim();
-    if (!key || entries.has(key)) {
+  for (const rawEntry of library.entries_raw) {
+    const formatted = formatBibEntry(rawEntry, library.entries$[rawEntry._id]);
+    const key = rawEntry._id?.trim();
+
+    if (!key || !formatted || entries.has(key)) {
       continue;
     }
 
-    entries.set(key, entry.input.trim());
+    entries.set(key, formatted);
   }
 
   return entries;
@@ -155,22 +217,42 @@ export async function loadBibliographyEntries(
   const entries = new Map<string, string>();
   const hasWildcard = citationKeys.includes('*');
   const filteredKeys = citationKeys.filter((key) => key !== '*');
-  const requestedKeys = new Set(filteredKeys);
+  const normalizedRequestedKeys = new Set(
+    filteredKeys.map((key) => key.toLowerCase()),
+  );
+  const parsedEntries = new Map<string, { key: string; value: string }>();
 
   for (const filePath of bibliographyFiles) {
     const content = await WorkspaceFS.read(filePath);
     const parsed = parseBibEntries(content);
     for (const [key, value] of parsed.entries()) {
-      if (
-        (hasWildcard || requestedKeys.size === 0 || requestedKeys.has(key)) &&
-        !entries.has(key)
-      ) {
-        entries.set(key, value);
+      const normalizedKey = key.toLowerCase();
+      if (!parsedEntries.has(normalizedKey)) {
+        parsedEntries.set(normalizedKey, { key, value });
       }
     }
   }
 
-  const missingKeys = filteredKeys.filter((key) => !entries.has(key));
+  if (hasWildcard || normalizedRequestedKeys.size === 0) {
+    for (const { key, value } of parsedEntries.values()) {
+      if (!entries.has(key)) {
+        entries.set(key, value);
+      }
+    }
+  } else {
+    for (const originalKey of filteredKeys) {
+      const normalizedKey = originalKey.toLowerCase();
+      const matched = parsedEntries.get(normalizedKey);
+      if (matched && !entries.has(originalKey)) {
+        entries.set(originalKey, matched.value);
+      }
+    }
+  }
+
+  const missingKeys =
+    hasWildcard || normalizedRequestedKeys.size === 0
+      ? []
+      : filteredKeys.filter((key) => !parsedEntries.has(key.toLowerCase()));
 
   return {
     entries,
