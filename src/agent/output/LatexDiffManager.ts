@@ -1,4 +1,5 @@
 // Standard library imports
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 // Local imports - agent
@@ -46,6 +47,14 @@ export class LatexDiffManager {
     this.latexdiffService = new LaTeXdiffService(channel);
   }
 
+  private async resolveActualPath(target: string): Promise<string> {
+    try {
+      return await fs.realpath(target);
+    } catch {
+      return target;
+    }
+  }
+
   private async resolveDiffTarget(
     relativePath: string,
     location?: FileLocation,
@@ -69,12 +78,18 @@ export class LatexDiffManager {
     const actualCandidate = location?.absolutePath;
 
     if (actualCandidate && (await existsFlexible(actualCandidate))) {
-      return { actual: actualCandidate, workspaceDir, workspaceReference };
+      const resolvedActual = await this.resolveActualPath(actualCandidate);
+      return {
+        actual: resolvedActual,
+        workspaceDir,
+        workspaceReference,
+      };
     }
 
     if (workspaceReference && (await existsFlexible(workspaceReference))) {
+      const resolvedActual = await this.resolveActualPath(workspaceReference);
       return {
-        actual: workspaceReference,
+        actual: resolvedActual,
         workspaceDir,
         workspaceReference,
       };
