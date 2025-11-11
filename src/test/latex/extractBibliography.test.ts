@@ -48,6 +48,33 @@ suite('extractBibliography helpers', () => {
     );
   });
 
+  test('handles wildcard nocite directives consistently across runs', async () => {
+    const texPath = 'paper.tex';
+    const expectedBibPath = 'refs.bib';
+    const texContent = `
+      % bibliographies
+      \\bibliography{refs}
+      Intro text
+      \\nocite{*}
+    `;
+
+    (WorkspaceFS as unknown as { read: typeof originalRead }).read = async () =>
+      texContent;
+    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
+      async () => true;
+
+    const first = await extractBibliographyContext(texPath);
+    const second = await extractBibliographyContext(texPath);
+
+    const expectedKeys = new Set(['*']);
+
+    assert.deepStrictEqual(first.bibliographyFiles, [expectedBibPath]);
+    assert.deepStrictEqual(second.bibliographyFiles, [expectedBibPath]);
+    assert.deepStrictEqual(new Set(first.citationKeys), expectedKeys);
+    assert.deepStrictEqual(new Set(second.citationKeys), expectedKeys);
+    assert.deepStrictEqual(second, first);
+  });
+
   test('marks missing bibliography files and ignores empty citations', async () => {
     const texPath = 'paper.tex';
 
@@ -101,5 +128,28 @@ suite('extractBibliography helpers', () => {
     assert.deepStrictEqual(formatted, [
       '@article{alpha,\n  title = {Alpha Paper},\n}',
     ]);
+  });
+
+  test('loads all entries when nocite wildcard is present', async () => {
+    const expectedContent = `@article{alpha,
+  title = {Alpha Paper},
+}
+
+@book{beta,
+  title = {Beta Book},
+}`;
+
+    (WorkspaceFS as unknown as { read: typeof originalRead }).read = async () =>
+      expectedContent;
+
+    const { entries, missingKeys } = await loadBibliographyEntries(
+      ['references.bib'],
+      ['*'],
+    );
+
+    assert.strictEqual(entries.size, 2);
+    assert.deepStrictEqual(missingKeys, []);
+    assert.ok(entries.has('alpha'));
+    assert.ok(entries.has('beta'));
   });
 });
