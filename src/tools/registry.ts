@@ -8,7 +8,11 @@ import { FileOpTool } from './fileOp';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
 import { LsTool } from './ls';
-import { ExtractLatexFiguresTool, ExtractTikzFiguresTool } from './latex';
+import {
+  ExtractBibliographyTool,
+  ExtractLatexFiguresTool,
+  ExtractTikzFiguresTool,
+} from './latex';
 import { ArxivDownloadTool, ArxivMetadataTool, ArxivSearchTool } from './arxiv';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
@@ -35,6 +39,7 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   arxiv_metadata: new ArxivMetadataTool(),
   arxiv_search: new ArxivSearchTool(),
   extract_figures: new ExtractLatexFiguresTool(),
+  extract_bib_entries: new ExtractBibliographyTool(),
   extract_tikz_figures: new ExtractTikzFiguresTool(),
   crossref_doi: new CrossrefDoiTool(),
   crossref_search: new CrossrefSearchTool(),
