@@ -64,6 +64,8 @@ When you are running a tool-use agent outside the UI controls, you can explicitl
   - `compile` (default `true`): set to `false` to skip compilation and just receive a summary of discovered figures.
   - Attachments are limited to the first 12 compiled PDFs to keep responses lightweight.
 
+Need the accompanying references as well? Use the complementary `extract_bib_entries` tool to pull the BibTeX records for every citation found in the same LaTeX file. See the [Tool Integration guide](./tool-integration.md#bibliography-extraction) for details and a sample payload.
+
 Example tool call payload for `extract_figures`:
 
 ```json
