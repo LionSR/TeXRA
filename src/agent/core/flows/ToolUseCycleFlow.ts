@@ -89,9 +89,7 @@ const RawToolCallPayloadSchema = z
       })
       .optional(),
     input: z.unknown().optional(),
-    args: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional(),
+    args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
     arguments: z
       .union([z.string(), z.record(z.string(), z.unknown())])
       .optional(),
