@@ -69,9 +69,13 @@ export class FlexibleFS {
       }
 
       const absoluteTarget = WorkspaceFS.fullPath(target);
+      const replacementSize =
+        typeof content === 'string'
+          ? Buffer.byteLength(content, 'utf-8')
+          : content.byteLength;
       logger.warn(
         CHANNEL,
-        `Detected circular symlink while writing ${absoluteTarget}, replacing with direct copy`,
+        `Detected circular symlink while writing ${absoluteTarget}, replaced with file (${replacementSize} bytes)`,
       );
       await AbsoluteFS.delete(absoluteTarget, {
         recursive: true,
