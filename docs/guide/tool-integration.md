@@ -24,6 +24,20 @@ TeXRA can use `texcount` (often included with LaTeX) to provide document statist
 
 Ensure `texcount` is in your system's PATH.
 
+**Bibliography Extraction:**
+Tool-use agents can call `extract_bib_entries` to resolve the bibliography context of a LaTeX file. The tool finds `\bibliography{}`/`\addbibresource{}` directives, loads the referenced `.bib` files, and returns the raw BibTeX entries for every cited key (including warnings for missing files or unresolved keys). Example payload:
+
+```json
+{
+  "name": "extract_bib_entries",
+  "arguments": {
+    "texPath": "paper/main.tex"
+  }
+}
+```
+
+Use this when you need the exact BibTeX records for citations you plan to edit, format, or validate.
+
 ### 2. Figure & Media Handling
 
 Processing visual elements for analysis and inclusion.
