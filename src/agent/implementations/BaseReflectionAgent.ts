@@ -185,7 +185,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.fileService,
     );
 
-    this.latexMediaManager = new LatexMediaManager(this.logger);
+    this.latexMediaManager = new LatexMediaManager(
+      this.logger,
+      this.fileService,
+    );
   }
 
   public async hydrateOutputState(params: {
@@ -723,7 +726,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      this.hydratedRoundCount = 0;
+      this.hydratedRoundCount =
+        this.roundOutputArtifacts.filter(Boolean).length;
     }
 
     this.runtimeXmlExports = this.computeRuntimeXmlExports();
