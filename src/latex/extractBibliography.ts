@@ -1,6 +1,9 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import { parse as parseBibTeX } from '@retorquere/bibtex-parser';
+
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
@@ -130,46 +133,16 @@ export async function extractBibliographyContext(
 }
 
 function parseBibEntries(content: string): Map<string, string> {
+  const library = parseBibTeX(content);
   const entries = new Map<string, string>();
-  const entryPattern = /@([\w-]+)\s*(\{|\()/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = entryPattern.exec(content)) !== null) {
-    const startIndex = match.index;
-    const delimiter = match[2];
-    const openChar = delimiter;
-    const closeChar = delimiter === '{' ? '}' : ')';
-    let depth = 1;
-    let cursor = entryPattern.lastIndex;
-
-    while (cursor < content.length && depth > 0) {
-      const char = content[cursor];
-      if (char === openChar) {
-        depth += 1;
-      } else if (char === closeChar) {
-        depth -= 1;
-      }
-      cursor += 1;
-    }
-
-    if (depth !== 0) {
-      entryPattern.lastIndex = cursor;
+  for (const entry of library.entries) {
+    const key = entry.key?.trim();
+    if (!key || entries.has(key)) {
       continue;
     }
 
-    const entryText = content.slice(startIndex, cursor).trim();
-    const keyMatch = entryText.match(/@[^({]*[({]\s*([^,\s]+)\s*,/);
-    if (!keyMatch) {
-      entryPattern.lastIndex = cursor;
-      continue;
-    }
-
-    const key = keyMatch[1].trim();
-    if (!entries.has(key)) {
-      entries.set(key, entryText);
-    }
-
-    entryPattern.lastIndex = cursor;
+    entries.set(key, entry.input.trim());
   }
 
   return entries;

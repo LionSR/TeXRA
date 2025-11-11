@@ -21,6 +21,11 @@ const ExtractBibliographyInputSchema = z.strictObject({
     .string()
     .min(1, 'texPath is required.')
     .describe('Path to the LaTeX file to scan for citations.'),
+  bibPath: z
+    .string()
+    .min(1, 'bibPath cannot be empty if provided.')
+    .describe('Optional path to a BibTeX file to include when resolving citations.')
+    .optional(),
 });
 
 export type ExtractBibliographyInput = z.infer<
@@ -35,7 +40,7 @@ export class ExtractBibliographyTool extends defineTool({
     'Collect BibTeX records for citations referenced in a LaTeX document.',
   schema: ExtractBibliographyInputSchema,
 }) {
-  protected async execute({ texPath }: ExtractBibliographyInput) {
+  protected async execute({ texPath, bibPath }: ExtractBibliographyInput) {
     const { resolved, display } = resolveAndFormat(texPath);
 
     if (!(await WorkspaceFS.exists(resolved.relative))) {
@@ -43,8 +48,23 @@ export class ExtractBibliographyTool extends defineTool({
     }
 
     const context = await extractBibliographyContext(resolved.relative);
-    const { citationKeys, bibliographyFiles, missingBibliographyFiles } =
-      context;
+    const bibliographyFiles = [...context.bibliographyFiles];
+    const missingBibliographyFiles = [...context.missingBibliographyFiles];
+    let citationKeys = [...context.citationKeys];
+
+    if (bibPath) {
+      const { resolved: bibResolved } = resolveAndFormat(bibPath);
+      const candidate = bibResolved.relative;
+      const exists = await WorkspaceFS.exists(candidate);
+      const target = exists ? bibliographyFiles : missingBibliographyFiles;
+      if (!target.includes(candidate)) {
+        target.push(candidate);
+      }
+    }
+
+    if (bibPath && citationKeys.length === 0) {
+      citationKeys = ['*'];
+    }
 
     if (
       citationKeys.length === 0 &&

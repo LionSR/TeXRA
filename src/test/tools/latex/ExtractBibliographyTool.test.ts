@@ -123,4 +123,90 @@ suite('ExtractBibliographyTool', () => {
     assert.strictEqual(result.isError, true);
     assert.ok(result.error?.includes('LaTeX file not found'));
   });
+
+  test('includes explicit bibliography path when provided', async () => {
+    const calls: { paths: string[]; keys: string[] }[] = [];
+
+    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
+      async (path: string) => path === 'thesis.tex' || path === 'extra.bib';
+    (
+      bibliographyModule as {
+        extractBibliographyContext: typeof originalContext;
+      }
+    ).extractBibliographyContext = async () => ({
+      citationKeys: ['alpha'],
+      bibliographyFiles: [],
+      missingBibliographyFiles: [],
+    });
+    (
+      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
+    ).loadBibliographyEntries = async (paths, keys) => {
+      calls.push({ paths, keys });
+      return {
+        entries: new Map([['alpha', '@article{alpha,...}']]),
+        missingKeys: [],
+      };
+    };
+    (
+      bibliographyModule as {
+        summarizeBibliographyEntries: typeof originalSummarize;
+      }
+    ).summarizeBibliographyEntries = () => ['@article{alpha,...}'];
+
+    const tool = new ExtractBibliographyTool();
+    const result = await tool.call({
+      texPath: 'thesis.tex',
+      bibPath: 'extra.bib',
+    });
+
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].paths, ['extra.bib']);
+    assert.deepStrictEqual(calls[0].keys, ['alpha']);
+    assert.ok(result.summary?.includes('Resolved 1 bibliography entry'));
+  });
+
+  test('falls back to wildcard when only a bibliography path is supplied', async () => {
+    const calls: { paths: string[]; keys: string[] }[] = [];
+
+    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
+      async (path: string) => path === 'standalone.tex' || path === 'refs.bib';
+    (
+      bibliographyModule as {
+        extractBibliographyContext: typeof originalContext;
+      }
+    ).extractBibliographyContext = async () => ({
+      citationKeys: [],
+      bibliographyFiles: [],
+      missingBibliographyFiles: [],
+    });
+    (
+      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
+    ).loadBibliographyEntries = async (paths, keys) => {
+      calls.push({ paths, keys });
+      return {
+        entries: new Map(),
+        missingKeys: [],
+      };
+    };
+    (
+      bibliographyModule as {
+        summarizeBibliographyEntries: typeof originalSummarize;
+      }
+    ).summarizeBibliographyEntries = () => [];
+
+    const tool = new ExtractBibliographyTool();
+    const result = await tool.call({
+      texPath: 'standalone.tex',
+      bibPath: 'refs.bib',
+    });
+
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].paths, ['refs.bib']);
+    assert.deepStrictEqual(calls[0].keys, ['*']);
+    assert.ok(
+      result.summary?.includes(
+        'No matching bibliography entries found for 1 citation key in standalone.tex.',
+      ),
+    );
+  });
 });
