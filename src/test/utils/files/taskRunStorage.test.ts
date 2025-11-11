@@ -260,4 +260,46 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
     const snapshotAfter = await fs.readFile(snapshotPath, 'utf-8');
     assert.strictEqual(snapshotAfter, 'original content');
   });
+
+  test('mirrors dependency files into run storage', async () => {
+    const baseRelative = path.join('documents', 'draft.tex');
+    const basePath = path.join(workspaceRoot, baseRelative);
+    const referenceRelative = path.join('references', 'main.bib');
+    const referencePath = path.join(workspaceRoot, referenceRelative);
+    const auxiliaryRelative = path.join('notes', 'summary.tex');
+    const auxiliaryPath = path.join(workspaceRoot, auxiliaryRelative);
+
+    await fs.mkdir(path.dirname(basePath), { recursive: true });
+    await fs.mkdir(path.dirname(referencePath), { recursive: true });
+    await fs.mkdir(path.dirname(auxiliaryPath), { recursive: true });
+
+    await fs.writeFile(basePath, 'draft content');
+    await fs.writeFile(referencePath, 'bibliography');
+    await fs.writeFile(auxiliaryPath, 'notes');
+
+    const service = new TaskRunFileService('run-5678');
+    await service.prepareRunWorkspace([baseRelative], {
+      linkFiles: [referenceRelative, auxiliaryRelative],
+    });
+
+    const runRoot = path.join(storageRoot, TASK_RUNS_DIR, 'run-5678');
+    const mirroredReference = path.join(runRoot, referenceRelative);
+    const mirroredAuxiliary = path.join(runRoot, auxiliaryRelative);
+
+    const referenceStats = await fs.lstat(mirroredReference);
+    assert.ok(referenceStats.isFile() || referenceStats.isSymbolicLink());
+    const mirroredReferenceContent = await fs.readFile(
+      mirroredReference,
+      'utf-8',
+    );
+    assert.strictEqual(mirroredReferenceContent, 'bibliography');
+
+    const auxiliaryStats = await fs.lstat(mirroredAuxiliary);
+    assert.ok(auxiliaryStats.isFile() || auxiliaryStats.isSymbolicLink());
+    const mirroredAuxiliaryContent = await fs.readFile(
+      mirroredAuxiliary,
+      'utf-8',
+    );
+    assert.strictEqual(mirroredAuxiliaryContent, 'notes');
+  });
 });
