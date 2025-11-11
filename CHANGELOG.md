@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- Add an `extract_bib_entries` LaTeX tool with shared helpers so agents can gather cited BibTeX records and surface missing files or keys directly in tool responses.
+
 ## [0.34.3] - 2025-11-07
 
 ### Features
