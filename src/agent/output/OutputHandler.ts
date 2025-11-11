@@ -581,12 +581,14 @@ export class OutputHandler implements IOutputHandler {
   }> {
     let relocatedRaw = rawOutput;
     const initialRawPath = rawOutput?.absolutePath ?? null;
+    const shouldForceRunStorage =
+      this.fileService.metadata.mode === 'taskRunStorage';
 
     if (rawOutput) {
       await this.cleanupLatexBackups(rawOutput);
       relocatedRaw = await this.fileService.relocateToRunStorage(
         rawOutput.absolutePath,
-        { forceRunStorage: true },
+        shouldForceRunStorage ? { forceRunStorage: true } : undefined,
       );
     }
 
@@ -749,6 +751,9 @@ export class OutputHandler implements IOutputHandler {
           rawPath = rawLocation.absolutePath;
         }
 
+        const runStorageEnabled =
+          this.fileService.metadata.mode === 'taskRunStorage';
+
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
 
@@ -820,6 +825,9 @@ export class OutputHandler implements IOutputHandler {
           rawPath = rawLocation.absolutePath;
         }
 
+        const runStorageEnabled =
+          this.fileService.metadata.mode === 'taskRunStorage';
+
         const handleMultipleOutputs = async () => {
           this.logger.debug(
             `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
@@ -876,7 +884,7 @@ export class OutputHandler implements IOutputHandler {
               const relocationSource = rawLocation?.absolutePath ?? outputFile;
               rawLocation = await this.fileService.relocateToRunStorage(
                 relocationSource,
-                { forceRunStorage: true },
+                runStorageEnabled ? { forceRunStorage: true } : undefined,
               );
               rawPath = rawLocation.absolutePath;
               outputFile = rawPath;
@@ -898,7 +906,7 @@ export class OutputHandler implements IOutputHandler {
               const relocationSource = rawLocation?.absolutePath ?? outputFile;
               rawLocation = await this.fileService.relocateToRunStorage(
                 relocationSource,
-                { forceRunStorage: true },
+                runStorageEnabled ? { forceRunStorage: true } : undefined,
               );
               rawPath = rawLocation.absolutePath;
               outputFile = rawPath;
@@ -1058,6 +1066,7 @@ export class OutputHandler implements IOutputHandler {
         tagContents: {},
         documents: [],
         singleOutputFile: null,
+        sourceLocation: null,
       }
     );
   }

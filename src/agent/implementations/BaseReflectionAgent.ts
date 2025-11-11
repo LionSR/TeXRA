@@ -676,7 +676,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     await this.awaitPendingHydration();
 
-    if (this.hydratedRoundCount === 0) {
+    const hadHydratedRounds = this.hydratedRoundCount > 0;
+    if (!hadHydratedRounds) {
       this.roundOutputArtifacts = [];
     }
     this.runtimeXmlExports = {
@@ -684,43 +685,46 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       documents: [],
       singleOutputFile: null,
     };
-    this.hydratedRoundCount = 0;
     const lifecycle = createLifecycleState<ReflectionRunPhase>('idle');
 
     const totalRounds = this.getTotalRounds();
 
-    await runAgentFlow<ReflectionRunShared<C>>({
-      agent: this,
-      lifecycle,
-      createState: () =>
-        ({
-          totalRounds,
-          currentRound: 0,
-          continueRounds: true,
-          conversation: [],
-          runState: new AgentRunState(),
-        }) satisfies ReflectionRunState,
-      createFlow: () => createReflectionRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => {
-        const baseStart = baseHooks.start;
-        return {
-          ...baseHooks,
-          init: async (runStage) => {
-            await this.init(runStage, { createStage: true });
-          },
-          start: async () => {
-            const runStage = await baseStart();
-            if (!runStage) {
-              throw new Error(
-                'Run group identifier is required for reflection runs.',
-              );
-            }
-            return runStage;
-          },
-          resetPromptBuilder: () => this.resetPromptBuilder(),
-        } satisfies ReflectionRunHooks;
-      },
-    });
+    try {
+      await runAgentFlow<ReflectionRunShared<C>>({
+        agent: this,
+        lifecycle,
+        createState: () =>
+          ({
+            totalRounds,
+            currentRound: 0,
+            continueRounds: true,
+            conversation: [],
+            runState: new AgentRunState(),
+          }) satisfies ReflectionRunState,
+        createFlow: () => createReflectionRunFlow<C>(),
+        extendHooks: (baseHooks: AgentRunHooks) => {
+          const baseStart = baseHooks.start;
+          return {
+            ...baseHooks,
+            init: async (runStage) => {
+              await this.init(runStage, { createStage: true });
+            },
+            start: async () => {
+              const runStage = await baseStart();
+              if (!runStage) {
+                throw new Error(
+                  'Run group identifier is required for reflection runs.',
+                );
+              }
+              return runStage;
+            },
+            resetPromptBuilder: () => this.resetPromptBuilder(),
+          } satisfies ReflectionRunHooks;
+        },
+      });
+    } finally {
+      this.hydratedRoundCount = 0;
+    }
 
     this.runtimeXmlExports = this.computeRuntimeXmlExports();
   }

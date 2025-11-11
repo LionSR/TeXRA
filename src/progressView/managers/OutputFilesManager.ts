@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -190,27 +193,85 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /**
    * Return a flattened set of file paths known for the provided stream.
-   * Includes both generated artifacts and their original counterparts.
+   * When workspaceOnly is true, only workspace-scoped paths are returned so
+   * commands like pack/clean do not accidentally target run-storage artifacts.
    */
-  getKnownFilePaths(stream: StreamTabId): Set<string> {
+  getKnownFilePaths(
+    stream: StreamTabId,
+    options: { runId?: string | null; workspaceOnly?: boolean } = {},
+  ): Set<string> {
     const paths = new Set<string>();
     const runs = this.items.get(stream);
     if (!runs) {
       return paths;
     }
 
-    for (const runRounds of runs.values()) {
+    const targetRunIds =
+      options.runId !== undefined
+        ? [normalizeRunId(options.runId)]
+        : Array.from(runs.keys());
+
+    for (const target of targetRunIds) {
+      const runRounds = runs.get(target);
+      if (!runRounds) {
+        continue;
+      }
+
       for (const infos of runRounds.values()) {
         for (const info of infos) {
-          paths.add(info.path);
-          if (info.original) {
-            paths.add(info.original);
+          if (options.workspaceOnly) {
+            this.collectWorkspacePaths(paths, info);
+          } else {
+            this.collectAllPaths(paths, info);
           }
         }
       }
     }
 
     return paths;
+  }
+
+  private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
+    this.addPath(target, info.path);
+    this.addPath(target, info.original);
+  }
+
+  private collectWorkspacePaths(
+    target: Set<string>,
+    info: OutputFileInfo,
+  ): void {
+    this.addPath(target, info.workspacePath ?? undefined);
+    this.addPath(target, info.location.workspace?.absolutePath);
+    this.addPath(target, info.original ?? undefined);
+    this.addPath(target, info.originalLocation?.workspace?.absolutePath);
+    this.addPath(target, info.baseLocation?.workspace?.absolutePath);
+    this.addPath(target, info.prevLocation?.workspace?.absolutePath);
+    this.addPath(target, info.rawLocation?.workspace?.absolutePath);
+
+    if (info.location.scope === 'workspace') {
+      this.addPath(target, info.location.absolutePath);
+    }
+
+    if (info.rawLocation?.scope === 'workspace') {
+      this.addPath(target, info.rawLocation.absolutePath);
+    }
+
+    if (info.rawOutputPath && path.isAbsolute(info.rawOutputPath)) {
+      this.addPath(target, info.rawOutputPath);
+    }
+  }
+
+  private addPath(target: Set<string>, candidate: string | null | undefined) {
+    if (typeof candidate !== 'string') {
+      return;
+    }
+
+    const trimmed = candidate.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    target.add(trimmed);
   }
 
   /** Get missing outputs for a stream */

@@ -67,7 +67,11 @@ export function registerPackCommands(context: vscode.ExtensionContext) {
   );
 }
 
-async function handlePack(config: { streamId?: string; [key: string]: any }) {
+async function handlePack(config: {
+  streamId?: string;
+  skipProgressViewClear?: boolean;
+  [key: string]: any;
+}) {
   logger.debug(
     CHANNEL,
     `Pack command called with config: ${JSON.stringify(config)}`,
@@ -114,9 +118,12 @@ async function handlePack(config: { streamId?: string; [key: string]: any }) {
     getStreamTabId(config.agent, config.model, config.inputFile, {
       useMultipleOutputs,
     });
-  bus.emit('clearOutputFiles', streamId);
-  bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
+
+  if (!config.skipProgressViewClear) {
+    bus.emit('clearOutputFiles', streamId);
+    bus.emit('clearMissingOutputs', streamId);
+    bus.emit('clearTaskOutput', streamId);
+  }
 }
 
 async function handlePackSingle(
