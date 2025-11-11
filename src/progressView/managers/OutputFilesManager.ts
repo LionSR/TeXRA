@@ -256,9 +256,46 @@ export class OutputFilesManager extends PersistentMapManager<
       this.addPath(target, info.rawLocation.absolutePath);
     }
 
-    if (info.rawOutputPath && path.isAbsolute(info.rawOutputPath)) {
+    if (this.isWorkspacePath(info.rawOutputPath)) {
       this.addPath(target, info.rawOutputPath);
     }
+  }
+
+  private normalizePathForComparison(candidate: string): string {
+    return process.platform === 'win32' ? candidate.toLowerCase() : candidate;
+  }
+
+  private isWorkspacePath(
+    candidate: string | null | undefined,
+  ): candidate is string {
+    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+      return false;
+    }
+
+    if (!path.isAbsolute(candidate)) {
+      return false;
+    }
+
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      return false;
+    }
+
+    const normalizedCandidate = this.normalizePathForComparison(
+      path.resolve(candidate),
+    );
+
+    return folders.some((folder) => {
+      const rootResolved = path.resolve(folder.uri.fsPath);
+      const normalizedRoot = this.normalizePathForComparison(rootResolved);
+      if (normalizedCandidate === normalizedRoot) {
+        return true;
+      }
+      const rootWithSep = normalizedRoot.endsWith(path.sep)
+        ? normalizedRoot
+        : `${normalizedRoot}${path.sep}`;
+      return normalizedCandidate.startsWith(rootWithSep);
+    });
   }
 
   private addPath(target: Set<string>, candidate: string | null | undefined) {
