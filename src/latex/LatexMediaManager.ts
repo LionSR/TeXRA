@@ -13,13 +13,62 @@ import { getTeXCountStats } from './texcount';
 // Local imports - agent components
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
-import { WorkspaceFS } from '@utils/files';
+import { TaskRunFileService, flexibleFS } from '@utils/files';
 
 /**
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
-  constructor(private readonly logger: AgentLogger) {}
+  constructor(
+    private readonly logger: AgentLogger,
+    private readonly fileService?: TaskRunFileService,
+  ) {}
+
+  private async mirrorFigureDependencies(
+    latexFile: string,
+    figures: string[],
+    groupId: string | null | undefined,
+  ): Promise<void> {
+    if (!this.fileService?.hasRunDirectory()) {
+      return;
+    }
+
+    if (figures.length === 0) {
+      return;
+    }
+
+    const baseDir = path.dirname(latexFile);
+    const targets = new Set<string>();
+    for (const relative of figures) {
+      if (!relative) {
+        continue;
+      }
+      const trimmed = relative.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+      const absolute = path.normalize(path.join(baseDir, trimmed));
+      targets.add(absolute);
+    }
+
+    if (targets.size === 0) {
+      return;
+    }
+
+    const tasks = Array.from(targets).map(async (target) => {
+      try {
+        await this.fileService!.mirrorWorkspaceFile(target);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.debug(
+          `Unable to mirror figure dependency ${target}: ${message}`,
+          groupId ?? undefined,
+        );
+      }
+    });
+
+    await Promise.all(tasks);
+  }
 
   private async attachTeXCount(
     files: string[],
@@ -45,7 +94,7 @@ export class LatexMediaManager {
     const compileResults = await Promise.allSettled(
       texFiles.map(async (file) => {
         const buildDir = path.join(path.dirname(file), 'build');
-        await WorkspaceFS.ensureDir(buildDir);
+        await flexibleFS.ensureDir(buildDir);
         const compiled = await compileLatex2Pdf(
           file,
           undefined,
@@ -57,9 +106,9 @@ export class LatexMediaManager {
             buildDir,
             path.basename(file).replace(/\.tex$/, '.pdf'),
           );
-          if (await WorkspaceFS.exists(pdfFile)) {
+          if (await flexibleFS.exists(pdfFile)) {
             try {
-              const stats = await WorkspaceFS.stat(pdfFile);
+              const stats = await flexibleFS.stat(pdfFile);
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file}: ${pdfFile}`,
@@ -101,6 +150,9 @@ export class LatexMediaManager {
     const figureResults = await Promise.allSettled(
       files.map((file) => extractFigurePathsFromLatex(file)),
     );
+
+    const mirrorTasks: Promise<void>[] = [];
+
     figureResults.forEach((result, idx) => {
       if (
         result.status === 'fulfilled' &&
@@ -113,8 +165,15 @@ export class LatexMediaManager {
           activeGroupId,
         );
         toolState.media.addMediaFiles(result.value);
+        mirrorTasks.push(
+          this.mirrorFigureDependencies(file, result.value, activeGroupId),
+        );
       }
     });
+
+    if (mirrorTasks.length > 0) {
+      await Promise.all(mirrorTasks);
+    }
   }
 
   private async compileTikzFigures(
@@ -169,7 +228,7 @@ export class LatexMediaManager {
     const existingFilesInfo = await Promise.all(
       files.map(async (file) => ({
         file,
-        exists: await WorkspaceFS.exists(file),
+        exists: await flexibleFS.exists(file),
       })),
     );
     const existingFiles = existingFilesInfo

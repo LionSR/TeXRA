@@ -65,11 +65,13 @@ export interface ProgressEventPayloads {
   addOutputFiles: {
     stream: StreamTabId;
     groupId?: string;
+    executionId?: ExecutionId;
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
   updateMissingOutputs: {
     stream: StreamTabId;
     groupId?: string;
+    executionId?: ExecutionId;
     filesByRound: { [key: number]: string[] };
   };
   clearMissingOutputs: StreamTabId;
