@@ -883,17 +883,26 @@ async function runLatexdiffViaWorkspaceScan(params: {
         `Running round diff for ${path.basename(baseFile)} -> ${path.basename(outputFile)} (r${round})`,
       );
 
+      const resolvedBase = path.isAbsolute(baseFile)
+        ? baseFile
+        : path.join(workspacePath, baseFile);
+      const resolvedOutput = path.isAbsolute(outputFile)
+        ? outputFile
+        : path.join(workspacePath, outputFile);
+      const cwd = path.dirname(resolvedOutput);
+
       const result = await service.runDiffForRound(
-        baseFile,
-        outputFile,
+        resolvedBase,
+        resolvedOutput,
         round,
         mathMarkup,
+        { cwd },
       );
 
       results.push({
         success: result.success,
         message: result.message,
-        basePath: baseFile,
+        basePath: resolvedBase,
         diffFileName: result.diffFileName,
         description: `${path.basename(baseFile)} (r${round})`,
       });
@@ -917,16 +926,25 @@ async function runLatexdiffViaWorkspaceScan(params: {
           `Running between-rounds diff: ${path.basename(currentFile)} -> ${path.basename(nextFile)}`,
         );
 
+        const resolvedCurrent = path.isAbsolute(currentFile)
+          ? currentFile
+          : path.join(workspacePath, currentFile);
+        const resolvedNext = path.isAbsolute(nextFile)
+          ? nextFile
+          : path.join(workspacePath, nextFile);
+        const cwd = path.dirname(resolvedCurrent);
+
         const result = await service.runDiffBetweenRounds(
-          currentFile,
-          nextFile,
+          resolvedCurrent,
+          resolvedNext,
           mathMarkup,
+          { cwd },
         );
 
         results.push({
           success: result.success,
           message: result.message,
-          basePath: currentFile,
+          basePath: resolvedCurrent,
           diffFileName: result.diffFileName,
           description: `${path.basename(currentFile)} (r${currentRound}→r${nextRound})`,
         });
