@@ -256,7 +256,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this.addPath(target, info.rawLocation.absolutePath);
     }
 
-    if (this.isWorkspacePath(info.rawOutputPath)) {
+    if (
+      info.rawLocation?.scope !== 'runStorage' &&
+      this.isWorkspacePath(info.rawOutputPath)
+    ) {
       this.addPath(target, info.rawOutputPath);
     }
   }
