@@ -681,7 +681,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     const segments = relative.split(path.sep).filter(Boolean);
     const runsIndex = segments.indexOf('taskRuns');
-    if (runsIndex === -1 || runsIndex + 1 >= segments.length) {
+    if (runsIndex === -1) {
+      return undefined;
+    }
+
+    if (runsIndex + 1 >= segments.length) {
       return undefined;
     }
 

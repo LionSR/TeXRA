@@ -295,12 +295,8 @@ export class OutputHandler implements IOutputHandler {
         ? this.fileService.describePath(original)
         : original;
 
-    const workspaceAbsolute = location?.workspace?.absolutePath ?? null;
-    if (
-      !workspaceAbsolute ||
-      workspaceAbsolute === workspaceRoot ||
-      !workspaceAbsolute.startsWith(workspaceRoot)
-    ) {
+    const workspaceAbsolute = this.fileService.toWorkspaceAbsolute(location);
+    if (!workspaceAbsolute) {
       return;
     }
 
@@ -621,15 +617,19 @@ export class OutputHandler implements IOutputHandler {
   }> {
     let relocatedRaw = rawOutput;
     const initialRawPath = rawOutput?.absolutePath ?? null;
-    const shouldForceRunStorage =
-      this.fileService.metadata.mode === 'taskRunStorage';
+    const runStorageActive = this.fileService.isRunStorageEnabled();
+    const shouldForceRunStorage = runStorageActive;
 
     if (rawOutput) {
       await this.cleanupLatexBackups(rawOutput);
-      relocatedRaw = await this.fileService.relocateToRunStorage(
-        rawOutput.absolutePath,
-        shouldForceRunStorage ? { forceRunStorage: true } : undefined,
-      );
+      if (runStorageActive) {
+        relocatedRaw = await this.fileService.relocateToRunStorage(
+          rawOutput.absolutePath,
+          shouldForceRunStorage ? { forceRunStorage: true } : undefined,
+        );
+      } else {
+        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
+      }
     }
 
     const relocatedProcessed: NamedOutputFile[] = [];
@@ -791,8 +791,7 @@ export class OutputHandler implements IOutputHandler {
           rawPath = rawLocation.absolutePath;
         }
 
-        const runStorageEnabled =
-          this.fileService.metadata.mode === 'taskRunStorage';
+        const runStorageEnabled = this.fileService.isRunStorageEnabled();
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -865,8 +864,7 @@ export class OutputHandler implements IOutputHandler {
           rawPath = rawLocation.absolutePath;
         }
 
-        const runStorageEnabled =
-          this.fileService.metadata.mode === 'taskRunStorage';
+        const runStorageEnabled = this.fileService.isRunStorageEnabled();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
