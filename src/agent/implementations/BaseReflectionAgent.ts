@@ -679,7 +679,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   public async run(): Promise<void> {
     await this.awaitPendingHydration();
 
-    const hadHydratedRounds = this.hydratedRoundCount > 0;
+    const previousHydratedRounds = this.hydratedRoundCount;
+    const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {
       this.roundOutputArtifacts = [];
     }
@@ -726,8 +727,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      this.hydratedRoundCount =
-        this.roundOutputArtifacts.filter(Boolean).length;
+      const currentArtifacts = this.roundOutputArtifacts.filter(Boolean).length;
+      this.hydratedRoundCount = Math.max(
+        previousHydratedRounds,
+        currentArtifacts,
+      );
     }
 
     this.runtimeXmlExports = this.computeRuntimeXmlExports();

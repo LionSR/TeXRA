@@ -195,7 +195,7 @@ describe('LatexDiffManager mapping reuse', () => {
         checkToolInstalled: async () => true,
         compileLatex2Pdf: async () => true,
         getConfig: <T>(key: string, defaultValue?: T) =>
-          key === 'latexdiff.generateBetweenRoundDiffs'
+          key === 'texra.latexdiff.generateBetweenRoundDiffs'
             ? (true as T)
             : (defaultValue as T),
       },
