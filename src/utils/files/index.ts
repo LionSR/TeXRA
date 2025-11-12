@@ -10,3 +10,4 @@ export * from './pathUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './copyUtils';
+export * from './flexibleFS';
