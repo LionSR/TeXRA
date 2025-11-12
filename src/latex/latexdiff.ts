@@ -13,7 +13,7 @@ import {
   logErrorMessage,
   formatError,
 } from '@common/errors/errorHandlingUtils';
-import { existsFlexible, readFlexible, writeFlexible } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -83,8 +83,8 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await existsFlexible(inputFile);
-      const editedExists = await existsFlexible(editedFile);
+      const inputExists = await flexibleFS.exists(inputFile);
+      const editedExists = await flexibleFS.exists(editedFile);
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -127,7 +127,7 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await writeFlexible(outputPath, result.stdout);
+      await flexibleFS.write(outputPath, result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
       logger.debug(
@@ -266,8 +266,8 @@ export class LaTeXdiffService {
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const baseExists = await existsFlexible(baseFile);
-      const outputExists = await existsFlexible(outputFile);
+      const baseExists = await flexibleFS.exists(baseFile);
+      const outputExists = await flexibleFS.exists(outputFile);
       if (baseExists && outputExists) {
         return await this.runDiff(
           baseFile,
@@ -296,8 +296,8 @@ export class LaTeXdiffService {
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const firstExists = await existsFlexible(outputFile1);
-      const secondExists = await existsFlexible(outputFile2);
+      const firstExists = await flexibleFS.exists(outputFile1);
+      const secondExists = await flexibleFS.exists(outputFile2);
       if (firstExists && secondExists) {
         const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
         const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
@@ -335,7 +335,7 @@ export class LaTeXdiffService {
     ...files: string[]
   ): Promise<boolean> {
     for (const file of files) {
-      const content = await readFlexible(file);
+      const content = await flexibleFS.read(file);
       if (
         !content.includes('\\begin{document}') ||
         !content.includes('\\end{document}')

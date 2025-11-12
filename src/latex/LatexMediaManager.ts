@@ -13,12 +13,7 @@ import { getTeXCountStats } from './texcount';
 // Local imports - agent components
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
-import {
-  TaskRunFileService,
-  ensureDirFlexible,
-  existsFlexible,
-  statFlexible,
-} from '@utils/files';
+import { TaskRunFileService, flexibleFS } from '@utils/files';
 
 /**
  * Handles LaTeX related media extraction and compilation for agents.
@@ -99,7 +94,7 @@ export class LatexMediaManager {
     const compileResults = await Promise.allSettled(
       texFiles.map(async (file) => {
         const buildDir = path.join(path.dirname(file), 'build');
-        await ensureDirFlexible(buildDir);
+        await flexibleFS.ensureDir(buildDir);
         const compiled = await compileLatex2Pdf(
           file,
           undefined,
@@ -111,9 +106,9 @@ export class LatexMediaManager {
             buildDir,
             path.basename(file).replace(/\.tex$/, '.pdf'),
           );
-          if (await existsFlexible(pdfFile)) {
+          if (await flexibleFS.exists(pdfFile)) {
             try {
-              const stats = await statFlexible(pdfFile);
+              const stats = await flexibleFS.stat(pdfFile);
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file}: ${pdfFile}`,
@@ -233,7 +228,7 @@ export class LatexMediaManager {
     const existingFilesInfo = await Promise.all(
       files.map(async (file) => ({
         file,
-        exists: await existsFlexible(file),
+        exists: await flexibleFS.exists(file),
       })),
     );
     const existingFiles = existingFilesInfo
