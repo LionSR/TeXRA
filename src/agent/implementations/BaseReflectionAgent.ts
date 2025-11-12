@@ -197,7 +197,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
-      this.hydratedRoundCount = 0;
       this.roundOutputArtifacts = [];
       this.fileService.updateRunContext(params.executionId);
       this.outputHandler.hydrateFromArtifacts(
@@ -209,12 +208,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         (a, b) => a - b,
       );
 
-      for (const round of sortedRounds) {
-        const artifacts = await this.outputHandler.getRoundArtifacts(round);
-        this.roundOutputArtifacts[round] = artifacts;
-      }
+      let hydratedCount = 0;
 
-      this.hydratedRoundCount = sortedRounds.length;
+      try {
+        for (const round of sortedRounds) {
+          const artifacts = await this.outputHandler.getRoundArtifacts(round);
+          this.roundOutputArtifacts[round] = artifacts;
+        }
+
+        hydratedCount = sortedRounds.length;
+      } finally {
+        this.hydratedRoundCount = hydratedCount;
+      }
     })();
 
     this.hydrationPromise = hydration;
