@@ -602,6 +602,22 @@ function describeInfo(info: OutputFileInfo): string {
   return info.path;
 }
 
+function describeRevisedInfo(
+  info: OutputFileInfo,
+  fallbackPath?: string | null,
+): string {
+  if (info.relativePath) {
+    return info.relativePath;
+  }
+  if (info.location?.relativePath) {
+    return info.location.relativePath;
+  }
+  if (fallbackPath) {
+    return path.basename(fallbackPath);
+  }
+  return info.path;
+}
+
 async function runLatexdiffFromMetadata(params: {
   rounds: Map<number, OutputFileInfo[]>;
   mathMarkup?: MathMarkupOption;
@@ -671,7 +687,10 @@ async function runLatexdiffFromMetadata(params: {
         const current = group[index];
         const prevPath = resolveInfoPath(previous.info, fileService);
         const currPath = resolveInfoPath(current.info, fileService);
-        const description = `${describeInfo(current.info)} (r${previous.round}→r${current.round})`;
+        const description = `${describeRevisedInfo(
+          current.info,
+          currPath,
+        )} (r${previous.round}→r${current.round})`;
 
         if (!prevPath || !currPath) {
           immediateResults.push({
