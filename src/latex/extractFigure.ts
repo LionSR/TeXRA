@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { existsFlexible, readFlexible } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -62,7 +62,7 @@ export async function extractFigurePathsFromLatex(
     ];
 
     // Read file content
-    const content = await readFlexible(latexFile);
+    const content = await flexibleFS.read(latexFile);
 
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
@@ -99,7 +99,7 @@ export async function extractFigurePathsFromLatex(
           for (const ext of extensions) {
             const pathToCheck = normPath + ext;
 
-            if (await existsFlexible(pathToCheck)) {
+            if (await flexibleFS.exists(pathToCheck)) {
               const relative = path.relative(latexDir, pathToCheck);
               if (!discovered.has(relative)) {
                 figurePaths.push(relative);

@@ -9,7 +9,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, existsFlexible, TaskRunFileService } from '@utils/files';
+import { WorkspaceFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex utils
@@ -113,7 +113,7 @@ async function openLatexdiffResult(
     : basePath;
   const diffFilePath = path.join(baseDirectory, diffFileName);
 
-  if (!(await existsFlexible(diffFilePath))) {
+  if (!(await flexibleFS.exists(diffFilePath))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,
@@ -729,8 +729,8 @@ async function runLatexdiffFromMetadata(params: {
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await existsFlexible(operation.basePath);
-    const revisedExists = await existsFlexible(operation.revisedPath);
+    const baseExists = await flexibleFS.exists(operation.basePath);
+    const revisedExists = await flexibleFS.exists(operation.revisedPath);
 
     if (!baseExists || !revisedExists) {
       results.push({

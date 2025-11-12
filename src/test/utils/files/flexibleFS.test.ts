@@ -1,10 +1,10 @@
 import * as assert from 'assert';
 
-import { writeFlexible } from '@utils/files/flexibleFS';
+import { flexibleFS } from '@utils/files/flexibleFS';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-describe('flexibleFS.writeFlexible', () => {
+describe('flexibleFS.write', () => {
   it('retries workspace write after clearing symlink loops', async () => {
     const originalWrite = WorkspaceFS.write;
     const originalFullPath = WorkspaceFS.fullPath;
@@ -46,7 +46,7 @@ describe('flexibleFS.writeFlexible', () => {
           assert.deepEqual(options, { recursive: true, useTrash: false });
         }) as typeof AbsoluteFS.delete;
 
-      await writeFlexible('file.tex', 'content');
+      await flexibleFS.write('file.tex', 'content');
 
       assert.deepEqual(writes, ['file.tex', 'file.tex']);
       assert.strictEqual(deleteTarget, '/tmp/workspace/file.tex');
