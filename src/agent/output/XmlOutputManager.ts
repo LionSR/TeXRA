@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { readFlexible, writeFlexible, TaskRunFileService } from '@utils/files';
+import { flexibleFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -130,7 +130,7 @@ export class XmlOutputManager {
     const { dir, name } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await readFlexible(outputFile);
+    let outputContent = await flexibleFS.read(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -140,7 +140,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await writeFlexible(texFile, namedDocumentContent);
+      await flexibleFS.write(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -160,7 +160,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await writeFlexible(texFile, latexDocument);
+        await flexibleFS.write(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -176,7 +176,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await readFlexible(outputFile);
+    let outputContent = await flexibleFS.read(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -287,7 +287,7 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      await writeFlexible(texFile, doc.content.trim());
+      await flexibleFS.write(texFile, doc.content.trim());
       outputFiles.push(this.buildNamedOutput(source, texFile));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -305,7 +305,7 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await readFlexible(outputFile);
+    const xmlContent = await flexibleFS.read(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -336,7 +336,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await readFlexible(filePath);
+    let content = await flexibleFS.read(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -353,6 +353,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await writeFlexible(filePath, content);
+    await flexibleFS.write(filePath, content);
   }
 }

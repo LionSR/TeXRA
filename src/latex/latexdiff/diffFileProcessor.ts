@@ -2,7 +2,7 @@
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { readFlexible, writeFlexible } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 
 // Local imports - replacement utils
 import replacementEngine from '@replacement/engine';
@@ -12,11 +12,11 @@ export class DiffFileProcessor {
 
   async processDiffFile(diffFileName: string): Promise<void> {
     try {
-      const content = await readFlexible(diffFileName);
+      const content = await flexibleFS.read(diffFileName);
       let processedContent = this.processStarEnvironments(content);
       processedContent = this.processLineByLine(processedContent);
       processedContent = replacementEngine.applyAll(processedContent);
-      await writeFlexible(diffFileName, processedContent);
+      await flexibleFS.write(diffFileName, processedContent);
       await this.processTikzPictureEndings(diffFileName);
     } catch (err) {
       logger.error(
@@ -106,7 +106,7 @@ export class DiffFileProcessor {
   }
 
   private async processTikzPictureEndings(filePath: string): Promise<void> {
-    const content = await readFlexible(filePath);
+    const content = await flexibleFS.read(filePath);
     let newContent = content;
 
     const patterns = [
@@ -118,6 +118,6 @@ export class DiffFileProcessor {
       newContent = newContent.replace(pattern, replacement as string);
     }
 
-    await writeFlexible(filePath, newContent);
+    await flexibleFS.write(filePath, newContent);
   }
 }

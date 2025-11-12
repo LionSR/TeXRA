@@ -10,11 +10,7 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import {
-  TaskRunFileService,
-  existsFlexible,
-  toAbsolutePath,
-} from '@utils/files';
+import { TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 
 // Local imports - types
@@ -64,7 +60,7 @@ export class LatexDiffManager {
     workspaceReference?: string;
   }> {
     const workspaceReference = location?.workspace?.absolutePath
-      ? toAbsolutePath(location.workspace.absolutePath)
+      ? location.workspace.absolutePath
       : relativePath
         ? this.fileService.resolveRelativePath(relativePath, {
             preferWorkspace: true,
@@ -77,7 +73,7 @@ export class LatexDiffManager {
 
     const actualCandidate = location?.absolutePath;
 
-    if (actualCandidate && (await existsFlexible(actualCandidate))) {
+    if (actualCandidate && (await flexibleFS.exists(actualCandidate))) {
       const resolvedActual = await this.resolveActualPath(actualCandidate);
       return {
         actual: resolvedActual,
@@ -86,7 +82,7 @@ export class LatexDiffManager {
       };
     }
 
-    if (workspaceReference && (await existsFlexible(workspaceReference))) {
+    if (workspaceReference && (await flexibleFS.exists(workspaceReference))) {
       const resolvedActual = await this.resolveActualPath(workspaceReference);
       return {
         actual: resolvedActual,
@@ -132,7 +128,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (!(await existsFlexible(target))) {
+    if (!(await flexibleFS.exists(target))) {
       return;
     }
 
@@ -358,8 +354,10 @@ export class LatexDiffManager {
 
           const workspaceCwd =
             prevResolved.workspaceDir ?? currResolved.workspaceDir;
-          const cwd =
-            workspaceCwd ?? path.dirname(toAbsolutePath(prevResolved.actual));
+          const previousActualAbsolute = flexibleFS.toAbsolutePath(
+            prevResolved.actual,
+          );
+          const cwd = workspaceCwd ?? path.dirname(previousActualAbsolute);
           const result = await this.latexdiffService.runDiffBetweenRounds(
             prevResolved.actual,
             currResolved.actual,
@@ -370,7 +368,7 @@ export class LatexDiffManager {
           let diffPath = '';
           if (result.success && result.diffFileName) {
             diffPath = path.join(
-              path.dirname(toAbsolutePath(prevResolved.actual)),
+              path.dirname(previousActualAbsolute),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
