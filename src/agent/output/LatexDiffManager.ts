@@ -287,7 +287,7 @@ export class LatexDiffManager {
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(baseFile),
             basePath: baseAbsolute,
-            revisedLabel: this.fileService.getDisplayLabel(baseFile),
+            revisedLabel: this.fileService.getDisplayLabel(outputFile),
             revisedPath: resolved.actual ?? location?.absolutePath,
             diffPath: diffPath || undefined,
             status: result.success ? 'success' : 'error',
