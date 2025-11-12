@@ -131,16 +131,3 @@ export class FlexibleFS {
 }
 
 export const flexibleFS = new FlexibleFS();
-
-export const existsFlexible = flexibleFS.exists.bind(flexibleFS);
-export const existsAndNonTrivialFlexible =
-  flexibleFS.existsAndNonTrivial.bind(flexibleFS);
-export const readFlexible = flexibleFS.read.bind(flexibleFS);
-export const readBytesFlexible = flexibleFS.readBytes.bind(flexibleFS);
-export const writeFlexible = flexibleFS.write.bind(flexibleFS);
-export const ensureDirFlexible = flexibleFS.ensureDir.bind(flexibleFS);
-export const deleteFlexible = flexibleFS.delete.bind(flexibleFS);
-export const statFlexible = flexibleFS.stat.bind(flexibleFS);
-export const toAbsolutePath = flexibleFS.toAbsolutePath.bind(flexibleFS);
-export const toRelativeFromWorkspace =
-  flexibleFS.toWorkspaceRelative.bind(flexibleFS);
