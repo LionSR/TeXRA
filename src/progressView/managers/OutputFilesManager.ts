@@ -241,26 +241,35 @@ export class OutputFilesManager extends PersistentMapManager<
     info: OutputFileInfo,
   ): void {
     this.addPath(target, info.workspacePath ?? undefined);
-    this.addPath(target, info.location.workspace?.absolutePath);
+    this.addWorkspaceAbsolute(target, info.location.workspace?.absolutePath);
     this.addPath(target, info.original ?? undefined);
-    this.addPath(target, info.originalLocation?.workspace?.absolutePath);
-    this.addPath(target, info.baseLocation?.workspace?.absolutePath);
-    this.addPath(target, info.prevLocation?.workspace?.absolutePath);
-    this.addPath(target, info.rawLocation?.workspace?.absolutePath);
+    this.addWorkspaceAbsolute(
+      target,
+      info.originalLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.baseLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.prevLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.rawLocation?.workspace?.absolutePath,
+    );
 
     if (info.location.scope === 'workspace') {
-      this.addPath(target, info.location.absolutePath);
+      this.addWorkspaceAbsolute(target, info.location.absolutePath);
     }
 
     if (info.rawLocation?.scope === 'workspace') {
-      this.addPath(target, info.rawLocation.absolutePath);
+      this.addWorkspaceAbsolute(target, info.rawLocation.absolutePath);
     }
 
-    if (
-      info.rawLocation?.scope !== 'runStorage' &&
-      this.isWorkspacePath(info.rawOutputPath)
-    ) {
-      this.addPath(target, info.rawOutputPath);
+    if (this.isWorkspacePath(info.rawOutputPath)) {
+      this.addWorkspaceAbsolute(target, info.rawOutputPath);
     }
   }
 
@@ -299,6 +308,29 @@ export class OutputFilesManager extends PersistentMapManager<
         : `${normalizedRoot}${path.sep}`;
       return normalizedCandidate.startsWith(rootWithSep);
     });
+  }
+
+  private containsRunStorageSegment(candidate: string): boolean {
+    return candidate.split(/[\\/]/).includes('taskRuns');
+  }
+
+  private addWorkspaceAbsolute(
+    target: Set<string>,
+    candidate: string | null | undefined,
+  ): void {
+    if (typeof candidate !== 'string') {
+      return;
+    }
+
+    if (!this.isWorkspacePath(candidate)) {
+      return;
+    }
+
+    if (this.containsRunStorageSegment(candidate)) {
+      return;
+    }
+
+    this.addPath(target, candidate);
   }
 
   private addPath(target: Set<string>, candidate: string | null | undefined) {
