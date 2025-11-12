@@ -17,7 +17,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { WorkspaceFS } from '@utils/files';
+import { flexibleFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 export class XmlOutputManager {
@@ -25,6 +25,7 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
+    private readonly fileService: TaskRunFileService,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
@@ -129,7 +130,7 @@ export class XmlOutputManager {
     const { dir, name } = path.parse(outputFile);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await flexibleFS.read(outputFile);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -139,7 +140,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await WorkspaceFS.write(texFile, namedDocumentContent);
+      await flexibleFS.write(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -159,7 +160,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await WorkspaceFS.write(texFile, latexDocument);
+        await flexibleFS.write(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -175,7 +176,7 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await WorkspaceFS.read(outputFile);
+    let outputContent = await flexibleFS.read(outputFile);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -234,6 +235,23 @@ export class XmlOutputManager {
     }
   }
 
+  private buildNamedOutput(
+    source: string,
+    outputPath: string,
+  ): NamedOutputFile {
+    const location = this.fileService.resolveRelativePath(outputPath, {
+      preferWorkspace: true,
+    });
+
+    return {
+      source,
+      path: location.absolutePath,
+      relativePath: location.relativePath,
+      workspacePath: location.workspace?.absolutePath ?? undefined,
+      location,
+    };
+  }
+
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
@@ -269,8 +287,8 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      await WorkspaceFS.write(texFile, doc.content.trim());
-      outputFiles.push({ source, path: texFile });
+      await flexibleFS.write(texFile, doc.content.trim());
+      outputFiles.push(this.buildNamedOutput(source, texFile));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -287,17 +305,17 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await WorkspaceFS.read(outputFile);
+    const xmlContent = await flexibleFS.read(outputFile);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
       original = nameMatch[1].trim();
     }
 
-    return {
-      source: original || this.agentConfig.inputFile,
-      path: processedOutputFile,
-    };
+    return this.buildNamedOutput(
+      original || this.agentConfig.inputFile,
+      processedOutputFile,
+    );
   }
 
   async processMultipleXmlOutputs(
@@ -318,7 +336,7 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await WorkspaceFS.read(filePath);
+    let content = await flexibleFS.read(filePath);
 
     content = await this.processXmlContent(content);
 
@@ -335,6 +353,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await WorkspaceFS.write(filePath, content);
+    await flexibleFS.write(filePath, content);
   }
 }

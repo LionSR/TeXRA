@@ -183,6 +183,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Actions
   RUN_AGAIN: 'runAgain',
+  RUN_NEW: 'runNew',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   SORT_STREAMS: 'sortStreams',

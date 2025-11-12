@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -13,17 +16,12 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-
-const isValidOutputFile = (value: unknown): value is OutputFileInfo => {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Partial<OutputFileInfo>;
-  return typeof candidate.path === 'string' && candidate.path.length > 0;
-};
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import {
+  OutputFileInfoListSchema,
+  OutputFileInfoSchema,
+  type OutputFileInfo,
+} from '@agent/output/types';
 
 /**
  * Manages output files collection with persistence and file existence validation.
@@ -44,13 +42,24 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
+  private readonly parseOutputInfo = (
+    value: unknown,
+  ): OutputFileInfo | null => {
+    const result = OutputFileInfoSchema.safeParse(value);
+    return result.success ? result.data : null;
+  };
+
+  private readonly parseStringValue = (value: unknown): string | null =>
+    typeof value === 'string' ? value : null;
+
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
     groupId: string | null | undefined,
     filesByRound: { [key: number]: OutputFileInfo[] },
+    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const runId = normalizeRunId(groupId);
+    const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -72,8 +81,8 @@ export class OutputFilesManager extends PersistentMapManager<
         );
         continue;
       }
-      const normalizedFiles = (Array.isArray(files) ? files : []).filter(
-        (file) => isValidOutputFile(file),
+      const normalizedFiles = OutputFileInfoListSchema.parse(
+        Array.isArray(files) ? files : [],
       );
       if (normalizedFiles.length === 0) {
         runRounds.delete(roundNum);
@@ -91,8 +100,9 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
     filesByRound: { [key: number]: string[] },
+    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const runId = normalizeRunId(groupId);
+    const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -126,29 +136,214 @@ export class OutputFilesManager extends PersistentMapManager<
     return runs ? new Map(runs) : new Map();
   }
 
+  getRun(
+    stream: StreamTabId,
+    runId: string,
+  ): Map<number, OutputFileInfo[]> | undefined {
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return undefined;
+    }
+
+    const target = runs.get(runId);
+    if (!target) {
+      return undefined;
+    }
+
+    return new Map(
+      Array.from(target.entries(), ([round, infos]) => [
+        round,
+        OutputFileInfoListSchema.parse(infos),
+      ]),
+    );
+  }
+
+  getRunByExecution(
+    stream: StreamTabId,
+    executionId: ExecutionId,
+  ): Map<number, OutputFileInfo[]> | undefined {
+    const normalized = normalizeRunId(executionId);
+    const direct = this.getRun(stream, normalized);
+    if (direct) {
+      return direct;
+    }
+
+    const runs = this.items.get(stream);
+    if (!runs) {
+      return undefined;
+    }
+
+    for (const [runKey, rounds] of runs.entries()) {
+      for (const infos of rounds.values()) {
+        if (
+          infos.some(
+            (info) =>
+              info.rawLocation?.runStorage?.storageRelativePath?.includes(
+                executionId,
+              ) || info.rawOutputPath?.includes(executionId),
+          )
+        ) {
+          return this.getRun(stream, runKey);
+        }
+      }
+    }
+
+    return undefined;
+  }
+
   /**
    * Return a flattened set of file paths known for the provided stream.
-   * Includes both generated artifacts and their original counterparts.
+   * When workspaceOnly is true, only workspace-scoped paths are returned so
+   * commands like pack/clean do not accidentally target run-storage artifacts.
    */
-  getKnownFilePaths(stream: StreamTabId): Set<string> {
+  getKnownFilePaths(
+    stream: StreamTabId,
+    options: { runId?: string | null; workspaceOnly?: boolean } = {},
+  ): Set<string> {
     const paths = new Set<string>();
     const runs = this.items.get(stream);
     if (!runs) {
       return paths;
     }
 
-    for (const runRounds of runs.values()) {
+    const targetRunIds =
+      options.runId !== undefined
+        ? [normalizeRunId(options.runId)]
+        : Array.from(runs.keys());
+
+    for (const target of targetRunIds) {
+      const runRounds = runs.get(target);
+      if (!runRounds) {
+        continue;
+      }
+
       for (const infos of runRounds.values()) {
         for (const info of infos) {
-          paths.add(info.path);
-          if (info.original) {
-            paths.add(info.original);
+          if (options.workspaceOnly) {
+            this.collectWorkspacePaths(paths, info);
+          } else {
+            this.collectAllPaths(paths, info);
           }
         }
       }
     }
 
     return paths;
+  }
+
+  private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
+    this.addPath(target, info.path);
+    this.addPath(target, info.original);
+  }
+
+  private collectWorkspacePaths(
+    target: Set<string>,
+    info: OutputFileInfo,
+  ): void {
+    this.addPath(target, info.workspacePath ?? undefined);
+    this.addWorkspaceAbsolute(target, info.location.workspace?.absolutePath);
+    this.addPath(target, info.original ?? undefined);
+    this.addWorkspaceAbsolute(
+      target,
+      info.originalLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.baseLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.prevLocation?.workspace?.absolutePath,
+    );
+    this.addWorkspaceAbsolute(
+      target,
+      info.rawLocation?.workspace?.absolutePath,
+    );
+
+    if (info.location.scope === 'workspace') {
+      this.addWorkspaceAbsolute(target, info.location.absolutePath);
+    }
+
+    if (info.rawLocation?.scope === 'workspace') {
+      this.addWorkspaceAbsolute(target, info.rawLocation.absolutePath);
+    }
+
+    if (this.isWorkspacePath(info.rawOutputPath)) {
+      this.addWorkspaceAbsolute(target, info.rawOutputPath);
+    }
+  }
+
+  private normalizePathForComparison(candidate: string): string {
+    return process.platform === 'win32' ? candidate.toLowerCase() : candidate;
+  }
+
+  private isWorkspacePath(
+    candidate: string | null | undefined,
+  ): candidate is string {
+    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+      return false;
+    }
+
+    if (!path.isAbsolute(candidate)) {
+      return false;
+    }
+
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      return false;
+    }
+
+    const normalizedCandidate = this.normalizePathForComparison(
+      path.resolve(candidate),
+    );
+
+    return folders.some((folder) => {
+      const rootResolved = path.resolve(folder.uri.fsPath);
+      const normalizedRoot = this.normalizePathForComparison(rootResolved);
+      if (normalizedCandidate === normalizedRoot) {
+        return true;
+      }
+      const rootWithSep = normalizedRoot.endsWith(path.sep)
+        ? normalizedRoot
+        : `${normalizedRoot}${path.sep}`;
+      return normalizedCandidate.startsWith(rootWithSep);
+    });
+  }
+
+  private containsRunStorageSegment(candidate: string): boolean {
+    return candidate.split(/[\\/]/).includes('taskRuns');
+  }
+
+  private addWorkspaceAbsolute(
+    target: Set<string>,
+    candidate: string | null | undefined,
+  ): void {
+    if (typeof candidate !== 'string') {
+      return;
+    }
+
+    if (!this.isWorkspacePath(candidate)) {
+      return;
+    }
+
+    if (this.containsRunStorageSegment(candidate)) {
+      return;
+    }
+
+    this.addPath(target, candidate);
+  }
+
+  private addPath(target: Set<string>, candidate: string | null | undefined) {
+    if (typeof candidate !== 'string') {
+      return;
+    }
+
+    const trimmed = candidate.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    target.add(trimmed);
   }
 
   /** Get missing outputs for a stream */
@@ -312,6 +507,7 @@ export class OutputFilesManager extends PersistentMapManager<
       if (looksLegacy) {
         const rounds = this.deserializeRoundMap<string>(
           raw as Record<string, unknown>,
+          this.parseStringValue,
         );
         if (rounds.size > 0) {
           runMap.set(normalizeRunId(null), rounds);
@@ -323,6 +519,7 @@ export class OutputFilesManager extends PersistentMapManager<
           }
           const rounds = this.deserializeRoundMap<string>(
             value as Record<string, unknown>,
+            this.parseStringValue,
           );
           if (rounds.size > 0) {
             runMap.set(runId, rounds);
@@ -368,7 +565,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   private deserializeRoundMap<T>(
     record: Record<string, unknown>,
-    validator?: (value: unknown) => value is T,
+    parser: (value: unknown) => T | null,
   ): Map<number, T[]> {
     const roundMap = new Map<number, T[]>();
 
@@ -382,14 +579,11 @@ export class OutputFilesManager extends PersistentMapManager<
         continue;
       }
 
-      if (!validator) {
-        roundMap.set(round, value as T[]);
-        continue;
-      }
-
-      const filtered = (value as unknown[]).filter((entry) => validator(entry));
-      if (filtered.length > 0) {
-        roundMap.set(round, filtered as T[]);
+      const parsed = (value as unknown[])
+        .map((entry) => parser(entry))
+        .filter((entry): entry is T => entry !== null);
+      if (parsed.length > 0) {
+        roundMap.set(round, parsed);
       }
     }
 
@@ -429,7 +623,7 @@ export class OutputFilesManager extends PersistentMapManager<
     if (looksLegacy) {
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         record,
-        isValidOutputFile,
+        this.parseOutputInfo,
       );
       if (rounds.size > 0) {
         runMap.set(normalizeRunId(null), rounds);
@@ -444,7 +638,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         value as Record<string, unknown>,
-        isValidOutputFile,
+        this.parseOutputInfo,
       );
       if (rounds.size > 0) {
         runMap.set(runId, rounds);

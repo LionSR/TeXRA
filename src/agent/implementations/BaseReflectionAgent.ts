@@ -33,6 +33,7 @@ import {
   IOutputHandler,
   type RoundOutputArtifacts,
 } from '@agent/output';
+import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
@@ -53,7 +54,8 @@ import type { ToolDefinition } from '@model';
 import { getConfig } from '@utils/config';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, TaskRunFileService } from '@utils/files';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 /**
  * Options for handling round output.
@@ -124,6 +126,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     documents: [],
     singleOutputFile: null,
   };
+  protected readonly fileService: TaskRunFileService;
+  private hydrationPromise: Promise<void> | null = null;
+  private hydratedRoundCount = 0;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -169,15 +174,78 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Initialize logging
     this.logId = 0;
 
+    this.fileService = new TaskRunFileService(context.executionId);
+
     this.outputHandler = new OutputHandler(
       this.agentSetting,
       this.agentConfig,
       this.logId,
       this.baseFiles,
       this.logger,
+      this.fileService,
     );
 
-    this.latexMediaManager = new LatexMediaManager(this.logger);
+    this.latexMediaManager = new LatexMediaManager(
+      this.logger,
+      this.fileService,
+    );
+  }
+
+  public async hydrateOutputState(params: {
+    executionId: ExecutionId;
+    runId?: string | null;
+    rounds: Map<number, OutputFileInfo[]>;
+  }): Promise<void> {
+    const hydration = (async () => {
+      this.roundOutputArtifacts = [];
+      this.fileService.updateRunContext(params.executionId);
+      this.outputHandler.hydrateFromArtifacts(
+        params.runId ?? null,
+        params.rounds,
+      );
+
+      const sortedRounds = Array.from(params.rounds.keys()).sort(
+        (a, b) => a - b,
+      );
+
+      let hydratedCount = 0;
+
+      try {
+        for (const round of sortedRounds) {
+          const artifacts = await this.outputHandler.getRoundArtifacts(round);
+          this.roundOutputArtifacts[round] = artifacts;
+        }
+
+        hydratedCount = sortedRounds.length;
+      } finally {
+        this.hydratedRoundCount = hydratedCount;
+      }
+    })();
+
+    this.hydrationPromise = hydration;
+
+    try {
+      await hydration;
+    } finally {
+      if (this.hydrationPromise === hydration) {
+        this.hydrationPromise = null;
+      }
+    }
+  }
+
+  private async awaitPendingHydration(): Promise<void> {
+    const pending = this.hydrationPromise;
+    if (!pending) {
+      return;
+    }
+
+    try {
+      await pending;
+    } finally {
+      if (this.hydrationPromise === pending) {
+        this.hydrationPromise = null;
+      }
+    }
   }
 
   protected getPromptBuilder(): PromptBuilder {
@@ -614,7 +682,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
-    this.roundOutputArtifacts = [];
+    await this.awaitPendingHydration();
+
+    const previousHydratedRounds = this.hydratedRoundCount;
+    const hadHydratedRounds = previousHydratedRounds > 0;
+    if (!hadHydratedRounds) {
+      this.roundOutputArtifacts = [];
+    }
     this.runtimeXmlExports = {
       tagContents: {},
       documents: [],
@@ -624,38 +698,46 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     const totalRounds = this.getTotalRounds();
 
-    await runAgentFlow<ReflectionRunShared<C>>({
-      agent: this,
-      lifecycle,
-      createState: () =>
-        ({
-          totalRounds,
-          currentRound: 0,
-          continueRounds: true,
-          conversation: [],
-          runState: new AgentRunState(),
-        }) satisfies ReflectionRunState,
-      createFlow: () => createReflectionRunFlow<C>(),
-      extendHooks: (baseHooks: AgentRunHooks) => {
-        const baseStart = baseHooks.start;
-        return {
-          ...baseHooks,
-          init: async (runStage) => {
-            await this.init(runStage, { createStage: true });
-          },
-          start: async () => {
-            const runStage = await baseStart();
-            if (!runStage) {
-              throw new Error(
-                'Run group identifier is required for reflection runs.',
-              );
-            }
-            return runStage;
-          },
-          resetPromptBuilder: () => this.resetPromptBuilder(),
-        } satisfies ReflectionRunHooks;
-      },
-    });
+    try {
+      await runAgentFlow<ReflectionRunShared<C>>({
+        agent: this,
+        lifecycle,
+        createState: () =>
+          ({
+            totalRounds,
+            currentRound: 0,
+            continueRounds: true,
+            conversation: [],
+            runState: new AgentRunState(),
+          }) satisfies ReflectionRunState,
+        createFlow: () => createReflectionRunFlow<C>(),
+        extendHooks: (baseHooks: AgentRunHooks) => {
+          const baseStart = baseHooks.start;
+          return {
+            ...baseHooks,
+            init: async (runStage) => {
+              await this.init(runStage, { createStage: true });
+            },
+            start: async () => {
+              const runStage = await baseStart();
+              if (!runStage) {
+                throw new Error(
+                  'Run group identifier is required for reflection runs.',
+                );
+              }
+              return runStage;
+            },
+            resetPromptBuilder: () => this.resetPromptBuilder(),
+          } satisfies ReflectionRunHooks;
+        },
+      });
+    } finally {
+      const currentArtifacts = this.roundOutputArtifacts.filter(Boolean).length;
+      this.hydratedRoundCount = Math.max(
+        previousHydratedRounds,
+        currentArtifacts,
+      );
+    }
 
     this.runtimeXmlExports = this.computeRuntimeXmlExports();
   }

@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -17,9 +20,14 @@ import {
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
 // Local imports - storage
-import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
+import {
+  ensureRunDir,
+  getRunDir,
+  isValidExecutionId,
+} from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import { RecordingManager } from '@webview/managers/RecordingManager';
@@ -110,6 +118,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
       // Actions
       [PROGRESS_VIEW_COMMANDS.RUN_AGAIN]: this.handleRunAgain.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: this.handleRunNew.bind(this),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: this.handleDiffStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: this.handlePackStream.bind(this),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: this.handleCleanStream.bind(this),
@@ -205,21 +214,53 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleRunAgain(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
-      await vscode.commands.executeCommand(
-        'texra.execute',
-        taskState.agentConfig,
-      );
+      const executionId = this.provider.state.getExecutionId(message.stream);
+      if (!executionId) {
+        this.logger.warn(
+          this.channel,
+          `Resume requested for ${message.stream} without an execution ID`,
+        );
+        return;
+      }
+
+      await safeExecuteCommand('texra.execute', [
+        {
+          config: taskState.agentConfig,
+          executionId,
+          stream: message.stream,
+          resume: true,
+        },
+      ]);
+    });
+  }
+
+  private async handleRunNew(message: any): Promise<void> {
+    await this.withToolbarTaskState(message.stream, async (taskState) => {
+      await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
     });
   }
 
   private async handleDiffStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
+      const executionId = this.provider.state.getExecutionId(message.stream);
+      const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
+        executionId,
+        runId: this.provider.state.getActiveRunId(message.stream),
+      });
+      const outputsByRound = runOutputs
+        ? Object.fromEntries(runOutputs.entries())
+        : undefined;
+
       await vscode.commands.executeCommand('texra.runLatexdiff', {
         agent: taskState.agentConfig.agent,
         model: taskState.agentConfig.model,
         inputFile: taskState.agentConfig.inputFile,
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
+        streamId: message.stream,
+        runId:
+          executionId ?? this.provider.state.getActiveRunId(message.stream),
+        outputsByRound,
       });
     });
   }
@@ -359,24 +400,50 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
 
-    const executionId = this.provider.state.getExecutionId(stream);
-    if (!executionId) {
-      await vscode.window.showInformationMessage(
-        'No workspace storage folder is available for this run yet.',
-      );
-      return;
-    }
+    const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
+      persist: false,
+    });
+    const runOutputs = this.provider.state.getRunOutputFiles(stream, {
+      runId: resolvedRunId ?? undefined,
+      executionId:
+        resolvedRunId && isValidExecutionId(resolvedRunId)
+          ? (resolvedRunId as ExecutionId)
+          : undefined,
+    });
+
+    const executionIdFromRun =
+      resolvedRunId && isValidExecutionId(resolvedRunId)
+        ? (resolvedRunId as ExecutionId)
+        : this.extractExecutionIdFromOutputs(runOutputs);
+    const executionId =
+      executionIdFromRun ?? this.provider.state.getExecutionId(stream);
 
     try {
-      await ensureRunDir(executionId);
-      const runDir = getRunDir(executionId);
-      await safeExecuteCommand('revealFileInOS', [vscode.Uri.file(runDir)]);
+      let directoryToReveal: string | undefined;
+
+      if (executionId && isValidExecutionId(executionId)) {
+        await ensureRunDir(executionId);
+        directoryToReveal = getRunDir(executionId);
+      } else if (runOutputs) {
+        directoryToReveal = this.findPreferredOutputDirectory(runOutputs);
+      }
+
+      if (!directoryToReveal) {
+        await vscode.window.showInformationMessage(
+          'No workspace storage folder is available for this run yet.',
+        );
+        return;
+      }
+
+      await safeExecuteCommand('revealFileInOS', [
+        vscode.Uri.file(directoryToReveal),
+      ]);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.logger.error(
         this.channel,
-        `Failed to open task storage for stream ${stream}, executionId ${executionId}: ${errorMessage}`,
+        `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
         error instanceof Error ? error : undefined,
         undefined,
         undefined,
@@ -522,12 +589,32 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     taskState: WorkflowTaskState,
     command: 'texra.pack' | 'texra.clean',
   ): Promise<void> {
-    const generatedPaths =
-      this.provider.state.outputFiles.getKnownFilePaths(stream);
-    const allFiles = new Set<string>([
-      ...taskState.agentConfig.outputFiles,
-      ...generatedPaths,
-    ]);
+    const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
+      persist: false,
+    });
+    const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
+      stream,
+      {
+        runId: resolvedRunId ?? undefined,
+        workspaceOnly: true,
+      },
+    );
+    const allFiles = new Set<string>();
+
+    const declaredOutputs = Array.isArray(taskState.agentConfig.outputFiles)
+      ? taskState.agentConfig.outputFiles
+      : [];
+    for (const file of declaredOutputs) {
+      if (typeof file === 'string' && file.trim().length > 0) {
+        allFiles.add(file);
+      }
+    }
+
+    for (const file of generatedPaths) {
+      if (file.trim().length > 0) {
+        allFiles.add(file);
+      }
+    }
 
     const outputFilesArray = Array.from(allFiles);
     const useMultipleOutputs =
@@ -541,7 +628,106 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       inputFile: taskState.agentConfig.inputFile,
       outputFiles: useMultipleOutputs ? outputFilesArray : [],
       useMultipleOutputs,
+      skipProgressViewClear: true,
     });
+  }
+
+  private extractExecutionIdFromOutputs(
+    outputs: Map<number, OutputFileInfo[]> | undefined,
+  ): ExecutionId | undefined {
+    if (!outputs) {
+      return undefined;
+    }
+
+    for (const infos of outputs.values()) {
+      for (const info of infos) {
+        const candidate = this.resolveExecutionIdFromInfo(info);
+        if (candidate) {
+          return candidate;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private resolveExecutionIdFromInfo(
+    info: OutputFileInfo,
+  ): ExecutionId | undefined {
+    const relativeCandidates = [
+      info.rawLocation?.runStorage?.storageRelativePath,
+      info.location.runStorage?.storageRelativePath,
+      info.originalLocation?.runStorage?.storageRelativePath,
+      info.baseLocation?.runStorage?.storageRelativePath,
+      info.prevLocation?.runStorage?.storageRelativePath,
+    ];
+
+    for (const relative of relativeCandidates) {
+      const candidate = this.extractExecutionIdFromRelative(relative);
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractExecutionIdFromRelative(
+    relative: string | null | undefined,
+  ): ExecutionId | undefined {
+    if (!relative) {
+      return undefined;
+    }
+
+    const segments = relative.split(path.sep).filter(Boolean);
+    const runsIndex = segments.indexOf('taskRuns');
+    if (runsIndex === -1) {
+      return undefined;
+    }
+
+    if (runsIndex + 1 >= segments.length) {
+      return undefined;
+    }
+
+    const candidate = segments[runsIndex + 1];
+
+    if (candidate && isValidExecutionId(candidate)) {
+      return candidate;
+    }
+
+    return undefined;
+  }
+
+  private findPreferredOutputDirectory(
+    outputs: Map<number, OutputFileInfo[]>,
+  ): string | undefined {
+    for (const infos of outputs.values()) {
+      for (const info of infos) {
+        const runStoragePath =
+          info.rawLocation?.runStorage?.absolutePath ??
+          info.location.runStorage?.absolutePath ??
+          info.originalLocation?.runStorage?.absolutePath ??
+          info.baseLocation?.runStorage?.absolutePath ??
+          info.prevLocation?.runStorage?.absolutePath;
+
+        if (runStoragePath) {
+          return path.dirname(runStoragePath);
+        }
+
+        const workspacePath =
+          info.rawLocation?.workspace?.absolutePath ??
+          info.workspacePath ??
+          info.location.workspace?.absolutePath ??
+          info.original ??
+          (path.isAbsolute(info.path) ? info.path : undefined);
+
+        if (workspacePath) {
+          return path.dirname(workspacePath);
+        }
+      }
+    }
+
+    return undefined;
   }
 
   /**

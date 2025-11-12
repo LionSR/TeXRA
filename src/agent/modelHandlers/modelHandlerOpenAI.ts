@@ -54,7 +54,7 @@ import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -953,7 +953,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
-    if (!(await WorkspaceFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
@@ -974,7 +974,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await WorkspaceFS.read(outputFile);
+    let fileContent = await flexibleFS.read(outputFile);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -987,7 +987,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Write file content to output file
-    await WorkspaceFS.write(outputFile, fileContent);
+    await flexibleFS.write(outputFile, fileContent);
 
     messages.push({
       role: 'assistant',
@@ -1027,7 +1027,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       toolState.assembly.updateAccumulatedOutput(fileContent);
     } else {
       toolState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await WorkspaceFS.write(outputFile, toolState.assembly.accumulatedOutput);
+      await flexibleFS.write(outputFile, toolState.assembly.accumulatedOutput);
     }
     const state = new ConversationRoundState(0);
     toolState.assembly.lastResponse = toolState.assembly.accumulatedOutput;

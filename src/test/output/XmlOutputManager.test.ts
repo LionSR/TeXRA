@@ -12,7 +12,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { WorkspaceFS } from '@utils/files';
+import { TaskRunFileService, WorkspaceFS } from '@utils/files';
 
 describe('XmlOutputManager markdown fallback', () => {
   const setting: AgentSetting = {
@@ -50,7 +50,12 @@ describe('XmlOutputManager markdown fallback', () => {
 
   it('writes tex file from markdown fenced latex block', async () => {
     const logger = new AgentLogger('TestXmlOutput');
-    const manager = new XmlOutputManager(setting, config, logger);
+    const manager = new XmlOutputManager(
+      setting,
+      config,
+      logger,
+      new TaskRunFileService(),
+    );
     const outputXml = 'markdown_only.xml';
     const markdownContent =
       '```latex\n\\begin{document}\nhello\n\\end{document}\n```';
@@ -71,7 +76,12 @@ describe('XmlOutputManager markdown fallback', () => {
 
   it('writes tex file from named document tag', async () => {
     const logger = new AgentLogger('TestXmlOutput');
-    const manager = new XmlOutputManager(setting, config, logger);
+    const manager = new XmlOutputManager(
+      setting,
+      config,
+      logger,
+      new TaskRunFileService(),
+    );
     const outputXml = 'named_document.xml';
     const xmlContent =
       '<document name="input.tex"><![CDATA[\\begin{document}\nhello\n\\end{document}]]></document>';
@@ -93,7 +103,12 @@ describe('XmlOutputManager markdown fallback', () => {
 
   it('prefers named document over latex_document when both present', async () => {
     const logger = new AgentLogger('TestXmlOutput');
-    const manager = new XmlOutputManager(setting, config, logger);
+    const manager = new XmlOutputManager(
+      setting,
+      config,
+      logger,
+      new TaskRunFileService(),
+    );
     const outputXml = 'both_tags.xml';
     const xmlContent = `<?xml version="1.0"?>
 <latex_document>
@@ -118,7 +133,12 @@ describe('XmlOutputManager markdown fallback', () => {
 
   it('writes tex file from plain LaTeX document block', async () => {
     const logger = new AgentLogger('TestXmlOutput');
-    const manager = new XmlOutputManager(setting, config, logger);
+    const manager = new XmlOutputManager(
+      setting,
+      config,
+      logger,
+      new TaskRunFileService(),
+    );
     const outputXml = 'plain_latex.xml';
     const content =
       'some explanation\n\\documentclass{article}\n\\begin{document}\nhello\n\\end{document}\nmore text';
