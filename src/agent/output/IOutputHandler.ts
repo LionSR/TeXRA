@@ -6,8 +6,13 @@ import { XmlOutputManager } from './XmlOutputManager';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - types
-import { NamedOutputFile, OutputFileInfo, RoundFileMapping } from './types';
-import type { OutputXmlSummary, RoundOutputArtifacts } from './OutputHandler';
+import {
+  NamedOutputFile,
+  OutputFileInfo,
+  OutputXmlSummary,
+  RoundFileMapping,
+  RoundOutputArtifacts,
+} from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
@@ -64,6 +69,11 @@ export interface IOutputHandler {
       stage?: AgentLogStage;
     },
   ): Promise<void>;
+
+  hydrateFromArtifacts(
+    runId: string | null | undefined,
+    rounds: Map<number, OutputFileInfo[]>,
+  ): void;
 
   getRoundArtifacts(round: number): Promise<RoundOutputArtifacts>;
   getRoundXmlSummary(round: number): OutputXmlSummary;

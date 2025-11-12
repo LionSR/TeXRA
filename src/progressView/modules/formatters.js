@@ -1009,19 +1009,76 @@ export class LogEntryFormatter {
       return null;
     }
 
+    const toStringOrEmpty = (value) =>
+      typeof value === 'string' && value.length > 0 ? value : '';
+    const toLocation = (value) =>
+      value && typeof value === 'object' ? value : null;
+    const describeLocation = (location) => {
+      if (!location) return '';
+      if (
+        location.workspace &&
+        typeof location.workspace.relativePath === 'string' &&
+        location.workspace.relativePath
+      ) {
+        return location.workspace.relativePath;
+      }
+      if (
+        location.runStorage &&
+        typeof location.runStorage.storageRelativePath === 'string' &&
+        location.runStorage.storageRelativePath
+      ) {
+        return location.runStorage.storageRelativePath;
+      }
+      if (typeof location.relativePath === 'string' && location.relativePath) {
+        return location.relativePath;
+      }
+      return '';
+    };
+    const pickAbsolutePath = (location, fallback) => {
+      if (
+        location &&
+        typeof location.absolutePath === 'string' &&
+        location.absolutePath
+      ) {
+        return location.absolutePath;
+      }
+      return fallback;
+    };
+
+    let aggregatedRunId = '';
     let items = '';
+
     entries.forEach((d) => {
-      const basePath = String(d.base ?? '');
-      const revisedPath = String(d.revised ?? '');
-      const outputPath = String(d.output ?? '');
-      const msg = d.message ? String(d.message) : '';
+      const locations = d && typeof d === 'object' ? d.locations : null;
+      const baseLocation = toLocation(locations ? locations.base : null);
+      const revisedLocation = toLocation(locations ? locations.revised : null);
+      const diffLocation = toLocation(locations ? locations.diff : null);
 
-      const baseEsc = encodeHtml(basePath);
-      const revisedEsc = encodeHtml(revisedPath);
-      const outputEsc = encodeHtml(outputPath);
+      const basePath = toStringOrEmpty(d.basePath);
+      const revisedPath = toStringOrEmpty(d.revisedPath);
+      const diffPath = toStringOrEmpty(d.diffPath);
+      const msg = toStringOrEmpty(d.message);
+      const baseLabel = toStringOrEmpty(d.baseLabel);
+      const revisedLabel = toStringOrEmpty(d.revisedLabel);
+      const runId = toStringOrEmpty(d.runId);
+      if (runId && !aggregatedRunId) {
+        aggregatedRunId = runId;
+      }
 
-      const baseName = getBasename(basePath);
-      const revisedName = getBasename(revisedPath);
+      const baseFile = pickAbsolutePath(baseLocation, basePath);
+      const revisedFile = pickAbsolutePath(revisedLocation, revisedPath);
+      const diffFile = pickAbsolutePath(diffLocation, diffPath);
+
+      const baseDisplayRaw =
+        describeLocation(baseLocation) || baseLabel || getBasename(baseFile);
+      const revisedDisplayRaw =
+        describeLocation(revisedLocation) ||
+        revisedLabel ||
+        getBasename(revisedFile || baseFile);
+      const diffDisplayRaw =
+        describeLocation(diffLocation) ||
+        (diffFile ? getBasename(diffFile) : '') ||
+        'diff';
 
       let icon = 'codicon-question';
       if (d.status === 'success') {
@@ -1031,12 +1088,19 @@ export class LogEntryFormatter {
       }
 
       const titleAttr = msg ? ` title="${encodeHtml(msg)}"` : '';
+      const runAttr = runId ? ` data-run-id="${encodeHtml(runId)}"` : '';
 
-      items += `<li class="detail-item"><i class="codicon ${icon}"${titleAttr}></i> <span class="file-link clickable-link" data-file="${baseEsc}">${encodeHtml(
-        baseName,
-      )}</span> <span class="arrow">&rarr;</span> <span class="file-link clickable-link" data-file="${revisedEsc}">${encodeHtml(
-        revisedName,
-      )}</span> (<span class="file-link clickable-link" data-file="${outputEsc}">diff</span>)</li>`;
+      const baseLink = baseFile
+        ? `<span class="file-link clickable-link" data-file="${encodeHtml(baseFile)}">${encodeHtml(baseDisplayRaw)}</span>`
+        : `<span>${encodeHtml(baseDisplayRaw)}</span>`;
+      const revisedLink = revisedFile
+        ? `<span class="file-link clickable-link" data-file="${encodeHtml(revisedFile)}">${encodeHtml(revisedDisplayRaw)}</span>`
+        : `<span>${encodeHtml(revisedDisplayRaw)}</span>`;
+      const diffLink = diffFile
+        ? `<span class="file-link clickable-link" data-file="${encodeHtml(diffFile)}">${encodeHtml(diffDisplayRaw)}</span>`
+        : `<span>${encodeHtml(diffDisplayRaw)}</span>`;
+
+      items += `<li class="detail-item"${runAttr}><i class="codicon ${icon}"${titleAttr}></i> ${baseLink} <span class="arrow">&rarr;</span> ${revisedLink} (${diffLink})</li>`;
     });
 
     const summary =
@@ -1048,6 +1112,9 @@ export class LogEntryFormatter {
     if (contentElem) {
       contentElem.innerHTML = items;
       if (logId) contentElem.dataset.logId = logId;
+      if (aggregatedRunId) {
+        contentElem.dataset.runId = aggregatedRunId;
+      }
     }
 
     return element;

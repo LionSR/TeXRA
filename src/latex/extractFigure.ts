@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -62,7 +62,7 @@ export async function extractFigurePathsFromLatex(
     ];
 
     // Read file content
-    const content = await WorkspaceFS.read(latexFile);
+    const content = await flexibleFS.read(latexFile);
 
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
@@ -82,10 +82,13 @@ export async function extractFigurePathsFromLatex(
       .join('\n');
 
     // Find all matches in the processed content for both patterns
+    const discovered = new Set<string>();
+
     for (const pattern of figurePatterns) {
       let match;
       while ((match = pattern.exec(processedLines)) !== null) {
         const figPath = match[1];
+        let found = false;
         for (const basePath of graphicspaths) {
           const normPath = path.normalize(path.join(basePath, figPath));
           // Try with common extensions if no extension is provided
@@ -96,26 +99,19 @@ export async function extractFigurePathsFromLatex(
           for (const ext of extensions) {
             const pathToCheck = normPath + ext;
 
-            // Handle subdirectory case by attempting two different path resolutions:
-            // 1. Standard way - relative to the main latex directory
-            const relPathStandard = path.relative(latexDir, pathToCheck);
-            if (await WorkspaceFS.exists(relPathStandard)) {
-              figurePaths.push(relPathStandard);
+            if (await flexibleFS.exists(pathToCheck)) {
+              const relative = path.relative(latexDir, pathToCheck);
+              if (!discovered.has(relative)) {
+                figurePaths.push(relative);
+                discovered.add(relative);
+              }
+              found = true;
               break;
             }
+          }
 
-            // 2. Relative to the basePath directory (handles subdirectory cases)
-            const relPathToBase = path.relative(
-              path.dirname(basePath),
-              pathToCheck,
-            );
-            if (
-              basePath !== latexDir &&
-              (await WorkspaceFS.exists(relPathToBase))
-            ) {
-              figurePaths.push(relPathToBase);
-              break;
-            }
+          if (found) {
+            break;
           }
         }
       }

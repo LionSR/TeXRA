@@ -48,10 +48,11 @@ export async function executeCommand(
     truncate?: boolean;
     env?: Record<string, string>;
     timeout?: number;
+    cwd?: string;
   } = {},
 ): Promise<ExecResult> {
   try {
-    const workspacePath = WorkspaceFS.getPath();
+    const workspacePath = options.cwd ?? WorkspaceFS.getPath();
     if (!workspacePath) {
       throw new Error('No workspace path found');
     }

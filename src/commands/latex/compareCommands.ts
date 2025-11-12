@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
@@ -43,16 +43,16 @@ async function handleCompare(
     }
 
     // Create URIs for both files
-    const baseUri = vscode.Uri.file(WorkspaceFS.fullPath(fileToUse));
-    const editedUri = vscode.Uri.file(WorkspaceFS.fullPath(editedFile));
+    const baseUri = vscode.Uri.file(flexibleFS.toAbsolutePath(fileToUse));
+    const editedUri = vscode.Uri.file(flexibleFS.toAbsolutePath(editedFile));
 
     // Verify both files exist
-    if (!(await WorkspaceFS.exists(fileToUse))) {
+    if (!(await flexibleFS.exists(fileToUse))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await WorkspaceFS.exists(editedFile))) {
+    if (!(await flexibleFS.exists(editedFile))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
@@ -134,18 +134,18 @@ async function handleAcceptEdited(
     }
 
     // Verify both files exist
-    if (!(await WorkspaceFS.exists(fileToUse))) {
+    if (!(await flexibleFS.exists(fileToUse))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await WorkspaceFS.exists(editedFile))) {
+    if (!(await flexibleFS.exists(editedFile))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
 
     // Read content from edited file using workspace utilities
-    const editedContent = await WorkspaceFS.read(editedFile);
+    const editedContent = await flexibleFS.read(editedFile);
 
     // Confirm with user
     const baseFileName = path.basename(fileToUse);
@@ -163,7 +163,8 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    await WorkspaceFS.write(fileToUse, editedContent);
+    const targetPath = flexibleFS.toAbsolutePath(fileToUse);
+    await flexibleFS.write(targetPath, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
