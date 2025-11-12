@@ -44,7 +44,7 @@ import {
   replaceInputCommands,
   createFileMapping,
   TaskRunFileService,
-  readFlexible,
+  flexibleFS,
 } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
@@ -290,44 +290,12 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const location =
-      typeof original === 'string'
-        ? this.fileService.describePath(original)
-        : original;
-    const resolveWorkspaceAbsolute = (
-      candidate?: string | null,
-    ): string | null => {
-      if (!candidate) {
-        return null;
-      }
+    const workspaceLocation = this.fileService.getWorkspaceLocation(original);
+    if (!workspaceLocation) {
+      return;
+    }
 
-      const normalized = path.normalize(candidate);
-
-      if (path.isAbsolute(normalized)) {
-        const relative = path.relative(workspaceRoot, normalized);
-        if (relative.startsWith('..') || path.isAbsolute(relative)) {
-          return null;
-        }
-        return path.join(workspaceRoot, relative);
-      }
-
-      if (normalized === '' || normalized === '.') {
-        return workspaceRoot;
-      }
-
-      return path.join(workspaceRoot, normalized);
-    };
-
-    const workspaceAbsolute =
-      this.fileService.toWorkspaceAbsolute(location) ??
-      resolveWorkspaceAbsolute(
-        typeof original === 'string' ? original : location.absolutePath,
-      ) ??
-      resolveWorkspaceAbsolute(location.workspace?.relativePath ?? null) ??
-      resolveWorkspaceAbsolute(
-        location.relativeScope === 'workspace' ? location.relativePath : null,
-      ) ??
-      resolveWorkspaceAbsolute(location.runStorage?.relativePath ?? null);
+    const workspaceAbsolute = workspaceLocation.absolutePath;
 
     if (!workspaceAbsolute) {
       return;
@@ -1182,7 +1150,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await readFlexible(rawOutputPath);
+        const rawContent = await flexibleFS.read(rawOutputPath);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 

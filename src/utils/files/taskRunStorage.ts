@@ -11,7 +11,7 @@ import { WorkspaceFS } from './workspaceFS';
 import { getConfig } from '@utils/config';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AbsoluteFS } from './absoluteFS';
-import { existsFlexible } from './flexibleFS';
+import { flexibleFS } from './flexibleFS';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
@@ -386,33 +386,33 @@ export class TaskRunFileService {
     return this.useRunStorage;
   }
 
-  public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
-    if (!location) {
+  public getWorkspaceLocation(
+    target: string | FileLocation | null | undefined,
+  ): WorkspaceLocationInfo | null {
+    if (!target) {
       return null;
     }
 
-    if (location.workspace?.absolutePath) {
-      return location.workspace.absolutePath;
+    const location =
+      typeof target === 'string' ? this.describePath(target) : target;
+
+    if (location.workspace) {
+      return location.workspace;
     }
 
-    const root = this.workspaceRoot;
-    if (!root) {
-      return null;
+    if (location.relativeScope === 'workspace') {
+      return this.resolveWorkspaceRelative(location.relativePath);
     }
 
     if (location.runStorage?.relativePath) {
-      return path.join(root, location.runStorage.relativePath);
-    }
-
-    if (
-      location.absolutePath &&
-      path.isAbsolute(location.absolutePath) &&
-      this.isWithinWorkspace(location.absolutePath)
-    ) {
-      return location.absolutePath;
+      return this.resolveWorkspaceRelative(location.runStorage.relativePath);
     }
 
     return null;
+  }
+
+  public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
+    return this.getWorkspaceLocation(location)?.absolutePath ?? null;
   }
 
   private isWithinWorkspace(candidate: string): boolean {
@@ -839,7 +839,7 @@ export class TaskRunFileService {
       throw error;
     }
 
-    const persisted = await existsFlexible(runInfo.absolutePath);
+    const persisted = await flexibleFS.exists(runInfo.absolutePath);
     if (!persisted) {
       await removeIfExists(runInfo.absolutePath);
       throw new Error(
