@@ -1,4 +1,5 @@
 // Standard library imports
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 // Local imports - agent
@@ -9,6 +10,8 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
+import { TaskRunFileService, flexibleFS } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';
@@ -34,9 +37,61 @@ export class LatexDiffManager {
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
+    private readonly fileService: TaskRunFileService,
     private readonly dependencies: LatexDiffDependencies = defaultLatexDiffDependencies,
   ) {
     this.latexdiffService = new LaTeXdiffService(channel);
+  }
+
+  private async resolveActualPath(target: string): Promise<string> {
+    try {
+      return await fs.realpath(target);
+    } catch {
+      return target;
+    }
+  }
+
+  private async resolveDiffTarget(
+    relativePath: string,
+    location?: FileLocation,
+  ): Promise<{
+    actual: string | null;
+    workspaceDir?: string;
+    workspaceReference?: string;
+  }> {
+    const workspaceReference = location?.workspace?.absolutePath
+      ? location.workspace.absolutePath
+      : relativePath
+        ? this.fileService.resolveRelativePath(relativePath, {
+            preferWorkspace: true,
+          }).workspace?.absolutePath
+        : undefined;
+
+    const workspaceDir = workspaceReference
+      ? path.dirname(workspaceReference)
+      : undefined;
+
+    const actualCandidate = location?.absolutePath;
+
+    if (actualCandidate && (await flexibleFS.exists(actualCandidate))) {
+      const resolvedActual = await this.resolveActualPath(actualCandidate);
+      return {
+        actual: resolvedActual,
+        workspaceDir,
+        workspaceReference,
+      };
+    }
+
+    if (workspaceReference && (await flexibleFS.exists(workspaceReference))) {
+      const resolvedActual = await this.resolveActualPath(workspaceReference);
+      return {
+        actual: resolvedActual,
+        workspaceDir,
+        workspaceReference,
+      };
+    }
+
+    return { actual: null, workspaceDir, workspaceReference };
   }
 
   private logLatexdiffResult(
@@ -66,6 +121,39 @@ export class LatexDiffManager {
     );
   }
 
+  private async ensureWorkspaceDependency(
+    target?: string | null,
+  ): Promise<void> {
+    if (!target) {
+      return;
+    }
+
+    if (!(await flexibleFS.exists(target))) {
+      return;
+    }
+
+    try {
+      await this.fileService.mirrorWorkspaceFile(target);
+    } catch (error) {
+      this.logger.warn(
+        `Unable to mirror workspace dependency ${target}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+    }
+  }
+
+  private async relocateDiffArtifact(diffPath: string): Promise<string> {
+    if (!this.fileService.hasRunDirectory()) {
+      return diffPath;
+    }
+
+    const relocation = await this.fileService.relocateToRunStorage(diffPath);
+    return relocation.absolutePath;
+  }
+
   async handleLatexdiffofOutput(
     currRound: number,
     mapping: RoundFileMapping,
@@ -76,11 +164,19 @@ export class LatexDiffManager {
       false,
     );
     const aggregated: Array<{
-      base: string;
-      revised: string;
-      output: string;
+      baseLabel: string;
+      basePath?: string;
+      revisedLabel: string;
+      revisedPath?: string;
+      diffPath?: string;
       status: 'success' | 'error';
       message?: string;
+      runId?: string | null;
+      locations?: {
+        base: FileLocation | null;
+        revised: FileLocation | null;
+        diff: FileLocation | null;
+      };
     }> = [];
 
     const execute = async () => {
@@ -121,24 +217,42 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
+          const location = mapping.locationByOutput.get(outputFile);
+          const resolved = await this.resolveDiffTarget(outputFile, location);
+          const baseAbsolute = this.fileService.resolveRelativePath(baseFile, {
+            preferWorkspace: true,
+          }).absolutePath;
+          await this.ensureWorkspaceDependency(baseAbsolute);
+          await this.ensureWorkspaceDependency(resolved.workspaceReference);
+          const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
+
+          if (!resolved.actual) {
+            this.logger.warn(
+              `Skipping latexdiff for ${outputFile} - file not found after relocation`,
+            );
+            aggregated.push({
+              baseLabel: this.fileService.getDisplayLabel(baseFile),
+              basePath: baseAbsolute,
+              revisedLabel: this.fileService.getDisplayLabel(baseFile),
+              revisedPath: location?.absolutePath,
+              status: 'error',
+              message: 'Revised file missing for latexdiff',
+            });
+            continue;
+          }
+
           const result = await this.latexdiffService.runDiffForRound(
-            baseFile,
-            outputFile,
+            baseAbsolute,
+            resolved.actual,
             currRound,
+            undefined,
+            { cwd },
           );
           this.logLatexdiffResult(result, 'round-diff');
-          aggregated.push({
-            base: baseFile,
-            revised: outputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(baseFile), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
+          let diffPath = '';
           if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(baseFile),
+            diffPath = path.join(
+              path.dirname(baseAbsolute),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -148,7 +262,39 @@ export class LatexDiffManager {
               buildDir,
               true,
             );
+            if (this.fileService.hasRunDirectory()) {
+              diffPath = await this.relocateDiffArtifact(diffPath);
+              // Leave the build directory in place; it mainly caches temporary
+              // LaTeX intermediates and can be regenerated on demand.
+            }
           }
+          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
+            preferWorkspace: true,
+          });
+          const revisedLocation =
+            location ??
+            (resolved.actual
+              ? this.fileService.describePath(resolved.actual)
+              : undefined);
+          const diffLocation = diffPath
+            ? this.fileService.describePath(diffPath)
+            : undefined;
+
+          aggregated.push({
+            baseLabel: this.fileService.getDisplayLabel(baseFile),
+            basePath: baseAbsolute,
+            revisedLabel: this.fileService.getDisplayLabel(outputFile),
+            revisedPath: resolved.actual ?? location?.absolutePath,
+            diffPath: diffPath || undefined,
+            status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
+            runId: this.fileService.metadata.executionId ?? null,
+            locations: {
+              base: baseLocation,
+              revised: revisedLocation ?? null,
+              diff: diffLocation ?? null,
+            },
+          });
         }
       }
 
@@ -172,23 +318,57 @@ export class LatexDiffManager {
         }
 
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const result = await this.latexdiffService.runDiffBetweenRounds(
+          const prevLocation = mapping.locationByOutput.get(prevOutputFile);
+          const currLocation = mapping.locationByOutput.get(currOutputFile);
+          const prevResolved = await this.resolveDiffTarget(
             prevOutputFile,
+            prevLocation,
+          );
+          const currResolved = await this.resolveDiffTarget(
             currOutputFile,
+            currLocation,
+          );
+          await this.ensureWorkspaceDependency(prevResolved.workspaceReference);
+          await this.ensureWorkspaceDependency(currResolved.workspaceReference);
+
+          if (!prevResolved.actual || !currResolved.actual) {
+            this.logger.warn(
+              `Skipping between-round latexdiff - missing files for ${prevOutputFile} or ${currOutputFile}`,
+            );
+            aggregated.push({
+              baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
+              basePath: prevLocation?.absolutePath,
+              revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
+              revisedPath: currLocation?.absolutePath,
+              status: 'error',
+              message: 'One or more round files missing for latexdiff',
+              runId: this.fileService.metadata.executionId ?? null,
+              locations: {
+                base: prevLocation ?? null,
+                revised: currLocation ?? null,
+                diff: null,
+              },
+            });
+            continue;
+          }
+
+          const workspaceCwd =
+            prevResolved.workspaceDir ?? currResolved.workspaceDir;
+          const previousActualAbsolute = flexibleFS.toAbsolutePath(
+            prevResolved.actual,
+          );
+          const cwd = workspaceCwd ?? path.dirname(previousActualAbsolute);
+          const result = await this.latexdiffService.runDiffBetweenRounds(
+            prevResolved.actual,
+            currResolved.actual,
+            undefined,
+            { cwd },
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
-          aggregated.push({
-            base: prevOutputFile,
-            revised: currOutputFile,
-            output: result.diffFileName
-              ? path.join(path.dirname(prevOutputFile), result.diffFileName)
-              : '',
-            status: result.success ? 'success' : 'error',
-            message: result.success ? undefined : result.message,
-          });
+          let diffPath = '';
           if (result.success && result.diffFileName) {
-            const diffPath = path.join(
-              path.dirname(prevOutputFile),
+            diffPath = path.join(
+              path.dirname(previousActualAbsolute),
               result.diffFileName,
             );
             const buildDir = path.join(path.dirname(diffPath), 'build');
@@ -198,7 +378,31 @@ export class LatexDiffManager {
               buildDir,
               true,
             );
+            if (this.fileService.hasRunDirectory()) {
+              diffPath = await this.relocateDiffArtifact(diffPath);
+              // Build folders stay in the workspace to avoid copying the entire
+              // compilation output tree into run storage.
+            }
           }
+          const diffLocation = diffPath
+            ? this.fileService.describePath(diffPath)
+            : undefined;
+
+          aggregated.push({
+            baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
+            basePath: prevLocation?.absolutePath,
+            revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
+            revisedPath: currResolved.actual ?? currLocation?.absolutePath,
+            diffPath: diffPath || undefined,
+            status: result.success ? 'success' : 'error',
+            message: result.success ? undefined : result.message,
+            runId: this.fileService.metadata.executionId ?? null,
+            locations: {
+              base: prevLocation ?? null,
+              revised: currLocation ?? null,
+              diff: diffLocation ?? null,
+            },
+          });
         }
       } else if (!generateBetweenRoundDiffs) {
         this.logger.debug(

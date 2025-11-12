@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports
-import { WorkspaceFS } from './workspaceFS';
+import { flexibleFS } from './flexibleFS';
 import { AgentLogger } from '@logger/AgentLogger';
 
 /**
@@ -124,13 +124,13 @@ export async function replaceInputCommands(
     }
 
     try {
-      const content = await WorkspaceFS.read(outputFile);
+      const content = await flexibleFS.read(outputFile);
       const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
         baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
       );
 
       if (newContent !== content) {
-        await WorkspaceFS.write(outputFile, newContent);
+        await flexibleFS.write(outputFile, newContent);
         logger?.debug(`Updated input commands in ${outputFile}`);
       }
     } catch (err) {
