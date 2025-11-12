@@ -31,6 +31,7 @@
     },
     "moduleResolution": "node",
     "strict": true /* enable all strict type-checking options */,
+    "skipLibCheck": true,
     "esModuleInterop": true /* Enables emit interoperability between CommonJS and ES Modules */
     /* Additional Checks */
     // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */
