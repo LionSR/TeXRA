@@ -382,6 +382,57 @@ export class TaskRunFileService {
     return WorkspaceFS.getPath();
   }
 
+  public isRunStorageEnabled(): boolean {
+    return this.useRunStorage;
+  }
+
+  public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
+    if (!location) {
+      return null;
+    }
+
+    if (location.workspace?.absolutePath) {
+      return location.workspace.absolutePath;
+    }
+
+    const root = this.workspaceRoot;
+    if (!root) {
+      return null;
+    }
+
+    if (location.runStorage?.relativePath) {
+      return path.join(root, location.runStorage.relativePath);
+    }
+
+    if (
+      location.absolutePath &&
+      path.isAbsolute(location.absolutePath) &&
+      this.isWithinWorkspace(location.absolutePath)
+    ) {
+      return location.absolutePath;
+    }
+
+    return null;
+  }
+
+  private isWithinWorkspace(candidate: string): boolean {
+    const root = this.workspaceRoot;
+    if (!root) {
+      return false;
+    }
+
+    const normalizedRoot = path.resolve(root);
+    const normalizedCandidate = path.resolve(candidate);
+    if (normalizedCandidate === normalizedRoot) {
+      return true;
+    }
+
+    const rootWithSep = normalizedRoot.endsWith(path.sep)
+      ? normalizedRoot
+      : `${normalizedRoot}${path.sep}`;
+    return normalizedCandidate.startsWith(rootWithSep);
+  }
+
   private get activeExecutionId(): ExecutionId | undefined {
     return this.metadata.executionId;
   }
