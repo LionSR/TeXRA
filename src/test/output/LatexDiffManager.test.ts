@@ -153,6 +153,8 @@ describe('LatexDiffManager mapping reuse', () => {
     ]);
     assert.equal(aggregated.length, 1);
     assert.equal(aggregated[0].length, 1);
+    const [first] = aggregated[0] as Array<Record<string, unknown>>;
+    assert.equal(first?.revisedLabel, 'chapter_r0.tex');
   });
 
   it('uses shared previous mapping for between-round diffs', async () => {

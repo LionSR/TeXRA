@@ -294,8 +294,41 @@ export class OutputHandler implements IOutputHandler {
       typeof original === 'string'
         ? this.fileService.describePath(original)
         : original;
+    const resolveWorkspaceAbsolute = (
+      candidate?: string | null,
+    ): string | null => {
+      if (!candidate) {
+        return null;
+      }
 
-    const workspaceAbsolute = this.fileService.toWorkspaceAbsolute(location);
+      const normalized = path.normalize(candidate);
+
+      if (path.isAbsolute(normalized)) {
+        const relative = path.relative(workspaceRoot, normalized);
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+          return null;
+        }
+        return path.join(workspaceRoot, relative);
+      }
+
+      if (normalized === '' || normalized === '.') {
+        return workspaceRoot;
+      }
+
+      return path.join(workspaceRoot, normalized);
+    };
+
+    const workspaceAbsolute =
+      this.fileService.toWorkspaceAbsolute(location) ??
+      resolveWorkspaceAbsolute(
+        typeof original === 'string' ? original : location.absolutePath,
+      ) ??
+      resolveWorkspaceAbsolute(location.workspace?.relativePath ?? null) ??
+      resolveWorkspaceAbsolute(
+        location.relativeScope === 'workspace' ? location.relativePath : null,
+      ) ??
+      resolveWorkspaceAbsolute(location.runStorage?.relativePath ?? null);
+
     if (!workspaceAbsolute) {
       return;
     }
@@ -648,6 +681,21 @@ export class OutputHandler implements IOutputHandler {
         }
 
         await this.cleanupLatexBackups(entry.location);
+        if (!runStorageActive) {
+          const described = this.fileService.describePath(
+            entry.location.absolutePath,
+          );
+          relocatedProcessed.push({
+            ...entry,
+            path: described.absolutePath,
+            relativePath: described.relativePath,
+            workspacePath:
+              entry.workspacePath ?? described.workspace?.absolutePath,
+            location: described,
+          });
+          continue;
+        }
+
         const relocation = await this.fileService.relocateToRunStorage(
           entry.location.absolutePath,
         );
@@ -920,10 +968,12 @@ export class OutputHandler implements IOutputHandler {
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
               const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = await this.fileService.relocateToRunStorage(
-                relocationSource,
-                runStorageEnabled ? { forceRunStorage: true } : undefined,
-              );
+              rawLocation = runStorageEnabled
+                ? await this.fileService.relocateToRunStorage(
+                    relocationSource,
+                    { forceRunStorage: true },
+                  )
+                : this.fileService.describePath(relocationSource);
               rawPath = rawLocation.absolutePath;
               outputFile = rawPath;
             }
@@ -942,10 +992,12 @@ export class OutputHandler implements IOutputHandler {
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
               const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = await this.fileService.relocateToRunStorage(
-                relocationSource,
-                runStorageEnabled ? { forceRunStorage: true } : undefined,
-              );
+              rawLocation = runStorageEnabled
+                ? await this.fileService.relocateToRunStorage(
+                    relocationSource,
+                    { forceRunStorage: true },
+                  )
+                : this.fileService.describePath(relocationSource);
               rawPath = rawLocation.absolutePath;
               outputFile = rawPath;
             }
