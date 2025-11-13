@@ -31,7 +31,7 @@ function createDirectivePattern(): RegExp {
 
 function createCitationPattern(): RegExp {
   return new RegExp(
-    `\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
+    `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
     'g',
   );
 }
