@@ -7,6 +7,7 @@ import { createOutputEvents } from '@progressView/events/OutputEvents';
 import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
+import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
 
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -223,5 +224,83 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
+  });
+
+  it('registers task groups before log handlers to avoid thinking replay races', () => {
+    const bus = new FakeBus();
+    const state = {
+      streamTabs: {
+        ensureStream: async () => {},
+        has: () => true,
+        addMessage: async () => {},
+        getMessages: () => [],
+        save: async () => {},
+      },
+      taskGroups: {
+        addGroup: async () => {},
+        updateGroup: async () => {},
+        getStreamGroups: () => new Map(),
+      },
+      outputFiles: {
+        addFiles: async () => {},
+        updateMissingOutputs: async () => {},
+        clearMissingOutputs: async () => {},
+        clearFiles: async () => {},
+        getFiles: () => new Map(),
+        getMissingOutputs: () => new Map(),
+      },
+      usageStats: {
+        getRunUsage: () => new Map(),
+        setRunUsage: () => {},
+      },
+      runInstructions: {
+        getInstructions: () => new Map(),
+        setInstruction: async () => {},
+        deleteRun: async () => {},
+      },
+      agentTypeFilter: 'all',
+      setActiveRunId: () => {},
+      resolveRunId: () => null,
+      setSessionKindHint: () => {},
+      clearSessionKindHint: () => {},
+      clearRunInstructions: () => {},
+      clearRunFiles: () => {},
+      clearRunMissingOutputs: () => {},
+      clearRunUsage: () => {},
+      clearAllActiveRuns: () => {},
+      clearAllPendingInstructions: () => {},
+      getTaskState: () => undefined,
+      activeStream: '',
+    } as unknown as ProgressViewState;
+
+    const updater = {
+      isAvailable: () => false,
+      updateLogContent: () => {},
+      updateFiles: () => {},
+      updateMissingOutputs: () => {},
+      updateUsage: () => {},
+      addTaskGroup: () => {},
+      updateTaskGroup: () => {},
+    } as unknown as WebviewUpdater;
+
+    const handler = new ProgressEventHandler(state, updater);
+    handler.setupEventListeners();
+
+    assert.deepStrictEqual(bus.events, [
+      'setActiveStream',
+      'updateStreamStatus',
+      'setTaskState',
+      'addOutputFiles',
+      'updateMissingOutputs',
+      'clearMissingOutputs',
+      'clearOutputFiles',
+      'clearTaskOutput',
+      'updateGroupUsage',
+      'updateStreamUsage',
+      'addTaskGroup',
+      'updateTaskGroup',
+      'addLogMessage',
+      'updateLogMessage',
+    ]);
   });
 });
