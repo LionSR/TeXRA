@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - Add an `extract_bib_entries` LaTeX tool with shared helpers so agents can gather cited BibTeX records and surface missing files or keys directly in tool responses.
+- Add OpenAI GPT-5.1 (`gpt51`) to the model catalog with docs covering its default `none` reasoning mode, apply-patch and shell tooling support, and drop-in parity with GPT-5 pricing.
 
 ## [0.34.3] - 2025-11-07
 
