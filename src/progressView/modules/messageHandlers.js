@@ -216,6 +216,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       container.classList.toggle('is-visible', isToolAgent);
       container.setAttribute('aria-hidden', isToolAgent ? 'false' : 'true');
     }
+    dom.followUpInput.setContainerVisibility(Boolean(isToolAgent && container));
 
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
 
@@ -449,6 +450,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const hasExecution = state.hasExecutionId(state.activeStream);
     dom.status.setExecutionIdAvailability(Boolean(hasExecution));
     dom.status.update(message.status);
+
+    const targetsActiveStream =
+      !message.stream || message.stream === state.activeStream;
+    if (!targetsActiveStream) {
+      return;
+    }
+
+    const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
+    const isContainerVisible = Boolean(
+      container &&
+        container.classList.contains('is-visible') &&
+        container.getAttribute('aria-hidden') === 'false',
+    );
+
+    if (message.status === STATUS.WAITING && isContainerVisible) {
+      dom.followUpInput.focus({ scrollIntoView: true });
+    }
   }
 
   handleUpdateUsage(message) {
