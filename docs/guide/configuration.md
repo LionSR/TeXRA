@@ -49,7 +49,7 @@ default list is maintained in the [Models Guide](./models.md). Override it by
 specifying your own model identifiers:
 
 ```json
-"texra.models": ["sonnet45T", "gpt5", "gpt5pro"]
+"texra.models": ["sonnet45T", "gpt51", "gpt5pro"]
 ```
 
 ### API Provider Settings
@@ -79,7 +79,7 @@ Configure how TeXRA connects to AI model providers:
 - `useStreamingOpenAIReasoning`: Enable streaming specifically for OpenAI reasoning models
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `instructionPolishModel`: Short name of the model TeXRA uses to polish instruction text when Copilot is disabled. Values match the identifiers listed in [Models](./models.md).
-- `gpt5ReasoningSummary`: Request reasoning summaries from GPT-5 family models, including GPT-5 Pro (requires verified account and user tier)
+- `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.1 and GPT-5 Pro (requires verified account and user tier)
 - `useCopilot`: Use the Copilot language model through VS Code's Language Model API for instruction polishing and text connection
 
 | Provider         | Proxy path                  | Supported |
