@@ -1514,7 +1514,7 @@
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.21.1",
     "@vscode-elements/elements": "^2.3.1",
-    "@vscode/codicons": "^0.0.41",
+    "@vscode/codicons": "^0.0.42",
     "@vscode/markdown-it-katex": "^1.1.2",
     "arxiv-client": "^0.0.9",
     "axios": "^1.13.2",
