@@ -11,7 +11,7 @@ import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler'
 
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { WebviewUpdater } from '@progressView/managers';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 class FakeBus {
@@ -227,7 +227,6 @@ describe('Progress event modules', () => {
   });
 
   it('registers task groups before log handlers to avoid thinking replay races', () => {
-    const bus = new FakeBus();
     const state = {
       streamTabs: {
         ensureStream: async () => {},
@@ -283,24 +282,43 @@ describe('Progress event modules', () => {
       updateTaskGroup: () => {},
     } as unknown as WebviewUpdater;
 
-    const handler = new ProgressEventHandler(state, updater);
-    handler.setupEventListeners();
+    const registeredEvents: (keyof ProgressEventPayloads)[] = [];
+    const originalOn = bus.on.bind(bus);
 
-    assert.deepStrictEqual(bus.events, [
-      'setActiveStream',
-      'updateStreamStatus',
-      'setTaskState',
-      'addOutputFiles',
-      'updateMissingOutputs',
-      'clearMissingOutputs',
-      'clearOutputFiles',
-      'clearTaskOutput',
-      'updateGroupUsage',
-      'updateStreamUsage',
-      'addTaskGroup',
-      'updateTaskGroup',
-      'addLogMessage',
-      'updateLogMessage',
-    ]);
+    const restoreBus = () => {
+      (bus as unknown as { on: typeof bus.on }).on = originalOn;
+    };
+
+    (bus as unknown as { on: typeof bus.on }).on = ((event, listener) => {
+      registeredEvents.push(event);
+      return originalOn(event, listener);
+    }) as typeof bus.on;
+
+    const disposables: { dispose: () => void }[] = [];
+
+    try {
+      const handler = new ProgressEventHandler(state, updater);
+      disposables.push(...handler.setupEventListeners());
+
+      assert.deepStrictEqual(registeredEvents, [
+        'setActiveStream',
+        'updateStreamStatus',
+        'setTaskState',
+        'addOutputFiles',
+        'updateMissingOutputs',
+        'clearMissingOutputs',
+        'clearOutputFiles',
+        'clearTaskOutput',
+        'updateGroupUsage',
+        'updateStreamUsage',
+        'addTaskGroup',
+        'updateTaskGroup',
+        'addLogMessage',
+        'updateLogMessage',
+      ]);
+    } finally {
+      disposables.forEach((disposable) => disposable.dispose());
+      restoreBus();
+    }
   });
 });
