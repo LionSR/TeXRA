@@ -4,8 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { fileLister } from '@frontend/files/fileLister';
-
-// Internal imports
 import { resolveFilePath, WorkspaceFS } from '@utils/files';
 
 export async function openFile(file: string): Promise<void> {

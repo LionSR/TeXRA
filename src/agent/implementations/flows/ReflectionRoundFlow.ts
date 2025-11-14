@@ -1,6 +1,5 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-// Local imports - flow constants
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { ConversationRoundState } from '@agent/core/AgentState';

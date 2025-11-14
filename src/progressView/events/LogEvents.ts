@@ -3,13 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { LogMessageUpdate } from '@logger/LogTypes';
+// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
-
-// Type imports
 import type { WebviewUpdater } from '@progressView/managers';
-
-// Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports - events
@@ -23,11 +21,6 @@ import { createErrorBoundary } from './errorHandling';
 
 // Type imports
 import type { ProgressEventBusLike } from './types';
-
-// Local imports - logger
-
-
-// Local imports - logging
 
 interface LogEventsShared {
   logger: AgentLogger;

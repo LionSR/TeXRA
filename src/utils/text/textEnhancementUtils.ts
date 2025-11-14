@@ -1,30 +1,18 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - error utils
-
-// Local imports - log
-
-// Local imports - utilities
-
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-
-// Internal imports
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
+// Type imports
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
-
-// Internal imports
 import { getConfig } from '@utils/config';
 
 // Local file imports

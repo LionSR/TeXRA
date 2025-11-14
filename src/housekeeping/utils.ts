@@ -6,8 +6,6 @@ import { sync as globSync } from 'glob';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'Housekeeping';

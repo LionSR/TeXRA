@@ -7,8 +7,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'Webview';

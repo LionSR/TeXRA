@@ -3,9 +3,8 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { STATUS } from '@progressView/modules/constants.js';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
+// Type imports
 import type { StreamStatusOrReady } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatusOrReady>();

@@ -4,8 +4,6 @@
 
 // Local imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-// Type imports
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';
 
 export interface TaskGroup {

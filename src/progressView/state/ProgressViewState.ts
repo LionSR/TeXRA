@@ -3,24 +3,29 @@ import * as vscode from 'vscode';
 
 // Local imports - agent metadata
 import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+// Type imports
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+// Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
+// Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+// Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
-
-// Internal imports - logging and state
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import {
   TaskState,
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
+// Type imports
 import type { TaskGroup } from '@logger/LogTypes';
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - progress view managers
 import type { AgentFilter } from '@progressView/types';
+// Internal imports
 import {
   StreamTabsManager,
   TaskGroupManager,
@@ -28,7 +33,9 @@ import {
   UsageStatsManager,
   RunInstructionManager,
 } from '@progressView/managers';
+// Type imports
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+// Internal imports
 import { normalizeRunId } from '@progressView/constants/runIds';
 import { getConfig } from '@utils/config';
 

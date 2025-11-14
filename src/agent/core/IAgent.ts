@@ -1,13 +1,7 @@
-// Local imports - agent
-// Local imports - agent components
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-
-// Type imports
 import type { AgentLogStage } from '@logger/AgentLogger';
-
-// Type imports
 import type { AgentSessionDescriptor } from './AgentDataclass';
 import type { AgentConfig } from './AgentConfig';
 

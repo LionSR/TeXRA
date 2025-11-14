@@ -9,23 +9,14 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
-
-// Local imports - log
-// Local imports - utilities
 import {
   runCleanSingle,
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
 } from '@housekeeping';
-
-// Internal imports
 import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - housekeeping

@@ -4,12 +4,9 @@ import * as path from 'path';
 // Local imports - core
 import { z } from 'zod';
 
-
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
 import { buildFileAttachment } from '@tools/utils';
-
-// Local imports - utils
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 // Local file imports

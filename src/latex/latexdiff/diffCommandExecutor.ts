@@ -3,8 +3,6 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
 

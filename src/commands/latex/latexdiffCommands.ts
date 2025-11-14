@@ -13,39 +13,24 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService, flexibleFS } from '@utils/files';
-// Local imports - latex utils
 import { checkToolInstalled } from '@utils/system';
-
-// Internal imports
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
-
-// Internal imports
 import {
   DEFAULT_MATH_MARKUP,
   MATH_MARKUP_OPTIONS,
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-
-// Local imports - housekeeping
 import {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-
-// Import agent utilities
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 // Local imports - agent types

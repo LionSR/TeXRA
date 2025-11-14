@@ -1,6 +1,5 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-// Local imports - flow constants
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
@@ -9,12 +8,15 @@ import type {
   ReflectionRoundContext,
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
+// Internal imports
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+// Type imports
 import type {
   AgentLifecycleState,
   AgentRunHooks,
   AgentRunShared,
 } from '@agent/implementations/flows/common/types';
+// Internal imports
 import {
   beginLifecyclePhase,
   completeLifecycle,

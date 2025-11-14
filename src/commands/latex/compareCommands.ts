@@ -6,11 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { registerDiffRefresh } from '@frontend/ui/diffView';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { flexibleFS } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 

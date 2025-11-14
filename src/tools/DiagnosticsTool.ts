@@ -6,13 +6,10 @@ import {
   getLinterMessages,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-// Local imports - tools
 import {
   type DiagnosticsPayload,
   ToolResult,

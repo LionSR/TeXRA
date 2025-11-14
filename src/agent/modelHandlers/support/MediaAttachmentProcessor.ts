@@ -4,18 +4,12 @@ import { Buffer } from 'buffer';
 
 // Local imports - agent utils
 import { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Internal imports
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import {
   countPdfPages,
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@frontend/media/img';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Type imports

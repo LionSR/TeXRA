@@ -1,7 +1,5 @@
 // Third-party imports
 import type { ToolDefinition } from '@model';
-
-// Type imports
 import type {
   Tool as AnthropicTool,
   ToolUnion,
@@ -11,7 +9,6 @@ import type {
   FunctionDeclaration,
   Schema,
 } from '@google/genai/dist/genai';
-// Third-party imports
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 

@@ -4,8 +4,6 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
-// Local imports - agent identifiers
-
 // Local imports - follow-up queue primitive
 import { FollowUpQueue } from './FollowUpQueue';
 

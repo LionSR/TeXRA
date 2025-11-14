@@ -7,6 +7,7 @@ import {
   AgentSharedStoreSnapshotSchema,
   type AgentSharedStoreSnapshot,
 } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';

@@ -3,18 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentCategory,
   AgentType,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { ToolConfig } from '@agent/core/ToolConfig';
-
-// Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import {
   isPastedImage,
   getPastedImageFullPath,

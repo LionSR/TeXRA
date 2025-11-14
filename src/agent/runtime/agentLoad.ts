@@ -15,10 +15,7 @@ import {
   AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
-// Local imports - utils
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Type imports

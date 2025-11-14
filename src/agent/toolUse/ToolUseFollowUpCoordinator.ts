@@ -1,10 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - logging
-
 // Local imports - agent coordination
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports

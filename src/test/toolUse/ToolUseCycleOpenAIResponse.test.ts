@@ -15,30 +15,27 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Internal imports
 import {
   ModelConfig,
   ModelProvider,
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
-
-// Internal imports
 import { ToolResult, toolResult } from '@tools/result';
-
-// Internal imports
 import { BaseTool } from '@tools/core/base';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Type imports

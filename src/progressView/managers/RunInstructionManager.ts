@@ -1,12 +1,9 @@
-// Local imports - progress view persistence
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types

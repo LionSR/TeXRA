@@ -1,13 +1,9 @@
 // Third-party imports
 import { execa } from 'execa';
-// Local imports - core
 import { z } from 'zod';
-
 
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
-
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports

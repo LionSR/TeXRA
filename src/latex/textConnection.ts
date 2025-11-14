@@ -5,15 +5,8 @@ import OpenAI from 'openai';
 // Local imports - error utils
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-
-// Internal imports
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - agent handlers
-// Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'LaTeXCommands';

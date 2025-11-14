@@ -1,6 +1,5 @@
 // VS Code imports
 import * as vscode from 'vscode';
-// Third-party imports
 import { nanoid } from 'nanoid';
 
 // Local imports

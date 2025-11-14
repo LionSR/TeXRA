@@ -3,31 +3,30 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-
-// Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+// Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
+// Type imports
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+// Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
-import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-
 // Internal imports
+import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+// Type imports
 import type { ToolDefinition } from '@model';
+// Internal imports
 import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-
-// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
