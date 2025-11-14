@@ -1,14 +1,10 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - core
-
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/utils';
-
-// Local imports - utils
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports

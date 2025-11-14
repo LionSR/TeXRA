@@ -1,4 +1,3 @@
-// Third-party imports
 /**
  * Diff statistic schema used for file comparisons.
  */

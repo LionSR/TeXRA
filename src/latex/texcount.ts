@@ -1,7 +1,5 @@
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { flexibleFS } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 

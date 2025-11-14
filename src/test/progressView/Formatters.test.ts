@@ -1,12 +1,8 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
-
 // @ts-ignore: jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
-
-// Local imports - progress view
 
 // @ts-ignore: formatter is compiled JS module
 import { LogEntryFormatter } from '@progressView/modules/formatters.js';

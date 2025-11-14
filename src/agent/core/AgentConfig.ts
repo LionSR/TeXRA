@@ -1,7 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - agent
 // Local imports - agent components
 import {
   AgentCategory,

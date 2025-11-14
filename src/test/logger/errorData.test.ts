@@ -3,8 +3,6 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 describe('AgentLogger error data', () => {

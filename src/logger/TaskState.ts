@@ -1,5 +1,6 @@
 // Local imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentCategory,
   type AgentSessionDescriptor,

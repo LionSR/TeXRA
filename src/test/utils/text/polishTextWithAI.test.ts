@@ -6,16 +6,12 @@ import * as vscode from 'vscode';
 
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
-
-// Local imports - models
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
-
-// Local imports - utilities
 import { polishTextWithAI } from '@utils/text/textEnhancementUtils';
 
 describe('polishTextWithAI', () => {

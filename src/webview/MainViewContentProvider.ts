@@ -14,14 +14,10 @@ import {
   DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
-
-// Local imports - webview
 import {
   BaseViewContentProvider,
   ModuleDescriptor,
 } from '@common/webview/BaseViewContentProvider';
-
-// Internal imports
 import { getConfig } from '@utils/config';
 import { GlobalStorageFS } from '@utils/files';
 

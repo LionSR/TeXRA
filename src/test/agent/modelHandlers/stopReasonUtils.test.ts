@@ -1,7 +1,5 @@
 // Third-party imports
 import { strict as assert } from 'assert';
-
-// Third-party imports
 import { FinishReason } from '@google/genai';
 
 // Local imports - utils

@@ -5,7 +5,6 @@ import { basename } from 'node:path';
 // Third-party imports
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 
-
 const isSupportedImageMediaType = (
   mediaType: string,
 ): mediaType is BetaBase64ImageSource['media_type'] => {
@@ -32,6 +31,7 @@ interface UploadedAnthropicAttachment {
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentSetting,
   AgentType,
@@ -49,14 +49,10 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-
-// Local imports - error utils
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
@@ -71,10 +67,7 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-// Local imports - utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
-
-// Internal imports
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 

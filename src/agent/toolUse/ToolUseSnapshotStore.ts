@@ -10,8 +10,6 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - utilities
 import { StorageFS, isValidExecutionId } from '@utils/files';
 import {
   getToolUsePersistenceEnabled,

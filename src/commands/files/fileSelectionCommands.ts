@@ -4,15 +4,9 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import { showInfoMessage } from '@frontend/ui/messageUtils';
 import { fileLister } from '@frontend/files/fileLister';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
 import { selectFile, selectFiles } from '@utils/dialogs';
 

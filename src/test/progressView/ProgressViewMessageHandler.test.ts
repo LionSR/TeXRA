@@ -4,17 +4,13 @@ import { strict as assert } from 'assert';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-
 // Types
 import { AgentCategory } from '@agent/core/AgentDataclass';
+// Type imports
 import type { OutputFileInfo } from '@agent/output/types';
-
-// Type imports
 import type { WorkflowTaskState } from '@logger/TaskState';
-
-// Type imports
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+// Internal imports
 import { ProgressViewMessageHandler } from '@progressView/ProgressViewMessageHandler';
 
 describe('ProgressViewMessageHandler.handleFileOperation', () => {

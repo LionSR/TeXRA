@@ -6,11 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - filesystem
 import { getLinterMessages } from '@frontend/latex/linter';
-
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - latex
 
 describe('latex linter diagnostics', () => {
   type MutableWorkspaceFs = {

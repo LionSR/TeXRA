@@ -5,8 +5,6 @@ import { getConfig } from '@utils/config';
 import { runLatexIndent } from './formatter/latexindentpt';
 import { runTexFmt } from './formatter/texfmt';
 
-// Local imports - utilities
-
 export async function runLatexFormatter(filePath: string): Promise<boolean> {
   const formatter = getConfig<string>('texra.latex.formatter', 'latexindent');
   if (formatter === 'none') {

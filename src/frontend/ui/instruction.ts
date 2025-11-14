@@ -1,15 +1,9 @@
 // Third-party imports
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
-
-// Standard library imports
 
 // Local imports
 import { INSTRUCTION_PREFIX, globalSM } from '@common/state/stateManager';
-
-// Internal imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 /**

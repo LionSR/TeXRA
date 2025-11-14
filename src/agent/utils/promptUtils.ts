@@ -7,19 +7,14 @@ import * as nunjucks from 'nunjucks';
 // Local imports - agent
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import {
   StorageFS,
   TASK_RUNS_DIR,
   WorkspaceFS,
   isValidExecutionId,
 } from '@utils/files';
-
-// Internal imports
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';

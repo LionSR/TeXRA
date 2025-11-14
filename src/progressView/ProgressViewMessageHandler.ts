@@ -9,45 +9,35 @@ import {
   AgentTypeFilter,
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
+// Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-
 // Internal imports
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
-// Local imports - agent types
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Internal imports
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
-
-// Local imports - storage
 import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-
-// Internal imports
 import {
   ensureRunDir,
   getRunDir,
   isValidExecutionId,
 } from '@utils/files/taskRunStorage';
-// Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-
-// Internal imports
 import { RecordingManager } from '@webview/managers/RecordingManager';
 
 

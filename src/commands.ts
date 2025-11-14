@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - commands
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { registerFileSelectionCommands } from '@commands/files/fileSelectionCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -41,7 +39,6 @@ import { registerWalkthroughCommands } from '@commands/system/walkthroughCommand
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
-
 
 const CHANNEL = 'Registration';
 logger.initialize(CHANNEL);

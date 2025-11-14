@@ -1,13 +1,10 @@
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-
-// Type imports
 import type { BaseTool } from '@tools/core/base';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
 import { AgentWorkspaceState } from './AgentWorkspaceState';
-// Local imports - flow orchestration
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,

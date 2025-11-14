@@ -4,15 +4,11 @@ import * as assert from 'assert';
 // Local imports - tools
 import { WriteFileTool } from '@tools/WriteTool';
 import { FileOpTool } from '@tools/fileOp';
-
-// Internal imports
 import {
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
-
-// Local imports - utils
 import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 

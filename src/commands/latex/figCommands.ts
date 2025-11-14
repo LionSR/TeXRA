@@ -6,20 +6,12 @@ import * as vscode from 'vscode';
 
 // Local imports - errors
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@utils/editor/activeFileGuards';
-
-// Local imports - latex utils
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 

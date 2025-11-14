@@ -21,6 +21,7 @@ import {
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
@@ -29,19 +30,13 @@ import {
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-// Local imports - base handler
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
-// Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-
-// Internal imports
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
@@ -49,13 +44,8 @@ import type { ModelConfig, ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
-
-// Internal imports
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-// Local imports - filesystem utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
-
-// Internal imports
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 

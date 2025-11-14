@@ -1,14 +1,9 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
 
-
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
-
-// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -16,8 +11,6 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports

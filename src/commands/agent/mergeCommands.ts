@@ -3,19 +3,11 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { executeMergeAgent } from '@agent/runtime/executeAgent';
-
-// Internal imports
 import {
   showLoggedMessageWithDocs,
   showLoggedErrorMessage,
 } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - errors
-// Local imports - agent
-// Local imports - utilities
 import { getConfig } from '@utils/config';
 
 export function registerMergeCommands(context: vscode.ExtensionContext) {

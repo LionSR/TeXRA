@@ -2,8 +2,6 @@
 import arxivClient from 'arxiv-client';
 import { extract as extractArxivId } from 'identifiers-arxiv';
 
-// Local imports - none
-
 /**
  * Base arXiv paper metadata shared between search and metadata tools.
  */

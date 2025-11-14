@@ -97,6 +97,71 @@ function applyEdits(text, edits) {
   return updated;
 }
 
+function dedupeImportCommentBlocks(text) {
+  const lines = text.split('\n');
+  let currentComment = null;
+  let blockEnd = 0;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      blockEnd = i;
+      continue;
+    }
+    if (trimmed.startsWith('//')) {
+      if (/imports/i.test(trimmed)) {
+        let lookaheadIndex = i + 1;
+        while (lookaheadIndex < lines.length && lines[lookaheadIndex].trim() === '') {
+          lookaheadIndex += 1;
+        }
+        if (
+          lookaheadIndex >= lines.length ||
+          lines[lookaheadIndex].trim().startsWith('//') ||
+          !lines[lookaheadIndex].trim().startsWith('import')
+        ) {
+          lines.splice(i, 1);
+          i -= 1;
+          continue;
+        }
+        const normalized = trimmed.toLowerCase();
+        if (normalized === currentComment) {
+          lines.splice(i, 1);
+          if (i < lines.length && lines[i].trim() === '') {
+            lines.splice(i, 1);
+          }
+          if (i - 1 >= 0 && lines[i - 1].trim() === '') {
+            lines.splice(i - 1, 1);
+            i -= 1;
+          }
+          i -= 1;
+          continue;
+        }
+        currentComment = normalized;
+      } else {
+        currentComment = null;
+      }
+      blockEnd = i;
+      continue;
+    }
+    if (/^import\b/.test(trimmed)) {
+      blockEnd = i;
+      continue;
+    }
+    blockEnd = i;
+    break;
+  }
+  let index = 1;
+  while (index <= blockEnd && index < lines.length) {
+    if (lines[index].trim() === '' && lines[index - 1].trim() === '') {
+      lines.splice(index, 1);
+      blockEnd -= 1;
+      continue;
+    }
+    index += 1;
+  }
+  return lines.join('\n');
+}
+
 function ensureCommentForFile(filePath) {
   const fileText = fs.readFileSync(filePath, 'utf8');
   const sourceFile = ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest, true);
@@ -109,22 +174,24 @@ function ensureCommentForFile(filePath) {
 
   imports.forEach((node, index) => {
     const previous = index > 0 ? imports[index - 1] : undefined;
-    const currentStartLine = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line;
-    const previousEndLine = previous
-      ? sourceFile.getLineAndCharacterOfPosition(previous.getEnd()).line
-      : undefined;
-    const hasBlankLine = previousEndLine !== undefined ? currentStartLine - previousEndLine > 1 : false;
-    const isGroupStart = !previous || hasBlankLine;
+    const currentClass = classifyImport(node);
+    const previousClass = previous ? classifyImport(previous) : undefined;
+    const isGroupStart = !previous || currentClass !== previousClass;
     if (previous) {
-      const previousClass = classifyImport(previous);
-      const currentClass = classifyImport(node);
-      if (previousClass === currentClass && hasBlankLine) {
-        const gapStart = previous.getEnd();
-        const gapEnd = node.getStart();
-        const gapText = fileText.slice(gapStart, gapEnd);
-        const normalizedGap = gapText.replace(/\n\s*\n/g, '\n');
-        if (normalizedGap !== gapText) {
-          edits.push({ start: gapStart, end: gapEnd, text: normalizedGap });
+      const gapStart = previous.getEnd();
+      const gapEnd = node.getStart();
+        if (previousClass === currentClass) {
+        const leadingStart = node.getFullStart();
+        const leadingText = fileText.slice(leadingStart, gapEnd);
+        if (/imports/i.test(leadingText)) {
+          const newline = leadingText.includes('\r\n') ? '\r\n' : '\n';
+          edits.push({ start: leadingStart, end: gapEnd, text: newline });
+        } else {
+          const gapText = fileText.slice(gapStart, gapEnd);
+          if (/\n\s*\n/.test(gapText)) {
+            const newline = gapText.includes('\r\n') ? '\r\n' : '\n';
+            edits.push({ start: gapStart, end: gapEnd, text: newline });
+          }
         }
       }
     }
@@ -144,7 +211,14 @@ function ensureCommentForFile(filePath) {
     return false;
   }
 
-  const updatedText = applyEdits(fileText, edits);
+  let updatedText = applyEdits(fileText, edits);
+  const dedupedText = dedupeImportCommentBlocks(updatedText);
+  if (dedupedText !== updatedText) {
+    updatedText = dedupedText;
+  }
+  if (updatedText === fileText) {
+    return false;
+  }
   fs.writeFileSync(filePath, updatedText, 'utf8');
   return true;
 }

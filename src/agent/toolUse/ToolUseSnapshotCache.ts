@@ -1,4 +1,3 @@
-// Internal imports - logging
 // Local imports - agent types
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - core indexing

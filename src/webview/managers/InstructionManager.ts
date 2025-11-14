@@ -6,16 +6,10 @@ import * as vscode from 'vscode';
 
 // Local imports - commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utils
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
-
-// Internal imports
 import { PASTED_DIR } from '@utils/files/pastedImageUtils';
 import {
   polishTextWithAI,

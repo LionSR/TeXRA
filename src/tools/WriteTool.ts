@@ -1,19 +1,11 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
 
 // Internal imports
 import { isTexFile } from '@common/files/fileTypeUtils';
-
-// Internal imports
 import replacementEngine from '@replacement/engine';
-
-// Internal imports
 import { ToolResult, toolResult } from '@tools/result';
-
-// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -21,8 +13,6 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports

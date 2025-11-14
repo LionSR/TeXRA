@@ -3,28 +3,16 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import replacementEngine from '@replacement/engine';
-
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
-
-// Internal imports
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@utils/editor/activeFileGuards';
-
-// Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
-
-// Local imports - housekeeping
 import { runIndentTeX } from '@housekeeping';
 
 const CHANNEL = 'LaTeXCommands';
