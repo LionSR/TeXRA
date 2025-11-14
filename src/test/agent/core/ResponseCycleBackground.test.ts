@@ -332,7 +332,7 @@ describe('ResponseCycle background reasoning logs', () => {
     const messages: ProviderMessage[] = [];
     const stateRound = new ConversationRoundState(1);
     const stateGlobal = new AgentRunState();
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const userVarChannels = {
       input: Object.freeze({}),
       transient: {} as Record<string, any>,
@@ -341,7 +341,7 @@ describe('ResponseCycle background reasoning logs', () => {
     const store = new AgentSharedStore({
       round: stateRound,
       run: stateGlobal,
-      workspace: toolState,
+      workspace: workspaceState,
       user: userVarChannels,
     });
 

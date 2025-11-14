@@ -802,11 +802,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: Content[],
     _stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -828,7 +828,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message history for Google GenAI (no prefill).',
@@ -864,7 +864,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug('Adding new model message for the response.');
       messages.push({
         role: 'model',
-        parts: [createPartFromText(toolState.assembly.accumulatedOutput)],
+        parts: [createPartFromText(workspaceState.assembly.accumulatedOutput)],
       });
     }
   }
@@ -873,7 +873,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: Content[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, Content[]]> {
@@ -886,7 +886,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.debug(
         `Output file ${outputFile} does not exist or is empty.`,
       );
-      toolState.assembly.updateAccumulatedOutput(prefill);
+      workspaceState.assembly.updateAccumulatedOutput(prefill);
 
       // Add pseudo-prefill instruction instead of skipping it
       const lastMessage = messages[messages.length - 1];
@@ -942,13 +942,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       'Existing file content found without end tag - continuing generation.',
     );
-    toolState.assembly.updateAccumulatedOutput(fileContent);
-    toolState.assembly.lastResponse = fileContent;
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.lastResponse = fileContent;
     const state = new ConversationRoundState(0);
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
-      toolState,
+      workspaceState,
       agentSetting,
       agentConfig,
     );
@@ -979,7 +979,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   processThinkingBlock(
     responseObject: GenerateContentResponse,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     if (
       !responseObject ||
@@ -1009,13 +1009,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       .join('')
       .trim();
 
-    if (toolState && !toolState.reasoning.thinkingAdded) {
-      toolState.reasoning.thinkingBlocks = thoughtParts.map((p) => ({
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+      workspaceState.reasoning.thinkingBlocks = thoughtParts.map((p) => ({
         type: 'thinking',
         thinking: p.text,
         thoughtSignature: p.thoughtSignature,
       }));
-      toolState.reasoning.thinkingAdded = true;
+      workspaceState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {
@@ -1086,7 +1086,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     name: string,
     call: FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: AgentWorkspaceState,
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     // Handle both args and input fields for backward compatibility
