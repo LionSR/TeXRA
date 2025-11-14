@@ -21,7 +21,7 @@ import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   toolRegistry: Record<string, BaseTool<any>>;
-  toolState: AgentWorkspaceState;
+  workspaceState: AgentWorkspaceState;
   modelName?: string;
 }
 

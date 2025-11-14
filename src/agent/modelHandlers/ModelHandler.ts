@@ -570,7 +570,7 @@ export abstract class ModelHandler<
   abstract addContinueMessageWithPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -582,7 +582,7 @@ export abstract class ModelHandler<
   abstract addContinueMessageWithoutPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -595,7 +595,7 @@ export abstract class ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, M[]]>;
@@ -620,7 +620,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -631,7 +631,7 @@ export abstract class ModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void;
 
   /**
@@ -647,12 +647,12 @@ export abstract class ModelHandler<
   /**
    * Extracts thinking content from model responses
    * @param responseObject The raw response object from the model
-   * @param toolState Optional toolState to update with the thinking block
+   * @param workspaceState Optional workspaceState to update with the thinking block
    * @returns The extracted thinking content string or null if no thinking content is available
    */
   abstract processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null;
 
   /**
@@ -673,7 +673,7 @@ export abstract class ModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 
