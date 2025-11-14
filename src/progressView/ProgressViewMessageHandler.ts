@@ -68,6 +68,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     super('ProgressView');
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: PROGRESS_VIEW_COMMANDS.RECORDING_ERROR,
       transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing follow-up message',
