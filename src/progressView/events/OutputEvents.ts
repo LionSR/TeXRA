@@ -12,7 +12,7 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 
 // Type imports
-import type { ProgressEventBusLike } from './types';
+import type { ProgressEventBusLike, StreamStatusType } from './types';
 
 export interface OutputEventsModule {
   register(
@@ -28,6 +28,7 @@ interface OutputEventsShared {
     stream: string,
     options?: { updateInstruction?: boolean },
   ) => void;
+  getAllStreamStatuses: () => Map<string, StreamStatusType>;
 }
 
 const updateActiveStreamOutputs = (
@@ -127,7 +128,10 @@ const registerClearTaskOutput = (
       withErrorBoundary('failed to handle clearTaskOutput', () => {
         const cleared = state.clearOutputState(streamTabId);
         if (cleared) {
-          const activeStream = updater.updateAll(state);
+          const activeStream = updater.updateAll(
+            state,
+            shared.getAllStreamStatuses(),
+          );
           shared.refreshStreamSurface(activeStream);
         }
       });
