@@ -4,10 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.34.4] - 2025-11-14
+
 ### Features
 
-- Add an `extract_bib_entries` LaTeX tool with shared helpers so agents can gather cited BibTeX records and surface missing files or keys directly in tool responses.
-- Add OpenAI GPT-5.1 (`gpt51`) to the model catalog with docs covering its default `none` reasoning mode, apply-patch and shell tooling support, and drop-in parity with GPT-5 pricing.
+- Added a **Collect references** helper that gathers the BibTeX entries your project cites and calls out anything missing, so you can tidy bibliographies before submitting.
+- Expanded the model catalog with **GPT-5.1** (`gpt51`), offering GPT-5-class reasoning with fresh pricing and full tool support.
+
+### Improvements
+
+- The progress board now loads conversations faster and keeps stream updates responsive, even for long sessions.
+- Run reviews feel smoother thanks to persistent run context, clearer timestamps, and an input box that’s ready whenever a follow-up is needed.
+- Workspace cleanup is less disruptive: generated artifacts stick around, TeX files are detected more reliably, and `\input{}` paths stay intact.
+
+### Bug Fixes
+
+- Workflow controls once again behave as expected—resume, restart, and stop actions reliably reflect the state of your run.
+- Progress board summaries stay in sync with agent defaults and usage totals, preventing stale data from lingering between refreshes.
+- Tool calls are steadier across providers, avoiding duplicate uploads, empty payload errors, and missing workflow outputs.
+- Bibliography parsing now handles complex citation files without crashing, keeping reference extraction dependable.
 
 ## [0.34.3] - 2025-11-07
 
