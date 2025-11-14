@@ -148,6 +148,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED]: (m) =>
         this.handleFollowUpTextTranscribed(m),
       [COMMANDS.RECORDING_STARTED]: () => this.handleRecordingStarted(),
+      [COMMANDS.RECORDING_STOPPED]: () => this.handleRecordingStopped(),
       [COMMANDS.RECORDING_ERROR]: () => this.handleRecordingError(),
     };
   }
@@ -692,6 +693,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleRecordingStarted() {
     dom.followUpInput.setRecording(true);
+  }
+
+  handleRecordingStopped() {
+    dom.followUpInput.setRecording(false);
   }
 
   handleRecordingError() {
