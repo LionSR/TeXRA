@@ -4,10 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.34.4] - 2025-11-14
+
 ### Features
 
-- Add an `extract_bib_entries` LaTeX tool with shared helpers so agents can gather cited BibTeX records and surface missing files or keys directly in tool responses.
-- Add OpenAI GPT-5.1 (`gpt51`) to the model catalog with docs covering its default `none` reasoning mode, apply-patch and shell tooling support, and drop-in parity with GPT-5 pricing.
+- Introduce an `extract_bib_entries` LaTeX tool that gathers the BibTeX records cited in your project—even when they live in explicit `.bib` paths—so agents can flag missing references automatically.
+- Add OpenAI GPT-5.1 (`gpt51`) to the model catalog with documentation on its reasoning mode, apply-patch, and shell tool support, giving you a drop-in alternative to GPT-5 pricing.
+
+### Improvements
+
+- Make the progress board feel snappier with leaner stream refreshes, faster output file loading, and lighter usage aggregation even on long-running sessions.
+- Smooth out run reviews by persisting per-run progress state, showing timestamps in the run picker, and auto-focusing the follow-up input whenever a run is waiting on you.
+- Treat workspace housekeeping more gently by preserving generated artifacts, keeping `.tex` detection consistent, and rewriting `\input{}` commands without stripping folder prefixes.
+
+### Bug Fixes
+
+- Restore reliable workflow controls: resume and restart buttons are back, recording stops now reset cleanly, and stop acknowledgements are sent only once to avoid stuck captures.
+- Keep the progress board accurate by reloading agent defaults when options disappear, registering task groups before new logs arrive, and routing usage refreshes through the shared helper.
+- Stabilize tool calls so Gemini requests get the right parameters, OpenRouter runs skip redundant uploads, empty tool inputs are ignored, and workflow outputs hydrate without runtime errors.
+- Harden bibliography extraction with stricter regexes, a dedicated BibTeX parser, and safer workspace storage handling so complex citation files parse without crashes.
 
 ## [0.34.3] - 2025-11-07
 
