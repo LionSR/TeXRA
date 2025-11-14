@@ -2,8 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import * as logger from '@logger/logUtils';
+// Type imports
 import type { TaskState } from '@logger/TaskState';
 
 const CHANNEL = 'stateRestoreCommand';

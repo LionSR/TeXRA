@@ -26,9 +26,8 @@ import {
 } from '@google/genai';
 
 // Local imports - agent
-import { toGoogleTools } from './toolConversion';
-import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import {
@@ -38,10 +37,7 @@ import {
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-
-// Local imports - agent components
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -51,13 +47,11 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
 import type { ToolDefinition } from '@model';
-import {
-  DEFAULT_ATTACHMENT_MIME_TYPE,
-  describeAttachments,
-  extractToolAttachments,
-  loadAttachmentBuffer,
-} from './utils/toolAttachmentUtils';
+
+// Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 
@@ -68,10 +62,21 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-
-// Local imports - utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import {
+  DEFAULT_ATTACHMENT_MIME_TYPE,
+  describeAttachments,
+  extractToolAttachments,
+  loadAttachmentBuffer,
+} from './utils/toolAttachmentUtils';
+import { toGoogleTools } from './toolConversion';
+
+// Type imports
+import type { MediaFileResult } from './support/MediaAttachmentProcessor';
+import type { ProviderStopReason } from './types/StopReasonTypes';
 
 type GoogleRole = 'user' | 'model';
 

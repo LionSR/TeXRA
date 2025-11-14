@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 // LaTeX spacing and punctuation fixes
 export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {

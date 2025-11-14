@@ -15,14 +15,18 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
@@ -30,8 +34,11 @@ import {
   ModelProvider,
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
-import { BaseTool } from '@tools/core/base';
 import { ToolResult, toolResult } from '@tools/result';
+import { BaseTool } from '@tools/core/base';
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Type imports
 import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {

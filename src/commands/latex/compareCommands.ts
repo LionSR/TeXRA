@@ -5,11 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { flexibleFS } from '@utils/files';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
+import * as logger from '@logger/logUtils';
+import { flexibleFS } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';

@@ -17,39 +17,34 @@ import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Internal imports
 import { OPENAI_CHAT_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
-
-// Local imports - logging
+import * as repetitionUtils from '@agent/utils/text/repetitionUtils';
+import * as debugSaver from '@agent/utils/debugMessageSaver';
+// Type imports
+import type { OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import type { AgentLogger } from '@logger/AgentLogger';
+// Internal imports
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
-
-// Local imports - model configuration
 import {
   ModelConfig,
   ModelProvider,
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-import * as latex from '@latex';
 import replacementEngine from '@replacement/engine';
-import * as repetitionUtils from '@agent/utils/text/repetitionUtils';
-import * as debugSaver from '@agent/utils/debugMessageSaver';
+import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
-import type { OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
+import * as latex from '@latex';
 
 // Third-party types
 import type OpenAI from 'openai';
-import type {
-  Response,
-  ResponseUsage,
-} from 'openai/resources/responses/responses';
+import type { Response, ResponseUsage } from 'openai/resources/responses/responses';
 
 type LoggedEvent = {
   level: 'debug' | 'info' | 'warn' | 'error';

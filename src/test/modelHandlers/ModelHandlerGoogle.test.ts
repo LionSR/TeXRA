@@ -7,14 +7,16 @@ import {
   GenerateContentResponse,
   createPartFromText,
 } from '@google/genai';
-import type { Content } from '@google/genai';
+
 
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/AgentDataclass';
+// Internal imports
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-
-// Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
+
+// Type imports
+import type { Content } from '@google/genai';
 
 describe('ModelHandlerGoogleGenAI.shouldContinue', () => {
   const handler = new ModelHandlerGoogleGenAI({
