@@ -7,6 +7,7 @@ export * from './pastedImageUtils';
 export * from './baseFileUtils';
 export * from './fileMappingUtils';
 export * from './pathUtils';
+export { isTexFile } from '@common/files/fileTypeUtils';
 export * from './mimeUtils';
 export * from './taskRunStorage';
 export * from './copyUtils';
