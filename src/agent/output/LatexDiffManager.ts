@@ -4,15 +4,12 @@ import * as path from 'path';
 
 // Local imports - agent
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-
-// Internal imports
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Internal imports
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
 import { TaskRunFileService, flexibleFS } from '@utils/files';
+// Type imports
 import type { FileLocation } from '@utils/files';
 
 // Internal imports

@@ -1,20 +1,21 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-
-// Local imports - flow constants
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-// Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Internal imports
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
+// Type imports
 import type {
   AgentLifecycleState,
   AgentRunHooks,
   AgentRunShared,
 } from '@agent/implementations/flows/common/types';
+// Internal imports
 import {
   beginLifecyclePhase,
   failLifecycle,

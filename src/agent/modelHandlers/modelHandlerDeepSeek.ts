@@ -1,9 +1,7 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
 import OpenAI from 'openai';
-
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -16,7 +14,6 @@ import { K_SLICE } from '@utils/config';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-// Local imports - utilities
 import {
   describeAttachments,
   extractToolAttachments,

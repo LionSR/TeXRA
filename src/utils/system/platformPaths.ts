@@ -7,8 +7,6 @@ import { execaSync } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { AbsoluteFS } from '@utils/files';
 
 // Local file imports

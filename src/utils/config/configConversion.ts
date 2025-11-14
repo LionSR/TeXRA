@@ -1,8 +1,8 @@
-// Standard library imports
 // (none needed)
 
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentCategory,
   type AgentSessionDescriptor,

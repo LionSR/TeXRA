@@ -12,8 +12,6 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-
-// Internal imports
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -27,44 +25,26 @@ import {
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
+// Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import {
   createCandidate,
   resolveAgentDefinition,
   type AgentDefinitionSearchOptions,
   type AgentDirectoryCandidate,
 } from '@agent/utils/agentPathResolver';
-
-// Internal imports
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Internal imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-// Local imports - errors
-// Local imports - utilities
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Internal imports
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
-
-// Internal imports
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-
-// Internal imports
 import { agentConfigToTaskState } from '@utils/config';
-
-// Internal imports
 import { ensureRunDir } from '@utils/files/taskRunStorage';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
-
-// Internal imports
 import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local file imports

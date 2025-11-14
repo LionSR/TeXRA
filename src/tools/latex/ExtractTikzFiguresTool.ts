@@ -1,8 +1,6 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - latex
-
 // Local imports - tools
 import { ToolError, toolResult, type ToolFileAttachment } from '@tools/result';
 import {
@@ -10,14 +8,8 @@ import {
   formatToolOutput,
   resolveAndFormat,
 } from '@tools/utils';
-
-// Internal imports
 import { defineTool } from '@tools/core/define';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 const ExtractTikzInputSchema = z.strictObject({

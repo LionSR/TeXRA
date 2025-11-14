@@ -3,26 +3,16 @@ import * as vscode from 'vscode';
 
 // Local imports - webview
 import { computeAgentOptions } from '@agent/computeAgentOptions';
-
-// Internal imports
 import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
 // @ts-ignore - Import JavaScript module
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Internal imports
 import { SecretManager } from '@frontend/secretManager';
-
-// Internal imports
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-
-// Internal imports
 import { computeModelOptions } from '@model/computeModelOptions';
-
-// Internal imports
 import { getConfig, setConfig } from '@utils/config';
 import {
   safeExecuteCommand,
@@ -30,8 +20,6 @@ import {
   getToolDocsCommand,
 } from '@utils/system';
 import { SETTINGS_QUERY } from '@utils/settingsQueries';
-
-// Internal imports
 import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 
 // Local file imports

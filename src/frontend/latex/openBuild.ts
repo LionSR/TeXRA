@@ -1,13 +1,9 @@
 // Third-party imports
 import * as path from 'path';
-
-// Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import {
   WorkspaceFS,
   AbsoluteFS,

@@ -1,15 +1,9 @@
 // Node.js built-in imports
 import * as assert from 'assert';
 
-// Local imports - latex helpers
-
 // Local imports - tools
 import { ExtractTikzFiguresTool } from '@tools/latex';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 suite('ExtractTikzFiguresTool', () => {

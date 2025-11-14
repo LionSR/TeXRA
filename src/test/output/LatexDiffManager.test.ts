@@ -4,8 +4,6 @@ import * as path from 'path';
 
 // Local imports - agent
 import { OutputHandler } from '@agent/output';
-
-// Internal imports
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
@@ -13,12 +11,11 @@ import {
   AgentType,
 } from '@agent/core/AgentDataclass';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+// Type imports
 import type { NamedOutputFile } from '@agent/output/types';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Internal imports
 import { TaskRunFileService } from '@utils/files';
 
 // Type imports

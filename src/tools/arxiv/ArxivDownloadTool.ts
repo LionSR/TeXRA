@@ -1,20 +1,12 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - latex
-
 // Local imports - tools
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { formatToolOutput, toPosixPath } from '@tools/utils';
-
-// Internal imports
 import { defineTool } from '@tools/core/define';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 const ArxivDownloadInputSchema = z.strictObject({

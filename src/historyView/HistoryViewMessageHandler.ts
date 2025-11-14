@@ -3,22 +3,14 @@ import * as vscode from 'vscode';
 
 // Local imports - agent commands
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-// Local imports - history view
-// Local imports - webview messaging
 import {
   BaseViewMessageHandler,
   type MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
 // @ts-ignore - Import JavaScript module
 import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Internal imports
 import { AgentHistoryManager } from '@historyView/managers';
-
-// Local imports - configuration
 import { agentConfigToTaskState } from '@utils/config';
-
-// Internal imports
 import { executeCommand } from '@commands/agent/executeCommand';
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<

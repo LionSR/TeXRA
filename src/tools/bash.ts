@@ -1,14 +1,9 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
 
-
 // Local imports - tools
 import { ToolResult, ToolError, toolResult } from '@tools/result';
-
-// Internal imports
 import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports

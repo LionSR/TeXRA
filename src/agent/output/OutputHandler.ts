@@ -4,10 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentSetting,
   AgentType,
@@ -16,17 +15,10 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-
-// Internal imports
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-
-// Local imports - utilities
-// Local imports - log
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - utilities
 import {
   replaceInputCommands,
   createFileMapping,
@@ -34,6 +26,7 @@ import {
   flexibleFS,
 } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+// Type imports
 import type { FileLocation } from '@utils/files';
 
 // Internal imports
@@ -42,11 +35,7 @@ import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
-
-// Internal imports
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local file imports

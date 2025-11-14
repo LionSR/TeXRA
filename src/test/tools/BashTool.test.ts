@@ -12,14 +12,14 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - agent runtime
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-// Local imports - agent model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-// Local imports - model
 import type { ExecResult } from '@agent/types/ResultTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -30,10 +30,7 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
-
-// Local imports - tools
 import { BashTool } from '@tools/bash';
-// Internal imports
 import * as execUtils from '@utils/system/execUtils';
 
 // Type imports

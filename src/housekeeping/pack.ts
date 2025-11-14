@@ -9,10 +9,7 @@ import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-// Local imports - housekeeping
 import { getConfig } from '@utils/config';
 
 // Local file imports

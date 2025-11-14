@@ -3,11 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 
 const CHANNEL = 'commandUtils';
 logger.initialize(CHANNEL);

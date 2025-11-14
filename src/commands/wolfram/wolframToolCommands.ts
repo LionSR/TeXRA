@@ -3,11 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { WolframTool } from '@tools/wolfram';
 
 const CHANNEL = 'WolframToolCommands';

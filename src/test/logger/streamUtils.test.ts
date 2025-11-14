@@ -3,8 +3,6 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentType } from '@agent/core/AgentDataclass';
-
-// Internal imports
 import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {

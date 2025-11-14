@@ -6,11 +6,7 @@ import {
   type AgentDirectoryMap,
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
-
-// Internal imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-
-// Internal imports
 import { getConfig } from '@utils/config';
 
 export type { AgentOptionsPayload };

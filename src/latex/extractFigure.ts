@@ -3,8 +3,6 @@ import * as path from 'path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { flexibleFS } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';

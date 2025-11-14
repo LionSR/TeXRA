@@ -3,15 +3,8 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-
-// Local imports - event bus
-// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 class TestModelHandlerGoogleGenAI extends ModelHandlerGoogleGenAI {

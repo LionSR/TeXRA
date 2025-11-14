@@ -1,7 +1,5 @@
 // Local imports - agent
 import { getOutputFileName } from '@agent/output';
-
-// Internal imports
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 
 // Local imports - agent components

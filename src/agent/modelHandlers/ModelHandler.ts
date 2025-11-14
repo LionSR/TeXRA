@@ -3,16 +3,12 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import { AgentSetting, AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-// Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
-
-// Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
@@ -25,10 +21,7 @@ import {
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
-
-// Internal imports
 import { getConfig } from '@utils/config';
-// Local imports - utilities
 import { normalizeUrl } from '@utils/urlUtils';
 
 // Local file imports
