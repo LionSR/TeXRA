@@ -13,7 +13,11 @@ import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 // Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
+
+import type { WebviewUpdater } from '@progressView/managers';
+import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -225,5 +229,101 @@ describe('Progress event modules', () => {
 
     assert.deepStrictEqual(initialized, ['stream-1']);
     assert.deepStrictEqual(bus.emissions, []);
+  });
+
+  it('registers task groups before log handlers to avoid thinking replay races', () => {
+    const state = {
+      streamTabs: {
+        ensureStream: async () => {},
+        has: () => true,
+        addMessage: async () => {},
+        getMessages: () => [],
+        save: async () => {},
+      },
+      taskGroups: {
+        addGroup: async () => {},
+        updateGroup: async () => {},
+        getStreamGroups: () => new Map(),
+      },
+      outputFiles: {
+        addFiles: async () => {},
+        updateMissingOutputs: async () => {},
+        clearMissingOutputs: async () => {},
+        clearFiles: async () => {},
+        getFiles: () => new Map(),
+        getMissingOutputs: () => new Map(),
+      },
+      usageStats: {
+        getRunUsage: () => new Map(),
+        setRunUsage: () => {},
+      },
+      runInstructions: {
+        getInstructions: () => new Map(),
+        setInstruction: async () => {},
+        deleteRun: async () => {},
+      },
+      agentTypeFilter: 'all',
+      setActiveRunId: () => {},
+      resolveRunId: () => null,
+      setSessionKindHint: () => {},
+      clearSessionKindHint: () => {},
+      clearRunInstructions: () => {},
+      clearRunFiles: () => {},
+      clearRunMissingOutputs: () => {},
+      clearRunUsage: () => {},
+      clearAllActiveRuns: () => {},
+      clearAllPendingInstructions: () => {},
+      getTaskState: () => undefined,
+      activeStream: '',
+    } as unknown as ProgressViewState;
+
+    const updater = {
+      isAvailable: () => false,
+      updateLogContent: () => {},
+      updateFiles: () => {},
+      updateMissingOutputs: () => {},
+      updateUsage: () => {},
+      addTaskGroup: () => {},
+      updateTaskGroup: () => {},
+    } as unknown as WebviewUpdater;
+
+    const registeredEvents: (keyof ProgressEventPayloads)[] = [];
+    const originalOn = bus.on.bind(bus);
+
+    const restoreBus = () => {
+      (bus as unknown as { on: typeof bus.on }).on = originalOn;
+    };
+
+    (bus as unknown as { on: typeof bus.on }).on = ((event, listener) => {
+      registeredEvents.push(event);
+      return originalOn(event, listener);
+    }) as typeof bus.on;
+
+    const disposables: { dispose: () => void }[] = [];
+
+    try {
+      const handler = new ProgressEventHandler(state, updater);
+      disposables.push(...handler.setupEventListeners());
+
+      assert.deepStrictEqual(registeredEvents, [
+        'setActiveStream',
+        'updateStreamStatus',
+        'setTaskState',
+        'addOutputFiles',
+        'updateMissingOutputs',
+        'clearMissingOutputs',
+        'clearOutputFiles',
+        'clearTaskOutput',
+        'updateGroupUsage',
+        'updateStreamUsage',
+        'addTaskGroup',
+        'updateTaskGroup',
+        'addLogMessage',
+        'updateLogMessage',
+      ]);
+    } finally {
+      disposables.forEach((disposable) => disposable.dispose());
+      restoreBus();
+    }
   });
 });
