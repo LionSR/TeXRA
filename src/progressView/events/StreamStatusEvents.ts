@@ -29,7 +29,7 @@ export interface StreamStatusEventShared {
   logger: AgentLogger;
   streamStatus: Map<string, StreamStatusType>;
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
-  sendInstructionUpdate(stream: StreamTabId | ''): void;
+  sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
     options?: { updateInstruction?: boolean },
