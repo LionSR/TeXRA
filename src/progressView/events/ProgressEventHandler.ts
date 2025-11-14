@@ -65,6 +65,7 @@ export class ProgressEventHandler {
       logger: this.logger,
       refreshStreamSurface: (stream, options) =>
         this.refreshStreamSurface(stream, options),
+      getAllStreamStatuses: () => this.getAllStreamStatuses(),
     });
     this.usageEvents = createUsageEvents({
       logger: this.logger,
