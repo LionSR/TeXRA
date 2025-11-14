@@ -83,48 +83,75 @@ export class TaskGroupDomManager {
     }
 
     const topLevel = [];
-    const childGroups = [];
+    const childrenByParent = new Map();
     for (const group of groups) {
       if (group.parentGroupId) {
-        childGroups.push(group);
+        const parentId = group.parentGroupId;
+        let bucket = childrenByParent.get(parentId);
+        if (!bucket) {
+          bucket = [];
+          childrenByParent.set(parentId, bucket);
+        }
+        bucket.push(group);
       } else {
         topLevel.push(group);
       }
     }
 
     const fragment = document.createDocumentFragment();
+    const traversalQueue = [];
     for (const group of topLevel) {
       const element = this._createGroupElement(group);
-      if (element) {
-        fragment.appendChild(element);
+      if (!element) {
+        this._discardGroup(group.id);
+        continue;
       }
+      fragment.appendChild(element);
+      traversalQueue.push(group.id);
     }
-    container.appendChild(fragment);
+    if (fragment.childNodes.length > 0) {
+      container.appendChild(fragment);
+    }
 
-    if (childGroups.length > 0) {
-      const fragmentByParent = new Map();
-      for (const group of childGroups) {
-        const element = this._createGroupElement(group);
-        if (!element) {
-          continue;
-        }
-        const parentContent = this._resolveGroupContent(group.parentGroupId);
-        if (!parentContent) {
-          continue;
-        }
-        let bucket = fragmentByParent.get(parentContent);
-        if (!bucket) {
-          bucket = document.createDocumentFragment();
-          fragmentByParent.set(parentContent, bucket);
-        }
-        bucket.appendChild(element);
+    while (traversalQueue.length > 0) {
+      const parentId = traversalQueue.shift();
+      const children = childrenByParent.get(parentId);
+      if (!children || children.length === 0) {
+        continue;
       }
 
-      for (const [
-        parentContent,
-        fragmentForParent,
-      ] of fragmentByParent.entries()) {
-        parentContent.appendChild(fragmentForParent);
+      const parentContent = this._resolveGroupContent(parentId);
+      if (!parentContent) {
+        for (const child of children) {
+          this._discardGroup(child.id);
+        }
+        childrenByParent.delete(parentId);
+        continue;
+      }
+
+      const parentFragment = document.createDocumentFragment();
+      for (const child of children) {
+        const element = this._createGroupElement(child);
+        if (!element) {
+          this._discardGroup(child.id);
+          continue;
+        }
+        parentFragment.appendChild(element);
+        traversalQueue.push(child.id);
+      }
+
+      if (parentFragment.childNodes.length > 0) {
+        parentContent.appendChild(parentFragment);
+      }
+
+      childrenByParent.delete(parentId);
+    }
+
+    if (childrenByParent.size > 0) {
+      for (const orphans of childrenByParent.values()) {
+        for (const orphan of orphans) {
+          this._discardGroup(orphan.id);
+        }
       }
     }
 
@@ -161,8 +188,7 @@ export class TaskGroupDomManager {
 
     const targetContainer = this._resolveGroupContent(group.parentGroupId);
     if (!targetContainer) {
-      this._removeToggleListener(group.id);
-      this.groupElements.delete(group.id);
+      this._discardGroup(group.id);
       return;
     }
 
@@ -427,6 +453,15 @@ export class TaskGroupDomManager {
       element.removeEventListener('toggle', listener);
     }
     this.toggleListeners.delete(groupId);
+  }
+
+  _discardGroup(groupId) {
+    if (!groupId) {
+      return;
+    }
+    this._removeToggleListener(groupId);
+    this.groupElements.delete(groupId);
+    progressViewState.taskGroups.delete(groupId);
   }
 }
 
