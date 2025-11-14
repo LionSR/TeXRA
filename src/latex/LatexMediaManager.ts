@@ -252,7 +252,11 @@ export class LatexMediaManager {
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
-      await this.compileTikzFigures(existingFiles, workspaceState, logTikzSummary);
+      await this.compileTikzFigures(
+        existingFiles,
+        workspaceState,
+        logTikzSummary,
+      );
     }
 
     if (includePdfCompilation && cfg.autoCompileInputPdf) {
