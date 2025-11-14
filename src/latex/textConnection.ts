@@ -3,15 +3,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
 // Local imports - error utils
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+
+// Internal imports
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
 // Local imports - agent handlers
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 

@@ -3,7 +3,6 @@ import { BaseNode, Flow } from '@agent/node';
 
 // Local imports - flow constants
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-
 // Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';

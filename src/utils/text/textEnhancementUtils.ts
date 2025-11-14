@@ -5,22 +5,30 @@
 import * as vscode from 'vscode';
 
 // Local imports - error utils
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
-import xmlUtils from './xmlUtils';
-import { getConfig } from '@utils/config';
 
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+
+// Internal imports
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+
+// Internal imports
+import { getConfig } from '@utils/config';
+
+// Local file imports
+import xmlUtils from './xmlUtils';
 
 const CHANNEL = 'TextEnhancement';
 

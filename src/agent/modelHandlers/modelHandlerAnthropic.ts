@@ -4,28 +4,7 @@ import { basename } from 'node:path';
 
 // Third-party imports
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
-import type {
-  BetaBase64ImageSource,
-  BetaCacheControlEphemeral,
-  BetaContextManagementConfig,
-  BetaImageBlockParam,
-  BetaMessage,
-  BetaRequestDocumentBlock,
-  BetaTextBlockParam,
-  MessageCountTokensParams,
-  MessageCreateParams,
-  BetaToolResultBlockParam,
-} from '@anthropic-ai/sdk/resources/beta/messages';
-import type {
-  MessageParam,
-  ContentBlock,
-  ContentBlockParam,
-  ToolUseBlock,
-  TextBlockParam,
-  ImageBlockParam,
-  DocumentBlockParam,
-} from '@anthropic-ai/sdk/resources/messages';
-import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
+
 
 const isSupportedImageMediaType = (
   mediaType: string,
@@ -50,10 +29,6 @@ interface UploadedAnthropicAttachment {
 }
 
 // Local imports - agent
-import { toAnthropicTools } from './toolConversion';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import type { ToolFileAttachment } from '@tools/result';
-import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -74,27 +49,68 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  describeAttachments,
-  extractToolAttachments,
-  loadAttachmentBuffer,
-} from './utils/toolAttachmentUtils';
 
 // Local imports - error utils
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
+
+// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
 import type { ToolDefinition } from '@model';
+
+// Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
-import { K_SLICE, getConfig } from '@utils/config';
 
+// Type imports
+import type { ToolFileAttachment } from '@tools/result';
+
+// Internal imports
+import { K_SLICE, getConfig } from '@utils/config';
 // Local imports - utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
+
+// Internal imports
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import {
+  describeAttachments,
+  extractToolAttachments,
+  loadAttachmentBuffer,
+} from './utils/toolAttachmentUtils';
+import { ANTHROPIC_STOP } from './types/StopReasonTypes';
+import { toAnthropicTools } from './toolConversion';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
+import type {
+  BetaBase64ImageSource,
+  BetaCacheControlEphemeral,
+  BetaContextManagementConfig,
+  BetaImageBlockParam,
+  BetaMessage,
+  BetaRequestDocumentBlock,
+  BetaTextBlockParam,
+  MessageCountTokensParams,
+  MessageCreateParams,
+  BetaToolResultBlockParam,
+} from '@anthropic-ai/sdk/resources/beta/messages';
+import type {
+  MessageParam,
+  ContentBlock,
+  ContentBlockParam,
+  ToolUseBlock,
+  TextBlockParam,
+  ImageBlockParam,
+  DocumentBlockParam,
+} from '@anthropic-ai/sdk/resources/messages';
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.

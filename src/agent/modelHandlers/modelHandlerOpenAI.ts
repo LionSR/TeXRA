@@ -17,7 +17,7 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
-import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
+
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -30,35 +30,51 @@ import {
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 // Local imports - base handler
-import { ModelHandler } from './ModelHandler';
-import {
-  describeAttachments,
-  extractToolAttachments,
-} from './utils/toolAttachmentUtils';
-import { toOpenAITools } from './toolConversion';
-import {
-  normalizeOpenAIMessageContent,
-  NormalizeOpenAIMessageContentOptions,
-} from './openAIMessageUtils';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 // Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+// Internal imports
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ModelConfig, ToolDefinition } from '@model';
-import { cleanFileContent } from '@replacement/engine';
-import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
+// Internal imports
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
+import type { ModelConfig, ToolDefinition } from '@model';
+
+// Internal imports
+import { cleanFileContent } from '@replacement/engine';
+
+// Internal imports
+import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 // Local imports - filesystem utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
+
+// Internal imports
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import {
+  normalizeOpenAIMessageContent,
+  NormalizeOpenAIMessageContentOptions,
+} from './openAIMessageUtils';
+import { toOpenAITools } from './toolConversion';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
+import { ModelHandler } from './ModelHandler';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,

@@ -1,8 +1,13 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
+// Third-party imports
 import { FileType } from 'vscode';
 
+// Internal imports
 import { ReadFileTool, READ_FILE_MAX_LINES } from '@tools/ReadTool';
+
+// Internal imports
 import { WorkspaceFS } from '@utils/files';
 
 const catFormat = (lineNumber: number, content: string): string =>

@@ -1,8 +1,12 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
 // Local imports - utilities
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { resolveFilePath, WorkspaceFS } from '@utils/files';
 import { fileLister } from '@frontend/files/fileLister';
+
+// Internal imports
+import { resolveFilePath, WorkspaceFS } from '@utils/files';
 
 export async function openFile(file: string): Promise<void> {
   const uri = vscode.Uri.file(resolveFilePath(file));

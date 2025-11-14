@@ -5,11 +5,17 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import * as logger from '@logger/logUtils';
-import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
 import { GlobalStateKey, globalSM } from '@common/state/stateManager';
-import { safeExecuteCommand } from '@utils/system';
+
+// Internal imports
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Internal imports
+import { GlobalStorageFS, StorageFS, copyDirToFS } from '@utils/files';
+import { safeExecuteCommand } from '@utils/system';
 import { updateConfig } from '@utils/config';
 
 /**

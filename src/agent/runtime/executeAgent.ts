@@ -5,6 +5,15 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - agent components
+import {
+  DirectAgent,
+  CoTAgent,
+  MergeAgent,
+  BaseToolUseAgent,
+  BaseReflectionAgent,
+} from '@agent/implementations';
+
+// Internal imports
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -14,49 +23,62 @@ import {
 } from '@agent/core/AgentDataclass';
 import { IAgent } from '@agent/core/IAgent';
 import {
-  DirectAgent,
-  CoTAgent,
-  MergeAgent,
-  BaseToolUseAgent,
-  BaseReflectionAgent,
-} from '@agent/implementations';
-import {
   loadAgentSettingAndPrompts,
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { bus } from '@eventBus/ProgressEventBus';
-import {
-  AgentDirectorySource,
-  type AgentPathResolution,
-} from './AgentPathTypes';
-import {
-  AgentExecutionContext,
-  type AgentExecutionContextInit,
-} from './AgentExecutionContext';
-import { StreamStatusService } from './StreamStatusService';
-
-// Local imports - errors
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
-
-// Local imports - utilities
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { getStreamTabId } from '@/logger/streamUtils';
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { agentConfigToTaskState } from '@utils/config';
-import { ensureRunDir } from '@utils/files/taskRunStorage';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   createCandidate,
   resolveAgentDefinition,
   type AgentDefinitionSearchOptions,
   type AgentDirectoryCandidate,
 } from '@agent/utils/agentPathResolver';
+
+// Internal imports
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Internal imports
+import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+// Local imports - errors
+// Local imports - utilities
+import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Internal imports
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+
+// Internal imports
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+
+// Internal imports
+import { agentConfigToTaskState } from '@utils/config';
+
+// Internal imports
+import { ensureRunDir } from '@utils/files/taskRunStorage';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
+import { getStreamTabId } from '@/logger/streamUtils';
+
+// Local file imports
+import { StreamStatusService } from './StreamStatusService';
+import {
+  AgentExecutionContext,
+  type AgentExecutionContextInit,
+} from './AgentExecutionContext';
+import {
+  AgentDirectorySource,
+  type AgentPathResolution,
+} from './AgentPathTypes';
+
+
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);

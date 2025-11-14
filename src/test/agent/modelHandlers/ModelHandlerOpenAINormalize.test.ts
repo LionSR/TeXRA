@@ -8,6 +8,8 @@ import { strict as assert } from 'assert';
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
+
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config

@@ -12,9 +12,11 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import { StorageFS } from '@utils/files';
-import { PASTED_DIR } from '@utils/files/pastedImageUtils';
 import { THREE_DAYS_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
+
+// Internal imports
+import { PASTED_DIR } from '@utils/files/pastedImageUtils';
 import {
   polishTextWithAI,
   FileContext,

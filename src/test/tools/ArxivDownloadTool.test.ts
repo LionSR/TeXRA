@@ -1,15 +1,20 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
 // Local imports - latex
-import * as arxivModule from '@latex/arxivProcessor';
 
 // Local imports - tools
-import { ArxivDownloadTool } from '@/tools/arxiv/ArxivDownloadTool';
 import { LsTool } from '@tools/ls';
 import { toolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import * as arxivModule from '@latex/arxivProcessor';
+
+// Internal imports
+import { ArxivDownloadTool } from '@/tools/arxiv/ArxivDownloadTool';
 
 declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {

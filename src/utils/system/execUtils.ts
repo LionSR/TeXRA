@@ -3,11 +3,15 @@ import { execa, type Options, ExecaError } from 'execa';
 import { quote as shellQuote } from 'shell-quote';
 
 // Local imports - log
+import type { ExecResult } from '@agent/types/ResultTypes';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-import type { ExecResult } from '@agent/types/ResultTypes';
+
+// Internal imports
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';

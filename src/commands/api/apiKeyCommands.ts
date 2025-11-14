@@ -2,8 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Internal imports
+import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 export const PROVIDER_URLS: Record<ApiProvider, string> = {
   openai: 'https://platform.openai.com/api-keys',

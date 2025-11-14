@@ -3,6 +3,7 @@ import { diff_match_patch } from 'diff-match-patch';
 
 // Local imports - agent
 import type { DiffStats } from '@agent/types/DiffTypes';
+
 // Local imports
 import { flexibleFS } from '@utils/files';
 

@@ -1,7 +1,9 @@
 // Local imports - common
 // Local imports
-import { getConfig } from '@utils/config';
 import * as path from 'path';
+
+// Internal imports
+import { getConfig } from '@utils/config';
 
 export type FileType =
   | 'input'

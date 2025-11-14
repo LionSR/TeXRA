@@ -2,17 +2,19 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import { executeMergeAgent } from '@agent/runtime/executeAgent';
 
-// Local imports - errors
+// Internal imports
 import {
   showLoggedMessageWithDocs,
   showLoggedErrorMessage,
 } from '@common/errors/errorHandlingUtils';
 
-// Local imports - agent
-import { executeMergeAgent } from '@agent/runtime/executeAgent';
+// Internal imports
+import * as logger from '@logger/logUtils';
 
+// Local imports - errors
+// Local imports - agent
 // Local imports - utilities
 import { getConfig } from '@utils/config';
 

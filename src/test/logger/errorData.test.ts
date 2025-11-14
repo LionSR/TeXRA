@@ -2,8 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
 
 describe('AgentLogger error data', () => {
   it('emits error data with stack', () => {

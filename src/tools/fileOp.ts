@@ -3,9 +3,17 @@
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
-// Local imports - tools
+// Internal imports
+import { isTexFile } from '@common/files/fileTypeUtils';
+
+// Internal imports
+import replacementEngine from '@replacement/engine';
+
+// Internal imports
+import { ToolResult, ToolError, toolResult } from '@tools/result';
+
+// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -13,10 +21,17 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { ToolResult, ToolError, toolResult } from '@tools/result';
+
+// Internal imports
 import { WorkspaceFS } from '@utils/files';
-import replacementEngine from '@replacement/engine';
-import { isTexFile } from '@common/files/fileTypeUtils';
+
+// Local file imports
+import { defineTool } from './core/define';
+
+// Local imports - tools
+
+
+
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),

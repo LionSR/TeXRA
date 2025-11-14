@@ -11,6 +11,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
+
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
