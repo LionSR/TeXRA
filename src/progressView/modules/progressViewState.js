@@ -13,34 +13,53 @@ class TaskGroups {
   }
 
   get(id) {
-    if (!id) {
-      console.error('TaskGroups.get: id is required');
-      return null;
-    }
-    return this.groups.get(id);
+    return this.groups.get(id) ?? null;
   }
 
   set(id, group) {
-    if (!id) {
-      console.error('TaskGroups.set: id is required');
+    if (!id || !group) {
       return;
     }
-    if (!group || typeof group !== 'object') {
-      console.error('TaskGroups.set: group must be an object');
-      return;
-    }
+
     const previousParentId = this.parentByChild.get(id);
-    if (previousParentId) {
+    const nextParentId = group.parentGroupId || null;
+
+    if (previousParentId && previousParentId !== nextParentId) {
       this._removeChild(previousParentId, id);
     }
 
     this.groups.set(id, group);
 
-    if (group.parentGroupId) {
-      this._addChild(group.parentGroupId, id);
+    if (nextParentId) {
+      this._addChild(nextParentId, id);
     } else {
       this.parentByChild.delete(id);
     }
+  }
+
+  delete(id) {
+    if (!id) {
+      return;
+    }
+
+    const parentId = this.parentByChild.get(id);
+    if (parentId) {
+      this._removeChild(parentId, id);
+    } else {
+      this.parentByChild.delete(id);
+    }
+
+    const children = this.childrenByParent.get(id);
+    if (children) {
+      for (const childId of children) {
+        if (this.parentByChild.get(childId) === id) {
+          this.parentByChild.delete(childId);
+        }
+      }
+      this.childrenByParent.delete(id);
+    }
+
+    this.groups.delete(id);
   }
 
   getGroupMap() {
@@ -58,20 +77,13 @@ class TaskGroups {
    * @param {{ groupId: string, updates?: Object }} payload
    */
   update(payload) {
-    if (!payload || typeof payload !== 'object') {
-      console.error('TaskGroups.update: payload must be an object');
+    if (!payload) {
       return;
     }
 
     const { groupId, updates = {} } = payload;
-    if (!groupId) {
-      console.error('TaskGroups.update: groupId is required');
-      return;
-    }
-
     const group = this.groups.get(groupId);
     if (!group) {
-      console.error(`TaskGroups.update: group not found for id ${groupId}`);
       return;
     }
 
@@ -97,10 +109,6 @@ class TaskGroups {
   }
 
   getChildIds(parentId) {
-    if (!parentId) {
-      return [];
-    }
-
     const children = this.childrenByParent.get(parentId);
     if (!children) {
       return [];
@@ -110,10 +118,6 @@ class TaskGroups {
   }
 
   _addChild(parentId, childId) {
-    if (!parentId || !childId) {
-      return;
-    }
-
     let children = this.childrenByParent.get(parentId);
     if (!children) {
       children = new Set();
@@ -124,10 +128,6 @@ class TaskGroups {
   }
 
   _removeChild(parentId, childId) {
-    if (!parentId || !childId) {
-      return;
-    }
-
     const children = this.childrenByParent.get(parentId);
     if (!children) {
       return;
@@ -153,18 +153,8 @@ class ToggleStates {
   }
 
   set(id, collapsed) {
-    if (!id) {
-      console.error('ToggleStates.set: id is required');
-      return;
-    }
-    if (typeof collapsed !== 'boolean') {
-      console.error('ToggleStates.set: collapsed must be a boolean');
-      return;
-    }
     this.states.set(id, collapsed);
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    this.saveCallback?.();
   }
 
   get(id) {
@@ -173,7 +163,6 @@ class ToggleStates {
 
   clearSelection(ids) {
     if (!Array.isArray(ids)) {
-      console.error('ToggleStates.clearSelection: ids must be an array');
       return;
     }
     ids.forEach((id) => {
@@ -181,16 +170,12 @@ class ToggleStates {
         this.states.delete(id);
       }
     });
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    this.saveCallback?.();
   }
 
   clearAll() {
     this.states.clear();
-    if (this.saveCallback) {
-      this.saveCallback();
-    }
+    this.saveCallback?.();
   }
 
   /** Get all entries for serialization */
@@ -218,20 +203,13 @@ class StreamStatuses {
 
   set(stream, status) {
     if (!stream) {
-      console.error('StreamStatuses.set: stream is required');
       return;
     }
-    if (!status) {
-      console.error('StreamStatuses.set: status is required');
+    if (!status || status === 'ready') {
+      this.statuses.delete(stream);
       return;
     }
-    if (typeof status !== 'string') {
-      console.error('StreamStatuses.set: status must be a string');
-      return;
-    }
-    if (status !== 'ready') {
-      this.statuses.set(stream, status);
-    }
+    this.statuses.set(stream, status);
   }
 
   delete(stream) {
@@ -248,10 +226,6 @@ class ExecutionIdAvailability {
   }
 
   setAvailable(stream, hasExecutionId) {
-    if (!stream) {
-      console.error('ExecutionIdAvailability.setAvailable: stream is required');
-      return;
-    }
     this.availability.set(stream, Boolean(hasExecutionId));
   }
 
