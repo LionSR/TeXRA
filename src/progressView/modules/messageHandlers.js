@@ -335,8 +335,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       });
       scrollToBottom(logContent);
 
-      // Recalculate cumulative usage after loading groups
-      dom.usageSummary.update();
       this._refreshInstructionForActiveRun();
       this._refreshOutputsForActiveRun();
       this._refreshUsageForActiveRun();
