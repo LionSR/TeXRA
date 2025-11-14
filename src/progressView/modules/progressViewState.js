@@ -37,6 +37,31 @@ class TaskGroups {
     }
   }
 
+  delete(id) {
+    if (!id) {
+      return;
+    }
+
+    const parentId = this.parentByChild.get(id);
+    if (parentId) {
+      this._removeChild(parentId, id);
+    } else {
+      this.parentByChild.delete(id);
+    }
+
+    const children = this.childrenByParent.get(id);
+    if (children) {
+      for (const childId of children) {
+        if (this.parentByChild.get(childId) === id) {
+          this.parentByChild.delete(childId);
+        }
+      }
+      this.childrenByParent.delete(id);
+    }
+
+    this.groups.delete(id);
+  }
+
   getGroupMap() {
     return this.groups;
   }
