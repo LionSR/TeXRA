@@ -15,6 +15,7 @@ import { vscode } from '@common/webviewContext.js';
 // Create shorter aliases for internal use
 const state = progressViewState;
 const dom = progressViewDomHandler;
+const pendingLogUpdates = new Map();
 
 function scrollToBottom(element) {
   if (!element) {
@@ -250,6 +251,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateLogs(message) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (message.stream === state.activeStream) {
+      pendingLogUpdates.clear();
       dom.taskGroups.clear();
       state.taskGroups.clear();
       state.clearRunInstructions(message.stream);
@@ -346,7 +348,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const messageType = message.logMessage.messageType;
+      const logId = message.logMessage?.id;
+      const pendingUpdate = logId ? pendingLogUpdates.get(logId) : null;
+      const mergedLogMessage = pendingUpdate
+        ? { ...message.logMessage, ...pendingUpdate }
+        : message.logMessage;
+      if (logId && pendingUpdate) {
+        pendingLogUpdates.delete(logId);
+      }
+
+      const messageType = mergedLogMessage.messageType;
       const shouldAutoExpand =
         messageType === 'thinking' || messageType === 'scratchpad';
       const formatOptions = shouldAutoExpand
@@ -354,12 +365,12 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         : undefined;
 
       const addedToGroup = dom.logEntries.append(
-        message.logMessage,
+        mergedLogMessage,
         formatOptions,
       );
       if (!addedToGroup) {
         const formatted = this._entryFormatter.format(
-          message.logMessage,
+          mergedLogMessage,
           formatOptions,
         );
         appendFormatted(logContent, formatted);
@@ -370,29 +381,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateLog(message) {
     if (message.stream === state.activeStream) {
-      const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
-        // Fallback: append as new log with proper group placement
-        const messageType = message.logMessage.messageType;
-        const shouldAutoExpand =
-          messageType === 'thinking' || messageType === 'scratchpad';
-        const formatOptions = shouldAutoExpand
-          ? { defaultOpen: true }
-          : undefined;
-
-        const addedToGroup = dom.logEntries.append(
-          message.logMessage,
-          formatOptions,
-        );
-        if (!addedToGroup) {
-          const formatted = this._entryFormatter.format(
-            message.logMessage,
-            formatOptions,
-          );
-          appendFormatted(logContent, formatted);
+        const logId = message.logMessage?.id;
+        if (logId) {
+          const existingUpdate = pendingLogUpdates.get(logId) || {};
+          pendingLogUpdates.set(logId, {
+            ...existingUpdate,
+            ...message.logMessage,
+          });
         }
-        scrollToBottom(logContent);
       }
     }
   }
@@ -646,6 +644,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteStream(message) {
     if (message.stream) {
+      pendingLogUpdates.clear();
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       state.clearActiveRun(message.stream);
@@ -663,6 +662,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleDeleteAll() {
+    pendingLogUpdates.clear();
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
