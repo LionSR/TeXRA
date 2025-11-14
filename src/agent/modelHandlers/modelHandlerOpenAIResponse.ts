@@ -779,7 +779,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: ResponseInputItem[],
     _stateRound: ConversationRoundState,
-    _toolState: AgentWorkspaceState,
+    _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1045,11 +1045,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: ResponseInputItem[],
     _stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
-    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -1070,7 +1070,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
@@ -1121,18 +1121,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'Output file exists but no end tag found - continuing from file',
     );
     if (fileContent.includes(prefill)) {
-      toolState.assembly.updateAccumulatedOutput(fileContent);
+      workspaceState.assembly.updateAccumulatedOutput(fileContent);
     } else {
-      toolState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await flexibleFS.write(outputFile, toolState.assembly.accumulatedOutput);
+      workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
+      await flexibleFS.write(outputFile, workspaceState.assembly.accumulatedOutput);
     }
 
     const state = new ConversationRoundState(0);
-    toolState.assembly.lastResponse = toolState.assembly.accumulatedOutput;
+    workspaceState.assembly.lastResponse = workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
-      toolState,
+      workspaceState,
       agentSetting,
       agentConfig,
     );
@@ -1146,7 +1146,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models with prefill support',
@@ -1161,7 +1161,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     messages.push(
-      this.createAssistantMessage(toolState.assembly.accumulatedOutput),
+      this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
     );
   }
 
@@ -1170,7 +1170,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     messages: ResponseInputItem[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI Responses models without prefill support',
@@ -1205,7 +1205,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           messages.pop();
         } else if (!appended) {
           messages.push(
-            this.createAssistantMessage(toolState.assembly.accumulatedOutput),
+            this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
           );
         }
       }
@@ -1214,7 +1214,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Last message is a request message rather than a continuation request',
       );
       messages.push(
-        this.createAssistantMessage(toolState.assembly.accumulatedOutput),
+        this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
       );
     }
   }
@@ -1234,7 +1234,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Process reasoning summaries from the Responses API. */
   processThinkingBlock(
     responseObject: Response,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     const outputArr = responseObject?.output;
     if (!Array.isArray(outputArr)) {
@@ -1250,12 +1250,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const thoughtContent = summaryParts.map((part) => part.text).join('\n\n'); // to make the thinking markdown rendering more readable
 
-    if (toolState && !toolState.reasoning.thinkingAdded) {
-      toolState.reasoning.thinkingBlocks = summaryParts.map((part) => ({
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+      workspaceState.reasoning.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
         thinking: part.text,
       }));
-      toolState.reasoning.thinkingAdded = true;
+      workspaceState.reasoning.thinkingAdded = true;
     }
 
     if (thoughtContent) {
@@ -1283,7 +1283,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     name: string,
     call: ResponseFunctionToolCallItem,
     result: Record<string, unknown>,
-    _toolState?: AgentWorkspaceState,
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];

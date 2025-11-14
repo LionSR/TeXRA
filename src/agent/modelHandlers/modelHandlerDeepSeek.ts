@@ -67,12 +67,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
   /**
    * Process thinking blocks for DeepSeek models
    * @param responseObject The raw response object from the model
-   * @param toolState Optional toolState to update with the thinking block
+   * @param workspaceState Optional workspaceState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
   processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -97,18 +97,18 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
           'Found reasoning_content in choices[0].message.reasoning_content',
         );
 
-        // If toolState is provided and we have reasoning content,
-        // store it in the toolState for future use (similar to Anthropic thinking blocks)
-        if (toolState && !toolState.reasoning.thinkingAdded) {
+        // If workspaceState is provided and we have reasoning content,
+        // store it in the workspaceState for future use (similar to Anthropic thinking blocks)
+        if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
           // Create a thinking block in the same format as Anthropic for consistency
           const thinkingBlock = {
             type: 'thinking',
             thinking: reasoningContent,
           };
 
-          toolState.reasoning.thinkingBlocks = [thinkingBlock];
-          toolState.reasoning.thinkingAdded = true;
-          // this.logger.debug('Added reasoning content to toolState');
+          workspaceState.reasoning.thinkingBlocks = [thinkingBlock];
+          workspaceState.reasoning.thinkingAdded = true;
+          // this.logger.debug('Added reasoning content to workspaceState');
         }
         // For deepseek mode thinking content should not be attached back to the message as a content item.
         // Nevertheless one can include one in a bare way...
@@ -145,7 +145,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: AgentWorkspaceState,
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);

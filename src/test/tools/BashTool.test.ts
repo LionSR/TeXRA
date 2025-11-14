@@ -137,7 +137,7 @@ suite('BashTool', () => {
       openRouterOnly: false,
     };
     const handler = new BashMockHandler(config);
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: {
@@ -168,7 +168,7 @@ suite('BashTool', () => {
       toolRegistry: { bash: bashTool },
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'bash-tool' as StreamTabId,
@@ -178,7 +178,7 @@ suite('BashTool', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
 
