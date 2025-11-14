@@ -46,6 +46,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
+      recordingStoppedCommand: MAIN_VIEW_COMMANDS.RECORDING_STOPPED,
       recordingErrorCommand: MAIN_VIEW_COMMANDS.RECORDING_ERROR,
       transcriptionCommand: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing instruction',
