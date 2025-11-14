@@ -69,14 +69,18 @@ export function createTaskGroupEvents(
         parentGroupId,
       };
 
-      await state.taskGroups.addGroup(stream, groupId, group);
+      const addGroupPromise = state.taskGroups.addGroup(stream, groupId, group);
 
-      if (!parentGroupId) {
-        state.setActiveRunId(stream, groupId);
-      }
+      try {
+        if (!parentGroupId) {
+          state.setActiveRunId(stream, groupId);
+        }
 
-      if (updater.isAvailable() && stream === state.activeStream) {
-        updater.addTaskGroup(stream, group);
+        if (updater.isAvailable() && stream === state.activeStream) {
+          updater.addTaskGroup(stream, group);
+        }
+      } finally {
+        await addGroupPromise;
       }
     });
   };
