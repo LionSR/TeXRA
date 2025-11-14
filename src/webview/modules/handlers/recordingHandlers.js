@@ -13,6 +13,11 @@ export function createRecordingHandlers({ postHandle }) {
     postHandle();
   }
 
+  function handleRecordingStopped() {
+    recordingManager.setRecording(false);
+    postHandle();
+  }
+
   function handleRecordingError() {
     recordingManager.setRecording(false);
     postHandle();
@@ -20,6 +25,7 @@ export function createRecordingHandlers({ postHandle }) {
 
   return {
     [MAIN_VIEW_COMMANDS.RECORDING_STARTED]: handleRecordingStarted,
+    [MAIN_VIEW_COMMANDS.RECORDING_STOPPED]: handleRecordingStopped,
     [MAIN_VIEW_COMMANDS.RECORDING_ERROR]: handleRecordingError,
   };
 }
