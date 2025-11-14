@@ -2,8 +2,10 @@
 import * as path from 'path';
 
 // Local imports
-import { flexibleFS } from './flexibleFS';
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Local file imports
+import { flexibleFS } from './flexibleFS';
 
 /**
  * Create a mapping between two file lists based on name similarity.

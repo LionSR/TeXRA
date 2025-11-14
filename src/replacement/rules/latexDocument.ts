@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 export const LATEX_DOCUMENT_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_document',

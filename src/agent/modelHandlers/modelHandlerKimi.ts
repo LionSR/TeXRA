@@ -1,24 +1,25 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-
-// Local imports - agent components
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Local imports - utilities
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
 import type { ToolDefinition } from '@model';
+
+// Internal imports
 import { K_SLICE } from '@utils/config';
+
+// Local file imports
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.

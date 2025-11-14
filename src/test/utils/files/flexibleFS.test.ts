@@ -1,5 +1,7 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
+// Internal imports
 import { flexibleFS } from '@utils/files/flexibleFS';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';

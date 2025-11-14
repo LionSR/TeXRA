@@ -3,8 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - agent core
 import { AgentType } from '@agent/core/AgentDataclass';
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
+// Internal imports
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import {
   executeAgentWithLogging,
@@ -14,25 +16,31 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
+import { STATUS } from '@progressView/modules/constants.js';
+import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local imports - persistence helpers
-import { getToolUsePersistenceEnabled } from '@utils/config';
-import { logErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local file imports
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
 import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';
 import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
+// Type imports
 import {
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
 import type { FollowUpQueue } from './FollowUpQueue';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STATUS } from '@progressView/modules/constants.js';
+
+
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);

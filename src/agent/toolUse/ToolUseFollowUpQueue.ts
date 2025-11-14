@@ -1,8 +1,8 @@
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - agent identifiers
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - follow-up queue primitive
 import { FollowUpQueue } from './FollowUpQueue';

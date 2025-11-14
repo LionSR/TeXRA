@@ -1,14 +1,17 @@
-// Standard library imports
 // (none needed)
 
 // Local imports - models
 import { type AgentConfig } from '@agent/core/AgentConfig';
-import { type TaskState } from '@logger/TaskState';
+// Internal imports
 import {
   AgentCategory,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 
+// Type imports
+import { type TaskState } from '@logger/TaskState';
+
+// Local file imports
 import { FILE_TYPES, type FileType } from './constants';
 
 function createActiveFilesFromArrays(

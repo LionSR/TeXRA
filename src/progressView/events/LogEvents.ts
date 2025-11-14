@@ -2,20 +2,25 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
-import type { ProgressViewState } from '../state/ProgressViewState';
+import type { LogMessageUpdate } from '@logger/LogTypes';
+// Internal imports
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+// Type imports
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports - events
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { createErrorBoundary } from './errorHandling';
-import type { ProgressEventBusLike } from './types';
-
-// Local imports - logger
-import type { LogMessageUpdate } from '@logger/LogTypes';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 
-import type { AgentLogger } from '@logger/AgentLogger';
+// Type imports
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
+// Local file imports
+import { createErrorBoundary } from './errorHandling';
+
+// Type imports
+import type { ProgressEventBusLike } from './types';
 
 interface LogEventsShared {
   logger: AgentLogger;

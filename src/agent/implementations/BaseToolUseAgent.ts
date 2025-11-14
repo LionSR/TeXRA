@@ -1,19 +1,19 @@
 // Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
-import { AgentRunState } from '../core/AgentState';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import { runToolUseCycle } from '../core/ToolUseCycle';
-import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
-import type { IModelHandler } from '../modelHandlers';
-import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
-import { buildInitialToolUsePrompts } from '../utils/PromptBuilder';
-// Base class for tool-use agents
+import type { IModelHandler } from '@agent/modelHandlers';
 
-// Standard library imports
-
-// Local imports - core
-import { BaseAgent } from './BaseAgent';
+// Internal imports
+import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+// Type imports
+import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+// Internal imports
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunState } from '@agent/core/AgentState';
+import { AgentPrompt, AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+// Type imports
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Internal imports
+import { buildInitialToolUsePrompts } from '@agent/utils/PromptBuilder';
 import {
   createToolUseRunFlow,
   type ToolUseRunHooks,
@@ -23,21 +23,34 @@ import {
   type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
+// Type imports
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+// Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
-import type { ToolDefinition } from '@model';
-import { BaseTool } from '@tools/core/base';
-import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { type ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
+// Internal imports
 import {
   registerToolUseAgent,
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
+
+// Type imports
+import type { ToolDefinition } from '@model';
+
+// Internal imports
+import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
+import { BaseTool } from '@tools/core/base';
+
+// Local file imports
+import { BaseAgent } from './BaseAgent';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;

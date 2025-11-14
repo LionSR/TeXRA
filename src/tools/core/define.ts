@@ -1,5 +1,10 @@
+// Third-party imports
 import { toJSONSchema, type ZodType } from 'zod';
+
+// Type imports
 import type { ToolDefinition } from '@model';
+
+// Local file imports
 import { BaseTool } from './base';
 
 export function defineTool<T>(def: {
