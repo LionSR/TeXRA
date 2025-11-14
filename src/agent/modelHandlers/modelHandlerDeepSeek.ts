@@ -19,7 +19,6 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 
-
 // Type imports
 import type {
   ChatCompletionAssistantMessageParam,

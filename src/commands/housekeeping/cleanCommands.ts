@@ -21,7 +21,6 @@ import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local imports - housekeeping
 
-
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);
 

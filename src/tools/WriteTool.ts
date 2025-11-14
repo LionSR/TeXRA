@@ -1,4 +1,3 @@
-
 // Local imports - core
 import { z } from 'zod';
 
@@ -21,8 +20,6 @@ import { defineTool } from './core/define';
 // Local imports - tools
 
 // Local imports - utils
-
-
 
 const WriteInputSchema = z.strictObject({
   path: z.string(),

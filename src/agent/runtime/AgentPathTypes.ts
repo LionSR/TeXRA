@@ -1,4 +1,3 @@
-
 /**
  * Indicates which directory contributed an agent definition.
  */
