@@ -1,3 +1,4 @@
+// Internal imports
 import { Flow, BaseNode } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 

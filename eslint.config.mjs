@@ -2,9 +2,48 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
+import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import texraImportRules from './eslint-rules/import-group-comment.mjs';
+
+const INTERNAL_ALIAS_NAMES = [
+  'agent',
+  'common',
+  'frontend',
+  'historyView',
+  'logger',
+  'model',
+  'progressView',
+  'replacement',
+  'tools',
+  'utils',
+  'eventBus',
+  'webview',
+  'latex',
+  'commands',
+  'housekeeping',
+  'types',
+];
+
+const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
+  {
+    pattern: `@${alias}`,
+    group: 'internal',
+    position: 'after',
+  },
+  {
+    pattern: `@${alias}/*`,
+    group: 'internal',
+    position: 'after',
+  },
+  {
+    pattern: `@${alias}/**`,
+    group: 'internal',
+    position: 'after',
+  },
+]);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +69,8 @@ export default tseslint.config(
     },
     plugins: {
       '@stylistic': stylistic,
+      import: importPlugin,
+      'texra-imports': texraImportRules,
     },
     rules: {
       // --- Migrated rules from .eslintrc.json ---
@@ -45,6 +86,35 @@ export default tseslint.config(
       curly: 'off',
       eqeqeq: 'warn',
       'no-throw-literal': 'warn',
+      'import/order': [
+        'warn',
+        {
+          groups: [
+            'builtin',
+            'external',
+            'internal',
+            ['parent', 'sibling', 'index', 'object'],
+            'type',
+          ],
+          pathGroups: [
+            ...INTERNAL_ALIAS_PATH_GROUPS,
+            {
+              pattern: '@/**',
+              group: 'internal',
+              position: 'after',
+            },
+            {
+              pattern: '~/**',
+              group: 'internal',
+              position: 'after',
+            },
+          ],
+          distinctGroup: false,
+          pathGroupsExcludedImportTypes: ['builtin'],
+          'newlines-between': 'ignore',
+        },
+      ],
+      'texra-imports/import-group-comment': 'warn',
 
       // --- Adjustments for ESLint v9 ---
 

@@ -1,8 +1,7 @@
-// Third-party imports
 // (none)
 
 // Local imports - logger
-import type { MessageType } from '../messageTypes';
+import type { MessageType } from '@logger/messageTypes';
 
 export interface LogMessageEvent {
   level: string;

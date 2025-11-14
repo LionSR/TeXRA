@@ -3,8 +3,6 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-
-// Local imports
 import {
   AgentSetting,
   AgentType,

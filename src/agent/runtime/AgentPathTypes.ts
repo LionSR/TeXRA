@@ -1,4 +1,3 @@
-// Local imports - agent runtime types
 
 /**
  * Indicates which directory contributed an agent definition.
