@@ -9,11 +9,6 @@ export function resolveFilePath(file: string): string {
   return path.isAbsolute(file) ? file : WorkspaceFS.fullPath(file);
 }
 
-/** Determine if the given file has a TeX extension. */
-export function isTexFile(file: string): boolean {
-  return file.toLowerCase().endsWith('.tex');
-}
-
 /**
  * Extract the base name (filename) from a file path.
  * Handles platform-specific separators (\ on Windows, / on Unix).
