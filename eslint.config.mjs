@@ -8,6 +8,43 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import texraImportRules from './eslint-rules/import-group-comment.mjs';
 
+const INTERNAL_ALIAS_NAMES = [
+  'agent',
+  'common',
+  'frontend',
+  'historyView',
+  'logger',
+  'model',
+  'progressView',
+  'replacement',
+  'tools',
+  'utils',
+  'eventBus',
+  'webview',
+  'latex',
+  'commands',
+  'housekeeping',
+  'types',
+];
+
+const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
+  {
+    pattern: `@${alias}`,
+    group: 'internal',
+    position: 'after',
+  },
+  {
+    pattern: `@${alias}/*`,
+    group: 'internal',
+    position: 'after',
+  },
+  {
+    pattern: `@${alias}/**`,
+    group: 'internal',
+    position: 'after',
+  },
+]);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -60,17 +97,7 @@ export default tseslint.config(
             'type',
           ],
           pathGroups: [
-            {
-              pattern:
-                '@{agent,common,frontend,historyView,logger,model,progressView,replacement,tools,utils,eventBus}/*',
-              group: 'internal',
-              position: 'after',
-            },
-            {
-              pattern: '@{agent,common,frontend,historyView,logger,model,progressView,replacement,tools,utils,eventBus}/**',
-              group: 'internal',
-              position: 'after',
-            },
+            ...INTERNAL_ALIAS_PATH_GROUPS,
             {
               pattern: '@/**',
               group: 'internal',
