@@ -3,20 +3,25 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent
+import { OutputHandler } from '@agent/output';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentCategory,
   AgentSetting,
   AgentType,
 } from '@agent/core/AgentDataclass';
-import { OutputHandler } from '@agent/output';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
+// Type imports
 import type { NamedOutputFile } from '@agent/output/types';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
 import { TaskRunFileService } from '@utils/files';
+
+// Type imports
 import type { FileLocation } from '@utils/files/taskRunStorage';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 
 describe('LatexDiffManager mapping reuse', () => {
   const baseSetting: AgentSetting = {

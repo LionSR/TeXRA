@@ -1,4 +1,7 @@
+// Local file imports
 import { failLifecycle } from './lifecycle';
+
+// Type imports
 import type { AgentLifecycleState } from './types';
 
 interface FinalizeLifecycleOptions<Phase extends string> {

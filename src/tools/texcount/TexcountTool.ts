@@ -2,6 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - latex utilities
+import { ToolError, toolResult, type ToolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
 import {
   formatTeXCountStats,
   getTeXCount,
@@ -9,8 +11,6 @@ import {
 } from '@latex/texcount';
 
 // Local imports - tool core
-import { defineTool } from '@tools/core/define';
-import { ToolError, toolResult, type ToolResult } from '@tools/result';
 
 const TexcountInputSchema = z.object({
   files: z.union([z.string(), z.array(z.string()).min(1)]),

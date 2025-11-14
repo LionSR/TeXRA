@@ -2,6 +2,15 @@
 import { z } from 'zod';
 
 // Local imports - response usage types
+import {
+  RunUsageAccumulator,
+  type RunUsageAccumulatorJSON,
+  type UsageProvider,
+  type UsageSummary,
+  type NativeUsagePayload,
+} from './RunUsageAccumulator';
+
+// Type imports
 import type {
   AnthropicAPIResponseUsage,
   OpenAIAPIResponseUsage,
@@ -11,13 +20,6 @@ import type {
 } from './ResponseUsage';
 
 // Local imports - usage accumulator
-import {
-  RunUsageAccumulator,
-  type RunUsageAccumulatorJSON,
-  type UsageProvider,
-  type UsageSummary,
-  type NativeUsagePayload,
-} from './RunUsageAccumulator';
 
 export type NativeResponseUsage =
   | ExtendedCompletionUsage

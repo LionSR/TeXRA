@@ -1,36 +1,43 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Local imports - agent metadata
+import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+// Type imports
+import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+// Internal imports
+import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
+// Type imports
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
+// Internal imports
+import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import {
+  TaskState,
+  isToolUseTaskState,
+  isWorkflowTaskState,
+} from '@logger/TaskState';
+// Type imports
+import type { TaskGroup } from '@logger/LogTypes';
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - progress view managers
+import type { AgentFilter } from '@progressView/types';
+// Internal imports
 import {
   StreamTabsManager,
   TaskGroupManager,
   OutputFilesManager,
   UsageStatsManager,
   RunInstructionManager,
-} from '../managers';
-import { normalizeRunId } from '../constants/runIds';
-import type { StateStorage } from '../persistence/PersistentMapManager';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
-import type { AgentFilter } from '../types';
-// Local imports - agent types
-import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { TaskGroup } from '@logger/LogTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-
-// Types
-import {
-  TaskState,
-  isToolUseTaskState,
-  isWorkflowTaskState,
-} from '@logger/TaskState';
+} from '@progressView/managers';
+// Type imports
+import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+// Internal imports
+import { normalizeRunId } from '@progressView/constants/runIds';
 import { getConfig } from '@utils/config';
-// Local imports - agents
-import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 
 /**
  * Core state management for the progress view.

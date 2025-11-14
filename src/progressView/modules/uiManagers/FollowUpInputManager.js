@@ -18,6 +18,8 @@ export class FollowUpInputManager {
     this.vscode = vscode;
     this.textarea = null;
     this.approvalBypassButton = null;
+    this._isContainerVisible = false;
+    this._focusTimer = null;
     this.recordingButton = new RecordingButtonManager(vscode, {
       buttonId: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
       startCommand: COMMANDS.START_RECORDING,
@@ -135,7 +137,7 @@ export class FollowUpInputManager {
     if (!this.textarea) return;
 
     this.textarea.value = '';
-    this.textarea.focus();
+    this.focus();
   }
 
   _resetApprovalBypass() {
@@ -146,6 +148,46 @@ export class FollowUpInputManager {
 
   setRecording(recording) {
     this.recordingButton.setRecording(recording);
+  }
+
+  setContainerVisibility(isVisible) {
+    this._isContainerVisible = Boolean(isVisible);
+    if (!this._isContainerVisible) {
+      this._clearPendingFocus();
+    }
+  }
+
+  focus(options = {}) {
+    if (!this.textarea || !this._isContainerVisible) {
+      return;
+    }
+
+    const { scrollIntoView = false } = options;
+
+    this._clearPendingFocus();
+
+    this._focusTimer = window.setTimeout(() => {
+      this._focusTimer = null;
+      if (!this.textarea || !this._isContainerVisible) {
+        return;
+      }
+
+      this.textarea.focus();
+
+      if (
+        scrollIntoView &&
+        typeof this.textarea.scrollIntoView === 'function'
+      ) {
+        this.textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 0);
+  }
+
+  _clearPendingFocus() {
+    if (this._focusTimer) {
+      clearTimeout(this._focusTimer);
+      this._focusTimer = null;
+    }
   }
 
   applyPolishedText(text) {
@@ -162,7 +204,7 @@ export class FollowUpInputManager {
     }
 
     this.textarea.value = text;
-    this.textarea.focus();
+    this.focus({ scrollIntoView: true });
   }
 
   insertTranscription(text) {
@@ -171,7 +213,7 @@ export class FollowUpInputManager {
     }
 
     insertTextAtCursor(this.textarea, text);
-    this.textarea.focus();
+    this.focus({ scrollIntoView: true });
   }
 
   setApprovalBypassState(isBypassed) {

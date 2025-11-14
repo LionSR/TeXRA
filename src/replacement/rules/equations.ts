@@ -6,8 +6,8 @@ import {
   generateEnvironmentBracesFixes,
   GREEK_LETTERS,
   MATH_OPERATORS,
-} from '../helpers';
-import { ReplacementCategory } from '../types';
+} from '@replacement/helpers';
+import { ReplacementCategory } from '@replacement/types';
 
 // Common LaTeX equation spacing fixes
 export const EQUATION_REPLACEMENTS: ReplacementCategory = {

@@ -2,22 +2,20 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utils
+import { parseAgentConfig } from '@agent/core/AgentConfig';
+import { executeAgent } from '@agent/runtime/executeAgent';
 import {
   getLinterMessages,
   getSeverityString,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
+import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
 } from '@utils/editor/activeFileGuards';
 
 // Local imports - core
-import { parseAgentConfig } from '@agent/core/AgentConfig';
-import { executeAgent } from '@agent/runtime/executeAgent';
 
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);

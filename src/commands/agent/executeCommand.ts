@@ -8,13 +8,12 @@ import {
   executeAgent,
   resumeAgentExecution,
 } from '@agent/runtime/executeAgent';
+// Type imports
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - history
 import { AgentHistoryManager } from '@historyView/managers';
-
-// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';

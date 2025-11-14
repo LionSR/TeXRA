@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vm from 'vm';
 
-// Third-party imports
 // @ts-ignore: jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
 

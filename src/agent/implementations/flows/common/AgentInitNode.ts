@@ -1,7 +1,11 @@
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+// Internal imports
 import { BaseNode } from '@agent/node';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
+// Local file imports
 import { beginLifecyclePhase, failLifecycle } from './lifecycle';
+
+// Type imports
 import type { AgentRunHooks, AgentLifecycleState } from './types';
 
 export interface AgentInitShared<

@@ -1,17 +1,19 @@
 // Utilities for registering newly created agents
 
+// Local imports
+import * as path from 'path';
+
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import * as path from 'path';
-import * as logger from '@logger/logUtils';
+// Internal imports
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import {
   AgentType,
   type AgentSetting,
   type AgentWorkflowSetting,
 } from '@agent/core/AgentDataclass';
+import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
 
 const CHANNEL = 'AgentRegister';

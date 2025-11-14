@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 export const FONT_COMMAND_REPLACEMENTS: ReplacementCategory = {
   name: 'font_commands',

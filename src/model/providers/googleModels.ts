@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for Google models
 // Continuation: ModelHandlerGoogleGenAI inspects Google's FinishReason stop signals.

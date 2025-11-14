@@ -13,8 +13,11 @@ import {
   AgentSharedStore,
   createSharedStore,
 } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
+// Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 
 // Local imports - utilities

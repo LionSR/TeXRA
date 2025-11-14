@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { getStreamTabId } from '@/logger/streamUtils';
 import { AgentType } from '@agent/core/AgentDataclass';
+import { getStreamTabId } from '@/logger/streamUtils';
 
 describe('getStreamTabId', () => {
   it('builds workflow identifiers using input file name', () => {

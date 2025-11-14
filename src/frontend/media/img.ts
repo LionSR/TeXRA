@@ -9,8 +9,6 @@ import { fromPath } from 'pdf2pic';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
