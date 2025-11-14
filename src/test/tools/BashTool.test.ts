@@ -95,17 +95,17 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
   }
 }
 
-suite('BashTool', () => {
+describe('BashTool', () => {
   const originalExecuteCommand = execUtils.executeCommand;
   const execUtilsMutable = execUtils as unknown as {
     executeCommand: typeof originalExecuteCommand;
   };
 
-  teardown(() => {
+  afterEach(() => {
     execUtilsMutable.executeCommand = originalExecuteCommand;
   });
 
-  test('preserves long stdout for tool results and model payloads', async () => {
+  it('preserves long stdout for tool results and model payloads', async () => {
     const longOutput = '0123456789'.repeat(35); // 350 chars, exceeds log truncation of 150
     const execResult: ExecResult = {
       success: true,
