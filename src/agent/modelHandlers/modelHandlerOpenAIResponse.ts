@@ -1124,11 +1124,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       workspaceState.assembly.updateAccumulatedOutput(fileContent);
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await flexibleFS.write(outputFile, workspaceState.assembly.accumulatedOutput);
+      await flexibleFS.write(
+        outputFile,
+        workspaceState.assembly.accumulatedOutput,
+      );
     }
 
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.lastResponse = workspaceState.assembly.accumulatedOutput;
+    workspaceState.assembly.lastResponse =
+      workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
@@ -1205,7 +1209,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           messages.pop();
         } else if (!appended) {
           messages.push(
-            this.createAssistantMessage(workspaceState.assembly.accumulatedOutput),
+            this.createAssistantMessage(
+              workspaceState.assembly.accumulatedOutput,
+            ),
           );
         }
       }

@@ -1441,7 +1441,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
           `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
         if (Array.isArray(assistantMessage.content)) {
-          assistantMessage.content.push(...workspaceState.reasoning.thinkingBlocks);
+          assistantMessage.content.push(
+            ...workspaceState.reasoning.thinkingBlocks,
+          );
         }
         // Clear cached thinking so the next response can store fresh blocks
         workspaceState.resetReasoning();
