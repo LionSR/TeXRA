@@ -5,10 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -118,9 +115,7 @@ async function handlePack(config: {
     });
 
   if (!config.skipProgressViewClear) {
-    bus.emit('clearOutputFiles', streamId);
     bus.emit('clearMissingOutputs', streamId);
-    bus.emit('clearTaskOutput', streamId);
   }
 }
 
@@ -152,9 +147,7 @@ async function handlePackSingle(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: false,
   });
-  bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
 }
 
 async function handlePackMultiple(
@@ -188,9 +181,7 @@ async function handlePackMultiple(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: true,
   });
-  bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
 }
 
 export const packCommands = {
