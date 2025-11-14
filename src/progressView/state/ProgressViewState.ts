@@ -195,9 +195,16 @@ export class ProgressViewState {
     const persist = options?.persist ?? true;
     const preferred = requested ?? null;
 
-    const candidates = this.collectRunCandidates(stream);
+    let candidates: Set<string> | null = null;
+    const ensureCandidates = (): Set<string> => {
+      if (!candidates) {
+        candidates = this.collectRunCandidates(stream);
+      }
+      return candidates;
+    };
+
     if (preferred) {
-      if (!candidates.has(preferred)) {
+      if (!ensureCandidates().has(preferred)) {
         return null;
       }
       if (persist) {
@@ -211,8 +218,9 @@ export class ProgressViewState {
       return current;
     }
 
-    if (candidates.size === 1) {
-      const [only] = Array.from(candidates);
+    const candidateSet = ensureCandidates();
+    if (candidateSet.size === 1) {
+      const only = candidateSet.values().next().value;
       if (only) {
         if (persist) {
           this.setActiveRunId(stream, only);

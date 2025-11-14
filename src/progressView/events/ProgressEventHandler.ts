@@ -167,8 +167,8 @@ export class ProgressEventHandler {
 
     if (!stream) {
       this.webviewUpdater.updateLogContent('', [], []);
-      this.webviewUpdater.updateFiles('', {});
-      this.webviewUpdater.updateMissingOutputs('', {});
+      this.webviewUpdater.updateFiles('', { reset: true });
+      this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
       this.webviewUpdater.updateStatus(STATUS.READY);
       if (updateInstruction) {
@@ -202,9 +202,23 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
       activeRunId,
-      runFiles: filesByRun,
-      runMissingOutputs: missingByRun,
       runUsage: usageByRun,
+    });
+
+    this.webviewUpdater.updateFiles(stream, { reset: true });
+    Object.entries(filesByRun).forEach(([runId, rounds]) => {
+      this.webviewUpdater.updateFiles(stream, {
+        runId,
+        rounds,
+      });
+    });
+
+    this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
+    Object.entries(missingByRun).forEach(([runId, rounds]) => {
+      this.webviewUpdater.updateMissingOutputs(stream, {
+        runId,
+        rounds,
+      });
     });
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
