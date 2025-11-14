@@ -199,6 +199,7 @@ export class UsageGroupManager {
         totals.inputTokens += child.usage.inputTokens || 0;
         totals.outputTokens += child.usage.outputTokens || 0;
         totals.cost += child.usage.cost || 0;
+        continue;
       }
 
       const childTotals = this.computeAggregatedUsage(child.id);
@@ -223,8 +224,17 @@ export class UsageGroupManager {
       return;
     }
 
+    const visitedParents = new Set();
     let parentId = group.parentGroupId;
     while (parentId) {
+      if (visitedParents.has(parentId)) {
+        console.error(
+          `UsageGroupManager.propagateUsageToParents: detected circular parent reference for group ${groupId}`,
+        );
+        break;
+      }
+      visitedParents.add(parentId);
+
       const parent = progressViewState.taskGroups.get(parentId);
       if (!parent) {
         break;
