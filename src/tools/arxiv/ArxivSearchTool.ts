@@ -10,15 +10,15 @@ import {
   getAuthorNames,
   normaliseArxivIdentifier,
   readPrimaryCategory,
-} from '../latex/arxivShared';
+} from '@tools/latex/arxivShared';
 
 // Local imports - citations
-import { ARXIV_CONSTANTS } from '../citation/constants';
-import { waitForRateLimit } from '../citation/rateLimiter';
+import { ARXIV_CONSTANTS } from '@tools/citation/constants';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
-import { ToolError, toolResult } from '../result';
+import { defineTool } from '@tools/core/define';
+import { ToolError, toolResult } from '@tools/result';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);

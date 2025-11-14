@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
+import { defineTool } from '@tools/core/define';
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { formatToolOutput, toPosixPath } from '@tools/utils';

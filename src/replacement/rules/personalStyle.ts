@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 export const PERSONAL_STYLE_REPLACEMENTS: ReplacementCategory = {
   name: 'personal_style',

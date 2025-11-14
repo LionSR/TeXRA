@@ -12,8 +12,8 @@ import { CROSSREF_CONSTANTS } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
-import { ToolError, toolResult } from '../result';
+import { defineTool } from '@tools/core/define';
+import { ToolError, toolResult } from '@tools/result';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),

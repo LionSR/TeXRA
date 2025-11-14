@@ -12,7 +12,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import xmlUtils from './xmlUtils';
-import { getConfig } from '../config';
+import { getConfig } from '@utils/config';
 
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';

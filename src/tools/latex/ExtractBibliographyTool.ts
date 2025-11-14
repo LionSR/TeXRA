@@ -9,7 +9,7 @@ import {
 } from '@latex/extractBibliography';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
+import { defineTool } from '@tools/core/define';
 import { ToolError, toolResult } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 

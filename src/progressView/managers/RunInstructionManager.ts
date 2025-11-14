@@ -2,7 +2,7 @@
 import {
   PersistentMapManager,
   type StateStorage,
-} from '../persistence/PersistentMapManager';
+} from '@progressView/persistence/PersistentMapManager';
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -10,7 +10,7 @@ import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
-import type { InstructionUpdate } from '../types';
+import type { InstructionUpdate } from '@progressView/types';
 
 type InstructionMap = Map<string, InstructionUpdate>;
 

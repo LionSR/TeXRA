@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
-import type { ProgressViewState } from '../state/ProgressViewState';
+import type { WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local imports - agent
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -12,6 +12,8 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 import type { ProgressEventBusLike } from './types';
+
+// Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 
 export interface OutputEventsModule {
