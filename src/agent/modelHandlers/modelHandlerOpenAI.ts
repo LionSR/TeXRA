@@ -17,30 +17,19 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
-import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
+
 
 // Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { ConversationRoundState } from '../core/AgentState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from '../core/ResponseUsage';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import { ModelHandler } from './ModelHandler';
-import {
-  describeAttachments,
-  extractToolAttachments,
-} from './utils/toolAttachmentUtils';
-import { toOpenAITools } from './toolConversion';
-import {
-  normalizeOpenAIMessageContent,
-  NormalizeOpenAIMessageContentOptions,
-} from './openAIMessageUtils';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+} from '@agent/core/ResponseUsage';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -49,14 +38,33 @@ import {
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
 import type { ModelConfig, ToolDefinition } from '@model';
+
+// Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-
-// Local imports - filesystem utilities
 import { WorkspaceFS, flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import {
+  normalizeOpenAIMessageContent,
+  NormalizeOpenAIMessageContentOptions,
+} from './openAIMessageUtils';
+import { toOpenAITools } from './toolConversion';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
+import { ModelHandler } from './ModelHandler';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,

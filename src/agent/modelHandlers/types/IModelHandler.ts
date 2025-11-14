@@ -1,17 +1,15 @@
 // Local imports - agent components
-import type { AgentConfig } from '../../core/AgentConfig';
-import { AgentSetting, AgentType } from '../../core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '../../core/AgentState';
-import { AgentWorkspaceState } from '../../core/AgentWorkspaceState';
-import type { MediaEntry } from '../../utils/mediaTypes';
-
-// Local imports - provider types
-import type { ProviderMessage } from './ProviderMessage';
-import type { ProviderStopReason } from './StopReasonTypes';
-
-// Local imports - logging and model metadata
+import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
+import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+// Type imports
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { ProviderMessage } from './ProviderMessage';
+import type { ProviderStopReason } from './StopReasonTypes';
 
 /**
  * Common interface implemented by all model handlers.

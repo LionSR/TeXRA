@@ -1,18 +1,16 @@
-// Standard library imports
 // Utility functions for building user variables for prompts
 import * as path from 'path';
 
 // Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentPrompt, AgentType } from '../core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
+import { AgentSetting, AgentPrompt, AgentType } from '@agent/core/AgentDataclass';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
 import { setVarFromFile } from '@frontend/files/vars';
-
-// Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';

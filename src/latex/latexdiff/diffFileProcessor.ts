@@ -1,11 +1,7 @@
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { flexibleFS } from '@utils/files';
-
-// Local imports - replacement utils
 import replacementEngine from '@replacement/engine';
+import { flexibleFS } from '@utils/files';
 
 export class DiffFileProcessor {
   constructor(private readonly channel: string) {}

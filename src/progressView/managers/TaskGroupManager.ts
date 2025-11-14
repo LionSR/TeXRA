@@ -1,17 +1,16 @@
-// Local imports - progress view persistence
-import {
-  PersistentMapManager,
-  type StateStorage,
-} from '../persistence/PersistentMapManager';
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - types
 import { TaskGroup } from '@logger/LogTypes';
-import { STATUS } from '../modules/constants.js';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '@progressView/persistence/PersistentMapManager';
+import { STATUS } from '@progressView/modules/constants.js';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;

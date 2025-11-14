@@ -7,9 +7,11 @@ import { parse as shellParse } from 'shell-quote';
 import * as vscode from 'vscode';
 
 // Local imports
+import type { ExecResult } from '@agent/types/ResultTypes';
+
+// Local file imports
 import { extendEnvPath, findToolInCommonPaths } from './platformPaths';
 import { executeCommand } from './execUtils';
-import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Interface for tool configuration
 export interface ToolConfig {

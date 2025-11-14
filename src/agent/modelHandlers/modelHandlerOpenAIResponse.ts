@@ -3,6 +3,57 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
+
+// Local imports - agent
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentSetting } from '@agent/core/AgentDataclass';
+// Internal imports
+import { hasEndTag } from '@agent/core/AgentDataclass';
+import { ConversationRoundState } from '@agent/core/AgentState';
+import {
+  ResponseUsageFactory,
+  type OpenAIAPIResponseUsage,
+  type ExtendedCompletionUsage,
+} from '@agent/core/ResponseUsage';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { createContinuationMessage } from '@agent/utils/continuationMessage';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import {
+  formatProviderHttpError,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
+import type { ModelConfig, ToolDefinition } from '@model';
+
+// Internal imports
+import { cleanFileContent } from '@replacement/engine';
+
+// Type imports
+import type { ToolFileAttachment } from '@tools/result';
+
+// Internal imports
+import { K_SLICE, getConfig } from '@utils/config';
+import { sleep } from '@utils/helpers';
+import { WorkspaceFS, flexibleFS } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import {
+  describeAttachments,
+  extractToolAttachments,
+  loadAttachmentBuffer,
+} from './utils/toolAttachmentUtils';
+import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import { toOpenAIResponseTools } from './toolConversion';
+import { ModelHandler } from './ModelHandler';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
+import type { Reasoning } from 'openai/resources/shared';
 import type {
   EasyInputMessage,
   Response,
@@ -21,48 +72,6 @@ import type {
   ResponseInputAudio,
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
-import type { Reasoning } from 'openai/resources/shared';
-import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
-
-// Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import type { AgentSetting } from '../core/AgentDataclass';
-import { hasEndTag } from '../core/AgentDataclass';
-import { ConversationRoundState } from '../core/AgentState';
-import {
-  ResponseUsageFactory,
-  type OpenAIAPIResponseUsage,
-  type ExtendedCompletionUsage,
-} from '../core/ResponseUsage';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-
-// Local imports - base handler
-import { ModelHandler } from './ModelHandler';
-import { toOpenAIResponseTools } from './toolConversion';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import {
-  describeAttachments,
-  extractToolAttachments,
-  loadAttachmentBuffer,
-} from './utils/toolAttachmentUtils';
-
-// Local imports - utilities
-import { createContinuationMessage } from '@agent/utils/continuationMessage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { ModelConfig, ToolDefinition } from '@model';
-import type { ToolFileAttachment } from '@tools/result';
-import { cleanFileContent } from '@replacement/engine';
-import { K_SLICE, getConfig } from '@utils/config';
-import { sleep } from '@utils/helpers';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
-import xmlUtils from '@utils/text/xmlUtils';
 
 interface UploadedOpenAIResponseAttachment {
   attachment: ToolFileAttachment;

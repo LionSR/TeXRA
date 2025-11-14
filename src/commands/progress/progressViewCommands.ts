@@ -1,7 +1,8 @@
+// Third-party imports
 import * as vscode from 'vscode';
-import { AgentLogger } from '@logger/AgentLogger';
 
-// Local imports - utils
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
 import { safeExecuteCommand } from '@utils/system';
 
 const CHANNEL = 'progressViewCommands';

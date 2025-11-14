@@ -5,11 +5,11 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - test
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import {
   registerMainViewCommands,
   mainViewCommands,
 } from '@commands/system/mainViewCommands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 
 describe('Main View Commands', () => {
   let context: vscode.ExtensionContext;

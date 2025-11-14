@@ -5,8 +5,8 @@ import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - agent
-import { NamedOutputFile } from './types';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -19,6 +19,9 @@ import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { flexibleFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import { NamedOutputFile } from './types';
 
 export class XmlOutputManager {
   constructor(

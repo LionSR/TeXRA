@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for DeepSeek models
 const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {

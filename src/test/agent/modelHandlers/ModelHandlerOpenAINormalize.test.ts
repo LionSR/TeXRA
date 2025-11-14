@@ -1,13 +1,14 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
 // (none needed)
 
 // Local imports - agent
 import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
+
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
