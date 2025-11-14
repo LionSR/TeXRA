@@ -156,6 +156,27 @@ export class OutputFilesManager extends PersistentMapManager<
     return new Map(entries);
   }
 
+  getRunMissingOutputs(
+    stream: StreamTabId,
+    runId: string,
+  ): Map<number, string[]> | undefined {
+    if (!this.missingOutputsLoaded) {
+      throw new Error('Missing outputs requested before load completed');
+    }
+
+    const runs = this._missingOutputs.get(stream);
+    if (!runs) {
+      return undefined;
+    }
+
+    const target = runs.get(runId);
+    if (!target) {
+      return undefined;
+    }
+
+    return new Map(target);
+  }
+
   getRunByExecution(
     stream: StreamTabId,
     executionId: ExecutionId,

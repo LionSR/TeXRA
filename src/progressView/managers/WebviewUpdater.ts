@@ -103,8 +103,6 @@ export class WebviewUpdater {
     extras?: {
       runInstructions?: Record<string, InstructionUpdate>;
       activeRunId?: string | null;
-      runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
-      runMissingOutputs?: Record<string, { [key: number]: string[] }>;
       runUsage?: Record<string, TokenUsageStats>;
     },
   ): void {
@@ -118,8 +116,6 @@ export class WebviewUpdater {
       groups,
       runInstructions: extras?.runInstructions,
       activeRunId: extras?.activeRunId,
-      runFiles: extras?.runFiles,
-      runMissingOutputs: extras?.runMissingOutputs,
       runUsage: extras?.runUsage,
     });
   }
@@ -157,7 +153,11 @@ export class WebviewUpdater {
    */
   updateFiles(
     stream: StreamTabId,
-    filesByRun: Record<string, { [key: number]: OutputFileInfo[] }>,
+    payload: {
+      runId?: string;
+      rounds?: { [key: number]: OutputFileInfo[] };
+      reset?: boolean;
+    },
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -165,7 +165,7 @@ export class WebviewUpdater {
     webview.postMessage({
       command: COMMANDS.UPDATE_FILES,
       stream,
-      filesByRun,
+      ...payload,
     });
   }
 
@@ -174,7 +174,11 @@ export class WebviewUpdater {
    */
   updateMissingOutputs(
     stream: StreamTabId,
-    filesByRun: Record<string, { [key: number]: string[] }>,
+    payload: {
+      runId?: string;
+      rounds?: { [key: number]: string[] };
+      reset?: boolean;
+    },
   ): void {
     const webview = this.getWebview();
     if (!webview) return;
@@ -182,7 +186,7 @@ export class WebviewUpdater {
     webview.postMessage({
       command: COMMANDS.UPDATE_MISSING_OUTPUTS,
       stream,
-      filesByRun,
+      ...payload,
     });
   }
 
