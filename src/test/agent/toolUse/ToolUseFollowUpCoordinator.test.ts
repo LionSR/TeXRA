@@ -10,8 +10,10 @@ import {
   resumeFromSnapshot,
   sendFollowUp,
 } from '@agent/toolUse/ToolUseFollowUpCoordinator';
+// Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 

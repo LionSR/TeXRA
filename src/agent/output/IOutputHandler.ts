@@ -1,11 +1,9 @@
 // Local imports - agent
-import { LatexDiffManager } from './LatexDiffManager';
-import { XmlOutputManager } from './XmlOutputManager';
-
-// Local imports - logging
 import type { AgentLogStage } from '@logger/AgentLogger';
 
-// Local imports - types
+// Local file imports
+import { LatexDiffManager } from './LatexDiffManager';
+import { XmlOutputManager } from './XmlOutputManager';
 import {
   NamedOutputFile,
   OutputFileInfo,

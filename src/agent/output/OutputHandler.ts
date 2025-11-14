@@ -4,22 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - agent
-import { DiffStatsManager } from './DiffStatsManager';
-import type { IOutputHandler } from './IOutputHandler';
-import { LatexDiffManager } from './LatexDiffManager';
-import {
-  OutputFileInfoSchema,
-  type NamedOutputFile,
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundFileMapping,
-  type RoundOutputArtifacts,
-} from './types';
-import { XmlOutputManager } from './XmlOutputManager';
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentSetting,
   AgentType,
@@ -28,18 +15,10 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-
-// Local imports - utilities
-import { runLatexFormatter } from '@latex/texFormatter';
-
-// Local imports - log
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - utilities
 import {
   replaceInputCommands,
   createFileMapping,
@@ -47,12 +26,33 @@ import {
   flexibleFS,
 } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+// Type imports
 import type { FileLocation } from '@utils/files';
+
+// Internal imports
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
+import { runLatexFormatter } from '@latex/texFormatter';
+
+// Local file imports
+import { XmlOutputManager } from './XmlOutputManager';
+import {
+  OutputFileInfoSchema,
+  type NamedOutputFile,
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type RoundFileMapping,
+  type RoundOutputArtifacts,
+} from './types';
+import { LatexDiffManager } from './LatexDiffManager';
+import { DiffStatsManager } from './DiffStatsManager';
+
+// Type imports
+import type { IOutputHandler } from './IOutputHandler';
 
 // Local imports - types
 

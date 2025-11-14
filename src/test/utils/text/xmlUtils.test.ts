@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports - utils
-import { extractScratchpad, formatContent } from '../../../utils/text/xmlUtils';
+import { extractScratchpad, formatContent } from '@utils/text/xmlUtils';
 
 describe('xmlUtils.formatContent', () => {
   it('converts HTML scratchpad content to markdown bullets', async () => {

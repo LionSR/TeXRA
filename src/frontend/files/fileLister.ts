@@ -5,12 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { getIncludedExtensions, FileType } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { getIncludedExtensions, FileType } from '@common/files/fileTypeUtils';
+
+// Local file imports
 import { getFilesInDirectory, getFilesRecursively } from './listing';
 
 const CHANNEL = 'FileLister';
