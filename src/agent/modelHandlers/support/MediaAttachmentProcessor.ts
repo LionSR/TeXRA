@@ -11,7 +11,11 @@ import {
   processPdf2Png,
 } from '@frontend/media/img';
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Type imports
 import type { ModelCapabilities } from '@model/ModelConfig';
+
+// Internal imports
 import { AbsoluteFS, WorkspaceFS, getMimeType } from '@utils/files';
 
 export type MediaFileResult = { path: string; ok: boolean };

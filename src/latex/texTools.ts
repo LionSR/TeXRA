@@ -3,12 +3,9 @@ import * as path from 'path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { runToolWithCheck } from '@utils/system';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, flexibleFS } from '@utils/files';
-// No additional imports needed
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

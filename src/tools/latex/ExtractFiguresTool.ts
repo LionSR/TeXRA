@@ -1,20 +1,16 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - latex
-import { extractFigurePathsFromLatex } from '@latex/extractFigure';
-
 // Local imports - tools
-import { defineTool } from '../core/define';
 import { ToolError, toolResult } from '@tools/result';
 import {
   buildFileAttachment,
   formatToolOutput,
   resolveAndFormat,
 } from '@tools/utils';
-
-// Local imports - utils
+import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 
 const ExtractFiguresInputSchema = z.strictObject({
   texPath: z

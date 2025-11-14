@@ -1,7 +1,7 @@
-// Third-party imports
 /**
  * Token usage statistics for tracking model usage and costs.
  */
+// Third-party imports
 import { z } from 'zod';
 
 export const TokenUsageStatsSchema = z.object({

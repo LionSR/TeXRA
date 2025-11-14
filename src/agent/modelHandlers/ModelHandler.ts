@@ -2,35 +2,40 @@
 import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '../core/AgentState';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import type { IModelHandler } from './types/IModelHandler';
-import type { ProviderMessage } from './types/ProviderMessage';
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import {
-  ANTHROPIC_STOP,
-  OPENAI_CHAT_FINISH,
-  MCP_STOP,
-} from './types/StopReasonTypes';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
+import { AgentSetting, AgentType, hasEndTag } from '@agent/core/AgentDataclass';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
-
-// Local imports - log
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Type imports
 import type { ToolDefinition } from '@model';
+
+// Internal imports
 import {
   ModelConfig,
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
 import { getConfig } from '@utils/config';
-
-// Local imports - utilities
 import { normalizeUrl } from '@utils/urlUtils';
+
+// Local file imports
+import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+import {
+  ANTHROPIC_STOP,
+  OPENAI_CHAT_FINISH,
+  MCP_STOP,
+} from './types/StopReasonTypes';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ProviderMessage } from './types/ProviderMessage';
+import type { IModelHandler } from './types/IModelHandler';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;

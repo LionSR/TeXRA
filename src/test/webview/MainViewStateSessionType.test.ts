@@ -1,11 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
 // @ts-ignore jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
 
-// Local imports - constants
 // @ts-ignore lack of type definitions for webview modules
 import {
   ELEMENT_IDS,

@@ -1,9 +1,8 @@
-// Third-party imports
 // (none)
 
 // Local imports - model utilities
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
 
 /**

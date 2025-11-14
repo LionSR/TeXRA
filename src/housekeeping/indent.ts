@@ -5,13 +5,11 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { runLatexFormatter } from '@latex/texFormatter';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - housekeeping
 import { EXCLUDED_DIRS } from './constants';

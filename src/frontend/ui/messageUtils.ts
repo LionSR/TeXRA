@@ -1,5 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
+
+// Internal imports
 import { capitalize, uncapitalize } from '@utils/text/stringUtils';
 
 export const showInfoMessage = vscode.window.showInformationMessage;

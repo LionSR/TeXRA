@@ -1,8 +1,10 @@
 // Local imports - agent components
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { BaseTool } from '@tools/core/base';
+
+// Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
 import { AgentWorkspaceState } from './AgentWorkspaceState';
-
-// Local imports - flow orchestration
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -13,10 +15,8 @@ import {
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
 // Local imports - model handlers
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - tools
-import type { BaseTool } from '@tools/core/base';
 
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {

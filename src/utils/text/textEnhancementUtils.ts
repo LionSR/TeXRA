@@ -1,26 +1,22 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - error utils
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-
-// Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import xmlUtils from './xmlUtils';
-import { getConfig } from '../config';
-
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import * as logger from '@logger/logUtils';
+// Type imports
 import type { TaskState } from '@logger/TaskState';
 
 // Local imports - model configs
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { getConfig } from '@utils/config';
+
+// Local file imports
+import xmlUtils from './xmlUtils';
 
 const CHANNEL = 'TextEnhancement';
 

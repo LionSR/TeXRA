@@ -4,6 +4,8 @@ import { randomUUID } from 'crypto';
 
 // Local imports - logger
 import { registry } from './LogChannelRegistry';
+
+// Type imports
 import type { MessageType } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
 

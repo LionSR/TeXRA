@@ -3,9 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports
-import { handleTestConnection } from '../tests/connectionTests';
+import { handleTestConnection } from '@commands/tests/connectionTests';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

@@ -4,8 +4,6 @@ import * as difflib from 'difflib';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
-
-// Local imports - configuration
 import {
   REPETITION_DETECTION_THRESHOLD,
   REPETITION_PREVIEW_LENGTH,

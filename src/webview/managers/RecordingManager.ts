@@ -6,8 +6,6 @@ import {
   startRecording,
   stopRecordingAndTranscribe,
 } from '@frontend/media/audio';
-
-// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'RecordingManager';

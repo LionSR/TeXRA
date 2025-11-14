@@ -1,8 +1,6 @@
 // Third-party imports
-import * as vscode from 'vscode';
-
-// Standard library imports
 import * as path from 'path';
+import * as vscode from 'vscode';
 
 // Local imports
 import * as logger from '@logger/logUtils';
