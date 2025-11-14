@@ -6,20 +6,11 @@ import * as vscode from 'vscode';
 
 // Local imports - explorer
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { validateYamlAndPromptAdd } from '@frontend/agents/register';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { AbsoluteFS } from '@utils/files';
-
-// Internal imports
 import { safeExecuteCommand } from '@utils/system/commandUtils';
-
 
 // Local file imports
 import { FileItem } from './FileItem';

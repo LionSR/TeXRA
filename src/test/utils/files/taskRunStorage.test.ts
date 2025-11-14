@@ -10,8 +10,6 @@ import * as vscode from 'vscode';
 // Internal imports
 import * as configModule from '@utils/config';
 import { StorageFS, WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import {
   moveToTarget,
   TASK_RUNS_DIR,

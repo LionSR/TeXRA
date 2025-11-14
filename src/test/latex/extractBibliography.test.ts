@@ -4,8 +4,6 @@ import * as path from 'path';
 
 // Local imports - latex helpers
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import {
   extractBibliographyContext,
   loadBibliographyEntries,

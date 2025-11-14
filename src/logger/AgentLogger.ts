@@ -1,7 +1,5 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
-
-// Third-party imports
 import { encode as encodeHtml } from 'he';
 
 // Local imports - events
@@ -10,8 +8,6 @@ import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log

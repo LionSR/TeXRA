@@ -1,16 +1,10 @@
 // Third-party imports
 import axios from 'axios';
-// Standard library imports
-// Local imports - core
 import { z } from 'zod';
 
 // Internal imports
 import { ToolResult, ToolError, toolResult } from '@tools/result';
-
-// Internal imports
 import { defineTool } from '@tools/core/define';
-
-// Local imports - tools
 
 const WebSearchInputSchema = z.object({
   query: z.string(),

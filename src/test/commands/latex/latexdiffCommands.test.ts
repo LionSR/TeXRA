@@ -7,21 +7,11 @@ import * as vscode from 'vscode';
 
 // Local imports - commands
 import * as errorHandlingModule from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as openBuildModule from '@frontend/latex/openBuild';
-
-// Internal imports
 import * as systemModule from '@utils/system';
-// Local imports - utilities
 import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-
-// Internal imports
 import { latexdiffHelpers } from '@commands/latex/latexdiffCommands';
-
-
-// Local imports - errors
 
 const {
   ensureLatexdiffToolInstalled,

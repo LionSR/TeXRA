@@ -2,8 +2,6 @@
 import { glob } from 'glob';
 import { z } from 'zod';
 
-// Local imports - core
-
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
@@ -13,8 +11,6 @@ import {
   toPosixPath,
 } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports

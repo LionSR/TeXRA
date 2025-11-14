@@ -1,4 +1,3 @@
-// Local imports - progress view
 // Local imports - identifiers
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Types
@@ -6,11 +5,7 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Internal imports
 import { normalizeRunId } from '@progressView/constants/runIds';
 import {
   PersistentMapManager,

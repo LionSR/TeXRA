@@ -1,38 +1,32 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-
-// Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
+// Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
+// Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+// Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
+// Internal imports
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 // Local imports - logging
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-
 // Internal imports
+import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - replacement engine
 import replacementEngine from '@replacement/engine';
-
-// Local imports - configuration/constants
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-
-// Local imports - filesystem utilities
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 

@@ -2,8 +2,6 @@
 import { randomUUID } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
-
-// Third-party imports
 import {
   diff_match_patch,
   DIFF_DELETE,
@@ -19,12 +17,8 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utils
 import { toolResult, type ToolResult } from '@tools/result';
-
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-
-// Internal imports
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 
 // Local file imports

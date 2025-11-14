@@ -8,34 +8,18 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-
-// Internal imports
 import { initializeStateManagers } from '@common/state/stateManager';
-
-// Internal imports
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
-
-// Internal imports
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { FileLister } from '@frontend/files/fileLister';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
-
-// Internal imports
 import { StorageFS } from '@utils/files';
 import { watchConfig, getConfig } from '@utils/config';
-
-// Internal imports
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-
-// Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - components

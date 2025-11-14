@@ -6,15 +6,9 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
-
-// Internal imports
 import { runLatexFormatter } from '@latex/texFormatter';
 
 // Local imports - housekeeping

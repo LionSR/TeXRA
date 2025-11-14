@@ -4,10 +4,10 @@ import { Buffer } from 'node:buffer';
 // Third-party imports
 import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
-
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
+// Internal imports
 import { hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
@@ -16,20 +16,13 @@ import {
   type ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-// Local imports - base handler
-// Local imports - utilities
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
-// Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-
-// Internal imports
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
@@ -45,8 +38,6 @@ import type { ToolFileAttachment } from '@tools/result';
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
 import { WorkspaceFS, flexibleFS } from '@utils/files';
-
-// Internal imports
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports

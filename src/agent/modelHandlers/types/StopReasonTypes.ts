@@ -1,8 +1,5 @@
 // Third-party imports
-// Third-party imports
 import { FinishReason } from '@google/genai';
-
-// Local imports - none
 
 /**
  * Finish reasons returned by the OpenAI Chat Completion API.

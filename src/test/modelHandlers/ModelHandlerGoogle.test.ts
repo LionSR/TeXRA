@@ -11,9 +11,8 @@ import {
 
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/AgentDataclass';
+// Internal imports
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-
-// Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
 
 // Type imports

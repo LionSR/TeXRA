@@ -6,9 +6,12 @@ import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
 import { ToolUseSnapshotCache } from '@agent/toolUse/ToolUseSnapshotCache';
+// Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSnapshotTypes';
 
 describe('ToolUse session queue helpers', () => {

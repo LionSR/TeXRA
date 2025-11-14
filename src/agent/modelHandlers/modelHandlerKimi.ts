@@ -1,4 +1,3 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
@@ -6,16 +5,11 @@ import OpenAI from 'openai';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-// Local imports - agent components
 import { MediaEntry } from '@agent/utils/mediaTypes';
-
-// Local imports - utilities
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
-
-// Internal imports
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports

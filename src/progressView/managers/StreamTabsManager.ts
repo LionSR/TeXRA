@@ -1,16 +1,11 @@
-// Local imports - persistence
 
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-
-// Internal imports
 import {
   PersistentMapManager,
   type StateStorage,

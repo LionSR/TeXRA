@@ -7,14 +7,8 @@ import { z } from 'zod';
 
 // Local imports - tool definitions
 import { isTexFile } from '@common/files/fileTypeUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import replacementEngine from '@replacement/engine';
-
-// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -22,8 +16,6 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-
-// Internal imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local file imports

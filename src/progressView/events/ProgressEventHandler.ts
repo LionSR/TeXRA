@@ -5,9 +5,8 @@ import * as vscode from 'vscode';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+// Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-// Internal imports - logging and state
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
