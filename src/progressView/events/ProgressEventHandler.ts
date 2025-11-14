@@ -63,6 +63,9 @@ export class ProgressEventHandler {
     });
     this.outputEvents = createOutputEvents({
       logger: this.logger,
+      refreshStreamSurface: (stream, options) =>
+        this.refreshStreamSurface(stream, options),
+      getAllStreamStatuses: () => this.getAllStreamStatuses(),
     });
     this.usageEvents = createUsageEvents({
       logger: this.logger,
@@ -156,6 +159,18 @@ export class ProgressEventHandler {
 
     const { updateInstruction = true } = options;
 
+    if (!stream) {
+      this.webviewUpdater.updateLogContent('', [], []);
+      this.webviewUpdater.updateFiles('', {});
+      this.webviewUpdater.updateMissingOutputs('', {});
+      this.webviewUpdater.updateUsage('', {});
+      this.webviewUpdater.updateStatus(STATUS.READY);
+      if (updateInstruction) {
+        this.webviewUpdater.clearInstruction('');
+      }
+      return;
+    }
+
     const messages = this.state.streamTabs.getMessages(stream);
     const groups = Array.from(
       this.state.taskGroups.getStreamGroups(stream).values(),
@@ -193,10 +208,7 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateMissingOutputs(stream, missingByRun);
 
     // Send usage for current stream
-    const usage = Object.fromEntries(
-      this.state.usageStats.getRunUsage(stream).entries(),
-    ) as Record<string, TokenUsageStats>;
-    this.webviewUpdater.updateUsage(stream, usage);
+    this.webviewUpdater.updateUsage(stream, usageByRun);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;
