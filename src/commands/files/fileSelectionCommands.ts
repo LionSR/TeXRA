@@ -2,15 +2,14 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { showInfoMessage } from '@frontend/ui/messageUtils';
-import { WorkspaceFS } from '@utils/files';
-import { fileLister } from '@frontend/files/fileLister';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { selectFile, selectFiles } from '@utils/dialogs';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showInfoMessage } from '@frontend/ui/messageUtils';
+import { fileLister } from '@frontend/files/fileLister';
+import * as logger from '@logger/logUtils';
+import { WorkspaceFS } from '@utils/files';
+import { selectFile, selectFiles } from '@utils/dialogs';
+
 const CHANNEL = 'fileSelectionCommands';
 logger.initialize(CHANNEL);
 

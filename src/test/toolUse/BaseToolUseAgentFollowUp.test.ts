@@ -11,12 +11,16 @@ import {
 } from '@agent/core/AgentDataclass';
 import { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { bus } from '@eventBus/ProgressEventBus';
-import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
+// Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
+import { bus } from '@eventBus/ProgressEventBus';
 
 type DummyClient = Record<string, never>;
 

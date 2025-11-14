@@ -1,11 +1,9 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
 // @ts-ignore: jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
 
-// Local imports - test
 // Since BannerManager uses ES6 modules with path aliases that Node.js doesn't understand,
 // we'll create a mock implementation that mirrors the actual behavior for testing purposes.
 

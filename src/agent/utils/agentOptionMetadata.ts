@@ -9,14 +9,12 @@ import {
   parseAgentSetting,
   type AgentSetting,
 } from '@agent/core/AgentDataclass';
-
-// Local imports - filesystem
-import { AbsoluteFS } from '@utils/files';
 import {
   mapToCandidates,
   resolveAgentDefinitionSync,
   type AgentDirectoryMap,
 } from '@agent/utils/agentPathResolver';
+import { AbsoluteFS } from '@utils/files';
 
 export type { AgentDirectoryMap } from '@agent/utils/agentPathResolver';
 

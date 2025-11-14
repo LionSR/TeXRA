@@ -1,7 +1,5 @@
-// Third-party imports
 // (none)
 
-// Local imports - types
 // (none)
 
 const EMOJI_BY_LEVEL: Record<string, string> = {

@@ -2,13 +2,6 @@
 import { strict as assert } from 'assert';
 
 // Third-party imports
-import type {
-  File,
-  Part,
-  UploadFileParameters,
-  FunctionCall,
-  Content,
-} from '@google/genai';
 import {
   createPartFromBase64,
   createPartFromText,
@@ -21,6 +14,8 @@ import {
   convertMessagesToGoogleContentHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
@@ -30,6 +25,15 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
+
+// Type imports
+import type {
+  File,
+  Part,
+  UploadFileParameters,
+  FunctionCall,
+  Content,
+} from '@google/genai';
 
 interface LoggerStub extends Partial<AgentLogger> {
   channelId: string;

@@ -1,9 +1,10 @@
-// Local imports - agent
 // Utility helpers for constructing prompts
 
 // Local imports
-import { renderPrompt } from './promptUtils';
 import { loadTexraRules } from '@frontend/files/rules';
+
+// Local file imports
+import { renderPrompt } from './promptUtils';
 
 /**
  * Combine the base system prompt with optional rules from `.texrarules`.

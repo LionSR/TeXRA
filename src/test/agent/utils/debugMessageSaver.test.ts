@@ -4,12 +4,9 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-
-// Local imports - config
 import * as configModule from '@utils/config';
-
-// Local imports - filesystem
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 

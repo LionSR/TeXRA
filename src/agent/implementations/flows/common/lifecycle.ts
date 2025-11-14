@@ -1,3 +1,4 @@
+// Type imports
 import type { AgentLifecycleState } from './types';
 
 export function createLifecycleState<Phase extends string>(

@@ -2,14 +2,12 @@
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
 import {
   showErrorMessage,
   showWarningMessage,
 } from '@frontend/ui/messageUtils';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
+import { WorkspaceFS } from '@utils/files';
 
 export type ActiveFileGuardFailureReason =
   | 'noEditor'
