@@ -1,5 +1,15 @@
 // Local imports - agent components
+import type { IModelHandler } from '@agent/modelHandlers';
+// Internal imports
+import {
+  OutputHandler,
+  IOutputHandler,
+  type RoundOutputArtifacts,
+} from '@agent/output';
+
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentSetting,
   AgentPrompt,
@@ -9,7 +19,9 @@ import {
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
+// Type imports
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
+// Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
@@ -21,41 +33,31 @@ import {
   type ReflectionRunPhase,
 } from '@agent/implementations/flows/ReflectionRunFlow';
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
+// Type imports
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+// Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
 } from '@agent/implementations/flows/ReflectionRoundFlow';
-import type { IModelHandler } from '@agent/modelHandlers';
-import {
-  OutputHandler,
-  IOutputHandler,
-  type RoundOutputArtifacts,
-} from '@agent/output';
+// Type imports
 import type { OutputFileInfo } from '@agent/output/types';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-import { bus } from '@eventBus/ProgressEventBus';
-
-// Local imports - logging
+// Type imports
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
-
-// Local imports - latex utilities
-import { LatexMediaManager } from '@latex';
-
-// Local imports - logging
-
-// Local imports - model definitions
 import type { ToolDefinition } from '@model';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
-
-// Local imports - filesystem utilities
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { bus } from '@eventBus/ProgressEventBus';
+import { LatexMediaManager } from '@latex';
+
 
 /**
  * Options for handling round output.

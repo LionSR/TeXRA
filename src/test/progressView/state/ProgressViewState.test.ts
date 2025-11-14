@@ -4,18 +4,22 @@ import { strict as assert } from 'assert';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
-import { WorkspaceStateKey } from '@common/state/stateManager';
-
 // Local imports - agent
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { WorkflowTaskState } from '@logger/TaskState';
-import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+// Type imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+
+// Internal imports
+import { WorkspaceStateKey } from '@common/state/stateManager';
+
+// Type imports
+import type { LogMessageData, TaskGroup } from '@logger/LogTypes';
+import type { WorkflowTaskState } from '@logger/TaskState';
+import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
+// Internal imports
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 class FakeStorage implements StateStorage {
   public readonly saved: { key: string; value: unknown }[] = [];

@@ -2,16 +2,18 @@
 import { strict as assert } from 'assert';
 
 // Local imports - progress view
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { WebviewUpdater } from '@progressView/managers';
+
+// Internal imports
 import { createStreamStatusEvents } from '@progressView/events/StreamStatusEvents';
 import { createOutputEvents } from '@progressView/events/OutputEvents';
 import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
-
+// Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];

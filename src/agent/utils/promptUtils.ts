@@ -6,18 +6,16 @@ import * as nunjucks from 'nunjucks';
 
 // Local imports - agent
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import {
   StorageFS,
   TASK_RUNS_DIR,
   WorkspaceFS,
   isValidExecutionId,
 } from '@utils/files';
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);

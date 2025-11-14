@@ -3,14 +3,16 @@ import * as vscode from 'vscode';
 import Transport from 'winston-transport';
 
 // Local imports - logger
-import { getColorForLevel } from '../utils/levelColors';
+import { getColorForLevel } from '@logger/utils/levelColors';
+// Type imports
 import type {
   LogEventSink,
   LogGroupFinishedEvent,
   LogGroupStartedEvent,
   LogMessageEvent,
-} from '../types/LogEventSink';
-import { serializeLogData } from '../utils/serializeLogData';
+} from '@logger/types/LogEventSink';
+// Internal imports
+import { serializeLogData } from '@logger/utils/serializeLogData';
 
 interface VSCodeTransportOptions extends Transport.TransportStreamOptions {
   channel: vscode.OutputChannel;

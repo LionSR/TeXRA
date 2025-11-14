@@ -5,11 +5,9 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { flexibleFS } from '@utils/files';
 import { renderPrompt } from '@agent/utils/promptUtils';
+import * as logger from '@logger/logUtils';
+import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils

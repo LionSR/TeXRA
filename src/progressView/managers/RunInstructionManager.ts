@@ -1,16 +1,19 @@
-// Local imports - progress view persistence
-import {
-  PersistentMapManager,
-  type StateStorage,
-} from '../persistence/PersistentMapManager';
 
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - types
-import type { InstructionUpdate } from '../types';
+import type { InstructionUpdate } from '@progressView/types';
+
+// Internal imports
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '@progressView/persistence/PersistentMapManager';
 
 type InstructionMap = Map<string, InstructionUpdate>;
 

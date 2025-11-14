@@ -1,15 +1,11 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
-
 // @ts-ignore: jsdom lacks ESM typings in this context
 import { JSDOM } from 'jsdom';
 
-// Local imports - test
-
 // @ts-ignore: formatter is compiled JS module
-import { LogEntryFormatter } from '../../progressView/modules/formatters.js';
+import { LogEntryFormatter } from '@progressView/modules/formatters.js';
 
 describe('LogEntryFormatter DOM', () => {
   const originalDateTimeFormat = Intl.DateTimeFormat;

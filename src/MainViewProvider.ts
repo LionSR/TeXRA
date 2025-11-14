@@ -4,13 +4,13 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
+import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { watchConfig, getConfig } from '@utils/config';
+import { checkCoreDependencies } from '@utils/system/toolUtils';
 
-// Local imports - webview
+// Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
 import { MainViewContentProvider } from './webview/MainViewContentProvider';
-import { watchConfig, getConfig } from '@utils/config';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { checkCoreDependencies } from '@utils/system/toolUtils';
 
 export class MainViewProvider
   extends BaseWebviewProvider

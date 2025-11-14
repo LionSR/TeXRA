@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for xAI models
 const XAI_DEFAULT_CAPABILITIES: ModelCapabilities = {

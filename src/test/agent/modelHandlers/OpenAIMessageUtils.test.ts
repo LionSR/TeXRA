@@ -1,7 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
 // (none needed)
 
 // Local imports - agent
