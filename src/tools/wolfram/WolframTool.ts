@@ -1,12 +1,12 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from '../core/define';
+
+// Internal imports
+import { ToolResult, ToolError, toolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError, toolResult } from '../result';
 import { executeWolframCode } from './wolframScriptUtils';
 
 const WolframInputSchema = z.object({

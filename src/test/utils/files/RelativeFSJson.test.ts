@@ -1,9 +1,11 @@
+// Third-party imports
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
-import { RelativeFS } from '../../../utils/files/relativeFS';
+// Local imports - utils
+import { RelativeFS } from '@utils/files/relativeFS';
 
 const BASE_DIR = path.join(os.tmpdir(), 'texra-relativefs-json-tests');
 

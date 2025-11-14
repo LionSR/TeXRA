@@ -5,8 +5,6 @@ import * as vscode from 'vscode';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentCommands';

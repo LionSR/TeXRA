@@ -1,7 +1,5 @@
-// Third-party imports
 // (none)
 
-// Local imports - types
 // (none)
 
 export function serializeLogData(data: unknown): unknown {

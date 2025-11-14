@@ -12,15 +12,13 @@ import {
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
 } from '@agent/modelHandlers';
+
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
-
-// Local imports - model configuration
 import { ModelConfig, ModelProvider } from '@model';
-
-// Local imports - configuration utilities
 import { getConfig } from '@utils/config';
 
 // Initialize logger

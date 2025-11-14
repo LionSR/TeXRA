@@ -1,10 +1,14 @@
 // Local imports - agent
-import { AgentRunState } from '@agent/core/AgentState';
 import type { IModelHandler } from '@agent/modelHandlers';
+
+// Internal imports
+import { AgentRunState } from '@agent/core/AgentState';
+// Type imports
 import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**

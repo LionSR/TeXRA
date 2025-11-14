@@ -8,6 +8,8 @@ import { getConfig } from '@utils/config';
 // Local imports - logger
 import { ProgressViewSink } from './sinks/ProgressViewSink';
 import { VSCodeTransport } from './transports/VSCodeTransport';
+
+// Type imports
 import type { LogEventSink } from './types/LogEventSink';
 
 interface ChannelEntry {

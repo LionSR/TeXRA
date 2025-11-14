@@ -1,8 +1,6 @@
 // Local imports - agent
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-
-// Local imports - log
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities

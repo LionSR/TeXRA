@@ -7,10 +7,8 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
-import { defineTool } from '../core/define';
-
-// Local imports - tools
-import { ToolError, ToolResult, toolResult } from '../result';
+import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { defineTool } from '@tools/core/define';
 
 const WebFetchInputSchema = z.strictObject({
   url: z

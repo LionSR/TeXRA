@@ -1,20 +1,16 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - latex
+// Local imports - tools
+import { ToolError, toolResult } from '@tools/result';
+import { formatToolOutput, resolveAndFormat } from '@tools/utils';
+import { defineTool } from '@tools/core/define';
+import { WorkspaceFS } from '@utils/files';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
-
-// Local imports - tools
-import { defineTool } from '../core/define';
-import { ToolError, toolResult } from '@tools/result';
-import { formatToolOutput, resolveAndFormat } from '@tools/utils';
-
-// Local imports - utils
-import { WorkspaceFS } from '@utils/files';
 
 const ExtractBibliographyInputSchema = z.strictObject({
   texPath: z
