@@ -1,7 +1,9 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 import * as path from 'path';
 
 // Local imports - latex helpers
+import { WorkspaceFS } from '@utils/files';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -9,7 +11,6 @@ import {
 } from '@latex/extractBibliography';
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
 
 suite('extractBibliography helpers', () => {
   const originalRead = WorkspaceFS.read;

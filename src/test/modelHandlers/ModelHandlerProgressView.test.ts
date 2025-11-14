@@ -3,15 +3,9 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-
-// Local imports - event bus
-import { bus } from '@eventBus/ProgressEventBus';
-
-// Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - model config
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from '@model/ModelConfig';
+import { bus } from '@eventBus/ProgressEventBus';
 
 class TestModelHandlerGoogleGenAI extends ModelHandlerGoogleGenAI {
   public createThinkingStreamPublic() {

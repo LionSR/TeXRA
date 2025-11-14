@@ -2,8 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { COMMON_COMMANDS } from './commands';
 import * as logger from '@logger/logUtils';
+
+// Local file imports
+import { COMMON_COMMANDS } from './commands';
 
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,

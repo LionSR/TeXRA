@@ -6,6 +6,7 @@ import {
   resumeFromSnapshot,
   type ResumeAgentResult,
 } from '@agent/toolUse/ToolUseFollowUpCoordinator';
+// Type imports
 import type { ToolUseSessionSnapshot } from '@agent/toolUse/ToolUseSessionPersistence';
 
 interface ResumeAgentCommandPayload {

@@ -1,11 +1,9 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
 // Local imports - tools
+import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -13,10 +11,10 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { ToolError, ToolResult, toolResult } from '@tools/result';
-
-// Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 const EditInputSchema = z.strictObject({
   path: z.string(),

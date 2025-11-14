@@ -6,8 +6,6 @@ import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-// Local imports - logger
 import type {
   LogMessageData,
   LogMessageUpdate,

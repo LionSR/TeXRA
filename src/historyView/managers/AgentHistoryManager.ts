@@ -6,12 +6,12 @@ import * as vscode from 'vscode';
 
 // Local imports - agent metadata
 import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
+// Type imports
 import { type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
-// Local imports - logging
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'AgentHistoryManager';

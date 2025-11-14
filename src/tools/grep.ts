@@ -1,16 +1,14 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - core
-import { defineTool } from './core/define';
-
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { resolveAndFormat } from '@tools/utils';
-
-// Local imports - utils
 import { executeCommand } from '@utils/system/execUtils';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 

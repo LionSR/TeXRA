@@ -1,16 +1,10 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
-import type {
-  ContentBlock,
-  ContentBlockParam,
-  MessageParam,
-  ToolUseBlock,
-} from '@anthropic-ai/sdk/resources/messages';
-
 // Local imports - agent
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - model config
@@ -20,9 +14,15 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
-
-// Local imports - utilities
 import * as configModule from '@utils/config';
+
+// Type imports
+import type {
+  ContentBlock,
+  ContentBlockParam,
+  MessageParam,
+  ToolUseBlock,
+} from '@anthropic-ai/sdk/resources/messages';
 
 function buildAnthropicConfig(
   capabilityOverrides: Partial<ModelCapabilities> = {},

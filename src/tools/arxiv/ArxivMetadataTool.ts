@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { arxivProcessor } from '@latex/arxivProcessor';
+import { ToolError, toolResult } from '@tools/result';
 import {
   type ArxivPaperMetadata,
   createArxivClient,
@@ -10,15 +10,12 @@ import {
   getAuthorNames,
   normaliseArxivIdentifier,
   readPrimaryCategory,
-} from '../latex/arxivShared';
+} from '@tools/latex/arxivShared';
+import { ARXIV_CONSTANTS } from '@tools/citation/constants';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
+import { defineTool } from '@tools/core/define';
+import { arxivProcessor } from '@latex/arxivProcessor';
 
-// Local imports - citations
-import { ARXIV_CONSTANTS } from '../citation/constants';
-import { waitForRateLimit } from '../citation/rateLimiter';
-
-// Local imports - tools
-import { defineTool } from '../core/define';
-import { ToolError, toolResult } from '../result';
 
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),

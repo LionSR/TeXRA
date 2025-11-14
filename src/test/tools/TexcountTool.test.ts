@@ -1,9 +1,8 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
 // Local imports - tools
 import { TexcountTool } from '@tools/texcount';
-
-// Local imports - latex utilities
 import * as texcountModule from '@latex/texcount';
 
 suite('TexcountTool', () => {

@@ -5,24 +5,22 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - utilities
 import {
   logErrorMessage,
   formatError,
 } from '@common/errors/errorHandlingUtils';
+import * as logger from '@logger/logUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
 import { runLatexFormatter } from './texFormatter';
-
-// Local imports - managers
 import { DiffFileNameManager } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
+
+// Type imports
 import type { MathMarkupOption } from './latexdiff/mathMarkup';
 
 export interface LaTeXdiffResult {
