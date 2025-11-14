@@ -4,15 +4,19 @@ import { encode as encodeHtml } from 'he';
 
 // Local imports - progress view
 import { bus } from '@eventBus/ProgressEventBus';
+
+// Local imports - utils
 import { getConfig } from '@utils/config';
-import type { LogMessageData } from '../LogTypes';
-import { MESSAGE_TYPES, type MessageType } from '../messageTypes';
+
+// Local imports - logger
+import type { LogMessageData } from '@logger/LogTypes';
+import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
 import type {
   LogEventSink,
   LogGroupFinishedEvent,
   LogGroupStartedEvent,
   LogMessageEvent,
-} from '../types/LogEventSink';
+} from '@logger/types/LogEventSink';
 
 function isValidMessageType(type: unknown): type is MessageType {
   return Object.values(MESSAGE_TYPES).includes(type as MessageType);

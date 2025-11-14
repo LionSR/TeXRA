@@ -1,5 +1,5 @@
 // Local imports - agent
-import { ConversationRoundState, AgentRunState } from '../core/AgentState';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 // Local imports - agent components
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';

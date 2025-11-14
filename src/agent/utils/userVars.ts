@@ -3,8 +3,8 @@
 import * as path from 'path';
 
 // Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentPrompt, AgentType } from '../core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentPrompt, AgentType } from '@agent/core/AgentDataclass';
 import type { IModelHandler } from '@agent/modelHandlers';
 import {
   getXmlFormatFromFiles,

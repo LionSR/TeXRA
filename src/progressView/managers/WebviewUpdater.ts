@@ -2,20 +2,18 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-
-import { COMMANDS, STATUS } from '../modules/constants.js';
-
-// Local imports
-import { ProgressViewState } from '../state/ProgressViewState';
-import type { TaskGroupUpdatePayload } from './TaskGroupManager';
-import { buildStreamInfos } from '../streamInfoUtils';
+import { COMMANDS, STATUS } from '@progressView/modules/constants.js';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type {
   InstructionUpdate,
   StreamTabInfo,
   ToolEditApprovalPrompt,
-} from '../types';
+} from '@progressView/types';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Local imports - agent filters
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 // Types

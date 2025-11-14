@@ -2,12 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { WebviewUpdater } from '../managers';
-import { buildStreamInfos } from '../streamInfoUtils';
-import type { ProgressViewState } from '../state/ProgressViewState';
-import type { StreamTabInfo } from '../types';
+import type { WebviewUpdater } from '@progressView/managers';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { StreamTabInfo } from '@progressView/types';
 
-import { STATUS } from '../modules/constants.js';
+// Local imports - constants
+import { STATUS } from '@progressView/modules/constants.js';
 
 // Local imports - agent
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';

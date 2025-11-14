@@ -3,10 +3,10 @@
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from '../core/define';
+import { defineTool } from '@tools/core/define';
 
 // Local imports - tools
-import { ToolResult, ToolError, toolResult } from '../result';
+import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { executeWolframCode } from './wolframScriptUtils';
 
 const WolframInputSchema = z.object({

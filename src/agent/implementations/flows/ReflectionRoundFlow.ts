@@ -7,7 +7,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { ConversationRoundState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { ReflectionRoundResult } from '../BaseReflectionAgent';
+import type { ReflectionRoundResult } from '@agent/implementations/BaseReflectionAgent';
 
 interface RoundPreparationResult {
   stateRound: ConversationRoundState;

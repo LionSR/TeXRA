@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // ===== OpenRouter Models =====
 

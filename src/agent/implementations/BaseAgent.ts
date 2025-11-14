@@ -1,21 +1,21 @@
 // Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentPrompt,
   AgentSetting,
   type AgentSessionDescriptor,
-} from '../core/AgentDataclass';
-import { AgentRunState } from '../core/AgentState';
-import { IAgent, type AgentRunHooks } from '../core/IAgent';
-import type { IModelHandler } from '../modelHandlers';
-import { UsageMonitor } from '../utils/UsageMonitor';
-import { buildUserVars } from '../utils/userVars';
+} from '@agent/core/AgentDataclass';
+import { AgentRunState } from '@agent/core/AgentState';
+import { IAgent, type AgentRunHooks } from '@agent/core/IAgent';
+import type { IModelHandler } from '@agent/modelHandlers';
+import { UsageMonitor } from '@agent/utils/UsageMonitor';
+import { buildUserVars } from '@agent/utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type {
   AgentCycleBaseOptions,
   UserVariableChannels,
 } from '@agent/core/AgentCycleOptions';
-import type { AgentRoundFinalizedCallback } from '../core/AgentSharedStore';
+import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - logging
