@@ -29,7 +29,7 @@ export interface ReflectionRoundHooks {
 }
 
 export interface ReflectionRoundRuntime {
-  toolState: AgentWorkspaceState;
+  workspaceState: AgentWorkspaceState;
   roundState?: ConversationRoundState;
   preparedMessages?: any[];
   prefill?: string;
