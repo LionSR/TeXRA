@@ -36,12 +36,12 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   /**
    * Process thinking blocks for Moonshot models
    * @param responseObject The raw response object from the model
-   * @param toolState Optional toolState to update with the thinking block
+   * @param workspaceState Optional workspaceState to update with the thinking block
    * @returns The extracted reasoning_content or null if none
    */
   processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -63,17 +63,17 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
           'Found reasoning_content in choices[0].message.reasoning_content',
         );
 
-        // If toolState is provided and we have reasoning content,
-        // store it in the toolState for future use (similar to Anthropic thinking blocks)
-        if (toolState && !toolState.reasoning.thinkingAdded) {
+        // If workspaceState is provided and we have reasoning content,
+        // store it in the workspaceState for future use (similar to Anthropic thinking blocks)
+        if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
           // Create a thinking block in the same format as Anthropic for consistency
           const thinkingBlock = {
             type: 'thinking',
             thinking: reasoningContent,
           };
 
-          toolState.reasoning.thinkingBlocks = [thinkingBlock];
-          toolState.reasoning.thinkingAdded = true;
+          workspaceState.reasoning.thinkingBlocks = [thinkingBlock];
+          workspaceState.reasoning.thinkingAdded = true;
         }
       }
     }
