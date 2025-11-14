@@ -13,6 +13,7 @@ logger.initialize(CHANNEL);
 
 export interface RecordingManagerConfig {
   recordingStartedCommand: string;
+  recordingStoppedCommand: string;
   recordingErrorCommand: string;
   transcriptionCommand: string;
   progressTitle?: string;
@@ -62,7 +63,11 @@ export class RecordingManager {
           cancellable: false,
         },
         async () => {
-          const result = await stopRecordingAndTranscribe(this.context);
+          const transcriptionPromise = stopRecordingAndTranscribe(this.context);
+          webviewView.webview.postMessage({
+            command: this.commandConfig.recordingStoppedCommand,
+          });
+          const result = await transcriptionPromise;
           if (result.success) {
             webviewView.webview.postMessage({
               command: this.commandConfig.transcriptionCommand,
@@ -73,6 +78,9 @@ export class RecordingManager {
             webviewView.webview.postMessage({
               command: this.commandConfig.recordingErrorCommand,
               error: result.error,
+            });
+            webviewView.webview.postMessage({
+              command: this.commandConfig.recordingStoppedCommand,
             });
           }
         },
@@ -88,6 +96,9 @@ export class RecordingManager {
       webviewView.webview.postMessage({
         command: this.commandConfig.recordingErrorCommand,
         error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      webviewView.webview.postMessage({
+        command: this.commandConfig.recordingStoppedCommand,
       });
     }
   }
