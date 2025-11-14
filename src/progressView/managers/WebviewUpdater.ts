@@ -320,12 +320,14 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update all webview content based on current state
+   * Update stream metadata and theme for the webview.
+   * Returns the resolved active stream after applying the update.
    */
-  updateAll(state: ProgressViewState, statuses?: Map<string, string>): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
+  updateAll(
+    state: ProgressViewState,
+    statuses?: Map<string, string>,
+    theme?: 'dark' | 'light',
+  ): StreamTabId {
     const streams = buildStreamInfos(state, statuses, state.agentTypeFilter);
 
     let activeStream = state.activeStream;
@@ -334,73 +336,22 @@ export class WebviewUpdater {
       state.activeStream = activeStream;
     }
 
-    // Update streams and active stream
-    this.updateStreams(streams, activeStream, state.agentTypeFilter);
-
-    if (activeStream) {
-      // Update log content for active stream
-      const messages = state.streamTabs.getMessages(activeStream);
-      const groups = Array.from(
-        state.taskGroups.getStreamGroups(activeStream).values(),
-      );
-      const files = Object.fromEntries(
-        Array.from(
-          state.outputFiles.getFiles(activeStream).entries(),
-          ([runId, rounds]) => [runId, Object.fromEntries(rounds.entries())],
-        ),
-      );
-      const missing = Object.fromEntries(
-        Array.from(
-          state.outputFiles.getMissingOutputs(activeStream).entries(),
-          ([runId, rounds]) => [runId, Object.fromEntries(rounds.entries())],
-        ),
-      );
-      const runInstructions = Object.fromEntries(
-        state.runInstructions.getInstructions(activeStream).entries(),
-      );
-      const activeRunId = state.getActiveRunId(activeStream);
-
-      this.updateLogContent(activeStream, messages, groups, {
-        runInstructions,
-        activeRunId,
-        runFiles: files,
-        runMissingOutputs: missing,
-      });
-
-      // Update files for active stream
-      this.updateFiles(activeStream, files);
-
-      // Update missing outputs for active stream
-      this.updateMissingOutputs(activeStream, missing);
-
-      // Update usage for active stream
-      const usage = Object.fromEntries(
-        state.usageStats.getRunUsage(activeStream).entries(),
-      ) as Record<string, TokenUsageStats>;
-      this.updateUsage(activeStream, usage);
-
-      const taskState = state.getTaskState(activeStream);
-      const instructionUpdate =
-        WebviewUpdater.createInstructionUpdate(taskState);
-      const activeStreamInfo = streams.find((s) => s.name === activeStream);
-      const sessionKind = activeStreamInfo?.agentSessionKind;
-      if (instructionUpdate) {
-        this.updateInstruction(activeStream, instructionUpdate, sessionKind);
-      } else {
-        this.clearInstruction(activeStream);
-      }
-    } else {
-      // Clear content when no active stream
-      this.updateLogContent('', [], []);
-      this.updateFiles('', {});
-      this.updateMissingOutputs('', {});
-      this.updateUsage('', {});
-      this.clearInstruction('');
+    const webview = this.getWebview();
+    if (!webview) {
+      return activeStream;
     }
 
+    if (theme) {
+      this.updateTheme(theme);
+    }
+
+    this.updateStreams(streams, activeStream, state.agentTypeFilter);
+
     this.logger.debug(
-      `Updated webview with ${streams.length} streams, active: ${activeStream}`,
+      `Updated webview streams (${streams.length}) active: ${activeStream}`,
     );
+
+    return activeStream;
   }
 
   /**
