@@ -5,16 +5,16 @@ import * as assert from 'assert';
 import { TexcountTool } from '@tools/texcount';
 import * as texcountModule from '@latex/texcount';
 
-suite('TexcountTool', () => {
+describe('TexcountTool', () => {
   const originalGetTeXCount = texcountModule.getTeXCount;
 
-  teardown(() => {
+  afterEach(() => {
     (
       texcountModule as { getTeXCount: typeof originalGetTeXCount }
     ).getTeXCount = originalGetTeXCount;
   });
 
-  test('returns raw texcount output for single file input', async () => {
+  it('returns raw texcount output for single file input', async () => {
     const calls: Array<{
       files: string[];
       options?: texcountModule.TexcountOptions;
@@ -39,7 +39,7 @@ suite('TexcountTool', () => {
     assert.strictEqual(calls[0].options?.mode, 'separate');
   });
 
-  test('formats output when stats format requested', async () => {
+  it('formats output when stats format requested', async () => {
     (
       texcountModule as { getTeXCount: typeof originalGetTeXCount }
     ).getTeXCount = async () => ({
@@ -58,7 +58,7 @@ suite('TexcountTool', () => {
     assert.ok(result.output?.includes('Words in text: 100'));
   });
 
-  test('returns error result when texcount output is missing', async () => {
+  it('returns error result when texcount output is missing', async () => {
     (
       texcountModule as { getTeXCount: typeof originalGetTeXCount }
     ).getTeXCount = async () => ({
@@ -73,7 +73,7 @@ suite('TexcountTool', () => {
     assert.ok(result.error?.includes('missing.tex'));
   });
 
-  test('passes selected mode to texcount implementation', async () => {
+  it('passes selected mode to texcount implementation', async () => {
     const calls: Array<{
       files: string[];
       options?: texcountModule.TexcountOptions;
