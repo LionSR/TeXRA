@@ -457,14 +457,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    const container = document.getElementById(ELEMENT_IDS.FOLLOW_UP_CONTAINER);
-    const isContainerVisible = Boolean(
-      container &&
-        container.classList.contains('is-visible') &&
-        container.getAttribute('aria-hidden') === 'false',
-    );
-
-    if (message.status === STATUS.WAITING && isContainerVisible) {
+    if (message.status === STATUS.WAITING) {
       dom.followUpInput.focus({ scrollIntoView: true });
     }
   }
