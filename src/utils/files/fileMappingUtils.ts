@@ -7,6 +7,15 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local file imports
 import { flexibleFS } from './flexibleFS';
 
+const INPUT_COMMAND_PATTERN = /\\input\s*{([^}]+)}/g;
+
+const toPosix = (target: string): string => target.replace(/\+/g, '/');
+
+const stripExtension = (target: string): string => {
+  const ext = path.posix.extname(target);
+  return ext.length > 0 ? target.slice(0, -ext.length) : target;
+};
+
 /**
  * Create a mapping between two file lists based on name similarity.
  *
@@ -108,16 +117,61 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${Array.from(
       baseToOutputMap.entries(),
     )
-      .map(
-        ([base, output]) =>
-          `${path.basename(base)} -> ${path.basename(output)}`,
-      )
+      .map(([base, output]) => {
+        const normalizedBase = toPosix(flexibleFS.toWorkspaceRelative(base));
+        const normalizedOutput = toPosix(
+          flexibleFS.toWorkspaceRelative(output),
+        );
+        return `${normalizedBase} -> ${normalizedOutput}`;
+      })
       .join(', ')}`,
   );
 
   const baseToOutput = new Map<string, string>();
+  const registerMapping = (key: string | undefined, value: string) => {
+    if (!key) {
+      return;
+    }
+
+    const trimmed = key.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+
+    const normalizedValue = value.trim();
+    if (normalizedValue.length === 0) {
+      return;
+    }
+
+    baseToOutput.set(trimmed, normalizedValue);
+  };
+
   for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-    baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
+    const workspaceBase = toPosix(
+      flexibleFS.toWorkspaceRelative(baseFile ?? ''),
+    );
+    const workspaceOutput = toPosix(
+      flexibleFS.toWorkspaceRelative(outputFile ?? ''),
+    );
+
+    if (!workspaceBase || !workspaceOutput) {
+      continue;
+    }
+
+    const baseWithoutExt = stripExtension(workspaceBase);
+    const baseName = path.posix.basename(workspaceBase);
+    const baseNameWithoutExt = stripExtension(baseName);
+
+    const variants = new Set([
+      workspaceBase,
+      baseWithoutExt,
+      baseName,
+      baseNameWithoutExt,
+    ]);
+
+    for (const variant of variants) {
+      registerMapping(variant, workspaceOutput);
+    }
   }
 
   for (const outputFile of outputFiles) {
@@ -127,8 +181,34 @@ export async function replaceInputCommands(
 
     try {
       const content = await flexibleFS.read(outputFile);
-      const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
-        baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
+      const newContent = content.replace(
+        INPUT_COMMAND_PATTERN,
+        (match, rawTarget: string) => {
+          const normalized = toPosix(rawTarget.trim());
+          if (!normalized) {
+            return match;
+          }
+
+          const targetWithExt = normalized.endsWith('.tex')
+            ? normalized
+            : `${normalized}.tex`;
+
+          const candidates = [
+            targetWithExt,
+            normalized,
+            path.posix.basename(targetWithExt),
+            path.posix.basename(normalized),
+          ];
+
+          for (const candidate of candidates) {
+            const replacement = baseToOutput.get(candidate);
+            if (replacement) {
+              return `\\input{${replacement}}`;
+            }
+          }
+
+          return match;
+        },
       );
 
       if (newContent !== content) {

@@ -1,23 +1,22 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Local imports - progress view
+// Local type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
-
-// Internal imports
-import { createStreamStatusEvents } from '@progressView/events/StreamStatusEvents';
-import { createOutputEvents } from '@progressView/events/OutputEvents';
-import { createUsageEvents } from '@progressView/events/UsageEvents';
-import { createLogEvents } from '@progressView/events/LogEvents';
-import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
-// Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { StreamStatusType } from '@progressView/events/types';
+
+// Local imports - progress view
+import { createLogEvents } from '@progressView/events/LogEvents';
+import { createOutputEvents } from '@progressView/events/OutputEvents';
+import { createStreamStatusEvents } from '@progressView/events/StreamStatusEvents';
+import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
+import { createUsageEvents } from '@progressView/events/UsageEvents';
 import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
 
-import type { WebviewUpdater } from '@progressView/managers';
+// Local imports - event bus
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -69,6 +68,11 @@ describe('Progress event modules', () => {
   } as unknown as AgentLogger;
   const stateStub = {} as ProgressViewState;
   const updaterStub = {} as WebviewUpdater;
+  const createOutputShared = () => ({
+    logger: loggerStub,
+    refreshStreamSurface: () => {},
+    getAllStreamStatuses: () => new Map<string, StreamStatusType>(),
+  });
 
   it('registers stream status handlers and disposes them', () => {
     const bus = new FakeBus();
@@ -93,9 +97,7 @@ describe('Progress event modules', () => {
 
   it('registers output handlers and disposes them', () => {
     const bus = new FakeBus();
-    const module = createOutputEvents({
-      logger: loggerStub,
-    });
+    const module = createOutputEvents(createOutputShared());
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
     assert.deepStrictEqual(bus.events, [
@@ -112,9 +114,7 @@ describe('Progress event modules', () => {
 
   it('delegates clearTaskOutput to ProgressViewState.clearOutputState', () => {
     const bus = new FakeBus();
-    const module = createOutputEvents({
-      logger: loggerStub,
-    });
+    const module = createOutputEvents(createOutputShared());
 
     const calls: string[] = [];
     const state = {
