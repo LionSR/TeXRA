@@ -5,10 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
@@ -82,9 +79,7 @@ async function handleCleanSingle(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: false,
   });
-  bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
 }
 
 async function handleCleanMultiple(
@@ -117,9 +112,7 @@ async function handleCleanMultiple(
   const streamId = getStreamTabId(agent, model, inputFile, {
     useMultipleOutputs: true,
   });
-  bus.emit('clearOutputFiles', streamId);
   bus.emit('clearMissingOutputs', streamId);
-  bus.emit('clearTaskOutput', streamId);
 }
 
 export async function handleClean(config: {
@@ -174,9 +167,7 @@ export async function handleClean(config: {
     });
 
   if (!config.skipProgressViewClear) {
-    bus.emit('clearOutputFiles', streamId);
     bus.emit('clearMissingOutputs', streamId);
-    bus.emit('clearTaskOutput', streamId);
   }
 }
 
