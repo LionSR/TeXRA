@@ -2,10 +2,12 @@
 import * as path from 'path';
 
 // Local imports - progress view
+import { AgentCategory } from '@agent/core/AgentDataclass';
+
+// Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
 import type { AgentFilter, StreamTabInfo } from './types';
 // Local imports - agent types
-import { AgentCategory } from '@agent/core/AgentDataclass';
 
 const sortComparators = {
   time: (a: StreamTabInfo, b: StreamTabInfo) =>

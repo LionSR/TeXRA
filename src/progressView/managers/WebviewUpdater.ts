@@ -2,25 +2,30 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import { COMMANDS, STATUS } from '@progressView/modules/constants.js';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
+import type { OutputFileInfo } from '@agent/output/types';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Local imports - agent filters
+import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+// Types
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+import { LogMessageData } from '@logger/LogTypes';
+import type { TaskState } from '@logger/TaskState';
+
+// Type imports
 import type {
   InstructionUpdate,
   StreamTabInfo,
   ToolEditApprovalPrompt,
 } from '@progressView/types';
-import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-// Local imports - agent filters
-import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
-// Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
-import type { TaskState } from '@logger/TaskState';
+// Type imports
+import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { COMMANDS, STATUS } from '@progressView/modules/constants.js';
 
 // Type aliases for status values
 type StatusType = (typeof STATUS)[keyof typeof STATUS];

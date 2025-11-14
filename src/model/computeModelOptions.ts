@@ -2,8 +2,12 @@
 // (none)
 
 // Local imports - model utilities
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
+
+// Internal imports
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+
+// Internal imports
 import { getConfig } from '@utils/config';
 
 /**

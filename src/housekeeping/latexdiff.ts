@@ -5,19 +5,21 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { WorkspaceFS } from '@utils/files';
-// Local imports - housekeeping utils
-import { findFilesFromPatterns } from './utils';
-
-// Local imports - housekeeping
-import { TEMP_EXTENSIONS } from './constants';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
 } from '@common/errors/errorHandlingUtils';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Local imports - utilities
+import { WorkspaceFS } from '@utils/files';
+
+// Local imports - housekeeping utils
+import { findFilesFromPatterns } from './utils';
+// Local imports - housekeeping
+import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);

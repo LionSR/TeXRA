@@ -2,9 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { WolframTool } from '@tools/wolfram';
-import * as logger from '@logger/logUtils';
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Internal imports
+import { WolframTool } from '@tools/wolfram';
 
 const CHANNEL = 'WolframToolCommands';
 logger.initialize(CHANNEL);

@@ -1,4 +1,7 @@
+// Third-party imports
 import * as vscode from 'vscode';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utils

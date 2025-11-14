@@ -14,9 +14,13 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { bus } from '@eventBus/ProgressEventBus';
-import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+
+// Internal imports
+import { ModelProvider, DEFAULT_MODEL_CAPABILITIES } from '@model/ModelConfig';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
 
 type DummyClient = Record<string, never>;
 

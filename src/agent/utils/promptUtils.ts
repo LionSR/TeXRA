@@ -6,7 +6,7 @@ import * as nunjucks from 'nunjucks';
 
 // Local imports - agent
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
+
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -18,6 +18,9 @@ import {
   WorkspaceFS,
   isValidExecutionId,
 } from '@utils/files';
+
+// Internal imports
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);

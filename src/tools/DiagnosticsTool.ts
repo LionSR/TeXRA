@@ -1,8 +1,17 @@
 // Third-party imports
-import type { Diagnostic } from 'vscode';
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
+// Internal imports
+import {
+  getLinterMessages,
+  countDiagnosticsBySeverity,
+} from '@frontend/latex/linter';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Local file imports
+import { defineTool } from './core/define';
 // Local imports - tools
 import {
   type DiagnosticsPayload,
@@ -10,11 +19,9 @@ import {
   ToolError,
   toolResult,
 } from './result';
-import {
-  getLinterMessages,
-  countDiagnosticsBySeverity,
-} from '@frontend/latex/linter';
-import * as logger from '@logger/logUtils';
+
+// Type imports
+import type { Diagnostic } from 'vscode';
 
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);

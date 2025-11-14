@@ -8,12 +8,16 @@ import {
 import { z } from 'zod';
 
 // Local imports - metadata
+import { ToolError, toolResult } from '@tools/result';
+
+// Internal imports
+import { defineTool } from '@tools/core/define';
+
+// Local file imports
 import { CROSSREF_CONSTANTS } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 // Local imports - tools
-import { defineTool } from '@tools/core/define';
-import { ToolError, toolResult } from '@tools/result';
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),

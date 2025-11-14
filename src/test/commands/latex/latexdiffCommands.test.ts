@@ -1,3 +1,4 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 import * as path from 'path';
 
@@ -5,16 +6,22 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - commands
-import { latexdiffHelpers } from '@commands/latex/latexdiffCommands';
+import * as errorHandlingModule from '@common/errors/errorHandlingUtils';
 
-// Local imports - utilities
-import * as systemModule from '@utils/system';
-import * as configModule from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+// Internal imports
 import * as openBuildModule from '@frontend/latex/openBuild';
 
+// Internal imports
+import * as systemModule from '@utils/system';
+// Local imports - utilities
+import * as configModule from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import { latexdiffHelpers } from '@commands/latex/latexdiffCommands';
+
+
 // Local imports - errors
-import * as errorHandlingModule from '@common/errors/errorHandlingUtils';
 
 const {
   ensureLatexdiffToolInstalled,

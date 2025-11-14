@@ -1,16 +1,21 @@
 // Local imports - progress view
+// Local imports - identifiers
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Types
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
+
+// Internal imports
+import { WorkspaceStateKey } from '@common/state/stateManager';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
+import { normalizeRunId } from '@progressView/constants/runIds';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-// Local imports - identifiers
-import { normalizeRunId } from '@progressView/constants/runIds';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Manages usage statistics collection with persistence.

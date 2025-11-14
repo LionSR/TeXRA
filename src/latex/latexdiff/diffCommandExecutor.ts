@@ -1,10 +1,14 @@
 // Local imports - log
+import type { ExecResult } from '@agent/types/ResultTypes';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { executeCommand } from '@utils/system';
 import { getConfig } from '@utils/config';
-import type { ExecResult } from '@agent/types/ResultTypes';
+
+// Local file imports
 import { DEFAULT_MATH_MARKUP, type MathMarkupOption } from './mathMarkup';
 
 const DEFAULT_PICTURE_ENVS =

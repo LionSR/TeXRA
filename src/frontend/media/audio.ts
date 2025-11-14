@@ -7,13 +7,23 @@ import OpenAI from 'openai';
 import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+
+// Internal imports
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - utils
+import { MODEL_CONFIGS } from '@model/ModelRegistry';
+
+// Internal imports
 import { AbsoluteFS, StorageFS } from '@utils/files';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import { getConfig } from '@utils/config/configUtils';
 import { THREE_DAYS_MS } from '@utils/config';
+
+// Internal imports
+import { getConfig } from '@utils/config/configUtils';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import {
   extendEnvPath,
@@ -21,10 +31,8 @@ import {
 } from '@utils/system/platformPaths';
 
 // Local imports - agent handlers
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 
 // Local imports - model configs
-import { MODEL_CONFIGS } from '@model/ModelRegistry';
 
 const CHANNEL = 'AudioUtils';
 logger.initialize(CHANNEL);

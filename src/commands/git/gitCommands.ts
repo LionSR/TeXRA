@@ -1,5 +1,4 @@
 // Standard library imports
-import type { Dirent } from 'fs';
 import { promises as fs } from 'fs';
 
 // Third-party imports
@@ -9,6 +8,9 @@ import * as vscode from 'vscode';
 // Local imports - utilities
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+
+// Type imports
+import type { Dirent } from 'fs';
 
 const COMMIT_LABEL_FORMAT = '%h: %s (%cr)';
 
