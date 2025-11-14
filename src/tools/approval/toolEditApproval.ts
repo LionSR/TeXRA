@@ -1,4 +1,7 @@
 // Third-party imports
+import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 import {
   diff_match_patch,
   DIFF_DELETE,
@@ -6,10 +9,8 @@ import {
   DIFF_INSERT,
 } from 'diff-match-patch';
 import * as vscode from 'vscode';
-import { randomUUID } from 'crypto';
 import * as difflib from 'difflib';
-import { promises as fs } from 'fs';
-import * as path from 'path';
+
 
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -19,6 +20,8 @@ import { toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+
+// Local file imports
 import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
 
 export interface ToolEditApprovalRequest {

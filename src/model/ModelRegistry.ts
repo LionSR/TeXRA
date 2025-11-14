@@ -9,7 +9,6 @@
 
 // Local imports - agent components
 import { ModelConfig } from './ModelConfig';
-
 import { ANTHROPIC_MODELS } from './providers/anthropicModels';
 import { OPENAI_REASONING_MODELS } from './providers/openaiReasoningModels';
 import { OPENAI_MODELS } from './providers/openaiModels';

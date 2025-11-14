@@ -1,6 +1,6 @@
 // Local imports - replacement
-import { generateSectionSpacingFixes, SECTION_TYPES } from '../helpers';
-import { ReplacementCategory } from '../types';
+import { generateSectionSpacingFixes, SECTION_TYPES } from '@replacement/helpers';
+import { ReplacementCategory } from '@replacement/types';
 
 export const SECTION_REPLACEMENTS: ReplacementCategory = {
   name: 'sections',

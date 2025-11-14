@@ -4,10 +4,10 @@ import * as path from 'path';
 
 // Local imports - agent
 import { writePromptToXml } from '@agent/utils/promptUtils';
-
 // Local imports - storage
-import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
+// Internal imports
+import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 
 describe('promptUtils.writePromptToXml', () => {
   type StorageFsMutable = {

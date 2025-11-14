@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 export const SCRATCHPAD_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'scratchpad_xml',

@@ -1,13 +1,13 @@
 // Third-party imports
 import { execa } from 'execa';
-
-// Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 const ApplyPathInputSchema = z.object({
   patch: z.string().min(1, 'patch content is required'),

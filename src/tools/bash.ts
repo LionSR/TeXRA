@@ -1,13 +1,13 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 const BashInputSchema = z.object({
   command: z.string(),

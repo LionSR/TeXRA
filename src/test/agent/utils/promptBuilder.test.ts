@@ -4,6 +4,7 @@ import { strict as assert } from 'assert';
 // Local imports - agent utilities
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+// Type imports
 import type {
   AgentPrompt,
   AgentWorkflowSetting,

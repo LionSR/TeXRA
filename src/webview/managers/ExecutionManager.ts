@@ -1,22 +1,16 @@
 // Third-party imports
-// Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - webview
+// Local imports - agent core
 import type { AgentConfig } from '@agent/core/AgentConfig';
-
-// Local imports - agent
+// Internal imports
 import {
   AgentCategory,
   AgentType,
   type AgentSessionDescriptor,
 } from '@agent/core/AgentDataclass';
 import { ToolConfig } from '@agent/core/ToolConfig';
-
-// Local imports - utils
 import { capitalize } from '@frontend/ui/messageUtils';
-
-// Local imports - log
 import * as logger from '@logger/logUtils';
 import {
   isPastedImage,

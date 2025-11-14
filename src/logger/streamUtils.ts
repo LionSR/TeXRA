@@ -4,6 +4,7 @@ import * as path from 'path';
 
 // Local imports
 import { AgentType } from '@agent/core/AgentDataclass';
+// Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 type StreamTabIdOptions = {

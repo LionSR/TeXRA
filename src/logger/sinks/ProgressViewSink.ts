@@ -2,17 +2,22 @@
 import { randomUUID } from 'crypto';
 import { encode as encodeHtml } from 'he';
 
-// Local imports - progress view
-import { bus } from '@eventBus/ProgressEventBus';
-import { getConfig } from '@utils/config';
-import type { LogMessageData } from '../LogTypes';
-import { MESSAGE_TYPES, type MessageType } from '../messageTypes';
+// Local imports - logger
+import type { LogMessageData } from '@logger/LogTypes';
+// Internal imports
+import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
+
+// Type imports
 import type {
   LogEventSink,
   LogGroupFinishedEvent,
   LogGroupStartedEvent,
   LogMessageEvent,
-} from '../types/LogEventSink';
+} from '@logger/types/LogEventSink';
+
+// Internal imports
+import { getConfig } from '@utils/config';
+import { bus } from '@eventBus/ProgressEventBus';
 
 function isValidMessageType(type: unknown): type is MessageType {
   return Object.values(MESSAGE_TYPES).includes(type as MessageType);

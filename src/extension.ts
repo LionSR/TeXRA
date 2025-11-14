@@ -6,21 +6,21 @@ import * as vscode from 'vscode';
 import dotenv from 'dotenv';
 
 // Local imports - core
-import * as logger from '@logger/logUtils';
-import { watchConfig, getConfig } from '@utils/config';
+import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { StorageFS } from '@utils/files';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
-import { initializeStateManagers } from '@common/state/stateManager';
 import { FileLister } from '@frontend/files/fileLister';
-import { bus } from '@eventBus/ProgressEventBus';
-import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import * as logger from '@logger/logUtils';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
+import { StorageFS } from '@utils/files';
+import { watchConfig, getConfig } from '@utils/config';
+import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - components
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';

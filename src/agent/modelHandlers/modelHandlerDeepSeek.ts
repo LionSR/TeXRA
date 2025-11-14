@@ -1,8 +1,26 @@
-// Standard library imports
 // (none needed)
 
 // Third-party imports
 import OpenAI from 'openai';
+
+// Local imports - agent
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+
+// Local imports - agent components
+import type { ToolDefinition } from '@model';
+
+// Internal imports
+import { K_SLICE } from '@utils/config';
+
+// Local file imports
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import {
+  describeAttachments,
+  extractToolAttachments,
+} from './utils/toolAttachmentUtils';
+
+
+// Type imports
 import type {
   ChatCompletionAssistantMessageParam,
   ChatCompletionToolMessageParam,
@@ -10,20 +28,6 @@ import type {
   ChatCompletionMessage,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
-
-// Local imports - agent
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-
-// Local imports - agent components
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-
-// Local imports - utilities
-import type { ToolDefinition } from '@model';
-import {
-  describeAttachments,
-  extractToolAttachments,
-} from './utils/toolAttachmentUtils';
-import { K_SLICE } from '@utils/config';
 
 // TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
 // DEEPSEEK RESPONSE USAGE FORMAT:

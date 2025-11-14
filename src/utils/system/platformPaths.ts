@@ -8,6 +8,8 @@ import { execaSync } from 'execa';
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
+
+// Local file imports
 import { TEX_TOOLS } from './constants';
 
 const CHANNEL = 'platformPaths';

@@ -5,14 +5,19 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
+import type { OutputFileInfo } from '@agent/output/types';
 
-// Local imports - utilities
+// Internal imports
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+  showLoggedMessageWithDocs,
+} from '@common/errors/errorHandlingUtils';
+import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService, flexibleFS } from '@utils/files';
-import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-
-// Local imports - latex utils
+import { checkToolInstalled } from '@utils/system';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import {
   DEFAULT_MATH_MARKUP,
@@ -20,28 +25,17 @@ import {
   describeMathMarkupOption,
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
-import { checkToolInstalled } from '@utils/system';
-
-// Local imports - housekeeping
 import {
   runPackLatexdiffvc,
   runPackLatexdiffvcMultiple,
   runCleanLatexdiffvc,
   runCleanLatexdiffvcMultiple,
 } from '@housekeeping';
-
-// Import agent utilities
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 // Local imports - agent types
-import type { OutputFileInfo } from '@agent/output/types';
 
 // Local imports - errors
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-  showLoggedMessageWithDocs,
-} from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
