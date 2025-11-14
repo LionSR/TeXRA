@@ -1,15 +1,10 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
-
 // Local imports - Anthropic Tool
 import { TextEditorTool, ToolCallInput } from '@agent/toolUse';
-
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports - utilities
+import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'TextEditorCommands';

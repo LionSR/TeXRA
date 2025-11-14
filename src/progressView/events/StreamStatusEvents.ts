@@ -1,26 +1,30 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-import type { WebviewUpdater } from '../managers';
-import { buildStreamInfos } from '../streamInfoUtils';
-import type { ProgressViewState } from '../state/ProgressViewState';
-import type { StreamTabInfo } from '../types';
-
-import { STATUS } from '../modules/constants.js';
-
-// Local imports - agent
+// Local imports - identifiers
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-
-// Local imports - events
+import type { AgentLogger } from '@logger/AgentLogger';
+import type { WebviewUpdater } from '@progressView/managers';
+import type { StreamTabInfo } from '@progressView/types';
+// Internal imports
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
+// Type imports
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+// Internal imports
+import { STATUS } from '@progressView/modules/constants.js';
+// Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
+// Local file imports
 import { createErrorBoundary } from './errorHandling';
+
+// Type imports
 import type {
   ProgressEventBusLike,
   StreamStatusType,
   StreamStatusOrReadyType,
 } from './types';
-import type { AgentLogger } from '@logger/AgentLogger';
+
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;

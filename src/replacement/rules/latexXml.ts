@@ -3,8 +3,8 @@ import {
   generateXmlLatexConversions,
   generateLatexToXmlConversions,
   LATEX_ENVIRONMENTS,
-} from '../helpers';
-import { ReplacementCategory } from '../types';
+} from '@replacement/helpers';
+import { ReplacementCategory } from '@replacement/types';
 
 export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
   name: 'latex_xml',

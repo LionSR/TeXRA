@@ -1,13 +1,10 @@
-// Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
-
 // Local imports - agent types
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-
 // Local imports - core indexing
 import { StreamExecutionIndex } from '@agent/core/StreamExecutionIndex';
+import { AgentLogger } from '@logger/AgentLogger';
 
-// Local imports - tool-use snapshots
+// Local file imports - tool-use snapshots
 import type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
 
 const CHANNEL = 'ToolUseSnapshotCache';

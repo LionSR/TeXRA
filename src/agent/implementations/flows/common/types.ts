@@ -1,3 +1,4 @@
+// Type imports
 import type { AgentRunHooks } from '@agent/core/IAgent';
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 

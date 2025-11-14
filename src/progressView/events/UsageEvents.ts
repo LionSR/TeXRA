@@ -2,17 +2,18 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { TaskGroupUpdatePayload, WebviewUpdater } from '../managers';
-import type { ProgressViewState } from '../state/ProgressViewState';
-
-// Local imports - events
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { createErrorBoundary } from './errorHandling';
-import type { ProgressEventBusLike } from './types';
-
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { TaskGroupUpdatePayload, WebviewUpdater } from '@progressView/managers';
+import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
+// Local file imports
+import { createErrorBoundary } from './errorHandling';
+
+// Type imports
+import type { ProgressEventBusLike } from './types';
 
 interface RunUsageComputationContext {
   groups: Map<string, TaskGroup>;

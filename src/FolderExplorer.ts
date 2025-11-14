@@ -3,11 +3,13 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import * as logger from '@logger/logUtils';
 
-// Local imports
+// Internal imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
+
+// Local file imports
 import { FileItem } from './explorer/FileItem';
 
 const CHANNEL = 'Webview';

@@ -1,14 +1,15 @@
-// Local imports - persistence
-import {
-  PersistentMapManager,
-  type StateStorage,
-} from '../persistence/PersistentMapManager';
 
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
+import {
+  PersistentMapManager,
+  type StateStorage,
+} from '@progressView/persistence/PersistentMapManager';
 
 /**
  * Manages stream tabs collection with persistence.

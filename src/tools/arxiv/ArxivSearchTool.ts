@@ -3,6 +3,7 @@ import { all, and, category as catQuery } from 'arxiv-client';
 import { z } from 'zod';
 
 // Local imports - latex
+import { ToolError, toolResult } from '@tools/result';
 import {
   type ArxivSearchResult,
   createArxivClient,
@@ -10,15 +11,10 @@ import {
   getAuthorNames,
   normaliseArxivIdentifier,
   readPrimaryCategory,
-} from '../latex/arxivShared';
-
-// Local imports - citations
-import { ARXIV_CONSTANTS } from '../citation/constants';
-import { waitForRateLimit } from '../citation/rateLimiter';
-
-// Local imports - tools
-import { defineTool } from '../core/define';
-import { ToolError, toolResult } from '../result';
+} from '@tools/latex/arxivShared';
+import { ARXIV_CONSTANTS } from '@tools/citation/constants';
+import { waitForRateLimit } from '@tools/citation/rateLimiter';
+import { defineTool } from '@tools/core/define';
 
 const SortBySchema = z.enum(['relevance', 'lastUpdatedDate', 'submittedDate']);
 const SortOrderSchema = z.enum(['ascending', 'descending']);
