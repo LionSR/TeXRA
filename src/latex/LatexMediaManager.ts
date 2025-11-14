@@ -70,11 +70,11 @@ export class LatexMediaManager {
 
   private async attachTeXCount(
     files: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
   ): Promise<void> {
     if (cfg.attachTeXCount && files.length > 0) {
-      toolState.document.texcountStats = await getTeXCountStats(files);
+      workspaceState.document.texcountStats = await getTeXCountStats(files);
     }
   }
 
@@ -83,7 +83,7 @@ export class LatexMediaManager {
    */
   private async compilePdfs(
     files: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
     const texFiles = files.filter((file) =>
@@ -135,14 +135,14 @@ export class LatexMediaManager {
     );
     compileResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
-        toolState.media.addMediaFiles([result.value]);
+        workspaceState.media.addMediaFiles([result.value]);
       }
     });
   }
 
   private async extractFiguresFromFiles(
     files: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
     const figureResults = await Promise.allSettled(
@@ -162,7 +162,7 @@ export class LatexMediaManager {
           `Extracted ${result.value.length} figures from ${file}`,
           activeGroupId,
         );
-        toolState.media.addMediaFiles(result.value);
+        workspaceState.media.addMediaFiles(result.value);
         mirrorTasks.push(
           this.mirrorFigureDependencies(file, result.value, activeGroupId),
         );
@@ -176,7 +176,7 @@ export class LatexMediaManager {
 
   private async compileTikzFigures(
     files: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
@@ -189,7 +189,7 @@ export class LatexMediaManager {
         result.value &&
         result.value.length > 0
       ) {
-        toolState.media.addMediaFiles(result.value);
+        workspaceState.media.addMediaFiles(result.value);
       }
     });
     if (logSummary) {
@@ -202,7 +202,7 @@ export class LatexMediaManager {
 
   private async processFiles(
     files: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     {
@@ -237,26 +237,26 @@ export class LatexMediaManager {
       return;
     }
 
-    await this.attachTeXCount(existingFiles, toolState, cfg);
+    await this.attachTeXCount(existingFiles, workspaceState, cfg);
 
     if (!supportsVision) {
       return;
     }
 
     if (extraMediaFiles.length > 0) {
-      toolState.media.addMediaFiles(extraMediaFiles);
+      workspaceState.media.addMediaFiles(extraMediaFiles);
     }
 
     if (includeFigureExtraction && cfg.autoExtractFigure) {
-      await this.extractFiguresFromFiles(existingFiles, toolState);
+      await this.extractFiguresFromFiles(existingFiles, workspaceState);
     }
 
     if (includeTikzCompilation && cfg.autoExtractTikzFigure) {
-      await this.compileTikzFigures(existingFiles, toolState, logTikzSummary);
+      await this.compileTikzFigures(existingFiles, workspaceState, logTikzSummary);
     }
 
     if (includePdfCompilation && cfg.autoCompileInputPdf) {
-      await this.compilePdfs(existingFiles, toolState);
+      await this.compilePdfs(existingFiles, workspaceState);
     }
   }
 
@@ -266,12 +266,12 @@ export class LatexMediaManager {
    */
   async processInputFiles(
     inputFiles: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: string[] = [],
   ): Promise<void> {
-    await this.processFiles(inputFiles, toolState, cfg, supportsVision, {
+    await this.processFiles(inputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: true,
       includeTikzCompilation: true,
       includePdfCompilation: true,
@@ -285,11 +285,11 @@ export class LatexMediaManager {
    */
   async processOutputFiles(
     outputFiles: string[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
   ): Promise<void> {
-    await this.processFiles(outputFiles, toolState, cfg, supportsVision, {
+    await this.processFiles(outputFiles, workspaceState, cfg, supportsVision, {
       includeFigureExtraction: false,
       includeTikzCompilation: true,
       includePdfCompilation: true,

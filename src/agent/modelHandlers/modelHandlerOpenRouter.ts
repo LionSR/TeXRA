@@ -97,7 +97,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   // Implementation for processing thinking blocks in OpenRouter responses
   processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -141,7 +141,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
@@ -153,7 +153,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.assembly.accumulatedOutput,
+            text: workspaceState.assembly.accumulatedOutput,
           },
         ];
       }
@@ -165,7 +165,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
     if (lastMessage.role === 'user' || lastMessage.role === 'system') {
@@ -174,7 +174,7 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
         content: [
           {
             type: 'text',
-            text: toolState.assembly.accumulatedOutput,
+            text: workspaceState.assembly.accumulatedOutput,
           },
         ],
       });

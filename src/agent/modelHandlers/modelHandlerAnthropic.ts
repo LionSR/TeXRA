@@ -1066,7 +1066,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: MessageParam[],
     _stateRound: ConversationRoundState,
-    _toolState: AgentWorkspaceState,
+    _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -1078,12 +1078,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: MessageParam[],
     _stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
     // Create continuation message with last K tokens
-    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -1109,7 +1109,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: MessageParam[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
@@ -1120,7 +1120,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
-          toolState.assembly.accumulatedOutput.includes('<scratchpad>') &&
+          workspaceState.assembly.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
           await flexibleFS.write(outputFile, prefill);
@@ -1165,9 +1165,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     await flexibleFS.write(outputFile, fileContent);
 
-    // Update the toolState with the actual file content
-    toolState.assembly.updateAccumulatedOutput(fileContent);
-    toolState.assembly.updateLastResponse(fileContent);
+    // Update the workspaceState with the actual file content
+    workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    workspaceState.assembly.updateLastResponse(fileContent);
 
     const lastMessage = messages.at(-1);
     if (hasEndTag(agentSetting, fileContent)) {
@@ -1218,7 +1218,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.addContinueMessageWithoutPrefill(
         messages,
         state,
-        toolState,
+        workspaceState,
         agentSetting,
         agentConfig,
       );
@@ -1289,7 +1289,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
 
@@ -1304,7 +1304,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.assembly.accumulatedOutput,
+            text: workspaceState.assembly.accumulatedOutput,
           } as ContentBlockParam,
         ];
       }
@@ -1320,7 +1320,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     messages: MessageParam[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     // For thinking-enabled anthropic models that don't support assistant prefill,
     // handle like OpenAI models where the last message is always a user message
@@ -1356,7 +1356,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Text blocks filtering removed - was unused
 
         // Anthropic models should include thinking blocks first in the content array
-        // Add all thinking blocks from toolState if we have them
+        // Add all thinking blocks from workspaceState if we have them
         if (thinkingBlocks.length > 0) {
           // if we have thinking blocks, then we use them
           this.logger.debug(
@@ -1383,12 +1383,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
           // let newThinkingContent: any[] = [];
 
-          // if (toolState.reasoning.thinkingAdded && toolState.reasoning.thinkingBlocks.length > 0) {
+          // if (workspaceState.reasoning.thinkingAdded && workspaceState.reasoning.thinkingBlocks.length > 0) {
           //   // if we have thinking blocks, then we use them
           //   this.logger.debug(
-          //     `Using ${toolState.reasoning.thinkingBlocks.length} existing thinking blocks from previous message`,
+          //     `Using ${workspaceState.reasoning.thinkingBlocks.length} existing thinking blocks from previous message`,
           //   );
-          //   newThinkingContent = [...toolState.reasoning.thinkingBlocks];
+          //   newThinkingContent = [...workspaceState.reasoning.thinkingBlocks];
           // }
 
           // let newContent: any[] = [];
@@ -1400,7 +1400,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           //     ...newThinkingContent,
           //     {
           //       type: 'text',
-          //       text: toolState.assembly.accumulatedOutput,
+          //       text: workspaceState.assembly.accumulatedOutput,
           //     },
           //   ];
           // }
@@ -1432,26 +1432,26 @@ export class ModelHandlerAnthropic extends ModelHandler<
         content: [],
       };
 
-      // Include all thinking blocks from toolState if available
+      // Include all thinking blocks from workspaceState if available
       if (
-        toolState.reasoning.thinkingBlocks &&
-        toolState.reasoning.thinkingBlocks.length > 0
+        workspaceState.reasoning.thinkingBlocks &&
+        workspaceState.reasoning.thinkingBlocks.length > 0
       ) {
         this.logger.debug(
-          `Adding ${toolState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
+          `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
         if (Array.isArray(assistantMessage.content)) {
-          assistantMessage.content.push(...toolState.reasoning.thinkingBlocks);
+          assistantMessage.content.push(...workspaceState.reasoning.thinkingBlocks);
         }
         // Clear cached thinking so the next response can store fresh blocks
-        toolState.resetReasoning();
+        workspaceState.resetReasoning();
       }
 
       // Add the text content
       if (Array.isArray(assistantMessage.content)) {
         assistantMessage.content.push({
           type: 'text',
-          text: toolState.assembly.accumulatedOutput,
+          text: workspaceState.assembly.accumulatedOutput,
         } as ContentBlockParam);
       }
 
@@ -1507,14 +1507,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Process thinking blocks for Anthropic models
    * @param responseObject The response object from Anthropic API
-   * @param toolState Optional toolState to update with the thinking blocks
+   * @param workspaceState Optional workspaceState to update with the thinking blocks
    * @returns The extracted thinking content (or null if none)
    * This preserves the full thinking objects including signature which is required
    * when sending back to the Anthropic API for continuing a conversation
    */
   processThinkingBlock(
     responseObject: BetaMessage,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     if (!responseObject) {
       return null;
@@ -1555,22 +1555,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     this.logger.debug(`Found ${thinkingBlocks.length} thinking blocks`);
 
-    // If toolState is provided, update it with all thinking blocks
-    if (toolState && !toolState.reasoning.thinkingAdded) {
+    // If workspaceState is provided, update it with all thinking blocks
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
       // Store all thinking blocks for future reference
       if (
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
-        toolState.reasoning.thinkingBlocks = thinkingBlocks;
+        workspaceState.reasoning.thinkingBlocks = thinkingBlocks;
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
-        toolState.reasoning.thinkingAdded = true;
+        workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
-          `Added ${thinkingBlocks.length} thinking blocks to toolState`,
+          `Added ${thinkingBlocks.length} thinking blocks to workspaceState`,
         );
       } else {
         this.logger.debug(
-          `Skipping adding thinking blocks to toolState because of cut off message`,
+          `Skipping adding thinking blocks to workspaceState because of cut off message`,
         );
       }
     }
@@ -1596,19 +1596,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     name: string,
     call: ToolUseBlock,
     result: Record<string, unknown>,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
     if (
       this.capabilities.supportsReasoning &&
-      toolState?.reasoning.thinkingBlocks &&
-      toolState.reasoning.thinkingBlocks.length > 0
+      workspaceState?.reasoning.thinkingBlocks &&
+      workspaceState.reasoning.thinkingBlocks.length > 0
     ) {
       // Anthropic models expect thinking blocks before text
-      content.push(...toolState.reasoning.thinkingBlocks);
+      content.push(...workspaceState.reasoning.thinkingBlocks);
       // Clear cached thinking so the next response can store fresh blocks
-      toolState.resetReasoning();
+      workspaceState.resetReasoning();
     }
     if (text) {
       content.push({ type: 'text', text });

@@ -912,7 +912,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   addContinueMessageWithPrefill(
     _messages: any[],
     _stateRound: ConversationRoundState,
-    _toolState: AgentWorkspaceState,
+    _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
@@ -924,12 +924,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
   addContinueMessageWithoutPrefill(
     messages: any[],
     _stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     _agentConfig: AgentConfig,
   ): void {
     // Create continuation message with last K tokens
-    const prefillTokens = toolState.assembly.lastResponse.slice(-K_SLICE);
+    const prefillTokens = workspaceState.assembly.lastResponse.slice(-K_SLICE);
     const userMessageContinuation = createContinuationMessage(
       agentSetting.endTag,
       prefillTokens,
@@ -954,7 +954,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: any[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, any[]]> {
@@ -1031,17 +1031,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
       'Output file exists but no end tag found - continuing from file',
     );
     if (fileContent.includes(prefill)) {
-      toolState.assembly.updateAccumulatedOutput(fileContent);
+      workspaceState.assembly.updateAccumulatedOutput(fileContent);
     } else {
-      toolState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await flexibleFS.write(outputFile, toolState.assembly.accumulatedOutput);
+      workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
+      await flexibleFS.write(outputFile, workspaceState.assembly.accumulatedOutput);
     }
     const state = new ConversationRoundState(0);
-    toolState.assembly.lastResponse = toolState.assembly.accumulatedOutput;
+    workspaceState.assembly.lastResponse = workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
-      toolState,
+      workspaceState,
       agentSetting,
       agentConfig,
     );
@@ -1129,7 +1129,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models with prefill support',
@@ -1148,7 +1148,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         lastMessage.content = [
           {
             type: 'text',
-            text: toolState.assembly.accumulatedOutput,
+            text: workspaceState.assembly.accumulatedOutput,
           },
         ];
       }
@@ -1169,7 +1169,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     messages: any[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
     this.logger.debug(
       'Updating message content for OpenAI models without prefill support',
@@ -1209,7 +1209,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           secondLastMessage.content = [
             {
               type: 'text',
-              text: toolState.assembly.accumulatedOutput,
+              text: workspaceState.assembly.accumulatedOutput,
             },
           ];
         }
@@ -1229,7 +1229,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       );
       messages.push({
         role: 'assistant',
-        content: [{ type: 'text', text: toolState.assembly.accumulatedOutput }],
+        content: [{ type: 'text', text: workspaceState.assembly.accumulatedOutput }],
       });
     }
   }
@@ -1249,23 +1249,23 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /**
    * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
    * @param responseObject The response object from the OpenAI API
-   * @param toolState Optional toolState to update with thinking blocks
+   * @param workspaceState Optional workspaceState to update with thinking blocks
    * @returns Always returns null as OpenAI doesn't support thinking blocks
    */
   processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null {
     const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
     if (typeof reasoning !== 'string' || !reasoning.trim()) {
       return null;
     }
 
-    if (toolState && !toolState.reasoning.thinkingAdded) {
-      toolState.reasoning.thinkingBlocks = [
+    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+      workspaceState.reasoning.thinkingBlocks = [
         { type: 'thinking', thinking: reasoning },
       ];
-      toolState.reasoning.thinkingAdded = true;
+      workspaceState.reasoning.thinkingAdded = true;
     }
 
     this.logger.debug(
@@ -1364,7 +1364,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     name: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
     result: Record<string, unknown>,
-    _toolState?: AgentWorkspaceState,
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(id, name, call);
