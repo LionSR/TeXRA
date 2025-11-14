@@ -66,11 +66,23 @@ export function insertChronologically({
 
   const targetTime =
     timestamp instanceof Date ? timestamp.getTime() : timestamp;
+  const childExtractor = getChildTimestamp ?? defaultChildTimestamp;
+
+  const lastChild = container.lastElementChild;
+  if (!lastChild) {
+    container.appendChild(element);
+    return;
+  }
+
+  const lastChildTime = childExtractor(lastChild);
+  if (lastChildTime !== null && targetTime >= lastChildTime) {
+    container.appendChild(element);
+    return;
+  }
+
   const children = Array.from(container.children);
   for (const child of children) {
-    const childTime = getChildTimestamp
-      ? getChildTimestamp(child)
-      : defaultChildTimestamp(child);
+    const childTime = childExtractor(child);
     if (childTime !== null && targetTime < childTime) {
       container.insertBefore(element, child);
       return;
