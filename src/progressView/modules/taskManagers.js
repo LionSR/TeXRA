@@ -1,6 +1,9 @@
 // Local imports - progress view
 import { ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
-import { TaskGroupHeaderFormatter, LogEntryFormatter } from './formatters.js';
+import {
+  TaskGroupHeaderFormatter,
+  getSharedLogEntryFormatter,
+} from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { insertChronologically } from './utils.js';
@@ -469,8 +472,8 @@ export class TaskGroupDomManager {
  * Manages individual log entry DOM operations.
  */
 export class LogEntryManager {
-  constructor() {
-    this.entryFormatter = new LogEntryFormatter();
+  constructor(entryFormatter = getSharedLogEntryFormatter()) {
+    this.entryFormatter = entryFormatter;
   }
 
   /**
@@ -478,13 +481,16 @@ export class LogEntryManager {
    * @param {Object} logMessage - The log message to append
    * @returns {boolean} Whether the message was appended to a group
    */
-  append(logMessage) {
+  append(logMessage, formatOptions) {
     // If the message has a group ID, append it to the right group
     if (logMessage.groupId) {
       const groupContentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${logMessage.groupId}`;
       const groupContent = document.getElementById(groupContentId);
       if (groupContent) {
-        const logLineElement = this.entryFormatter.format(logMessage);
+        const logLineElement = this.entryFormatter.format(
+          logMessage,
+          formatOptions,
+        );
         if (!logLineElement) {
           console.debug(
             'LogEntryManager.append: formatter returned null for message',
@@ -519,23 +525,17 @@ export class LogEntryManager {
     if (existing) {
       // Preserve the expanded/collapsed state for thinking and scratchpad
       const wasOpen = existing.hasAttribute('open');
-      const newEl = this.entryFormatter.format(logMessage);
+      const shouldPreserveExpansion =
+        wasOpen &&
+        (logMessage.messageType === 'thinking' ||
+          logMessage.messageType === 'scratchpad');
+      const newEl = this.entryFormatter.format(
+        logMessage,
+        shouldPreserveExpansion ? { defaultOpen: true } : undefined,
+      );
       if (!newEl) {
         existing.remove();
         return true;
-      }
-
-      // Restore the expanded state if it was open
-      if (
-        wasOpen &&
-        (logMessage.messageType === 'thinking' ||
-          logMessage.messageType === 'scratchpad')
-      ) {
-        newEl.setAttribute('open', '');
-        const toggleIcon = newEl.querySelector('.toggle-icon');
-        if (toggleIcon) {
-          toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
-        }
       }
 
       existing.replaceWith(newEl);

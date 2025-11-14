@@ -1,6 +1,7 @@
 // Local imports - progress view
 import { COMMANDS, STATUS, ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
-import { progressViewDomHandler, LogEntryFormatter } from './domHandlers.js';
+import { progressViewDomHandler } from './domHandlers.js';
+import { getSharedLogEntryFormatter } from './formatters.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
 // Local imports - log state
@@ -38,7 +39,7 @@ function scrollToBottom(element) {
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
-    this._entryFormatter = new LogEntryFormatter();
+    this._entryFormatter = getSharedLogEntryFormatter();
     this._handlers = {
       ...createThemeHandlers(),
       ...this._createHandlers(),
@@ -346,20 +347,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleAppendLog(message) {
     if (message.stream === state.activeStream) {
       const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-      const addedToGroup = dom.logEntries.append(message.logMessage);
+      const shouldAutoExpand =
+        message.logMessage.messageType === 'thinking' ||
+        message.logMessage.messageType === 'scratchpad';
+      const formatOptions = shouldAutoExpand
+        ? { defaultOpen: true }
+        : undefined;
+      const addedToGroup = dom.logEntries.append(
+        message.logMessage,
+        formatOptions,
+      );
       if (!addedToGroup) {
-        const formatted = this._entryFormatter.format(message.logMessage);
-        if (formatted instanceof HTMLElement) {
-          // For thinking and scratchpad, auto-expand when live streaming
-          const messageType = message.logMessage.messageType;
-          if (messageType === 'thinking' || messageType === 'scratchpad') {
-            formatted.setAttribute('open', '');
-            const toggleIcon = formatted.querySelector('.toggle-icon');
-            if (toggleIcon) {
-              toggleIcon.className = 'codicon codicon-chevron-down toggle-icon';
-            }
-          }
-        }
+        const formatted = this._entryFormatter.format(
+          message.logMessage,
+          formatOptions,
+        );
         appendFormatted(logContent, formatted);
       }
       scrollToBottom(logContent);
@@ -372,21 +374,21 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const updated = dom.logEntries.update(message.logMessage);
       if (!updated) {
         // Fallback: append as new log with proper group placement
-        const addedToGroup = dom.logEntries.append(message.logMessage);
+        const shouldAutoExpand =
+          message.logMessage.messageType === 'thinking' ||
+          message.logMessage.messageType === 'scratchpad';
+        const formatOptions = shouldAutoExpand
+          ? { defaultOpen: true }
+          : undefined;
+        const addedToGroup = dom.logEntries.append(
+          message.logMessage,
+          formatOptions,
+        );
         if (!addedToGroup) {
-          const formatted = this._entryFormatter.format(message.logMessage);
-          if (formatted instanceof HTMLElement) {
-            // For thinking and scratchpad, auto-expand when live streaming
-            const messageType = message.logMessage.messageType;
-            if (messageType === 'thinking' || messageType === 'scratchpad') {
-              formatted.setAttribute('open', '');
-              const toggleIcon = formatted.querySelector('.toggle-icon');
-              if (toggleIcon) {
-                toggleIcon.className =
-                  'codicon codicon-chevron-down toggle-icon';
-              }
-            }
-          }
+          const formatted = this._entryFormatter.format(
+            message.logMessage,
+            formatOptions,
+          );
           appendFormatted(logContent, formatted);
         }
         scrollToBottom(logContent);

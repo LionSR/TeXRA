@@ -60,6 +60,55 @@ const TIME_FORMAT_OPTIONS = {
   hour12: false,
 };
 
+let cachedDateTimeFormatter = null;
+let cachedTimeFormatter = null;
+let dateTimeFormatterFailed = false;
+let timeFormatterFailed = false;
+
+function getSharedDateTimeFormatter() {
+  if (dateTimeFormatterFailed) {
+    return null;
+  }
+  if (!cachedDateTimeFormatter) {
+    try {
+      cachedDateTimeFormatter = new Intl.DateTimeFormat(
+        undefined,
+        DATETIME_FORMAT_OPTIONS,
+      );
+    } catch (error) {
+      dateTimeFormatterFailed = true;
+      cachedDateTimeFormatter = null;
+      return null;
+    }
+  }
+  return cachedDateTimeFormatter;
+}
+
+function getSharedTimeFormatter() {
+  if (timeFormatterFailed) {
+    return null;
+  }
+  if (!cachedTimeFormatter) {
+    try {
+      cachedTimeFormatter = new Intl.DateTimeFormat(
+        undefined,
+        TIME_FORMAT_OPTIONS,
+      );
+    } catch (error) {
+      timeFormatterFailed = true;
+      cachedTimeFormatter = null;
+      return null;
+    }
+  }
+  return cachedTimeFormatter;
+}
+
+function extractIsoParts(date) {
+  const isoTimestamp = date.toISOString();
+  const isoTimePart = isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+  return { isoTimestamp, isoTimePart };
+}
+
 const toYamlString = (value) => {
   if (typeof value === 'string') {
     return value;
@@ -82,17 +131,12 @@ export const TaskGroupLevel = {
   ROOT: {
     name: 'root',
     formatTime: (date) => {
-      try {
-        return new Intl.DateTimeFormat(
-          undefined,
-          DATETIME_FORMAT_OPTIONS,
-        ).format(date);
-      } catch (error) {
-        const isoTimestamp = date.toISOString();
-        const timePart =
-          isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
-        return `${isoTimestamp.split('T')[0]} ${timePart}`;
+      const formatter = getSharedDateTimeFormatter();
+      if (formatter) {
+        return formatter.format(date);
       }
+      const { isoTimestamp, isoTimePart } = extractIsoParts(date);
+      return `${isoTimestamp.split('T')[0]} ${isoTimePart}`;
     },
     showTitle: false,
     headerOrder: 'time-first', // time → bullet → usage
@@ -101,15 +145,11 @@ export const TaskGroupLevel = {
   NESTED: {
     name: 'nested',
     formatTime: (date) => {
-      try {
-        return new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS).format(
-          date,
-        );
-      } catch (error) {
-        return (
-          date.toISOString().split('T')[1]?.split('.')[0] ?? date.toISOString()
-        );
+      const formatter = getSharedTimeFormatter();
+      if (formatter) {
+        return formatter.format(date);
       }
+      return extractIsoParts(date).isoTimePart;
     },
     showTitle: true,
     headerOrder: 'usage-first', // usage → bullet → time
@@ -157,6 +197,7 @@ export class MessageTimestampExtractor {
 export class LogEntryFormatter {
   constructor() {
     this._initializeMarkdown();
+    this._formatters = this._createFormatterMap();
   }
 
   _initializeMarkdown() {
@@ -173,38 +214,91 @@ export class LogEntryFormatter {
       .use(highlight);
   }
 
+  _createFormatterMap() {
+    return Object.freeze({
+      thinking: (text, id, groupId, timestamp, options) =>
+        this._safeFormat(
+          () =>
+            this._formatBannerContent(
+              text,
+              'Thinking',
+              id,
+              groupId,
+              timestamp,
+              options,
+            ),
+          'thinking',
+        ),
+      scratchpad: (text, id, groupId, timestamp, options) =>
+        this._safeFormat(
+          () =>
+            this._formatBannerContent(
+              text,
+              'Scratchpad',
+              id,
+              groupId,
+              timestamp,
+              options,
+            ),
+          'scratchpad',
+        ),
+      toolUse: (text, data, id, groupId, timestamp) =>
+        this._safeFormat(
+          () => this._formatToolUse(text, data, id, groupId, timestamp),
+          'tool use',
+        ),
+      modelResponse: (params) =>
+        this._safeFormat(() => this._formatModelResponse(params), 'Assistant'),
+      fileList: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatFileList(text, data, id),
+          'file list',
+        ),
+      missingOutputs: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatMissingOutputs(text, data, id),
+          'missing outputs',
+        ),
+      latexdiff: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatLatexdiff(text, data, id),
+          'latexdiff',
+        ),
+      statistics: (text, data, id) =>
+        this._safeFormat(
+          () => this._formatStatistics(text, data, id),
+          'statistics',
+        ),
+      userMessage: (text, id, timestamp) =>
+        this._safeFormat(
+          () => this._formatUserMessage(text, id, timestamp),
+          'user message',
+        ),
+      progressStatus: (text, id, timestamp) =>
+        this._safeFormat(
+          () => this._formatProgressStatus(text, id, timestamp),
+          'progress status',
+        ),
+    });
+  }
+
   /**
    * Format timestamp consistently across all methods
    * @param {Date} date - Date object to format
    * @returns {{fullTimestamp: string, timeDisplay: string}} Formatted timestamps
    */
   _formatTimestamp(date) {
-    const isoTimestamp = date.toISOString();
+    const { isoTimestamp, isoTimePart } = extractIsoParts(date);
+    const timeFormatter = getSharedTimeFormatter();
+    const dateTimeFormatter = getSharedDateTimeFormatter();
 
-    try {
-      const timeDisplay = new Intl.DateTimeFormat(
-        undefined,
-        TIME_FORMAT_OPTIONS,
-      ).format(date);
-      const tooltipTimestamp = new Intl.DateTimeFormat(
-        undefined,
-        DATETIME_FORMAT_OPTIONS,
-      ).format(date);
-
-      return {
-        fullTimestamp: isoTimestamp,
-        timeDisplay,
-        tooltipTimestamp,
-      };
-    } catch (error) {
-      const timeDisplay =
-        isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
-      return {
-        fullTimestamp: isoTimestamp,
-        timeDisplay,
-        tooltipTimestamp: isoTimestamp,
-      };
-    }
+    return {
+      fullTimestamp: isoTimestamp,
+      timeDisplay: timeFormatter ? timeFormatter.format(date) : isoTimePart,
+      tooltipTimestamp: dateTimeFormatter
+        ? dateTimeFormatter.format(date)
+        : isoTimestamp,
+    };
   }
 
   /**
@@ -262,71 +356,6 @@ export class LogEntryFormatter {
   }
 
   /**
-   * Get the formatter for a specific message type
-   * @private
-   * @returns {Object} Map of message types to their formatters with error handling
-   */
-  _getFormatters() {
-    return {
-      thinking: (text, id, groupId, timestamp) =>
-        this._safeFormat(
-          () =>
-            this._formatBannerContent(text, 'Thinking', id, groupId, timestamp),
-          'thinking',
-        ),
-      scratchpad: (text, id, groupId, timestamp) =>
-        this._safeFormat(
-          () =>
-            this._formatBannerContent(
-              text,
-              'Scratchpad',
-              id,
-              groupId,
-              timestamp,
-            ),
-          'scratchpad',
-        ),
-      toolUse: (text, data, id, groupId, timestamp) =>
-        this._safeFormat(
-          () => this._formatToolUse(text, data, id, groupId, timestamp),
-          'tool use',
-        ),
-      modelResponse: (params) =>
-        this._safeFormat(() => this._formatModelResponse(params), 'Assistant'),
-      fileList: (text, data, id) =>
-        this._safeFormat(
-          () => this._formatFileList(text, data, id),
-          'file list',
-        ),
-      missingOutputs: (text, data, id) =>
-        this._safeFormat(
-          () => this._formatMissingOutputs(text, data, id),
-          'missing outputs',
-        ),
-      latexdiff: (text, data, id) =>
-        this._safeFormat(
-          () => this._formatLatexdiff(text, data, id),
-          'latexdiff',
-        ),
-      statistics: (text, data, id) =>
-        this._safeFormat(
-          () => this._formatStatistics(text, data, id),
-          'statistics',
-        ),
-      userMessage: (text, id, timestamp) =>
-        this._safeFormat(
-          () => this._formatUserMessage(text, id, timestamp),
-          'user message',
-        ),
-      progressStatus: (text, id, timestamp) =>
-        this._safeFormat(
-          () => this._formatProgressStatus(text, id, timestamp),
-          'progress status',
-        ),
-    };
-  }
-
-  /**
    * Safely execute a formatting function with error handling
    * @private
    * @param {Function} formatter - The formatting function to execute
@@ -354,7 +383,7 @@ export class LogEntryFormatter {
    * DO NOT convert this to use templates unless you have a solution for the
    * whitespace formatting issue.
    */
-  format(logMessage) {
+  format(logMessage, options = {}) {
     const { id, text, level, timestamp, groupId, messageType, verbose, data } =
       logMessage;
 
@@ -364,8 +393,7 @@ export class LogEntryFormatter {
       this._formatTimestamp(date);
 
     // Check if we have a custom formatter for this message type
-    const formatters = this._getFormatters();
-    const formatter = formatters[messageType];
+    const formatter = this._formatters[messageType];
 
     if (formatter) {
       let result;
@@ -382,7 +410,7 @@ export class LogEntryFormatter {
       } else if (messageType === 'thinking' || messageType === 'scratchpad') {
         // Pass identifiers so the formatter can apply grouping metadata
         // Note: timestamp here is numeric (from Date.now())
-        result = formatter(text, id, groupId, timestamp);
+        result = formatter(text, id, groupId, timestamp, options);
       } else if (messageType === 'toolUse') {
         // Tool use needs both the rendered text and the structured payload
         result = formatter(text, data, id, groupId, timestamp);
@@ -431,7 +459,14 @@ export class LogEntryFormatter {
     return wrapper.firstElementChild;
   }
 
-  _formatBannerContent(content, contentType, logId, groupId, timestamp) {
+  _formatBannerContent(
+    content,
+    contentType,
+    logId,
+    groupId,
+    timestamp,
+    options = {},
+  ) {
     if (!content || !content.trim()) return null;
     const decodedContent = decodeHtml(content);
     if (!decodedContent.trim()) {
@@ -440,6 +475,7 @@ export class LogEntryFormatter {
 
     const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
     const isThinking = contentType.includes('Thinking');
+    const shouldOpen = options?.defaultOpen === true;
     const bannerEntry = this._createBannerEntry({
       logId,
       groupId,
@@ -450,7 +486,7 @@ export class LogEntryFormatter {
       contentClass: isThinking
         ? 'banner-content--thinking'
         : 'banner-content--scratchpad',
-      open: false,
+      open: shouldOpen,
     });
 
     if (!bannerEntry || !bannerEntry.contentElem) {
@@ -1256,6 +1292,15 @@ export class LogEntryFormatter {
 
     return element;
   }
+}
+
+let sharedLogEntryFormatterInstance = null;
+
+export function getSharedLogEntryFormatter() {
+  if (!sharedLogEntryFormatterInstance) {
+    sharedLogEntryFormatterInstance = new LogEntryFormatter();
+  }
+  return sharedLogEntryFormatterInstance;
 }
 
 /**

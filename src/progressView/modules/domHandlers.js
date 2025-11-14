@@ -1,5 +1,4 @@
 // Local imports - progress view
-import { LogEntryFormatter } from './formatters.js';
 // Local imports
 import { progressViewState } from './progressViewState.js';
 import { TaskGroupDomManager, LogEntryManager } from './taskManagers.js';
@@ -44,6 +43,3 @@ class ProgressViewDomHandler extends BaseDomHandler {
 }
 
 export const progressViewDomHandler = new ProgressViewDomHandler();
-
-// Export formatter classes for reuse
-export { LogEntryFormatter };

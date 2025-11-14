@@ -217,6 +217,84 @@ class StreamStatuses {
   }
 }
 
+class RunScopedStore {
+  constructor(resolveStreamId) {
+    this._resolveStreamId = resolveStreamId;
+    this._store = new Map();
+  }
+
+  _resolve(streamId) {
+    return this._resolveStreamId(streamId);
+  }
+
+  _getStreamMap(streamId, createIfMissing) {
+    const targetStream = this._resolve(streamId);
+    if (targetStream == null) {
+      return { targetStream: null, streamMap: null };
+    }
+
+    let streamMap = this._store.get(targetStream) || null;
+    if (!streamMap && createIfMissing) {
+      streamMap = new Map();
+      this._store.set(targetStream, streamMap);
+    }
+
+    return { targetStream, streamMap };
+  }
+
+  getStreamMap(streamId) {
+    return this._getStreamMap(streamId, false).streamMap;
+  }
+
+  set(streamId, runId, value) {
+    if (!runId) {
+      return;
+    }
+    const { streamMap } = this._getStreamMap(streamId, true);
+    if (streamMap) {
+      streamMap.set(runId, value);
+    }
+  }
+
+  get(streamId, runId) {
+    if (!runId) {
+      return null;
+    }
+    const { streamMap } = this._getStreamMap(streamId, false);
+    if (!streamMap) {
+      return null;
+    }
+    return streamMap.get(runId) ?? null;
+  }
+
+  delete(streamId, runId) {
+    if (!runId) {
+      return;
+    }
+    const { targetStream, streamMap } = this._getStreamMap(streamId, false);
+    if (!streamMap) {
+      return;
+    }
+    streamMap.delete(runId);
+    if (streamMap.size === 0 && targetStream != null) {
+      this._store.delete(targetStream);
+    }
+  }
+
+  clear(streamId) {
+    if (streamId !== undefined && streamId !== null) {
+      const targetStream = this._resolve(streamId);
+      if (targetStream == null) {
+        return;
+      }
+      this._store.delete(targetStream);
+      return;
+    }
+
+    this._store.clear();
+  }
+}
+
 /**
  * Tracks whether a stream has an execution directory available.
  */
@@ -260,10 +338,11 @@ export class ProgressViewState {
     this.pendingInstructions = new Map();
 
     this.activeRunIds = new Map();
-    this.runInstructions = new Map();
-    this.runFiles = new Map();
-    this.runMissingOutputs = new Map();
-    this.runUsage = new Map();
+    const streamResolver = (streamId) => this._resolveStreamId(streamId);
+    this.runInstructions = new RunScopedStore(streamResolver);
+    this.runFiles = new RunScopedStore(streamResolver);
+    this.runMissingOutputs = new RunScopedStore(streamResolver);
+    this.runUsage = new RunScopedStore(streamResolver);
 
     // Initialize managers
     this.taskGroups = new TaskGroups();
@@ -282,20 +361,6 @@ export class ProgressViewState {
     }
 
     return null;
-  }
-
-  _getStreamMap(container, streamId, createIfMissing = false) {
-    const targetStream = this._resolveStreamId(streamId);
-    if (targetStream == null) {
-      return null;
-    }
-
-    let streamMap = container.get(targetStream) || null;
-    if (!streamMap && createIfMissing) {
-      streamMap = new Map();
-      container.set(targetStream, streamMap);
-    }
-    return streamMap;
   }
 
   setExecutionIdAvailable(stream, hasExecutionId) {
@@ -398,7 +463,7 @@ export class ProgressViewState {
   _collectRunCandidates(streamId) {
     const candidates = new Set();
 
-    const instructionRuns = this.runInstructions.get(streamId);
+    const instructionRuns = this.runInstructions.getStreamMap(streamId);
     if (instructionRuns) {
       for (const runId of instructionRuns.keys()) {
         if (runId) {
@@ -407,7 +472,7 @@ export class ProgressViewState {
       }
     }
 
-    const fileRuns = this.runFiles.get(streamId);
+    const fileRuns = this.runFiles.getStreamMap(streamId);
     if (fileRuns) {
       for (const runId of fileRuns.keys()) {
         if (runId) {
@@ -416,7 +481,7 @@ export class ProgressViewState {
       }
     }
 
-    const missingRuns = this.runMissingOutputs.get(streamId);
+    const missingRuns = this.runMissingOutputs.getStreamMap(streamId);
     if (missingRuns) {
       for (const runId of missingRuns.keys()) {
         if (runId) {
@@ -425,7 +490,7 @@ export class ProgressViewState {
       }
     }
 
-    const usageRuns = this.runUsage.get(streamId);
+    const usageRuns = this.runUsage.getStreamMap(streamId);
     if (usageRuns) {
       for (const runId of usageRuns.keys()) {
         if (runId) {
@@ -454,7 +519,7 @@ export class ProgressViewState {
     }
 
     if (rootGroups.length === 0) {
-      const usageRuns = this.runUsage.get(streamId);
+      const usageRuns = this.runUsage.getStreamMap(streamId);
       if (usageRuns && usageRuns.size > 0) {
         return Array.from(usageRuns.keys())[usageRuns.size - 1] || null;
       }
@@ -527,12 +592,7 @@ export class ProgressViewState {
       return;
     }
 
-    const streamMap = this._getStreamMap(
-      this.runInstructions,
-      targetStream,
-      true,
-    );
-    streamMap.set(runId, {
+    this.runInstructions.set(targetStream, runId, {
       text: text.trim(),
       metadata: instruction?.metadata,
     });
@@ -543,14 +603,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const streamMap = this.runInstructions.get(targetStream);
-    if (!streamMap) {
-      return;
-    }
-    streamMap.delete(runId);
-    if (streamMap.size === 0) {
-      this.runInstructions.delete(targetStream);
-    }
+    this.runInstructions.delete(targetStream, runId);
   }
 
   getRunInstruction(streamId, runId) {
@@ -558,11 +611,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return null;
     }
-    const streamMap = this.runInstructions.get(targetStream);
-    if (!streamMap) {
-      return null;
-    }
-    return streamMap.get(runId) || null;
+    return this.runInstructions.get(targetStream, runId);
   }
 
   clearRunInstructions(streamId) {
@@ -571,7 +620,7 @@ export class ProgressViewState {
       if (targetStream == null) {
         return;
       }
-      this.runInstructions.delete(targetStream);
+      this.runInstructions.clear(targetStream);
       this.clearPendingInstruction(targetStream);
       return;
     }
@@ -585,8 +634,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const streamMap = this._getStreamMap(this.runFiles, targetStream, true);
-    streamMap.set(runId, filesByRound || {});
+    this.runFiles.set(targetStream, runId, filesByRound || {});
   }
 
   getRunFiles(streamId, runId) {
@@ -594,24 +642,11 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return null;
     }
-    const streamMap = this.runFiles.get(targetStream);
-    if (!streamMap) {
-      return null;
-    }
-    return streamMap.get(runId) || null;
+    return this.runFiles.get(targetStream, runId);
   }
 
   clearRunFiles(streamId) {
-    if (streamId !== undefined && streamId !== null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream == null) {
-        return;
-      }
-      this.runFiles.delete(targetStream);
-      return;
-    }
-
-    this.runFiles.clear();
+    this.runFiles.clear(streamId);
   }
 
   deleteRunFiles(streamId, runId) {
@@ -619,14 +654,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const streamMap = this.runFiles.get(targetStream);
-    if (!streamMap) {
-      return;
-    }
-    streamMap.delete(runId);
-    if (streamMap.size === 0) {
-      this.runFiles.delete(targetStream);
-    }
+    this.runFiles.delete(targetStream, runId);
   }
 
   setRunMissingOutputs(streamId, runId, filesByRound) {
@@ -634,12 +662,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const streamMap = this._getStreamMap(
-      this.runMissingOutputs,
-      targetStream,
-      true,
-    );
-    streamMap.set(runId, filesByRound || {});
+    this.runMissingOutputs.set(targetStream, runId, filesByRound || {});
   }
 
   getRunMissingOutputs(streamId, runId) {
@@ -647,24 +670,11 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return null;
     }
-    const streamMap = this.runMissingOutputs.get(targetStream);
-    if (!streamMap) {
-      return null;
-    }
-    return streamMap.get(runId) || null;
+    return this.runMissingOutputs.get(targetStream, runId);
   }
 
   clearRunMissingOutputs(streamId) {
-    if (streamId !== undefined && streamId !== null) {
-      const targetStream = this._resolveStreamId(streamId);
-      if (targetStream == null) {
-        return;
-      }
-      this.runMissingOutputs.delete(targetStream);
-      return;
-    }
-
-    this.runMissingOutputs.clear();
+    this.runMissingOutputs.clear(streamId);
   }
 
   setRunUsage(streamId, runId, usage) {
@@ -685,8 +695,7 @@ export class ProgressViewState {
       this.clearRunUsage(targetStream, runId);
       return;
     }
-    const streamMap = this._getStreamMap(this.runUsage, targetStream, true);
-    streamMap.set(runId, normalized);
+    this.runUsage.set(targetStream, runId, normalized);
   }
 
   getRunUsage(streamId, runId) {
@@ -694,11 +703,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return null;
     }
-    const streamMap = this.runUsage.get(targetStream);
-    if (!streamMap) {
-      return null;
-    }
-    return streamMap.get(runId) || null;
+    return this.runUsage.get(targetStream, runId);
   }
 
   clearRunUsage(streamId, runId) {
@@ -707,14 +712,7 @@ export class ProgressViewState {
       if (targetStream == null) {
         return;
       }
-      const streamMap = this.runUsage.get(targetStream);
-      if (!streamMap) {
-        return;
-      }
-      streamMap.delete(runId);
-      if (streamMap.size === 0) {
-        this.runUsage.delete(targetStream);
-      }
+      this.runUsage.delete(targetStream, runId);
       return;
     }
 
@@ -723,7 +721,7 @@ export class ProgressViewState {
       if (targetStream == null) {
         return;
       }
-      this.runUsage.delete(targetStream);
+      this.runUsage.clear(targetStream);
       return;
     }
 
@@ -735,14 +733,7 @@ export class ProgressViewState {
     if (targetStream == null || !runId) {
       return;
     }
-    const streamMap = this.runMissingOutputs.get(targetStream);
-    if (!streamMap) {
-      return;
-    }
-    streamMap.delete(runId);
-    if (streamMap.size === 0) {
-      this.runMissingOutputs.delete(targetStream);
-    }
+    this.runMissingOutputs.delete(targetStream, runId);
   }
 }
 
