@@ -1,5 +1,8 @@
 // Local imports - replacement
-import { generateInvalidSectionEndingFixes, SECTION_TYPES } from '@replacement/helpers';
+import {
+  generateInvalidSectionEndingFixes,
+  SECTION_TYPES,
+} from '@replacement/helpers';
 import { ReplacementCategory } from '@replacement/types';
 
 export const LATEX_FORBIDDEN_REPLACEMENTS: ReplacementCategory = {

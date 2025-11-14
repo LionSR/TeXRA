@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 // Local imports - progress view
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { TaskGroup } from '@logger/LogTypes';
-import type { TaskGroupUpdatePayload, WebviewUpdater } from '@progressView/managers';
+import type {
+  TaskGroupUpdatePayload,
+  WebviewUpdater,
+} from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 

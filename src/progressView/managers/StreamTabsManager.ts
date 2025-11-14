@@ -1,4 +1,3 @@
-
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 

@@ -5,7 +5,11 @@ import * as path from 'path';
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentSetting, AgentPrompt, AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentPrompt,
+  AgentType,
+} from '@agent/core/AgentDataclass';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,

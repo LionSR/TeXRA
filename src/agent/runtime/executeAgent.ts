@@ -58,8 +58,6 @@ import {
   type AgentPathResolution,
 } from './AgentPathTypes';
 
-
-
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
 

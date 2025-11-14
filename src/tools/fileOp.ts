@@ -1,4 +1,3 @@
-
 // Local imports - core
 import { z } from 'zod';
 
@@ -19,9 +18,6 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 // Local imports - tools
-
-
-
 
 const FileOpInputSchema = z.object({
   command: z.enum(['read', 'write', 'append']),

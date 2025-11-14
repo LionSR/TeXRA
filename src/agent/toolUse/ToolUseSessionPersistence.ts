@@ -40,8 +40,6 @@ import {
 } from './ToolUseSnapshotTypes';
 import type { FollowUpQueue } from './FollowUpQueue';
 
-
-
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);
 
