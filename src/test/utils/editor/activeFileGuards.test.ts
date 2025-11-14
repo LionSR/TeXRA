@@ -15,7 +15,7 @@ import {
 let warningMessages: string[] = [];
 let errorMessages: string[] = [];
 
-suite('Active File Guards', () => {
+describe('Active File Guards', () => {
   let originalActiveTextEditor: vscode.TextEditor | undefined;
   let originalWorkspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
   let originalShowWarningMessage: typeof messageUtils.showWarningMessage;
@@ -54,7 +54,7 @@ suite('Active File Guards', () => {
     (messageUtils as any).showErrorMessage = originalShowErrorMessage;
   });
 
-  test('returns noEditor when there is no active editor', async () => {
+  it('returns noEditor when there is no active editor', async () => {
     const result = await getActiveEditorWithGuards({
       allowedExtensions: ['.tex'],
       resourceName: 'LaTeX',
@@ -65,7 +65,7 @@ suite('Active File Guards', () => {
     assert.ok(warningMessages[0].includes('No active editor found'));
   });
 
-  test('returns unsupportedExtension when active document does not match', async () => {
+  it('returns unsupportedExtension when active document does not match', async () => {
     const mockEditor = createEditor('/workspace/project/notes/sample.txt');
     (vscode.window as any).activeTextEditor = mockEditor;
 
@@ -79,7 +79,7 @@ suite('Active File Guards', () => {
     assert.ok(warningMessages[0].includes('LaTeX'));
   });
 
-  test('saves dirty document when requested and returns editor data', async () => {
+  it('saves dirty document when requested and returns editor data', async () => {
     const mockEditor = createEditor('/workspace/project/main.tex', true);
     (vscode.window as any).activeTextEditor = mockEditor;
 

@@ -12,14 +12,14 @@ import {
 import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
-suite('Tool edit approval gating', () => {
+describe('Tool edit approval gating', () => {
   let originalExists: typeof WorkspaceFS.exists;
   let originalRead: typeof WorkspaceFS.read;
   let originalWrite: typeof WorkspaceFS.write;
   let originalAppend: typeof WorkspaceFS.appendFile;
   let originalGetConfig: typeof configModule.getConfig;
 
-  setup(() => {
+  beforeEach(() => {
     originalExists = WorkspaceFS.exists;
     originalRead = WorkspaceFS.read;
     originalWrite = WorkspaceFS.write;
@@ -28,7 +28,7 @@ suite('Tool edit approval gating', () => {
     setToolEditApprovalSessionBypass(false);
   });
 
-  teardown(() => {
+  afterEach(() => {
     WorkspaceFS.exists = originalExists;
     WorkspaceFS.read = originalRead;
     WorkspaceFS.write = originalWrite;
@@ -39,7 +39,7 @@ suite('Tool edit approval gating', () => {
     setToolEditApprovalSessionBypass(false);
   });
 
-  test('write_file applies changes after approval', async () => {
+  it('write_file applies changes after approval', async () => {
     const tool = new WriteFileTool();
     let capturedRequest: ToolEditApprovalRequest | undefined;
     let writtenContent: string | undefined;
@@ -65,7 +65,7 @@ suite('Tool edit approval gating', () => {
     assert.strictEqual(result.output, 'written');
   });
 
-  test('file_op append aborts when change is rejected', async () => {
+  it('file_op append aborts when change is rejected', async () => {
     const tool = new FileOpTool();
     let appendCalled = false;
 
@@ -91,7 +91,7 @@ suite('Tool edit approval gating', () => {
     assert.strictEqual(result.error, 'Rejected by user');
   });
 
-  test('write_file skips approval when disabled via config', async () => {
+  it('write_file skips approval when disabled via config', async () => {
     const tool = new WriteFileTool();
     let handlerCalled = false;
     let writtenContent: string | undefined;
@@ -124,7 +124,7 @@ suite('Tool edit approval gating', () => {
     assert.strictEqual(result.output, 'written');
   });
 
-  test('session bypass auto-approves pending requests', async () => {
+  it('session bypass auto-approves pending requests', async () => {
     const tool = new WriteFileTool();
     let handlerCalled = false;
     let writtenContent: string | undefined;
