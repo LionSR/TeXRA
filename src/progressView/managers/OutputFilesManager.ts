@@ -19,7 +19,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import {
   OutputFileInfoListSchema,
-  OutputFileInfoSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
 
@@ -35,19 +34,13 @@ export class OutputFilesManager extends PersistentMapManager<
     StreamTabId,
     Map<string, Map<number, string[]>>
   > = new Map();
+  private missingOutputsLoaded = false;
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
     super(WorkspaceStateKey.OUTPUT_FILES, storage);
     this.logger = new AgentLogger('OutputFilesManager');
   }
-
-  private readonly parseOutputInfo = (
-    value: unknown,
-  ): OutputFileInfo | null => {
-    const result = OutputFileInfoSchema.safeParse(value);
-    return result.success ? result.data : null;
-  };
 
   private readonly parseStringValue = (value: unknown): string | null =>
     typeof value === 'string' ? value : null;
@@ -102,6 +95,7 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: string[] },
     options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
+    this.ensureMissingOutputsLoaded();
     const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamMissing = this._missingOutputs.get(stream);
@@ -150,12 +144,14 @@ export class OutputFilesManager extends PersistentMapManager<
       return undefined;
     }
 
-    return new Map(
-      Array.from(target.entries(), ([round, infos]) => [
-        round,
-        OutputFileInfoListSchema.parse(infos),
-      ]),
-    );
+    const entries: [number, OutputFileInfo[]][] = [];
+    for (const [round, infos] of target.entries()) {
+      if (Array.isArray(infos)) {
+        entries.push([round, infos]);
+      }
+    }
+
+    return new Map(entries);
   }
 
   getRunByExecution(
@@ -348,6 +344,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Get missing outputs for a stream */
   getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
+    this.ensureMissingOutputsLoaded();
     const missing = this._missingOutputs.get(stream);
     return missing ? new Map(missing) : new Map();
   }
@@ -379,6 +376,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Clear missing outputs for a stream */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
+    this.ensureMissingOutputsLoaded();
     if (!this._missingOutputs.delete(stream)) {
       return;
     }
@@ -389,6 +387,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
   ): Promise<void> {
+    this.ensureMissingOutputsLoaded();
     const runId = normalizeRunId(groupId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
@@ -408,6 +407,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Delete all files for a stream */
   async deleteStream(stream: StreamTabId): Promise<void> {
     await super.delete(stream);
+    this.ensureMissingOutputsLoaded();
     this._missingOutputs.delete(stream);
     await this.saveMissingOutputs();
   }
@@ -415,6 +415,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Clear all output files */
   async clear(): Promise<void> {
     await super.clear();
+    this.ensureMissingOutputsLoaded();
     this._missingOutputs.clear();
     await this.saveMissingOutputs();
   }
@@ -426,6 +427,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Get all missing outputs */
   getAllMissingOutputs(): Map<StreamTabId, Map<string, Map<number, string[]>>> {
+    this.ensureMissingOutputsLoaded();
     return new Map(this._missingOutputs);
   }
 
@@ -441,12 +443,12 @@ export class OutputFilesManager extends PersistentMapManager<
     missing: Map<StreamTabId, Map<string, Map<number, string[]>>>,
   ): void {
     this._missingOutputs = new Map(missing);
+    this.missingOutputsLoaded = true;
   }
 
   /** Load output files from persistence and clean up missing files */
   async load(): Promise<void> {
     await super.load();
-    await this.loadMissingOutputs();
   }
 
   /** Load missing outputs from persistence */
@@ -465,6 +467,16 @@ export class OutputFilesManager extends PersistentMapManager<
     if (!migrated) {
       this._missingOutputs.clear();
     }
+  }
+
+  private ensureMissingOutputsLoaded(): void {
+    if (this.missingOutputsLoaded) {
+      return;
+    }
+    this.missingOutputsLoaded = true;
+    void this.loadMissingOutputs().catch((error) => {
+      this.logger.error('Failed to load missing outputs', error);
+    });
   }
 
   /** Save missing outputs to persistence */
@@ -565,7 +577,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   private deserializeRoundMap<T>(
     record: Record<string, unknown>,
-    parser: (value: unknown) => T | null,
+    parser?: (value: unknown) => T | null,
   ): Map<number, T[]> {
     const roundMap = new Map<number, T[]>();
 
@@ -576,6 +588,11 @@ export class OutputFilesManager extends PersistentMapManager<
         continue;
       }
       if (!Array.isArray(value)) {
+        continue;
+      }
+
+      if (!parser) {
+        roundMap.set(round, value as T[]);
         continue;
       }
 
@@ -621,10 +638,7 @@ export class OutputFilesManager extends PersistentMapManager<
     const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
 
     if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(
-        record,
-        this.parseOutputInfo,
-      );
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(record);
       if (rounds.size > 0) {
         runMap.set(normalizeRunId(null), rounds);
       }
@@ -638,7 +652,6 @@ export class OutputFilesManager extends PersistentMapManager<
 
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         value as Record<string, unknown>,
-        this.parseOutputInfo,
       );
       if (rounds.size > 0) {
         runMap.set(runId, rounds);
