@@ -3,15 +3,6 @@ import { ELEMENT_IDS } from '../constants.js';
 // Local imports - shared helpers
 import { safeGetElementById } from '@common/domUtils.js';
 
-const RUN_LABEL_DATETIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
-
 /**
  * Manages the run selector dropdown in the progress view header.
  */
@@ -24,89 +15,33 @@ export class RunSelector {
     this._changeHandler = this._handleChange.bind(this);
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
-    this._domReady = document.readyState !== 'loading';
-    this._initScheduled = false;
-
-    if (this._domReady) {
-      this._scheduleInitialize();
-    } else {
-      document.addEventListener(
-        'DOMContentLoaded',
-        () => {
-          this._domReady = true;
-          this.initialize();
-        },
-        { once: true },
-      );
-    }
+    this._labelFormatter = null;
+    this._domReadyListenerRegistered = false;
+    this._domReadyHandler = () => {
+      this._domReadyListenerRegistered = false;
+      this._initializeDomElements();
+      this._syncVisibility();
+    };
   }
 
-  initialize() {
-    if (!this._domReady) {
-      this._initScheduled = false;
-      return;
-    }
-
-    this._initScheduled = false;
-    this._initializeDropdown();
-    this._syncVisibility();
-  }
-
-  _scheduleInitialize() {
-    if (this._initScheduled) {
-      return;
-    }
-
-    if (!this._domReady) {
-      return;
-    }
-
-    this._initScheduled = true;
-    queueMicrotask(() => {
-      if (!this._domReady) {
-        this._initScheduled = false;
-        return;
-      }
-      this.initialize();
-    });
-  }
-
-  _initializeDropdown() {
-    if (!this._domReady) {
-      return;
-    }
-
-    if (this._dropdown) {
-      this._dropdown.removeEventListener('change', this._changeHandler);
-      this._dropdown = null;
-    }
-
-    const container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
-    if (container) {
-      this._container = container;
-    }
-    const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
-    if (!dropdown) {
-      return;
-    }
-
-    dropdown.addEventListener('change', this._changeHandler);
-    this._dropdown = dropdown;
-    this._renderOptions();
-    this._applyActiveValue();
-  }
-
-  _ensureDropdown() {
+  ensureInitialized() {
     if (this._dropdown) {
       return true;
     }
 
-    if (!this._domReady) {
-      this._scheduleInitialize();
+    if (document.readyState === 'loading') {
+      if (!this._domReadyListenerRegistered) {
+        document.addEventListener(
+          'DOMContentLoaded',
+          this._domReadyHandler,
+          { once: true },
+        );
+        this._domReadyListenerRegistered = true;
+      }
       return false;
     }
 
-    this._initializeDropdown();
+    this._initializeDomElements();
     return Boolean(this._dropdown);
   }
 
@@ -142,7 +77,8 @@ export class RunSelector {
       startTime: group.startTime,
     });
 
-    if (this._ensureDropdown()) {
+    const isInitialized = this.ensureInitialized();
+    if (isInitialized) {
       this._renderOptions();
       this._applyActiveValue();
     }
@@ -162,7 +98,8 @@ export class RunSelector {
       }
     });
 
-    if (this._ensureDropdown()) {
+    const isInitialized = this.ensureInitialized();
+    if (isInitialized) {
       this._renderOptions();
       this._applyActiveValue();
     }
@@ -172,7 +109,7 @@ export class RunSelector {
 
   setActiveRun(groupId) {
     this._pendingActiveId = groupId || null;
-    if (this._ensureDropdown()) {
+    if (this.ensureInitialized()) {
       this._applyActiveValue();
     }
   }
@@ -194,7 +131,7 @@ export class RunSelector {
       this._pendingActiveId = null;
     }
 
-    if (this._ensureDropdown()) {
+    if (this.ensureInitialized()) {
       this._renderOptions();
       this._applyActiveValue();
     }
@@ -206,12 +143,36 @@ export class RunSelector {
     this._runs.clear();
     this._pendingActiveId = null;
 
-    if (this._dropdown) {
+    if (this.ensureInitialized() && this._dropdown) {
       this._dropdown.innerHTML = '';
       this._dropdown.value = '';
     }
 
     this._syncVisibility();
+  }
+
+  _initializeDomElements() {
+    const container = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR_CONTAINER);
+    if (container) {
+      this._container = container;
+    }
+
+    const dropdown = safeGetElementById(ELEMENT_IDS.RUN_SELECTOR);
+    if (!dropdown) {
+      return;
+    }
+
+    if (this._dropdown && this._dropdown !== dropdown) {
+      this._dropdown.removeEventListener('change', this._changeHandler);
+    }
+
+    if (this._dropdown !== dropdown) {
+      dropdown.addEventListener('change', this._changeHandler);
+    }
+
+    this._dropdown = dropdown;
+    this._renderOptions();
+    this._applyActiveValue();
   }
 
   _renderOptions() {
@@ -294,17 +255,15 @@ export class RunSelector {
       return '';
     }
 
-    return RUN_LABEL_DATETIME_FORMATTER.format(date);
+    return this.getLabelFormatter().format(date);
   }
 
   _syncVisibility() {
     const hasRuns = this._runs.size > 0 && this._isDisplayEnabled;
 
-    if (hasRuns) {
-      this._ensureDropdown();
-    }
+    const isInitialized = this.ensureInitialized();
 
-    if (!this._container && this._domReady) {
+    if (!this._container && isInitialized) {
       const containerElem = safeGetElementById(
         ELEMENT_IDS.RUN_SELECTOR_CONTAINER,
       );
@@ -336,12 +295,31 @@ export class RunSelector {
     if (this._dropdown) {
       this._dropdown.removeEventListener('change', this._changeHandler);
     }
+    if (this._domReadyListenerRegistered) {
+      document.removeEventListener('DOMContentLoaded', this._domReadyHandler);
+      this._domReadyListenerRegistered = false;
+    }
     this._dropdown = null;
     this._container = null;
     this._runs.clear();
     this._onDidChange = null;
     this._pendingActiveId = null;
     this._isDisplayEnabled = true;
-    this._initScheduled = false;
+    this._labelFormatter = null;
+  }
+
+  getLabelFormatter() {
+    if (!this._labelFormatter) {
+      this._labelFormatter = new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    }
+
+    return this._labelFormatter;
   }
 }
