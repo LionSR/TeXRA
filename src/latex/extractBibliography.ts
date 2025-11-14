@@ -8,7 +8,7 @@ import { BibEntry, parseBibFile } from 'bibtex';
 import { WorkspaceFS } from '@utils/files';
 
 const DIRECTIVE_PATTERN_SOURCE =
-  '\\(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}';
+  '(?:bibliography|addbibresource)(?:\\s*\\[[^\\]]*\\])?\\s*\\{([^}]*)\\}';
 const CITE_COMMANDS = [
   'cite',
   'citet',
@@ -31,7 +31,7 @@ function createDirectivePattern(): RegExp {
 
 function createCitationPattern(): RegExp {
   return new RegExp(
-    `\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
+    `\\\\(?:${CITE_COMMANDS.join('|')})\\*?(?:\\[[^\\]]*\\])*\{([^}]*)\}`,
     'g',
   );
 }
@@ -197,7 +197,9 @@ function parseBibEntries(content: string): Map<string, string> {
   const entries = new Map<string, string>();
 
   for (const rawEntry of library.entries_raw) {
-    const formatted = formatBibEntry(rawEntry, library.entries$[rawEntry._id]);
+    const processedEntry =
+      rawEntry._id !== undefined ? library.entries$[rawEntry._id] : undefined;
+    const formatted = formatBibEntry(rawEntry, processedEntry);
     const key = rawEntry._id?.trim();
 
     if (!key || !formatted || entries.has(key)) {
