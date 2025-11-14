@@ -8,8 +8,8 @@ import * as vscode from 'vscode';
 import {
   PersistentMapManager,
   type StateStorage,
-} from '../persistence/PersistentMapManager';
-import { normalizeRunId } from '../constants/runIds';
+} from '@progressView/persistence/PersistentMapManager';
+import { normalizeRunId } from '@progressView/constants/runIds';
 
 // Local imports
 import { WorkspaceStateKey } from '@common/state/stateManager';

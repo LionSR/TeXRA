@@ -2,9 +2,11 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
+import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import texraImportRules from './eslint-rules/import-group-comment.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +32,8 @@ export default tseslint.config(
     },
     plugins: {
       '@stylistic': stylistic,
+      import: importPlugin,
+      'texra-imports': texraImportRules,
     },
     rules: {
       // --- Migrated rules from .eslintrc.json ---
@@ -45,6 +49,44 @@ export default tseslint.config(
       curly: 'off',
       eqeqeq: 'warn',
       'no-throw-literal': 'warn',
+      'import/order': [
+        'warn',
+        {
+          groups: [
+            'builtin',
+            'external',
+            'internal',
+            ['parent', 'sibling', 'index', 'object'],
+            'type',
+          ],
+          pathGroups: [
+            {
+              pattern:
+                '@{agent,common,frontend,historyView,logger,model,progressView,replacement,tools,utils,eventBus}/*',
+              group: 'internal',
+              position: 'after',
+            },
+            {
+              pattern: '@{agent,common,frontend,historyView,logger,model,progressView,replacement,tools,utils,eventBus}/**',
+              group: 'internal',
+              position: 'after',
+            },
+            {
+              pattern: '@/**',
+              group: 'internal',
+              position: 'after',
+            },
+            {
+              pattern: '~/**',
+              group: 'internal',
+              position: 'after',
+            },
+          ],
+          pathGroupsExcludedImportTypes: ['builtin'],
+          'newlines-between': 'always',
+        },
+      ],
+      'texra-imports/import-group-comment': 'warn',
 
       // --- Adjustments for ESLint v9 ---
 

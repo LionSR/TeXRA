@@ -1,13 +1,13 @@
 // Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentPrompt, AgentSetting, AgentType } from '../core/AgentDataclass';
-import { AgentRunState } from '../core/AgentState';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
-import { runToolUseCycle } from '../core/ToolUseCycle';
-import type { ToolUseCycleOptions } from '../core/ToolUseCycle';
-import type { IModelHandler } from '../modelHandlers';
-import type { ProviderMessage } from '../modelHandlers/types/ProviderMessage';
-import { buildInitialToolUsePrompts } from '../utils/PromptBuilder';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentPrompt, AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { runToolUseCycle } from '@agent/core/ToolUseCycle';
+import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { IModelHandler } from '@agent/modelHandlers';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { buildInitialToolUsePrompts } from '@agent/utils/PromptBuilder';
 // Base class for tool-use agents
 
 // Standard library imports

@@ -2,7 +2,7 @@
 import {
   PersistentMapManager,
   type StateStorage,
-} from '../persistence/PersistentMapManager';
+} from '@progressView/persistence/PersistentMapManager';
 
 // Local imports - shared state and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';

@@ -2,8 +2,9 @@
 import {
   PersistentMapManager,
   type StateStorage,
-} from '../persistence/PersistentMapManager';
-import { normalizeRunId } from '../constants/runIds';
+} from '@progressView/persistence/PersistentMapManager';
+// Local imports - identifiers
+import { normalizeRunId } from '@progressView/constants/runIds';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Types

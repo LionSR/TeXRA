@@ -8,7 +8,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { BaseToolUseAgent } from '../BaseToolUseAgent';
+import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
 import type {

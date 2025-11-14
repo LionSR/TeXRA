@@ -2,10 +2,10 @@
 import { FinishReason } from '@google/genai';
 
 // Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentType, hasEndTag } from '../core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '../core/AgentState';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentType, hasEndTag } from '@agent/core/AgentDataclass';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { IModelHandler } from './types/IModelHandler';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -14,8 +14,11 @@ import {
   OPENAI_CHAT_FINISH,
   MCP_STOP,
 } from './types/StopReasonTypes';
+// Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+
+// Local imports - frontend
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 // Local imports - log

@@ -1,9 +1,9 @@
 // Local imports - agent components
-import type { AgentConfig } from '../../core/AgentConfig';
-import { AgentSetting, AgentType } from '../../core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '../../core/AgentState';
-import { AgentWorkspaceState } from '../../core/AgentWorkspaceState';
-import type { MediaEntry } from '../../utils/mediaTypes';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - provider types
 import type { ProviderMessage } from './ProviderMessage';

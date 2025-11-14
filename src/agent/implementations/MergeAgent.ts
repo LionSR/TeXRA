@@ -2,9 +2,9 @@
 import * as path from 'path';
 
 // Local imports - agent
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, AgentPrompt } from '../core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '../core/AgentState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { RoundOutputOptions } from './BaseReflectionAgent';
 
 // Local imports - agent components

@@ -8,13 +8,13 @@ import {
   OutputFilesManager,
   UsageStatsManager,
   RunInstructionManager,
-} from '../managers';
-import { normalizeRunId } from '../constants/runIds';
-import type { StateStorage } from '../persistence/PersistentMapManager';
+} from '@progressView/managers';
+import { normalizeRunId } from '@progressView/constants/runIds';
+import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import type { AgentFilter } from '../types';
+import type { AgentFilter } from '@progressView/types';
 // Local imports - agent types
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
