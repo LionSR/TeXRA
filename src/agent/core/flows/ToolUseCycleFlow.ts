@@ -3,45 +3,34 @@ import { z } from 'zod';
 
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-
-// Local imports - flow constants
-import { FlowTransition } from './FlowTransitions';
-
-// Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
+// Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-
-// Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+// Internal imports
+import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
+// Type imports
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
+// Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
+// Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-
-// Local imports - logging
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - tools
-import { ToolResult, toolResult } from '@tools/result';
-import type { ToolDefinition } from '@model';
-import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
-
-// Local imports - error utilities
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Local imports - filesystem utilities
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+// Type imports
+import type { ToolDefinition } from '@model';
+// Internal imports
+import { ToolResult, toolResult } from '@tools/result';
+import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
-
-// Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
 
-// Local imports - usage helpers
-import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
-
-// Local imports - identifier types
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+// Local file imports
+import { FlowTransition } from './FlowTransitions';
 
 interface DebugContext {
   logger: ToolUseCycleOptions['logger'];

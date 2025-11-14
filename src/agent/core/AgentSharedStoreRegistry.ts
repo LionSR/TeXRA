@@ -1,7 +1,11 @@
 // Local imports - agent state
-import type { AgentSharedStore } from './AgentSharedStore';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Local file imports
 import { StreamExecutionIndex } from './StreamExecutionIndex';
+
+// Type imports
+import type { AgentSharedStore } from './AgentSharedStore';
 
 class SharedStoreRegistry {
   private readonly index = new StreamExecutionIndex<AgentSharedStore>();

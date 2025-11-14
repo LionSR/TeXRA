@@ -9,10 +9,10 @@ import * as yaml from 'yaml';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
-import * as logger from '@logger/logUtils';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
 import {
   getActiveEditorWithGuards,

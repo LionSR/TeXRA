@@ -1,24 +1,20 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-import { WebviewUpdater } from '../managers';
-
-import { STATUS } from '../modules/constants.js';
-
-// Local imports
-import { ProgressViewState } from '../state/ProgressViewState';
-import { buildStreamInfos } from '../streamInfoUtils';
+// Local imports - agent and usage types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-// Local imports - agent
+// Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-// Types
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger } from '@logger/AgentLogger';
+import { WebviewUpdater } from '@progressView/managers';
+import { buildStreamInfos } from '@progressView/streamInfoUtils';
+import { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { STATUS } from '@progressView/modules/constants.js';
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Local file imports
 import {
   createStreamStatusEvents,
   type StreamStatusEventModule,

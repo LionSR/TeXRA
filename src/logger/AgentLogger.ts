@@ -3,15 +3,19 @@ import { randomUUID } from 'crypto';
 import { encode as encodeHtml } from 'he';
 
 // Local imports - events
+import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+
+// Internal imports
+import { sleep } from '@utils/helpers';
+import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local imports - log
 import * as logger from './logUtils';
-import type { MessageType } from './messageTypes';
 import { MESSAGE_TYPES } from './messageTypes';
-import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
-import { sleep } from '@utils/helpers';
-import { SHORT_SLEEP_MS } from '@utils/config';
+
+// Type imports
+import type { MessageType } from './messageTypes';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;

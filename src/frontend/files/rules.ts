@@ -4,8 +4,6 @@ import * as path from 'path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 const CHANNEL = 'texraRulesUtils';

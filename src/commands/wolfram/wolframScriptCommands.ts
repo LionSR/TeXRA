@@ -1,19 +1,13 @@
 // Third-party imports
+import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - errors
 import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@common/errors/errorHandlingUtils';
-
-// Standard library imports
-import * as path from 'path';
-
-// Local imports
+import * as logger from '@logger/logUtils';
 import {
   executeWolframCode,
   executeWolframScriptFile,

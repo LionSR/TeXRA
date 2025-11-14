@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for Moonshot models
 const MOONSHOT_DEFAULT_CAPABILITIES: ModelCapabilities = {
