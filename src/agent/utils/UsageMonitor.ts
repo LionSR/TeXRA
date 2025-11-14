@@ -91,7 +91,8 @@ export class UsageMonitor {
         }),
       };
 
-      usageReporter.report(payload);
+      const runId = this.context.executionId ?? this.context.streamId;
+      usageReporter.report(payload, runId);
     } catch (error) {
       logger.error(`Error printing statistics: ${error}`);
     }
