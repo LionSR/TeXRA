@@ -55,6 +55,17 @@ export class RecordingManager {
   }
 
   async stop(webviewView: vscode.WebviewView): Promise<void> {
+    let stopAcknowledged = false;
+    const acknowledgeStop = () => {
+      if (stopAcknowledged) {
+        return;
+      }
+      stopAcknowledged = true;
+      webviewView.webview.postMessage({
+        command: this.commandConfig.recordingStoppedCommand,
+      });
+    };
+
     try {
       await vscode.window.withProgress(
         {
@@ -64,9 +75,7 @@ export class RecordingManager {
         },
         async () => {
           const transcriptionPromise = stopRecordingAndTranscribe(this.context);
-          webviewView.webview.postMessage({
-            command: this.commandConfig.recordingStoppedCommand,
-          });
+          acknowledgeStop();
           const result = await transcriptionPromise;
           if (result.success) {
             webviewView.webview.postMessage({
@@ -78,9 +87,6 @@ export class RecordingManager {
             webviewView.webview.postMessage({
               command: this.commandConfig.recordingErrorCommand,
               error: result.error,
-            });
-            webviewView.webview.postMessage({
-              command: this.commandConfig.recordingStoppedCommand,
             });
           }
         },
@@ -97,9 +103,7 @@ export class RecordingManager {
         command: this.commandConfig.recordingErrorCommand,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
-      webviewView.webview.postMessage({
-        command: this.commandConfig.recordingStoppedCommand,
-      });
+      acknowledgeStop();
     }
   }
 }
