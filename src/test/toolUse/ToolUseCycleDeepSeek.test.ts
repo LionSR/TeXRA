@@ -132,7 +132,7 @@ describe('runToolUseCycle DeepSeek', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -148,7 +148,7 @@ describe('runToolUseCycle DeepSeek', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'ds',
       context: new AgentExecutionContext({
         streamId: 'tool-use-stream' as StreamTabId,
@@ -157,7 +157,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
     const events: any[] = [];
@@ -249,7 +249,7 @@ describe('runToolUseCycle DeepSeek', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -265,7 +265,7 @@ describe('runToolUseCycle DeepSeek', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'ds',
       context: new AgentExecutionContext({
         streamId: 'tool-use-deepseek-empty' as StreamTabId,
@@ -274,7 +274,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
     const events: any[] = [];
@@ -349,7 +349,7 @@ describe('runToolUseCycle DeepSeek', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -365,7 +365,7 @@ describe('runToolUseCycle DeepSeek', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'ds',
       context: new AgentExecutionContext({
         streamId: 'tool-use-deepseek-args' as StreamTabId,
@@ -374,7 +374,7 @@ describe('runToolUseCycle DeepSeek', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
 

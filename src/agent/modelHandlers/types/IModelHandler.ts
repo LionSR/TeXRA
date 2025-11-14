@@ -114,7 +114,7 @@ export interface IModelHandler<
   addContinueMessageWithPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -123,7 +123,7 @@ export interface IModelHandler<
   addContinueMessageWithoutPrefill(
     messages: M[],
     stateRound: ConversationRoundState,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void;
@@ -133,7 +133,7 @@ export interface IModelHandler<
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
     messages: M[],
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, M[]]>;
@@ -149,7 +149,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void;
 
   /** Update messages when prefill is not supported. */
@@ -157,7 +157,7 @@ export interface IModelHandler<
     messages: M[],
     bestConnector: string,
     newResponse: string,
-    toolState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void;
 
   /** Determine whether generation should continue. */
@@ -182,7 +182,7 @@ export interface IModelHandler<
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
     responseObject: any,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
   ): string | null;
 
   /** Extract tool-use details from a provider response. */
@@ -203,7 +203,7 @@ export interface IModelHandler<
     name: string,
     call: T,
     result: Record<string, unknown>,
-    toolState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 
