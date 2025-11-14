@@ -1,13 +1,16 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
 // Local imports - latex helpers
-import * as bibliographyModule from '@latex/extractBibliography';
 
 // Local imports - tools
 import { ExtractBibliographyTool } from '@tools/latex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import * as bibliographyModule from '@latex/extractBibliography';
 
 suite('ExtractBibliographyTool', () => {
   const originalExists = WorkspaceFS.exists;

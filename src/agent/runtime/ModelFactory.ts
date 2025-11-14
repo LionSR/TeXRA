@@ -12,6 +12,8 @@ import {
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
 } from '@agent/modelHandlers';
+
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - logging

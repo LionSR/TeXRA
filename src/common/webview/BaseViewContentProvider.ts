@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { buildWebviewHtml } from '@frontend/webview/html';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 /** Descriptor for a webview module resource. */

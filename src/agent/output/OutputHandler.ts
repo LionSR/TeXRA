@@ -5,18 +5,6 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { DiffStatsManager } from './DiffStatsManager';
-import type { IOutputHandler } from './IOutputHandler';
-import { LatexDiffManager } from './LatexDiffManager';
-import {
-  OutputFileInfoSchema,
-  type NamedOutputFile,
-  type OutputFileInfo,
-  type OutputXmlSummary,
-  type RoundFileMapping,
-  type RoundOutputArtifacts,
-} from './types';
-import { XmlOutputManager } from './XmlOutputManager';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -28,13 +16,12 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 
 // Local imports - utilities
-import { runLatexFormatter } from '@latex/texFormatter';
-
 // Local imports - log
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -48,11 +35,35 @@ import {
 } from '@utils/files';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+
+// Internal imports
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
+import { runLatexFormatter } from '@latex/texFormatter';
+
+// Local file imports
+import { XmlOutputManager } from './XmlOutputManager';
+import {
+  OutputFileInfoSchema,
+  type NamedOutputFile,
+  type OutputFileInfo,
+  type OutputXmlSummary,
+  type RoundFileMapping,
+  type RoundOutputArtifacts,
+} from './types';
+import { LatexDiffManager } from './LatexDiffManager';
+import { DiffStatsManager } from './DiffStatsManager';
+
+// Type imports
+import type { IOutputHandler } from './IOutputHandler';
 
 // Local imports - types
 

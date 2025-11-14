@@ -8,10 +8,14 @@ import OpenAI from 'openai';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - agent components
+import type { ToolDefinition } from '@model';
+
+// Internal imports
+import { K_SLICE } from '@utils/config';
+
+// Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
-import type { ToolDefinition } from '@model';
-import { K_SLICE } from '@utils/config';
 
 /**
  * Handler for models accessed through OpenRouter.

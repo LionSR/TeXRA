@@ -5,20 +5,30 @@ import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - agent
-import { NamedOutputFile } from './types';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Internal imports
 import {
   applyReplacements,
   getReplacementsByCategory,
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
+
+// Internal imports
 import { flexibleFS, TaskRunFileService } from '@utils/files';
+
+// Internal imports
 import xmlUtils from '@utils/text/xmlUtils';
+
+// Local file imports
+import { NamedOutputFile } from './types';
 
 export class XmlOutputManager {
   constructor(

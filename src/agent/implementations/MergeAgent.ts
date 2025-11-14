@@ -2,15 +2,18 @@
 import * as path from 'path';
 
 // Local imports - agent
+import type { IModelHandler } from '@agent/modelHandlers';
+
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import { RoundOutputOptions } from './BaseReflectionAgent';
+import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
+// Local file imports
+import { RoundOutputOptions } from './BaseReflectionAgent';
 // Local imports - agent components
 import { DirectAgent } from './DirectAgent';
-import type { IModelHandler } from '@agent/modelHandlers';
-import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 /**
  * Specialized agent for merging multiple edited files into a consolidated output.

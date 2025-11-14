@@ -1,3 +1,4 @@
+// Type imports
 import type { Diagnostic } from 'vscode';
 import type { ZodIssue } from 'zod';
 

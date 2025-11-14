@@ -1,5 +1,7 @@
+// Node.js built-in imports
 import { strict as assert } from 'assert';
 
+// Internal imports
 import { wrapCritiqueInAlign } from '@replacement/advanced';
 
 describe('wrapCritiqueInAlign', () => {

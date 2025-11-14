@@ -8,9 +8,10 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Local imports - config
 import * as configModule from '@utils/config';
-
 // Local imports - filesystem
 import { WorkspaceFS, StorageFS } from '@utils/files';
+
+// Internal imports
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 describe('maybeSaveDebugObject', () => {

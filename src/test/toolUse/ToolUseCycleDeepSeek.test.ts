@@ -20,16 +20,28 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Internal imports
 import {
   ModelConfig,
   ModelProvider,
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
-import { BaseTool } from '@tools/core/base';
+
+// Internal imports
 import { ToolResult, toolResult } from '@tools/result';
+
+// Internal imports
+import { BaseTool } from '@tools/core/base';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Type imports
 import type OpenAI from 'openai';
 
 class EchoTool extends BaseTool<{ value: string }> {

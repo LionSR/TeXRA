@@ -1,16 +1,11 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 
-// Local imports - flow constants
-import { FlowTransition } from './FlowTransitions';
-
 // Local imports - agent components
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-
-// Local imports - model handler types
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - utilities
@@ -20,14 +15,13 @@ import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
-// Local imports - latex utilities
-import { bestConnectionMethod } from '@latex';
-
 // Local imports - logging
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 
-// Local imports - errors
+// Internal imports
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - replacement engine
 import replacementEngine from '@replacement/engine';
@@ -40,10 +34,10 @@ import { WorkspaceFS } from '@utils/files';
 
 // Local imports - text utilities
 import xmlUtils from '@utils/text/xmlUtils';
+import { bestConnectionMethod } from '@latex';
 
-// Local imports - identifier types
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+// Local file imports
+import { FlowTransition } from './FlowTransitions';
 
 interface DebugContext {
   logger: ResponseCycleOptions['logger'];

@@ -5,24 +5,36 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { ProgressViewProvider } from './ProgressViewProvider';
+import {
+  AgentTypeFilter,
+  isAgentTypeFilter,
+} from '@agent/types/AgentStreamTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
+import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+
+// Internal imports
 import {
   BaseViewMessageHandler,
   MessageHandler,
 } from '@common/webview/BaseViewMessageHandler';
 // Local imports - agent types
-import {
-  AgentTypeFilter,
-  isAgentTypeFilter,
-} from '@agent/types/AgentStreamTypes';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Internal imports
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,
   type TaskState,
 } from '@logger/TaskState';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
+
 // Local imports - storage
+import {
+  handleProgressViewToolEditApprovalAction,
+  resetToolEditApprovalSessionBypass,
+} from '@tools/approval/toolEditApproval';
+
+// Internal imports
 import {
   ensureRunDir,
   getRunDir,
@@ -30,19 +42,19 @@ import {
 } from '@utils/files/taskRunStorage';
 // Local imports - commands
 import { safeExecuteCommand } from '@utils/system/commandUtils';
-import { RecordingManager } from '@webview/managers/RecordingManager';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import {
-  handleProgressViewToolEditApprovalAction,
-  resetToolEditApprovalSessionBypass,
-} from '@tools/approval/toolEditApproval';
-import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+
+// Internal imports
+import { RecordingManager } from '@webview/managers/RecordingManager';
+
 
 // @ts-ignore - Import JavaScript module
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Type imports
+import type { ProgressViewProvider } from './ProgressViewProvider';
 
 interface FileCommandMessage {
   file: string;

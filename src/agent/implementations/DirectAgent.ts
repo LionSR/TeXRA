@@ -1,8 +1,11 @@
 // Local imports - agent
+import { getOutputFileName } from '@agent/output';
+
+// Internal imports
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+
 // Local imports - agent components
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
-import { getOutputFileName } from '@agent/output';
 
 /**
  * Direct agent implementation that processes requests in a single pass.

@@ -2,18 +2,23 @@
 import * as path from 'path';
 
 // Local imports - log
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { ToolConfig } from '@agent/core/ToolConfig';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - latex utils
+import { TaskRunFileService, flexibleFS } from '@utils/files';
+
+// Local file imports
 import { extractFigurePathsFromLatex } from './extractFigure';
 import { tikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
 import { getTeXCountStats } from './texcount';
 
 // Local imports - agent components
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { ToolConfig } from '@agent/core/ToolConfig';
-import { TaskRunFileService, flexibleFS } from '@utils/files';
+
 
 /**
  * Handles LaTeX related media extraction and compilation for agents.

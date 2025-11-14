@@ -1,23 +1,27 @@
 // Third-party imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-
-// Local imports - errors
 import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@common/errors/errorHandlingUtils';
 
-// Standard library imports
-import * as path from 'path';
+// Internal imports
+import * as logger from '@logger/logUtils';
 
+// Local imports - errors
+// Standard library imports
 // Local imports
 import {
   executeWolframCode,
   executeWolframScriptFile,
 } from '@tools/wolfram/wolframScriptUtils';
+
+// Internal imports
 import { checkToolInstalled } from '@utils/system';
 import { MAX_PREVIEW_LENGTH } from '@utils/config';
 

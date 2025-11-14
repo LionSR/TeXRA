@@ -1,8 +1,10 @@
 // Local imports - utilities
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 // Local imports - log
-import { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Reads a file and populates user variable fields with its path and content.

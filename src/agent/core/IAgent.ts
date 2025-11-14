@@ -1,11 +1,15 @@
 // Local imports - agent
-import type { AgentConfig } from './AgentConfig';
 // Local imports - agent components
-import type { AgentSessionDescriptor } from './AgentDataclass';
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+
+// Type imports
 import type { AgentLogStage } from '@logger/AgentLogger';
+
+// Type imports
+import type { AgentSessionDescriptor } from './AgentDataclass';
+import type { AgentConfig } from './AgentConfig';
 
 /**
  * Minimal interface implemented by all agent types.

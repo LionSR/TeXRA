@@ -2,12 +2,15 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
 
 // Local imports - Anthropic Tool
 import { TextEditorTool, ToolCallInput } from '@agent/toolUse';
 
+// Internal imports
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';

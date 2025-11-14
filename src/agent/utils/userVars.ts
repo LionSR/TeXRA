@@ -3,18 +3,24 @@
 import * as path from 'path';
 
 // Local imports - agent
+import type { IModelHandler } from '@agent/modelHandlers';
+
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt, AgentType } from '@agent/core/AgentDataclass';
-import type { IModelHandler } from '@agent/modelHandlers';
 import {
   getXmlFormatFromFiles,
   getListOfFiles,
 } from '@agent/utils/promptUtils';
+
+// Internal imports
 import { setVarFromFile } from '@frontend/files/vars';
 
 // Local imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Internal imports
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 

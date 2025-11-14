@@ -15,14 +15,23 @@ import {
   AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
-
 // Local imports - utils
-import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
-import { AbsoluteFS } from '@utils/files';
-import type { AgentPathResolution } from './AgentPathTypes';
-import { AgentDirectorySource } from './AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Type imports
+import type { ToolDefinition } from '@model';
+
+// Internal imports
+import { AbsoluteFS } from '@utils/files';
+
+// Local file imports
+import { AgentDirectorySource } from './AgentPathTypes';
+
+// Type imports
+import type { AgentPathResolution } from './AgentPathTypes';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);

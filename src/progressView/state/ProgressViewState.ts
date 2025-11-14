@@ -1,7 +1,26 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Local imports - agent metadata
+import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
+import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
+import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { OutputFileInfo } from '@agent/output/types';
+import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+
+// Internal imports - logging and state
+import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import {
+  TaskState,
+  isToolUseTaskState,
+  isWorkflowTaskState,
+} from '@logger/TaskState';
+import type { TaskGroup } from '@logger/LogTypes';
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - progress view managers
+import type { AgentFilter } from '@progressView/types';
 import {
   StreamTabsManager,
   TaskGroupManager,
@@ -9,28 +28,9 @@ import {
   UsageStatsManager,
   RunInstructionManager,
 } from '@progressView/managers';
-import { normalizeRunId } from '@progressView/constants/runIds';
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
-import type { AgentFilter } from '@progressView/types';
-// Local imports - agent types
-import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
-import { resolveAgentSessionDescriptor } from '@agent/core/AgentDataclass';
-import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { TaskGroup } from '@logger/LogTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-
-// Types
-import {
-  TaskState,
-  isToolUseTaskState,
-  isWorkflowTaskState,
-} from '@logger/TaskState';
+import { normalizeRunId } from '@progressView/constants/runIds';
 import { getConfig } from '@utils/config';
-// Local imports - agents
-import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 
 /**
  * Core state management for the progress view.

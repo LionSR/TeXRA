@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
+
 
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
@@ -11,6 +11,9 @@ import { buildFileAttachment } from '@tools/utils';
 
 // Local imports - utils
 import { WorkspaceFS, getMimeType } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 export const READ_FILE_MAX_LINES = 2000;
 

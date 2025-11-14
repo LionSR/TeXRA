@@ -1,11 +1,15 @@
 // Third-party imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
 // Standard library imports
-import * as path from 'path';
 
 // Local imports
 import * as logger from '@logger/logUtils';
+
+// Internal imports
 import { arxivProcessor } from '@latex/arxivProcessor';
 
 const CHANNEL = 'arXivCommands';

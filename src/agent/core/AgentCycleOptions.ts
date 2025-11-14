@@ -2,16 +2,22 @@
 import { z } from 'zod';
 
 // Local imports - agent configuration
+import type { IModelHandler } from '@agent/modelHandlers';
+
+// Type imports
+import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+
+// Type imports
+import type { AgentLogger } from '@logger/AgentLogger';
+
+// Type imports
 import type { AgentPrompt, AgentSetting } from './AgentDataclass';
 
 // Local imports - logging
-import type { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - execution context
-import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local imports - model handlers
-import type { IModelHandler } from '@agent/modelHandlers';
 
 export interface UserVariableChannels {
   input: Readonly<Record<string, any>>;

@@ -2,6 +2,7 @@
 /**
  * Diff statistic schema used for file comparisons.
  */
+// Third-party imports
 import { z } from 'zod';
 
 export const DiffStatsSchema = z.object({

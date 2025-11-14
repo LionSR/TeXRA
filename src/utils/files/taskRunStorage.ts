@@ -3,13 +3,17 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 
 // Local imports - log
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - storage
+import { getConfig } from '@utils/config';
+
+// Local file imports
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
-import { getConfig } from '@utils/config';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AbsoluteFS } from './absoluteFS';
 import { flexibleFS } from './flexibleFS';
 
