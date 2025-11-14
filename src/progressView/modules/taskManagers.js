@@ -18,57 +18,20 @@ export class TaskGroupDomManager {
     this.runSelector = runSelector || null;
   }
 
-  /**
-   * Adds a log group to the DOM
-   * @param {Object} group - Group data
-   */
-  addGroup(group) {
-    const existingGroup = this.groupElements.get(group.id);
-    if (existingGroup) {
-      if (!progressViewState.taskGroups.get(group.id)) {
-        console.warn(
-          `Group ${group.id} exists in DOM but not in state - removing from DOM`,
-        );
-        this._removeToggleListener(group.id);
-        existingGroup.remove();
-        this.groupElements.delete(group.id);
-      } else {
-        progressViewState.taskGroups.set(group.id, group);
-        if (group.parentGroupId) {
-          this.updateGroup({
-            groupId: group.id,
-            updates: {
-              status: group.status,
-              endTime: group.endTime,
-            },
-          });
-        }
-        return;
-      }
-    }
-
+  _createGroupElement(group) {
     const baseGroupElement = createFromTemplate('groupDetailsTemplate');
     if (!baseGroupElement) {
-      console.error(
-        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
-      );
-      return;
+      return null;
     }
 
     const groupContainer = baseGroupElement.querySelector('.log-group-content');
     if (!groupContainer) {
-      console.error(
-        'TaskGroupDomManager.addGroup: missing group content container',
-      );
-      baseGroupElement.remove();
-      return;
+      return null;
     }
     groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    const isRootGroup = !group.parentGroupId;
-    let detailsElem = null;
-
-    if (isRootGroup) {
+    let detailsElem;
+    if (!group.parentGroupId) {
       detailsElem = baseGroupElement;
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.classList.add('log-run');
@@ -76,11 +39,7 @@ export class TaskGroupDomManager {
     } else {
       const headerElement = this.headerFormatter.create(group);
       if (!headerElement) {
-        console.error(
-          'TaskGroupDomManager.addGroup: failed to create group header',
-        );
-        baseGroupElement.remove();
-        return;
+        return null;
       }
 
       detailsElem = document.createElement('details');
@@ -88,8 +47,6 @@ export class TaskGroupDomManager {
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.appendChild(headerElement);
       detailsElem.appendChild(groupContainer);
-      baseGroupElement.replaceChildren();
-      baseGroupElement.remove();
 
       const isCollapsed = progressViewState.toggleStates.get(group.id);
       detailsElem.open = isCollapsed !== true;
@@ -104,35 +61,140 @@ export class TaskGroupDomManager {
     progressViewState.taskGroups.set(group.id, group);
     this.groupElements.set(group.id, detailsElem);
 
-    // Insert the group at the right position in the parent
-    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!container) {
-      console.error(
-        'TaskGroupDomManager.addGroup: missing log content container',
-      );
-      this._removeToggleListener(group.id);
-      this.groupElements.delete(group.id);
+    return detailsElem;
+  }
+
+  _resolveGroupContent(parentGroupId) {
+    if (!parentGroupId) {
+      return document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    }
+    const parentDetails = this.groupElements.get(parentGroupId);
+    return parentDetails?.querySelector('.log-group-content') ?? null;
+  }
+
+  renderInitial(groups) {
+    if (!Array.isArray(groups) || groups.length === 0) {
       return;
     }
 
-    if (group.parentGroupId) {
-      const parentDetails = this.groupElements.get(group.parentGroupId);
-      const parentGroupContent =
-        parentDetails?.querySelector('.log-group-content');
-      if (parentGroupContent) {
-        insertChronologically({
-          container: parentGroupContent,
-          element: detailsElem,
-          timestamp: group.startTime,
-        });
-        return;
+    const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!container) {
+      return;
+    }
+
+    const topLevel = [];
+    const childrenByParent = new Map();
+    for (const group of groups) {
+      if (group.parentGroupId) {
+        const parentId = group.parentGroupId;
+        let bucket = childrenByParent.get(parentId);
+        if (!bucket) {
+          bucket = [];
+          childrenByParent.set(parentId, bucket);
+        }
+        bucket.push(group);
+      } else {
+        topLevel.push(group);
       }
     }
 
-    // For top-level groups, insert in chronological order
+    const fragment = document.createDocumentFragment();
+    const traversalQueue = [];
+    for (const group of topLevel) {
+      const element = this._createGroupElement(group);
+      if (!element) {
+        this._discardGroup(group.id);
+        continue;
+      }
+      fragment.appendChild(element);
+      traversalQueue.push(group.id);
+    }
+    if (fragment.childNodes.length > 0) {
+      container.appendChild(fragment);
+    }
+
+    while (traversalQueue.length > 0) {
+      const parentId = traversalQueue.shift();
+      const children = childrenByParent.get(parentId);
+      if (!children || children.length === 0) {
+        continue;
+      }
+
+      const parentContent = this._resolveGroupContent(parentId);
+      if (!parentContent) {
+        for (const child of children) {
+          this._discardGroup(child.id);
+        }
+        childrenByParent.delete(parentId);
+        continue;
+      }
+
+      const parentFragment = document.createDocumentFragment();
+      for (const child of children) {
+        const element = this._createGroupElement(child);
+        if (!element) {
+          this._discardGroup(child.id);
+          continue;
+        }
+        parentFragment.appendChild(element);
+        traversalQueue.push(child.id);
+      }
+
+      if (parentFragment.childNodes.length > 0) {
+        parentContent.appendChild(parentFragment);
+      }
+
+      childrenByParent.delete(parentId);
+    }
+
+    if (childrenByParent.size > 0) {
+      for (const orphans of childrenByParent.values()) {
+        for (const orphan of orphans) {
+          this._discardGroup(orphan.id);
+        }
+      }
+    }
+
+    if (topLevel.length > 0) {
+      progressViewState.currentGroupId = topLevel[topLevel.length - 1].id;
+      this.collapsePreviousActiveGroup();
+    }
+  }
+
+  /**
+   * Adds a log group to the DOM
+   * @param {Object} group - Group data
+   */
+  addGroup(group) {
+    const existingElement = this.groupElements.get(group.id);
+    if (existingElement) {
+      progressViewState.taskGroups.set(group.id, group);
+      if (group.parentGroupId) {
+        this.updateGroup({
+          groupId: group.id,
+          updates: {
+            status: group.status,
+            endTime: group.endTime,
+          },
+        });
+      }
+      return;
+    }
+
+    const element = this._createGroupElement(group);
+    if (!element) {
+      return;
+    }
+
+    const targetContainer = this._resolveGroupContent(group.parentGroupId);
+    if (!targetContainer) {
+      this._discardGroup(group.id);
+      return;
+    }
+
     insertChronologically({
-      container,
-      element: detailsElem,
+      container: targetContainer,
+      element,
       timestamp: group.startTime,
     });
 
@@ -391,6 +453,15 @@ export class TaskGroupDomManager {
       element.removeEventListener('toggle', listener);
     }
     this.toggleListeners.delete(groupId);
+  }
+
+  _discardGroup(groupId) {
+    if (!groupId) {
+      return;
+    }
+    this._removeToggleListener(groupId);
+    this.groupElements.delete(groupId);
+    progressViewState.taskGroups.delete(groupId);
   }
 }
 
