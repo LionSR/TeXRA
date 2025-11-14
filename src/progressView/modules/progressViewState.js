@@ -8,7 +8,8 @@ import { WebviewStateManager } from '@common/webviewState.js';
 class TaskGroups {
   constructor() {
     this.groups = new Map();
-    this._cachedTotals = null;
+    this.childrenByParent = new Map();
+    this.parentByChild = new Map();
   }
 
   get(id) {
@@ -28,8 +29,18 @@ class TaskGroups {
       console.error('TaskGroups.set: group must be an object');
       return;
     }
+    const previousParentId = this.parentByChild.get(id);
+    if (previousParentId) {
+      this._removeChild(previousParentId, id);
+    }
+
     this.groups.set(id, group);
-    this._cachedTotals = null; // Invalidate cache
+
+    if (group.parentGroupId) {
+      this._addChild(group.parentGroupId, id);
+    } else {
+      this.parentByChild.delete(id);
+    }
   }
 
   getGroupMap() {
@@ -38,7 +49,8 @@ class TaskGroups {
 
   clear() {
     this.groups.clear();
-    this._cachedTotals = null; // Invalidate cache
+    this.childrenByParent.clear();
+    this.parentByChild.clear();
   }
 
   /**
@@ -81,8 +93,53 @@ class TaskGroups {
       group.usage = updates.usage;
     }
 
-    this.groups.set(groupId, group);
-    this._cachedTotals = null; // Invalidate cache
+    this.set(groupId, group);
+  }
+
+  getChildIds(parentId) {
+    if (!parentId) {
+      return [];
+    }
+
+    const children = this.childrenByParent.get(parentId);
+    if (!children) {
+      return [];
+    }
+
+    return Array.from(children);
+  }
+
+  _addChild(parentId, childId) {
+    if (!parentId || !childId) {
+      return;
+    }
+
+    let children = this.childrenByParent.get(parentId);
+    if (!children) {
+      children = new Set();
+      this.childrenByParent.set(parentId, children);
+    }
+    children.add(childId);
+    this.parentByChild.set(childId, parentId);
+  }
+
+  _removeChild(parentId, childId) {
+    if (!parentId || !childId) {
+      return;
+    }
+
+    const children = this.childrenByParent.get(parentId);
+    if (!children) {
+      return;
+    }
+
+    children.delete(childId);
+    if (this.parentByChild.get(childId) === parentId) {
+      this.parentByChild.delete(childId);
+    }
+    if (children.size === 0) {
+      this.childrenByParent.delete(parentId);
+    }
   }
 }
 
