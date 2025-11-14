@@ -35,6 +35,7 @@ export class OutputFilesManager extends PersistentMapManager<
     Map<string, Map<number, string[]>>
   > = new Map();
   private missingOutputsLoaded = false;
+  private missingOutputsLoadPromise: Promise<void> | null = null;
   private readonly logger: AgentLogger;
 
   constructor(storage?: StateStorage) {
@@ -95,7 +96,7 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: string[] },
     options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    this.ensureMissingOutputsLoaded();
+    await this.ensureMissingOutputsLoaded();
     const runId = normalizeRunId(options.executionId ?? groupId);
 
     let streamMissing = this._missingOutputs.get(stream);
@@ -344,7 +345,9 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Get missing outputs for a stream */
   getMissingOutputs(stream: StreamTabId): Map<string, Map<number, string[]>> {
-    this.ensureMissingOutputsLoaded();
+    if (!this.missingOutputsLoaded) {
+      throw new Error('Missing outputs requested before load completed');
+    }
     const missing = this._missingOutputs.get(stream);
     return missing ? new Map(missing) : new Map();
   }
@@ -376,7 +379,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Clear missing outputs for a stream */
   async clearMissingOutputs(stream: StreamTabId): Promise<void> {
-    this.ensureMissingOutputsLoaded();
+    await this.ensureMissingOutputsLoaded();
     if (!this._missingOutputs.delete(stream)) {
       return;
     }
@@ -387,7 +390,7 @@ export class OutputFilesManager extends PersistentMapManager<
     stream: StreamTabId,
     groupId: string | null | undefined,
   ): Promise<void> {
-    this.ensureMissingOutputsLoaded();
+    await this.ensureMissingOutputsLoaded();
     const runId = normalizeRunId(groupId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
@@ -407,7 +410,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Delete all files for a stream */
   async deleteStream(stream: StreamTabId): Promise<void> {
     await super.delete(stream);
-    this.ensureMissingOutputsLoaded();
+    await this.ensureMissingOutputsLoaded();
     this._missingOutputs.delete(stream);
     await this.saveMissingOutputs();
   }
@@ -415,7 +418,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Clear all output files */
   async clear(): Promise<void> {
     await super.clear();
-    this.ensureMissingOutputsLoaded();
+    await this.ensureMissingOutputsLoaded();
     this._missingOutputs.clear();
     await this.saveMissingOutputs();
   }
@@ -427,7 +430,9 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Get all missing outputs */
   getAllMissingOutputs(): Map<StreamTabId, Map<string, Map<number, string[]>>> {
-    this.ensureMissingOutputsLoaded();
+    if (!this.missingOutputsLoaded) {
+      throw new Error('Missing outputs requested before load completed');
+    }
     return new Map(this._missingOutputs);
   }
 
@@ -449,6 +454,7 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Load output files from persistence and clean up missing files */
   async load(): Promise<void> {
     await super.load();
+    await this.ensureMissingOutputsLoaded();
   }
 
   /** Load missing outputs from persistence */
@@ -469,14 +475,24 @@ export class OutputFilesManager extends PersistentMapManager<
     }
   }
 
-  private ensureMissingOutputsLoaded(): void {
+  private async ensureMissingOutputsLoaded(): Promise<void> {
     if (this.missingOutputsLoaded) {
       return;
     }
-    this.missingOutputsLoaded = true;
-    void this.loadMissingOutputs().catch((error) => {
-      this.logger.error('Failed to load missing outputs', error);
-    });
+
+    if (!this.missingOutputsLoadPromise) {
+      this.missingOutputsLoadPromise = this.loadMissingOutputs()
+        .then(() => {
+          this.missingOutputsLoaded = true;
+        })
+        .catch((error) => {
+          this.logger.error('Failed to load missing outputs', error);
+          this.missingOutputsLoadPromise = null;
+          throw error;
+        });
+    }
+
+    await this.missingOutputsLoadPromise;
   }
 
   /** Save missing outputs to persistence */
