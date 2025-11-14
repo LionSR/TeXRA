@@ -24,6 +24,10 @@ export interface OutputEventsModule {
 
 interface OutputEventsShared {
   logger: AgentLogger;
+  refreshStreamSurface: (
+    stream: string,
+    options?: { updateInstruction?: boolean },
+  ) => void;
 }
 
 const updateActiveStreamOutputs = (
@@ -115,14 +119,16 @@ const registerClearTaskOutput = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
+  shared: OutputEventsShared,
   withErrorBoundary: ReturnType<typeof createErrorBoundary>,
 ): vscode.Disposable => {
   return new vscode.Disposable(
     bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
       withErrorBoundary('failed to handle clearTaskOutput', () => {
         const cleared = state.clearOutputState(streamTabId);
-        if (cleared && updater.isAvailable()) {
-          updater.updateAll(state);
+        if (cleared) {
+          const activeStream = updater.updateAll(state);
+          shared.refreshStreamSurface(activeStream);
         }
       });
     }),
@@ -147,7 +153,7 @@ export function createOutputEvents(
         withErrorBoundary,
       );
       disposables.push(
-        registerClearTaskOutput(bus, state, updater, withErrorBoundary),
+        registerClearTaskOutput(bus, state, updater, shared, withErrorBoundary),
       );
       return disposables;
     },
