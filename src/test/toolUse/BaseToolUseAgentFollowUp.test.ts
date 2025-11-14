@@ -117,7 +117,7 @@ class DummyHandler extends ModelHandler<
     _name: string,
     _call: unknown,
     _result: Record<string, unknown>,
-    _toolState?: AgentWorkspaceState,
+    _workspaceState?: AgentWorkspaceState,
     _text?: string,
   ): Promise<ProviderMessage[]> {
     return [];
