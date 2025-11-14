@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - identifiers
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { StreamTabInfo } from '@progressView/types';
@@ -10,10 +10,10 @@ import type { StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 // Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+
 // Internal imports
 import { STATUS } from '@progressView/modules/constants.js';
-// Type imports
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';
@@ -24,7 +24,6 @@ import type {
   StreamStatusType,
   StreamStatusOrReadyType,
 } from './types';
-
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;

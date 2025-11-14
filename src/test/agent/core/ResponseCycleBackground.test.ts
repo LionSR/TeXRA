@@ -44,7 +44,10 @@ import * as latex from '@latex';
 
 // Third-party types
 import type OpenAI from 'openai';
-import type { Response, ResponseUsage } from 'openai/resources/responses/responses';
+import type {
+  Response,
+  ResponseUsage,
+} from 'openai/resources/responses/responses';
 
 type LoggedEvent = {
   level: 'debug' | 'info' | 'warn' | 'error';

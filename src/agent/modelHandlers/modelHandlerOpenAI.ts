@@ -18,7 +18,6 @@ import {
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
 
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports

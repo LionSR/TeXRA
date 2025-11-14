@@ -8,7 +8,6 @@ import {
   createPartFromText,
 } from '@google/genai';
 
-
 // Local imports - agent
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports

@@ -40,7 +40,6 @@ import {
 } from '@utils/text/textEnhancementUtils';
 import { RecordingManager } from '@webview/managers/RecordingManager';
 
-
 // @ts-ignore - Import JavaScript module
 
 // Type imports

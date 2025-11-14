@@ -27,7 +27,6 @@ import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
   createReflectionRunFlow,
   type ReflectionRunHooks,
-  type ReflectionRunLifecycle,
   type ReflectionRunShared,
   type ReflectionRunState,
   type ReflectionRunPhase,
@@ -50,14 +49,11 @@ import { writePromptToXml } from '@agent/utils/promptUtils';
 // Type imports
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
-import type { ToolDefinition } from '@model';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
-import { bus } from '@eventBus/ProgressEventBus';
 import { LatexMediaManager } from '@latex';
-
 
 /**
  * Options for handling round output.
