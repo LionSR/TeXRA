@@ -31,6 +31,12 @@ import { WebviewStateManager } from '@common/webviewState.js';
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
+function getSessionDefaultAgent(sessionType) {
+  return sessionType === SESSION_TYPES.TOOL_USE
+    ? DEFAULT_TOOL_USE_AGENT
+    : DEFAULT_WORKFLOW_AGENT;
+}
+
 function setFileSelectionGroupDisabled(isDisabled) {
   const container = document.querySelector('.file-selection-group');
   if (!(container instanceof HTMLElement)) {
@@ -70,8 +76,9 @@ function getSelectDefaultValue(selectId, fallback) {
       return element.value;
     }
     const options = getSelectOptionElements(element);
-    if (options.length > 0) {
-      return options[0].value ?? '';
+    const firstValueOption = options.find((option) => option.value);
+    if (firstValueOption) {
+      return firstValueOption.value;
     }
   }
   return fallback;
@@ -272,7 +279,13 @@ export class MainViewState {
     const normalizedSessionType = normalizeSessionType(sessionTypeValue);
     const activeSelectId = AGENT_SELECT_IDS[normalizedSessionType];
     if (activeSelectId) {
-      state.agent = safeGetElementValue(activeSelectId) ?? '';
+      const defaultAgent = getSessionDefaultAgent(normalizedSessionType);
+      const agentValue = safeGetElementValue(activeSelectId) ?? '';
+      const resolvedAgent = agentValue || getSelectDefaultValue(activeSelectId, defaultAgent);
+      if (!agentValue && resolvedAgent) {
+        safeSetElementValue(activeSelectId, resolvedAgent);
+      }
+      state.agent = resolvedAgent ?? '';
       state.isToolUseAgent = normalizedSessionType === SESSION_TYPES.TOOL_USE;
     }
 
@@ -335,6 +348,13 @@ export class MainViewState {
       selectEl.classList.toggle('agent-select--hidden', !isActive);
       selectEl.setAttribute('aria-hidden', isActive ? 'false' : 'true');
       selectEl.tabIndex = isActive ? 0 : -1;
+      if (isActive && !selectEl.value) {
+        const fallback = getSelectDefaultValue(
+          selectId,
+          getSessionDefaultAgent(normalized),
+        );
+        safeSetElementValue(selectId, fallback);
+      }
     });
 
     setFileSelectionGroupDisabled(isToolUseSession);
