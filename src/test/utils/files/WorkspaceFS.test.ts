@@ -4,8 +4,8 @@ import * as assert from 'assert';
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
-suite('WorkspaceFS Test Suite', () => {
-  test('delete should be idempotent - not throw when file does not exist', async () => {
+describe('WorkspaceFS Test Suite', () => {
+  it('delete should be idempotent - not throw when file does not exist', async () => {
     // Test that deleting a non-existent file doesn't throw
     const nonExistentPath = 'this-file-definitely-does-not-exist-12345.txt';
 

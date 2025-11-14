@@ -19,13 +19,13 @@ declare module '@latex/arxivProcessor' {
   }
 }
 
-suite('ArxivDownloadTool', () => {
+describe('ArxivDownloadTool', () => {
   const originalValidateId = arxivModule.arxivProcessor.validateId;
   const originalDownloadSource = arxivModule.arxivProcessor.downloadSource;
   const originalRelativePath = WorkspaceFS.relativePath;
   const originalLsCall = LsTool.prototype.call;
 
-  teardown(() => {
+  afterEach(() => {
     (
       arxivModule.arxivProcessor as {
         validateId: typeof originalValidateId;
@@ -48,7 +48,7 @@ suite('ArxivDownloadTool', () => {
     ).call = originalLsCall;
   });
 
-  test('returns download summary and listing from ls tool', async () => {
+  it('returns download summary and listing from ls tool', async () => {
     let receivedId: string | undefined;
     let receivedAutoIndent: boolean | undefined;
     let validateCalls = 0;

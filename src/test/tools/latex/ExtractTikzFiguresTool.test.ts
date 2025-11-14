@@ -6,13 +6,13 @@ import { ExtractTikzFiguresTool } from '@tools/latex';
 import { WorkspaceFS } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
-suite('ExtractTikzFiguresTool', () => {
+describe('ExtractTikzFiguresTool', () => {
   const originalExtract = tikzPictureManager.extract;
   const originalCompile = tikzPictureManager.compile;
   const originalExists = WorkspaceFS.exists;
   const originalReadBytes = WorkspaceFS.readFileBytes;
 
-  teardown(() => {
+  afterEach(() => {
     (
       tikzPictureManager as unknown as { extract: typeof originalExtract }
     ).extract = originalExtract;
@@ -26,7 +26,7 @@ suite('ExtractTikzFiguresTool', () => {
     ).readFileBytes = originalReadBytes;
   });
 
-  test('compiles TikZ figures and returns attachments', async () => {
+  it('compiles TikZ figures and returns attachments', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) =>
         path === 'slides.tex' || path === 'build/slides/fig_a.pdf';
@@ -58,7 +58,7 @@ suite('ExtractTikzFiguresTool', () => {
     assert.strictEqual(result.files?.[0].base64Data, undefined);
   });
 
-  test('omits attachments when compilation disabled', async () => {
+  it('omits attachments when compilation disabled', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) => path === 'draft.tex';
     (
@@ -75,7 +75,7 @@ suite('ExtractTikzFiguresTool', () => {
     assert.strictEqual(result.files, undefined);
   });
 
-  test('returns error when LaTeX file is missing', async () => {
+  it('returns error when LaTeX file is missing', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async () => false;
 

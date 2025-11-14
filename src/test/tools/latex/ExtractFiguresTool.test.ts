@@ -6,12 +6,12 @@ import { ExtractLatexFiguresTool } from '@tools/latex';
 import { WorkspaceFS } from '@utils/files';
 import * as figureModule from '@latex/extractFigure';
 
-suite('ExtractLatexFiguresTool', () => {
+describe('ExtractLatexFiguresTool', () => {
   const originalExtract = figureModule.extractFigurePathsFromLatex;
   const originalExists = WorkspaceFS.exists;
   const originalReadBytes = WorkspaceFS.readFileBytes;
 
-  teardown(() => {
+  afterEach(() => {
     (
       figureModule as { extractFigurePathsFromLatex: typeof originalExtract }
     ).extractFigurePathsFromLatex = originalExtract;
@@ -22,7 +22,7 @@ suite('ExtractLatexFiguresTool', () => {
     ).readFileBytes = originalReadBytes;
   });
 
-  test('attaches discovered figure files', async () => {
+  it('attaches discovered figure files', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) => {
         return path === 'main.tex' || path === 'figures/plot.pdf';
@@ -52,7 +52,7 @@ suite('ExtractLatexFiguresTool', () => {
     assert.strictEqual(result.files?.[0].base64Data, undefined);
   });
 
-  test('returns graceful message when figures are absent', async () => {
+  it('returns graceful message when figures are absent', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) => path === 'report.tex';
     (
@@ -69,7 +69,7 @@ suite('ExtractLatexFiguresTool', () => {
     assert.strictEqual(result.files, undefined);
   });
 
-  test('returns error when tex file is missing', async () => {
+  it('returns error when tex file is missing', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async () => false;
 

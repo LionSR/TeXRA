@@ -16,7 +16,7 @@ import {
   TaskRunFileService,
 } from '@utils/files/taskRunStorage';
 
-suite('taskRunStorage moveToTarget', () => {
+describe('taskRunStorage moveToTarget', () => {
   async function createTempDir(prefix: string): Promise<string> {
     return await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   }
@@ -69,7 +69,7 @@ suite('taskRunStorage moveToTarget', () => {
     }
   }
 
-  test('retries directory move when destination exists (EISDIR)', async () => {
+  it('retries directory move when destination exists (EISDIR)', async () => {
     const tmpRoot = await createTempDir('texra-run-');
     const sourceDir = path.join(tmpRoot, 'source');
     const destDir = path.join(tmpRoot, 'dest');
@@ -89,7 +89,7 @@ suite('taskRunStorage moveToTarget', () => {
     await assert.rejects(fs.stat(sourceDir));
   });
 
-  test('retries directory move when destination not empty (ENOTEMPTY)', async () => {
+  it('retries directory move when destination not empty (ENOTEMPTY)', async () => {
     const tmpRoot = await createTempDir('texra-run-');
     const sourceDir = path.join(tmpRoot, 'source2');
     const destDir = path.join(tmpRoot, 'dest2');
@@ -109,7 +109,7 @@ suite('taskRunStorage moveToTarget', () => {
     await assert.rejects(fs.stat(sourceDir));
   });
 
-  test('retries move when destination path includes a blocking file (ENOTDIR)', async () => {
+  it('retries move when destination path includes a blocking file (ENOTDIR)', async () => {
     const tmpRoot = await createTempDir('texra-run-');
     const sourceDir = path.join(tmpRoot, 'source3');
     const destDir = path.join(tmpRoot, 'dest3');
@@ -130,7 +130,7 @@ suite('taskRunStorage moveToTarget', () => {
   });
 });
 
-suite('TaskRunFileService prepareRunWorkspace', () => {
+describe('TaskRunFileService prepareRunWorkspace', () => {
   let workspaceRoot: string;
   let storageRoot: string;
   let originalGetConfig: typeof configModule.getConfig;
@@ -142,7 +142,7 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
   let originalStorageExists: typeof StorageFS.exists;
   let originalStorageCreateDir: typeof StorageFS.createDir;
 
-  setup(async () => {
+  beforeEach(async () => {
     workspaceRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), 'texra-workspace-'),
     );
@@ -210,7 +210,7 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
     }) as typeof StorageFS.createDir;
   });
 
-  teardown(async () => {
+  afterEach(async () => {
     (configModule as { getConfig: typeof originalGetConfig }).getConfig =
       originalGetConfig;
     (
@@ -239,7 +239,7 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
     await fs.rm(storageRoot, { recursive: true, force: true });
   });
 
-  test('captures original base files once per run', async () => {
+  it('captures original base files once per run', async () => {
     const baseRelative = path.join('sections', 'main.tex');
     const basePath = path.join(workspaceRoot, baseRelative);
     await fs.mkdir(path.dirname(basePath), { recursive: true });
@@ -265,7 +265,7 @@ suite('TaskRunFileService prepareRunWorkspace', () => {
     assert.strictEqual(snapshotAfter, 'original content');
   });
 
-  test('mirrors dependency files into run storage', async () => {
+  it('mirrors dependency files into run storage', async () => {
     const baseRelative = path.join('documents', 'draft.tex');
     const basePath = path.join(workspaceRoot, baseRelative);
     const referenceRelative = path.join('references', 'main.bib');

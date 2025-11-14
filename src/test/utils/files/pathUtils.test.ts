@@ -9,15 +9,15 @@ import {
   resolveFilePath,
 } from '@utils/files/pathUtils';
 
-suite('pathUtils Test Suite', () => {
-  suite('getBasename', () => {
-    test('should extract basename from Unix paths', () => {
+describe('pathUtils Test Suite', () => {
+  describe('getBasename', () => {
+    it('should extract basename from Unix paths', () => {
       assert.strictEqual(getBasename('/home/user/file.txt'), 'file.txt');
       assert.strictEqual(getBasename('/usr/local/bin/node'), 'node');
       assert.strictEqual(getBasename('/path/to/document.pdf'), 'document.pdf');
     });
 
-    test('should extract basename from Windows paths', () => {
+    it('should extract basename from Windows paths', () => {
       assert.strictEqual(getBasename('C:\\Users\\file.txt'), 'file.txt');
       assert.strictEqual(getBasename('C:\\Program Files\\app.exe'), 'app.exe');
       assert.strictEqual(
@@ -26,7 +26,7 @@ suite('pathUtils Test Suite', () => {
       );
     });
 
-    test('should handle mixed path separators', () => {
+    it('should handle mixed path separators', () => {
       assert.strictEqual(
         getBasename('C:/Users\\Documents/file.txt'),
         'file.txt',
@@ -37,13 +37,13 @@ suite('pathUtils Test Suite', () => {
       );
     });
 
-    test('should handle paths with trailing slashes', () => {
+    it('should handle paths with trailing slashes', () => {
       assert.strictEqual(getBasename('/path/to/'), 'to');
       assert.strictEqual(getBasename('/path/to/dir/'), 'dir');
       assert.strictEqual(getBasename('C:\\Users\\'), 'Users');
     });
 
-    test('should handle edge cases', () => {
+    it('should handle edge cases', () => {
       assert.strictEqual(getBasename(''), '');
       assert.strictEqual(getBasename('/'), '');
       assert.strictEqual(getBasename('//'), '');
@@ -52,7 +52,7 @@ suite('pathUtils Test Suite', () => {
       assert.strictEqual(getBasename('../file.txt'), 'file.txt');
     });
 
-    test('should handle files with multiple dots', () => {
+    it('should handle files with multiple dots', () => {
       assert.strictEqual(getBasename('/path/to/file.tar.gz'), 'file.tar.gz');
       assert.strictEqual(
         getBasename('archive.backup.zip'),
@@ -61,7 +61,7 @@ suite('pathUtils Test Suite', () => {
       assert.strictEqual(getBasename('/home/user/.bashrc'), '.bashrc');
     });
 
-    test('should handle special characters in filenames', () => {
+    it('should handle special characters in filenames', () => {
       assert.strictEqual(
         getBasename('/path/to/file with spaces.txt'),
         'file with spaces.txt',
@@ -80,28 +80,28 @@ suite('pathUtils Test Suite', () => {
       );
     });
 
-    test('should handle relative paths', () => {
+    it('should handle relative paths', () => {
       assert.strictEqual(getBasename('relative/path/to/file.txt'), 'file.txt');
       assert.strictEqual(getBasename('./relative/file.txt'), 'file.txt');
       assert.strictEqual(getBasename('../parent/file.txt'), 'file.txt');
     });
 
-    test('should handle directory paths without extensions', () => {
+    it('should handle directory paths without extensions', () => {
       assert.strictEqual(getBasename('/home/user/Documents'), 'Documents');
       assert.strictEqual(getBasename('C:\\Program Files'), 'Program Files');
       assert.strictEqual(getBasename('/usr/local/bin'), 'bin');
     });
   });
 
-  suite('isTexFile', () => {
-    test('should identify TeX files correctly', () => {
+  describe('isTexFile', () => {
+    it('should identify TeX files correctly', () => {
       assert.strictEqual(isTexFile('document.tex'), true);
       assert.strictEqual(isTexFile('DOCUMENT.TEX'), true);
       assert.strictEqual(isTexFile('path/to/file.tex'), true);
       assert.strictEqual(isTexFile('file.TeX'), true);
     });
 
-    test('should reject non-TeX files', () => {
+    it('should reject non-TeX files', () => {
       assert.strictEqual(isTexFile('document.txt'), false);
       assert.strictEqual(isTexFile('file.pdf'), false);
       assert.strictEqual(isTexFile('image.png'), false);
@@ -109,7 +109,7 @@ suite('pathUtils Test Suite', () => {
       assert.strictEqual(isTexFile('noextension'), false);
     });
 
-    test('should handle edge cases', () => {
+    it('should handle edge cases', () => {
       assert.strictEqual(isTexFile(''), false);
       assert.strictEqual(isTexFile('.tex'), true);
       assert.strictEqual(isTexFile('tex'), false);
@@ -117,13 +117,13 @@ suite('pathUtils Test Suite', () => {
     });
   });
 
-  suite('resolveFilePath', () => {
-    test('should return absolute paths unchanged', () => {
+  describe('resolveFilePath', () => {
+    it('should return absolute paths unchanged', () => {
       const absolutePath = path.resolve('/absolute/path/file.txt');
       assert.strictEqual(resolveFilePath(absolutePath), absolutePath);
     });
 
-    test('should resolve relative paths to workspace', () => {
+    it('should resolve relative paths to workspace', () => {
       const relativePath = 'relative/path/file.txt';
       const resolved = resolveFilePath(relativePath);
       assert.strictEqual(path.isAbsolute(resolved), true);

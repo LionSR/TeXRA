@@ -15,15 +15,15 @@ class TestRelativeFS extends RelativeFS {
   }
 }
 
-suite('RelativeFS JSON helpers', () => {
-  suiteSetup(async () => {
+describe('RelativeFS JSON helpers', () => {
+  before(async () => {
     await fs
       .rm(BASE_DIR, { recursive: true, force: true })
       .catch(() => undefined);
     await fs.mkdir(BASE_DIR, { recursive: true });
   });
 
-  setup(async () => {
+  beforeEach(async () => {
     // Ensure each test starts with a clean directory
     await fs
       .rm(BASE_DIR, { recursive: true, force: true })
@@ -31,13 +31,13 @@ suite('RelativeFS JSON helpers', () => {
     await fs.mkdir(BASE_DIR, { recursive: true });
   });
 
-  suiteTeardown(async () => {
+  after(async () => {
     await fs
       .rm(BASE_DIR, { recursive: true, force: true })
       .catch(() => undefined);
   });
 
-  test('writeJson and readJson round trip preserves data', async () => {
+  it('writeJson and readJson round trip preserves data', async () => {
     const payload = {
       foo: 'bar',
       nested: { count: 3 },

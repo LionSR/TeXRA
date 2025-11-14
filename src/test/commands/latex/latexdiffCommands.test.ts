@@ -25,7 +25,7 @@ type WorkspaceExists = typeof WorkspaceFS.exists;
 type OpenBuildDisplayIfTex = typeof openBuildModule.openBuildDisplayIfTex;
 type ShowLoggedMessage = typeof errorHandlingModule.showLoggedMessage;
 
-suite('Latexdiff command helpers', () => {
+describe('Latexdiff command helpers', () => {
   const originalCheckToolInstalled = systemModule.checkToolInstalled;
   const originalGetConfig = configModule.getConfig;
   const originalShowQuickPick = vscode.window.showQuickPick;
@@ -33,7 +33,7 @@ suite('Latexdiff command helpers', () => {
   const originalOpenBuildDisplayIfTex = openBuildModule.openBuildDisplayIfTex;
   const originalShowLoggedMessage = errorHandlingModule.showLoggedMessage;
 
-  teardown(() => {
+  afterEach(() => {
     (
       systemModule as { checkToolInstalled: CheckToolInstalled }
     ).checkToolInstalled = originalCheckToolInstalled;
@@ -51,7 +51,7 @@ suite('Latexdiff command helpers', () => {
     ).showLoggedMessage = originalShowLoggedMessage;
   });
 
-  test('ensureLatexdiffToolInstalled returns boolean status from tool check', async () => {
+  it('ensureLatexdiffToolInstalled returns boolean status from tool check', async () => {
     const calls: string[] = [];
     (
       systemModule as { checkToolInstalled: CheckToolInstalled }
@@ -76,7 +76,7 @@ suite('Latexdiff command helpers', () => {
     assert.strictEqual(missing, false);
   });
 
-  test('promptForLatexdiffMathMarkup prioritizes configured option and returns selection', async () => {
+  it('promptForLatexdiffMathMarkup prioritizes configured option and returns selection', async () => {
     (configModule as { getConfig: GetConfig }).getConfig = (<T>() =>
       'Scope' as unknown as T) as GetConfig;
 
@@ -97,7 +97,7 @@ suite('Latexdiff command helpers', () => {
     assert.strictEqual(selection, receivedItems[1].value);
   });
 
-  test('openLatexdiffResult resolves and opens single-file diff output', async () => {
+  it('openLatexdiffResult resolves and opens single-file diff output', async () => {
     const existsCalls: string[] = [];
     (WorkspaceFS as { exists: WorkspaceExists }).exists = async (filePath) => {
       existsCalls.push(filePath);
@@ -121,7 +121,7 @@ suite('Latexdiff command helpers', () => {
     assert.strictEqual(openedPath, 'chapters/ch1_diff.tex');
   });
 
-  test('openLatexdiffResult resolves diff inside directory for multi-file flows', async () => {
+  it('openLatexdiffResult resolves diff inside directory for multi-file flows', async () => {
     let checkedPath: string | undefined;
     (WorkspaceFS as { exists: WorkspaceExists }).exists = async (filePath) => {
       checkedPath = filePath;
@@ -146,7 +146,7 @@ suite('Latexdiff command helpers', () => {
     assert.strictEqual(diffPath, path.join('chapters', 'rounds/ch2_diff.tex'));
   });
 
-  test('openLatexdiffResult shows message when diff file missing', async () => {
+  it('openLatexdiffResult shows message when diff file missing', async () => {
     (WorkspaceFS as { exists: WorkspaceExists }).exists = async () => false;
 
     let message: string | undefined;

@@ -1476,6 +1476,7 @@
     "prettier": "^3.6.2",
     "terser-webpack-plugin": "^5.3.14",
     "ts-loader": "^9.5.4",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4",
     "webpack": "^5.102.1",
