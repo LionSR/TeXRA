@@ -154,11 +154,28 @@ export class UsageGroupManager {
     // Persist usage on the group state so the summary can be computed
     const group = progressViewState.taskGroups.get(groupId);
     if (group) {
-      group.usage = { inputTokens, outputTokens, cost };
+      const previousUsage = group.usage || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+      };
+
+      const nextUsage = { inputTokens, outputTokens, cost };
+      group.usage = nextUsage;
       progressViewState.taskGroups.set(groupId, group);
-    }
-    if (!skipPropagate) {
-      this.propagateUsageToParents(groupId);
+
+      if (!skipPropagate) {
+        const delta = {
+          inputTokens: nextUsage.inputTokens - (previousUsage.inputTokens || 0),
+          outputTokens:
+            nextUsage.outputTokens - (previousUsage.outputTokens || 0),
+          cost: nextUsage.cost - (previousUsage.cost || 0),
+        };
+
+        if (!this._isZeroDelta(delta)) {
+          this.propagateUsageToParents(groupId, delta);
+        }
+      }
     }
 
     // Refresh the cumulative summary displayed in the footer
@@ -171,19 +188,23 @@ export class UsageGroupManager {
    */
   computeAggregatedUsage(parentId) {
     const totals = { inputTokens: 0, outputTokens: 0, cost: 0 };
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const group of taskGroups.values()) {
-      if (group.parentGroupId === parentId) {
-        if (group.usage) {
-          totals.inputTokens += group.usage.inputTokens || 0;
-          totals.outputTokens += group.usage.outputTokens || 0;
-          totals.cost += group.usage.cost || 0;
-        }
-        const childTotals = this.computeAggregatedUsage(group.id);
-        totals.inputTokens += childTotals.inputTokens;
-        totals.outputTokens += childTotals.outputTokens;
-        totals.cost += childTotals.cost;
+    const childIds = progressViewState.taskGroups.getChildIds(parentId);
+    for (const childId of childIds) {
+      const child = progressViewState.taskGroups.get(childId);
+      if (!child) {
+        continue;
       }
+
+      if (child.usage) {
+        totals.inputTokens += child.usage.inputTokens || 0;
+        totals.outputTokens += child.usage.outputTokens || 0;
+        totals.cost += child.usage.cost || 0;
+      }
+
+      const childTotals = this.computeAggregatedUsage(child.id);
+      totals.inputTokens += childTotals.inputTokens;
+      totals.outputTokens += childTotals.outputTokens;
+      totals.cost += childTotals.cost;
     }
     return totals;
   }
@@ -192,28 +213,53 @@ export class UsageGroupManager {
    * Propagate usage updates to parent groups
    * @private
    */
-  propagateUsageToParents(groupId) {
-    const group = progressViewState.taskGroups.get(groupId);
-    if (!group) return;
+  propagateUsageToParents(groupId, delta) {
+    if (!delta || this._isZeroDelta(delta)) {
+      return;
+    }
 
-    // If this group has a parent, update the parent with aggregated usage
-    if (group.parentGroupId) {
-      const totals = {
-        ...this.computeAggregatedUsage(group.parentGroupId),
+    const group = progressViewState.taskGroups.get(groupId);
+    if (!group) {
+      return;
+    }
+
+    let parentId = group.parentGroupId;
+    while (parentId) {
+      const parent = progressViewState.taskGroups.get(parentId);
+      if (!parent) {
+        break;
+      }
+
+      const previousUsage = parent.usage || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
       };
+
+      const updatedUsage = {
+        inputTokens:
+          (previousUsage.inputTokens || 0) + (delta.inputTokens || 0),
+        outputTokens:
+          (previousUsage.outputTokens || 0) + (delta.outputTokens || 0),
+        cost: (previousUsage.cost || 0) + (delta.cost || 0),
+      };
+
       this.update({
-        groupId: group.parentGroupId,
-        usage: totals,
+        groupId: parentId,
+        usage: updatedUsage,
         skipPropagate: true,
       });
-      this.propagateUsageToParents(group.parentGroupId);
-    } else {
-      // This is a top-level group, update it with aggregated usage from its children
-      const totals = {
-        ...this.computeAggregatedUsage(groupId),
-      };
-      this.update({ groupId, usage: totals, skipPropagate: true });
+
+      parentId = parent.parentGroupId;
     }
+  }
+
+  _isZeroDelta(delta) {
+    return (
+      (!delta.inputTokens || delta.inputTokens === 0) &&
+      (!delta.outputTokens || delta.outputTokens === 0) &&
+      (!delta.cost || delta.cost === 0)
+    );
   }
 
   /**
