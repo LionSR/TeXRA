@@ -12,8 +12,10 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-
 // Local imports - housekeeping
+import { getConfig } from '@utils/config';
+
+// Local file imports
 import {
   PACK_EXTENSIONS,
   TEMP_EXTENSIONS,
@@ -25,7 +27,6 @@ import {
   getFilePatterns,
   findFilesFromPatterns,
 } from './utils';
-import { getConfig } from '@utils/config';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);

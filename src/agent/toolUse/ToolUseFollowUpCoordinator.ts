@@ -2,11 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports - logging
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - agent coordination
 import { getToolUseAgent } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - persistence
 import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';

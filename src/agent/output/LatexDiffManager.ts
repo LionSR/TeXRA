@@ -4,14 +4,20 @@ import * as path from 'path';
 
 // Local imports - agent
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
-import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
-import { compileLatex2Pdf } from '@latex/texTools';
+
+// Internal imports
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+
+// Internal imports
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
 import { TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+
+// Internal imports
+import { compileLatex2Pdf } from '@latex/texTools';
+import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
 import type { RoundFileMapping } from './types';

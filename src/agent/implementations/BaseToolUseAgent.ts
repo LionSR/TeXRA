@@ -1,19 +1,18 @@
 // Local imports - agent
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentPrompt, AgentSetting, AgentType } from '@agent/core/AgentDataclass';
-import { AgentRunState } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { IModelHandler } from '@agent/modelHandlers';
+
+// Internal imports
 import { runToolUseCycle } from '@agent/core/ToolUseCycle';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
-import type { IModelHandler } from '@agent/modelHandlers';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunState } from '@agent/core/AgentState';
+import { AgentPrompt, AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { buildInitialToolUsePrompts } from '@agent/utils/PromptBuilder';
 // Base class for tool-use agents
-
 // Standard library imports
-
 // Local imports - core
-import { BaseAgent } from './BaseAgent';
 import {
   createToolUseRunFlow,
   type ToolUseRunHooks,
@@ -25,9 +24,6 @@ import {
 import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
-import type { ToolDefinition } from '@model';
-import { BaseTool } from '@tools/core/base';
-import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
@@ -38,6 +34,18 @@ import {
   unregisterToolUseAgent,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
+
+// Type imports
+import type { ToolDefinition } from '@model';
+
+// Internal imports
+import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
+
+// Internal imports
+import { BaseTool } from '@tools/core/base';
+
+// Local file imports
+import { BaseAgent } from './BaseAgent';
 
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
   private toolRegistry: Record<string, BaseTool<any>>;

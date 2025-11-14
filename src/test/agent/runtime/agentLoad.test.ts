@@ -5,6 +5,8 @@ import * as path from 'path';
 // Local imports - agent runtime
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+
+// Internal imports
 import { AbsoluteFS } from '@utils/files';
 
 suite('loadAgentSettingAndPrompts', () => {

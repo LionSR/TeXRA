@@ -6,6 +6,9 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports - logging
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - utilities
@@ -14,7 +17,8 @@ import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
 } from '@utils/config';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Local file imports
 import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,

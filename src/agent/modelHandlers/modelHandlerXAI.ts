@@ -7,9 +7,13 @@
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - agent components
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { ProviderStopReason } from './types/StopReasonTypes';
 import { K_SLICE } from '@utils/config';
+
+// Local file imports
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+
+// Type imports
+import type { ProviderStopReason } from './types/StopReasonTypes';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.

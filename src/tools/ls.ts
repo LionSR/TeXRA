@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - core
-import { defineTool } from './core/define';
 
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
@@ -18,6 +17,9 @@ import { getGitignoreMatcher } from '@tools/gitignore';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
 
 const LsInputSchema = z.strictObject({
   path: z.string(),

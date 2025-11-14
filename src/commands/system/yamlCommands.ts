@@ -9,11 +9,19 @@ import * as yaml from 'yaml';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
-import * as logger from '@logger/logUtils';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
+
+// Internal imports
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Internal imports
 import { GlobalStorageFS, StorageFS } from '@utils/files';
+
+// Internal imports
 import {
   getActiveEditorWithGuards,
   logGuardFailure,

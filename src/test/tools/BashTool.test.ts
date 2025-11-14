@@ -1,7 +1,5 @@
+// Node.js built-in imports
 import { strict as assert } from 'assert';
-
-// Third-party imports
-import type OpenAI from 'openai';
 
 // Local imports - agent core
 import {
@@ -18,12 +16,15 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 
 // Local imports - agent runtime
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-
 // Local imports - agent model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-
 // Local imports - model
+import type { ExecResult } from '@agent/types/ResultTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   ModelConfig,
@@ -32,12 +33,11 @@ import {
 
 // Local imports - tools
 import { BashTool } from '@tools/bash';
-
-// Local imports - utilities
-import type { ExecResult } from '@agent/types/ResultTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import * as execUtils from '@utils/system/execUtils';
-import { AgentLogger } from '@logger/AgentLogger';
+
+// Type imports
+import type OpenAI from 'openai';
 
 class BashMockHandler extends ModelHandlerOpenAIResponse {
   private callCount = 0;

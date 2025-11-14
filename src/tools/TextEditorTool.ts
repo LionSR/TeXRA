@@ -6,11 +6,15 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tool definitions
-import { defineTool } from './core/define';
-import { ToolResult, ToolError, cliResult, toolResult } from './result';
-import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
+import { isTexFile } from '@common/files/fileTypeUtils';
 
-// Local imports - approval helpers
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Internal imports
+import replacementEngine from '@replacement/engine';
+
+// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -19,13 +23,21 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 
+// Internal imports
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
+import { ToolResult, ToolError, cliResult, toolResult } from './result';
+import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
+
+// Local imports - approval helpers
+
 // Local imports - logging
-import * as logger from '@logger/logUtils';
 
 // Local imports - filesystem utilities
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-import replacementEngine from '@replacement/engine';
-import { isTexFile } from '@common/files/fileTypeUtils';
+
+
 
 // Constants
 const CHANNEL = 'TextEditorTool';

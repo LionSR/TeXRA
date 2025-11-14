@@ -1,13 +1,16 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 
 // Local imports - latex helpers
-import * as figureModule from '@latex/extractFigure';
 
 // Local imports - tools
 import { ExtractLatexFiguresTool } from '@tools/latex';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import * as figureModule from '@latex/extractFigure';
 
 suite('ExtractLatexFiguresTool', () => {
   const originalExtract = figureModule.extractFigurePathsFromLatex;

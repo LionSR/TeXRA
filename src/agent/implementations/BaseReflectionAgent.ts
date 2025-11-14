@@ -1,4 +1,12 @@
 // Local imports - agent components
+import type { IModelHandler } from '@agent/modelHandlers';
+import {
+  OutputHandler,
+  IOutputHandler,
+  type RoundOutputArtifacts,
+} from '@agent/output';
+
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -27,35 +35,32 @@ import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
 } from '@agent/implementations/flows/ReflectionRoundFlow';
-import type { IModelHandler } from '@agent/modelHandlers';
-import {
-  OutputHandler,
-  IOutputHandler,
-  type RoundOutputArtifacts,
-} from '@agent/output';
 import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-import { bus } from '@eventBus/ProgressEventBus';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
-// Local imports - logging
+// Type imports
 import type { AgentLogStage } from '@logger/AgentLogger';
 
-// Local imports - latex utilities
-import { LatexMediaManager } from '@latex';
-
 // Local imports - logging
-
+// Local imports - latex utilities
+// Local imports - logging
 // Local imports - model definitions
 import type { ToolDefinition } from '@model';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
-
 // Local imports - filesystem utilities
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
+
+// Internal imports
+import { LatexMediaManager } from '@latex';
+
 
 /**
  * Options for handling round output.

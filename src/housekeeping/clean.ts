@@ -6,15 +6,18 @@ import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
+import type { FileOpResult } from '@agent/types/ResultTypes';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - result types
-import type { FileOpResult } from '@agent/types/ResultTypes';
-
 // Local imports - utilities
 import { WorkspaceFS } from '@utils/files';
-
 // Local imports - housekeeping
+import { getConfig } from '@utils/config';
+
+// Local file imports
 import {
   EXCLUDED_DIRS,
   TEMP_EXTENSIONS,
@@ -27,7 +30,6 @@ import {
   getFilePatterns,
   findFilesFromPatterns,
 } from './utils';
-import { getConfig } from '@utils/config';
 
 const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);

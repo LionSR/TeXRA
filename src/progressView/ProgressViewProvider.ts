@@ -2,27 +2,32 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
+
+// Internal imports
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
 
 // Local imports - progress view
+import { AgentLogger } from '@logger/AgentLogger';
+import { LogMessageData } from '@logger/LogTypes';
+
+// Local file imports
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
-
 // @ts-ignore - Import JavaScript module
 import { STATUS } from './modules/constants.js';
-
 // Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
 
 // Types
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+
+// Type imports
 import type { ToolEditApprovalPrompt } from './types';
-import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
+
 
 // Type aliases for status values
 type StreamStatusType =

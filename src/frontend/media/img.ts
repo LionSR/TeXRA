@@ -14,6 +14,8 @@ import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';
 import { checkMultipleToolsInstalled } from '@utils/system';
+
+// Internal imports
 import { executeCommand } from '@utils/system/execUtils';
 
 const CHANNEL = 'ImgUtils';

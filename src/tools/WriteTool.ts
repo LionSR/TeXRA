@@ -3,9 +3,17 @@
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
-// Local imports - tools
+// Internal imports
+import { isTexFile } from '@common/files/fileTypeUtils';
+
+// Internal imports
+import replacementEngine from '@replacement/engine';
+
+// Internal imports
+import { ToolResult, toolResult } from '@tools/result';
+
+// Internal imports
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -13,12 +21,18 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { ToolResult, toolResult } from '@tools/result';
+
+// Internal imports
+import { WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
+
+// Local imports - tools
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
-import replacementEngine from '@replacement/engine';
-import { isTexFile } from '@common/files/fileTypeUtils';
+
+
 
 const WriteInputSchema = z.strictObject({
   path: z.string(),

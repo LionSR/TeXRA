@@ -1,11 +1,17 @@
+// Node.js built-in imports
 import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
+// Internal imports
 import * as configModule from '@utils/config';
 import { StorageFS, WorkspaceFS } from '@utils/files';
+
+// Internal imports
 import {
   moveToTarget,
   TASK_RUNS_DIR,

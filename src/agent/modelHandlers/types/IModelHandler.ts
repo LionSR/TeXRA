@@ -6,12 +6,16 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - provider types
+import type { AgentLogger } from '@logger/AgentLogger';
+
+// Type imports
+import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+
+// Type imports
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 // Local imports - logging and model metadata
-import type { AgentLogger } from '@logger/AgentLogger';
-import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 
 /**
  * Common interface implemented by all model handlers.

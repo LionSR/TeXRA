@@ -2,12 +2,19 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Internal imports
 import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
+import replacementEngine from '@replacement/engine';
+
+// Internal imports
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
-import replacementEngine from '@replacement/engine';
+
+// Internal imports
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -16,7 +23,6 @@ import {
 // Local imports - latex utils
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - housekeeping
 import { runIndentTeX } from '@housekeeping';

@@ -3,11 +3,13 @@ import * as vscode from 'vscode';
 import { XMLParser } from 'fast-xml-parser';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
 
 // Local imports - core
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
 
 // Local imports - utils
 import {

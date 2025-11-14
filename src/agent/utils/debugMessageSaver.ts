@@ -5,11 +5,16 @@ import * as path from 'path';
 // Local imports - agent
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { AgentLogger } from '@logger/AgentLogger';
-import { getConfig } from '@utils/config';
 
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
+import { getConfig } from '@utils/config';
 // Local imports
 import { WorkspaceFS, StorageFS } from '@utils/files';
+
+// Internal imports
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 /**

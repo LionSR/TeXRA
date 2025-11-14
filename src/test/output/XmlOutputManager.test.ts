@@ -3,7 +3,6 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
-
 // Local imports
 import {
   AgentSetting,
@@ -11,7 +10,11 @@ import {
   AgentCategory,
 } from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
+
+// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
 import { TaskRunFileService, WorkspaceFS } from '@utils/files';
 
 describe('XmlOutputManager markdown fallback', () => {

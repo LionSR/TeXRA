@@ -5,6 +5,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - utils
+import * as messageUtils from '@frontend/ui/messageUtils';
 import {
   getActiveEditorWithGuards,
   type ActiveFileGuardResult,
@@ -13,9 +14,6 @@ import {
 // Mock messageUtils before importing it
 let warningMessages: string[] = [];
 let errorMessages: string[] = [];
-
-// Import and mock messageUtils
-import * as messageUtils from '@frontend/ui/messageUtils';
 
 suite('Active File Guards', () => {
   let originalActiveTextEditor: vscode.TextEditor | undefined;

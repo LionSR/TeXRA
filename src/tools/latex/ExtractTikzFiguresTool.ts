@@ -2,10 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 // Local imports - tools
-import { defineTool } from '@tools/core/define';
 import { ToolError, toolResult, type ToolFileAttachment } from '@tools/result';
 import {
   buildFileAttachment,
@@ -13,8 +11,14 @@ import {
   resolveAndFormat,
 } from '@tools/utils';
 
+// Internal imports
+import { defineTool } from '@tools/core/define';
+
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 const ExtractTikzInputSchema = z.strictObject({
   texPath: z

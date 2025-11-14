@@ -1,12 +1,16 @@
 // Third-party imports
+import * as path from 'path';
+
+// Third-party imports
 import * as vscode from 'vscode';
 
 // Standard library imports
-import * as path from 'path';
 
 // Local imports
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { INSTRUCTION_PREFIX, globalSM } from '@common/state/stateManager';
+
+// Internal imports
+import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 /**
  * Show an instruction message that can be permanently dismissed.

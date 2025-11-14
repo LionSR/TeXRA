@@ -5,19 +5,23 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
+import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
+
+// Internal imports
 import {
   buildAgentOptionsPayload,
   DEFAULT_TOOL_USE_AGENT,
   DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
-import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
 
 // Local imports - webview
 import {
   BaseViewContentProvider,
   ModuleDescriptor,
 } from '@common/webview/BaseViewContentProvider';
+
+// Internal imports
 import { getConfig } from '@utils/config';
 import { GlobalStorageFS } from '@utils/files';
 
