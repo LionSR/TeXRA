@@ -14,7 +14,17 @@ import {
   safeGetElementValue,
   safeGetElementChecked,
   isSelectLikeElement,
+  getSelectOptionElements,
 } from '@common/domUtils.js';
+
+const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_TOOL_USE_AGENT = 'chat';
+
+function getSessionDefaultAgent(sessionType) {
+  return sessionType === SESSION_TYPES.TOOL_USE
+    ? DEFAULT_TOOL_USE_AGENT
+    : DEFAULT_WORKFLOW_AGENT;
+}
 
 const DEFAULT_SINGLE_FILE_TYPES = ['input', 'reference', 'auxiliary', 'media'];
 
@@ -33,10 +43,18 @@ function getAgent(sessionType) {
   const selectId =
     AGENT_SELECT_IDS[sessionType] ?? AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW];
   const selectElement = safeGetElementById(selectId);
-  if (isSelectLikeElement(selectElement) && selectElement.value) {
-    return selectElement.value;
+  if (isSelectLikeElement(selectElement)) {
+    if (selectElement.value) {
+      return selectElement.value;
+    }
+    const option = getSelectOptionElements(selectElement).find(
+      (item) => item.value,
+    );
+    if (option?.value) {
+      return option.value;
+    }
   }
-  return '';
+  return getSessionDefaultAgent(sessionType);
 }
 
 function collectSingleFileSelections(singleFileTypes) {
