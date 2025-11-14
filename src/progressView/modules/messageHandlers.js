@@ -278,20 +278,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
           );
         }
 
-        if (message.runFiles) {
-          Object.entries(message.runFiles).forEach(([runId, files]) => {
-            state.setRunFiles(message.stream, runId, files);
-          });
-        }
-
-        if (message.runMissingOutputs) {
-          Object.entries(message.runMissingOutputs).forEach(
-            ([runId, files]) => {
-              state.setRunMissingOutputs(message.stream, runId, files);
-            },
-          );
-        }
-
         if (message.runUsage) {
           Object.entries(message.runUsage).forEach(([runId, usage]) => {
             state.setRunUsage(message.stream, runId, usage);
@@ -490,11 +476,23 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         return;
       }
 
-      state.clearRunFiles(targetStream);
-      const filesByRun = message.filesByRun || {};
-      Object.entries(filesByRun).forEach(([runId, files]) => {
-        state.setRunFiles(targetStream, runId, files);
-      });
+      if (message.reset) {
+        state.clearRunFiles(targetStream);
+        this._refreshOutputsForActiveRun();
+        return;
+      }
+
+      const runId = message.runId;
+      if (!runId) {
+        return;
+      }
+
+      const rounds = message.rounds;
+      if (!rounds || Object.keys(rounds).length === 0) {
+        state.deleteRunFiles(targetStream, runId);
+      } else {
+        state.setRunFiles(targetStream, runId, rounds);
+      }
       this._refreshOutputsForActiveRun();
     }
   }
@@ -506,11 +504,22 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         return;
       }
 
-      state.clearRunMissingOutputs(targetStream);
-      const filesByRun = message.filesByRun || {};
-      Object.entries(filesByRun).forEach(([runId, files]) => {
-        state.setRunMissingOutputs(targetStream, runId, files);
-      });
+      if (message.reset) {
+        state.clearRunMissingOutputs(targetStream);
+        return;
+      }
+
+      const runId = message.runId;
+      if (!runId) {
+        return;
+      }
+
+      const rounds = message.rounds;
+      if (!rounds || Object.keys(rounds).length === 0) {
+        state.deleteRunMissingOutputs(targetStream, runId);
+      } else {
+        state.setRunMissingOutputs(targetStream, runId, rounds);
+      }
     }
   }
 

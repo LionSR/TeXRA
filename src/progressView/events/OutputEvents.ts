@@ -6,6 +6,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import { normalizeRunId } from '@progressView/constants/runIds';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -31,7 +32,49 @@ interface OutputEventsShared {
   getAllStreamStatuses: () => Map<string, StreamStatusType>;
 }
 
-const updateActiveStreamOutputs = (
+const toRoundRecord = <T>(
+  rounds?: Map<number, T[]>,
+): Record<number, T[]> | undefined => {
+  if (!rounds || rounds.size === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(rounds.entries());
+};
+
+const sendRunFileUpdate = (
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+  stream: string,
+  runId: string,
+): void => {
+  if (state.activeStream !== stream || !updater.isAvailable()) {
+    return;
+  }
+
+  const runFiles = state.outputFiles.getFiles(stream).get(runId);
+  const rounds = toRoundRecord(runFiles);
+  const payload = rounds ? { runId, rounds } : { runId };
+  updater.updateFiles(stream, payload);
+};
+
+const sendRunMissingUpdate = (
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+  stream: string,
+  runId: string,
+): void => {
+  if (state.activeStream !== stream || !updater.isAvailable()) {
+    return;
+  }
+
+  const runMissing = state.outputFiles.getMissingOutputs(stream).get(runId);
+  const rounds = toRoundRecord(runMissing);
+  const payload = rounds ? { runId, rounds } : { runId };
+  updater.updateMissingOutputs(stream, payload);
+};
+
+const resetFileSurface = (
   state: ProgressViewState,
   updater: WebviewUpdater,
   stream: string,
@@ -40,23 +83,19 @@ const updateActiveStreamOutputs = (
     return;
   }
 
-  const filesByRun = state.outputFiles.getFiles(stream);
-  const filesPayload = Object.fromEntries(
-    Array.from(filesByRun.entries(), ([runId, rounds]) => [
-      runId,
-      Object.fromEntries(rounds.entries()),
-    ]),
-  );
-  updater.updateFiles(stream, filesPayload);
+  updater.updateFiles(stream, { reset: true });
+};
 
-  const missingByRun = state.outputFiles.getMissingOutputs(stream);
-  const missingPayload = Object.fromEntries(
-    Array.from(missingByRun.entries(), ([runId, rounds]) => [
-      runId,
-      Object.fromEntries(rounds.entries()),
-    ]),
-  );
-  updater.updateMissingOutputs(stream, missingPayload);
+const resetMissingSurface = (
+  state: ProgressViewState,
+  updater: WebviewUpdater,
+  stream: string,
+): void => {
+  if (state.activeStream !== stream || !updater.isAvailable()) {
+    return;
+  }
+
+  updater.updateMissingOutputs(stream, { reset: true });
 };
 
 const registerOutputFileListeners = (
@@ -77,7 +116,8 @@ const registerOutputFileListeners = (
             executionId,
           },
         );
-        updateActiveStreamOutputs(state, updater, stream);
+        const runId = normalizeRunId(executionId ?? groupId);
+        sendRunFileUpdate(state, updater, stream, runId);
       });
     },
   );
@@ -92,7 +132,8 @@ const registerOutputFileListeners = (
           filesByRound,
           { executionId },
         );
-        updateActiveStreamOutputs(state, updater, stream);
+        const runId = normalizeRunId(executionId ?? groupId);
+        sendRunMissingUpdate(state, updater, stream, runId);
       });
     },
   );
@@ -100,14 +141,14 @@ const registerOutputFileListeners = (
   const clearMissing = bus.on('clearMissingOutputs', (stream) => {
     withErrorBoundary('failed to handle clearMissingOutputs', async () => {
       await state.outputFiles.clearMissingOutputs(stream);
-      updateActiveStreamOutputs(state, updater, stream);
+      resetMissingSurface(state, updater, stream);
     });
   });
 
   const clearFiles = bus.on('clearOutputFiles', (stream) => {
     withErrorBoundary('failed to handle clearOutputFiles', async () => {
       await state.outputFiles.clearFiles(stream);
-      updateActiveStreamOutputs(state, updater, stream);
+      resetFileSurface(state, updater, stream);
     });
   });
 
