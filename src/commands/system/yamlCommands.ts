@@ -11,17 +11,9 @@ import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
-
-// Internal imports
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { GlobalStorageFS, StorageFS } from '@utils/files';
-
-// Internal imports
 import {
   getActiveEditorWithGuards,
   logGuardFailure,

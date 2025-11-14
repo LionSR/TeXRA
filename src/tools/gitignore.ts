@@ -7,8 +7,6 @@ import { Minimatch } from 'minimatch';
 
 // Local imports - utils
 import { toPosixPath } from '@tools/pathUtils';
-
-// Internal imports
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 type GitignoreRule = {

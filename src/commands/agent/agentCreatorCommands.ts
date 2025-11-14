@@ -4,21 +4,11 @@ import * as vscode from 'vscode';
 
 // Local imports - agent runtime
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
-
-// Local imports - commands
 import { SecretManager } from '@frontend/secretManager';
-
-// Internal imports
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
-
-// Local imports - utils
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { ANTHROPIC_MODELS } from '@model/providers/anthropicModels';
-
-// Internal imports
 import { AbsoluteFS } from '@utils/files';
 
 // Type imports

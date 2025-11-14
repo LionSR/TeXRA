@@ -8,8 +8,6 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
-
-// Local imports - progress view
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
@@ -18,7 +16,6 @@ import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
 import { STATUS } from './modules/constants.js';
-// Local imports - existing components
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
@@ -27,7 +24,6 @@ import { ProgressViewState } from './state/ProgressViewState';
 
 // Type imports
 import type { ToolEditApprovalPrompt } from './types';
-
 
 // Type aliases for status values
 type StreamStatusType =

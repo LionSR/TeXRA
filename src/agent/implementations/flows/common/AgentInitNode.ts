@@ -1,7 +1,5 @@
 // Internal imports
 import { BaseNode } from '@agent/node';
-
-// Internal imports
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 
 // Local file imports

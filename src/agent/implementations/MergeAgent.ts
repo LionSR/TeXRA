@@ -3,16 +3,14 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
-
-// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
-// Local imports - agent components
 import { DirectAgent } from './DirectAgent';
 
 /**

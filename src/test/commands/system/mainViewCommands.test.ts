@@ -6,8 +6,6 @@ import * as vscode from 'vscode';
 
 // Local imports - test
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-
-// Internal imports
 import {
   registerMainViewCommands,
   mainViewCommands,

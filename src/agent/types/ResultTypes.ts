@@ -1,4 +1,3 @@
-// Third-party imports
 /**
  * Common result schemas used across utilities.
  */

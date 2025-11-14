@@ -6,19 +6,14 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+// Internal imports
 import {
   OutputFileInfoListSchema,
   OutputFileInfoSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
-
-// Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
-
-// Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-
-// Internal imports
 import {
   PersistentMapManager,
   type StateStorage,

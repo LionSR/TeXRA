@@ -3,6 +3,7 @@ import { FinishReason } from '@google/genai';
 
 // Local imports - stop reasons
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+// Internal imports
 import {
   ANTHROPIC_STOP,
   MCP_STOP,

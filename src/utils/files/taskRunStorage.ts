@@ -7,8 +7,6 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - storage
 import { getConfig } from '@utils/config';
 
 // Local file imports

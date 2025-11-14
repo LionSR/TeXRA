@@ -6,11 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import { getIncludedExtensions, FileType } from '@common/files/fileTypeUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 

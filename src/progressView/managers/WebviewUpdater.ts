@@ -4,7 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - progress view
 import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-// Local imports - agent filters
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
@@ -12,18 +11,19 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
-import type { TaskState } from '@logger/TaskState';
-
 // Type imports
+import type { TaskState } from '@logger/TaskState';
 import type {
   InstructionUpdate,
   StreamTabInfo,
   ToolEditApprovalPrompt,
 } from '@progressView/types';
+// Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
 // Type imports
 import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
+// Internal imports
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { COMMANDS, STATUS } from '@progressView/modules/constants.js';
 

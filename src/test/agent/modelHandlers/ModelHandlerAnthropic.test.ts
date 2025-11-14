@@ -1,8 +1,6 @@
 // Standard library imports
 import { strict as assert } from 'assert';
 
-// Third-party imports
-
 // Local imports - agent
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 
@@ -16,8 +14,6 @@ import {
   ModelConfig,
   ModelProvider,
 } from '@model/ModelConfig';
-
-// Local imports - utilities
 import * as configModule from '@utils/config';
 
 // Type imports

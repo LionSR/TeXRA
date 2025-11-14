@@ -4,17 +4,12 @@ import { pipeline } from 'node:stream/promises';
 
 // Third-party imports
 import axios from 'axios';
-// Third-party imports
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
-
-// Internal imports
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 export interface ExtractResult {

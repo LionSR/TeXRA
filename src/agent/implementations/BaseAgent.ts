@@ -1,8 +1,7 @@
 // Local imports - agent components
 import type { IModelHandler } from '@agent/modelHandlers';
-
-// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
+// Internal imports
 import {
   AgentPrompt,
   AgentSetting,
@@ -12,19 +11,17 @@ import { AgentRunState } from '@agent/core/AgentState';
 import { IAgent, type AgentRunHooks } from '@agent/core/IAgent';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { buildUserVars } from '@agent/utils/userVars';
+// Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type {
   AgentCycleBaseOptions,
   UserVariableChannels,
 } from '@agent/core/AgentCycleOptions';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
+// Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-
-// Local imports - logging
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Local imports - utilities
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { sleep } from '@utils/helpers';
 

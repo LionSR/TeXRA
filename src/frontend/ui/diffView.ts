@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import { REFRESH_THRESHOLD_MS } from '@utils/config';
 
 const CHANNEL = 'DiffRefresh';

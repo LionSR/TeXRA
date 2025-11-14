@@ -1,12 +1,7 @@
-// Standard library imports
 // (none needed)
-
-// Third-party imports
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-
-// Local imports - agent components
 import { K_SLICE } from '@utils/config';
 
 // Local file imports

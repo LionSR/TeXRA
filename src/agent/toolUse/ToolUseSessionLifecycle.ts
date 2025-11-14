@@ -1,17 +1,20 @@
 // Local imports - agent core
 import { AgentSharedStoreRegistry } from '@agent/core/AgentSharedStoreRegistry';
+// Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Internal imports
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+// Type imports
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+// Internal imports
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+// Type imports
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 // Internal imports
 import { STATUS } from '@progressView/modules/constants.js';
-
-// Local imports - agent implementation
 
 export class ToolUseSessionLifecycle<C = unknown> {
   private readonly followUps: FollowUpQueue;

@@ -17,31 +17,29 @@ import { runResponseCycle } from '@agent/core/ResponseCycle';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+// Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+// Internal imports
 import { OPENAI_CHAT_FINISH } from '@agent/modelHandlers/types/StopReasonTypes';
-// Local imports - logging
 import * as repetitionUtils from '@agent/utils/text/repetitionUtils';
 import * as debugSaver from '@agent/utils/debugMessageSaver';
-import type { OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 // Type imports
+import type { OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
 import type { AgentLogger } from '@logger/AgentLogger';
+// Internal imports
 import { MESSAGE_TYPES, type MessageType } from '@logger/messageTypes';
-// Local imports - model configuration
 import {
   ModelConfig,
   ModelProvider,
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
-// Local imports - utilities
 import replacementEngine from '@replacement/engine';
-// Internal imports
 import { WorkspaceFS } from '@utils/files';
-// Internal imports
 import xmlUtils from '@utils/text/xmlUtils';
-// Internal imports
 import * as latex from '@latex';
 
 // Third-party types

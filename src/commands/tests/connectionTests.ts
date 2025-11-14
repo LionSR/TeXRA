@@ -3,11 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Internal imports
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,

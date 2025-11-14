@@ -4,18 +4,12 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-
-// Internal imports
 import {
   getLinterMessages,
   getSeverityString,
   countDiagnosticsBySeverity,
 } from '@frontend/latex/linter';
-
-// Internal imports
 import * as logger from '@logger/logUtils';
-
-// Local imports - utils
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
