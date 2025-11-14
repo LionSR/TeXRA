@@ -1,5 +1,5 @@
 // Local imports - replacement
-import { ReplacementCategory } from '../types';
+import { ReplacementCategory } from '@replacement/types';
 
 export const HTML_ENTITY_REPLACEMENTS: ReplacementCategory = {
   name: 'html_entities',

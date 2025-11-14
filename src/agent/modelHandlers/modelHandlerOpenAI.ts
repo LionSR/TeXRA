@@ -20,15 +20,16 @@ import {
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 // Local imports - agent components
-import type { AgentConfig } from '../core/AgentConfig';
-import { AgentSetting, hasEndTag } from '../core/AgentDataclass';
-import { ConversationRoundState } from '../core/AgentState';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
   ExtendedCompletionUsage,
-} from '../core/ResponseUsage';
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
+} from '@agent/core/ResponseUsage';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+// Local imports - base handler
 import { ModelHandler } from './ModelHandler';
 import {
   describeAttachments,
@@ -42,6 +43,7 @@ import {
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
+// Local imports - media
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import {

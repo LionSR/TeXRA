@@ -1,10 +1,13 @@
+// Third-party imports
 import * as assert from 'assert';
+import * as path from 'path';
+
+// Local imports - utils
 import {
   getBasename,
   isTexFile,
   resolveFilePath,
-} from '../../../utils/files/pathUtils';
-import * as path from 'path';
+} from '@utils/files/pathUtils';
 
 suite('pathUtils Test Suite', () => {
   suite('getBasename', () => {

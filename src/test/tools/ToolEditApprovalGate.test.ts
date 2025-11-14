@@ -1,14 +1,18 @@
+// Third-party imports
 import * as assert from 'assert';
 
-import { WriteFileTool } from '../../tools/WriteTool';
-import { FileOpTool } from '../../tools/fileOp';
+// Local imports - tools
+import { WriteFileTool } from '@tools/WriteTool';
+import { FileOpTool } from '@tools/fileOp';
 import {
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
-} from '../../tools/approval/toolEditApproval';
-import * as configModule from '../../utils/config';
-import { WorkspaceFS } from '../../utils/files';
+} from '@tools/approval/toolEditApproval';
+
+// Local imports - utils
+import * as configModule from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
 
 suite('Tool edit approval gating', () => {
   let originalExists: typeof WorkspaceFS.exists;
