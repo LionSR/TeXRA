@@ -7,7 +7,7 @@ import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { AbsoluteFS } from '@utils/files';
 
-suite('loadAgentSettingAndPrompts', () => {
+describe('loadAgentSettingAndPrompts', () => {
   const absoluteFsAny = AbsoluteFS as unknown as {
     exists: (filePath: string) => Promise<boolean>;
     read: (filePath: string) => Promise<string>;
@@ -21,7 +21,7 @@ suite('loadAgentSettingAndPrompts', () => {
     return path.normalize(filePath);
   }
 
-  setup(() => {
+  beforeEach(() => {
     fileContents.clear();
 
     absoluteFsAny.exists = async (filePath: string) =>
@@ -37,12 +37,12 @@ suite('loadAgentSettingAndPrompts', () => {
     };
   });
 
-  teardown(() => {
+  afterEach(() => {
     absoluteFsAny.exists = originalExists;
     absoluteFsAny.read = originalRead;
   });
 
-  test('uses the _multiple definition when available', async () => {
+  it('uses the _multiple definition when available', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'polish.yaml');
     const multipleDefinitionPath = path.join(agentPath, 'polish_multiple.yaml');
@@ -85,7 +85,7 @@ suite('loadAgentSettingAndPrompts', () => {
     assert.strictEqual(prompts.userRequest, 'multiple variant');
   });
 
-  test('falls back to the base definition when _multiple is missing', async () => {
+  it('falls back to the base definition when _multiple is missing', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
     const fallbackResolution = {

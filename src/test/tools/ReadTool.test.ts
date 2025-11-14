@@ -11,27 +11,27 @@ import { WorkspaceFS } from '@utils/files';
 const catFormat = (lineNumber: number, content: string): string =>
   `${lineNumber.toString().padStart(6, ' ')}\t${content}`;
 
-suite('ReadFileTool', () => {
+describe('ReadFileTool', () => {
   let originalRead: typeof WorkspaceFS.read;
   let originalExists: typeof WorkspaceFS.exists;
   let originalStat: typeof WorkspaceFS.stat;
   let originalReadFileBytes: typeof WorkspaceFS.readFileBytes;
 
-  setup(() => {
+  beforeEach(() => {
     originalRead = WorkspaceFS.read;
     originalExists = WorkspaceFS.exists;
     originalStat = WorkspaceFS.stat;
     originalReadFileBytes = WorkspaceFS.readFileBytes;
   });
 
-  teardown(() => {
+  afterEach(() => {
     WorkspaceFS.read = originalRead;
     WorkspaceFS.exists = originalExists;
     WorkspaceFS.stat = originalStat;
     WorkspaceFS.readFileBytes = originalReadFileBytes;
   });
 
-  test('truncates output when file exceeds maximum lines', async () => {
+  it('truncates output when file exceeds maximum lines', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 10;
@@ -68,7 +68,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('returns complete content when file is within limit', async () => {
+  it('returns complete content when file is within limit', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES - 5;
@@ -89,7 +89,7 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.output, expected);
   });
 
-  test('reads requested range beyond default limit', async () => {
+  it('reads requested range beyond default limit', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 50;
@@ -123,7 +123,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('notes when requested range exceeds file length', async () => {
+  it('notes when requested range exceeds file length', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 50;
@@ -147,7 +147,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('indicates when the requested window lies beyond the file bounds', async () => {
+  it('indicates when the requested window lies beyond the file bounds', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES;
@@ -170,7 +170,7 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.output, '');
   });
 
-  test('handles single-line range correctly', async () => {
+  it('handles single-line range correctly', async () => {
     const tool = new ReadFileTool();
 
     const content = Array.from(
@@ -189,7 +189,7 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.output, catFormat(5, 'line 5'));
   });
 
-  test('handles empty file gracefully', async () => {
+  it('handles empty file gracefully', async () => {
     const tool = new ReadFileTool();
 
     WorkspaceFS.read = async () => '';
@@ -200,7 +200,7 @@ suite('ReadFileTool', () => {
     assert.strictEqual(result.output, '');
   });
 
-  test('returns pdf as attachment without text rendering', async () => {
+  it('returns pdf as attachment without text rendering', async () => {
     const tool = new ReadFileTool();
 
     let readCalled = false;
@@ -230,7 +230,7 @@ suite('ReadFileTool', () => {
     assert.ok(attachment.bytes instanceof Uint8Array);
   });
 
-  test('ignores requested range when returning pdf attachment', async () => {
+  it('ignores requested range when returning pdf attachment', async () => {
     const tool = new ReadFileTool();
 
     WorkspaceFS.read = async () => {
@@ -259,7 +259,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('returns image as attachment without text rendering', async () => {
+  it('returns image as attachment without text rendering', async () => {
     const tool = new ReadFileTool();
 
     let readCalled = false;
@@ -299,7 +299,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('defaults range end to start + limit - 1 when only start provided', async () => {
+  it('defaults range end to start + limit - 1 when only start provided', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = READ_FILE_MAX_LINES + 1000;
@@ -331,7 +331,7 @@ suite('ReadFileTool', () => {
     );
   });
 
-  test('handles range starting at line 1 with end exceeding file length', async () => {
+  it('handles range starting at line 1 with end exceeding file length', async () => {
     const tool = new ReadFileTool();
 
     const totalLines = 50;

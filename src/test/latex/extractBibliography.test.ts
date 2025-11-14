@@ -12,18 +12,18 @@ import {
 
 // Local imports - utils
 
-suite('extractBibliography helpers', () => {
+describe('extractBibliography helpers', () => {
   const originalRead = WorkspaceFS.read;
   const originalExists = WorkspaceFS.exists;
 
-  teardown(() => {
+  afterEach(() => {
     (WorkspaceFS as unknown as { read: typeof originalRead }).read =
       originalRead;
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       originalExists;
   });
 
-  test('collects bibliography paths and citation keys', async () => {
+  it('collects bibliography paths and citation keys', async () => {
     const texPath = path.join('chapters', 'main.tex');
     const expectedBibPath = path.join('chapters', 'references.bib');
 
@@ -49,7 +49,7 @@ suite('extractBibliography helpers', () => {
     );
   });
 
-  test('handles wildcard nocite directives consistently across runs', async () => {
+  it('handles wildcard nocite directives consistently across runs', async () => {
     const texPath = 'paper.tex';
     const expectedBibPath = 'refs.bib';
     const texContent = `
@@ -76,7 +76,7 @@ suite('extractBibliography helpers', () => {
     assert.deepStrictEqual(second, first);
   });
 
-  test('marks missing bibliography files and ignores empty citations', async () => {
+  it('marks missing bibliography files and ignores empty citations', async () => {
     const texPath = 'paper.tex';
 
     (WorkspaceFS as unknown as { read: typeof originalRead }).read =
@@ -101,7 +101,7 @@ suite('extractBibliography helpers', () => {
     );
   });
 
-  test('loads requested bibliography entries and reports missing keys', async () => {
+  it('loads requested bibliography entries and reports missing keys', async () => {
     const expectedContent = `@article{alpha,
   title = {Alpha Paper},
 }
@@ -131,7 +131,7 @@ suite('extractBibliography helpers', () => {
     ]);
   });
 
-  test('loads all entries when nocite wildcard is present', async () => {
+  it('loads all entries when nocite wildcard is present', async () => {
     const expectedContent = `@article{alpha,
   title = {Alpha Paper},
 }

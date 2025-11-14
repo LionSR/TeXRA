@@ -6,13 +6,13 @@ import { ExtractBibliographyTool } from '@tools/latex';
 import { WorkspaceFS } from '@utils/files';
 import * as bibliographyModule from '@latex/extractBibliography';
 
-suite('ExtractBibliographyTool', () => {
+describe('ExtractBibliographyTool', () => {
   const originalExists = WorkspaceFS.exists;
   const originalContext = bibliographyModule.extractBibliographyContext;
   const originalLoad = bibliographyModule.loadBibliographyEntries;
   const originalSummarize = bibliographyModule.summarizeBibliographyEntries;
 
-  teardown(() => {
+  afterEach(() => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       originalExists;
     (
@@ -30,7 +30,7 @@ suite('ExtractBibliographyTool', () => {
     ).summarizeBibliographyEntries = originalSummarize;
   });
 
-  test('returns bibliography entries and summary', async () => {
+  it('returns bibliography entries and summary', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) => path === 'main.tex';
     (
@@ -73,7 +73,7 @@ suite('ExtractBibliographyTool', () => {
     assert.strictEqual(result.userInstruction, undefined);
   });
 
-  test('reports missing bibliography files and keys', async () => {
+  it('reports missing bibliography files and keys', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (path: string) => path === 'paper.tex';
     (
@@ -110,7 +110,7 @@ suite('ExtractBibliographyTool', () => {
     assert.ok(result.userInstruction?.includes('Missing citation keys'));
   });
 
-  test('returns error when tex file is missing', async () => {
+  it('returns error when tex file is missing', async () => {
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async () => false;
 
@@ -121,7 +121,7 @@ suite('ExtractBibliographyTool', () => {
     assert.ok(result.error?.includes('LaTeX file not found'));
   });
 
-  test('includes explicit bibliography path when provided', async () => {
+  it('includes explicit bibliography path when provided', async () => {
     const calls: { paths: string[]; keys: string[] }[] = [];
 
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
@@ -162,7 +162,7 @@ suite('ExtractBibliographyTool', () => {
     assert.ok(result.summary?.includes('Resolved 1 bibliography entry'));
   });
 
-  test('falls back to wildcard when only a bibliography path is supplied', async () => {
+  it('falls back to wildcard when only a bibliography path is supplied', async () => {
     const calls: { paths: string[]; keys: string[] }[] = [];
 
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =

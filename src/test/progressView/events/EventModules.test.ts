@@ -15,6 +15,7 @@ import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
 
+// Event bus imports
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 class FakeBus {
