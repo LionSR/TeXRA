@@ -6,7 +6,6 @@ import importPlugin from 'eslint-plugin-import';
 import globals from 'globals';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import texraImportRules from './eslint-rules/import-group-comment.mjs';
 
 const INTERNAL_ALIAS_NAMES = [
   'agent',
@@ -70,7 +69,6 @@ export default tseslint.config(
     plugins: {
       '@stylistic': stylistic,
       import: importPlugin,
-      'texra-imports': texraImportRules,
     },
     rules: {
       // --- Migrated rules from .eslintrc.json ---
@@ -114,7 +112,6 @@ export default tseslint.config(
           'newlines-between': 'ignore',
         },
       ],
-      'texra-imports/import-group-comment': 'warn',
 
       // --- Adjustments for ESLint v9 ---
 
