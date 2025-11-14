@@ -15,7 +15,6 @@ import { LogMessageData } from '@logger/LogTypes';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
-import { STATUS } from './modules/constants.js';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 import { ProgressViewState } from './state/ProgressViewState';
@@ -24,14 +23,6 @@ import { ProgressViewState } from './state/ProgressViewState';
 
 // Type imports
 import type { ToolEditApprovalPrompt } from './types';
-
-// Type aliases for status values
-type StreamStatusType =
-  | typeof STATUS.RUNNING
-  | typeof STATUS.ERROR
-  | typeof STATUS.STOPPED
-  | typeof STATUS.WAITING
-  | typeof STATUS.RESUMING;
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
@@ -179,28 +170,17 @@ export class ProgressViewProvider
       vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Dark
         ? 'dark'
         : 'light';
-    this.webviewUpdater.updateTheme(theme);
 
-    // Validate and update active stream if necessary
-    const streams = this.state.streamTabs.keys();
-    if (!streams.includes(this.state.activeStream)) {
-      this.state.activeStream = streams[0] || '';
-    }
-
-    // Update all webview content using the new updater
-    this.webviewUpdater.updateAll(
+    const activeStream = this.webviewUpdater.updateAll(
       this.state,
       this.eventHandler.getAllStreamStatuses(),
+      theme,
     );
 
-    // Update status for current stream
-    if (this.state.activeStream) {
-      const status = this.eventHandler.getStreamStatus(this.state.activeStream);
-      if (status) {
-        this.webviewUpdater.updateStatus(status);
-      }
+    if (activeStream) {
+      this.eventHandler.refreshStreamSurface(activeStream);
     } else {
-      this.webviewUpdater.updateStatus(STATUS.READY);
+      this.eventHandler.refreshStreamSurface('');
     }
 
     this._pendingUpdate = false;
