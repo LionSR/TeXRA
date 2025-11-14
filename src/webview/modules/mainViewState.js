@@ -281,7 +281,8 @@ export class MainViewState {
     if (activeSelectId) {
       const defaultAgent = getSessionDefaultAgent(normalizedSessionType);
       const agentValue = safeGetElementValue(activeSelectId) ?? '';
-      const resolvedAgent = agentValue || getSelectDefaultValue(activeSelectId, defaultAgent);
+      const resolvedAgent =
+        agentValue || getSelectDefaultValue(activeSelectId, defaultAgent);
       if (!agentValue && resolvedAgent) {
         safeSetElementValue(activeSelectId, resolvedAgent);
       }
