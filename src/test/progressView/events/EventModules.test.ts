@@ -15,9 +15,7 @@ import { createTaskGroupEvents } from '@progressView/events/TaskGroupEvents';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
 
-import type { WebviewUpdater } from '@progressView/managers';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { AgentLogger } from '@logger/AgentLogger';
 
 class FakeBus {
   public readonly events: (keyof ProgressEventPayloads)[] = [];
@@ -95,6 +93,8 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createOutputEvents({
       logger: loggerStub,
+      refreshStreamSurface: () => {},
+      getAllStreamStatuses: () => new Map(),
     });
 
     const disposables = module.register(bus as any, stateStub, updaterStub);
@@ -114,6 +114,8 @@ describe('Progress event modules', () => {
     const bus = new FakeBus();
     const module = createOutputEvents({
       logger: loggerStub,
+      refreshStreamSurface: () => {},
+      getAllStreamStatuses: () => new Map(),
     });
 
     const calls: string[] = [];

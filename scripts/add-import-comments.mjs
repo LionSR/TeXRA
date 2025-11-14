@@ -50,7 +50,9 @@ function isInternalModule(specifier) {
   if (specifier.startsWith('@/') || specifier.startsWith('~/')) {
     return true;
   }
-  return INTERNAL_ALIAS_PREFIXES.some((prefix) => specifier === prefix || specifier.startsWith(prefix));
+  return INTERNAL_ALIAS_PREFIXES.some(
+    (prefix) => specifier === prefix || specifier.startsWith(prefix),
+  );
 }
 
 function classifyImport(node) {
@@ -81,7 +83,9 @@ function hasLeadingComment(fileText, node) {
     return false;
   }
   const previousLineStart = fileText.lastIndexOf('\n', previousLineEnd - 1) + 1;
-  const previousLine = fileText.slice(previousLineStart, previousLineEnd).trim();
+  const previousLine = fileText
+    .slice(previousLineStart, previousLineEnd)
+    .trim();
   return previousLine.startsWith('//') || previousLine.startsWith('/*');
 }
 
@@ -111,7 +115,10 @@ function dedupeImportCommentBlocks(text) {
     if (trimmed.startsWith('//')) {
       if (/imports/i.test(trimmed)) {
         let lookaheadIndex = i + 1;
-        while (lookaheadIndex < lines.length && lines[lookaheadIndex].trim() === '') {
+        while (
+          lookaheadIndex < lines.length &&
+          lines[lookaheadIndex].trim() === ''
+        ) {
           lookaheadIndex += 1;
         }
         if (
@@ -164,7 +171,12 @@ function dedupeImportCommentBlocks(text) {
 
 function ensureCommentForFile(filePath) {
   const fileText = fs.readFileSync(filePath, 'utf8');
-  const sourceFile = ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest, true);
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    fileText,
+    ts.ScriptTarget.Latest,
+    true,
+  );
   const imports = sourceFile.statements.filter(ts.isImportDeclaration);
   if (imports.length === 0) {
     return false;
@@ -180,7 +192,7 @@ function ensureCommentForFile(filePath) {
     if (previous) {
       const gapStart = previous.getEnd();
       const gapEnd = node.getStart();
-        if (previousClass === currentClass) {
+      if (previousClass === currentClass) {
         const leadingStart = node.getFullStart();
         const leadingText = fileText.slice(leadingStart, gapEnd);
         if (/imports/i.test(leadingText)) {
@@ -204,7 +216,11 @@ function ensureCommentForFile(filePath) {
     const commentLabel = classifyImport(node);
     const lineStart = fileText.lastIndexOf('\n', node.getStart() - 1) + 1;
     const insertionPos = lineStart >= 0 ? lineStart : 0;
-    edits.push({ start: insertionPos, end: insertionPos, text: `// ${commentLabel}\n` });
+    edits.push({
+      start: insertionPos,
+      end: insertionPos,
+      text: `// ${commentLabel}\n`,
+    });
   });
 
   if (edits.length === 0) {

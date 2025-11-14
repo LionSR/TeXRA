@@ -46,26 +46,26 @@ To experiment with Anthropic's 1M-token context window for Sonnet 4 or 4.5, ena
 
 Known for strong reasoning and creative capabilities.
 
-| Model ID  | Key Strength / Use Case               | Relative Cost | Relative Speed | Notes                            |
-| :-------- | :------------------------------------ | :------------ | :------------- | :------------------------------- |
-| `o1`      | Advanced reasoning, math, figures     | $$$$          | Slow           | Explicit reasoning               |
-| `gpt45`   | High quality, vision (Preview)        | $$$$          | Medium         |                                  |
-| `gpt5pro` | Premium reasoning & coding            | $$$$          | Slow           | 400k ctx, 272k max output        |
+| Model ID  | Key Strength / Use Case                | Relative Cost | Relative Speed | Notes                                    |
+| :-------- | :------------------------------------- | :------------ | :------------- | :--------------------------------------- |
+| `o1`      | Advanced reasoning, math, figures      | $$$$          | Slow           | Explicit reasoning                       |
+| `gpt45`   | High quality, vision (Preview)         | $$$$          | Medium         |                                          |
+| `gpt5pro` | Premium reasoning & coding             | $$$$          | Slow           | 400k ctx, 272k max output                |
 | `gpt51`   | Flagship reasoning w/ low-latency mode | $$$           | Medium         | New GPT-5.1 defaults to `none` reasoning |
-| `gpt5`    | Flagship reasoning & coding           | $$$           | Medium         | 400k context                     |
-| `gpt5-`   | Flagship mini, fast                   | $$            | Fast           | 400k context, mini               |
-| `gpt5--`  | Flagship nano, fastest                | $             | Very Fast      | 400k context, nano               |
-| `gpt41`   | Long-context vision, powerful         | $$$           | Medium         | 1M tokens context                |
-| `gpt41-`  | Long-context vision, cost-effective   | $$            | Medium         | 1M tokens context, mini          |
-| `gpt41--` | Long-context vision, cheapest         | $             | Medium         | 1M tokens context, nano          |
-| `gpt4o`   | Strong all-rounder, vision            | $$$           | Medium         | Good default choice              |
-| `gpt4ol`  | Latest `gpt4o`, potentially better    | $$$           | Medium         |                                  |
-| `o3`      | Coding, tool calling                  | $$$           | Medium         |                                  |
-| `o3pro`   | Reliable answers, heavy compute       | $$$$          | Slow           | `o3-pro`                         |
-| `o3-`     | Fast reasoning                        | $$$           | Fast           | `o3-mini`                        |
-| `o1-`     | Fast reasoning (smaller `o1`)         | $$$           | Fast           | `o1-mini`                        |
-| `gptoss`  | Open-weight reasoning, large context  | $$            | Medium         | `gpt-oss-120b` (OpenRouter only) |
-| `gptoss-` | Open-weight reasoning, cost-effective | $             | Fast           | `gpt-oss-20b` (OpenRouter only)  |
+| `gpt5`    | Flagship reasoning & coding            | $$$           | Medium         | 400k context                             |
+| `gpt5-`   | Flagship mini, fast                    | $$            | Fast           | 400k context, mini                       |
+| `gpt5--`  | Flagship nano, fastest                 | $             | Very Fast      | 400k context, nano                       |
+| `gpt41`   | Long-context vision, powerful          | $$$           | Medium         | 1M tokens context                        |
+| `gpt41-`  | Long-context vision, cost-effective    | $$            | Medium         | 1M tokens context, mini                  |
+| `gpt41--` | Long-context vision, cheapest          | $             | Medium         | 1M tokens context, nano                  |
+| `gpt4o`   | Strong all-rounder, vision             | $$$           | Medium         | Good default choice                      |
+| `gpt4ol`  | Latest `gpt4o`, potentially better     | $$$           | Medium         |                                          |
+| `o3`      | Coding, tool calling                   | $$$           | Medium         |                                          |
+| `o3pro`   | Reliable answers, heavy compute        | $$$$          | Slow           | `o3-pro`                                 |
+| `o3-`     | Fast reasoning                         | $$$           | Fast           | `o3-mini`                                |
+| `o1-`     | Fast reasoning (smaller `o1`)          | $$$           | Fast           | `o1-mini`                                |
+| `gptoss`  | Open-weight reasoning, large context   | $$            | Medium         | `gpt-oss-120b` (OpenRouter only)         |
+| `gptoss-` | Open-weight reasoning, cost-effective  | $             | Fast           | `gpt-oss-20b` (OpenRouter only)          |
 
 > **Note:** GPT-5.1, GPT-5, and GPT-5 Pro reasoning summaries require additional account verification. TeXRA disables them by default—enable `"texra.model.gpt5ReasoningSummary": true` if your account supports this feature.
 
