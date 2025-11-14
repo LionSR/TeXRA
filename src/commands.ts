@@ -1,6 +1,10 @@
+// Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - commands
+import * as logger from '@logger/logUtils';
+
+// Internal imports
 import { registerFileSelectionCommands } from '@commands/files/fileSelectionCommands';
 import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
@@ -8,7 +12,6 @@ import { registerPackCommands } from '@commands/housekeeping/packCommands';
 import { registerCleanCommands } from '@commands/housekeeping/cleanCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
 import { registerExecuteCommand } from '@commands/agent/executeCommand';
-import { MainViewProvider } from './MainViewProvider';
 import { registerLatexCommands } from '@commands/latex/latexCommands';
 import { registerImageCommands } from '@commands/latex/imageCommands';
 import { registerFigureCommands } from '@commands/latex/figCommands';
@@ -36,7 +39,9 @@ import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerSampleProjectCommands } from '@commands/system/sampleProjectCommands';
 import { registerWalkthroughCommands } from '@commands/system/walkthroughCommands';
 
-import * as logger from '@logger/logUtils';
+// Local file imports
+import { MainViewProvider } from './MainViewProvider';
+
 
 const CHANNEL = 'Registration';
 logger.initialize(CHANNEL);

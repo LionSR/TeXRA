@@ -1,4 +1,7 @@
 // Local imports - agent components
+import type { IModelHandler } from '@agent/modelHandlers';
+
+// Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentPrompt,
@@ -7,7 +10,6 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState } from '@agent/core/AgentState';
 import { IAgent, type AgentRunHooks } from '@agent/core/IAgent';
-import type { IModelHandler } from '@agent/modelHandlers';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { buildUserVars } from '@agent/utils/userVars';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';

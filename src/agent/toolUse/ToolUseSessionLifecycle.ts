@@ -6,10 +6,12 @@ import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersiste
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
+
+// Internal imports
 import { STATUS } from '@progressView/modules/constants.js';
 
 // Local imports - agent implementation
-import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 export class ToolUseSessionLifecycle<C = unknown> {
   private readonly followUps: FollowUpQueue;

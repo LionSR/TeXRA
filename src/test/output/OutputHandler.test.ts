@@ -3,18 +3,24 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - test
+import { OutputHandler } from '@agent/output';
+
+// Internal imports
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
   AgentType,
   AgentCategory,
 } from '@agent/core/AgentDataclass';
-import { OutputHandler } from '@agent/output';
 
 // Local imports
-import { bus } from '@eventBus/ProgressEventBus';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
+
+// Internal imports
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import { bus } from '@eventBus/ProgressEventBus';
 
 const createLocation = (file: string) => ({
   absolutePath: file,

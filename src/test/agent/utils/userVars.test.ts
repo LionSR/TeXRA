@@ -10,6 +10,8 @@ import {
 } from '@agent/core/AgentDataclass';
 import type { AgentPrompt } from '@agent/core/AgentDataclass';
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
+
+// Internal imports
 import * as configModule from '@utils/config';
 
 const baseSetting: AgentSetting = {

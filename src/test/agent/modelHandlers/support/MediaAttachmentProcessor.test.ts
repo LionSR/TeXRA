@@ -13,11 +13,17 @@ import {
   MediaAttachmentProcessor,
   type MediaFileResult,
 } from '@agent/modelHandlers/support/MediaAttachmentProcessor';
+
+// Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelCapabilities,
 } from '@model/ModelConfig';
+
+// Internal imports
 import { AbsoluteFS } from '@utils/files';
 
 interface LoggerStub extends Partial<AgentLogger> {

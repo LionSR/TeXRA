@@ -2,14 +2,18 @@
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Internal imports
+import * as logger from '@logger/logUtils';
+
+// Internal imports
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
 } from '@latex/textConnection';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
 
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);

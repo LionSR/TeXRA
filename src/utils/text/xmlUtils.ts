@@ -5,7 +5,11 @@ import nodePandoc from 'node-pandoc';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+
+// Internal imports
 import { K_SLICE } from '@utils/config';
+
+// Internal imports
 import { checkToolInstalled } from '@utils/system/toolUtils';
 
 const CHANNEL = 'xmlUtils';

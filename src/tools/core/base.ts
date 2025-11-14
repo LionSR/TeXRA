@@ -3,6 +3,8 @@ import { ZodError, type ZodType } from 'zod';
 
 // Local imports - tools
 import type { ToolDefinition } from '@model';
+
+// Internal imports
 import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {

@@ -1,6 +1,10 @@
+// Type imports
 import type { Flow } from '@agent/node';
+
+// Type imports
 import type { BaseAgent } from '@agent/implementations/BaseAgent';
 
+// Type imports
 import type {
   AgentRunHooks,
   AgentLifecycleState,

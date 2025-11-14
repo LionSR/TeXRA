@@ -1,8 +1,9 @@
 // Standard library imports
 import * as path from 'path';
-import axios from 'axios';
 import { pipeline } from 'node:stream/promises';
 
+// Third-party imports
+import axios from 'axios';
 // Third-party imports
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
@@ -12,6 +13,8 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - utilities
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+
+// Internal imports
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 
 export interface ExtractResult {

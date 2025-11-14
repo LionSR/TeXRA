@@ -5,6 +5,20 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - progress view
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import {
+  OutputFileInfoListSchema,
+  OutputFileInfoSchema,
+  type OutputFileInfo,
+} from '@agent/output/types';
+
+// Internal imports
+import { WorkspaceStateKey } from '@common/state/stateManager';
+
+// Internal imports
+import { AgentLogger } from '@logger/AgentLogger';
+
+// Internal imports
 import {
   PersistentMapManager,
   type StateStorage,
@@ -12,16 +26,8 @@ import {
 import { normalizeRunId } from '@progressView/constants/runIds';
 
 // Local imports
-import { WorkspaceStateKey } from '@common/state/stateManager';
-import { AgentLogger } from '@logger/AgentLogger';
 
 // Types
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-import {
-  OutputFileInfoListSchema,
-  OutputFileInfoSchema,
-  type OutputFileInfo,
-} from '@agent/output/types';
 
 /**
  * Manages output files collection with persistence and file existence validation.

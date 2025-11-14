@@ -2,10 +2,8 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 
 // Local imports - tools
-import { defineTool } from '@tools/core/define';
 import { ToolError, toolResult } from '@tools/result';
 import {
   buildFileAttachment,
@@ -13,8 +11,14 @@ import {
   resolveAndFormat,
 } from '@tools/utils';
 
+// Internal imports
+import { defineTool } from '@tools/core/define';
+
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
+
+// Internal imports
+import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 
 const ExtractFiguresInputSchema = z.strictObject({
   texPath: z

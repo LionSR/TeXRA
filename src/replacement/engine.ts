@@ -11,6 +11,7 @@ import { getConfig } from '@utils/config';
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
 
+// Local file imports
 import {
   ReplacementCategory,
   ReplacementFunction,
@@ -23,7 +24,6 @@ import {
   escapeTextttUnderscores,
   wrapCritiqueInAlign,
 } from './advanced';
-
 import {
   EQUATION_REPLACEMENTS,
   EQUATION_MACRO_REPLACEMENTS,
@@ -42,7 +42,6 @@ import {
   LATEXDIFF_REPLACEMENTS,
 } from './rules';
 import { MAX_STYLE_REPLACEMENTS, MAX_REGEX_REPLACEMENTS } from './maxRules';
-
 import {
   PARENTHESES_REPLACEMENTS,
   LATEXDIFF_MARKUP_REPLACEMENTS,

@@ -6,6 +6,8 @@ import {
   executeWolframCode,
   executeWolframScriptFile,
 } from '@tools/wolfram/wolframScriptUtils';
+
+// Internal imports
 import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
 

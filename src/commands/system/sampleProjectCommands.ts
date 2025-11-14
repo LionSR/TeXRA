@@ -5,10 +5,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - fs
+import * as logger from '@logger/logUtils';
+
+// Internal imports
 import { WorkspaceFS, copyDirToFS } from '@utils/files';
 
 // Local imports - log
-import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'SampleProjectCommands';
 logger.initialize(CHANNEL);
