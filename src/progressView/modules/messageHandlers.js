@@ -258,16 +258,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       const previousRunId = state.getActiveRunId(message.stream);
       state.clearActiveRun(message.stream);
       logContent.innerHTML = '';
-      if (message.groups && message.groups.length > 0) {
-        const parentGroups = message.groups.filter((g) => !g.parentGroupId);
-        const childGroups = message.groups.filter((g) => g.parentGroupId);
+      const groups = message.groups || [];
+      if (groups.length > 0) {
+        const parentGroups = groups.filter((g) => !g.parentGroupId);
         dom.runSelector.setRuns(parentGroups);
-        parentGroups
-          .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.addGroup(g));
-        childGroups
-          .sort((a, b) => a.startTime - b.startTime)
-          .forEach((g) => dom.taskGroups.addGroup(g));
+        dom.taskGroups.renderInitial(groups);
 
         if (message.runInstructions) {
           Object.entries(message.runInstructions).forEach(
@@ -324,10 +319,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       } else {
         dom.taskGroups.showRun(null);
       }
-      const sortedMessages = [...message.messages].sort(
-        (a, b) => a.timestamp - b.timestamp,
-      );
-      sortedMessages.forEach((msg) => {
+      const logMessages = message.messages || [];
+      logMessages.forEach((msg) => {
         if (msg.groupId) {
           if (!dom.logEntries.append(msg)) {
             const formatted = this._entryFormatter.format(msg);
