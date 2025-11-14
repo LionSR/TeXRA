@@ -18,57 +18,20 @@ export class TaskGroupDomManager {
     this.runSelector = runSelector || null;
   }
 
-  /**
-   * Adds a log group to the DOM
-   * @param {Object} group - Group data
-   */
-  addGroup(group) {
-    const existingGroup = this.groupElements.get(group.id);
-    if (existingGroup) {
-      if (!progressViewState.taskGroups.get(group.id)) {
-        console.warn(
-          `Group ${group.id} exists in DOM but not in state - removing from DOM`,
-        );
-        this._removeToggleListener(group.id);
-        existingGroup.remove();
-        this.groupElements.delete(group.id);
-      } else {
-        progressViewState.taskGroups.set(group.id, group);
-        if (group.parentGroupId) {
-          this.updateGroup({
-            groupId: group.id,
-            updates: {
-              status: group.status,
-              endTime: group.endTime,
-            },
-          });
-        }
-        return;
-      }
-    }
-
+  _createGroupElement(group) {
     const baseGroupElement = createFromTemplate('groupDetailsTemplate');
     if (!baseGroupElement) {
-      console.error(
-        'TaskGroupDomManager.addGroup: groupDetailsTemplate not found',
-      );
-      return;
+      return null;
     }
 
     const groupContainer = baseGroupElement.querySelector('.log-group-content');
     if (!groupContainer) {
-      console.error(
-        'TaskGroupDomManager.addGroup: missing group content container',
-      );
-      baseGroupElement.remove();
-      return;
+      return null;
     }
     groupContainer.id = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    const isRootGroup = !group.parentGroupId;
-    let detailsElem = null;
-
-    if (isRootGroup) {
+    let detailsElem;
+    if (!group.parentGroupId) {
       detailsElem = baseGroupElement;
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.classList.add('log-run');
@@ -76,11 +39,7 @@ export class TaskGroupDomManager {
     } else {
       const headerElement = this.headerFormatter.create(group);
       if (!headerElement) {
-        console.error(
-          'TaskGroupDomManager.addGroup: failed to create group header',
-        );
-        baseGroupElement.remove();
-        return;
+        return null;
       }
 
       detailsElem = document.createElement('details');
@@ -88,8 +47,6 @@ export class TaskGroupDomManager {
       detailsElem.id = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
       detailsElem.appendChild(headerElement);
       detailsElem.appendChild(groupContainer);
-      baseGroupElement.replaceChildren();
-      baseGroupElement.remove();
 
       const isCollapsed = progressViewState.toggleStates.get(group.id);
       detailsElem.open = isCollapsed !== true;
@@ -104,35 +61,114 @@ export class TaskGroupDomManager {
     progressViewState.taskGroups.set(group.id, group);
     this.groupElements.set(group.id, detailsElem);
 
-    // Insert the group at the right position in the parent
+    return detailsElem;
+  }
+
+  _resolveGroupContent(parentGroupId) {
+    if (!parentGroupId) {
+      return document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    }
+    const parentDetails = this.groupElements.get(parentGroupId);
+    return parentDetails?.querySelector('.log-group-content') ?? null;
+  }
+
+  renderInitial(groups) {
+    if (!Array.isArray(groups) || groups.length === 0) {
+      return;
+    }
+
     const container = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (!container) {
-      console.error(
-        'TaskGroupDomManager.addGroup: missing log content container',
-      );
+      return;
+    }
+
+    const topLevel = [];
+    const childGroups = [];
+    for (const group of groups) {
+      if (group.parentGroupId) {
+        childGroups.push(group);
+      } else {
+        topLevel.push(group);
+      }
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const group of topLevel) {
+      const element = this._createGroupElement(group);
+      if (element) {
+        fragment.appendChild(element);
+      }
+    }
+    container.appendChild(fragment);
+
+    if (childGroups.length > 0) {
+      const fragmentByParent = new Map();
+      for (const group of childGroups) {
+        const element = this._createGroupElement(group);
+        if (!element) {
+          continue;
+        }
+        const parentContent = this._resolveGroupContent(group.parentGroupId);
+        if (!parentContent) {
+          continue;
+        }
+        let bucket = fragmentByParent.get(parentContent);
+        if (!bucket) {
+          bucket = document.createDocumentFragment();
+          fragmentByParent.set(parentContent, bucket);
+        }
+        bucket.appendChild(element);
+      }
+
+      for (const [
+        parentContent,
+        fragmentForParent,
+      ] of fragmentByParent.entries()) {
+        parentContent.appendChild(fragmentForParent);
+      }
+    }
+
+    if (topLevel.length > 0) {
+      progressViewState.currentGroupId = topLevel[topLevel.length - 1].id;
+      this.collapsePreviousActiveGroup();
+    }
+  }
+
+  /**
+   * Adds a log group to the DOM
+   * @param {Object} group - Group data
+   */
+  addGroup(group) {
+    const existingElement = this.groupElements.get(group.id);
+    if (existingElement) {
+      progressViewState.taskGroups.set(group.id, group);
+      if (group.parentGroupId) {
+        this.updateGroup({
+          groupId: group.id,
+          updates: {
+            status: group.status,
+            endTime: group.endTime,
+          },
+        });
+      }
+      return;
+    }
+
+    const element = this._createGroupElement(group);
+    if (!element) {
+      return;
+    }
+
+    const targetContainer = this._resolveGroupContent(group.parentGroupId);
+    if (!targetContainer) {
       this._removeToggleListener(group.id);
       this.groupElements.delete(group.id);
       return;
     }
 
-    if (group.parentGroupId) {
-      const parentDetails = this.groupElements.get(group.parentGroupId);
-      const parentGroupContent =
-        parentDetails?.querySelector('.log-group-content');
-      if (parentGroupContent) {
-        insertChronologically({
-          container: parentGroupContent,
-          element: detailsElem,
-          timestamp: group.startTime,
-        });
-        return;
-      }
-    }
-
-    // For top-level groups, insert in chronological order
     insertChronologically({
-      container,
-      element: detailsElem,
+      container: targetContainer,
+      element,
       timestamp: group.startTime,
     });
 
