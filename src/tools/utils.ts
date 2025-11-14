@@ -7,8 +7,6 @@ import { Minimatch } from 'minimatch';
 // Local imports - tools
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 import { toPosixPath } from '@tools/pathUtils';
-
-// Local imports - utils
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 /**

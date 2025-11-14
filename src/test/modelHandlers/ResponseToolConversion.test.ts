@@ -3,6 +3,8 @@ import { strict as assert } from 'assert';
 
 // Local imports - test
 import { toOpenAIResponseTools } from '@agent/modelHandlers/toolConversion';
+
+// Type imports
 import type { ToolDefinition } from '@model';
 
 describe('toOpenAIResponseTools', () => {

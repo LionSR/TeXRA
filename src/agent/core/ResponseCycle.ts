@@ -1,7 +1,8 @@
 // Local imports - agent components
-import { AgentSharedStore } from './AgentSharedStore';
+import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
-// Local imports - flow orchestration
+// Local file imports
+import { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -10,11 +11,6 @@ import {
 
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
-
-// Local imports - model handler types
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-
-// Local imports - agent configuration
 import type { AgentConfig } from './AgentConfig';
 
 export interface ResponseCycleOptions<C = unknown>

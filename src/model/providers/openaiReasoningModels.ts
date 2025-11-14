@@ -5,7 +5,7 @@ import {
   ModelConfig,
   ModelProvider,
   ReasoningEffort,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for OpenAI reasoning models
 const OPENAI_REASONING_DEFAULT_CAPABILITIES: ModelCapabilities = {
@@ -223,6 +223,28 @@ export const OPENAI_REASONING_MODELS: Record<string, ModelConfig> = {
     capabilities: {
       ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
       cacheDiscountFactor: 0.25,
+      supportsNativeMCPServer: true,
+      supportsNativeWebSearch: true,
+      supportsNativeCodeExecution: true,
+      supportsPredictiveOutput: true,
+      supportsVision: true,
+      supportsNativePdf: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
+  gpt51: {
+    name: 'gpt51',
+    fullName: 'gpt-5.1-2025-11-13',
+    openrouterFullName: 'openai/gpt-5.1-2025-11-13',
+    provider: ModelProvider.OPENAI,
+    maxOutputTokens: 128000,
+    contextWindow: 400000,
+    inputPrice: 1.25,
+    outputPrice: 10.0,
+    capabilities: {
+      ...OPENAI_REASONING_DEFAULT_CAPABILITIES,
+      cacheDiscountFactor: 0.25,
+      reasoningEffort: ReasoningEffort.NONE,
       supportsNativeMCPServer: true,
       supportsNativeWebSearch: true,
       supportsNativeCodeExecution: true,

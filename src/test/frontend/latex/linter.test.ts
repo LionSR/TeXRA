@@ -5,10 +5,8 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - filesystem
-import { WorkspaceFS } from '@utils/files';
-
-// Local imports - latex
 import { getLinterMessages } from '@frontend/latex/linter';
+import { WorkspaceFS } from '@utils/files';
 
 describe('latex linter diagnostics', () => {
   type MutableWorkspaceFs = {

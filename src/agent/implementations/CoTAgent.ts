@@ -1,7 +1,9 @@
 // Local imports - agent components
-import { ConversationRoundState, AgentRunState } from '../core/AgentState';
-import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 import { getOutputFileName } from '@agent/output';
+import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+
+// Local file imports
+import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.

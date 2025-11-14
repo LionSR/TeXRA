@@ -2,26 +2,25 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import { bus } from '@eventBus/ProgressEventBus';
+import type { FileOpResult } from '@agent/types/ResultTypes';
 
-// Local imports - log
+// Internal imports
+import {
+  showLoggedErrorMessage,
+  showLoggedMessage,
+} from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-
-// Local imports - utilities
-import { getStreamTabId } from '@/logger/streamUtils';
-
-// Local imports - housekeeping
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   runCleanSingle,
   runCleanMultiple,
   runCleanBuild,
   runCleanOutput,
 } from '@housekeeping';
-import type { FileOpResult } from '@agent/types/ResultTypes';
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-} from '@common/errors/errorHandlingUtils';
+import { getStreamTabId } from '@/logger/streamUtils';
+
+// Local imports - housekeeping
+
 
 const CHANNEL = 'cleanCommands';
 logger.initialize(CHANNEL);

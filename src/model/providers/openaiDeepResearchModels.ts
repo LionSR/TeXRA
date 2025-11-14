@@ -4,7 +4,7 @@ import {
   ModelCapabilities,
   ModelConfig,
   ModelProvider,
-} from '../ModelConfig';
+} from '@model/ModelConfig';
 
 // Common capabilities for OpenAI reasoning models
 const OPENAI_DEEP_RESEARCH_DEFAULT_CAPABILITIES: ModelCapabilities = {

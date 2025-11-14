@@ -1,11 +1,11 @@
-// Third-party imports
-// Standard library imports
 
 // Local imports - core
 import { z } from 'zod';
-import { defineTool } from './core/define';
 
-// Local imports - tools
+// Internal imports
+import { isTexFile } from '@common/files/fileTypeUtils';
+import replacementEngine from '@replacement/engine';
+import { ToolResult, toolResult } from '@tools/result';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -13,12 +13,16 @@ import {
   requestToolEditApproval,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { ToolResult, toolResult } from '@tools/result';
+import { WorkspaceFS } from '@utils/files';
+
+// Local file imports
+import { defineTool } from './core/define';
+
+// Local imports - tools
 
 // Local imports - utils
-import { WorkspaceFS } from '@utils/files';
-import replacementEngine from '@replacement/engine';
-import { isTexFile } from '@common/files/fileTypeUtils';
+
+
 
 const WriteInputSchema = z.strictObject({
   path: z.string(),

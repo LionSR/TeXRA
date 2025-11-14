@@ -1,9 +1,12 @@
-// Local imports - usage types
-import type { UsageProvider } from './RunUsageAccumulator';
 
 // Local imports - model handlers
 import type { IModelHandler } from '@agent/modelHandlers';
+
+// Internal imports
 import { ModelProvider } from '@model/ModelConfig';
+
+// Type imports
+import type { UsageProvider } from './RunUsageAccumulator';
 
 export function resolveUsageProvider(
   handler: IModelHandler<any, any, any, any, any>,
