@@ -109,7 +109,10 @@ export class ProgressEventHandler {
   /**
    * Send instruction updates for the provided stream
    */
-  private sendInstructionUpdate(stream: StreamTabId | ''): void {
+  private sendInstructionUpdate(
+    stream: StreamTabId | '',
+    precomputedRunId?: string | null,
+  ): void {
     if (!this.webviewUpdater.isAvailable()) {
       return;
     }
@@ -123,9 +126,12 @@ export class ProgressEventHandler {
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKindHint = this.state.getSessionKindHint(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
-    const runId = this.state.resolveRunId(stream, undefined, {
-      persist: false,
-    });
+    const runId =
+      precomputedRunId !== undefined
+        ? precomputedRunId
+        : this.state.resolveRunId(stream, undefined, {
+            persist: false,
+          });
 
     if (runId && instructionUpdate) {
       void this.state.runInstructions.setInstruction(
@@ -201,21 +207,12 @@ export class ProgressEventHandler {
       runUsage: usageByRun,
     });
 
-    // Send output files for current stream
-    this.webviewUpdater.updateFiles(stream, filesByRun);
-
-    // Send missing outputs for current stream
-    this.webviewUpdater.updateMissingOutputs(stream, missingByRun);
-
-    // Send usage for current stream
-    this.webviewUpdater.updateUsage(stream, usageByRun);
-
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
-      this.sendInstructionUpdate(stream);
+      this.sendInstructionUpdate(stream, activeRunId);
     }
   }
 
