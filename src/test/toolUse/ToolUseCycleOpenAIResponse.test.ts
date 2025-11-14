@@ -142,7 +142,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -158,7 +158,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'tool-use-openai' as StreamTabId,
@@ -167,7 +167,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
     const events: any[] = [];
@@ -257,7 +257,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       userPrefix: '',
       userRequest: '',
     };
-    const toolState = new AgentWorkspaceState();
+    const workspaceState = new AgentWorkspaceState();
     const options: ToolUseCycleOptions<OpenAI> = {
       modelHandler: handler,
       agentSetting: setting,
@@ -273,7 +273,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
       toolRegistry,
       checkInterruption: () => false,
       setAbortController: () => {},
-      toolState,
+      workspaceState,
       modelName: 'test',
       context: new AgentExecutionContext({
         streamId: 'tool-use-openai-empty' as StreamTabId,
@@ -282,7 +282,7 @@ describe('runToolUseCycle OpenAIResponse', () => {
     const store = new AgentSharedStore({
       round: new ConversationRoundState(0),
       run: new AgentRunState(),
-      workspace: toolState,
+      workspace: workspaceState,
       user: options.userVarChannels,
     });
     const events: any[] = [];
