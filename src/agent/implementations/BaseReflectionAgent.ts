@@ -643,7 +643,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
           prepareAgentWorkspaceState: () =>
             this.prepareAgentWorkspaceState(roundIndex, workspaceState),
           prepareRoundContext: () =>
-            this.prepareRoundContext(roundIndex, runState, messages, workspaceState),
+            this.prepareRoundContext(
+              roundIndex,
+              runState,
+              messages,
+              workspaceState,
+            ),
           runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
             this.runRoundPipeline({
               roundIndex,

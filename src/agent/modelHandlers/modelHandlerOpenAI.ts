@@ -1034,10 +1034,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
       workspaceState.assembly.updateAccumulatedOutput(fileContent);
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
-      await flexibleFS.write(outputFile, workspaceState.assembly.accumulatedOutput);
+      await flexibleFS.write(
+        outputFile,
+        workspaceState.assembly.accumulatedOutput,
+      );
     }
     const state = new ConversationRoundState(0);
-    workspaceState.assembly.lastResponse = workspaceState.assembly.accumulatedOutput;
+    workspaceState.assembly.lastResponse =
+      workspaceState.assembly.accumulatedOutput;
     this.addContinueMessageWithoutPrefill(
       messages,
       state,
@@ -1229,7 +1233,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       );
       messages.push({
         role: 'assistant',
-        content: [{ type: 'text', text: workspaceState.assembly.accumulatedOutput }],
+        content: [
+          { type: 'text', text: workspaceState.assembly.accumulatedOutput },
+        ],
       });
     }
   }
