@@ -95,11 +95,14 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.usageEvents.register(bus, this.state, this.webviewUpdater),
     );
-    disposables.push(
-      ...this.logEvents.register(bus, this.state, this.webviewUpdater),
-    );
+    // Task group events must be registered before log events so buffered group
+    // replays run first. Otherwise replayed thinking logs land before their
+    // containers exist, leaving the progress board with orphaned banners.
     disposables.push(
       ...this.taskGroupEvents.register(bus, this.state, this.webviewUpdater),
+    );
+    disposables.push(
+      ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
     return disposables;
   }
