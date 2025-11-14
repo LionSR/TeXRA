@@ -35,5 +35,6 @@ export function getIncludedExtensions(
  * Returns true if the file has a .tex extension.
  */
 export function isTexFile(filePath: string): boolean {
-  return path.extname(filePath).toLowerCase() === '.tex';
+  const fileName = path.basename(filePath);
+  return fileName.toLowerCase().endsWith('.tex');
 }
