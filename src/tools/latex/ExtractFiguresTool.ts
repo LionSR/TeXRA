@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
+import { defineTool } from '@tools/core/define';
 import { ToolError, toolResult } from '@tools/result';
 import {
   buildFileAttachment,

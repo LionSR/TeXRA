@@ -1,5 +1,8 @@
+// Third-party imports
 import * as assert from 'assert';
-import { WorkspaceFS } from '../../../utils/files/workspaceFS';
+
+// Local imports - utils
+import { WorkspaceFS } from '@utils/files/workspaceFS';
 
 suite('WorkspaceFS Test Suite', () => {
   test('delete should be idempotent - not throw when file does not exist', async () => {

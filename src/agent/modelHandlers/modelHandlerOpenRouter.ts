@@ -5,7 +5,7 @@
 import OpenAI from 'openai';
 
 // Local imports - agent
-import { AgentWorkspaceState } from '../core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - agent components
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';

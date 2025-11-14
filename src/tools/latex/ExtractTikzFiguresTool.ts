@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 // Local imports - tools
-import { defineTool } from '../core/define';
+import { defineTool } from '@tools/core/define';
 import { ToolError, toolResult, type ToolFileAttachment } from '@tools/result';
 import {
   buildFileAttachment,

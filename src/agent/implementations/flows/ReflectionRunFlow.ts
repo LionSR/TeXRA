@@ -10,7 +10,7 @@ import type {
   BaseReflectionAgent,
   ReflectionRoundContext,
   ReflectionRoundResult,
-} from '../BaseReflectionAgent';
+} from '@agent/implementations/BaseReflectionAgent';
 import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
 import type {
   AgentLifecycleState,
