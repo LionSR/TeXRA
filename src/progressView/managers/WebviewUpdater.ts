@@ -330,28 +330,31 @@ export class WebviewUpdater {
   ): StreamTabId {
     const streams = buildStreamInfos(state, statuses, state.agentTypeFilter);
 
-    let activeStream = state.activeStream;
-    if (!streams.some((info) => info.name === activeStream)) {
-      activeStream = streams[0]?.name ?? '';
-      state.activeStream = activeStream;
+    const webview = this.getWebview();
+    let resolvedActiveStream = state.activeStream;
+    if (!streams.some((info) => info.name === resolvedActiveStream)) {
+      resolvedActiveStream = streams[0]?.name ?? '';
     }
 
-    const webview = this.getWebview();
     if (!webview) {
-      return activeStream;
+      return resolvedActiveStream;
+    }
+
+    if (resolvedActiveStream !== state.activeStream) {
+      state.activeStream = resolvedActiveStream;
     }
 
     if (theme) {
       this.updateTheme(theme);
     }
 
-    this.updateStreams(streams, activeStream, state.agentTypeFilter);
+    this.updateStreams(streams, resolvedActiveStream, state.agentTypeFilter);
 
     this.logger.debug(
-      `Updated webview streams (${streams.length}) active: ${activeStream}`,
+      `Updated webview streams (${streams.length}) active: ${resolvedActiveStream}`,
     );
 
-    return activeStream;
+    return resolvedActiveStream;
   }
 
   /**
