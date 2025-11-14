@@ -87,6 +87,81 @@ export function createFileMapping(
  * @param outputFiles Output file paths
  * @param logger Optional logger for debug messages
  */
+const TEX_EXTENSION_REGEX = /\.tex$/i;
+
+function normalizeLatexPath(value: string): string {
+  if (!value) {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return '';
+  }
+
+  const normalized = path.posix.normalize(trimmed.replace(/\\/g, '/'));
+  return normalized.startsWith('./') ? normalized.slice(2) : normalized;
+}
+
+function hasTexExtension(value: string): boolean {
+  return TEX_EXTENSION_REGEX.test(value);
+}
+
+function removeTexExtension(value: string): string {
+  return value.replace(TEX_EXTENSION_REGEX, '');
+}
+
+function getPathSegments(filePath: string): string[] {
+  return path
+    .normalize(filePath)
+    .split(path.sep)
+    .filter((segment) => segment !== '');
+}
+
+function buildReplacementLookup(
+  baseToOutputMap: Map<string, string>,
+): Map<string, string> {
+  const replacements = new Map<string, string>();
+
+  const registerReplacement = (source: string, target: string) => {
+    const normalizedSource = normalizeLatexPath(source);
+    const normalizedTarget = normalizeLatexPath(target);
+
+    if (!normalizedSource || replacements.has(normalizedSource)) {
+      return;
+    }
+
+    replacements.set(normalizedSource, normalizedTarget);
+  };
+
+  for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
+    if (!baseFile || !outputFile) {
+      continue;
+    }
+
+    const baseSegments = getPathSegments(baseFile);
+    const outputSegments = getPathSegments(outputFile);
+    const maxDepth = Math.min(baseSegments.length, outputSegments.length);
+
+    for (let depth = maxDepth; depth >= 1; depth--) {
+      const baseSuffix = baseSegments.slice(-depth).join('/');
+      const outputSuffix = outputSegments.slice(-depth).join('/');
+
+      registerReplacement(baseSuffix, outputSuffix);
+
+      if (hasTexExtension(baseSuffix) && hasTexExtension(outputSuffix)) {
+        registerReplacement(
+          removeTexExtension(baseSuffix),
+          removeTexExtension(outputSuffix),
+        );
+      }
+    }
+  }
+
+  return replacements;
+}
+
 export async function replaceInputCommands(
   baseFiles: string[],
   outputFiles: string[],
@@ -108,16 +183,15 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${Array.from(
       baseToOutputMap.entries(),
     )
-      .map(
-        ([base, output]) =>
-          `${path.basename(base)} -> ${path.basename(output)}`,
-      )
+      .map(([base, output]) => `${base} -> ${output}`)
       .join(', ')}`,
   );
 
-  const baseToOutput = new Map<string, string>();
-  for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-    baseToOutput.set(path.basename(baseFile), path.basename(outputFile));
+  const replacementLookup = buildReplacementLookup(baseToOutputMap);
+
+  if (replacementLookup.size === 0) {
+    logger?.debug('No replacement entries derived from file mappings');
+    return;
   }
 
   for (const outputFile of outputFiles) {
@@ -127,8 +201,23 @@ export async function replaceInputCommands(
 
     try {
       const content = await flexibleFS.read(outputFile);
-      const newContent = content.replace(/\\input{([^}]+)}/g, (match, p1) =>
-        baseToOutput.has(p1) ? `\\input{${baseToOutput.get(p1)}}` : match,
+      const newContent = content.replace(
+        /\\input{([^}]+)}/g,
+        (match, rawPath) => {
+          const normalizedPath = normalizeLatexPath(rawPath);
+
+          if (!normalizedPath) {
+            return match;
+          }
+
+          const replacement = replacementLookup.get(normalizedPath);
+
+          if (replacement) {
+            return `\\input{${replacement}}`;
+          }
+
+          return match;
+        },
       );
 
       if (newContent !== content) {
