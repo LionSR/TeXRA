@@ -29,8 +29,6 @@ import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 
 // Local imports - filesystem utilities
 
-
-
 // Constants
 const CHANNEL = 'TextEditorTool';
 const SNIPPET_LINES = 4;

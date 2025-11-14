@@ -16,7 +16,6 @@ import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 import { arxivProcessor } from '@latex/arxivProcessor';
 
-
 const ArxivMetadataInputSchema = z.strictObject({
   id: z.string(),
   includeAbstract: z.boolean().optional(),
