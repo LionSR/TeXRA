@@ -40,7 +40,6 @@ import {
 } from '@utils/text/textEnhancementUtils';
 import { RecordingManager } from '@webview/managers/RecordingManager';
 
-
 // @ts-ignore - Import JavaScript module
 
 // Type imports
@@ -294,7 +293,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleRestoreState(message: any): Promise<void> {
-    const taskState = this.provider.state.getTaskState(message.stream);
+    const taskState = this.provider.state.peekTaskState(message.stream);
     if (taskState) {
       await vscode.commands.executeCommand('texra.restoreState', taskState);
     }
@@ -314,7 +313,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       return;
     }
 
-    const taskState = this.provider.state.getTaskState(stream) as
+    const taskState = this.provider.state.peekTaskState(stream) as
       | TaskState
       | undefined;
     if (!taskState) {
@@ -741,7 +740,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     stream: string,
     action: (taskState: WorkflowTaskState) => Promise<void>,
   ): Promise<void> {
-    const taskState = this.provider.state.getTaskState(stream);
+    const taskState = this.provider.state.peekTaskState(stream);
     if (!taskState || !isWorkflowTaskState(taskState)) {
       return;
     }

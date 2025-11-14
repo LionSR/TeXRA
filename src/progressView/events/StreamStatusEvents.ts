@@ -25,7 +25,6 @@ import type {
   StreamStatusOrReadyType,
 } from './types';
 
-
 export interface StreamStatusEventShared {
   logger: AgentLogger;
   streamStatus: Map<string, StreamStatusType>;
@@ -102,7 +101,7 @@ export function createStreamStatusEvents(
     state.setTaskState(streamTabId, taskState);
     state.clearSessionKindHint(streamTabId);
 
-    const normalizedState = state.getTaskState(streamTabId);
+    const normalizedState = state.peekTaskState(streamTabId);
 
     if (!normalizedState) {
       shared.logger.warn(

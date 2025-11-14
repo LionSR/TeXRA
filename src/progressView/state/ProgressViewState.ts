@@ -10,6 +10,7 @@ import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
+import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
@@ -24,7 +25,7 @@ import type { TaskGroup } from '@logger/LogTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - progress view managers
-import type { AgentFilter } from '@progressView/types';
+import type { AgentFilter, InstructionUpdate } from '@progressView/types';
 // Internal imports
 import {
   StreamTabsManager,
@@ -85,6 +86,8 @@ export class ProgressViewState {
   private _activeRunIds: Map<StreamTabId, string | null> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
+  private deferredLoadPromise: Promise<void> | undefined;
+  private deferredStateLoaded = false;
 
   constructor(storage?: StateStorage) {
     const resolvedStorage = storage ?? workspaceSM;
@@ -366,8 +369,12 @@ export class ProgressViewState {
     this.cleanupToolUseAgentRegistry();
   }
 
+  peekTaskState(streamTabId: StreamTabId): TaskState | undefined {
+    return this.taskStates.get(streamTabId);
+  }
+
   getTaskState(streamTabId: StreamTabId): TaskState | undefined {
-    const stored = this.taskStates.get(streamTabId);
+    const stored = this.peekTaskState(streamTabId);
     return stored ? cloneTaskState(stored) : undefined;
   }
 
@@ -478,24 +485,68 @@ export class ProgressViewState {
   /**
    * Load all state from persistence
    */
-  async load(): Promise<void> {
-    // Load basic state first
-    await Promise.all([
-      this._streamTabs.load(),
-      this._taskGroups.load(),
-      this._outputFiles.load(),
-      this._usageStats.load(),
-      this._runInstructions.load(),
-    ]);
+  async load(options: { includeDeferred?: boolean } = {}): Promise<void> {
+    await this.loadEssential();
 
-    // Load dependent state after basic state is loaded
+    if (options.includeDeferred ?? true) {
+      await this.loadDeferred();
+    }
+  }
+
+  async loadEssential(): Promise<void> {
+    this.deferredStateLoaded = false;
+    this.deferredLoadPromise = undefined;
+
+    // Load essential managers eagerly
+    await Promise.all([this._streamTabs.load(), this._taskGroups.load()]);
+
+    // Clear heavy managers so deferred hydration can repopulate them
+    this._outputFiles.setAll(
+      new Map<StreamTabId, Map<string, Map<number, OutputFileInfo[]>>>(),
+    );
+    this._outputFiles.setAllMissingOutputs(
+      new Map<StreamTabId, Map<string, Map<number, string[]>>>(),
+    );
+    this._usageStats.setAll(
+      new Map<StreamTabId, Map<string, TokenUsageStats>>(),
+    );
+    this._runInstructions.setAll(
+      new Map<StreamTabId, Map<string, InstructionUpdate>>(),
+    );
+
     await Promise.all([
-      this.loadActiveStream(), // Depends on stream tabs being loaded
+      this.loadActiveStream(),
       this.loadTaskStates(),
       this.loadExecutionIds(),
       this.loadStreamSortOrder(),
       this.loadAgentTypeFilter(),
       this.loadActiveRunIds(),
+    ]);
+  }
+
+  async loadDeferred(): Promise<void> {
+    if (this.deferredStateLoaded) {
+      return;
+    }
+
+    if (!this.deferredLoadPromise) {
+      this.deferredLoadPromise = this.loadDeferredInternal()
+        .then(() => {
+          this.deferredStateLoaded = true;
+        })
+        .finally(() => {
+          this.deferredLoadPromise = undefined;
+        });
+    }
+
+    await this.deferredLoadPromise;
+  }
+
+  private async loadDeferredInternal(): Promise<void> {
+    await Promise.all([
+      this._outputFiles.load(),
+      this._usageStats.load(),
+      this._runInstructions.load(),
     ]);
   }
 

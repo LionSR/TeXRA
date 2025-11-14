@@ -137,6 +137,36 @@ export class OutputFilesManager extends PersistentMapManager<
     return runs ? new Map(runs) : new Map();
   }
 
+  getFilesRecord(
+    stream: StreamTabId,
+  ): Record<string, { [key: number]: OutputFileInfo[] }> {
+    const runs = this.items.get(stream);
+    if (!runs || runs.size === 0) {
+      return {};
+    }
+
+    const payload: Record<string, { [key: number]: OutputFileInfo[] }> = {};
+    for (const [runId, rounds] of runs.entries()) {
+      if (!rounds || rounds.size === 0) {
+        continue;
+      }
+
+      const runRecord: { [key: number]: OutputFileInfo[] } = {};
+      for (const [round, infos] of rounds.entries()) {
+        if (!infos || infos.length === 0) {
+          continue;
+        }
+        runRecord[round] = infos;
+      }
+
+      if (Object.keys(runRecord).length > 0) {
+        payload[runId] = runRecord;
+      }
+    }
+
+    return payload;
+  }
+
   getRun(
     stream: StreamTabId,
     runId: string,
@@ -353,6 +383,36 @@ export class OutputFilesManager extends PersistentMapManager<
     return missing ? new Map(missing) : new Map();
   }
 
+  getMissingOutputsRecord(
+    stream: StreamTabId,
+  ): Record<string, { [key: number]: string[] }> {
+    const missing = this._missingOutputs.get(stream);
+    if (!missing || missing.size === 0) {
+      return {};
+    }
+
+    const payload: Record<string, { [key: number]: string[] }> = {};
+    for (const [runId, rounds] of missing.entries()) {
+      if (!rounds || rounds.size === 0) {
+        continue;
+      }
+
+      const runRecord: { [key: number]: string[] } = {};
+      for (const [round, infos] of rounds.entries()) {
+        if (!infos || infos.length === 0) {
+          continue;
+        }
+        runRecord[round] = infos;
+      }
+
+      if (Object.keys(runRecord).length > 0) {
+        payload[runId] = runRecord;
+      }
+    }
+
+    return payload;
+  }
+
   /** Clear output files for a stream */
   async clearFiles(stream: StreamTabId): Promise<void> {
     await this.delete(stream);
@@ -470,18 +530,41 @@ export class OutputFilesManager extends PersistentMapManager<
 
   /** Save missing outputs to persistence */
   async saveMissingOutputs(): Promise<void> {
-    const obj = Object.fromEntries(
-      Array.from(this._missingOutputs.entries(), ([stream, runs]) => [
-        stream,
-        Object.fromEntries(
-          Array.from(runs.entries(), ([runId, rounds]) => [
-            runId,
-            Object.fromEntries(rounds.entries()),
-          ]),
-        ),
-      ]),
-    );
-    await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, obj);
+    const payload: Record<
+      string,
+      Record<string, { [key: number]: string[] }>
+    > = {};
+
+    for (const [stream, runs] of this._missingOutputs.entries()) {
+      if (!runs || runs.size === 0) {
+        continue;
+      }
+
+      const runRecord: Record<string, { [key: number]: string[] }> = {};
+      for (const [runId, rounds] of runs.entries()) {
+        if (!rounds || rounds.size === 0) {
+          continue;
+        }
+
+        const roundRecord: { [key: number]: string[] } = {};
+        for (const [round, files] of rounds.entries()) {
+          if (!files || files.length === 0) {
+            continue;
+          }
+          roundRecord[round] = files;
+        }
+
+        if (Object.keys(roundRecord).length > 0) {
+          runRecord[runId] = roundRecord;
+        }
+      }
+
+      if (Object.keys(runRecord).length > 0) {
+        payload[stream] = runRecord;
+      }
+    }
+
+    await this.storage.update(WorkspaceStateKey.MISSING_OUTPUTS, payload);
   }
 
   private deserializeMissingOutputs(

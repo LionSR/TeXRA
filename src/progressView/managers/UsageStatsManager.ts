@@ -91,6 +91,19 @@ export class UsageStatsManager extends PersistentMapManager<
     return new Map(this.items.get(stream) ?? []);
   }
 
+  getUsageRecord(stream: StreamTabId): Record<string, TokenUsageStats> {
+    const usage = this.items.get(stream);
+    if (!usage || usage.size === 0) {
+      return {};
+    }
+
+    const record: Record<string, TokenUsageStats> = {};
+    for (const [runId, stats] of usage.entries()) {
+      record[runId] = stats;
+    }
+    return record;
+  }
+
   /**
    * Get total usage across all runs for a stream
    */

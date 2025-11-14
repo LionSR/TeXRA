@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent and usage types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -113,7 +111,7 @@ export class ProgressEventHandler {
       return;
     }
 
-    const taskState = this.state.getTaskState(stream);
+    const taskState = this.state.peekTaskState(stream);
     const instructionUpdate = WebviewUpdater.createInstructionUpdate(taskState);
     const sessionKindHint = this.state.getSessionKindHint(stream);
     const sessionKind = taskState?.session?.agentCategory ?? sessionKindHint;
@@ -161,19 +159,14 @@ export class ProgressEventHandler {
       persist: false,
     });
 
-    const runInstructions = Object.fromEntries(
-      this.state.runInstructions.getInstructions(stream).entries(),
-    );
+    const streamId = stream as StreamTabId;
+    const runInstructions =
+      this.state.runInstructions.getInstructionRecord(streamId);
 
-    const filesByRun = this.formatRunOutputs(
-      this.state.outputFiles.getFiles(stream),
-    );
-    const missingByRun = this.formatRunStringOutputs(
-      this.state.outputFiles.getMissingOutputs(stream),
-    );
-    const usageByRun = Object.fromEntries(
-      this.state.usageStats.getRunUsage(stream).entries(),
-    ) as Record<string, TokenUsageStats>;
+    const filesByRun = this.state.outputFiles.getFilesRecord(streamId);
+    const missingByRun =
+      this.state.outputFiles.getMissingOutputsRecord(streamId);
+    const usageByRun = this.state.usageStats.getUsageRecord(streamId);
 
     this.webviewUpdater.updateLogContent(stream, messages, groups, {
       runInstructions,
@@ -190,10 +183,7 @@ export class ProgressEventHandler {
     this.webviewUpdater.updateMissingOutputs(stream, missingByRun);
 
     // Send usage for current stream
-    const usage = Object.fromEntries(
-      this.state.usageStats.getRunUsage(stream).entries(),
-    ) as Record<string, TokenUsageStats>;
-    this.webviewUpdater.updateUsage(stream, usage);
+    this.webviewUpdater.updateUsage(stream, usageByRun);
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
     const status = this._streamStatus.get(stream) || STATUS.STOPPED;
@@ -238,26 +228,6 @@ export class ProgressEventHandler {
         this.webviewUpdater.updateStatus(status);
       }
     }
-  }
-
-  private formatRunOutputs(
-    runs: Map<string, Map<number, OutputFileInfo[]>>,
-  ): Record<string, { [key: number]: OutputFileInfo[] }> {
-    const payload: Record<string, { [key: number]: OutputFileInfo[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
-    }
-    return payload;
-  }
-
-  private formatRunStringOutputs(
-    runs: Map<string, Map<number, string[]>>,
-  ): Record<string, { [key: number]: string[] }> {
-    const payload: Record<string, { [key: number]: string[] }> = {};
-    for (const [runId, rounds] of runs.entries()) {
-      payload[runId] = Object.fromEntries(rounds.entries());
-    }
-    return payload;
   }
 
   /**

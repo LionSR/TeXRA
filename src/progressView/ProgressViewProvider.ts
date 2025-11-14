@@ -93,8 +93,19 @@ export class ProgressViewProvider
     // Listen for workspace folder changes
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-        await this.state.load();
+        await this.state.loadEssential();
         this.updateWebview();
+
+        void this.state.loadDeferred().then(
+          () => this.updateWebview(),
+          (error) =>
+            this.logger.error(
+              'Failed to hydrate deferred progress state after workspace change',
+              undefined,
+              undefined,
+              error instanceof Error ? error : new Error(String(error)),
+            ),
+        );
       }),
     );
   }
@@ -103,10 +114,25 @@ export class ProgressViewProvider
    * Initialize provider state. Must be called after construction.
    */
   public async initialize(): Promise<void> {
-    await this.state.load();
+    await this.state.loadEssential();
+    const deferredLoad = this.state.loadDeferred();
 
     // Setup event listeners using the new architecture
     this._disposables.push(...this.eventHandler.setupEventListeners());
+
+    void deferredLoad.then(
+      () => {
+        this.logger.debug('Deferred progress state hydrated');
+        this.updateWebview();
+      },
+      (error) =>
+        this.logger.error(
+          'Failed to hydrate deferred progress state',
+          undefined,
+          undefined,
+          error instanceof Error ? error : new Error(String(error)),
+        ),
+    );
 
     this.logger.debug(
       'ProgressViewProvider initialized with new modular architecture',

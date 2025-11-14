@@ -58,7 +58,7 @@ export function buildStreamInfos(
   filter: AgentFilter = 'all',
 ): StreamTabInfo[] {
   const infos = state.streamTabs.keys().reduce<StreamTabInfo[]>((acc, id) => {
-    const taskState = state.getTaskState(id);
+    const taskState = state.peekTaskState(id);
     const sessionKindHint = state.getSessionKindHint(id);
     const logs = state.streamTabs.getMessages(id);
     const lastTimestamp =

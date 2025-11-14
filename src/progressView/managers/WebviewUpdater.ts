@@ -343,21 +343,10 @@ export class WebviewUpdater {
       const groups = Array.from(
         state.taskGroups.getStreamGroups(activeStream).values(),
       );
-      const files = Object.fromEntries(
-        Array.from(
-          state.outputFiles.getFiles(activeStream).entries(),
-          ([runId, rounds]) => [runId, Object.fromEntries(rounds.entries())],
-        ),
-      );
-      const missing = Object.fromEntries(
-        Array.from(
-          state.outputFiles.getMissingOutputs(activeStream).entries(),
-          ([runId, rounds]) => [runId, Object.fromEntries(rounds.entries())],
-        ),
-      );
-      const runInstructions = Object.fromEntries(
-        state.runInstructions.getInstructions(activeStream).entries(),
-      );
+      const files = state.outputFiles.getFilesRecord(activeStream);
+      const missing = state.outputFiles.getMissingOutputsRecord(activeStream);
+      const runInstructions =
+        state.runInstructions.getInstructionRecord(activeStream);
       const activeRunId = state.getActiveRunId(activeStream);
 
       this.updateLogContent(activeStream, messages, groups, {
@@ -374,12 +363,10 @@ export class WebviewUpdater {
       this.updateMissingOutputs(activeStream, missing);
 
       // Update usage for active stream
-      const usage = Object.fromEntries(
-        state.usageStats.getRunUsage(activeStream).entries(),
-      ) as Record<string, TokenUsageStats>;
+      const usage = state.usageStats.getUsageRecord(activeStream);
       this.updateUsage(activeStream, usage);
 
-      const taskState = state.getTaskState(activeStream);
+      const taskState = state.peekTaskState(activeStream);
       const instructionUpdate =
         WebviewUpdater.createInstructionUpdate(taskState);
       const activeStreamInfo = streams.find((s) => s.name === activeStream);

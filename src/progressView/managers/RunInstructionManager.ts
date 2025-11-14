@@ -1,4 +1,3 @@
-
 // Local imports - identifiers and logging
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -33,6 +32,19 @@ export class RunInstructionManager extends PersistentMapManager<
 
   getInstructions(stream: StreamTabId): InstructionMap {
     return new Map(this.get(stream) ?? []);
+  }
+
+  getInstructionRecord(stream: StreamTabId): Record<string, InstructionUpdate> {
+    const entries = this.items.get(stream);
+    if (!entries || entries.size === 0) {
+      return {};
+    }
+
+    const record: Record<string, InstructionUpdate> = {};
+    for (const [runId, instruction] of entries.entries()) {
+      record[runId] = instruction;
+    }
+    return record;
   }
 
   async setInstruction(
