@@ -3,11 +3,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 
 // Local imports - utils
-import {
-  getBasename,
-  isTexFile,
-  resolveFilePath,
-} from '@utils/files/pathUtils';
+import { getBasename, isTexFile, resolveFilePath } from '@utils/files';
 
 describe('pathUtils Test Suite', () => {
   describe('getBasename', () => {
