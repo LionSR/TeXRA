@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
@@ -61,7 +62,7 @@ export abstract class BaseViewMessageHandler<
       this.logger.error(
         this.channel,
         `Error handling command ${message.command}: ${
-          error instanceof Error ? error.message : String(error)
+          toErrorMessage(error)
         }`,
       );
 
