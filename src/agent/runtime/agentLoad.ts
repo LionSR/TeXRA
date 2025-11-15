@@ -16,6 +16,7 @@ import {
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
 // Type imports
@@ -87,7 +88,7 @@ export function notifyYamlLoadFailure(
 
   void vscode.window
     .showErrorMessage(
-      `Error loading YAML file ${absolutePath}: ${error instanceof Error ? error.message : String(error)}`,
+      `Error loading YAML file ${absolutePath}: ${toErrorMessage(error)}`,
       moreInfo,
       openFile,
     )
@@ -226,7 +227,7 @@ export async function loadAgentSettingAndPrompts(
     return [settings as AgentSetting, prompts as AgentPrompt];
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Error loading agent settings and prompts: ${err instanceof Error ? err.message : String(err)}`,
+      `Error loading agent settings and prompts: ${toErrorMessage(err)}`,
     );
     throw err;
   }
@@ -250,7 +251,7 @@ export async function isValidAgentYaml(
   } catch (err) {
     logger.debug(
       CHANNEL,
-      `isValidAgentYaml check failed for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `isValidAgentYaml check failed for ${filePath}: ${toErrorMessage(err)}`,
     );
   }
   return null;
