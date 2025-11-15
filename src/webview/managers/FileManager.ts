@@ -8,7 +8,10 @@ import { workspace } from 'vscode';
 // Local imports - webview
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+import {
+  showLoggedMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { fileLister } from '@frontend/files/fileLister';
 import { uncapitalize } from '@frontend/ui/messageUtils';
@@ -182,7 +185,7 @@ export class FileManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error requesting default output files: ${toErrorMessage(err)}`,
       );
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
@@ -240,10 +243,10 @@ export class FileManager {
     } catch (error) {
       logger.error(
         CHANNEL,
-        `Error in handleSelectMultipleFiles: ${error instanceof Error ? error.message : String(error)}`,
+        `Error in handleSelectMultipleFiles: ${toErrorMessage(error)}`,
       );
       vscode.window.showErrorMessage(
-        `Error selecting ${fileType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error selecting ${fileType}: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -472,10 +475,10 @@ export class FileManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error selecting output files: ${toErrorMessage(err)}`,
       );
       vscode.window.showErrorMessage(
-        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error selecting output files: ${toErrorMessage(err)}`,
       );
       return null;
     }
