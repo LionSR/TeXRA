@@ -8,6 +8,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';
@@ -219,16 +220,13 @@ export async function getBase64EncodedMedia(
         } catch (err) {
           logger.warn(
             CHANNEL,
-            `Failed to remove temporary file ${tempPath}: ${err instanceof Error ? err.message : String(err)}`,
+            `Failed to remove temporary file ${tempPath}: ${toErrorMessage(err)}`,
           );
         }
       }
     }
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error encoding media to base64: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error encoding media to base64: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -249,10 +247,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 
     return await loadPdfPageCount(absolutePath, pdfPath);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error counting PDF pages: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error counting PDF pages: ${toErrorMessage(err)}`);
     return 0;
   }
 }
@@ -335,7 +330,7 @@ export async function singlePagePdf2Png(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error converting PDF page to PNG: ${err instanceof Error ? err.message : String(err)}`,
+      `Error converting PDF page to PNG: ${toErrorMessage(err)}`,
     );
     throw err;
   } finally {
@@ -382,7 +377,7 @@ export async function multiPagePdf2Png(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error converting multiple PDF pages: ${err instanceof Error ? err.message : String(err)}`,
+      `Error converting multiple PDF pages: ${toErrorMessage(err)}`,
     );
     throw err;
   }
@@ -430,10 +425,7 @@ export async function processPdf2Png(
       );
     }
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error processing PDF input: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error processing PDF input: ${toErrorMessage(err)}`);
     return null;
   }
 }

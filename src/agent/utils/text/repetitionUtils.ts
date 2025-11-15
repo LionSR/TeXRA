@@ -3,6 +3,7 @@ import { diff_match_patch } from 'diff-match-patch';
 import * as difflib from 'difflib';
 
 // Local imports - logging
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   REPETITION_DETECTION_THRESHOLD,
@@ -66,7 +67,7 @@ export function checkForMassiveRepetition(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error checking repetition with DMP: ${err instanceof Error ? err.message : String(err)}`,
+      `Error checking repetition with DMP: ${toErrorMessage(err)}`,
     );
     throw err;
   }
@@ -113,7 +114,7 @@ export function checkRepetitionDifflib(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error checking repetition with difflib: ${err instanceof Error ? err.message : String(err)}`,
+      `Error checking repetition with difflib: ${toErrorMessage(err)}`,
     );
     throw err;
   }
