@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
@@ -21,6 +21,7 @@ import type { ModelConfig } from '@model';
 import { cleanFileContent } from '@replacement/engine';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { WorkspaceFS, flexibleFS } from '@utils/files';
+import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import { ModelHandler } from './ModelHandler';
@@ -213,10 +214,8 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
         outputStream.finalize(fullText);
       }
 
-      // Append end tag if specified
-      if (endTag && !fullText.endsWith(endTag)) {
-        fullText += endTag;
-      }
+      // Note: Don't append endTag here - it will be added in extractResponse
+      // to avoid duplication and match other model handlers
 
       // Create compatible response object
       const copilotResponse: VSCodeLMResponse = {
@@ -403,19 +402,64 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
     outputFile: string,
     prefill: string,
   ): Promise<[boolean, VSCodeLMMessage[]]> {
-    // Create or clear output file
-    await flexibleFS.write(outputFile, '');
+    let endTurn = false;
 
-    // VS Code LM doesn't support prefill in the same way
-    // We can add it as a user message hint
-    if (prefill.trim().length > 0) {
-      messages.push({
-        role: 'user',
-        content: `Please start your response with: ${prefill}`,
-      });
+    // Check if output file already exists with content
+    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+      // File doesn't exist or is empty - add prefill hint to last message
+      if (prefill.trim().length > 0) {
+        const pseudoPrefillMsg = `Organize your response with xml tags. Start your response with:\n${prefill}`;
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && lastMessage.role === 'user') {
+          lastMessage.content += `\n\n${pseudoPrefillMsg}`;
+        } else {
+          messages.push({
+            role: 'user',
+            content: pseudoPrefillMsg,
+          });
+        }
+        this.logger.debug(
+          `Added pseudo prefill message:\n${pseudoPrefillMsg}`,
+        );
+      }
+      return [endTurn, messages];
     }
 
-    return [false, messages];
+    // File exists with content - read and preserve it
+    let fileContent = await flexibleFS.read(outputFile);
+    fileContent = cleanFileContent(fileContent);
+
+    // Extract any existing scratchpad content
+    const scratchpad = await xmlUtils.extractScratchpad(
+      fileContent,
+      'scratchpad',
+    );
+    if (scratchpad) {
+      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+    }
+
+    // Write cleaned content back
+    await flexibleFS.write(outputFile, fileContent);
+
+    // Add existing content as assistant message
+    messages.push({
+      role: 'assistant',
+      content: fileContent,
+    });
+
+    // Check if content is already complete (has end tag)
+    if (hasEndTag(agentSetting, fileContent)) {
+      this.logger.debug('End tag detected - skipping continuation');
+      endTurn = true;
+      return [endTurn, messages];
+    }
+
+    // No end tag - will continue generation
+    this.logger.warn(
+      'Output file exists but no end tag found - continuing from file',
+    );
+
+    return [endTurn, messages];
   }
 
   /**
@@ -461,23 +505,61 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
 
   /**
    * Updates message content with response (without prefill).
+   * Properly handles continuation prompts to avoid accumulation in context.
    */
   updateMessageContentWithoutPrefill(
     messages: VSCodeLMMessage[],
     bestConnector: string,
     newResponse: string,
-    _workspaceState: AgentWorkspaceState,
+    workspaceState: AgentWorkspaceState,
   ): void {
-    const lastMessage = messages[messages.length - 1];
+    this.logger.debug(
+      'Updating message content for VS Code LM without prefill support',
+    );
 
-    if (lastMessage && lastMessage.role === 'assistant') {
-      // Append to existing assistant message
-      lastMessage.content += bestConnector + newResponse;
+    const lastMessage = messages[messages.length - 1];
+    const secondLastMessage = messages[messages.length - 2];
+
+    // Check if last message is a user message (typical after continuation prompt)
+    if (!lastMessage || lastMessage.role !== 'user') {
+      this.logger.error(
+        'Last message is not a user message - unexpected format',
+      );
+      return;
+    }
+
+    this.logger.debug('Last message is a user message');
+
+    // Check if it's a continuation prompt
+    if (this.containCutOffMessage(lastMessage.content)) {
+      this.logger.debug(
+        'Last message is a continuation prompt - appending to previous assistant message',
+      );
+
+      // Append to the second-last assistant message
+      if (secondLastMessage && secondLastMessage.role === 'assistant') {
+        secondLastMessage.content += bestConnector + newResponse;
+
+        // Remove the continuation prompt to keep conversation clean
+        messages.pop();
+      } else {
+        this.logger.error(
+          'Second last message is not an assistant message - unexpected format',
+        );
+        // Fallback: create new assistant message
+        messages.push({
+          role: 'assistant',
+          content: workspaceState.assembly.accumulatedOutput,
+        });
+      }
     } else {
-      // Create new assistant message
+      this.logger.debug(
+        'Last message is a regular request - creating new assistant message',
+      );
+      // Not a continuation - create new assistant message
       messages.push({
         role: 'assistant',
-        content: newResponse,
+        content: workspaceState.assembly.accumulatedOutput,
       });
     }
   }
