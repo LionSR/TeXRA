@@ -59,7 +59,7 @@ export function formatError(prefix: string, err: unknown): string {
 
   // Truncate overly long error details for better readability
   if (detail.length > MAX_ERROR_LENGTH) {
-    detail = detail.substring(0, MAX_ERROR_LENGTH) + '...';
+    detail = `${detail.substring(0, MAX_ERROR_LENGTH)}...`;
   }
 
   return `${prefix}: ${detail}`;

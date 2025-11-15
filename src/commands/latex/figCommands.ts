@@ -115,7 +115,7 @@ async function handleExtractTikzFigures(): Promise<void> {
         ([label, tikzpicturess]: [string, string[]]) => ({
           label: `${label} (${tikzpicturess.length} TikZ picture${tikzpicturess.length > 1 ? 's' : ''})`,
           description: `Figure with label: ${label}`,
-          detail: tikzpicturess[0].substring(0, 100) + '...', // Show first 100 chars of first TikZ picture
+          detail: `${tikzpicturess[0].substring(0, 100)}...`, // Show first 100 chars of first TikZ picture
         }),
       );
 
