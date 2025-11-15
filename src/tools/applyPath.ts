@@ -2,6 +2,9 @@
 import { execa } from 'execa';
 import { z } from 'zod';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
@@ -53,7 +56,7 @@ export class ApplyPathTool extends defineTool({
       }
 
       const message =
-        error instanceof Error ? error.message : 'Unknown error applying patch';
+        toErrorMessage(error);
       throw new ToolError(`apply_path error: ${message}`);
     }
   }

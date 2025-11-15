@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - utilities
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { fileLister } from '@frontend/files/fileLister';
@@ -39,7 +42,7 @@ export async function openLabel(label: string): Promise<void> {
     } catch (error) {
       // Log but continue search - file might be inaccessible
       console.debug(
-        `Could not read file ${file}: ${error instanceof Error ? error.message : error}`,
+        `Could not read file ${file}: ${toErrorMessage(error)}`,
       );
     }
   }
