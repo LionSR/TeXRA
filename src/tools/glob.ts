@@ -3,6 +3,7 @@ import { glob } from 'glob';
 import { z } from 'zod';
 
 // Local imports - tools
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   joinWorkspaceRelativePath,
@@ -48,8 +49,7 @@ export class GlobTool extends defineTool({
         follow: false,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new ToolError(`glob error: ${message}`);
+      throw new ToolError(`glob error: ${toErrorMessage(err)}`);
     }
 
     // Process matches in parallel for better performance
@@ -59,7 +59,7 @@ export class GlobTool extends defineTool({
         resolved = joinWorkspaceRelativePath(base.relative, match);
       } catch (err) {
         throw new ToolError(
-          `Match resolved outside the workspace: ${match} (${err instanceof Error ? err.message : String(err)})`,
+          `Match resolved outside the workspace: ${match} (${toErrorMessage(err)})`,
         );
       }
 
