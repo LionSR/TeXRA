@@ -166,6 +166,10 @@ export abstract class BaseViewContentProvider {
         webview,
         'modules/BaseWebviewMessageHandler.js',
       ),
+      baseFileUtilsUri: this.getCommonUri(
+        webview,
+        'modules/files/baseFileUtils.js',
+      ),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       baseDomHandlerUri: this.getCommonUri(
         webview,
