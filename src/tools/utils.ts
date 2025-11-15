@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Minimatch } from 'minimatch';
 
 // Local imports - tools
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 import { toPosixPath } from '@tools/pathUtils';
 import { WorkspaceFS, getMimeType } from '@utils/files';
@@ -170,7 +171,9 @@ export async function buildFileAttachment({
   try {
     stats = await WorkspaceFS.stat(resolved.relative);
   } catch (err) {
-    throw new ToolError(`Failed to inspect attachment ${display}: ${toErrorMessage(err)}`);
+    throw new ToolError(
+      `Failed to inspect attachment ${display}: ${toErrorMessage(err)}`,
+    );
   }
 
   if (stats.size > maxBytes) {
@@ -184,7 +187,9 @@ export async function buildFileAttachment({
   try {
     buffer = await WorkspaceFS.readFileBytes(resolved.relative);
   } catch (err) {
-    throw new ToolError(`Failed to read attachment ${display}: ${toErrorMessage(err)}`);
+    throw new ToolError(
+      `Failed to read attachment ${display}: ${toErrorMessage(err)}`,
+    );
   }
 
   const inferredMime =
