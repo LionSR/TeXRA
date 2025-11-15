@@ -9,6 +9,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
@@ -220,7 +221,7 @@ export class XmlOutputManager {
       return [];
     } catch (err) {
       this.logger.debug(
-        `Failed to parse XML content: ${err instanceof Error ? err.message : String(err)}, attempting fallback extraction...`,
+        `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
