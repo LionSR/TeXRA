@@ -611,7 +611,7 @@ export class TextEditorTool extends defineTool({
       }
 
       // Restore previous content
-      const previousContent = history[history.length - 1]!;
+      const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
       const approval = await requestToolEditApproval({

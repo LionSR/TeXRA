@@ -3,6 +3,7 @@ import axios from 'axios';
 import { z } from 'zod';
 
 // Internal imports
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -26,8 +27,7 @@ export class WebSearchTool extends defineTool({
         params: { q: query, format: 'json', no_redirect: 1, no_html: 1 },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Web search failed: ${message}`);
+      throw new ToolError(`Web search failed: ${toErrorMessage(error)}`);
     }
     const data = response.data;
     const results: string[] = [];
