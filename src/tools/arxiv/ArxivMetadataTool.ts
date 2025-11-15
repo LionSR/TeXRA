@@ -46,7 +46,9 @@ export class ArxivMetadataTool extends defineTool({
       // Use arxiv-client's ids() method for direct ID lookup
       entries = await createArxivClient().ids([requestId]).execute();
     } catch (error) {
-      throw new ToolError(`Failed to query arXiv API: ${toErrorMessage(error)}`);
+      throw new ToolError(
+        `Failed to query arXiv API: ${toErrorMessage(error)}`,
+      );
     }
 
     if (!entries || entries.length === 0) {
