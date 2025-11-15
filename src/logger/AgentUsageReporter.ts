@@ -20,19 +20,30 @@ export class AgentUsageReporter {
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    */
-  public report(stats: ExtendedTokenUsageStats): void {
+  public report(stats: ExtendedTokenUsageStats, runId?: string): void {
+    const usage = {
+      inputTokens: stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
+      outputTokens: stats.outputTokens,
+      cost: stats.cost,
+    };
+
     const groupId = this.logger.withCurrentGroup((id) => id);
 
     if (groupId) {
       bus.emit('updateGroupUsage', {
         stream: this.streamId,
         groupId,
-        usage: {
-          inputTokens:
-            stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
-          outputTokens: stats.outputTokens,
-          cost: stats.cost,
-        },
+        usage,
+      });
+      this.logger.statistics(stats, groupId);
+      return;
+    }
+
+    if (runId) {
+      bus.emit('updateStreamUsage', {
+        stream: this.streamId,
+        runId,
+        usage,
       });
     }
 
