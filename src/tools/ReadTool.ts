@@ -57,7 +57,7 @@ export class ReadFileTool extends defineTool({
 
     const content = await WorkspaceFS.read(input.path);
     const lines = content.split(/\r?\n/);
-    if (lines.length > 0 && lines[lines.length - 1] === '') {
+    if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
     }
 
