@@ -1,5 +1,5 @@
 name: generic_multiple
-inherits: generic_cot
+inherits: generic
 settings:
   agentType: CoT
   isMultipleOutput: true
