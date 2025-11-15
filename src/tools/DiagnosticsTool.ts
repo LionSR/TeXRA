@@ -23,7 +23,7 @@ import type { Diagnostic } from 'vscode';
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
 
-export const DiagnosticsInputSchema = z.object({
+export const DiagnosticsInputSchema = z.strictObject({
   command: z.enum(['list', 'count']),
   path: z.string(),
 });
