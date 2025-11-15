@@ -4,7 +4,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-export const DiffStatsSchema = z.object({
+export const DiffStatsSchema = z.strictObject({
   /** Number of added lines */
   added: z.number().optional(),
   /** Number of removed lines */

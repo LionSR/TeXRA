@@ -4,7 +4,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-export const TokenUsageStatsSchema = z.object({
+export const TokenUsageStatsSchema = z.strictObject({
   /** Number of input tokens consumed */
   inputTokens: z.number(),
   /** Number of output tokens generated */
@@ -36,13 +36,10 @@ export interface ExtendedTokenUsageStats extends TokenUsageStats {
 /**
  * Message interface for updating usage stats in the progress view.
  */
-export const StreamUsageMessageSchema = z.object({
+export const StreamUsageMessageSchema = z.strictObject({
   command: z.literal('updateUsage'),
   stream: z.string(),
-  usageByRun: z
-    .record(z.string(), TokenUsageStatsSchema)
-    .default({})
-    .optional(),
+  usageByRun: z.record(z.string(), TokenUsageStatsSchema).prefault({}),
 });
 
 export type StreamUsageMessage = z.infer<typeof StreamUsageMessageSchema>;

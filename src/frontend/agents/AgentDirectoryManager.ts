@@ -5,7 +5,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { showLoggedMessageWithDocs } from '@common/errors/errorHandlingUtils';
+import {
+  showLoggedMessageWithDocs,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig, updateConfig } from '@utils/config';
 import { GlobalStorageFS, StorageFS, AbsoluteFS } from '@utils/files';
@@ -62,7 +65,7 @@ export class AgentDirectoryManager {
     try {
       await GlobalStorageFS.ensureDir(DEFAULT_CUSTOM_AGENTS_DIR_NAME);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       logger.error(
         CHANNEL,
         `Failed to create default custom agents directory: ${message}`,

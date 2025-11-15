@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,
@@ -23,7 +24,7 @@ import type { Diagnostic } from 'vscode';
 const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
 
-export const DiagnosticsInputSchema = z.object({
+export const DiagnosticsInputSchema = z.strictObject({
   command: z.enum(['list', 'count']),
   path: z.string(),
 });
@@ -77,7 +78,7 @@ export class DiagnosticsTool extends defineTool({
       const severity = countDiagnosticsBySeverity(messages);
       return { messages, severity };
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = toErrorMessage(error);
       logger.error(
         CHANNEL,
         `Failed to collect diagnostics for ${path}: ${detail}`,

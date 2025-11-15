@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { WorkspaceFS } from '@utils/files';
@@ -74,7 +77,7 @@ async function handleApplyReplacements(): Promise<void> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error applying replacements: ${err instanceof Error ? err.message : String(err)}`,
+      `Error applying replacements: ${toErrorMessage(err)}`,
     );
     vscode.window.showErrorMessage('Error applying LaTeX replacements');
   }
@@ -209,7 +212,7 @@ async function handleGetTeXCount(): Promise<void> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in getTeXCount command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in getTeXCount command: ${toErrorMessage(err)}`,
     );
     vscode.window.showErrorMessage('Error getting tex count');
   }
