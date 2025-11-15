@@ -189,7 +189,9 @@ export async function handleFixLinterIssues(
       CHANNEL,
       `Error in fixLinterIssues command: ${toErrorMessage(err)}`,
     );
-    vscode.window.showErrorMessage(`Error fixing linter issues: ${String(err)}`);
+    vscode.window.showErrorMessage(
+      `Error fixing linter issues: ${String(err)}`,
+    );
   }
 }
 
