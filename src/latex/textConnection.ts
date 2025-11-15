@@ -37,9 +37,9 @@ function preparePrompt(
   str2: string,
 ): { strings: TestStrings; prompt: string } {
   const strings = {
-    A: str1 + str2,
-    B: str1 + ' ' + str2,
-    C: str1 + '\n' + str2,
+    A: `${str1}${str2}`,
+    B: `${str1} ${str2}`,
+    C: `${str1}\n${str2}`,
   };
 
   const prompt =

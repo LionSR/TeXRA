@@ -2,6 +2,9 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -287,7 +290,7 @@ export function applyReplacements(
         } catch (regexErr) {
           logger.error(
             CHANNEL,
-            `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
+            `Error with regex pattern "${pattern}": ${toErrorMessage(regexErr)}`,
           );
         }
       }

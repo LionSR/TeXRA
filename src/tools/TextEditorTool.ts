@@ -33,7 +33,7 @@ import { ToolCallInput, EditorCommand, FileHistoryEntry } from './types';
 const CHANNEL = 'TextEditorTool';
 const SNIPPET_LINES = 4;
 
-export const TextEditorInputSchema = z.object({
+export const TextEditorInputSchema = z.strictObject({
   command: z.enum(['view', 'create', 'str_replace', 'insert', 'undo_edit']),
   path: z.string(),
   file_text: z.string().optional(),
@@ -611,7 +611,7 @@ export class TextEditorTool extends defineTool({
       }
 
       // Restore previous content
-      const previousContent = history[history.length - 1]!;
+      const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
       const approval = await requestToolEditApproval({

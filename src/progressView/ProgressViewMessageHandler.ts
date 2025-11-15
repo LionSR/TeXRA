@@ -4,6 +4,8 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+
 // Local imports - progress view
 import {
   AgentTypeFilter,
@@ -14,6 +16,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import {
   BaseViewMessageHandler,
   MessageHandler,
@@ -349,7 +352,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
           }
         } catch (error) {
           const messageText =
-            error instanceof Error ? error.message : 'Unknown error';
+            toErrorMessage(error);
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
@@ -442,7 +445,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       ]);
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : String(error);
+        toErrorMessage(error);
       this.logger.error(
         this.channel,
         `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
