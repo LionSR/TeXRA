@@ -72,7 +72,7 @@ export class LsTool extends defineTool({
 
     if (stats.type === vscode.FileType.File) {
       const relativePosix = toPosixPath(relative);
-      const fileName = relativePosix.split('/').pop() ?? relativePosix;
+      const fileName = relativePosix.split('/').at(-1) ?? relativePosix;
       if (
         isDefaultHiddenName(fileName) ||
         gitignore.ignores(relative) ||
