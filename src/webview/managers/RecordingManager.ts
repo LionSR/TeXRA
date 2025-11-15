@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - media utilities
 import {
   startRecording,
@@ -41,15 +44,12 @@ export class RecordingManager {
       }
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Error starting recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error starting recording: ${toErrorMessage(error)}`,
       );
-      logger.error(
-        CHANNEL,
-        `Error in start: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      logger.error(CHANNEL, `Error in start: ${toErrorMessage(error)}`);
       webviewView.webview.postMessage({
         command: this.commandConfig.recordingErrorCommand,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toErrorMessage(error),
       });
     }
   }
@@ -93,15 +93,12 @@ export class RecordingManager {
       );
     } catch (error) {
       vscode.window.showErrorMessage(
-        `Error stopping recording: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error stopping recording: ${toErrorMessage(error)}`,
       );
-      logger.error(
-        CHANNEL,
-        `Error in stop: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      logger.error(CHANNEL, `Error in stop: ${toErrorMessage(error)}`);
       webviewView.webview.postMessage({
         command: this.commandConfig.recordingErrorCommand,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: toErrorMessage(error),
       });
       acknowledgeStop();
     }
