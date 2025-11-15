@@ -62,11 +62,16 @@ interface MarkerFlags {
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
+ * @template M Provider-specific message type
+ * @template U Provider-specific usage type
+ * @template R Provider-specific response usage type
+ * @template T Provider-specific tool call type
+ * @template C Provider-specific client type
  */
 export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
-  U = any,
-  R = any,
+  U = unknown,
+  R = unknown,
   T = unknown,
   C = unknown,
 > implements IModelHandler<M, U, R, T, C>
@@ -411,8 +416,11 @@ export abstract class ModelHandler<
    * Create image/audio messages for the conversation.
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
+   * @returns Array of media content objects in provider-specific format
    */
-  public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
+  public async createMediaMessage(
+    mediaFiles: string[],
+  ): Promise<ReturnType<typeof this.createMediaContent>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
@@ -499,13 +507,13 @@ export abstract class ModelHandler<
     return [markerFlags.endTurn, shouldStop];
   }
 
-  public containCutOffMessage(content: any[] | string): boolean {
+  public containCutOffMessage(
+    content: Array<{ type: string; text?: string }> | string,
+  ): boolean {
     if (typeof content === 'string') {
       return content.includes('Your response got cut off');
     }
-    return content.some((c: { type: string; text: string }) =>
-      c.text?.includes('Your response got cut off'),
-    );
+    return content.some((c) => c.text?.includes('Your response got cut off'));
   }
 
   /** Creates and configures a client instance for the specific model provider. */
