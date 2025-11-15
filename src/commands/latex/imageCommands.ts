@@ -83,7 +83,7 @@ async function handleEncodeImageToBase64(): Promise<string | undefined> {
     const base64String = await getBase64EncodedMedia(selection.relativePath);
 
     // Also show a truncated version in the debug log for quick verification
-    const truncatedString = base64String.substring(0, 100) + '...';
+    const truncatedString = `${base64String.substring(0, 100)}...`;
     logger.debug(
       CHANNEL,
       `Truncated base64 string (first 100 chars): ${truncatedString}`,
@@ -212,7 +212,7 @@ async function handleTestPdfToImage(): Promise<string | undefined> {
     );
 
     // Show truncated result in debug log
-    const truncatedString = base64String.substring(0, 100) + '...';
+    const truncatedString = `${base64String.substring(0, 100)}...`;
     logger.debug(
       CHANNEL,
       `Truncated base64 string (first 100 chars): ${truncatedString}`,

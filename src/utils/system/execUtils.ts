@@ -23,7 +23,7 @@ function truncateOutput(
   maxChars: number = MAX_OUTPUT_LENGTH,
 ): string | null {
   if (text && text.length > maxChars) {
-    return '...' + text.slice(-maxChars);
+    return `...${text.slice(-maxChars)}`;
   }
   return text;
 }
