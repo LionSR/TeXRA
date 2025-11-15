@@ -836,7 +836,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         }
 
         // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
-        const usage = responseObject.usage || {
+        const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
         };
