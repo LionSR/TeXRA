@@ -1,11 +1,13 @@
 // Third-party imports
 import { ZodError, type ZodType } from 'zod';
 
-// Local imports - tools
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - model
 import type { ToolDefinition } from '@model';
 
-// Internal imports
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+// Internal imports - tools
 import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
