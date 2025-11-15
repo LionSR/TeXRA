@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
-const WebSearchInputSchema = z.object({
+const WebSearchInputSchema = z.strictObject({
   query: z.string(),
   max_results: z.number().min(1).max(5).optional(),
 });
