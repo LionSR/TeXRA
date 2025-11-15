@@ -1,68 +1,77 @@
 // Third-party imports
 import { GoogleGenAI } from '@google/genai';
 
+// Local imports - helpers
+import {
+  logValidation,
+  runStreamingAggregationTest,
+} from './helpers/streamHarness.js';
+
 // Set the API key directly or via environment variable
 const apiKey = process.env.GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
 const ai = new GoogleGenAI({ apiKey });
 
 async function run() {
   try {
-    console.log('Starting stream...\n');
+    await runStreamingAggregationTest({
+      title: 'Gemini Streaming Test with Chunk Aggregation',
+      createStream: () =>
+        ai.models.generateContentStream({
+          model: 'gemini-2.5-flash',
+          contents: 'Count from 1 to 5. Each number on a new line.',
+        }),
+      consumeStream: async (stream) => {
+        const aggregated = {
+          text: '',
+          lastChunk: null,
+          finalResponse: undefined,
+          streamKeys: Object.keys(stream),
+        };
+        let count = 0;
 
-    const stream = await ai.models.generateContentStream({
-      model: 'gemini-2.5-flash',
-      contents: 'Count from 1 to 5. Each number on a new line.',
+        console.log('Streaming content:\n');
+
+        for await (const chunk of stream) {
+          count++;
+          aggregated.lastChunk = chunk;
+          const text =
+            typeof chunk.text === 'function' ? chunk.text() : chunk.text;
+          aggregated.text += text ?? chunk.toString();
+          process.stdout.write(text ?? chunk.toString());
+        }
+
+        aggregated.finalResponse = stream.response;
+
+        return { aggregated, count };
+      },
+      createNonStream: () =>
+        ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: 'Count from 1 to 5. Each number on a new line.',
+        }),
+      compare: (aggregated, nonStreamResponse) => {
+        const nonStreamText =
+          typeof nonStreamResponse.response?.text === 'function'
+            ? nonStreamResponse.response.text()
+            : (nonStreamResponse.response?.text ?? '');
+
+        logValidation(
+          'Stream captured text',
+          aggregated.text.trim().length > 0,
+        );
+        logValidation(
+          'Content matches non-stream',
+          aggregated.text.trim() === nonStreamText.trim(),
+        );
+        logValidation(
+          'Final response exists',
+          aggregated.finalResponse !== undefined,
+        );
+        const finishReason =
+          aggregated.finalResponse?.candidates?.[0]?.finishReason;
+        logValidation('Finish reason present', Boolean(finishReason));
+      },
     });
-
-    // Process the stream
-    let lastChunk;
-    for await (const chunk of stream) {
-      lastChunk = chunk;
-      // Check if chunk has text method or is text directly
-      const text = typeof chunk.text === 'function' ? chunk.text() : chunk.text;
-      process.stdout.write(text ?? chunk.toString());
-    }
-
-    console.log('\n\n--- Last Chunk Structure ---');
-    console.log('Last chunk keys:', Object.keys(lastChunk || {}));
-    console.log('Last chunk:', JSON.stringify(lastChunk, null, 2));
-
-    // Check stream object properties
-    console.log('\n--- Stream Object Properties ---');
-    console.log('Stream keys:', Object.keys(stream));
-    console.log('Stream.response exists?', 'response' in stream);
-
-    // Try to get the final response after streaming
-    const finalResponse = stream.response;
-
-    console.log('\n\n--- Final Response Metadata ---');
-    console.log('Final response exists?', finalResponse !== undefined);
-    console.log(
-      'Usage Metadata:',
-      JSON.stringify(finalResponse?.usageMetadata, null, 2),
-    );
-
-    // Check for candidates and finish reason
-    if (finalResponse?.candidates && finalResponse.candidates.length > 0) {
-      const candidate = finalResponse.candidates[0];
-      console.log('Finish Reason:', candidate.finishReason);
-      console.log('Finish Message:', candidate.finishMessage);
-      console.log(
-        'Safety Ratings:',
-        JSON.stringify(candidate.safetyRatings, null, 2),
-      );
-    }
-
-    // Check for end turn reason or similar properties
-    console.log('Model Version:', finalResponse?.modelVersion);
-    console.log(
-      'Prompt Feedback:',
-      JSON.stringify(finalResponse?.promptFeedback, null, 2),
-    );
-
-    // Log the entire response structure for inspection
-    console.log('\n--- Full Response Structure ---');
-    console.log(JSON.stringify(finalResponse, null, 2));
   } catch (error) {
     console.error('Error:', error);
   }

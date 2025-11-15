@@ -2,15 +2,14 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { ToolError, toolResult } from '@tools/result';
-import {
-  buildFileAttachment,
-  formatToolOutput,
-  resolveAndFormat,
-} from '@tools/utils';
+import { toolResult } from '@tools/result';
+import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
-import { WorkspaceFS } from '@utils/files';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
+import {
+  buildLimitedAttachments,
+  resolveLatexFileOrThrow,
+} from './figureExtractionShared';
 
 const ExtractFiguresInputSchema = z.strictObject({
   texPath: z
@@ -30,11 +29,7 @@ export class ExtractLatexFiguresTool extends defineTool({
   schema: ExtractFiguresInputSchema,
 }) {
   protected async execute({ texPath }: ExtractFiguresInput) {
-    const { resolved, display } = resolveAndFormat(texPath);
-
-    if (!(await WorkspaceFS.exists(resolved.relative))) {
-      throw new ToolError(`LaTeX file not found: ${display}`);
-    }
+    const { resolved, display } = await resolveLatexFileOrThrow(texPath);
 
     const figurePaths = await extractFigurePathsFromLatex(resolved.relative);
     const uniqueFigures = Array.from(new Set(figurePaths));
@@ -47,26 +42,20 @@ export class ExtractLatexFiguresTool extends defineTool({
       });
     }
 
-    const limit = Math.min(uniqueFigures.length, DEFAULT_MAX_FILES);
-    const limitedFigures = uniqueFigures.slice(0, limit);
+    const { attachments, limitedPaths, limitReached } =
+      await buildLimitedAttachments(uniqueFigures, {
+        limit: DEFAULT_MAX_FILES,
+        describe: () => `Figure referenced by ${display}`,
+      });
 
-    const attachments = await Promise.all(
-      limitedFigures.map((figurePath) =>
-        buildFileAttachment({
-          filePath: figurePath,
-          description: `Figure referenced by ${display}`,
-        }),
-      ),
-    );
-
-    const formattedList = limitedFigures.map((path) => {
+    const formattedList = limitedPaths.map((path) => {
       const { display: figureDisplay } = resolveAndFormat(path);
       return `- ${figureDisplay}`;
     });
     const header = `Figures referenced in ${display}`;
     const output = formatToolOutput(header, formattedList);
-    const summary = `Found ${limitedFigures.length} figure file${
-      limitedFigures.length === 1 ? '' : 's'
+    const summary = `Found ${limitedPaths.length} figure file${
+      limitedPaths.length === 1 ? '' : 's'
     } in ${display}.`;
 
     const result = toolResult({
@@ -75,8 +64,8 @@ export class ExtractLatexFiguresTool extends defineTool({
       files: attachments,
     });
 
-    if (uniqueFigures.length > limit) {
-      result.userInstruction = `Limited attachments to ${limit} files.`;
+    if (limitReached) {
+      result.userInstruction = `Limited attachments to ${attachments.length} files.`;
     }
 
     return result;
