@@ -383,7 +383,7 @@ export function replaceMathUnicode(text: string): string {
     // Replace HTML superscript tags with LaTeX superscript syntax
     content = content.replace(/<sup>(.*?)<\/sup>/g, '^{$1}');
 
-    return '$' + content + '$';
+    return `$${content}$`;
   });
 
   return text;
