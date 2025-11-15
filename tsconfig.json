@@ -12,6 +12,7 @@
       "@common/*": ["src/common/*"],
       "@webview/*": ["src/webview/*"],
       "@agent/*": ["src/agent/*"],
+      "@auth/*": ["src/auth/*"],
       "@frontend/*": ["src/frontend/*"],
       "@utils/*": ["src/utils/*"],
       "@logger/*": ["src/logger/*"],

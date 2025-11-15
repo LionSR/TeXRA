@@ -38,6 +38,7 @@ const extensionConfig = {
       '@common': path.resolve(__dirname, 'src/common'),
       '@webview': path.resolve(__dirname, 'src/webview'),
       '@agent': path.resolve(__dirname, 'src/agent'),
+      '@auth': path.resolve(__dirname, 'src/auth'),
       '@frontend': path.resolve(__dirname, 'src/frontend'),
       '@utils': path.resolve(__dirname, 'src/utils'),
       '@logger': path.resolve(__dirname, 'src/logger'),

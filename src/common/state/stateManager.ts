@@ -21,6 +21,9 @@ export enum WorkspaceStateKey {
 
 export enum GlobalStateKey {
   LAST_KNOWN_VERSION = 'lastKnownVersion',
+  // Authentication state keys
+  AUTH_SESSIONS = 'texra.auth.sessions',
+  AUTH_CURRENT_SESSION = 'texra.auth.currentSession',
 }
 
 // Prefix used for per-instruction suppression flags

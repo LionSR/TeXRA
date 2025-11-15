@@ -30,8 +30,13 @@ import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
 import { registerCommands } from './commands';
 
+// Local imports - authentication
+import { TeXRAAuthProvider, AuthStatusBar } from '@auth/index';
+import { registerAuthCommands } from '@commands/auth';
+
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
+let authStatusBar: AuthStatusBar | undefined;
 let disposeStatusListener: (() => void) | undefined;
 
 function promptToOpenFolder(message: string): void {
@@ -132,6 +137,38 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands first - this will create and store the MainViewProvider
   registerCommands(context);
+
+  // Initialize authentication system (if enabled)
+  const authEnabled = getConfig<boolean>('texra.auth.enabled', false);
+  const authProvider = new TeXRAAuthProvider();
+
+  if (authEnabled) {
+    // Register authentication provider with VS Code
+    context.subscriptions.push(
+      vscode.authentication.registerAuthenticationProvider(
+        TeXRAAuthProvider.PROVIDER_ID,
+        TeXRAAuthProvider.PROVIDER_LABEL,
+        authProvider,
+        { supportsMultipleAccounts: true },
+      ),
+    );
+
+    // Clean up expired sessions on startup
+    await authProvider.cleanupExpiredSessions();
+
+    logger.info('extension', 'Authentication system enabled');
+  }
+
+  // Register auth commands (always register, even if disabled, for enabling later)
+  const authCommandDisposables = registerAuthCommands(context, authProvider);
+  context.subscriptions.push(...authCommandDisposables);
+
+  // Create auth status bar (show if enabled)
+  const showAuthStatusBar = getConfig<boolean>('texra.auth.showStatusBar', true);
+  if (authEnabled && showAuthStatusBar) {
+    authStatusBar = new AuthStatusBar(authProvider);
+    context.subscriptions.push(authStatusBar);
+  }
 
   initializeToolEditApproval(context);
 

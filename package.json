@@ -826,6 +826,36 @@
         }
       },
       {
+        "title": "Authentication",
+        "properties": {
+          "texra.auth.enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable user authentication system",
+            "scope": "application"
+          },
+          "texra.auth.showStatusBar": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show authentication status in the status bar",
+            "scope": "application"
+          },
+          "texra.auth.sessionTimeout": {
+            "type": "number",
+            "default": 86400,
+            "description": "Session timeout in seconds (default: 24 hours, 0 = no timeout)",
+            "scope": "application",
+            "minimum": 0
+          },
+          "texra.auth.rememberMe": {
+            "type": "boolean",
+            "default": true,
+            "description": "Remember authentication sessions across VS Code restarts",
+            "scope": "application"
+          }
+        }
+      },
+      {
         "title": "Logger",
         "properties": {
           "texra.logger.debugMode": {
@@ -1114,6 +1144,30 @@
         "command": "texra.removeApiKey",
         "title": "Remove API Key",
         "category": "TeXRA"
+      },
+      {
+        "command": "texra.auth.login",
+        "title": "Login",
+        "category": "TeXRA",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "texra.auth.logout",
+        "title": "Logout",
+        "category": "TeXRA",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "texra.auth.switchAccount",
+        "title": "Switch Account",
+        "category": "TeXRA",
+        "icon": "$(account)"
+      },
+      {
+        "command": "texra.auth.status",
+        "title": "Show Authentication Status",
+        "category": "TeXRA",
+        "icon": "$(info)"
       },
       {
         "command": "texra.testTextEditor",
