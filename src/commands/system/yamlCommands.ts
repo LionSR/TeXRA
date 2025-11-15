@@ -11,6 +11,7 @@ import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
@@ -145,7 +146,7 @@ export async function handleTestAgentLoading(
       'Agent loading tests completed. Check Debug Console for results.',
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     logger.error(CHANNEL, `Agent loading test failed: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
       logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
@@ -201,7 +202,7 @@ export async function handleLoadSpecificAgent(
       `Successfully loaded agent "${agentName}". Check Debug Console for details.`,
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     logger.error(CHANNEL, `Failed to load agent: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
       logger.debug(CHANNEL, `Stack trace: ${err.stack}`);
@@ -239,10 +240,7 @@ export async function handleParseYaml(
         `Parsed structure: ${JSON.stringify(parsedYaml, null, 2)}`,
       );
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Failed to parse YAML: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      logger.error(CHANNEL, `Failed to parse YAML: ${toErrorMessage(err)}`);
       vscode.window.showErrorMessage('Failed to parse YAML content');
       await showInstructionWithSuppress(
         'yamlParseFail',
@@ -252,10 +250,7 @@ export async function handleParseYaml(
       );
     }
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in parseYaml command: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error in parseYaml command: ${toErrorMessage(err)}`);
     vscode.window.showErrorMessage('Error parsing YAML');
   }
 }
@@ -318,7 +313,7 @@ export async function handleTestYamlBrackets(
       'YAML bracket test completed. Check Debug Console for results.',
     );
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     logger.error(CHANNEL, `YAML bracket test failed: ${errorMessage}`);
     if (err instanceof Error && err.stack) {
       logger.debug(CHANNEL, `Stack trace: ${err.stack}`);

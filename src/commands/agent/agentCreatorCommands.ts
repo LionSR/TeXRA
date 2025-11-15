@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent runtime
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
@@ -172,7 +173,7 @@ function validateAgentYamlString(content: string): string | null {
     validateAgentYamlContent(content);
     return null;
   } catch (err) {
-    return err instanceof Error ? err.message : String(err);
+    return toErrorMessage(err);
   }
 }
 
@@ -288,10 +289,7 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
         }
       }
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `AI generation failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      logger.error(CHANNEL, `AI generation failed: ${toErrorMessage(err)}`);
     }
 
     if (!yamlContent) {
@@ -319,12 +317,9 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
     const doc = await vscode.workspace.openTextDocument(filePath);
     await vscode.window.showTextDocument(doc);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error creating agent: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error creating agent: ${toErrorMessage(err)}`);
     vscode.window.showErrorMessage(
-      `Failed to create agent: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      `Failed to create agent: ${toErrorMessage(err)}`,
     );
   }
 }
