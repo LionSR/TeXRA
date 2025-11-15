@@ -1,6 +1,5 @@
 // Local imports - common
 import { registerMessageHandlers } from './webviewContext.js';
-import { createMessageHandlerRegistry } from './messageHandlerRegistry.js';
 
 /**
  * Base class for webview message handlers.
@@ -22,19 +21,20 @@ import { createMessageHandlerRegistry } from './messageHandlerRegistry.js';
 export class BaseWebviewMessageHandler {
   constructor() {
     /**
+     * Cleanup function returned from registerMessageHandlers.
+     * Used to unregister handlers when cleanup() is called.
+     * @type {Function|null}
+     * @protected
+     */
+    this._cleanupFn = null;
+
+    /**
      * Map of command names to handler functions.
      * Derived classes must populate this before calling setup().
      * @type {Object.<string, Function>}
      * @protected
      */
     this._handlers = {};
-
-    /**
-     * Shared handler registry used to coordinate setup/cleanup.
-     * @type {ReturnType<typeof createMessageHandlerRegistry>}
-     * @protected
-     */
-    this._registry = createMessageHandlerRegistry(this._handlers);
   }
 
   /**
@@ -43,18 +43,23 @@ export class BaseWebviewMessageHandler {
    * @throws {Error} If handlers are not properly defined
    */
   setup() {
-    if (!this._handlers || typeof this._handlers !== 'object') {
-      throw new Error('BaseWebviewMessageHandler: handlers must be an object');
-    }
+    if (!this._cleanupFn) {
+      // Validate handlers are defined
+      if (!this._handlers || typeof this._handlers !== 'object') {
+        throw new Error(
+          'BaseWebviewMessageHandler: handlers must be an object',
+        );
+      }
 
-    if (Object.keys(this._handlers).length === 0) {
-      console.warn(
-        'BaseWebviewMessageHandler: No handlers defined for registration',
-      );
-    }
+      // Warn if no handlers are defined (but don't throw - could be intentional)
+      if (Object.keys(this._handlers).length === 0) {
+        console.warn(
+          'BaseWebviewMessageHandler: No handlers defined for registration',
+        );
+      }
 
-    this._registry.setHandlers(this._handlers);
-    this._registry.register((handlers) => registerMessageHandlers(handlers));
+      this._cleanupFn = registerMessageHandlers(this._handlers);
+    }
   }
 
   /**
@@ -63,7 +68,10 @@ export class BaseWebviewMessageHandler {
    * Safe to call multiple times.
    */
   cleanup() {
-    this._registry.dispose();
+    if (this._cleanupFn) {
+      this._cleanupFn();
+      this._cleanupFn = null;
+    }
   }
 }
 

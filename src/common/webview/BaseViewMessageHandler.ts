@@ -2,10 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import {
-  createMessageHandlerRegistry,
-  type MessageHandlerRegistry,
-} from '@common/modules/messageHandlerRegistry.js';
 import * as logger from '@logger/logUtils';
 
 // Local file imports
@@ -25,14 +21,13 @@ export abstract class BaseViewMessageHandler<
 > {
   protected readonly logger: any;
   protected readonly channel: string;
-  private readonly registry: MessageHandlerRegistry<T>;
+  protected readonly handlers: Record<string, MessageHandler<T>>;
 
   constructor(protected readonly viewName: string) {
     this.logger = logger;
     this.channel = `${viewName}MessageHandler`;
     logger.initialize(this.channel);
-    this.registry = createMessageHandlerRegistry<T>();
-    this.registry.setHandlers(this.createHandlers());
+    this.handlers = this.createHandlers();
   }
 
   /**
@@ -54,7 +49,7 @@ export abstract class BaseViewMessageHandler<
 
     this.logger.debug(this.channel, `Received message: ${message.command}`);
 
-    const handler = this.registry.getHandlers()[message.command];
+    const handler = this.handlers[message.command];
     if (!handler) {
       this.logger.warn(this.channel, `Unknown command: ${message.command}`);
       return;
