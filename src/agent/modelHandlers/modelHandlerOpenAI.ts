@@ -644,7 +644,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         }
 
         // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
-        const usage = responseObject.usage || {
+        const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
         };
@@ -819,7 +819,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       this.logger.debug('End tag detected - skipping continuation');
       if (lastMessage && Array.isArray(lastMessage.content)) {
         // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content[lastMessage.content.length - 1];
+        const lastPart = lastMessage.content.at(-1);
         if (lastPart && 'text' in lastPart) {
           lastPart.text = fileContent;
         }

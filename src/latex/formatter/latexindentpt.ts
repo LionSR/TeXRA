@@ -5,6 +5,7 @@ import * as path from 'path';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -118,10 +119,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
     logger.info(CHANNEL, `Indented ${filePath}`);
     return true;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error running LaTeX indent: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error running LaTeX indent: ${toErrorMessage(err)}`);
     return false;
   }
 }

@@ -20,7 +20,7 @@ export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
-  const state = rateLimiters.get(apiName) || { lastRequestTime: 0 };
+  const state = rateLimiters.get(apiName) ?? { lastRequestTime: 0 };
   const now = Date.now();
   const timeSinceLastRequest = now - state.lastRequestTime;
 

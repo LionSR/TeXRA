@@ -1,6 +1,9 @@
 // Third-party imports
 import { z } from 'zod';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
 import { executeCommand } from '@utils/system/execUtils';
@@ -8,7 +11,7 @@ import { executeCommand } from '@utils/system/execUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
-const ApplyPathInputSchema = z.object({
+const ApplyPathInputSchema = z.strictObject({
   patch: z.string().min(1, 'patch content is required'),
 });
 
@@ -47,7 +50,7 @@ export class ApplyPathTool extends defineTool({
       }
 
       const message =
-        error instanceof Error ? error.message : 'Unknown error applying patch';
+        toErrorMessage(error);
       throw new ToolError(`apply_path error: ${message}`);
     }
   }

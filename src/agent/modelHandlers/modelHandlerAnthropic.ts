@@ -1174,7 +1174,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug('End tag detected - skipping continuation');
       // this is suspicious, because the two conflicts!!! we should check
       if (lastMessage && Array.isArray(lastMessage.content)) {
-        const lastContent = lastMessage.content[lastMessage.content.length - 1];
+        const lastContent = lastMessage.content.at(-1);
         if (lastContent && lastContent.type === 'text') {
           lastContent.text = fileContent;
         }

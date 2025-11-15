@@ -15,6 +15,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -192,9 +193,7 @@ export class OutputHandler implements IOutputHandler {
       await this.runPreparation;
     } catch (error) {
       this.logger.debug(
-        `Failed to prepare run workspace: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to prepare run workspace: ${toErrorMessage(error)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
@@ -324,9 +323,7 @@ export class OutputHandler implements IOutputHandler {
         }
       } catch (error) {
         this.logger.debug(
-          `Failed to remove latexindent backup ${relative}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Failed to remove latexindent backup ${relative}: ${toErrorMessage(error)}`,
         );
       }
     }
@@ -678,9 +675,7 @@ export class OutputHandler implements IOutputHandler {
       } catch (error) {
         throw Object.assign(
           new Error(
-            `Failed to relocate processed output ${entry.location.absolutePath}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            `Failed to relocate processed output ${entry.location.absolutePath}: ${toErrorMessage(error)}`,
           ),
           { cause: error },
         );
@@ -820,9 +815,7 @@ export class OutputHandler implements IOutputHandler {
             );
           } catch (error) {
             this.logger.error(
-              `Expected output validation failed after round ${currRound}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
+              `Expected output validation failed after round ${currRound}: ${toErrorMessage(error)}`,
             );
           }
         }
@@ -844,9 +837,7 @@ export class OutputHandler implements IOutputHandler {
             this.openedOutputs.add(filePath);
           } catch (error) {
             this.logger.error(
-              `Failed to open output file ${filePath}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
+              `Failed to open output file ${filePath}: ${toErrorMessage(error)}`,
             );
           }
         }
@@ -952,7 +943,7 @@ export class OutputHandler implements IOutputHandler {
             }
           } catch (err) {
             this.logger.debug(
-              `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
+              `Error processing output files: ${toErrorMessage(err)}`,
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
@@ -1060,7 +1051,7 @@ export class OutputHandler implements IOutputHandler {
             );
           } catch (err) {
             this.logger.debug(
-              `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
+              `Error processing output file: ${toErrorMessage(err)}`,
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
@@ -1205,9 +1196,7 @@ export class OutputHandler implements IOutputHandler {
         };
       } catch (error) {
         this.logger.debug(
-          `Failed to collect XML summary for round ${round}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
           undefined,
           MESSAGE_TYPES.INTERNAL,
         );

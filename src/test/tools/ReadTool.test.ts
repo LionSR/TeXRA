@@ -118,7 +118,7 @@ describe('ReadFileTool', () => {
       catFormat(rangeStart, `row ${rangeStart}`),
     );
     assert.strictEqual(
-      outputLines[outputLines.length - 1],
+      outputLines.at(-1),
       catFormat(rangeEnd, `row ${rangeEnd}`),
     );
   });

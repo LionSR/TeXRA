@@ -1,7 +1,10 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
@@ -226,7 +229,7 @@ export async function replaceInputCommands(
       }
     } catch (err) {
       logger?.warn(
-        `Error processing input commands in ${outputFile}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error processing input commands in ${outputFile}: ${toErrorMessage(err)}`,
       );
     }
   }
