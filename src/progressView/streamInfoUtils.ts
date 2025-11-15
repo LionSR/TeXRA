@@ -62,7 +62,7 @@ export function buildStreamInfos(
     const sessionKindHint = state.getSessionKindHint(id);
     const logs = state.streamTabs.getMessages(id);
     const lastTimestamp =
-      logs.length > 0 ? logs[logs.length - 1].timestamp : undefined;
+      logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
     const outputs = taskState?.agentConfig.outputFiles ?? [];
     const inputFile = taskState?.agentConfig.inputFile || '';
