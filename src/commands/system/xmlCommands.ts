@@ -5,6 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // Local imports - core
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,
@@ -56,17 +57,11 @@ export async function handleParseXml(): Promise<void> {
         `Parsed structure: ${JSON.stringify(parsedXml, null, 2)}`,
       );
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Failed to parse XML: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      logger.error(CHANNEL, `Failed to parse XML: ${toErrorMessage(err)}`);
       vscode.window.showErrorMessage('Failed to parse XML content');
     }
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error in parseXml command: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error in parseXml command: ${toErrorMessage(err)}`);
     vscode.window.showErrorMessage('Error parsing XML');
   }
 }
@@ -103,7 +98,7 @@ export async function handleValidateAndFixXml(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in validateAndFixXml command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in validateAndFixXml command: ${toErrorMessage(err)}`,
     );
     vscode.window.showErrorMessage(`Error validating XML: ${String(err)}`);
   }

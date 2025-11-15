@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import {
+  showLoggedErrorMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 // Type imports
 import type { TaskState } from '@logger/TaskState';
@@ -56,7 +59,7 @@ async function restoreState(state: TaskState) {
     } catch (error) {
       logger.warn(
         CHANNEL,
-        `Could not access webview directly: ${error instanceof Error ? error.message : String(error)}`,
+        `Could not access webview directly: ${toErrorMessage(error)}`,
       );
 
       await storeStateForLater(state);

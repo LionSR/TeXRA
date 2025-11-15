@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import {
   getLinterMessages,
   getSeverityString,
@@ -79,7 +80,7 @@ export async function handleShowLinterMessages(): Promise<void> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in showLinterMessages command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in showLinterMessages command: ${toErrorMessage(err)}`,
     );
     vscode.window.showErrorMessage('Error showing linter messages');
   }
@@ -129,7 +130,7 @@ export async function handleCountLinterMessages(): Promise<void> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in countLinterMessages command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in countLinterMessages command: ${toErrorMessage(err)}`,
     );
     vscode.window.showErrorMessage('Error counting linter messages');
   }
@@ -186,11 +187,9 @@ export async function handleFixLinterIssues(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error in fixLinterIssues command: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in fixLinterIssues command: ${toErrorMessage(err)}`,
     );
-    vscode.window.showErrorMessage(
-      `Error fixing linter issues: ${String(err)}`,
-    );
+    vscode.window.showErrorMessage(`Error fixing linter issues: ${String(err)}`);
   }
 }
 
