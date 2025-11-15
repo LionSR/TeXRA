@@ -3,6 +3,7 @@ import { CrossrefClient } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - metadata
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -54,8 +55,7 @@ export class CrossrefDoiTool extends defineTool({
       }
       work = message;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Crossref lookup failed: ${message}`);
+      throw new ToolError(`Crossref lookup failed: ${toErrorMessage(error)}`);
     }
 
     const titleValue = work.title;
