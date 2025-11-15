@@ -31,7 +31,6 @@ import {
   type ReflectionRunState,
   type ReflectionRunPhase,
 } from '@agent/implementations/flows/ReflectionRunFlow';
-import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
 // Type imports
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 // Internal imports
@@ -702,8 +701,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const totalRounds = this.getTotalRounds();
 
     try {
-      await runAgentFlow<ReflectionRunShared<C>>({
-        agent: this,
+      await this.executeAgentRunFlow<ReflectionRunShared<C>>({
         lifecycle,
         createState: () =>
           ({
