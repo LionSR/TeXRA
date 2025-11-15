@@ -4,8 +4,11 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - commands
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
@@ -29,7 +32,7 @@ export class InstructionManager {
         .catch((e) =>
           logger.warn(
             CHANNEL,
-            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
+            `Error during initial cleanup: ${toErrorMessage(e)}`,
           ),
         );
     }, 100);
@@ -138,25 +141,21 @@ export class InstructionManager {
       } catch (error) {
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-          error:
-            error instanceof Error ? error.message : 'Unknown error occurred',
+          error: toErrorMessage(error),
         });
         logger.error(
           CHANNEL,
-          `Error in handlePolishInstructionText: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
         );
       }
     } catch (error) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
+        error: toErrorMessage(error),
       });
       logger.error(
         CHANNEL,
-        `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
+        `Error setting up text polishing: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -188,7 +187,7 @@ export class InstructionManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error handling clipboard image: ${err instanceof Error ? err.message : String(err)}`,
+        `Error handling clipboard image: ${toErrorMessage(err)}`,
       );
     }
   }
