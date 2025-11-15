@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
@@ -75,7 +76,7 @@ async function handleCompare(
         await vscode.commands.executeCommand('workbench.action.closePanel');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       if (message.includes(`command '${contextKeyCommandId}' not found`)) {
         logger.warn(
           CHANNEL,
@@ -105,12 +106,9 @@ async function handleCompare(
     );
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Error comparing files: ${err instanceof Error ? err.message : String(err)}`,
+      `Error comparing files: ${toErrorMessage(err)}`,
     );
-    logger.error(
-      CHANNEL,
-      `Error in handleCompare: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error in handleCompare: ${toErrorMessage(err)}`);
   }
 }
 
@@ -174,11 +172,11 @@ async function handleAcceptEdited(
     );
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Error accepting changes: ${err instanceof Error ? err.message : String(err)}`,
+      `Error accepting changes: ${toErrorMessage(err)}`,
     );
     logger.error(
       CHANNEL,
-      `Error in handleAcceptEdited: ${err instanceof Error ? err.message : String(err)}`,
+      `Error in handleAcceptEdited: ${toErrorMessage(err)}`,
     );
   }
 }
