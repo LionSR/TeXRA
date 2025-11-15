@@ -17,6 +17,32 @@ import { getStreamTabId } from '@/logger/streamUtils';
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
+/** Validates and logs required parameters, returns false if any are missing */
+async function validateParams(
+  inputFile: string,
+  agent: string,
+  model: string,
+  commandName: string,
+): Promise<boolean> {
+  logger.debug(
+    CHANNEL,
+    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
+  );
+
+  if (!inputFile || !agent || !model) {
+    const missing = [];
+    if (!inputFile) missing.push('inputFile');
+    if (!agent) missing.push('agent');
+    if (!model) missing.push('model');
+    await showLoggedMessage(
+      CHANNEL,
+      `Missing required parameters for ${commandName}: ${missing.join(', ')}`,
+    );
+    return false;
+  }
+  return true;
+}
+
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
     case 'success':
@@ -124,20 +150,7 @@ async function handlePackSingle(
   agent: string,
   model: string,
 ) {
-  logger.debug(
-    CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-  );
-
-  if (!inputFile || !agent || !model) {
-    const missing = [];
-    if (!inputFile) missing.push('inputFile');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for packSingle: ${missing.join(', ')}`,
-    );
+  if (!(await validateParams(inputFile, agent, model, 'packSingle'))) {
     return;
   }
 
