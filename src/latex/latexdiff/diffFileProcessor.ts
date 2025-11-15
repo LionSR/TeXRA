@@ -89,7 +89,7 @@ export class DiffFileProcessor {
 
       // Add line if not in add block
       if (!addBlock) {
-        newContent += line + '\n';
+        newContent += `${line}\n`;
       }
 
       // Add extra newline after color package
