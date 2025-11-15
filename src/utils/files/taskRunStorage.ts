@@ -5,6 +5,9 @@ import { promises as fs } from 'fs';
 // Local imports - log
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -662,9 +665,7 @@ export class TaskRunFileService {
         }
         throw Object.assign(
           new Error(
-            `Failed to capture original file ${target}: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
+            `Failed to capture original file ${target}: ${toErrorMessage(err)}`,
           ),
           { cause: error },
         );
@@ -680,11 +681,9 @@ export class TaskRunFileService {
           try {
             await this.mirrorWorkspaceFile(candidate);
           } catch (error) {
-            const message =
-              error instanceof Error ? error.message : String(error);
             logger.warn(
               CHANNEL,
-              `Failed to mirror workspace dependency ${candidate}: ${message}`,
+              `Failed to mirror workspace dependency ${candidate}: ${toErrorMessage(error)}`,
             );
           }
         }),
