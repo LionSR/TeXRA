@@ -42,6 +42,13 @@ export class WebviewUpdater {
     this.logger = new AgentLogger('WebviewUpdater');
   }
 
+  /** Helper to send messages to webview, eliminating repetitive null checks */
+  private sendMessage(message: any): void {
+    const webview = this.getWebview();
+    if (!webview) return;
+    webview.postMessage(message);
+  }
+
   static createInstructionUpdate(
     taskState?: TaskState,
   ): InstructionUpdate | undefined {
@@ -82,10 +89,7 @@ export class WebviewUpdater {
     activeStream: StreamTabId,
     agentFilter: AgentTypeFilter,
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_STREAMS,
       streams,
       activeStream,
@@ -106,10 +110,7 @@ export class WebviewUpdater {
       runUsage?: Record<string, TokenUsageStats>;
     },
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
       stream,
       messages,
@@ -124,10 +125,7 @@ export class WebviewUpdater {
    * Append a single log message to a stream
    */
   appendLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.APPEND_LOG,
       stream,
       logMessage,
@@ -138,10 +136,7 @@ export class WebviewUpdater {
    * Update an existing log message
    */
   updateLogMessage(stream: StreamTabId, logMessage: LogMessageData): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_LOG,
       stream,
       logMessage,
@@ -159,10 +154,7 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_FILES,
       stream,
       ...payload,
@@ -180,10 +172,7 @@ export class WebviewUpdater {
       reset?: boolean;
     },
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_MISSING_OUTPUTS,
       stream,
       ...payload,
@@ -191,30 +180,21 @@ export class WebviewUpdater {
   }
 
   showToolEditApprovalPrompt(prompt: ToolEditApprovalPrompt): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.SHOW_TOOL_EDIT_APPROVAL,
       request: prompt,
     });
   }
 
   resolveToolEditApprovalPrompt(requestId: string): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.RESOLVE_TOOL_EDIT_APPROVAL,
       requestId,
     });
   }
 
   updateToolEditApprovalState(bypassActive: boolean): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       bypassActive,
     });
@@ -227,10 +207,7 @@ export class WebviewUpdater {
     stream: StreamTabId,
     usageByRun: Record<string, TokenUsageStats>,
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_USAGE,
       stream,
       usageByRun,
@@ -245,10 +222,7 @@ export class WebviewUpdater {
     instruction: InstructionUpdate,
     sessionKind?: string,
   ): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction,
@@ -260,10 +234,7 @@ export class WebviewUpdater {
    * Clear instruction panel content
    */
   clearInstruction(stream: StreamTabId | ''): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_INSTRUCTION,
       stream,
       instruction: null,
@@ -274,10 +245,7 @@ export class WebviewUpdater {
    * Update the code highlight theme
    */
   updateTheme(theme: 'dark' | 'light'): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.THEME_SET,
       theme,
     });
@@ -287,10 +255,7 @@ export class WebviewUpdater {
    * Update stream status
    */
   updateStatus(status: StatusType): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_STATUS,
       status,
     });
@@ -300,10 +265,7 @@ export class WebviewUpdater {
    * Add a task group to the webview
    */
   addTaskGroup(stream: StreamTabId, group: any): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.ADD_TASK_GROUP,
       stream,
       group,
@@ -314,10 +276,7 @@ export class WebviewUpdater {
    * Update a task group in the webview
    */
   updateTaskGroup(update: TaskGroupUpdatePayload): void {
-    const webview = this.getWebview();
-    if (!webview) return;
-
-    webview.postMessage({
+    this.sendMessage({
       command: COMMANDS.UPDATE_TASK_GROUP,
       update,
     });
