@@ -54,3 +54,27 @@ export function insertTextAtCursor(target, text) {
 }
 
 export { resolveTextareaTarget };
+
+/**
+ * Ensure callbacks run after a vscode-textarea upgrades to its wrapped textarea.
+ * For native textareas the callback executes immediately.
+ *
+ * @param {HTMLElement|HTMLTextAreaElement|null|undefined} target
+ * @param {(element: HTMLElement|HTMLTextAreaElement) => void} callback
+ */
+export function awaitTextareaUpgrade(target, callback) {
+  if (!target || typeof callback !== 'function') {
+    return;
+  }
+
+  const needsUpgrade =
+    target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
+    typeof target.updateComplete?.then === 'function';
+
+  if (needsUpgrade) {
+    target.updateComplete.then(() => callback(target));
+    return;
+  }
+
+  callback(target);
+}

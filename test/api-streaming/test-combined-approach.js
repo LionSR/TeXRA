@@ -2,6 +2,11 @@ import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
+import {
+  logValidation,
+  runStreamingAggregationTest,
+} from './helpers/streamHarness.js';
+
 dotenv.config();
 
 const openai = new OpenAI({
@@ -14,46 +19,76 @@ const anthropic = new Anthropic({
 
 // OpenAI: Stream to user + get final response
 async function testOpenAIStreamingBoth() {
-  console.log('=== OpenAI: Stream + Final Response ===\n');
+  await runStreamingAggregationTest({
+    title: 'OpenAI: Stream + Final Response',
+    createStream: () =>
+      openai.chat.completions.create({
+        model: 'o1-mini',
+        messages: [
+          {
+            role: 'user',
+            content: 'Explain why the sky is blue in 2 sentences.',
+          },
+        ],
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+    consumeStream: async (stream) => {
+      const aggregated = {
+        content: '',
+        reasoning: '',
+        finalResponse: null,
+      };
+      let count = 0;
 
-  const stream = await openai.chat.completions.create({
-    model: 'o1-mini',
-    messages: [
-      {
-        role: 'user',
-        content: 'Explain why the sky is blue in 2 sentences.',
-      },
-    ],
-    stream: true,
-    stream_options: { include_usage: true },
+      console.log('Streaming to user:\n');
+
+      for await (const chunk of stream) {
+        count++;
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          aggregated.content += content;
+          process.stdout.write(content);
+        }
+
+        const reasoning = chunk.choices[0]?.delta?.reasoning_content || '';
+        if (reasoning) {
+          aggregated.reasoning += reasoning;
+          process.stdout.write(`[REASONING] ${reasoning}\n`);
+        }
+      }
+
+      aggregated.finalResponse = await stream.finalChatCompletion();
+
+      return { aggregated, count };
+    },
+    createNonStream: () =>
+      openai.chat.completions.create({
+        model: 'o1-mini',
+        messages: [
+          {
+            role: 'user',
+            content: 'Explain why the sky is blue in 2 sentences.',
+          },
+        ],
+        stream: false,
+      }),
+    compare: (aggregated, nonStream) => {
+      const streamedContent =
+        aggregated.finalResponse?.choices[0]?.message?.content ?? '';
+      const nonStreamContent = nonStream.choices[0]?.message?.content ?? '';
+      logValidation(
+        'Content matches non-stream',
+        streamedContent.trim() === nonStreamContent.trim(),
+      );
+      logValidation('Reasoning captured', aggregated.reasoning.length > 0);
+      logValidation('Usage present', Boolean(aggregated.finalResponse?.usage));
+      logValidation(
+        'Finish reason',
+        aggregated.finalResponse?.choices[0]?.finish_reason ?? null,
+      );
+    },
   });
-
-  console.log('Streaming to user:\n');
-
-  // Process chunks for real-time display
-  for await (const chunk of stream) {
-    // Stream content to user
-    const content = chunk.choices[0]?.delta?.content || '';
-    if (content) {
-      process.stdout.write(content); // This would be sent to user in real app
-    }
-
-    // For o1 models, also stream reasoning
-    const reasoning = chunk.choices[0]?.delta?.reasoning_content || '';
-    if (reasoning) {
-      process.stdout.write(`[REASONING] ${reasoning}\n`);
-    }
-  }
-
-  // After streaming completes, get the final assembled response
-  const finalResponse = await stream.finalChatCompletion();
-
-  console.log('\n\n--- Final Assembled Response ---');
-  console.log('Full content:', finalResponse.choices[0].message.content);
-  console.log('Usage:', finalResponse.usage);
-  console.log('Finish reason:', finalResponse.choices[0].finish_reason);
-
-  return finalResponse; // Can use this for further processing
 }
 
 // Anthropic: Stream to user + get final response
@@ -104,32 +139,71 @@ async function testAnthropicStreamingBoth() {
 
 // Alternative Anthropic approach with manual iteration
 async function testAnthropicManualIteration() {
-  console.log('\n\n=== Anthropic: Manual Iteration + Final Response ===\n');
+  await runStreamingAggregationTest({
+    title: 'Anthropic: Manual Iteration + Final Response',
+    createStream: () =>
+      anthropic.beta.messages.stream({
+        model: 'claude-3-5-haiku-20241205',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: 'What is 2+2? Answer in one word.',
+          },
+        ],
+      }),
+    consumeStream: async (stream) => {
+      const aggregated = {
+        text: '',
+        finalMessage: null,
+      };
+      let count = 0;
 
-  const stream = anthropic.beta.messages.stream({
-    model: 'claude-3-5-haiku-20241205',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: 'What is 2+2? Answer in one word.',
-      },
-    ],
+      for await (const event of stream) {
+        count++;
+        if (event.type === 'text') {
+          aggregated.text += event.text;
+          process.stdout.write(event.text);
+        }
+      }
+
+      aggregated.finalMessage = await stream.finalMessage();
+      console.log('\n\nFinal:', aggregated.finalMessage.content[0].text);
+
+      return { aggregated, count };
+    },
+    createNonStream: () =>
+      anthropic.messages.create({
+        model: 'claude-3-5-haiku-20241205',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: 'What is 2+2? Answer in one word.',
+          },
+        ],
+        stream: false,
+      }),
+    compare: (aggregated, nonStream) => {
+      const streamedText = aggregated.finalMessage?.content
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+      const nonStreamText = nonStream.content
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+
+      logValidation(
+        'Content matches non-stream',
+        streamedText.trim() === nonStreamText.trim(),
+      );
+      logValidation(
+        'Stop reason',
+        aggregated.finalMessage?.stop_reason ?? nonStream.stop_reason,
+      );
+    },
   });
-
-  // Manually iterate (instead of event handlers)
-  for await (const event of stream) {
-    if (event.type === 'text') {
-      process.stdout.write(event.text); // Stream to user
-    }
-    // Handle other event types as needed
-  }
-
-  // Still get the final message!
-  const finalMessage = await stream.finalMessage();
-  console.log('\n\nFinal:', finalMessage.content[0].text);
-
-  return finalMessage;
 }
 
 // Practical example: Stream with processing
