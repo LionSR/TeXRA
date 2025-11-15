@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import {
   showLoggedErrorMessage,
   showLoggedMessage,
+  toErrorMessage,
 } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -104,10 +105,7 @@ export async function runPackLatexdiffvc(
           );
         }
       } catch (err) {
-        logger.error(
-          CHANNEL,
-          `Error during packing: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        logger.error(CHANNEL, `Error during packing: ${toErrorMessage(err)}`);
         vscode.window.showErrorMessage(`Error during packing: ${err}`);
       }
     }
