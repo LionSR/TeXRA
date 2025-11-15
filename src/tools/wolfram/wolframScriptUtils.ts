@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - system utilities
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
 // Wolfram configuration is now in toolUtils.ts
@@ -56,7 +57,7 @@ async function runWolfram(
       error: result.stderr,
     };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
 
     if (opts.showErrorsToUser) {
       vscode.window.showErrorMessage(
