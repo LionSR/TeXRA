@@ -170,7 +170,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       [...baseMessages],
       '  follow up text  ',
     );
-    const followUp = updated.at(-1);
+    const followUp = updated.at(-1)!;
     const followUpContent = followUp.content as ContentBlock[];
     const textBlock = assertSingleTextBlock(followUpContent);
     assert.equal(textBlock.text, 'follow up text');
@@ -204,7 +204,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       [...baseMessages],
       'next follow up',
     );
-    const followUp = updated.at(-1);
+    const followUp = updated.at(-1)!;
     const followUpContent = followUp.content as ContentBlockParam[];
     const followUpBlock = followUpContent.at(-1);
     const followUpMarker = getCacheMarker(followUpBlock);
@@ -372,7 +372,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       [...baseMessages],
       '  another follow up  ',
     );
-    const followUp = withFollowUp.at(-1);
+    const followUp = withFollowUp.at(-1)!;
     const followUpContent = followUp.content as ContentBlock[];
     const textBlock = assertSingleTextBlock(followUpContent);
     assert.equal(textBlock.text, 'another follow up');
