@@ -889,7 +889,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       workspaceState.assembly.updateAccumulatedOutput(prefill);
 
       // Add pseudo-prefill instruction instead of skipping it
-      const lastMessage = messages[messages.length - 1];
+      const lastMessage = messages.at(-1);
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
       if (lastMessage) {

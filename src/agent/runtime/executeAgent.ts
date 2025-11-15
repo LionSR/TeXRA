@@ -34,6 +34,7 @@ import {
   type AgentDefinitionSearchOptions,
   type AgentDirectoryCandidate,
 } from '@agent/utils/agentPathResolver';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -124,7 +125,7 @@ export async function getAgentPath(
     const errorMsg = `Could not find yaml file for agent: ${agentName}`;
     throw new Error(errorMsg);
   } catch (err) {
-    const errorMsg = `Error finding agent path: ${err instanceof Error ? err.message : String(err)}`;
+    const errorMsg = `Error finding agent path: ${toErrorMessage(err)}`;
     // Don't show error notification for missing YAML files - we handle it with banner
     if (!err?.toString().includes('Could not find yaml file for agent')) {
       vscode.window.showErrorMessage(errorMsg);
@@ -507,9 +508,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
             { skip: isResume },
           );
         } catch (err) {
-          logger.error(
-            `Task initialization failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          logger.error(`Task initialization failed: ${toErrorMessage(err)}`);
           throw err;
         }
 
@@ -523,9 +522,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`);
           StreamStatusService.set(activeStreamId, 'stopped');
         } catch (err) {
-          logger.error(
-            `Task failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          logger.error(`Task failed: ${toErrorMessage(err)}`);
           StreamStatusService.set(activeStreamId, 'error');
           throw err;
         }
@@ -534,7 +531,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
     );
   } catch (err) {
     const formattedError = formatProviderHttpError(err);
-    const rawErrorMessage = err instanceof Error ? err.message : String(err);
+    const rawErrorMessage = toErrorMessage(err);
     const errorMsg = `Error executing agent ${agentName}: ${formattedError.message}`;
     const errorData = { ...formattedError, rawMessage: rawErrorMessage };
 
