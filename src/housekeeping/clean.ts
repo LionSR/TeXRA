@@ -9,6 +9,7 @@ import { sync as globSync } from 'glob';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -93,11 +94,11 @@ export async function runCleanSingle(
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error during cleanup of ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error during cleanup of ${inputFile}: ${toErrorMessage(err)}`,
       );
       result = {
         status: 'error',
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       };
     }
   }
@@ -177,7 +178,7 @@ export async function runCleanBuild(): Promise<void> {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error removing build directory ${dir}: ${err instanceof Error ? err.message : String(err)}`,
+        `Error removing build directory ${dir}: ${toErrorMessage(err)}`,
       );
     }
   }
