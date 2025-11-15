@@ -18,7 +18,7 @@ import { OTHER_MODELS } from './providers/otherModels';
 import { DEEPSEEK_MODELS } from './providers/deepseekModels';
 import { MOONSHOT_MODELS } from './providers/moonshotModels';
 import { DASHSCOPE_MODELS } from './providers/dashscopeModels';
-import { COPILOT_MODELS } from './providers/copilotModels';
+import { VSCODE_LM_MODELS } from './providers/vscodeLMModels';
 
 /**
  * Available model configurations indexed by short name.
@@ -34,5 +34,5 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   ...DEEPSEEK_MODELS,
   ...MOONSHOT_MODELS,
   ...DASHSCOPE_MODELS,
-  ...COPILOT_MODELS,
+  ...VSCODE_LM_MODELS,
 };

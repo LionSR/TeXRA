@@ -17,4 +17,4 @@ export {
 } from './modelHandlerOpenRouter';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
-export { ModelHandlerCopilot } from './modelHandlerCopilot';
+export { ModelHandlerVSCodeLM } from './modelHandlerVSCodeLM';

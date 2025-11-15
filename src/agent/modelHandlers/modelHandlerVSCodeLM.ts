@@ -28,10 +28,10 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import type { ProviderStopReason } from './types/StopReasonTypes';
 
 /**
- * Message format for VS Code Copilot API
+ * Message format for VS Code Language Model API
  * Supports text content and simple structure
  */
-interface CopilotMessage {
+interface VSCodeLMMessage {
   role: 'user' | 'assistant';
   content: string;
 }
@@ -39,7 +39,7 @@ interface CopilotMessage {
 /**
  * Simulated response object to maintain compatibility with base class
  */
-interface CopilotResponse {
+interface VSCodeLMResponse {
   choices: Array<{
     message: {
       role: 'assistant';
@@ -55,42 +55,92 @@ interface CopilotResponse {
 }
 
 /**
- * Handler for VS Code Copilot models using the native Language Model API.
- * This provides seamless integration with VS Code's built-in Copilot capabilities.
+ * Model selector configuration for VS Code Language Model API
+ * Supports flexible model selection by vendor, family, id, or version
  */
-export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
+interface VSCodeLMSelector {
+  vendor?: string;
+  family?: string;
+  id?: string;
+  version?: string;
+}
+
+/**
+ * Handler for VS Code Language Model API.
+ * Provides seamless integration with all models available through VS Code's
+ * native Language Model API, including VS Code LM, Claude, O1, and others.
+ *
+ * Supports flexible model selection similar to OpenRouter:
+ * - By vendor (e.g., "copilot")
+ * - By family (e.g., "gpt-4o", "claude-3-5-sonnet", "o1")
+ * - By specific model ID
+ * - By version
+ */
+export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
   private cachedModel: vscode.LanguageModelChat | null = null;
 
   /**
    * Creates and caches a VS Code Language Model client.
-   * Uses the configured model family (default: gpt-4o)
+   * Parses the model configuration to determine vendor, family, id, or version.
+   *
+   * The fullName field can contain:
+   * - Family name: "gpt-4o", "claude-3-5-sonnet", "o1"
+   * - Vendor/family: "copilot/gpt-4o"
+   * - Model ID: "copilot-gpt-4o"
    */
   async getClient(): Promise<vscode.LanguageModelChat> {
     if (this.cachedModel) {
       return this.cachedModel;
     }
 
-    // Select the appropriate Copilot model
-    // The fullName should be something like 'gpt-4o', 'gpt-4', etc.
-    const modelFamily = this.config.fullName || 'gpt-4o';
+    // Parse the fullName to build the selector
+    const selector = this.parseModelSelector();
 
-    const [model] = await vscode.lm.selectChatModels({
-      vendor: 'copilot',
-      family: modelFamily,
-    });
+    const models = await vscode.lm.selectChatModels(selector);
 
-    if (!model) {
+    if (models.length === 0) {
+      const selectorStr = JSON.stringify(selector);
       throw new Error(
-        `No Copilot model available for family "${modelFamily}". Please ensure GitHub Copilot is enabled.`,
+        `No VS Code Language Model available for selector ${selectorStr}. Please ensure the required extension is enabled.`,
       );
     }
 
-    this.cachedModel = model;
+    // Use the first matching model
+    this.cachedModel = models[0];
     this.logger.debug(
-      `Selected Copilot model: ${model.name} (family: ${model.family})`,
+      `Selected VS Code LM: ${this.cachedModel.name} (vendor: ${this.cachedModel.vendor}, family: ${this.cachedModel.family})`,
     );
 
-    return model;
+    return this.cachedModel;
+  }
+
+  /**
+   * Parses the model configuration to build a VS Code Language Model selector.
+   * Supports various formats:
+   * - "gpt-4o" -> { family: "gpt-4o" }
+   * - "copilot/gpt-4o" -> { vendor: "copilot", family: "gpt-4o" }
+   * - "copilot-gpt-4o" (id) -> { id: "copilot-gpt-4o" }
+   */
+  private parseModelSelector(): VSCodeLMSelector {
+    const fullName = this.config.fullName || 'gpt-4o';
+    const selector: VSCodeLMSelector = {};
+
+    // Check if it contains a vendor separator
+    if (fullName.includes('/')) {
+      const [vendor, family] = fullName.split('/');
+      selector.vendor = vendor;
+      selector.family = family;
+    }
+    // Check if it's a specific model ID (contains vendor prefix)
+    else if (fullName.includes('-') && fullName.startsWith('copilot-')) {
+      selector.id = fullName;
+    }
+    // Otherwise treat as family name
+    else {
+      selector.family = fullName;
+    }
+
+    return selector;
   }
 
   /**
@@ -99,13 +149,13 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    */
   async createResponse(
     client: vscode.LanguageModelChat,
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     temperature: number,
     systemPrompt?: string,
     endTag?: string,
     _signal?: AbortSignal,
     _tools?: any[],
-  ): Promise<CopilotResponse> {
+  ): Promise<VSCodeLMResponse> {
     try {
       // Convert messages to VS Code format
       const vscodeMessages = messages.map((msg) => {
@@ -169,7 +219,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
       }
 
       // Create compatible response object
-      const copilotResponse: CopilotResponse = {
+      const copilotResponse: VSCodeLMResponse = {
         choices: [
           {
             message: {
@@ -206,7 +256,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
       // Check for common VS Code API errors
       if (error?.message?.includes('No language model')) {
         throw new Error(
-          'GitHub Copilot is not available. Please sign in to GitHub Copilot.',
+          'VS Code Language Model is not available. Please enable the required extension (e.g., GitHub Copilot).',
         );
       }
 
@@ -223,13 +273,13 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
     userRequest: string,
     mediaFiles?: string[],
     _systemPrompt?: string,
-  ): Promise<CopilotMessage[]> {
+  ): Promise<VSCodeLMMessage[]> {
     let content = userPrefix ? `${userPrefix}\n\n${userRequest}` : userRequest;
 
     // Log warning if media files are provided
     if (mediaFiles && mediaFiles.length > 0) {
       this.logger.warn(
-        'Media files are not fully supported by VS Code Copilot API. Files will be ignored.',
+        'Media files are not fully supported by VS Code Language Model API. Files will be ignored.',
       );
     }
 
@@ -245,13 +295,13 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Creates follow-up messages for conversation rounds.
    */
   async createRoundMessages(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     userMessage: string,
     mediaFiles?: string[],
-  ): Promise<CopilotMessage[]> {
+  ): Promise<VSCodeLMMessage[]> {
     if (mediaFiles && mediaFiles.length > 0) {
       this.logger.warn(
-        'Media files are not fully supported by VS Code Copilot API.',
+        'Media files are not fully supported by VS Code Language Model API.',
       );
     }
 
@@ -269,7 +319,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Currently not supported by VS Code API, returns empty array.
    */
   createMediaContent(_mediaMessage: MediaEntry[]): any[] {
-    this.logger.warn('Media content is not supported by VS Code Copilot API');
+    this.logger.warn('Media content is not supported by VS Code Language Model API');
     return [];
   }
 
@@ -277,12 +327,12 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Extracts response text and metadata from the model response.
    */
   extractResponse(
-    responseObject: CopilotResponse,
+    responseObject: VSCodeLMResponse,
     endTag: string,
   ): [string, any, ProviderStopReason] {
     const message = responseObject.choices[0]?.message;
     if (!message) {
-      throw new Error('No response message from Copilot');
+      throw new Error('No response message from VS Code LM');
     }
 
     let text = message.content || '';
@@ -298,16 +348,16 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
 
   /**
    * Adds continuation message with prefill support.
-   * Copilot API doesn't support prefill, so we use the without-prefill approach.
+   * VS Code Language Model API doesn't support prefill, so we use the without-prefill approach.
    */
   addContinueMessageWithPrefill(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
   ): void {
-    // Copilot doesn't support prefill, delegate to without-prefill version
+    // VS Code LM doesn't support prefill, delegate to without-prefill version
     this.addContinueMessageWithoutPrefill(
       messages,
       stateRound,
@@ -321,7 +371,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Adds continuation message without prefill support.
    */
   addContinueMessageWithoutPrefill(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     stateRound: ConversationRoundState,
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
@@ -348,15 +398,15 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
   async initializeOutputAndPrefill(
     agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     workspaceState: AgentWorkspaceState,
     outputFile: string,
     prefill: string,
-  ): Promise<[boolean, CopilotMessage[]]> {
+  ): Promise<[boolean, VSCodeLMMessage[]]> {
     // Create or clear output file
     await flexibleFS.write(outputFile, '');
 
-    // Copilot doesn't support prefill in the same way
+    // VS Code LM doesn't support prefill in the same way
     // We can add it as a user message hint
     if (prefill.trim().length > 0) {
       messages.push({
@@ -370,10 +420,10 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
 
   /**
    * Computes API usage cost.
-   * Copilot doesn't charge per token, so we return 0.
+   * VS Code LM doesn't charge per token, so we return 0.
    */
   computePrice(_responseUsage: any): number {
-    return 0; // Copilot is included with GitHub Copilot subscription
+    return 0; // Pricing handled by the underlying service (e.g., Copilot subscription)
   }
 
   /**
@@ -395,12 +445,12 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Updates message content with response (prefill version).
    */
   updateMessageContentWithPrefill(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     bestConnector: string,
     newResponse: string,
     _workspaceState: AgentWorkspaceState,
   ): void {
-    // Copilot doesn't support prefill, use regular append
+    // VS Code LM doesn't support prefill, use regular append
     this.updateMessageContentWithoutPrefill(
       messages,
       bestConnector,
@@ -413,7 +463,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
    * Updates message content with response (without prefill).
    */
   updateMessageContentWithoutPrefill(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     bestConnector: string,
     newResponse: string,
     _workspaceState: AgentWorkspaceState,
@@ -456,7 +506,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
 
   /**
    * Processes thinking blocks.
-   * Copilot API doesn't expose thinking blocks.
+   * VS Code Language Model API doesn't expose thinking blocks.
    */
   processThinkingBlock(
     _responseObject: any,
@@ -467,7 +517,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
 
   /**
    * Extracts tool use information.
-   * Copilot API doesn't support tools yet.
+   * VS Code Language Model API doesn't support tools yet.
    */
   extractToolUse(_responseObject: any): string | null {
     return null;
@@ -475,7 +525,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
 
   /**
    * Creates tool use follow-up messages.
-   * Not supported by Copilot API.
+   * Not supported by VS Code Language Model API.
    */
   async createToolUseFollowUpMessages(
     _client: vscode.LanguageModelChat | undefined,
@@ -485,17 +535,17 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
     _result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     _text?: string,
-  ): Promise<CopilotMessage[]> {
-    throw new Error('Tool use is not supported by VS Code Copilot API');
+  ): Promise<VSCodeLMMessage[]> {
+    throw new Error('Tool use is not supported by VS Code Language Model API');
   }
 
   /**
    * Creates user follow-up messages.
    */
   async createUserFollowUpMessages(
-    messages: CopilotMessage[],
+    messages: VSCodeLMMessage[],
     userMessage: string,
-  ): Promise<CopilotMessage[]> {
+  ): Promise<VSCodeLMMessage[]> {
     return [
       ...messages,
       {
@@ -508,7 +558,7 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
   /**
    * Creates a simple assistant message.
    */
-  createAssistantMessage(text: string): CopilotMessage {
+  createAssistantMessage(text: string): VSCodeLMMessage {
     return {
       role: 'assistant',
       content: text,
@@ -516,17 +566,18 @@ export class ModelHandlerCopilot extends ModelHandler<CopilotMessage> {
   }
 
   /**
-   * Override getApiKey to indicate no API key is needed for Copilot
+   * Override getApiKey to indicate no API key is needed for VS Code LM
    */
   async getApiKey(): Promise<string> {
-    // Copilot uses VS Code's authentication, no API key needed
-    return 'copilot-integrated';
+    // VS Code Language Model API uses VS Code's authentication, no API key needed
+    return 'vscode-lm-integrated';
   }
 
   /**
-   * Override getBaseUrl since Copilot doesn't use a base URL
+   * Override getBaseUrl since VS Code LM doesn't use a base URL
    */
   getBaseUrl(): string | null {
+    // VS Code Language Model API doesn't use base URLs
     return null;
   }
 }

@@ -11,7 +11,7 @@ import {
   ModelHandlerAnthropicViaOpenRouter,
   ModelHandlerOpenAI,
   ModelHandlerOpenAIResponse,
-  ModelHandlerCopilot,
+  ModelHandlerVSCodeLM,
 } from '@agent/modelHandlers';
 
 // Type imports
@@ -81,7 +81,7 @@ export class ModelFactory {
       [ModelProvider.XAI, ModelHandlerXAI],
       [ModelProvider.MOONSHOT, ModelHandlerKimi],
       [ModelProvider.DASHSCOPE, ModelHandlerDashScope],
-      [ModelProvider.COPILOT, ModelHandlerCopilot],
+      [ModelProvider.COPILOT, ModelHandlerVSCodeLM],
       [ModelProvider.OTHERS, ModelHandlerOpenRouter],
     ]);
 
