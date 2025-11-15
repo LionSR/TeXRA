@@ -723,7 +723,7 @@ export class TaskRunFileService {
     }
     const normalized = relativePath.replace(/\\/g, '/');
     const segments = normalized.split('/').filter(Boolean);
-    return segments.length === 0 ? normalized : segments[segments.length - 1];
+    return segments.length === 0 ? normalized : segments.at(-1);
   }
 
   public resolveRelativePath(

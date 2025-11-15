@@ -39,5 +39,5 @@ export function getCurrentToolEditApprovalContext():
   if (contextStack.length === 0) {
     return undefined;
   }
-  return contextStack[contextStack.length - 1];
+  return contextStack.at(-1);
 }
