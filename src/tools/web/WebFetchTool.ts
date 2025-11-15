@@ -119,7 +119,9 @@ export class WebFetchTool extends defineTool({
       try {
         markdown = this.turndown.turndown(rawBody);
       } catch (error) {
-        throw new ToolError(`Failed to convert HTML to Markdown: ${toErrorMessage(error)}`);
+        throw new ToolError(
+          `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
+        );
       }
     } else {
       markdown = rawBody;

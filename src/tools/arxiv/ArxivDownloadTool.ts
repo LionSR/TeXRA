@@ -41,7 +41,9 @@ export class ArxivDownloadTool extends defineTool({
         input.autoIndent ?? true,
       );
     } catch (err) {
-      throw new ToolError(`Failed to download arXiv source: ${toErrorMessage(err)}`);
+      throw new ToolError(
+        `Failed to download arXiv source: ${toErrorMessage(err)}`,
+      );
     }
 
     const relativeRaw = WorkspaceFS.relativePath(downloadPath);

@@ -87,7 +87,9 @@ export class ArxivSearchTool extends defineTool({
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
       entries = await client.execute();
     } catch (error) {
-      throw new ToolError(`Failed to query arXiv API: ${toErrorMessage(error)}`);
+      throw new ToolError(
+        `Failed to query arXiv API: ${toErrorMessage(error)}`,
+      );
     }
 
     const results: ArxivSearchResult[] = entries.map((entry) => {
