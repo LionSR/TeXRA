@@ -1,4 +1,5 @@
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { runToolWithCheck } from '@utils/system';
@@ -29,10 +30,7 @@ export async function runTexFmt(filePath: string): Promise<boolean> {
     logger.info(CHANNEL, `Formatted ${filePath}`);
     return true;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error running tex-fmt: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error running tex-fmt: ${toErrorMessage(err)}`);
     return false;
   }
 }
