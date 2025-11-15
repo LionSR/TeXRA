@@ -4,6 +4,7 @@ import { Buffer } from 'buffer';
 
 // Local imports - agent utils
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import {
   countPdfPages,
@@ -209,7 +210,7 @@ export class MediaAttachmentProcessor {
       const stats = await AbsoluteFS.stat(absolutePath);
       fileSize = stats.size;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       this.logger.error(
         `Unable to read file info for ${mediaFile}: ${message}`,
       );

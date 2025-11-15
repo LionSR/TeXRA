@@ -3,6 +3,7 @@ import { all, and, category as catQuery } from 'arxiv-client';
 import { z } from 'zod';
 
 // Local imports - latex
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, toolResult } from '@tools/result';
 import {
   type ArxivSearchResult,
@@ -86,8 +87,9 @@ export class ArxivSearchTool extends defineTool({
       await waitForRateLimit('arxiv', ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS);
       entries = await client.execute();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Failed to query arXiv API: ${message}`);
+      throw new ToolError(
+        `Failed to query arXiv API: ${toErrorMessage(error)}`,
+      );
     }
 
     const results: ArxivSearchResult[] = entries.map((entry) => {

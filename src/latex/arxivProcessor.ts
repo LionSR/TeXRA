@@ -8,6 +8,7 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
@@ -140,7 +141,7 @@ export class ArxivSourceProcessor {
       }
       return { success: true };
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg = toErrorMessage(err);
       logger.error(
         options.channel ?? this.channel,
         `Failed to extract tar file: ${errorMsg}`,
@@ -223,7 +224,7 @@ export class ArxivSourceProcessor {
       } catch (err) {
         logger.debug(
           this.channel,
-          `Could not remove download directory: ${err instanceof Error ? err.message : String(err)}`,
+          `Could not remove download directory: ${toErrorMessage(err)}`,
         );
       }
     } else {
@@ -240,7 +241,7 @@ export class ArxivSourceProcessor {
       } catch (err) {
         logger.debug(
           this.channel,
-          `Could not remove download directory: ${err instanceof Error ? err.message : String(err)}`,
+          `Could not remove download directory: ${toErrorMessage(err)}`,
         );
       }
     }
