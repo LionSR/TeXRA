@@ -1,10 +1,9 @@
 // Third-party imports
-import { execa } from 'execa';
 import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
+import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
@@ -24,20 +23,13 @@ export class ApplyPathTool extends defineTool({
   schema: ApplyPathInputSchema,
 }) {
   protected async execute(input: ApplyPathInput): Promise<ToolResult> {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      throw new ToolError('apply_path error: workspace path is not available');
-    }
-
     try {
-      const result = await execa(COMMAND, ARGS, {
-        cwd: workspacePath,
-        input: input.patch,
-        encoding: 'utf8',
-        reject: false,
+      const result = await executeCommand([COMMAND, ...ARGS], {
+        stdin: input.patch,
+        channel: 'ApplyPathTool',
       });
 
-      if (result.exitCode === 0) {
+      if (result.success) {
         return toolResult({
           summary: 'Applied patch',
           output: result.stdout ?? '',
@@ -45,7 +37,9 @@ export class ApplyPathTool extends defineTool({
       }
 
       throw new ToolError(
-        `apply_path error: ${result.stderr || 'Unknown failure applying patch'}`,
+        `apply_path error: ${
+          result.stderr ?? 'Unknown failure applying patch'
+        }`,
       );
     } catch (error) {
       if (error instanceof ToolError) {
