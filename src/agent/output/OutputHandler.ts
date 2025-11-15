@@ -15,6 +15,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
@@ -952,7 +953,7 @@ export class OutputHandler implements IOutputHandler {
             }
           } catch (err) {
             this.logger.debug(
-              `Error processing output files: ${err instanceof Error ? err.message : String(err)}`,
+              `Error processing output files: ${toErrorMessage(err)}`,
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
@@ -1060,7 +1061,7 @@ export class OutputHandler implements IOutputHandler {
             );
           } catch (err) {
             this.logger.debug(
-              `Error processing output file: ${err instanceof Error ? err.message : String(err)}`,
+              `Error processing output file: ${toErrorMessage(err)}`,
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
