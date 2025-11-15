@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system';
 import { getConfig } from '@utils/config';
@@ -113,10 +114,7 @@ export async function compileLatex2Pdf(
     }
     return false;
   } catch (err) {
-    logger.error(
-      channel,
-      `Error compiling LaTeX: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(channel, `Error compiling LaTeX: ${toErrorMessage(err)}`);
     return false;
   }
 }
