@@ -9,7 +9,7 @@ import { WorkspaceFS } from '@utils/files';
 // Local file imports
 import { defineTool } from './core/define';
 
-const ApplyPathInputSchema = z.object({
+const ApplyPathInputSchema = z.strictObject({
   patch: z.string().min(1, 'patch content is required'),
 });
 
