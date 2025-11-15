@@ -4,6 +4,7 @@ import { progressViewState } from '../progressViewState.js';
 
 // Local imports - common helpers
 import {
+  awaitTextareaUpgrade,
   insertTextAtCursor,
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
@@ -80,15 +81,7 @@ export class FollowUpInputManager {
       this.recordingButton.setup();
     };
 
-    const needsUpgrade =
-      target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
-      typeof target.updateComplete?.then === 'function';
-
-    if (needsUpgrade) {
-      target.updateComplete.then(() => applySetup());
-    } else {
-      applySetup();
-    }
+    awaitTextareaUpgrade(target, () => applySetup());
   }
 
   _sendFollowUp() {

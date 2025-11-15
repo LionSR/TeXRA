@@ -76,7 +76,26 @@ import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands.js';
 // Use standardized commands directly (OPEN_LABEL is already included)
 export const COMMANDS = PROGRESS_VIEW_COMMANDS;
 
-// Shared definition for the storage toolbar button across layouts
+// Shared definitions reused across toolbar configurations
+const STOP_STREAM_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.STOP_STREAM_BTN,
+  icon: 'debug-stop',
+  command: COMMANDS.STOP_STREAM,
+  title:
+    'Request task interruption (current API call will be aborted if supported)',
+  className: 'stop-button',
+  disabled: true,
+});
+
+const RESTORE_STATE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.RESTORE_STATE_BTN,
+  icon: 'reply',
+  command: COMMANDS.RESTORE_STATE,
+  title: 'Restore this configuration to the main view',
+  className: 'restore-button',
+  disabled: true,
+});
+
 const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   id: ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
   icon: 'folder-opened',
@@ -88,15 +107,7 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
 
 /** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
-  {
-    id: ELEMENT_IDS.STOP_STREAM_BTN,
-    icon: 'debug-stop',
-    command: COMMANDS.STOP_STREAM,
-    title:
-      'Request task interruption (current API call will be aborted if supported)',
-    className: 'stop-button',
-    disabled: true,
-  },
+  STOP_STREAM_BUTTON,
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
     icon: 'debug-start',
@@ -113,14 +124,7 @@ const WORKFLOW_TOOLBAR = [
     className: 'run-button run-again-button toolbar-button--hidden',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.RESTORE_STATE_BTN,
-    icon: 'reply',
-    command: COMMANDS.RESTORE_STATE,
-    title: 'Restore this configuration to the main view',
-    className: 'restore-button',
-    disabled: true,
-  },
+  RESTORE_STATE_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
@@ -150,23 +154,8 @@ const WORKFLOW_TOOLBAR = [
 
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
-  {
-    id: ELEMENT_IDS.STOP_STREAM_BTN,
-    icon: 'debug-stop',
-    command: COMMANDS.STOP_STREAM,
-    title:
-      'Request task interruption (current API call will be aborted if supported)',
-    className: 'stop-button',
-    disabled: true,
-  },
-  {
-    id: ELEMENT_IDS.RESTORE_STATE_BTN,
-    icon: 'reply',
-    command: COMMANDS.RESTORE_STATE,
-    title: 'Restore this configuration to the main view',
-    className: 'restore-button',
-    disabled: true,
-  },
+  STOP_STREAM_BUTTON,
+  RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
 
