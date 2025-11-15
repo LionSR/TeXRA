@@ -170,8 +170,7 @@ export async function buildFileAttachment({
   try {
     stats = await WorkspaceFS.stat(resolved.relative);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new ToolError(`Failed to inspect attachment ${display}: ${message}`);
+    throw new ToolError(`Failed to inspect attachment ${display}: ${toErrorMessage(err)}`);
   }
 
   if (stats.size > maxBytes) {
@@ -185,8 +184,7 @@ export async function buildFileAttachment({
   try {
     buffer = await WorkspaceFS.readFileBytes(resolved.relative);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new ToolError(`Failed to read attachment ${display}: ${message}`);
+    throw new ToolError(`Failed to read attachment ${display}: ${toErrorMessage(err)}`);
   }
 
   const inferredMime =
