@@ -1375,38 +1375,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
               text: bestConnector + newResponse,
             } as ContentBlockParam);
           }
-          // Add the updated text content
-          // If there are existing text blocks, update with new content
-          // Otherwise create a new text block with the new returned thinking block if it is not after cut off
-          // we should not add the new thinking block if it is after cut off
-          // but we still need to add at least somewhere...
-
-          // let newThinkingContent: any[] = [];
-
-          // if (workspaceState.reasoning.thinkingAdded && workspaceState.reasoning.thinkingBlocks.length > 0) {
-          //   // if we have thinking blocks, then we use them
-          //   this.logger.debug(
-          //     `Using ${workspaceState.reasoning.thinkingBlocks.length} existing thinking blocks from previous message`,
-          //   );
-          //   newThinkingContent = [...workspaceState.reasoning.thinkingBlocks];
-          // }
-
-          // let newContent: any[] = [];
-
-          // if (textBlocks.length > 0) {
-          //   newContent = [...newThinkingContent, ...textBlocks];
-          // } else {
-          //   newContent = [
-          //     ...newThinkingContent,
-          //     {
-          //       type: 'text',
-          //       text: workspaceState.assembly.accumulatedOutput,
-          //     },
-          //   ];
-          // }
-
-          // Replace the content of the second last message with our new content array
-          // secondLastMessage.content = newContent;
         }
 
         if (Array.isArray(secondLastMessage.content)) {
