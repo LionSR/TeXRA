@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tools
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   createGlobMatcher,
@@ -59,7 +60,7 @@ export class LsTool extends defineTool({
     try {
       stats = await WorkspaceFS.stat(relative);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       throw new ToolError(`Path not found: ${display} (${message})`);
     }
 
