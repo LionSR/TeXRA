@@ -258,9 +258,6 @@ export function applyReplacements(
     processMathUnicode?: boolean; // Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
   },
 ): string {
-  // // By default, math-Unicode replacements are NOT applied.
-  // // To enable them, call applyReplacements(..., { processMathUnicode: true })
-  // if (options?.processMathUnicode === true) {
   // Apply Unicode replacements in math environments if requested
   if (options?.processMathUnicode !== false) {
     // Default to true if not specified
