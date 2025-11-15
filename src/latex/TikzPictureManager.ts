@@ -6,6 +6,7 @@ import * as nunjucks from 'nunjucks';
 
 // Local imports - log
 import { renderPrompt } from '@agent/utils/promptUtils';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -85,7 +86,7 @@ export class TikzPictureManager {
     } catch (err) {
       logger.error(
         channel,
-        `Error extracting TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
+        `Error extracting TikZ pictures: ${toErrorMessage(err)}`,
       );
       throw err;
     }
@@ -122,7 +123,7 @@ export class TikzPictureManager {
     } catch (err) {
       logger.error(
         channel,
-        `Error creating standalone LaTeX: ${err instanceof Error ? err.message : String(err)}`,
+        `Error creating standalone LaTeX: ${toErrorMessage(err)}`,
       );
       throw err;
     }
@@ -184,7 +185,7 @@ export class TikzPictureManager {
     } catch (err) {
       logger.error(
         channel,
-        `Error extracting and compiling TikZ pictures: ${err instanceof Error ? err.message : String(err)}`,
+        `Error extracting and compiling TikZ pictures: ${toErrorMessage(err)}`,
       );
       throw err;
     }
