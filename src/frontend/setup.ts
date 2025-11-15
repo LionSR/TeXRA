@@ -52,7 +52,7 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
   } catch (err) {
-    logger.logError('Error copying default agents', err);
+    logger.error('extension', `Error copying default agents: ${err}`);
   }
 }
 
