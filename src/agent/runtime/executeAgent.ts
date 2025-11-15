@@ -508,9 +508,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
             { skip: isResume },
           );
         } catch (err) {
-          logger.error(
-            `Task initialization failed: ${toErrorMessage(err)}`,
-          );
+          logger.error(`Task initialization failed: ${toErrorMessage(err)}`);
           throw err;
         }
 
@@ -524,9 +522,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`);
           StreamStatusService.set(activeStreamId, 'stopped');
         } catch (err) {
-          logger.error(
-            `Task failed: ${toErrorMessage(err)}`,
-          );
+          logger.error(`Task failed: ${toErrorMessage(err)}`);
           StreamStatusService.set(activeStreamId, 'error');
           throw err;
         }

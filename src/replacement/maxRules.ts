@@ -188,7 +188,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Leftrightarrow: 'LRa',
       Longleftrightarrow: 'LRa',
     };
-    patterns = { ...patterns, ...generateArrowRelationShortcuts(arrowRelationMap) };
+    patterns = {
+      ...patterns,
+      ...generateArrowRelationShortcuts(arrowRelationMap),
+    };
 
     // Calculus command shortcuts
     // Examples: \partial -> \der, \nabla -> \na
@@ -266,15 +269,27 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'.split('');
     patterns = {
       ...patterns,
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathrm',
+        'rm',
+      ),
     };
     patterns = {
       ...patterns,
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathbf',
+        'bf',
+      ),
     };
     patterns = {
       ...patterns,
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathcal', 'cal'),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathcal',
+        'cal',
+      ),
     };
 
     // Tilde variables - simple letters
@@ -350,7 +365,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     // Hat variables
     // Example: \hat{H} -> \hH
     const hatLetters = 'HFP'.split('');
-    patterns = { ...patterns, ...generateDecoratorShortcuts('hat', hatLetters, 'h') };
+    patterns = {
+      ...patterns,
+      ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
+    };
 
     // Hat with Greek letters
     // Example: \hat{\sigma} -> \hsg
@@ -384,7 +402,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 
     // Fix for extra backslashes in bold symbols
     // Automatically generate fixes for lowercase bold letters (e.g., \\ba -> \ba)
-    patterns = { ...patterns, ...generateBoldBackslashFixes('b', lowerLetters) };
+    patterns = {
+      ...patterns,
+      ...generateBoldBackslashFixes('b', lowerLetters),
+    };
 
     // Automatically generate fixes for uppercase bold letters (e.g., \\bA -> \bA)
     patterns = {
