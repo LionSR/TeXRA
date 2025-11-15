@@ -3,7 +3,10 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import nodePandoc from 'node-pandoc';
 
-// Local imports - log
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - utils
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -135,10 +138,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     });
     return result;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Pandoc conversion failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Pandoc conversion failed: ${toErrorMessage(err)}`);
     return null;
   }
 }
@@ -171,10 +171,7 @@ export function addCdataToTags(xmlData: string, tags: string[]): string {
       return result.replace(pattern, '$1<![CDATA[$2]]>$3');
     }, xmlData);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error adding CDATA to tags: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error adding CDATA to tags: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -379,7 +376,7 @@ export function extractContentFromXMLbyTagMultiple(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
+      `Error extracting multiple content from tag: ${toErrorMessage(err)}. Structure: ${getObjectStructure(root)}`,
     );
     throw err;
   }
