@@ -49,6 +49,7 @@ export async function executeCommand(
     env?: Record<string, string>;
     timeout?: number;
     cwd?: string;
+    stdin?: string;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -73,6 +74,7 @@ export async function executeCommand(
       encoding: encodingOption as any, // execa v9 type compatibility
       timeout: options.timeout,
       reject: false,
+      input: options.stdin,
     };
 
     let stdout: string;
