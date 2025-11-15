@@ -7,6 +7,7 @@ import {
 } from '@common/domUtils.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
+import { applyOpenStates } from '@common/modules/toggleStateUtils.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 
@@ -254,21 +255,10 @@ export class HistoryRenderer {
 
   applyToggleStates() {
     const entries = historyViewState.toggleStates.entries();
-    for (const [id, expanded] of entries) {
-      const collapsible = document.querySelector(
-        `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}[data-id="${id}"]`,
-      );
-      if (!collapsible) {
-        continue;
-      }
-      if ('open' in collapsible) {
-        collapsible.open = Boolean(expanded);
-      }
-      if (expanded) {
-        collapsible.setAttribute('open', '');
-      } else {
-        collapsible.removeAttribute('open');
-      }
-    }
+    applyOpenStates(entries, (id) => {
+      const safeId =
+        typeof id === 'string' ? (CSS?.escape?.(id) ?? id) : String(id);
+      return `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}[data-id="${safeId}"]`;
+    });
   }
 }

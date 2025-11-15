@@ -160,6 +160,10 @@ export abstract class BaseViewContentProvider {
         'modules/RecordingButtonManager.js',
       ),
       textareaUtilsUri: this.getCommonUri(webview, 'modules/textareaUtils.js'),
+      toggleStateUtilsUri: this.getCommonUri(
+        webview,
+        'modules/toggleStateUtils.js',
+      ),
       htmlEncodingUri: this.getCommonUri(webview, 'modules/htmlEncoding.js'),
       iconConstantsUri: this.getCommonUri(webview, 'modules/iconConstants.js'),
       baseWebviewMessageHandlerUri: this.getCommonUri(

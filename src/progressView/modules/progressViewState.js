@@ -1,6 +1,7 @@
 // Local imports - progress view
 // Local imports - state management helper
 import { WebviewStateManager } from '@common/webviewState.js';
+import { ToggleStates } from '@common/modules/toggleStateUtils.js';
 
 /**
  * Manages task groups in the progress view.
@@ -140,52 +141,6 @@ class TaskGroups {
     if (children.size === 0) {
       this.childrenByParent.delete(parentId);
     }
-  }
-}
-
-/**
- * Manages group toggle states with persistence.
- */
-class ToggleStates {
-  constructor(saveCallback) {
-    this.states = new Map();
-    this.saveCallback = saveCallback;
-  }
-
-  set(id, collapsed) {
-    this.states.set(id, collapsed);
-    this.saveCallback?.();
-  }
-
-  get(id) {
-    return this.states.get(id);
-  }
-
-  clearSelection(ids) {
-    if (!Array.isArray(ids)) {
-      return;
-    }
-    ids.forEach((id) => {
-      if (id) {
-        this.states.delete(id);
-      }
-    });
-    this.saveCallback?.();
-  }
-
-  clearAll() {
-    this.states.clear();
-    this.saveCallback?.();
-  }
-
-  /** Get all entries for serialization */
-  entries() {
-    return [...this.states.entries()];
-  }
-
-  /** Load from serialized data */
-  load(data) {
-    this.states = new Map(data);
   }
 }
 

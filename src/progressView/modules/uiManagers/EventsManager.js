@@ -9,6 +9,7 @@ import {
   setChevronIconHorizontal,
 } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
+import { applyOpenStates } from '@common/modules/toggleStateUtils.js';
 
 /**
  * Manages event handling and state application.
@@ -18,17 +19,16 @@ export class EventsManager {
    * Apply saved toggle states to any groups already in the DOM
    */
   applyToggleStates() {
-    const taskGroups = progressViewState.taskGroups.getGroupMap();
-    for (const [groupId] of taskGroups) {
-      const isCollapsed = progressViewState.toggleStates.get(groupId);
-      const detailsElem = document.getElementById(
-        `${GROUP_DOM_IDS.DETAILS_PREFIX}${groupId}`,
-      );
-
-      if (detailsElem && isCollapsed !== undefined) {
-        detailsElem.open = !isCollapsed;
-      }
-    }
+    const entries = progressViewState.toggleStates.entries();
+    applyOpenStates(
+      entries,
+      (id) => {
+        const safeId =
+          typeof id === 'string' ? (CSS?.escape?.(id) ?? id) : String(id);
+        return `#${GROUP_DOM_IDS.DETAILS_PREFIX}${safeId}`;
+      },
+      (isCollapsed) => !isCollapsed,
+    );
   }
 
   /**

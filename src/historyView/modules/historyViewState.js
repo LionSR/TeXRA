@@ -1,35 +1,6 @@
 // Local imports - history view
 import { WebviewStateManager } from '@common/webviewState.js';
-
-class ToggleStates {
-  constructor(saveCallback) {
-    this.states = new Map();
-    this.saveCallback = saveCallback;
-  }
-
-  set(id, expanded) {
-    if (!id) return;
-    this.states.set(id, expanded);
-    if (this.saveCallback) this.saveCallback();
-  }
-
-  get(id) {
-    return this.states.get(id);
-  }
-
-  entries() {
-    return [...this.states.entries()];
-  }
-
-  load(data) {
-    this.states = new Map(data);
-  }
-
-  clearAll() {
-    this.states.clear();
-    if (this.saveCallback) this.saveCallback();
-  }
-}
+import { ToggleStates } from '@common/modules/toggleStateUtils.js';
 
 export class HistoryViewState {
   constructor() {
