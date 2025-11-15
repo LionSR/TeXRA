@@ -193,9 +193,7 @@ export class OutputHandler implements IOutputHandler {
       await this.runPreparation;
     } catch (error) {
       this.logger.debug(
-        `Failed to prepare run workspace: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to prepare run workspace: ${toErrorMessage(error)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
@@ -325,9 +323,7 @@ export class OutputHandler implements IOutputHandler {
         }
       } catch (error) {
         this.logger.debug(
-          `Failed to remove latexindent backup ${relative}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Failed to remove latexindent backup ${relative}: ${toErrorMessage(error)}`,
         );
       }
     }
@@ -679,9 +675,7 @@ export class OutputHandler implements IOutputHandler {
       } catch (error) {
         throw Object.assign(
           new Error(
-            `Failed to relocate processed output ${entry.location.absolutePath}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            `Failed to relocate processed output ${entry.location.absolutePath}: ${toErrorMessage(error)}`,
           ),
           { cause: error },
         );
@@ -821,9 +815,7 @@ export class OutputHandler implements IOutputHandler {
             );
           } catch (error) {
             this.logger.error(
-              `Expected output validation failed after round ${currRound}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
+              `Expected output validation failed after round ${currRound}: ${toErrorMessage(error)}`,
             );
           }
         }
@@ -845,9 +837,7 @@ export class OutputHandler implements IOutputHandler {
             this.openedOutputs.add(filePath);
           } catch (error) {
             this.logger.error(
-              `Failed to open output file ${filePath}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
+              `Failed to open output file ${filePath}: ${toErrorMessage(error)}`,
             );
           }
         }
@@ -1206,9 +1196,7 @@ export class OutputHandler implements IOutputHandler {
         };
       } catch (error) {
         this.logger.debug(
-          `Failed to collect XML summary for round ${round}: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
           undefined,
           MESSAGE_TYPES.INTERNAL,
         );
