@@ -6,6 +6,10 @@ import { BaseNode, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Type imports
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import {
+  BaseCycleState,
+  resetCycleState,
+} from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
@@ -213,23 +217,18 @@ type ToolDispatchErrorResult = {
   fallbackMessage?: string;
 };
 
-export interface ToolUseCycleState {
-  messages: ProviderMessage[];
-  shouldStop: boolean;
+export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
-  responseTime?: number;
   toolInfo?: string;
   text?: string;
-  stopReason?: ProviderStopReason;
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  state.shouldStop = false;
-  state.response = undefined;
-  state.responseTime = undefined;
-  state.toolInfo = undefined;
-  state.text = undefined;
-  state.stopReason = undefined;
+  resetCycleState(state, [
+    'response' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
+    'toolInfo' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
+    'text' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
+  ]);
 }
 
 export interface ToolUseCycleShared<C = unknown> {
