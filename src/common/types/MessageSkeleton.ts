@@ -1,31 +1,17 @@
 /**
  * Type definitions for message skeleton structures used in debugging and logging.
- * Provides type-safe representations of message objects with truncated content.
+ * Provides flexible representations of message objects with truncated content.
  */
 
 /**
- * Content item in a message skeleton (e.g., text, image, thinking blocks)
+ * Content item in a message skeleton - kept flexible for debugging
  */
-export interface ContentItemSkeleton {
-  type: string;
-  text?: string;
-  source?: {
-    type: string;
-    media_type?: string;
-    data?: string;
-  };
-  cache_control?: unknown;
-  thinking?: string;
-}
+export type ContentItemSkeleton = any;
 
 /**
  * Message skeleton that preserves structure while truncating content
  */
-export interface MessageSkeleton {
-  role?: string;
-  content?: ContentItemSkeleton[] | string | string;
-  [key: string]: unknown;
-}
+export type MessageSkeleton = any;
 
 /**
  * Type guard to check if a value is an object (not null, not array)
