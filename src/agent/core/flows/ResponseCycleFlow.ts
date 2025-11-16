@@ -87,7 +87,6 @@ export type ResponseCycleState = ResponseCycleInputState &
 
 function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   resetCycleState(cycle, [
-    'endTurn' as keyof Omit<ResponseCycleRuntimeState, keyof BaseCycleState>,
     'responseObject' as keyof Omit<
       ResponseCycleRuntimeState,
       keyof BaseCycleState
@@ -97,6 +96,7 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
       keyof BaseCycleState
     >,
   ]);
+  // Boolean fields set directly to avoid undefined intermediate state
   cycle.endTurn = false;
   cycle.roundFinalized = false;
 }
