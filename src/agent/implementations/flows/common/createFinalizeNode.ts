@@ -9,7 +9,9 @@ import { setLifecyclePhase } from './lifecycle';
 import type { AgentRunShared } from './types';
 import type { FinalizeNodeContext } from './nodeExecution';
 
-export interface AgentFinalizeNodeOptions<Shared extends AgentRunShared<any, any, any, any>> {
+export interface AgentFinalizeNodeOptions<
+  Shared extends AgentRunShared<any, any, any, any>,
+> {
   finalizePhase: Shared['lifecycle']['phase'];
   computeStatus(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
@@ -32,9 +34,7 @@ export interface AgentFinalizeNodeOptions<Shared extends AgentRunShared<any, any
 
 export function createAgentFinalizeNode<
   Shared extends AgentRunShared<any, any, any, any>,
->(
-  options: AgentFinalizeNodeOptions<Shared>,
-): BaseNode<Shared> {
+>(options: AgentFinalizeNodeOptions<Shared>): BaseNode<Shared> {
   return new (class AgentFinalizeNode extends BaseNode<Shared> {
     async prep(
       shared: Shared,

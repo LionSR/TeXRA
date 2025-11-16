@@ -31,7 +31,10 @@ export async function getXmlFormatFromFile(file: string): Promise<string> {
     const content = await WorkspaceFS.read(file);
     return `<document name="${file}">\n${content}\n</document>`;
   } catch (err) {
-    logger.error(CHANNEL, `Error formatting file as XML: ${toErrorMessage(err)}`);
+    logger.error(
+      CHANNEL,
+      `Error formatting file as XML: ${toErrorMessage(err)}`,
+    );
     throw err;
   }
 }

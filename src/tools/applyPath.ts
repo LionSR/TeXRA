@@ -49,8 +49,7 @@ export class ApplyPathTool extends defineTool({
         throw error;
       }
 
-      const message =
-        toErrorMessage(error);
+      const message = toErrorMessage(error);
       throw new ToolError(`apply_path error: ${message}`);
     }
   }
