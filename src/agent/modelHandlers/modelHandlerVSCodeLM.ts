@@ -132,12 +132,8 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
       selector.vendor = vendor;
       selector.family = family;
     }
-    // Check if it's a specific model ID (contains vendor prefix)
-    else if (fullName.includes('-') && fullName.startsWith('copilot-')) {
-      selector.id = fullName;
-    }
-    // Otherwise treat as family name
     else {
+      // Treat the remaining value as the family name (default path)
       selector.family = fullName;
     }
 
@@ -339,7 +335,9 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
 
     // Ensure end tag is present
     if (endTag && !text.endsWith(endTag)) {
-      text += endTag;
+      const trimmedText = text.trimEnd();
+      const separator = trimmedText.length > 0 ? '\n' : '';
+      text = `${trimmedText}${separator}${endTag}`;
     }
 
     return [text, responseObject.usage || {}, finishReason as ProviderStopReason];
@@ -545,12 +543,9 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
     const secondLastMessage = messages.at(-2);
 
     // Check if last message is a user message (typical after continuation prompt)
-    if (
-      !lastMessage ||
-      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
-    ) {
+    if (!lastMessage || lastMessage.role !== 'user') {
       this.logger.error(
-        'Last message is not a user or system message - unexpected format',
+        'Last message is not a user message - unexpected format',
       );
       return;
     }
