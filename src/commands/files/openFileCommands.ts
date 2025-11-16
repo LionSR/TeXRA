@@ -41,9 +41,7 @@ export async function openLabel(label: string): Promise<void> {
       }
     } catch (error) {
       // Log but continue search - file might be inaccessible
-      console.debug(
-        `Could not read file ${file}: ${toErrorMessage(error)}`,
-      );
+      console.debug(`Could not read file ${file}: ${toErrorMessage(error)}`);
     }
   }
 
