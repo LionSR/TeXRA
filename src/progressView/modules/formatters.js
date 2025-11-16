@@ -743,15 +743,28 @@ export class LogEntryFormatter {
     }
 
     if (outputCandidate && outputCandidate.diagnostics !== undefined) {
-      const diagnosticsJson = toYamlString(outputCandidate.diagnostics);
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Diagnostics:</span>
-            <pre>${encodeHtml(diagnosticsJson)}</pre>
+      const diagnosticsText = toYamlString(outputCandidate.diagnostics).trim();
+      const MAX_DIAGNOSTICS_LENGTH = 600;
+
+      if (diagnosticsText && diagnosticsText.length <= MAX_DIAGNOSTICS_LENGTH) {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Diagnostics:</span>
+              <pre>${encodeHtml(diagnosticsText)}</pre>
+            </div>
           </div>
-        </div>
-      `);
+        `);
+      } else if (diagnosticsText) {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Diagnostics:</span>
+              <div>Diagnostics omitted (too verbose for progress view).</div>
+            </div>
+          </div>
+        `);
+      }
     }
 
     if (outputCandidate && typeof outputCandidate.system === 'string') {
