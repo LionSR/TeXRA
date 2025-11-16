@@ -17,7 +17,7 @@ import {
   getSelectOptionElements,
 } from '@common/domUtils.js';
 
-const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_WORKFLOW_AGENT = 'generic';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 function getSessionDefaultAgent(sessionType) {
