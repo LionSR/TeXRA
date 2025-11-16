@@ -161,7 +161,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
   const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = createAgentFinalizeNode<ReflectionRunShared<C>>({
+  const finalizeNode = createAgentFinalizeNode<
+    ReflectionRunShared<C>,
+    'error' | 'stopped'
+  >({
     finalizePhase: 'finalize',
     computeStatus: ({ lifecycle }) => (lifecycle.error ? 'error' : 'stopped'),
     runFinalize: async ({ hooks }, status) => {
