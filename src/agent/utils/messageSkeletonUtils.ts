@@ -96,6 +96,11 @@ export function messageToSkeleton(
         value as ProviderMessage,
         maxContentLength,
       );
+    } else if (Array.isArray(value)) {
+      // Recursively process arrays outside content fields
+      result[key] = value.map((item) =>
+        messageToSkeleton(item, maxContentLength),
+      );
     } else {
       // Pass through primitive values
       result[key] = value;
