@@ -617,7 +617,7 @@ export class OutputHandler implements IOutputHandler {
     const initialRawPath = rawOutput?.absolutePath ?? null;
     const runStorageActive = this.fileService.isRunStorageEnabled();
     const rawInRunStorage = rawOutput?.scope === 'runStorage';
-    const preferRunStorage = runStorageActive || rawInRunStorage;
+    const preferRunStorage = runStorageActive;
 
     if (rawOutput) {
       await this.cleanupLatexBackups(rawOutput);
