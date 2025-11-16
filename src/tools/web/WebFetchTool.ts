@@ -7,6 +7,7 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -99,8 +100,7 @@ export class WebFetchTool extends defineTool({
         }
       }
 
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Failed to fetch ${url}: ${message}`);
+      throw new ToolError(`Failed to fetch ${url}: ${toErrorMessage(error)}`);
     }
 
     const rawBody = response.data;
@@ -119,8 +119,9 @@ export class WebFetchTool extends defineTool({
       try {
         markdown = this.turndown.turndown(rawBody);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new ToolError(`Failed to convert HTML to Markdown: ${message}`);
+        throw new ToolError(
+          `Failed to convert HTML to Markdown: ${toErrorMessage(error)}`,
+        );
       }
     } else {
       markdown = rawBody;

@@ -19,7 +19,7 @@ import { defineTool } from './core/define';
 
 // Local imports - tools
 
-const FileOpInputSchema = z.object({
+const FileOpInputSchema = z.strictObject({
   command: z.enum(['read', 'write', 'append']),
   path: z.string(),
   content: z.string().optional(),

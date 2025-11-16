@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { buildWebviewHtml } from '@frontend/webview/html';
 import * as logger from '@logger/logUtils';
 
@@ -130,7 +131,7 @@ export abstract class BaseViewContentProvider {
     } catch (err) {
       this.logger.error(
         this.channel,
-        `Error generating HTML content: ${err instanceof Error ? err.message : String(err)}`,
+        `Error generating HTML content: ${toErrorMessage(err)}`,
       );
       return '<html><body>Error loading content</body></html>';
     }
@@ -165,6 +166,10 @@ export abstract class BaseViewContentProvider {
       baseWebviewMessageHandlerUri: this.getCommonUri(
         webview,
         'modules/BaseWebviewMessageHandler.js',
+      ),
+      baseFileUtilsUri: this.getCommonUri(
+        webview,
+        'modules/files/baseFileUtils.js',
       ),
       domUtilsUri: this.getCommonUri(webview, 'modules/domUtils.js'),
       baseDomHandlerUri: this.getCommonUri(

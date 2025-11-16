@@ -1,6 +1,5 @@
 // Third-party imports
 import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
-// import type { UsageMetadata as GenerateContentResponseUsageMetadata } from '@google/genai';
 import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 import type { CompletionUsage } from 'openai/resources/completions';
 
@@ -18,8 +17,6 @@ import type { CompletionUsage } from 'openai/resources/completions';
  */
 export interface ExtendedCompletionUsage extends CompletionUsage {
   prompt_cache_hit_tokens?: number;
-  // total_tokens: number;
-  // Note: tool_use_tokens is not provided by OpenAI API
 }
 
 // Re-export SDK types for use in model handlers

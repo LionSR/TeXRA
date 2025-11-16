@@ -2,6 +2,9 @@
 import * as os from 'os';
 import * as path from 'path';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -37,7 +40,7 @@ export async function loadTexraRules(): Promise<string> {
   } catch (err) {
     logger.warn(
       CHANNEL,
-      `Failed to load ${'.texrarules'}: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to load ${'.texrarules'}: ${toErrorMessage(err)}`,
     );
   }
   return '';

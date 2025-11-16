@@ -177,11 +177,7 @@ export class ProgressViewProvider
       theme,
     );
 
-    if (activeStream) {
-      this.eventHandler.refreshStreamSurface(activeStream);
-    } else {
-      this.eventHandler.refreshStreamSurface('');
-    }
+    this.eventHandler.refreshStreamSurface(activeStream || '');
 
     this._pendingUpdate = false;
   }

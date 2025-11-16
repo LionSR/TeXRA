@@ -74,8 +74,7 @@ export class TaskGroupManager extends PersistentMapManager<
     }
 
     // Apply updates
-    Object.assign(group, updates);
-    streamGroups.set(groupId, group);
+    streamGroups.set(groupId, { ...group, ...updates });
     await this.save();
   }
 

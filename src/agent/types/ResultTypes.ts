@@ -4,7 +4,7 @@
 // Third-party imports
 import { z } from 'zod';
 
-export const ExecResultSchema = z.object({
+export const ExecResultSchema = z.strictObject({
   /** Indicates whether the command succeeded */
   success: z.boolean(),
   /** Standard output from the command, if available */
@@ -19,7 +19,7 @@ export type ExecResult = z.infer<typeof ExecResultSchema>;
 
 export type FileOpStatus = 'success' | 'noFiles' | 'missingParams' | 'error';
 
-export const FileOpResultSchema = z.object({
+export const FileOpResultSchema = z.strictObject({
   /** Outcome of the pack or clean operation */
   status: z.union([
     z.literal('success'),
