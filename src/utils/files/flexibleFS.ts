@@ -55,6 +55,7 @@ export class FlexibleFS {
   }
 
   async write(target: string, content: string | Uint8Array): Promise<void> {
+    await this.ensureDir(path.dirname(this.toAbsolutePath(target)));
     if (isAbsolute(target)) {
       await AbsoluteFS.write(target, content);
       return;
@@ -83,6 +84,19 @@ export class FlexibleFS {
       });
       await WorkspaceFS.write(target, content);
     }
+  }
+
+  async appendFile(target: string, content: string): Promise<void> {
+    await this.ensureDir(path.dirname(this.toAbsolutePath(target)));
+    if (isAbsolute(target)) {
+      const existing = (await AbsoluteFS.exists(target))
+        ? await AbsoluteFS.read(target)
+        : '';
+      await AbsoluteFS.write(target, `${existing}${content}`);
+      return;
+    }
+
+    await WorkspaceFS.appendFile(target, content);
   }
 
   async ensureDir(target: string): Promise<void> {

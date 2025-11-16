@@ -12,16 +12,22 @@ import {
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 import type { AgentConfig } from './AgentConfig';
+import type {
+  FileLocation,
+  TaskRunFileService,
+} from '@utils/files/taskRunStorage';
 
 export interface ResponseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   agentConfig: AgentConfig;
+  rawOutputLocation: FileLocation;
+  fileService: TaskRunFileService;
 }
 
 export interface ResponseCycleContext<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  outputFile: string;
+  outputLocation: ResponseCycleOptions['rawOutputLocation'];
   store: AgentSharedStore;
 }
 
@@ -38,7 +44,8 @@ export async function runResponseCycle<C = unknown>(
     store: context.store,
     state: {
       messages: context.messages,
-      outputFile: context.outputFile,
+      outputFile: context.outputLocation.absolutePath,
+      outputLocation: context.outputLocation,
       endTurn: false,
       shouldStop: false,
       outputExists: false,
@@ -51,6 +58,7 @@ export async function runResponseCycle<C = unknown>(
       stopReason: undefined,
       processedResponse: undefined,
       roundFinalized: false,
+      continuationLogged: false,
     } satisfies ResponseCycleState,
   };
 

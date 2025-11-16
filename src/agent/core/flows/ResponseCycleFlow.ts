@@ -26,7 +26,7 @@ import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -65,6 +65,7 @@ async function maybeSaveDebug(
 export interface ResponseCycleInputState {
   messages: ProviderMessage[];
   outputFile: string;
+  outputLocation: ResponseCycleOptions['rawOutputLocation'];
 }
 
 export interface ResponseCycleRuntimeState {
@@ -80,6 +81,7 @@ export interface ResponseCycleRuntimeState {
   stopReason?: ProviderStopReason;
   processedResponse?: string;
   roundFinalized: boolean;
+  continuationLogged: boolean;
 }
 
 export type ResponseCycleState = ResponseCycleInputState &
@@ -137,7 +139,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleShared<C>> {
     const { options, state, store } = shared;
     const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const exists = await WorkspaceFS.exists(state.outputFile);
+    const exists = await flexibleFS.exists(state.outputFile);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -491,11 +493,11 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
 
     if (!state.outputExists) {
       options.logger.debug(`Creating new file: ${state.outputFile}`);
-      await WorkspaceFS.write(state.outputFile, processedResponse);
+      await flexibleFS.write(state.outputFile, processedResponse);
       state.outputExists = true;
     } else {
       options.logger.debug(`Appending to existing file: ${state.outputFile}`);
-      await WorkspaceFS.appendFile(
+      await flexibleFS.appendFile(
         state.outputFile,
         (result.bestConnector ?? '') + processedResponse,
       );
@@ -650,6 +652,16 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
     if (!willContinue) {
       await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
+    }
+
+    if (!state.continuationLogged) {
+      const location = state.outputLocation;
+      options.logger.missingOutputs({
+        missing: [],
+        xmlFile: location.absolutePath,
+        documentTag: options.agentSetting.documentTag,
+      });
+      state.continuationLogged = true;
     }
 
     store.round.incrementContinuation();

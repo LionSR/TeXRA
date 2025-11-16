@@ -398,13 +398,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill,
     outputPath,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
+    const outputLocation = await this.fileService.prepareRunStorageTarget(
+      outputPath,
+    );
+    const resolvedOutputPath = outputLocation.absolutePath;
+    this.outputFile[roundIndex] = resolvedOutputPath;
+
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
         this.agentSetting,
         preparedMessages,
         workspaceState,
-        outputPath,
+        resolvedOutputPath,
         prefill,
       );
 
@@ -420,9 +426,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     if (!endTurn) {
       const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
       const cycleResult = await runResponseCycle({
-        options: this.createResponseCycleOptions(),
+        options: this.createResponseCycleOptions(outputLocation),
         messages: updatedMessages,
-        outputFile: outputPath,
+        outputLocation,
         store,
       });
 
@@ -431,7 +437,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store.round,
         store.run,
         {
-          outputFile: outputPath,
+          outputFile: resolvedOutputPath,
           endTurn: cycleResult.endTurn,
           runGroupId,
         },
@@ -455,7 +461,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.round,
       store.run,
       {
-        outputFile: outputPath,
+        outputFile: resolvedOutputPath,
         endTurn,
         runGroupId,
       },
@@ -471,7 +477,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private createResponseCycleOptions(): ResponseCycleOptions<C> {
+  private createResponseCycleOptions(
+    rawOutputLocation: ResponseCycleOptions['rawOutputLocation'],
+  ): ResponseCycleOptions<C> {
     const client = this.getClientInstance();
     const baseOptions = this.buildCycleBaseOptions({
       agentSetting: this.agentSetting,
@@ -482,6 +490,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return {
       ...baseOptions,
       agentConfig: this.agentConfig,
+      rawOutputLocation,
+      fileService: this.fileService,
     };
   }
 

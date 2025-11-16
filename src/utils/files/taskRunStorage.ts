@@ -461,6 +461,39 @@ export class TaskRunFileService {
     await ensureRunDir(this.activeExecutionId);
   }
 
+  public async prepareRunStorageTarget(
+    target: string,
+  ): Promise<FileLocation> {
+    const location = this.describePath(target);
+    const executionId = this.activeExecutionId;
+    if (!executionId) {
+      return location;
+    }
+
+    const workspaceRelative = location.workspace?.relativePath
+      ?? (location.relativeScope === 'workspace' ? location.relativePath : null);
+    if (!workspaceRelative) {
+      return location;
+    }
+
+    const workspace = this.resolveWorkspaceRelative(workspaceRelative);
+    const runPaths = getRunStoragePaths(executionId, workspaceRelative);
+
+    await ensureRunDir(executionId);
+    await AbsoluteFS.ensureDir(path.dirname(runPaths.absolute));
+
+    return createFileLocation({
+      absolutePath: runPaths.absolute,
+      scope: 'runStorage',
+      workspace: workspace ?? undefined,
+      runStorage: {
+        absolutePath: runPaths.absolute,
+        relativePath: runPaths.runRelative,
+        storageRelativePath: runPaths.storageRelative,
+      },
+    });
+  }
+
   private resolveWorkspaceRelative(
     relativePath: string,
   ): WorkspaceLocationInfo | null {

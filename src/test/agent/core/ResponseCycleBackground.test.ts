@@ -38,6 +38,7 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
 import replacementEngine from '@replacement/engine';
+import { TaskRunFileService } from '@utils/files';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import * as latex from '@latex';
@@ -338,6 +339,15 @@ describe('ResponseCycle background reasoning logs', () => {
       transient: {} as Record<string, any>,
       output: {} as Record<string, any>,
     };
+    const rawOutputLocation = {
+      absolutePath: 'output.txt',
+      scope: 'workspace' as const,
+      relativePath: 'output.txt',
+      relativeScope: 'workspace' as const,
+      workspace: { absolutePath: 'output.txt', relativePath: 'output.txt' },
+      runStorage: null,
+    };
+    const fileService = new TaskRunFileService();
     const store = new AgentSharedStore({
       round: stateRound,
       run: stateGlobal,
@@ -360,9 +370,11 @@ describe('ResponseCycle background reasoning logs', () => {
         context: new AgentExecutionContext({
           streamId: 'test-stream' as StreamTabId,
         }),
+        rawOutputLocation,
+        fileService,
       },
       messages,
-      outputFile: 'output.txt',
+      outputLocation: rawOutputLocation,
       store,
     });
 

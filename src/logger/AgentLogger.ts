@@ -242,8 +242,11 @@ export class AgentLogger {
    */
   missingOutputs(info: unknown, groupId?: string): void {
     const missing = (info as any).missing as unknown[] | undefined;
+    const hasXml = Boolean((info as any).xmlFile);
     const count = missing ? missing.length : 0;
-    const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
+    const summary = hasXml && count === 0
+      ? 'XML output incomplete—open the XML file, click Fix, then rerun.'
+      : `${count} output file${count === 1 ? '' : 's'} missing`;
     this.info(summary, groupId, MESSAGE_TYPES.MISSING_OUTPUTS, info);
   }
 

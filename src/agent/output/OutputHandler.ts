@@ -616,14 +616,17 @@ export class OutputHandler implements IOutputHandler {
     let relocatedRaw = rawOutput;
     const initialRawPath = rawOutput?.absolutePath ?? null;
     const runStorageActive = this.fileService.isRunStorageEnabled();
-    const shouldForceRunStorage = runStorageActive;
+    const rawInRunStorage = rawOutput?.scope === 'runStorage';
+    const preferRunStorage = runStorageActive || rawInRunStorage;
 
     if (rawOutput) {
       await this.cleanupLatexBackups(rawOutput);
-      if (runStorageActive) {
+      if (rawInRunStorage) {
+        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
+      } else if (preferRunStorage) {
         relocatedRaw = await this.fileService.relocateToRunStorage(
           rawOutput.absolutePath,
-          shouldForceRunStorage ? { forceRunStorage: true } : undefined,
+          { forceRunStorage: true },
         );
       } else {
         relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
@@ -646,7 +649,7 @@ export class OutputHandler implements IOutputHandler {
         }
 
         await this.cleanupLatexBackups(entry.location);
-        if (!runStorageActive) {
+        if (!preferRunStorage) {
           const described = this.fileService.describePath(
             entry.location.absolutePath,
           );
