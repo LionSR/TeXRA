@@ -1,19 +1,9 @@
 // Local imports - agent
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-/**
- * Utility functions for working with message objects in agent conversations.
- */
 
 // Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-import type {
-  MessageSkeleton,
-  ContentItemSkeleton,
-} from '@common/types/MessageSkeleton';
-import {
-  isPlainObject,
-  isContentItemArray,
-} from '@common/types/MessageSkeleton';
+import { isPlainObject, isContentItemArray } from '@common/types/MessageSkeleton';
 
 /**
  * Creates a skeleton representation of a message object for debugging.
@@ -25,7 +15,7 @@ import {
 export function messageToSkeleton(
   message: ProviderMessage | ProviderMessage[],
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): MessageSkeleton | MessageSkeleton[] | null {
+): any {
   if (!message) {
     return null;
   }
@@ -35,10 +25,10 @@ export function messageToSkeleton(
   }
 
   if (!isPlainObject(message)) {
-    return { _type: typeof message } as unknown as MessageSkeleton;
+    return { _type: typeof message };
   }
 
-  const result: MessageSkeleton = {};
+  const result: any = {};
 
   for (const [key, value] of Object.entries(message)) {
     if (key === 'content') {
@@ -46,7 +36,7 @@ export function messageToSkeleton(
         // Handle content arrays (common in Anthropic responses)
         result[key] = value.map((item) => {
           if (isPlainObject(item)) {
-            const itemSkeleton: ContentItemSkeleton = { type: String(item.type) };
+            const itemSkeleton: any = { type: item.type };
 
             if (item.text) {
               const truncatedText =
