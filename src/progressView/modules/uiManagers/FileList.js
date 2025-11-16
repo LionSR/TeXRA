@@ -4,32 +4,12 @@ import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
+import { getEffectiveBaseFile } from '@common/modules/files/baseFileUtils.js';
 
 /**
  * Manages file list rendering.
  */
 export class FileList {
-  /**
-   * Get the effective base file for comparison operations.
-   * @param {string|null|undefined} base - The explicit base file path
-   * @param {string|null|undefined} original - The original source file path
-   * @param {string} current - The current generated file path
-   * @returns {string|null} The effective base file path or null
-   */
-  getEffectiveBaseFile(base, original, current) {
-    // Use explicit base if available
-    if (base) {
-      return base;
-    }
-
-    // Use original as base if it exists and differs from current
-    if (original && original !== current) {
-      return original;
-    }
-
-    return null;
-  }
-
   /**
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
@@ -124,7 +104,7 @@ export class FileList {
         }
 
         // Get effective base file for comparisons
-        const effectiveBase = this.getEffectiveBaseFile(
+        const effectiveBase = getEffectiveBaseFile(
           file.base,
           file.original,
           file.path,

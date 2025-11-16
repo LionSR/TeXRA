@@ -1,6 +1,11 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 
+import {
+  logValidation,
+  runStreamingAggregationTest,
+} from './helpers/streamHarness.js';
+
 dotenv.config();
 
 const client = new OpenAI({
@@ -9,111 +14,97 @@ const client = new OpenAI({
 
 async function testStreamingWithAggregation() {
   try {
-    console.log('=== OpenAI Streaming Test with Chunk Aggregation ===\n');
+    await runStreamingAggregationTest({
+      title: 'OpenAI Streaming Test with Chunk Aggregation',
+      createStream: () =>
+        client.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: 'Count from 1 to 5. Each number on a new line.',
+            },
+          ],
+          stream: true,
+          stream_options: { include_usage: true },
+        }),
+      consumeStream: async (stream) => {
+        const aggregatedResponse = {
+          id: null,
+          object: 'chat.completion',
+          created: null,
+          model: null,
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: '',
+              },
+              finish_reason: null,
+            },
+          ],
+          usage: null,
+        };
 
-    const stream = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: 'Count from 1 to 5. Each number on a new line.',
-        },
-      ],
-      stream: true,
-      stream_options: { include_usage: true },
+        let chunkCount = 0;
+        console.log('Streaming content:\n');
+
+        for await (const chunk of stream) {
+          chunkCount++;
+
+          if (!aggregatedResponse.id && chunk.id) {
+            aggregatedResponse.id = chunk.id;
+            aggregatedResponse.created = chunk.created;
+            aggregatedResponse.model = chunk.model;
+          }
+
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            aggregatedResponse.choices[0].message.content += content;
+            process.stdout.write(content);
+          }
+
+          if (chunk.choices[0]?.finish_reason) {
+            aggregatedResponse.choices[0].finish_reason =
+              chunk.choices[0].finish_reason;
+          }
+
+          if (chunk.usage) {
+            aggregatedResponse.usage = chunk.usage;
+          }
+        }
+
+        return { aggregated: aggregatedResponse, count: chunkCount };
+      },
+      createNonStream: () =>
+        client.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: 'Count from 1 to 5. Each number on a new line.',
+            },
+          ],
+          stream: false,
+        }),
+      compare: (aggregatedResponse, nonStreamResponse) => {
+        logValidation(
+          'Content matches',
+          aggregatedResponse.choices[0].message.content.trim() ===
+            nonStreamResponse.choices[0].message.content.trim(),
+        );
+        logValidation(
+          'Both have finish_reason',
+          !!aggregatedResponse.choices[0].finish_reason &&
+            !!nonStreamResponse.choices[0].finish_reason,
+        );
+        logValidation(
+          'Both have usage data',
+          !!aggregatedResponse.usage && !!nonStreamResponse.usage,
+        );
+      },
     });
-
-    let aggregatedResponse = {
-      id: null,
-      object: 'chat.completion',
-      created: null,
-      model: null,
-      choices: [
-        {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: '',
-          },
-          finish_reason: null,
-        },
-      ],
-      usage: null,
-    };
-
-    let chunkCount = 0;
-    console.log('Streaming content:\n');
-
-    for await (const chunk of stream) {
-      chunkCount++;
-
-      // Aggregate metadata from first chunk
-      if (!aggregatedResponse.id && chunk.id) {
-        aggregatedResponse.id = chunk.id;
-        aggregatedResponse.created = chunk.created;
-        aggregatedResponse.model = chunk.model;
-      }
-
-      // Aggregate content
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        aggregatedResponse.choices[0].message.content += content;
-        process.stdout.write(content);
-      }
-
-      // Capture finish reason
-      if (chunk.choices[0]?.finish_reason) {
-        aggregatedResponse.choices[0].finish_reason =
-          chunk.choices[0].finish_reason;
-      }
-
-      // Capture usage data
-      if (chunk.usage) {
-        aggregatedResponse.usage = chunk.usage;
-      }
-    }
-
-    console.log('\n\n--- Aggregated Response ---');
-    console.log('Total chunks received:', chunkCount);
-    console.log(
-      'Aggregated response:',
-      JSON.stringify(aggregatedResponse, null, 2),
-    );
-
-    // Compare with non-streaming
-    console.log('\n--- Non-streaming Comparison ---');
-    const nonStreamResponse = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: 'Count from 1 to 5. Each number on a new line.',
-        },
-      ],
-      stream: false,
-    });
-
-    console.log(
-      'Non-stream response structure:',
-      JSON.stringify(nonStreamResponse, null, 2),
-    );
-
-    // Validate aggregation
-    console.log('\n--- Validation ---');
-    console.log(
-      'Content matches:',
-      aggregatedResponse.choices[0].message.content.trim() ===
-        nonStreamResponse.choices[0].message.content.trim(),
-    );
-    console.log(
-      'Both have finish_reason:',
-      !!aggregatedResponse.choices[0].finish_reason &&
-        !!nonStreamResponse.choices[0].finish_reason,
-    );
-    console.log(
-      'Both have usage data:',
-      !!aggregatedResponse.usage && !!nonStreamResponse.usage,
-    );
   } catch (error) {
     console.error('Error:', error);
   }

@@ -5,6 +5,9 @@ import { quote as shellQuote } from 'shell-quote';
 // Local imports - log
 import type { ExecResult } from '@agent/types/ResultTypes';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Internal imports
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -23,7 +26,7 @@ function truncateOutput(
   maxChars: number = MAX_OUTPUT_LENGTH,
 ): string | null {
   if (text && text.length > maxChars) {
-    return '...' + text.slice(-maxChars);
+    return `...${text.slice(-maxChars)}`;
   }
   return text;
 }
@@ -49,6 +52,7 @@ export async function executeCommand(
     env?: Record<string, string>;
     timeout?: number;
     cwd?: string;
+    stdin?: string;
   } = {},
 ): Promise<ExecResult> {
   try {
@@ -73,6 +77,7 @@ export async function executeCommand(
       encoding: encodingOption as any, // execa v9 type compatibility
       timeout: options.timeout,
       reject: false,
+      input: options.stdin,
     };
 
     let stdout: string;
@@ -126,10 +131,9 @@ export async function executeCommand(
       timedOut,
     };
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error(
       options.channel ?? CHANNEL,
-      `Error executing command: ${errorMessage}`,
+      `Error executing command: ${toErrorMessage(err)}`,
     );
 
     // Handle stderr from ExecaError
@@ -140,7 +144,7 @@ export async function executeCommand(
 
     // With reject: false, this catch block only handles actual execution errors
     // (e.g., command not found), not timeouts or non-zero exit codes
-    const fallbackOutput = stderr || errorMessage;
+    const fallbackOutput = stderr || toErrorMessage(err);
     const normalizedError = normalizeOutput(fallbackOutput);
     return {
       success: false,

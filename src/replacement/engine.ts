@@ -2,6 +2,9 @@
  * Utilities for managing text replacements in the codebase.
  */
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -258,9 +261,6 @@ export function applyReplacements(
     processMathUnicode?: boolean; // Whether to apply Unicode-to-LaTeX within math environments (defaults to true)
   },
 ): string {
-  // // By default, math-Unicode replacements are NOT applied.
-  // // To enable them, call applyReplacements(..., { processMathUnicode: true })
-  // if (options?.processMathUnicode === true) {
   // Apply Unicode replacements in math environments if requested
   if (options?.processMathUnicode !== false) {
     // Default to true if not specified
@@ -287,7 +287,7 @@ export function applyReplacements(
         } catch (regexErr) {
           logger.error(
             CHANNEL,
-            `Error with regex pattern "${pattern}": ${regexErr instanceof Error ? regexErr.message : String(regexErr)}`,
+            `Error with regex pattern "${pattern}": ${toErrorMessage(regexErr)}`,
           );
         }
       }

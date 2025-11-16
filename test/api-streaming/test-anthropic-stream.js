@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import dotenv from 'dotenv';
 
+import {
+  logValidation,
+  runStreamingAggregationTest,
+} from './helpers/streamHarness.js';
+
 dotenv.config();
 
 const client = new Anthropic({
@@ -9,146 +14,135 @@ const client = new Anthropic({
 
 async function testStreamingWithAggregation() {
   try {
-    console.log('=== Anthropic Streaming Test with Chunk Aggregation ===\n');
+    await runStreamingAggregationTest({
+      title: 'Anthropic Streaming Test with Chunk Aggregation',
+      createStream: () =>
+        client.messages.create({
+          model: 'claude-3-5-haiku-20241205',
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: 'Count from 1 to 5. Each number on a new line.',
+            },
+          ],
+          stream: true,
+        }),
+      consumeStream: async (stream) => {
+        const aggregatedResponse = {
+          id: null,
+          type: 'message',
+          role: 'assistant',
+          content: [],
+          model: null,
+          stop_reason: null,
+          stop_sequence: null,
+          usage: null,
+        };
 
-    const stream = await client.messages.create({
-      model: 'claude-3-5-haiku-20241205',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: 'Count from 1 to 5. Each number on a new line.',
-        },
-      ],
-      stream: true,
+        let currentTextBlock = {
+          type: 'text',
+          text: '',
+        };
+
+        let chunkCount = 0;
+        let messageStart = null;
+
+        console.log('Streaming content:\n');
+
+        for await (const event of stream) {
+          chunkCount++;
+
+          switch (event.type) {
+            case 'message_start':
+              messageStart = event.message;
+              aggregatedResponse.id = messageStart.id;
+              aggregatedResponse.model = messageStart.model;
+              aggregatedResponse.role = messageStart.role;
+              aggregatedResponse.usage = messageStart.usage;
+              break;
+
+            case 'content_block_start':
+              if (event.content_block.type === 'text') {
+                currentTextBlock = {
+                  type: 'text',
+                  text: '',
+                };
+              }
+              break;
+
+            case 'content_block_delta':
+              if (event.delta.type === 'text_delta') {
+                const text = event.delta.text;
+                currentTextBlock.text += text;
+                process.stdout.write(text);
+              }
+              break;
+
+            case 'content_block_stop':
+              if (currentTextBlock.text) {
+                aggregatedResponse.content.push({ ...currentTextBlock });
+              }
+              break;
+
+            case 'message_delta':
+              if (event.delta.stop_reason) {
+                aggregatedResponse.stop_reason = event.delta.stop_reason;
+              }
+              if (event.delta.stop_sequence) {
+                aggregatedResponse.stop_sequence = event.delta.stop_sequence;
+              }
+              if (event.usage) {
+                aggregatedResponse.usage = {
+                  ...aggregatedResponse.usage,
+                  ...event.usage,
+                };
+              }
+              break;
+
+            case 'message_stop':
+              break;
+          }
+        }
+
+        return { aggregated: aggregatedResponse, count: chunkCount };
+      },
+      createNonStream: () =>
+        client.messages.create({
+          model: 'claude-3-5-haiku-20241205',
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: 'Count from 1 to 5. Each number on a new line.',
+            },
+          ],
+          stream: false,
+        }),
+      compare: (aggregatedResponse, nonStreamResponse) => {
+        const aggregatedText = aggregatedResponse.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text)
+          .join('');
+        const nonStreamText = nonStreamResponse.content
+          .filter((c) => c.type === 'text')
+          .map((c) => c.text)
+          .join('');
+
+        logValidation(
+          'Content matches',
+          aggregatedText.trim() === nonStreamText.trim(),
+        );
+        logValidation(
+          'Both have stop_reason',
+          !!aggregatedResponse.stop_reason && !!nonStreamResponse.stop_reason,
+        );
+        logValidation(
+          'Both have usage data',
+          !!aggregatedResponse.usage && !!nonStreamResponse.usage,
+        );
+      },
     });
-
-    let aggregatedResponse = {
-      id: null,
-      type: 'message',
-      role: 'assistant',
-      content: [],
-      model: null,
-      stop_reason: null,
-      stop_sequence: null,
-      usage: null,
-    };
-
-    let currentTextBlock = {
-      type: 'text',
-      text: '',
-    };
-
-    let chunkCount = 0;
-    let messageStart = null;
-
-    console.log('Streaming content:\n');
-
-    for await (const event of stream) {
-      chunkCount++;
-
-      switch (event.type) {
-        case 'message_start':
-          messageStart = event.message;
-          aggregatedResponse.id = messageStart.id;
-          aggregatedResponse.model = messageStart.model;
-          aggregatedResponse.role = messageStart.role;
-          aggregatedResponse.usage = messageStart.usage;
-          break;
-
-        case 'content_block_start':
-          if (event.content_block.type === 'text') {
-            currentTextBlock = {
-              type: 'text',
-              text: '',
-            };
-          }
-          break;
-
-        case 'content_block_delta':
-          if (event.delta.type === 'text_delta') {
-            const text = event.delta.text;
-            currentTextBlock.text += text;
-            process.stdout.write(text);
-          }
-          break;
-
-        case 'content_block_stop':
-          if (currentTextBlock.text) {
-            aggregatedResponse.content.push({ ...currentTextBlock });
-          }
-          break;
-
-        case 'message_delta':
-          if (event.delta.stop_reason) {
-            aggregatedResponse.stop_reason = event.delta.stop_reason;
-          }
-          if (event.delta.stop_sequence) {
-            aggregatedResponse.stop_sequence = event.delta.stop_sequence;
-          }
-          if (event.usage) {
-            aggregatedResponse.usage = {
-              ...aggregatedResponse.usage,
-              ...event.usage,
-            };
-          }
-          break;
-
-        case 'message_stop':
-          // Final event, streaming complete
-          break;
-      }
-    }
-
-    console.log('\n\n--- Aggregated Response ---');
-    console.log('Total events received:', chunkCount);
-    console.log(
-      'Aggregated response:',
-      JSON.stringify(aggregatedResponse, null, 2),
-    );
-
-    // Compare with non-streaming
-    console.log('\n--- Non-streaming Comparison ---');
-    const nonStreamResponse = await client.messages.create({
-      model: 'claude-3-5-haiku-20241205',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: 'Count from 1 to 5. Each number on a new line.',
-        },
-      ],
-      stream: false,
-    });
-
-    console.log(
-      'Non-stream response structure:',
-      JSON.stringify(nonStreamResponse, null, 2),
-    );
-
-    // Validate aggregation
-    console.log('\n--- Validation ---');
-    const aggregatedText = aggregatedResponse.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text)
-      .join('');
-    const nonStreamText = nonStreamResponse.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text)
-      .join('');
-
-    console.log(
-      'Content matches:',
-      aggregatedText.trim() === nonStreamText.trim(),
-    );
-    console.log(
-      'Both have stop_reason:',
-      !!aggregatedResponse.stop_reason && !!nonStreamResponse.stop_reason,
-    );
-    console.log(
-      'Both have usage data:',
-      !!aggregatedResponse.usage && !!nonStreamResponse.usage,
-    );
   } catch (error) {
     console.error('Error:', error);
   }

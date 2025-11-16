@@ -6,9 +6,6 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUpCoordinator';
 
-const CHANNEL = 'followUpCommand';
-console.log(`[${CHANNEL}] command registered`);
-
 export function registerFollowUpCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(

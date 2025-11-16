@@ -8,13 +8,32 @@ import { workspace } from 'vscode';
 // Local imports - webview
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+import {
+  showLoggedMessage,
+  toErrorMessage,
+} from '@common/errors/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { fileLister } from '@frontend/files/fileLister';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
+
+// Local imports - types
+import type {
+  FileSelectionMessage,
+  InputFileSelectedMessage,
+  GenericFileSelectedMessage,
+  RequestInputFileMessage,
+  RequestFileMessage,
+  RequestEditedFileMessage,
+  RequestBaseFileMessage,
+  RequestDefaultOutputFilesMessage,
+  SetMultipleFilesMessage,
+  SelectMultipleFilesMessage,
+  GetCurrentFileMessage,
+  UpdateFilesMessage,
+} from '../types/messages';
 
 const CHANNEL = 'FileManager';
 logger.initialize(CHANNEL);
@@ -44,7 +63,7 @@ export class FileManager {
     return this.webview;
   }
 
-  async handleFileSelection(message: any): Promise<void> {
+  async handleFileSelection(message: FileSelectionMessage): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -80,7 +99,9 @@ export class FileManager {
     }
   }
 
-  async handleInputFileSelected(message: any): Promise<void> {
+  async handleInputFileSelected(
+    message: InputFileSelectedMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -94,11 +115,13 @@ export class FileManager {
     this.postFileUpdate('Edited', filteredEditedFiles);
   }
 
-  handleGenericFileSelected(message: any): void {
+  handleGenericFileSelected(message: GenericFileSelectedMessage): void {
     logger.debug(CHANNEL, `${message.command}: ${message.filePath}`);
   }
 
-  async handleRequestInputFile(message: any): Promise<void> {
+  async handleRequestInputFile(
+    message: RequestInputFileMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -106,13 +129,13 @@ export class FileManager {
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
-      )) || [];
+      )) ?? [];
     await this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
-  async handleRequestFile(message: any): Promise<void> {
+  async handleRequestFile(message: RequestFileMessage): Promise<void> {
     const fileType = message.command.replace('request', '').replace('File', '');
     const files = await (async () => {
       switch (fileType) {
@@ -127,11 +150,13 @@ export class FileManager {
       }
     })();
     await this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
-  async handleRequestEditedFile(message: any): Promise<void> {
+  async handleRequestEditedFile(
+    message: RequestEditedFileMessage,
+  ): Promise<void> {
     let allEditedFiles: string[] = [];
     if (message.baseFile) {
       const baseFileNameForEdited = path.basename(
@@ -141,21 +166,23 @@ export class FileManager {
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
     await this.postFileUpdate('Edited', allEditedFiles, {
-      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
     });
   }
 
-  async handleRequestBaseFile(message: any): Promise<void> {
+  async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
     await this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: Boolean(message?.notifyWhenEmpty),
-      additionalPayload: message?.preserveBaseFile
+      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
     });
   }
 
-  async handleRequestDefaultOutputFiles(message: any): Promise<void> {
+  async handleRequestDefaultOutputFiles(
+    message: RequestDefaultOutputFilesMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -182,7 +209,7 @@ export class FileManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error requesting default output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error requesting default output files: ${toErrorMessage(err)}`,
       );
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
@@ -191,12 +218,12 @@ export class FileManager {
     }
   }
 
-  handleSetMultipleFiles(message: any): void {
+  handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    if (message.files?.length > 0) {
+    if (message.files && message.files.length > 0) {
       webviewView.webview.postMessage({
         command: message.command,
         files: message.files,
@@ -204,7 +231,9 @@ export class FileManager {
     }
   }
 
-  async handleSelectMultipleFiles(message: any): Promise<void> {
+  async handleSelectMultipleFiles(
+    message: SelectMultipleFilesMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -240,10 +269,10 @@ export class FileManager {
     } catch (error) {
       logger.error(
         CHANNEL,
-        `Error in handleSelectMultipleFiles: ${error instanceof Error ? error.message : String(error)}`,
+        `Error in handleSelectMultipleFiles: ${toErrorMessage(error)}`,
       );
       vscode.window.showErrorMessage(
-        `Error selecting ${fileType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Error selecting ${fileType}: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -263,12 +292,12 @@ export class FileManager {
     await this.updateBaseFileSelect();
   }
 
-  async handleGetCurrentFile(message: any): Promise<void> {
+  async handleGetCurrentFile(message: GetCurrentFileMessage): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
-    const fileType = message.fileType || 'input';
+    const fileType = message.fileType ?? 'input';
     const currentOpenFile = await vscode.commands.executeCommand<string>(
       'texra.getCurrentFile',
     );
@@ -310,7 +339,10 @@ export class FileManager {
           if (derivedBaseFile) {
             const baseExists = await WorkspaceFS.exists(derivedBaseFile);
             if (baseExists) {
-              await this.handleRequestBaseFile({ preserveBaseFile: true });
+              await this.handleRequestBaseFile({
+                command: 'requestBaseFile',
+                preserveBaseFile: true,
+              });
               filePathToSelect = derivedBaseFile;
             } else {
               logger.info(
@@ -391,14 +423,14 @@ export class FileManager {
     });
   }
 
-  async handleUpdateFiles(message: any): Promise<void> {
+  async handleUpdateFiles(message: UpdateFilesMessage): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
     const command = message.command;
     const fileType = command.replace('update', '');
-    const files = message.files || [];
+    const files = message.files ?? [];
 
     logger.debug(CHANNEL, `Updating ${fileType} with ${files.length} files`);
     webviewView.webview.postMessage({ command: `set${fileType}`, files });
@@ -431,7 +463,9 @@ export class FileManager {
     return { dir, baseName, ext, commitHash };
   }
 
-  async selectOutputFiles(currentInputFile: string): Promise<string[] | null> {
+  async selectOutputFiles(
+    currentInputFile?: string,
+  ): Promise<string[] | null> {
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
       await showLoggedMessage(CHANNEL, 'No workspace folder open');
@@ -472,10 +506,10 @@ export class FileManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error selecting output files: ${toErrorMessage(err)}`,
       );
       vscode.window.showErrorMessage(
-        `Error selecting output files: ${err instanceof Error ? err.message : String(err)}`,
+        `Error selecting output files: ${toErrorMessage(err)}`,
       );
       return null;
     }

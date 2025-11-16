@@ -1,6 +1,8 @@
 // Local imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
 
+// Local imports - common
+
 // Internal imports
 import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
@@ -10,6 +12,7 @@ import type {
 } from '@agent/types/UsageTypes';
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 
 /**
  * Handles recording usage statistics to the log and progress view.
@@ -43,7 +46,7 @@ export class UsageMonitor {
         } catch (error) {
           logger.debug(
             `Failed to compute ${runKind} cost for round ${snapshot.round}: ${
-              error instanceof Error ? error.message : String(error)
+              toErrorMessage(error)
             }`,
           );
           return runningTotal;
@@ -91,7 +94,8 @@ export class UsageMonitor {
         }),
       };
 
-      usageReporter.report(payload);
+      const runId = this.context.executionId ?? this.context.streamId;
+      usageReporter.report(payload, runId);
     } catch (error) {
       logger.error(`Error printing statistics: ${error}`);
     }

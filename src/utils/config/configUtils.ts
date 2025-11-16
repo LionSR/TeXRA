@@ -71,15 +71,15 @@ export async function updateConfig<T>(
     const setting = vscode.workspace.getConfiguration().inspect(key);
     if (
       setting &&
-      setting.globalValue === undefined &&
-      setting.workspaceValue === undefined &&
-      setting.workspaceFolderValue === undefined
+      (setting.globalValue !== undefined ||
+        setting.workspaceValue !== undefined ||
+        setting.workspaceFolderValue !== undefined)
     ) {
-      await vscode.workspace.getConfiguration().update(key, value, target);
+      return; // Setting already exists, don't update
     }
-  } else {
-    await vscode.workspace.getConfiguration().update(key, value, target);
   }
+
+  await vscode.workspace.getConfiguration().update(key, value, target);
 }
 
 // Backwards-compatible alias

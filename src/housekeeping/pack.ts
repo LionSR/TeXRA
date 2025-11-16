@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -131,11 +132,11 @@ export async function runPackSingle(
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error during file operations: ${err instanceof Error ? err.message : String(err)}`,
+        `Error during file operations: ${toErrorMessage(err)}`,
       );
       result = {
         status: 'error',
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       };
     }
   } else {
@@ -249,11 +250,11 @@ export async function runPackMultiple(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error during multiple pack operation: ${err instanceof Error ? err.message : String(err)}`,
+      `Error during multiple pack operation: ${toErrorMessage(err)}`,
     );
     return {
       status: 'error',
-      error: err instanceof Error ? err.message : String(err),
+      error: toErrorMessage(err),
     };
   }
 }
