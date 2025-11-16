@@ -19,7 +19,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
-import { mergeObjects } from '@common/utils/objectMerge';
 
 /**
  * User variables for prompt rendering
@@ -66,16 +65,15 @@ export async function buildUserVars(
     await getPatternBasedFileVars(agentConfig, agentSetting, logger);
   allLoadedFiles.push(...patternFiles);
 
-  // Merge all variable sources into a single object
-  const userVars = mergeObjects<UserVars>(
-    {},
-    getBasicVars(agentConfig, modelHandler),
-    await getFileVars(agentConfig),
-    requiredVars,
-    patternVars,
-    getOutputFilesOrder(agentConfig, agentSetting),
-    getToolFlags(agentConfig, agentSetting, agentPrompt),
-  );
+  // Merge all variable sources using spread operator
+  const userVars: UserVars = {
+    ...getBasicVars(agentConfig, modelHandler),
+    ...(await getFileVars(agentConfig)),
+    ...requiredVars,
+    ...patternVars,
+    ...getOutputFilesOrder(agentConfig, agentSetting),
+    ...getToolFlags(agentConfig, agentSetting, agentPrompt),
+  };
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
