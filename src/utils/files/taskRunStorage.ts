@@ -460,11 +460,7 @@ export class TaskRunFileService {
       return null;
     }
 
-    const storageSegments = relativeToStorage.split(path.sep).filter(Boolean);
-    const taskRunIndex = storageSegments.indexOf(TASK_RUNS_DIR);
-    if (taskRunIndex === -1 || storageSegments.length < taskRunIndex + 2) return null;
-
-    const withinRun = storageSegments.slice(taskRunIndex + 2).join(path.sep);
+    const withinRun = segments.slice(runIndex + 2).join(path.sep);
     const runRelative = normalizeRunRelative(withinRun);
     const storageRelative = path.join(TASK_RUNS_DIR, executionId, runRelative);
     return {

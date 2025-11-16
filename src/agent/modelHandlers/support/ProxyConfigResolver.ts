@@ -34,9 +34,9 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   const useImprovedConnection = getConfig<boolean>('texra.model.useImprovedConnection', false);
 
   if (useImprovedConnection) {
-    const configValue = getConfig<string>('texra.model.improvedConnectionDomain', DEFAULT_PROXY_DOMAIN);
-    const domain = normalizeUrl((configValue || '').trim() || DEFAULT_PROXY_DOMAIN);
-    if (!configValue?.trim()) config.logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
+    const configValue = getConfig<string>('texra.model.improvedConnectionDomain', '');
+    const domain = normalizeUrl(configValue.trim() || DEFAULT_PROXY_DOMAIN);
+    if (!configValue.trim()) config.logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
 
     if (useOpenRouter) {
       config.logger?.debug(`Using proxy for ${config.provider} for OpenRouter`);
