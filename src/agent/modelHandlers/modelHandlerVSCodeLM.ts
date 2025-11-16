@@ -192,7 +192,6 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
 
       // Aggregate the streamed response
       let fullText = '';
-      let tokenCount = 0;
 
       // Create output stream if streaming is enabled
       const outputStream = this.outputStreaming
@@ -201,7 +200,6 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
 
       for await (const chunk of response.text) {
         fullText += chunk;
-        tokenCount++;
 
         // Stream to output if enabled
         if (outputStream) {
@@ -273,7 +271,9 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
     mediaFiles?: string[],
     _systemPrompt?: string,
   ): Promise<VSCodeLMMessage[]> {
-    let content = userPrefix ? `${userPrefix}\n\n${userRequest}` : userRequest;
+    const content = userPrefix
+      ? `${userPrefix}\n\n${userRequest}`
+      : userRequest;
 
     // Log warning if media files are provided
     if (mediaFiles && mediaFiles.length > 0) {
@@ -459,6 +459,30 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
       'Output file exists but no end tag found - continuing from file',
     );
 
+    if (fileContent.includes(prefill)) {
+      workspaceState.assembly.updateAccumulatedOutput(fileContent);
+    } else {
+      workspaceState.assembly.updateAccumulatedOutput(
+        prefill + fileContent,
+      );
+      await flexibleFS.write(
+        outputFile,
+        workspaceState.assembly.accumulatedOutput,
+      );
+    }
+
+    const state = new ConversationRoundState(0);
+    workspaceState.assembly.lastResponse =
+      workspaceState.assembly.accumulatedOutput;
+    this.addContinueMessageWithoutPrefill(
+      messages,
+      state,
+      workspaceState,
+      agentSetting,
+      agentConfig,
+    );
+
+    endTurn = false;
     return [endTurn, messages];
   }
 
@@ -517,18 +541,21 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
       'Updating message content for VS Code LM without prefill support',
     );
 
-    const lastMessage = messages[messages.length - 1];
-    const secondLastMessage = messages[messages.length - 2];
+    const lastMessage = messages.at(-1);
+    const secondLastMessage = messages.at(-2);
 
     // Check if last message is a user message (typical after continuation prompt)
-    if (!lastMessage || lastMessage.role !== 'user') {
+    if (
+      !lastMessage ||
+      (lastMessage.role !== 'user' && lastMessage.role !== 'system')
+    ) {
       this.logger.error(
-        'Last message is not a user message - unexpected format',
+        'Last message is not a user or system message - unexpected format',
       );
       return;
     }
 
-    this.logger.debug('Last message is a user message');
+    this.logger.debug('Last message is a user/system message');
 
     // Check if it's a continuation prompt
     if (this.containCutOffMessage(lastMessage.content)) {
@@ -539,9 +566,6 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
       // Append to the second-last assistant message
       if (secondLastMessage && secondLastMessage.role === 'assistant') {
         secondLastMessage.content += bestConnector + newResponse;
-
-        // Remove the continuation prompt to keep conversation clean
-        messages.pop();
       } else {
         this.logger.error(
           'Second last message is not an assistant message - unexpected format',
@@ -552,6 +576,9 @@ export class ModelHandlerVSCodeLM extends ModelHandler<VSCodeLMMessage> {
           content: workspaceState.assembly.accumulatedOutput,
         });
       }
+
+      // Remove the continuation prompt to keep conversation clean
+      messages.pop();
     } else {
       this.logger.debug(
         'Last message is a regular request - creating new assistant message',
