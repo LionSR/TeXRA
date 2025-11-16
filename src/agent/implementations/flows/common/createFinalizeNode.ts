@@ -3,7 +3,7 @@ import { BaseNode } from '@agent/node';
 
 // Internal imports
 import { finalizeLifecycle } from './finalizeLifecycle';
-import { setLifecyclePhase } from './lifecycle';
+import { completeLifecycle, setLifecyclePhase } from './lifecycle';
 
 // Type imports
 import type { AgentRunShared } from './types';
@@ -56,7 +56,9 @@ export function createAgentFinalizeNode<
         ? () => {
             void options.onSuccess?.(context);
           }
-        : () => {};
+        : () => {
+            completeLifecycle(context.lifecycle);
+          };
       const handleSecondaryError = options.onSecondaryError
         ? (error: unknown) => options.onSecondaryError?.(context, error)
         : undefined;
