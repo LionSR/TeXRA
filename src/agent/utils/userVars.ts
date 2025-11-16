@@ -21,9 +21,14 @@ import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 /**
- * Build all user variables needed for prompt rendering.
+ * User variables for prompt rendering
  */
-type LoadedFileEntry = {
+export type UserVars = Record<string, unknown>;
+
+/**
+ * Information about a loaded file
+ */
+export type LoadedFileEntry = {
   path: string;
   ok: boolean;
   varName: string;
@@ -31,6 +36,17 @@ type LoadedFileEntry = {
   internal?: boolean;
 };
 
+/**
+ * Result of loading file-based variables
+ */
+type FileVarsResult = {
+  vars: UserVars;
+  files: LoadedFileEntry[];
+};
+
+/**
+ * Build all user variables needed for prompt rendering.
+ */
 export async function buildUserVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
@@ -38,25 +54,26 @@ export async function buildUserVars(
   agentPath: string,
   modelHandler: IModelHandler,
   logger: AgentLogger,
-): Promise<Record<string, any>> {
-  const userVars: Record<string, any> = {};
+): Promise<UserVars> {
   const allLoadedFiles: LoadedFileEntry[] = [];
-
-  Object.assign(userVars, getBasicVars(agentConfig, modelHandler));
-  Object.assign(userVars, await getFileVars(agentConfig));
 
   const { vars: requiredVars, files: requiredFiles } =
     await getRequiredFileVars(agentSetting, agentPath, logger);
-  Object.assign(userVars, requiredVars);
   allLoadedFiles.push(...requiredFiles);
 
   const { vars: patternVars, files: patternFiles } =
     await getPatternBasedFileVars(agentConfig, agentSetting, logger);
-  Object.assign(userVars, patternVars);
   allLoadedFiles.push(...patternFiles);
 
-  Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
-  Object.assign(userVars, getToolFlags(agentConfig, agentSetting, agentPrompt));
+  // Merge all variable sources using spread operator
+  const userVars: UserVars = {
+    ...getBasicVars(agentConfig, modelHandler),
+    ...(await getFileVars(agentConfig)),
+    ...requiredVars,
+    ...patternVars,
+    ...getOutputFilesOrder(agentConfig, agentSetting),
+    ...getToolFlags(agentConfig, agentSetting, agentPrompt),
+  };
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
@@ -69,7 +86,7 @@ export async function buildUserVars(
 function getBasicVars(
   agentConfig: AgentConfig,
   modelHandler: IModelHandler,
-): Record<string, any> {
+): UserVars {
   return {
     MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
@@ -79,10 +96,8 @@ function getBasicVars(
   };
 }
 
-async function getFileVars(
-  agentConfig: AgentConfig,
-): Promise<Record<string, any>> {
-  const userVars: Record<string, any> = {};
+async function getFileVars(agentConfig: AgentConfig): Promise<UserVars> {
+  const userVars: UserVars = {};
 
   const allInputFiles = [
     agentConfig.inputFile,
@@ -145,11 +160,8 @@ async function getRequiredFileVars(
   agentSetting: AgentSetting,
   agentPath: string,
   logger: AgentLogger,
-): Promise<{
-  vars: Record<string, any>;
-  files: LoadedFileEntry[];
-}> {
-  const userVars: Record<string, any> = {};
+): Promise<FileVarsResult> {
+  const userVars: UserVars = {};
   const files: LoadedFileEntry[] = [];
 
   if (agentSetting.requiredFiles) {
@@ -199,11 +211,8 @@ async function getPatternBasedFileVars(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   logger: AgentLogger,
-): Promise<{
-  vars: Record<string, any>;
-  files: LoadedFileEntry[];
-}> {
-  const userVars: Record<string, any> = {};
+): Promise<FileVarsResult> {
+  const userVars: UserVars = {};
   const files: LoadedFileEntry[] = [];
 
   if (agentSetting.filePatternsContain) {
@@ -213,10 +222,17 @@ async function getPatternBasedFileVars(
       const categories = patternConfig.categories;
 
       for (const category of categories) {
-        const categoryValue = (agentConfig as any)[category];
+        // Type-safe access to agent config properties
+        const categoryValue = agentConfig[
+          category as keyof AgentConfig
+        ] as unknown;
 
         if (category.endsWith('File')) {
-          if (categoryValue && categoryValue.toLowerCase().includes(pattern)) {
+          if (
+            categoryValue &&
+            typeof categoryValue === 'string' &&
+            categoryValue.toLowerCase().includes(pattern)
+          ) {
             const ok = await setVarFromFile(
               categoryValue,
               varName,
@@ -232,9 +248,12 @@ async function getPatternBasedFileVars(
             });
           }
         } else if (category.endsWith('Files')) {
-          if (categoryValue) {
+          if (categoryValue && Array.isArray(categoryValue)) {
             for (const file of categoryValue) {
-              if (file.toLowerCase().includes(pattern)) {
+              if (
+                typeof file === 'string' &&
+                file.toLowerCase().includes(pattern)
+              ) {
                 const ok = await setVarFromFile(
                   file,
                   varName,
@@ -265,8 +284,8 @@ async function getPatternBasedFileVars(
 function getOutputFilesOrder(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-): Record<string, any> {
-  const userVars: Record<string, any> = {};
+): UserVars {
+  const userVars: UserVars = {};
   if (
     Array.isArray(agentConfig.outputFiles) &&
     agentConfig.outputFiles.length > 0
@@ -286,12 +305,12 @@ export function getToolFlags(
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
   agentPrompt: AgentPrompt,
-): Record<string, any> {
+): UserVars {
   const shouldSaveInputPrompt = getConfig<boolean>(
     'texra.debug.saveInputPrompt',
     false,
   );
-  const flags: Record<string, any> = {
+  const flags: UserVars = {
     AUTO_EXTRACT_FIGURE: agentConfig.toolConfig.autoExtractFigure,
     AUTO_EXTRACT_TIKZ_FIGURE: agentConfig.toolConfig.autoExtractTikzFigure,
     INCLUDE_TEX_COUNT: agentConfig.toolConfig.attachTeXCount,
