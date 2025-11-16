@@ -4,6 +4,7 @@ import type { IModelHandler } from '@agent/modelHandlers';
 import {
   OutputHandler,
   IOutputHandler,
+  getOutputFileName,
   type RoundOutputArtifacts,
 } from '@agent/output';
 
@@ -282,8 +283,24 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Generates output file path for specified conversation round.
+   * Default implementation uses scratchpad mode detection to determine file extension.
+   * Override for specialized naming logic (e.g., MergeAgent).
    */
-  protected abstract getOutputFile(currRound: number): string;
+  protected getOutputFile(currRound: number): string {
+    const baseOutputFile = this.agentConfig.inputFile;
+    const fileExtension = this.useScratchpad
+      ? 'xml'
+      : this.agentSetting.outputExt;
+
+    return getOutputFileName(
+      baseOutputFile,
+      this.agentConfig.agent,
+      this.modelHandler.config.name,
+      fileExtension,
+      currRound,
+      this.agentConfig.editedFile || undefined,
+    );
+  }
 
   /**
    * Processes completion of conversation round.
