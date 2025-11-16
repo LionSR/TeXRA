@@ -18,7 +18,8 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
   [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
   [ModelProvider.XAI]: 'https://api.x.ai/v1',
   [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
-  [ModelProvider.DASHSCOPE]: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
+  [ModelProvider.DASHSCOPE]:
+    'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
   [ModelProvider.COPILOT]: null,
   [ModelProvider.OTHERS]: null,
 };
@@ -30,13 +31,24 @@ export interface ProxyConfig {
 }
 
 export function resolveBaseUrl(config: ProxyConfig): string | null {
-  const useOpenRouter = config.openRouterOnly || getConfig<boolean>('texra.model.useOpenRouter', false);
-  const useImprovedConnection = getConfig<boolean>('texra.model.useImprovedConnection', false);
+  const useOpenRouter =
+    config.openRouterOnly ||
+    getConfig<boolean>('texra.model.useOpenRouter', false);
+  const useImprovedConnection = getConfig<boolean>(
+    'texra.model.useImprovedConnection',
+    false,
+  );
 
   if (useImprovedConnection) {
-    const configValue = getConfig<string>('texra.model.improvedConnectionDomain', '');
+    const configValue = getConfig<string>(
+      'texra.model.improvedConnectionDomain',
+      '',
+    );
     const domain = normalizeUrl(configValue.trim() || DEFAULT_PROXY_DOMAIN);
-    if (!configValue.trim()) config.logger?.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
+    if (!configValue.trim())
+      config.logger?.debug(
+        `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
+      );
 
     if (useOpenRouter) {
       config.logger?.debug(`Using proxy for ${config.provider} for OpenRouter`);
@@ -45,7 +57,9 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
 
     const path = PROXY_PATHS[config.provider];
     if (path) {
-      config.logger?.debug(`Using proxy for ${config.provider}: with ${domain}/${path}`);
+      config.logger?.debug(
+        `Using proxy for ${config.provider}: with ${domain}/${path}`,
+      );
       return `https://${domain}/${path}`;
     }
   }

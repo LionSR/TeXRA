@@ -223,11 +223,16 @@ async function getPatternBasedFileVars(
 
       for (const category of categories) {
         // Type-safe access to agent config properties
-        const categoryValue =
-          agentConfig[category as keyof AgentConfig] as unknown;
+        const categoryValue = agentConfig[
+          category as keyof AgentConfig
+        ] as unknown;
 
         if (category.endsWith('File')) {
-          if (categoryValue && categoryValue.toLowerCase().includes(pattern)) {
+          if (
+            categoryValue &&
+            typeof categoryValue === 'string' &&
+            categoryValue.toLowerCase().includes(pattern)
+          ) {
             const ok = await setVarFromFile(
               categoryValue,
               varName,
@@ -243,9 +248,12 @@ async function getPatternBasedFileVars(
             });
           }
         } else if (category.endsWith('Files')) {
-          if (categoryValue) {
+          if (categoryValue && Array.isArray(categoryValue)) {
             for (const file of categoryValue) {
-              if (file.toLowerCase().includes(pattern)) {
+              if (
+                typeof file === 'string' &&
+                file.toLowerCase().includes(pattern)
+              ) {
                 const ok = await setVarFromFile(
                   file,
                   varName,
