@@ -26,7 +26,7 @@ import { normalizeUrl } from '@utils/urlUtils';
 
 // Local file imports
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
-import { ProxyConfigResolver } from './support/ProxyConfigResolver';
+import { resolveBaseUrl } from './support/ProxyConfigResolver';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -204,7 +204,7 @@ export abstract class ModelHandler<
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
-    return ProxyConfigResolver.resolveBaseUrl({
+    return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
       logger: this.logger,
