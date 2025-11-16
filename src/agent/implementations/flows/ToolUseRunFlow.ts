@@ -190,7 +190,10 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
-  const finalizeNode = createAgentFinalizeNode<ToolUseRunShared<C>>({
+  const finalizeNode = createAgentFinalizeNode<
+    ToolUseRunShared<C>,
+    'error' | 'stopped'
+  >({
     finalizePhase: 'finalize',
     computeStatus: ({ lifecycle }) =>
       lifecycle.status === 'error' ? 'error' : 'stopped',

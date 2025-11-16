@@ -11,14 +11,15 @@ import type { FinalizeNodeContext } from './nodeExecution';
 
 export interface AgentFinalizeNodeOptions<
   Shared extends AgentRunShared<any, any, any, any>,
+  Status extends string = string,
 > {
   finalizePhase: Shared['lifecycle']['phase'];
   computeStatus(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
-  ): string;
+  ): Status;
   runFinalize(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
-    status: string,
+    status: Status,
   ): Promise<void>;
   runCleanup(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
@@ -34,7 +35,8 @@ export interface AgentFinalizeNodeOptions<
 
 export function createAgentFinalizeNode<
   Shared extends AgentRunShared<any, any, any, any>,
->(options: AgentFinalizeNodeOptions<Shared>): BaseNode<Shared> {
+  Status extends string = string,
+>(options: AgentFinalizeNodeOptions<Shared, Status>): BaseNode<Shared> {
   return new (class AgentFinalizeNode extends BaseNode<Shared> {
     async prep(
       shared: Shared,
@@ -56,7 +58,7 @@ export function createAgentFinalizeNode<
         runCleanup: () => options.runCleanup(context),
         onSuccess: options.onSuccess
           ? () => options.onSuccess?.(context)
-          : undefined,
+          : () => {},
         onSecondaryError: options.onSecondaryError
           ? (error) => options.onSecondaryError?.(context, error)
           : undefined,
