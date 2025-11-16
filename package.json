@@ -35,7 +35,6 @@
             },
             "default": [
               "generic",
-              "generic_multiple",
               "correct",
               "polish",
               "draw",
