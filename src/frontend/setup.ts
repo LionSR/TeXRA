@@ -29,13 +29,8 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
 
   // Only proceed if version has changed
   if (currentVersion === lastKnownVersion) {
-    console.log('Extension version unchanged, skipping agent copy');
     return;
   }
-
-  console.log(
-    `Extension version changed from ${lastKnownVersion} to ${currentVersion}, updating agents`,
-  );
 
   const resourcesPath = path.join(context.extensionPath, 'resources', 'agents');
   const resourcesToolUse = path.join(
@@ -45,14 +40,10 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
   );
   const globalStoragePath = GlobalStorageFS.fullPath('agents');
 
-  console.log('Resources path:', resourcesPath);
-  console.log('Global storage path:', globalStoragePath);
-
   try {
     // Ensure the global storage agents directory exists
     await GlobalStorageFS.ensureDir('agents');
     await GlobalStorageFS.ensureDir('tool_use_agents');
-    console.log('Created or verified global storage directory');
 
     // Start recursive copy from root
     await copyDirToFS(resourcesPath, 'agents', GlobalStorageFS);
@@ -60,9 +51,8 @@ export async function copyDefaultAgents(context: vscode.ExtensionContext) {
 
     // Update the stored version after successful copy
     await globalSM.update(GlobalStateKey.LAST_KNOWN_VERSION, currentVersion);
-    console.log('Updated stored extension version');
   } catch (err) {
-    console.error('Error copying default agents:', err);
+    logger.error('extension', `Error copying default agents: ${err}`);
   }
 }
 
