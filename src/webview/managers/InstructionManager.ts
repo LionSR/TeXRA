@@ -195,9 +195,7 @@ export class InstructionManager {
     );
   }
 
-  async handleClipboardImage(
-    message: ClipboardImageMessage,
-  ): Promise<void> {
+  async handleClipboardImage(message: ClipboardImageMessage): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;

@@ -6,9 +6,7 @@ export type NodeExecResult<T> =
   | { result: T; error?: undefined }
   | { error: unknown; result?: undefined };
 
-export type NodeExecVoidResult =
-  | { error?: undefined }
-  | { error: unknown };
+export type NodeExecVoidResult = { error?: undefined } | { error: unknown };
 
 export async function runNodeExecution<T>(
   exec: () => Promise<T>,

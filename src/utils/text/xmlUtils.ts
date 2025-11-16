@@ -358,8 +358,7 @@ export function extractContentFromXMLbyTagMultiple(
         if (Array.isArray(documents)) {
           return documents.map((doc) => ({
             content:
-              (doc as Record<string, unknown>).content?.toString().trim() ??
-              '',
+              (doc as Record<string, unknown>).content?.toString().trim() ?? '',
             name: (doc as Record<string, unknown>).name as string,
           }));
         }

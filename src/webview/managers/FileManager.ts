@@ -463,9 +463,7 @@ export class FileManager {
     return { dir, baseName, ext, commitHash };
   }
 
-  async selectOutputFiles(
-    currentInputFile?: string,
-  ): Promise<string[] | null> {
+  async selectOutputFiles(currentInputFile?: string): Promise<string[] | null> {
     const workspacePath = WorkspaceFS.getPath();
     if (!workspacePath) {
       await showLoggedMessage(CHANNEL, 'No workspace folder open');
