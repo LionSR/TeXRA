@@ -24,7 +24,6 @@ import {
   type ToolUseRunState,
   type ToolUseRunPhase,
 } from '@agent/implementations/flows/ToolUseRunFlow';
-import { runAgentFlow } from '@agent/implementations/flows/common/AgentRunFlowRunner';
 // Type imports
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
@@ -140,8 +139,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     const lifecycle = createLifecycleState<ToolUseRunPhase>('idle');
 
     try {
-      await runAgentFlow<ToolUseRunShared<C>>({
-        agent: this,
+      await this.executeAgentRunFlow<ToolUseRunShared<C>>({
         lifecycle,
         hookOverrides: {
           start: async () => undefined,
@@ -190,7 +188,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           },
           cleanup: async () => {
             await baseHooks.cleanup();
-            this.activeState = null;
             this.sessionLifecycle.dispose();
           },
         }),

@@ -8,22 +8,18 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
-import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
-// Type imports
-import type {
-  AgentLifecycleState,
-  AgentRunHooks,
-  AgentRunShared,
-} from '@agent/implementations/flows/common/types';
-// Internal imports
 import {
+  createAgentRunFlow,
+  createAgentFinalizeNode,
   beginLifecyclePhase,
   failLifecycle,
-  setLifecyclePhase,
   setLifecycleStatus,
-} from '@agent/implementations/flows/common/lifecycle';
-import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
-import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
+  runNodeExecution,
+  type AgentLifecycleState,
+  type AgentRunHooks,
+  type AgentRunShared,
+  type NodeExecResult,
+} from '@agent/implementations/flows/common';
 
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
@@ -32,19 +28,9 @@ interface ToolUsePrepareResult<C> {
   cycleOptions: ToolUseCycleOptions<C>;
 }
 
-interface ToolUsePrepareExecResult<C> {
-  result?: ToolUsePrepareResult<C>;
-  error?: unknown;
-}
+type ToolUsePrepareExecResult<C> = NodeExecResult<ToolUsePrepareResult<C>>;
 
-interface ToolUseCycleExecResult {
-  error?: unknown;
-}
-
-interface ToolUseFinalizePrep<C> {
-  hooks: ToolUseRunHooks<C>;
-  lifecycle: ToolUseRunLifecycle;
-}
+type ToolUseCycleExecResult = NodeExecResult<void>;
 
 export type ToolUseRunPhase =
   | 'idle'
@@ -104,18 +90,14 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
   async exec(
     shared: ToolUseRunShared<C>,
   ): Promise<ToolUsePrepareExecResult<C>> {
-    try {
+    return runNodeExecution(async () => {
       const prepared = await shared.hooks.prepareState();
       const cycleOptions = shared.hooks.buildCycleOptions(prepared.store);
       return {
-        result: {
-          ...prepared,
-          cycleOptions,
-        },
-      };
-    } catch (error) {
-      return { error };
-    }
+        ...prepared,
+        cycleOptions,
+      } satisfies ToolUsePrepareResult<C>;
+    });
   }
 
   async post(
@@ -153,7 +135,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
     const { hooks, state } = shared;
     const cycleOptions = state.cycleOptions!;
 
-    try {
+    return runNodeExecution(async () => {
       while (true) {
         if (!state.shouldSkipCycle) {
           if (!state.store) {
@@ -165,7 +147,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
         }
 
         if (hooks.checkInterruption()) {
-          return {};
+          return;
         }
 
         if (hooks.hasQueuedFollowUp()) {
@@ -176,7 +158,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
 
         const followUp = await hooks.waitForFollowUp();
         if (!followUp || hooks.checkInterruption()) {
-          return {};
+          return;
         }
 
         await hooks.markRunning();
@@ -187,9 +169,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
         );
         state.conversation = [...updatedMessages];
       }
-    } catch (error) {
-      return { error };
-    }
+    });
   }
 
   async post(
@@ -207,51 +187,36 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 }
 
-class ToolUseFinalizeNode<C> extends BaseNode<ToolUseRunShared<C>> {
-  async prep(shared: ToolUseRunShared<C>): Promise<ToolUseFinalizePrep<C>> {
-    setLifecyclePhase(shared.lifecycle, 'finalize');
-    return {
-      hooks: shared.hooks,
-      lifecycle: shared.lifecycle,
-    };
-  }
-
-  async exec(prepRes: ToolUseFinalizePrep<C>): Promise<void> {
-    const status = prepRes.lifecycle.status === 'error' ? 'error' : 'stopped';
-    await finalizeLifecycle({
-      lifecycle: prepRes.lifecycle,
-      runFinalize: async () => {
-        await prepRes.hooks.clearPersistedSnapshot();
-        await prepRes.hooks.end(status);
-      },
-      runCleanup: () => Promise.resolve(prepRes.hooks.cleanup()),
-      onSuccess: () => setLifecycleStatus(prepRes.lifecycle, 'completed'),
-      onSecondaryError: (error) =>
-        prepRes.hooks.logFinalizeWarning?.(
-          'Additional finalize error encountered.',
-          error,
-        ),
-    });
-  }
-}
-
 export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
-  const initNode = new AgentInitNode<ToolUseRunShared<C>>({
-    phase: 'init',
-    onSuccess: (shared) => {
-      beginLifecyclePhase(shared.lifecycle, 'prepare');
-      return FlowTransition.EXECUTE;
-    },
-  });
   const prepareNode = new ToolUsePrepareNode<C>();
   const cycleNode = new ToolUseCycleNode<C>();
-  const finalizeNode = new ToolUseFinalizeNode<C>();
+  const finalizeNode = createAgentFinalizeNode<ToolUseRunShared<C>>({
+    finalizePhase: 'finalize',
+    computeStatus: ({ lifecycle }) =>
+      lifecycle.status === 'error' ? 'error' : 'stopped',
+    runFinalize: async ({ hooks }, status) => {
+      await hooks.clearPersistedSnapshot();
+      await hooks.end(status);
+    },
+    runCleanup: async ({ hooks }) => {
+      await hooks.cleanup();
+    },
+    onSuccess: ({ lifecycle }) => setLifecycleStatus(lifecycle, 'completed'),
+    onSecondaryError: ({ hooks }, error) =>
+      hooks.logFinalizeWarning?.('Additional finalize error encountered.', error),
+  });
 
-  return buildRunFlow({
-    init: initNode,
+  return createAgentRunFlow<ToolUseRunShared<C>>({
+    init: {
+      phase: 'init',
+      onSuccess: (shared) => {
+        beginLifecyclePhase(shared.lifecycle, 'prepare');
+        return FlowTransition.EXECUTE;
+      },
+    },
     finalize: finalizeNode,
-    links: [
-      { from: initNode, on: FlowTransition.EXECUTE, to: prepareNode },
+    links: ({ init }) => [
+      { from: init, on: FlowTransition.EXECUTE, to: prepareNode },
       { from: prepareNode, on: FlowTransition.EXECUTE, to: cycleNode },
       { from: prepareNode, on: FlowTransition.FINALIZE },
       { from: cycleNode, on: FlowTransition.FINALIZE },
