@@ -40,7 +40,7 @@ const stringArrayField = () =>
     .transform((value) => value ?? []);
 
 const AgentConfigBaseSchema = z
-  .object({
+  .strictObject({
     model: z.string().prefault('gemini25p'),
     agent: z.string().prefault('correct'),
     instruction: z.string().prefault(''),

@@ -4,6 +4,7 @@ import * as path from 'path';
 
 // Local imports - agent
 import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
@@ -139,9 +140,7 @@ export class LatexDiffManager {
       await this.fileService.mirrorWorkspaceFile(target);
     } catch (error) {
       this.logger.warn(
-        `Unable to mirror workspace dependency ${target}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Unable to mirror workspace dependency ${target}: ${toErrorMessage(error)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
@@ -428,7 +427,7 @@ export class LatexDiffManager {
       }
     } catch (err) {
       this.logger.error(
-        `Error during latexdiff processing: ${err instanceof Error ? err.message : String(err)}`,
+        `Error during latexdiff processing: ${toErrorMessage(err)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );

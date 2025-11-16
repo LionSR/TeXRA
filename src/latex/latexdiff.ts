@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import {
   logErrorMessage,
   formatError,
+  toErrorMessage,
 } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -223,7 +224,7 @@ export class LaTeXdiffService {
           results.failed.push(inputFile);
           logger.error(
             this.channel,
-            `Error processing ${inputFile}: ${err instanceof Error ? err.message : String(err)}`,
+            `Error processing ${inputFile}: ${toErrorMessage(err)}`,
           );
         }
       }

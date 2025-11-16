@@ -3,7 +3,10 @@ import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import nodePandoc from 'node-pandoc';
 
-// Local imports - log
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - utils
 import * as logger from '@logger/logUtils';
 import { K_SLICE } from '@utils/config';
 import { checkToolInstalled } from '@utils/system/toolUtils';
@@ -135,10 +138,7 @@ async function convertWithPandoc(text: string): Promise<string | null> {
     });
     return result;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Pandoc conversion failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Pandoc conversion failed: ${toErrorMessage(err)}`);
     return null;
   }
 }
@@ -146,14 +146,14 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 /**
  * Get a string representation of an object's structure without its values
  */
-function getObjectStructure(obj: any): string {
+function getObjectStructure(obj: unknown): string {
   if (Array.isArray(obj)) {
     return `Array(${obj.length})`;
   }
   if (obj && typeof obj === 'object') {
     const keys = Object.keys(obj);
     const structure = keys.map((key) => {
-      const value = obj[key];
+      const value = (obj as Record<string, unknown>)[key];
       return `${key}: ${getObjectStructure(value)}`;
     });
     return `{${structure.join(', ')}}`;
@@ -171,10 +171,7 @@ export function addCdataToTags(xmlData: string, tags: string[]): string {
       return result.replace(pattern, '$1<![CDATA[$2]]>$3');
     }, xmlData);
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error adding CDATA to tags: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error adding CDATA to tags: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -304,7 +301,7 @@ export function filterTagsFromText(
  * We should have a fall back to regex if this fails
  */
 export function extractContentFromXMLbyTag(
-  root: Record<string, any>,
+  root: Record<string, unknown>,
   documentTag: string,
 ): string | null {
   if (!root || typeof root !== 'object') {
@@ -338,7 +335,7 @@ export function extractContentFromXMLbyTag(
  * we should have a fall back to regex if this fails
  */
 export function extractContentFromXMLbyTagMultiple(
-  root: Record<string, any>,
+  root: Record<string, unknown>,
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
@@ -357,11 +354,13 @@ export function extractContentFromXMLbyTagMultiple(
         typeof container === 'object' &&
         'document' in container
       ) {
-        const documents = container.document;
+        const documents = (container as Record<string, unknown>).document;
         if (Array.isArray(documents)) {
           return documents.map((doc) => ({
-            content: doc.content?.trim() || '',
-            name: doc.name,
+            content:
+              (doc as Record<string, unknown>).content?.toString().trim() ??
+              '',
+            name: (doc as Record<string, unknown>).name as string,
           }));
         }
         logger.error(
@@ -379,7 +378,7 @@ export function extractContentFromXMLbyTagMultiple(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting multiple content from tag: ${err instanceof Error ? err.message : String(err)}. Structure: ${getObjectStructure(root)}`,
+      `Error extracting multiple content from tag: ${toErrorMessage(err)}. Structure: ${getObjectStructure(root)}`,
     );
     throw err;
   }

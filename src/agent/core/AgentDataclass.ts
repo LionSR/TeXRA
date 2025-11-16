@@ -193,7 +193,7 @@ export function hasEndTag(
 /** Zod schema for AgentPrompt validation */
 const promptEntrySchema = z.union([z.string(), z.array(z.string())]);
 
-export const AgentPromptSchema = z.object({
+export const AgentPromptSchema = z.strictObject({
   systemPrompt: z.string().prefault(''),
   userPrefix: z.string().prefault(''),
   userRequest: promptEntrySchema.prefault(''),

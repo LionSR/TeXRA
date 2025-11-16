@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { formatToolOutput, toPosixPath } from '@tools/utils';
@@ -40,8 +41,9 @@ export class ArxivDownloadTool extends defineTool({
         input.autoIndent ?? true,
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new ToolError(`Failed to download arXiv source: ${message}`);
+      throw new ToolError(
+        `Failed to download arXiv source: ${toErrorMessage(err)}`,
+      );
     }
 
     const relativeRaw = WorkspaceFS.relativePath(downloadPath);
@@ -59,8 +61,7 @@ export class ArxivDownloadTool extends defineTool({
         listingOutput = `Failed to list directory: ${listingResult.error}`;
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      listingOutput = `Failed to list directory: ${message}`;
+      listingOutput = `Failed to list directory: ${toErrorMessage(err)}`;
     }
 
     const summary = `Downloaded arXiv source to ${displayPath}`;

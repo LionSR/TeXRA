@@ -1,4 +1,5 @@
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS } from '@utils/files';
@@ -17,7 +18,7 @@ export class DiffFileProcessor {
     } catch (err) {
       logger.error(
         this.channel,
-        `Error processing diff file: ${err instanceof Error ? err.message : String(err)}`,
+        `Error processing diff file: ${toErrorMessage(err)}`,
       );
     }
   }
@@ -89,7 +90,7 @@ export class DiffFileProcessor {
 
       // Add line if not in add block
       if (!addBlock) {
-        newContent += line + '\n';
+        newContent += `${line}\n`;
       }
 
       // Add extra newline after color package

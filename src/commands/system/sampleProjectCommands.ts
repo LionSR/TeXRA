@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - fs
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, copyDirToFS } from '@utils/files';
 
@@ -57,7 +58,7 @@ export function registerSampleProjectCommands(
           await vscode.window.showTextDocument(document, { preview: false });
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = toErrorMessage(err);
         logger.error(CHANNEL, `Failed to create sample project: ${message}`);
         void vscode.window.showErrorMessage(
           `Failed to create sample project: ${message}`,

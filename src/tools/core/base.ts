@@ -1,10 +1,13 @@
 // Third-party imports
 import { ZodError, type ZodType } from 'zod';
 
-// Local imports - tools
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - model
 import type { ToolDefinition } from '@model';
 
-// Internal imports
+// Internal imports - tools
 import { ToolResult, toolResult } from '@tools/result';
 
 export abstract class BaseTool<T> {
@@ -47,7 +50,7 @@ export abstract class BaseTool<T> {
           diagnostics: err.issues,
         });
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       const diagnostics =
         err instanceof Error ? { name: err.name, stack: err.stack } : undefined;
       return toolResult({

@@ -8,7 +8,7 @@ import { defineTool } from '@tools/core/define';
 // Local imports - tools
 import { executeWolframCode } from './wolframScriptUtils';
 
-const WolframInputSchema = z.object({
+const WolframInputSchema = z.strictObject({
   code: z.string(),
   timeout: z.number().optional(),
 });

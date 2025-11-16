@@ -1,18 +1,47 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Workspace assembly state keeps track of the model's textual output so the
-// agent can resume mid-conversation without rebuilding strings from scratch.
+/**
+ * Thinking block from reasoning models.
+ * This represents the internal reasoning/thinking output from models like Claude Sonnet 4.
+ * Uses a flexible structure to accommodate different provider formats.
+ */
+export interface ThinkingBlock {
+  type: string;
+  thinking?: unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * Workspace assembly state keeps track of the model's textual output so the
+ * agent can resume mid-conversation without rebuilding strings from scratch.
+ */
 export class ResponseAssemblyState {
-  public lastResponse = '';
-  public accumulatedOutput = '';
+  private _lastResponse = '';
+  private _accumulatedOutput = '';
+
+  get lastResponse(): string {
+    return this._lastResponse;
+  }
+
+  set lastResponse(value: string) {
+    this._lastResponse = value;
+  }
+
+  get accumulatedOutput(): string {
+    return this._accumulatedOutput;
+  }
+
+  set accumulatedOutput(value: string) {
+    this._accumulatedOutput = value;
+  }
 
   updateLastResponse(response: string): void {
-    this.lastResponse = response;
+    this._lastResponse = response;
   }
 
   updateAccumulatedOutput(output: string): void {
-    this.accumulatedOutput = output;
+    this._accumulatedOutput = output;
   }
 }
 
@@ -29,10 +58,10 @@ export class MediaAttachmentState {
 }
 
 export class ReasoningCacheState {
-  public thinkingBlocks: any[] = [];
+  public thinkingBlocks: ThinkingBlock[] = [];
   public thinkingAdded = false;
 
-  get primaryBlock(): any | null {
+  get primaryBlock(): ThinkingBlock | null {
     return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
   }
 
@@ -50,6 +79,13 @@ export class DocumentStatsState {
   }
 }
 
+export const ThinkingBlockSchema = z
+  .object({
+    type: z.string(),
+    thinking: z.unknown().optional(),
+  })
+  .passthrough();
+
 export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   assembly: z.strictObject({
     lastResponse: z.string(),
@@ -57,7 +93,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   }),
   media: z.strictObject({ files: z.array(z.string()) }),
   reasoning: z.strictObject({
-    thinkingBlocks: z.array(z.unknown()),
+    thinkingBlocks: z.array(ThinkingBlockSchema),
     thinkingAdded: z.boolean(),
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
