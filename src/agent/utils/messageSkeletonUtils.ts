@@ -3,7 +3,10 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-import { isPlainObject, isContentItemArray } from '@common/types/MessageSkeleton';
+import {
+  isPlainObject,
+  isContentItemArray,
+} from '@common/types/MessageSkeleton';
 
 /**
  * Creates a skeleton representation of a message object for debugging.
@@ -38,21 +41,23 @@ export function messageToSkeleton(
           if (isPlainObject(item)) {
             const itemSkeleton: any = { type: item.type };
 
-            if (item.text) {
+            if (item.text && typeof item.text === 'string') {
+              const text = item.text as string;
               const truncatedText =
-                item.text.length > maxContentLength
-                  ? `${item.text.substring(0, maxContentLength)}... (${item.text.length} chars)`
-                  : item.text;
+                text.length > maxContentLength
+                  ? `${text.substring(0, maxContentLength)}... (${text.length} chars)`
+                  : text;
               itemSkeleton.text = truncatedText;
             }
 
-            if (item.source) {
-              itemSkeleton.source = { type: item.source.type };
-              if (item.source.media_type) {
-                itemSkeleton.source.media_type = item.source.media_type;
+            if (item.source && isPlainObject(item.source)) {
+              const source = item.source as any;
+              itemSkeleton.source = { type: source.type };
+              if (source.media_type) {
+                itemSkeleton.source.media_type = source.media_type;
               }
-              if (item.source.data) {
-                itemSkeleton.source.data = `[base64 data: ${item.source.data.length} chars]`;
+              if (source.data && typeof source.data === 'string') {
+                itemSkeleton.source.data = `[base64 data: ${source.data.length} chars]`;
               }
             }
 
@@ -60,8 +65,8 @@ export function messageToSkeleton(
               itemSkeleton.cache_control = item.cache_control;
             }
 
-            if (item.thinking) {
-              itemSkeleton.thinking = `[thinking data: ${item.thinking.length} chars]`;
+            if (item.thinking && typeof item.thinking === 'string') {
+              itemSkeleton.thinking = `[thinking data: ${(item.thinking as string).length} chars]`;
             }
 
             return itemSkeleton;
@@ -87,7 +92,10 @@ export function messageToSkeleton(
       result[key] = `[data: ${value.length} chars]`;
     } else if (isPlainObject(value)) {
       // Recursively process nested objects
-      result[key] = messageToSkeleton(value as ProviderMessage, maxContentLength);
+      result[key] = messageToSkeleton(
+        value as ProviderMessage,
+        maxContentLength,
+      );
     } else {
       // Pass through primitive values
       result[key] = value;
