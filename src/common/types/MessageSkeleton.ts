@@ -28,6 +28,6 @@ export function isContentItemArray(
 ): content is Array<Record<string, unknown>> {
   return (
     Array.isArray(content) &&
-    content.every((item) => typeof item === 'object' && item !== null)
+    content.every((item) => typeof item === 'object' && item !== null && !Array.isArray(item))
   );
 }
