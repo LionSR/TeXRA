@@ -16,7 +16,9 @@ export type MessageSkeleton = any;
 /**
  * Type guard to check if a value is an object (not null, not array)
  */
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(
+  value: unknown,
+): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -28,6 +30,9 @@ export function isContentItemArray(
 ): content is Array<Record<string, unknown>> {
   return (
     Array.isArray(content) &&
-    content.every((item) => typeof item === 'object' && item !== null && !Array.isArray(item))
+    content.every(
+      (item) =>
+        typeof item === 'object' && item !== null && !Array.isArray(item),
+    )
   );
 }
