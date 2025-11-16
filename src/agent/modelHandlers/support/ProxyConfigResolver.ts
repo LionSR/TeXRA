@@ -40,15 +40,18 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   );
 
   if (useImprovedConnection) {
+    // Use empty string as default so we can detect when config is not set
+    // (using DEFAULT_PROXY_DOMAIN as default would prevent debug logging)
     const configValue = getConfig<string>(
       'texra.model.improvedConnectionDomain',
       '',
     );
     const domain = normalizeUrl(configValue.trim() || DEFAULT_PROXY_DOMAIN);
-    if (!configValue.trim())
+    if (!configValue.trim()) {
       config.logger?.debug(
         `Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`,
       );
+    }
 
     if (useOpenRouter) {
       config.logger?.debug(`Using proxy for ${config.provider} for OpenRouter`);
