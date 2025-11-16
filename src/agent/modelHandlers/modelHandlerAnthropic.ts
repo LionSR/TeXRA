@@ -44,7 +44,10 @@ import {
   ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import {
+  AgentWorkspaceState,
+  ThinkingBlock,
+} from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -1410,7 +1413,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
         if (Array.isArray(assistantMessage.content)) {
           assistantMessage.content.push(
-            ...workspaceState.reasoning.thinkingBlocks,
+            ...(workspaceState.reasoning
+              .thinkingBlocks as unknown as ContentBlockParam[]),
           );
         }
         // Clear cached thinking so the next response can store fresh blocks
@@ -1532,7 +1536,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
-        workspaceState.reasoning.thinkingBlocks = thinkingBlocks;
+        workspaceState.reasoning.thinkingBlocks =
+          thinkingBlocks as unknown as ThinkingBlock[];
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
@@ -1576,7 +1581,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       workspaceState.reasoning.thinkingBlocks.length > 0
     ) {
       // Anthropic models expect thinking blocks before text
-      content.push(...workspaceState.reasoning.thinkingBlocks);
+      content.push(
+        ...(workspaceState.reasoning
+          .thinkingBlocks as unknown as ContentBlockParam[]),
+      );
       // Clear cached thinking so the next response can store fresh blocks
       workspaceState.resetReasoning();
     }
