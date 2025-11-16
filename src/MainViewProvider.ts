@@ -52,16 +52,7 @@ export class MainViewProvider
           return false;
         });
 
-      // Log the result for diagnostics
-      registerCommandPromise.then((registered) => {
-        if (registered) {
-          console.log('Registered texra.getWebviewView command');
-        } else {
-          console.log(
-            'Command texra.getWebviewView already exists, skipped registration',
-          );
-        }
-      });
+      // Command registration is handled asynchronously
     }
 
     // Always set up notifier for this instance, regardless of command registration

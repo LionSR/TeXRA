@@ -9,22 +9,16 @@ import type {
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
 // Internal imports
-import { AgentInitNode } from '@agent/implementations/flows/common/AgentInitNode';
-// Type imports
-import type {
-  AgentLifecycleState,
-  AgentRunHooks,
-  AgentRunShared,
-} from '@agent/implementations/flows/common/types';
-// Internal imports
 import {
+  createAgentRunFlow,
+  createAgentFinalizeNode,
   beginLifecyclePhase,
   completeLifecycle,
   failLifecycle,
-  setLifecyclePhase,
-} from '@agent/implementations/flows/common/lifecycle';
-import { buildRunFlow } from '@agent/implementations/flows/common/buildRunFlow';
-import { finalizeLifecycle } from '@agent/implementations/flows/common/finalizeLifecycle';
+  type AgentLifecycleState,
+  type AgentRunHooks,
+  type AgentRunShared,
+} from '@agent/implementations/flows/common';
 
 export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 
@@ -61,11 +55,6 @@ interface ReflectionRoundPrep<C> {
 interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
   result?: ReflectionRoundResult;
   error?: unknown;
-}
-
-interface ReflectionFinalizePrep {
-  hooks: ReflectionRunHooks;
-  lifecycle: ReflectionRunLifecycle;
 }
 
 class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
@@ -170,45 +159,37 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
   }
 }
 
-class ReflectionFinalizeNode<C> extends BaseNode<ReflectionRunShared<C>> {
-  async prep(shared: ReflectionRunShared<C>): Promise<ReflectionFinalizePrep> {
-    setLifecyclePhase(shared.lifecycle, 'finalize');
-    return {
-      hooks: shared.hooks,
-      lifecycle: shared.lifecycle,
-    };
-  }
-
-  async exec(prepRes: ReflectionFinalizePrep): Promise<void> {
-    const status = prepRes.lifecycle.error ? 'error' : 'stopped';
-    await finalizeLifecycle({
-      lifecycle: prepRes.lifecycle,
-      runFinalize: () => Promise.resolve(prepRes.hooks.end(status)),
-      runCleanup: () => Promise.resolve(prepRes.hooks.cleanup()),
-      onSuccess: () => completeLifecycle(prepRes.lifecycle),
-    });
-  }
-}
-
 export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
-  const initNode = new AgentInitNode<ReflectionRunShared<C>>({
-    phase: 'init',
-    beforeInitialize: (shared) => {
-      shared.hooks.resetPromptBuilder();
-    },
-    onSuccess: (shared) => {
-      beginLifecyclePhase(shared.lifecycle, 'rounds');
-      return FlowTransition.ROUND;
-    },
-  });
   const roundNode = new ReflectionRoundNode<C>();
-  const finalizeNode = new ReflectionFinalizeNode<C>();
+  const finalizeNode = createAgentFinalizeNode<
+    ReflectionRunShared<C>,
+    'error' | 'stopped'
+  >({
+    finalizePhase: 'finalize',
+    computeStatus: ({ lifecycle }) => (lifecycle.error ? 'error' : 'stopped'),
+    runFinalize: async ({ hooks }, status) => {
+      await hooks.end(status);
+    },
+    runCleanup: async ({ hooks }) => {
+      await hooks.cleanup();
+    },
+    onSuccess: ({ lifecycle }) => completeLifecycle(lifecycle),
+  });
 
-  return buildRunFlow({
-    init: initNode,
+  return createAgentRunFlow<ReflectionRunShared<C>>({
+    init: {
+      phase: 'init',
+      beforeInitialize: (shared) => {
+        shared.hooks.resetPromptBuilder();
+      },
+      onSuccess: (shared) => {
+        beginLifecyclePhase(shared.lifecycle, 'rounds');
+        return FlowTransition.ROUND;
+      },
+    },
     finalize: finalizeNode,
-    links: [
-      { from: initNode, on: FlowTransition.ROUND, to: roundNode },
+    links: ({ init }) => [
+      { from: init, on: FlowTransition.ROUND, to: roundNode },
       { from: roundNode, on: FlowTransition.CONTINUE, to: roundNode },
       { from: roundNode, on: FlowTransition.FINALIZE },
     ],

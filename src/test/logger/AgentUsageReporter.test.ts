@@ -22,7 +22,7 @@ describe('AgentUsageReporter', () => {
 
     let recordedStats: ExtendedTokenUsageStats | undefined;
     const loggerStub = {
-      withCurrentGroup: <T,>(_: (groupId: string) => T): T | undefined =>
+      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined =>
         undefined,
       statistics: (stats: ExtendedTokenUsageStats) => {
         recordedStats = stats;

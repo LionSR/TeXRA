@@ -411,8 +411,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _handleStateRestoration(state) {
-    console.log('Restoring state:', state);
-
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
 

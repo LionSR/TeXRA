@@ -44,7 +44,10 @@ import {
   ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import {
+  AgentWorkspaceState,
+  ThinkingBlock,
+} from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
@@ -1375,38 +1378,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
               text: bestConnector + newResponse,
             } as ContentBlockParam);
           }
-          // Add the updated text content
-          // If there are existing text blocks, update with new content
-          // Otherwise create a new text block with the new returned thinking block if it is not after cut off
-          // we should not add the new thinking block if it is after cut off
-          // but we still need to add at least somewhere...
-
-          // let newThinkingContent: any[] = [];
-
-          // if (workspaceState.reasoning.thinkingAdded && workspaceState.reasoning.thinkingBlocks.length > 0) {
-          //   // if we have thinking blocks, then we use them
-          //   this.logger.debug(
-          //     `Using ${workspaceState.reasoning.thinkingBlocks.length} existing thinking blocks from previous message`,
-          //   );
-          //   newThinkingContent = [...workspaceState.reasoning.thinkingBlocks];
-          // }
-
-          // let newContent: any[] = [];
-
-          // if (textBlocks.length > 0) {
-          //   newContent = [...newThinkingContent, ...textBlocks];
-          // } else {
-          //   newContent = [
-          //     ...newThinkingContent,
-          //     {
-          //       type: 'text',
-          //       text: workspaceState.assembly.accumulatedOutput,
-          //     },
-          //   ];
-          // }
-
-          // Replace the content of the second last message with our new content array
-          // secondLastMessage.content = newContent;
         }
 
         if (Array.isArray(secondLastMessage.content)) {
@@ -1442,7 +1413,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
         if (Array.isArray(assistantMessage.content)) {
           assistantMessage.content.push(
-            ...workspaceState.reasoning.thinkingBlocks,
+            ...(workspaceState.reasoning
+              .thinkingBlocks as unknown as ContentBlockParam[]),
           );
         }
         // Clear cached thinking so the next response can store fresh blocks
@@ -1564,7 +1536,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
-        workspaceState.reasoning.thinkingBlocks = thinkingBlocks;
+        workspaceState.reasoning.thinkingBlocks =
+          thinkingBlocks as unknown as ThinkingBlock[];
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
@@ -1608,7 +1581,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       workspaceState.reasoning.thinkingBlocks.length > 0
     ) {
       // Anthropic models expect thinking blocks before text
-      content.push(...workspaceState.reasoning.thinkingBlocks);
+      content.push(
+        ...(workspaceState.reasoning
+          .thinkingBlocks as unknown as ContentBlockParam[]),
+      );
       // Clear cached thinking so the next response can store fresh blocks
       workspaceState.resetReasoning();
     }

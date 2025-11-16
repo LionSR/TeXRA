@@ -146,14 +146,14 @@ async function convertWithPandoc(text: string): Promise<string | null> {
 /**
  * Get a string representation of an object's structure without its values
  */
-function getObjectStructure(obj: any): string {
+function getObjectStructure(obj: unknown): string {
   if (Array.isArray(obj)) {
     return `Array(${obj.length})`;
   }
   if (obj && typeof obj === 'object') {
     const keys = Object.keys(obj);
     const structure = keys.map((key) => {
-      const value = obj[key];
+      const value = (obj as Record<string, unknown>)[key];
       return `${key}: ${getObjectStructure(value)}`;
     });
     return `{${structure.join(', ')}}`;
@@ -301,7 +301,7 @@ export function filterTagsFromText(
  * We should have a fall back to regex if this fails
  */
 export function extractContentFromXMLbyTag(
-  root: Record<string, any>,
+  root: Record<string, unknown>,
   documentTag: string,
 ): string | null {
   if (!root || typeof root !== 'object') {
@@ -335,7 +335,7 @@ export function extractContentFromXMLbyTag(
  * we should have a fall back to regex if this fails
  */
 export function extractContentFromXMLbyTagMultiple(
-  root: Record<string, any>,
+  root: Record<string, unknown>,
   documentTag: string,
 ): Array<{ content: string; name: string }> | null {
   try {
@@ -354,11 +354,12 @@ export function extractContentFromXMLbyTagMultiple(
         typeof container === 'object' &&
         'document' in container
       ) {
-        const documents = container.document;
+        const documents = (container as Record<string, unknown>).document;
         if (Array.isArray(documents)) {
           return documents.map((doc) => ({
-            content: doc.content?.trim() || '',
-            name: doc.name,
+            content:
+              (doc as Record<string, unknown>).content?.toString().trim() ?? '',
+            name: (doc as Record<string, unknown>).name as string,
           }));
         }
         logger.error(

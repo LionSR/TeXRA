@@ -437,9 +437,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     } catch (error) {
       this.logger.error(
         this.channel,
-        `Failed to compute options: ${
-          toErrorMessage(error)
-        }`,
+        `Failed to compute options: ${toErrorMessage(error)}`,
       );
     }
   }

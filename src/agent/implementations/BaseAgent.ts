@@ -19,6 +19,14 @@ import type {
 } from '@agent/core/AgentCycleOptions';
 import type { AgentRoundFinalizedCallback } from '@agent/core/AgentSharedStore';
 // Internal imports
+import {
+  runAgentFlow,
+  type AgentRunFlowOptions,
+} from '@agent/implementations/flows/common/AgentRunFlowRunner';
+import type {
+  AgentRunShared,
+  AgentLifecycleState,
+} from '@agent/implementations/flows/common/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -195,6 +203,22 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     }
 
     await runInit();
+  }
+
+  protected async executeAgentRunFlow<
+    Shared extends AgentRunShared<
+      BaseAgent<any>,
+      any,
+      AgentLifecycleState<string>,
+      AgentRunHooks
+    >,
+  >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
+    const flowOptions = {
+      ...options,
+      agent: this as Shared['agent'],
+    } as AgentRunFlowOptions<Shared>;
+
+    return runAgentFlow<Shared>(flowOptions);
   }
 
   /** Interrupt the agent's execution. */

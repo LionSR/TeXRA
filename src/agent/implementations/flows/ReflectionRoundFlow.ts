@@ -41,6 +41,14 @@ export interface ReflectionRoundShared {
   hooks: ReflectionRoundHooks;
 }
 
+function storeRoundResult(
+  shared: ReflectionRoundShared,
+  result: ReflectionRoundResult,
+): string | undefined {
+  shared.runtime.result = result;
+  return undefined;
+}
+
 class ToolPreparationNode extends BaseNode<ReflectionRoundShared> {
   async prep(shared: ReflectionRoundShared): Promise<ReflectionRoundHooks> {
     return shared.hooks;
@@ -103,8 +111,7 @@ class RoundExecutionNode extends BaseNode<ReflectionRoundShared> {
     _prepRes: ReflectionRoundShared,
     execRes: ReflectionRoundResult,
   ): Promise<string | undefined> {
-    shared.runtime.result = execRes;
-    return undefined;
+    return storeRoundResult(shared, execRes);
   }
 }
 
@@ -127,8 +134,7 @@ class RoundSkipNode extends BaseNode<ReflectionRoundShared> {
     _prepRes: ReflectionRoundShared,
     execRes: ReflectionRoundResult,
   ): Promise<string | undefined> {
-    shared.runtime.result = execRes;
-    return undefined;
+    return storeRoundResult(shared, execRes);
   }
 }
 

@@ -26,6 +26,7 @@ import { normalizeUrl } from '@utils/urlUtils';
 
 // Local file imports
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
+import { resolveBaseUrl } from './support/ProxyConfigResolver';
 import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
@@ -44,9 +45,6 @@ const DEFAULT_CONTINUE_LIMIT = 10;
 const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
 const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
-// Default proxy domain
-const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
-
 /** Flags for token-based stop conditions. */
 interface TokenFlags {
   continuationLimit: boolean;
@@ -62,11 +60,16 @@ interface MarkerFlags {
 
 /**
  * Abstract base class for model-specific handlers that manage API interactions, message processing, and response handling.
+ * @template M Provider-specific message type
+ * @template U Provider-specific usage type
+ * @template R Provider-specific response usage type
+ * @template T Provider-specific tool call type
+ * @template C Provider-specific client type
  */
 export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
-  U = any,
-  R = any,
+  U = unknown,
+  R = unknown,
   T = unknown,
   C = unknown,
 > implements IModelHandler<M, U, R, T, C>
@@ -201,97 +204,11 @@ export abstract class ModelHandler<
    * @returns Base URL string or null for providers using default URLs
    */
   public getBaseUrl(): string | null {
-    // Use OpenRouter if model requires it or if explicitly configured
-    const useOpenRouter =
-      this.config.openRouterOnly ||
-      getConfig<boolean>('texra.model.useOpenRouter', false);
-    const useImprovedConnection = getConfig<boolean>(
-      'texra.model.useImprovedConnection',
-      false,
-    );
-    const configValue = getConfig<string>(
-      'texra.model.improvedConnectionDomain',
-      DEFAULT_PROXY_DOMAIN,
-    );
-    let improvedConnectionDomain = (configValue || '').trim();
-
-    if (!improvedConnectionDomain) {
-      this.logger.debug(`Using default proxy domain: ${DEFAULT_PROXY_DOMAIN}`);
-      improvedConnectionDomain = DEFAULT_PROXY_DOMAIN;
-    }
-
-    if (useImprovedConnection) {
-      // Normalize proxy domain
-      improvedConnectionDomain = normalizeUrl(improvedConnectionDomain);
-
-      // Define supported proxy paths for specific providers
-      // Only these providers are supported by the proxy
-      const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
-        // [ModelProvider.GOOGLE]: 'generativelanguage/v1beta',
-        [ModelProvider.GOOGLE]: 'generativelanguage',
-        [ModelProvider.OPENAI]: 'openai/v1',
-        // [ModelProvider.ANTHROPIC]: 'anthropic/v1',
-        [ModelProvider.ANTHROPIC]: 'anthropic',
-        [ModelProvider.XAI]: 'xai',
-        // [ModelProvider.OPENROUTER]: 'openrouter',
-        // Additional providers that may be accessed via OpenRouter
-        // groq: 'groq/openai/v1',
-        // perplexity: 'pplx',
-        // mistral: 'mistral',
-        // cerebras: 'cerebras',
-      };
-
-      // Check if using OpenRouter
-      if (useOpenRouter) {
-        this.logger.debug(
-          `Using proxy for ${this.config.provider} for OpenRouter`,
-        );
-        return `https://${improvedConnectionDomain}/openrouter`;
-      }
-
-      // Check if provider is supported by proxy
-      const path = PROXY_PATHS[this.config.provider];
-      if (path) {
-        this.logger.debug(
-          `Using proxy for ${this.config.provider}: with ${improvedConnectionDomain}/${path}`,
-        );
-        return `https://${improvedConnectionDomain}/${path}`;
-      }
-
-      // Provider not supported by proxy, fall through to regular URLs
-    }
-
-    if (useOpenRouter) {
-      return 'https://openrouter.ai/api/v1';
-    }
-
-    const customDeepSeekUrl = getConfig<string>(
-      'texra.model.baseUrlDeepSeek',
-      '',
-    );
-    if (customDeepSeekUrl && this.config.provider === ModelProvider.DEEPSEEK) {
-      const normalized = normalizeUrl(customDeepSeekUrl);
-      return `https://${normalized}`;
-    }
-
-    // Provider-specific base URLs
-    const BASE_URLS: Record<ModelProvider, string | null> = {
-      // [ModelProvider.GOOGLE]:
-      //   // 'https://generativelanguage.googleapis.com/v1beta/openai/',
-      //   'https://generativelanguage.googleapis.com/v1beta/',
-      [ModelProvider.GOOGLE]: null,
-      [ModelProvider.OPENAI]: null, // OpenAI uses default base URL
-      // [ModelProvider.ANTHROPIC]: 'https://api.anthropic.com/v1/',
-      [ModelProvider.ANTHROPIC]: null,
-      [ModelProvider.DEEPSEEK]: 'https://api.deepseek.com',
-      [ModelProvider.XAI]: 'https://api.x.ai/v1',
-      [ModelProvider.MOONSHOT]: 'https://api.moonshot.cn/v1',
-      [ModelProvider.DASHSCOPE]:
-        'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
-      [ModelProvider.COPILOT]: null,
-      [ModelProvider.OTHERS]: null,
-    };
-    return BASE_URLS[this.config.provider];
+    return resolveBaseUrl({
+      provider: this.config.provider,
+      openRouterOnly: this.config.openRouterOnly,
+      logger: this.logger,
+    });
   }
 
   /** Checks if the model uses an OpenAI-compatible API format. */
@@ -411,8 +328,11 @@ export abstract class ModelHandler<
    * Create image/audio messages for the conversation.
    * This is a shared implementation that can be used by all providers.
    * Individual providers can override if needed.
+   * @returns Array of media content objects in provider-specific format
    */
-  public async createMediaMessage(mediaFiles: string[]): Promise<any[]> {
+  public async createMediaMessage(
+    mediaFiles: string[],
+  ): Promise<ReturnType<typeof this.createMediaContent>> {
     const { entries, results } =
       await this.mediaProcessor.loadEntries(mediaFiles);
     this.mediaProcessor.logResults(results);
@@ -499,13 +419,13 @@ export abstract class ModelHandler<
     return [markerFlags.endTurn, shouldStop];
   }
 
-  public containCutOffMessage(content: any[] | string): boolean {
+  public containCutOffMessage(
+    content: Array<{ type: string; text?: string }> | string,
+  ): boolean {
     if (typeof content === 'string') {
       return content.includes('Your response got cut off');
     }
-    return content.some((c: { type: string; text: string }) =>
-      c.text?.includes('Your response got cut off'),
-    );
+    return content.some((c) => c.text?.includes('Your response got cut off'));
   }
 
   /** Creates and configures a client instance for the specific model provider. */
