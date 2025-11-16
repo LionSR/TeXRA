@@ -203,7 +203,10 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
     },
     onSuccess: ({ lifecycle }) => setLifecycleStatus(lifecycle, 'completed'),
     onSecondaryError: ({ hooks }, error) =>
-      hooks.logFinalizeWarning?.('Additional finalize error encountered.', error),
+      hooks.logFinalizeWarning?.(
+        'Additional finalize error encountered.',
+        error,
+      ),
   });
 
   return createAgentRunFlow<ToolUseRunShared<C>>({

@@ -351,8 +351,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
             await vscode.window.showErrorMessage(result.error);
           }
         } catch (error) {
-          const messageText =
-            toErrorMessage(error);
+          const messageText = toErrorMessage(error);
           await vscode.window.showErrorMessage(
             `Error polishing follow-up: ${messageText}`,
           );
@@ -444,8 +443,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         vscode.Uri.file(directoryToReveal),
       ]);
     } catch (error) {
-      const errorMessage =
-        toErrorMessage(error);
+      const errorMessage = toErrorMessage(error);
       this.logger.error(
         this.channel,
         `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
