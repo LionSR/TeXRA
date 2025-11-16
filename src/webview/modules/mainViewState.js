@@ -28,7 +28,7 @@ import {
 import { capitalize } from '@common/stringUtils.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
-const DEFAULT_WORKFLOW_AGENT = 'correct';
+const DEFAULT_WORKFLOW_AGENT = 'generic';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 function getSessionDefaultAgent(sessionType) {
