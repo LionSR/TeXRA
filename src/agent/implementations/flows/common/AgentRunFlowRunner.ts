@@ -75,67 +75,6 @@ function hasExtendHooks<
   );
 }
 
-async function runAgentFlowWithExtend<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycleState<string>,
-    AgentRunHooks
-  >,
->(options: AgentRunFlowOptionsWithExtend<Shared>): Promise<Shared> {
-  const state = options.createState();
-  const baseHooks = options.agent.getRunHooks(options.hookOverrides);
-  const hooks = options.extendHooks(baseHooks);
-
-  const shared = {
-    agent: options.agent,
-    state,
-    lifecycle: options.lifecycle,
-    hooks,
-  } as Shared;
-
-  options.prepareShared?.(shared);
-
-  const flow = options.createFlow();
-  await flow.run(shared);
-
-  if (shared.lifecycle.error) {
-    throw shared.lifecycle.error;
-  }
-
-  return shared;
-}
-
-async function runAgentFlowWithoutExtend<
-  Shared extends AgentRunShared<
-    BaseAgent<any>,
-    any,
-    AgentLifecycleState<string>,
-    AgentRunHooks
-  >,
->(options: AgentRunFlowOptionsWithoutExtend<Shared>): Promise<Shared> {
-  const state = options.createState();
-  const hooks = options.agent.getRunHooks(options.hookOverrides);
-
-  const shared = {
-    agent: options.agent,
-    state,
-    lifecycle: options.lifecycle,
-    hooks,
-  } as Shared;
-
-  options.prepareShared?.(shared);
-
-  const flow = options.createFlow();
-  await flow.run(shared);
-
-  if (shared.lifecycle.error) {
-    throw shared.lifecycle.error;
-  }
-
-  return shared;
-}
-
 export async function runAgentFlow<
   Shared extends AgentRunShared<
     BaseAgent<any>,
@@ -144,9 +83,29 @@ export async function runAgentFlow<
     AgentRunHooks
   >,
 >(options: AgentRunFlowOptions<Shared>): Promise<Shared> {
-  if (hasExtendHooks(options)) {
-    return runAgentFlowWithExtend(options);
+  const state = options.createState();
+
+  // Get hooks - either extend base hooks or use them directly
+  const baseHooks = options.agent.getRunHooks(options.hookOverrides);
+  const hooks = hasExtendHooks(options)
+    ? options.extendHooks(baseHooks)
+    : baseHooks;
+
+  const shared = {
+    agent: options.agent,
+    state,
+    lifecycle: options.lifecycle,
+    hooks,
+  } as Shared;
+
+  options.prepareShared?.(shared);
+
+  const flow = options.createFlow();
+  await flow.run(shared);
+
+  if (shared.lifecycle.error) {
+    throw shared.lifecycle.error;
   }
 
-  return runAgentFlowWithoutExtend(options);
+  return shared;
 }
