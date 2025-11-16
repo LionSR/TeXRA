@@ -11,14 +11,15 @@ import type { FinalizeNodeContext } from './nodeExecution';
 
 export interface AgentFinalizeNodeOptions<
   Shared extends AgentRunShared<any, any, any, any>,
+  Status extends 'error' | 'stopped' = 'error' | 'stopped',
 > {
   finalizePhase: Shared['lifecycle']['phase'];
   computeStatus(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
-  ): string;
+  ): Status;
   runFinalize(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
-    status: string,
+    status: Status,
   ): Promise<void>;
   runCleanup(
     context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
@@ -34,7 +35,8 @@ export interface AgentFinalizeNodeOptions<
 
 export function createAgentFinalizeNode<
   Shared extends AgentRunShared<any, any, any, any>,
->(options: AgentFinalizeNodeOptions<Shared>): BaseNode<Shared> {
+  Status extends 'error' | 'stopped' = 'error' | 'stopped',
+>(options: AgentFinalizeNodeOptions<Shared, Status>): BaseNode<Shared> {
   return new (class AgentFinalizeNode extends BaseNode<Shared> {
     async prep(
       shared: Shared,
@@ -50,16 +52,20 @@ export function createAgentFinalizeNode<
       context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
     ): Promise<void> {
       const status = options.computeStatus(context);
+      const runOnSuccess = options.onSuccess
+        ? () => {
+            void options.onSuccess?.(context);
+          }
+        : () => {};
+      const handleSecondaryError = options.onSecondaryError
+        ? (error: unknown) => options.onSecondaryError?.(context, error)
+        : undefined;
       await finalizeLifecycle({
         lifecycle: context.lifecycle,
         runFinalize: () => options.runFinalize(context, status),
         runCleanup: () => options.runCleanup(context),
-        onSuccess: options.onSuccess
-          ? () => options.onSuccess?.(context)
-          : undefined,
-        onSecondaryError: options.onSecondaryError
-          ? (error) => options.onSecondaryError?.(context, error)
-          : undefined,
+        onSuccess: runOnSuccess,
+        onSecondaryError: handleSecondaryError,
       });
     }
   })();
