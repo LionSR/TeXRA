@@ -5,6 +5,10 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
+import {
+  BaseCycleState,
+  resetCycleState,
+} from '@agent/core/flows/CommonCycleTypes';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -63,21 +67,17 @@ async function maybeSaveDebug(
 }
 
 export interface ResponseCycleInputState {
-  messages: ProviderMessage[];
   outputFile: string;
 }
 
-export interface ResponseCycleRuntimeState {
+export interface ResponseCycleRuntimeState extends BaseCycleState {
   endTurn: boolean;
-  shouldStop: boolean;
   outputExists: boolean;
   systemPrompt?: string;
   debugContext?: DebugContext;
   debugFileOptions?: DebugFileOptions;
   startTime?: number;
   responseObject?: unknown;
-  responseTime?: number;
-  stopReason?: ProviderStopReason;
   processedResponse?: string;
   roundFinalized: boolean;
 }
@@ -86,12 +86,18 @@ export type ResponseCycleState = ResponseCycleInputState &
   ResponseCycleRuntimeState;
 
 function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
-  cycle.shouldStop = false;
+  resetCycleState(cycle, [
+    'endTurn' as keyof Omit<ResponseCycleRuntimeState, keyof BaseCycleState>,
+    'responseObject' as keyof Omit<
+      ResponseCycleRuntimeState,
+      keyof BaseCycleState
+    >,
+    'processedResponse' as keyof Omit<
+      ResponseCycleRuntimeState,
+      keyof BaseCycleState
+    >,
+  ]);
   cycle.endTurn = false;
-  cycle.responseObject = undefined;
-  cycle.responseTime = undefined;
-  cycle.stopReason = undefined;
-  cycle.processedResponse = undefined;
   cycle.roundFinalized = false;
 }
 
@@ -114,8 +120,8 @@ export interface ResponseCycleShared<C = unknown> {
 }
 
 type InvocationNodeResult =
-  | { skipped: true }
-  | { response: unknown; responseTime?: number };
+  | { type: 'skipped' }
+  | { type: 'success'; response: unknown; responseTime?: number };
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are
@@ -212,7 +218,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(context: ResponseCycleShared<C>): Promise<InvocationNodeResult> {
     const { options, state } = context;
     if (state.shouldStop) {
-      return { skipped: true };
+      return { type: 'skipped' };
     }
 
     const abortController = new AbortController();
@@ -244,7 +250,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         return { response: invocation, responseTime: elapsed };
       });
 
-      return { response, responseTime };
+      return { type: 'success', response, responseTime };
     } catch (error) {
       const formattedError = formatProviderHttpError(error);
       const message = `Model invocation failed: ${formattedError.message}`;
@@ -269,7 +275,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
 
-    if ('skipped' in execRes) {
+    if (execRes.type === 'skipped') {
       state.endTurn = false;
       return FlowTransition.COMPLETE;
     }
@@ -313,11 +319,14 @@ interface ProcessResult {
   repetitionDetected: boolean;
 }
 
-type ProcessNodeResult = { skipped: true } | ProcessResult;
+type ProcessNodeResult =
+  | { type: 'skipped' }
+  | (ProcessResult & { type: 'success' });
 
 type ContinuationNodeResult =
-  | { skipped: true }
+  | { type: 'skipped' }
   | {
+      type: 'success';
       shouldEndTurn: boolean;
       shouldStop: boolean;
       shouldContinue: boolean;
@@ -335,7 +344,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(context: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.responseObject) {
-      return { skipped: true };
+      return { type: 'skipped' };
     }
 
     const stage = await options.logger.stage('Process response', {
@@ -442,6 +451,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
       }
 
       return {
+        type: 'success',
         stopReason,
         newResponse,
         processedResponse,
@@ -451,7 +461,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
         responseUsage,
         apiUsage,
         repetitionDetected: repetitionResult.massiveRepetitionDetected,
-      } satisfies ProcessResult;
+      };
     });
   }
 
@@ -462,7 +472,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleShared<C>> {
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
 
-    if ('skipped' in execRes) {
+    if (execRes.type === 'skipped') {
       state.endTurn = false;
       await finalizeRoundIfNeeded(store, state);
       return FlowTransition.COMPLETE;
@@ -581,7 +591,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   async exec(context: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.stopReason || !state.processedResponse) {
-      return { skipped: true };
+      return { type: 'skipped' };
     }
 
     const stopReason = state.stopReason!;
@@ -595,6 +605,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
       const interrupted = Boolean(await options.checkInterruption());
       if (interrupted) {
         return {
+          type: 'success',
           shouldEndTurn: false,
           shouldStop: true,
           shouldContinue: false,
@@ -616,7 +627,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
         options.agentSetting,
       );
 
-      return { shouldEndTurn, shouldStop, shouldContinue };
+      return { type: 'success', shouldEndTurn, shouldStop, shouldContinue };
     });
   }
 
@@ -627,7 +638,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleShared<C>> {
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
 
-    if ('skipped' in execRes) {
+    if (execRes.type === 'skipped') {
       state.endTurn = false;
       state.shouldStop = true;
       await finalizeRoundIfNeeded(store, state);
