@@ -227,7 +227,15 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, usage, runId }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            const targetRunId = resolveTargetRunId(stream, runId, state);
+            const normalizedUsage: TokenUsageStats = {
+              inputTokens: Number(usage.inputTokens ?? 0),
+              outputTokens: Number(usage.outputTokens ?? 0),
+              cost: Number(usage.cost ?? 0),
+            };
+
+            const resolvedRunId = resolveTargetRunId(stream, runId, state);
+            const targetRunId = resolvedRunId ?? runId ?? null;
+
             if (!targetRunId) {
               shared.logger.warn(
                 `Skipping updateStreamUsage for ${stream}: unable to resolve run ID`,
@@ -238,7 +246,11 @@ export function createUsageEvents(
             if (!state.getActiveRunId(stream)) {
               state.setActiveRunId(stream, targetRunId);
             }
-            await state.usageStats.setRunUsage(stream, targetRunId, usage);
+            await state.usageStats.setRunUsage(
+              stream,
+              targetRunId,
+              normalizedUsage,
+            );
             if (state.activeStream === stream && updater.isAvailable()) {
               const usageByRun = Object.fromEntries(
                 state.usageStats.getRunUsage(stream).entries(),

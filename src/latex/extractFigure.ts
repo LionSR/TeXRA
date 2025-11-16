@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 
@@ -119,7 +120,7 @@ export async function extractFigurePathsFromLatex(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error extracting figure paths: ${err instanceof Error ? err.message : String(err)}`,
+      `Error extracting figure paths: ${toErrorMessage(err)}`,
     );
     throw err;
   }

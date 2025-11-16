@@ -1,15 +1,17 @@
 // Third-party imports
-import { execa } from 'execa';
 import { z } from 'zod';
+
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 
 // Local imports - tools
 import { ToolError, toolResult, type ToolResult } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
+import { executeCommand } from '@utils/system/execUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
 
-const ApplyPathInputSchema = z.object({
+const ApplyPathInputSchema = z.strictObject({
   patch: z.string().min(1, 'patch content is required'),
 });
 
@@ -24,20 +26,13 @@ export class ApplyPathTool extends defineTool({
   schema: ApplyPathInputSchema,
 }) {
   protected async execute(input: ApplyPathInput): Promise<ToolResult> {
-    const workspacePath = WorkspaceFS.getPath();
-    if (!workspacePath) {
-      throw new ToolError('apply_path error: workspace path is not available');
-    }
-
     try {
-      const result = await execa(COMMAND, ARGS, {
-        cwd: workspacePath,
-        input: input.patch,
-        encoding: 'utf8',
-        reject: false,
+      const result = await executeCommand([COMMAND, ...ARGS], {
+        stdin: input.patch,
+        channel: 'ApplyPathTool',
       });
 
-      if (result.exitCode === 0) {
+      if (result.success) {
         return toolResult({
           summary: 'Applied patch',
           output: result.stdout ?? '',
@@ -45,7 +40,9 @@ export class ApplyPathTool extends defineTool({
       }
 
       throw new ToolError(
-        `apply_path error: ${result.stderr || 'Unknown failure applying patch'}`,
+        `apply_path error: ${
+          result.stderr ?? 'Unknown failure applying patch'
+        }`,
       );
     } catch (error) {
       if (error instanceof ToolError) {
@@ -53,7 +50,7 @@ export class ApplyPathTool extends defineTool({
       }
 
       const message =
-        error instanceof Error ? error.message : 'Unknown error applying patch';
+        toErrorMessage(error);
       throw new ToolError(`apply_path error: ${message}`);
     }
   }

@@ -8,6 +8,7 @@ import * as nunjucks from 'nunjucks';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import {
   StorageFS,
@@ -30,10 +31,7 @@ export async function getXmlFormatFromFile(file: string): Promise<string> {
     const content = await WorkspaceFS.read(file);
     return `<document name="${file}">\n${content}\n</document>`;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error formatting file as XML: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error formatting file as XML: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -57,7 +55,7 @@ export async function getXmlFormatFromFiles(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error formatting files as XML: ${err instanceof Error ? err.message : String(err)}`,
+      `Error formatting files as XML: ${toErrorMessage(err)}`,
     );
     throw err;
   }
@@ -79,10 +77,7 @@ export function getListOfFiles(files: string[] | null | undefined): string {
       )
       .join(', ');
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error creating file list: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error creating file list: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -127,10 +122,7 @@ export async function renderPrompt(
     const renderedPrompt = env.renderString(prompt, resolvedVariables);
     return renderedPrompt;
   } catch (err) {
-    logger.error(
-      CHANNEL,
-      `Error rendering prompt: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    logger.error(CHANNEL, `Error rendering prompt: ${toErrorMessage(err)}`);
     throw err;
   }
 }
@@ -184,7 +176,7 @@ export async function writePromptToXml(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error writing prompt to XML: ${err instanceof Error ? err.message : String(err)}`,
+      `Error writing prompt to XML: ${toErrorMessage(err)}`,
     );
     throw err;
   }

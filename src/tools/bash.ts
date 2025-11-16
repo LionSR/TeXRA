@@ -8,7 +8,7 @@ import { executeCommand } from '@utils/system/execUtils';
 // Local file imports
 import { defineTool } from './core/define';
 
-const BashInputSchema = z.object({
+const BashInputSchema = z.strictObject({
   command: z.string(),
 });
 

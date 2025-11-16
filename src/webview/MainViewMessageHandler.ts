@@ -1,8 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - webview
+// Local imports - common
 import { computeAgentOptions } from '@agent/computeAgentOptions';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
+// Local imports - webview
 import {
   BaseViewMessageHandler,
   MessageHandler,
@@ -435,7 +438,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       this.logger.error(
         this.channel,
         `Failed to compute options: ${
-          error instanceof Error ? error.message : String(error)
+          toErrorMessage(error)
         }`,
       );
     }

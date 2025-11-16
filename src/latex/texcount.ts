@@ -1,4 +1,5 @@
 // Local imports - log
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
@@ -30,7 +31,7 @@ async function hasChinesePackages(filePath: string): Promise<boolean> {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error checking Chinese packages: ${err instanceof Error ? err.message : String(err)}`,
+      `Error checking Chinese packages: ${toErrorMessage(err)}`,
     );
     return false;
   }
@@ -292,9 +293,7 @@ export async function getTeXCount(
     );
     return { output: combinedOutput, errors };
   } catch (err) {
-    const errorMessage = `Error in getTeXCount: ${
-      err instanceof Error ? err.message : String(err)
-    }`;
+    const errorMessage = `Error in getTeXCount: ${toErrorMessage(err)}`;
     logger.error(resolvedChannel, errorMessage);
     return { output: null, errors: [errorMessage] };
   }
