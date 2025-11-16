@@ -43,6 +43,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { STATUS } from '@progressView/modules/constants.js';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -382,7 +383,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     const provider = ProgressViewProvider.getInstance();
     if (isResume) {
-      StreamStatusService.set(activeStreamId, 'resuming');
+      StreamStatusService.set(activeStreamId, STATUS.RESUMING);
     }
 
     if (
@@ -413,7 +414,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     // Check if this stream is already running
     const currentStatus = StreamStatusService.get(activeStreamId);
-    if (!isResume && currentStatus === 'running') {
+    if (!isResume && currentStatus === STATUS.RUNNING) {
       const errorMsg = `Task "${activeStreamId}" is already running. Please wait for it to complete or stop it first.`;
       throw new Error(errorMsg);
     }
@@ -443,7 +444,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
                 stream: activeStreamId,
                 session: metadata,
               });
-              StreamStatusService.set(activeStreamId, 'running');
+              StreamStatusService.set(activeStreamId, STATUS.RUNNING);
 
               if (!isResume) {
                 const viewVisible = provider?.isViewVisible() ?? false;
@@ -520,10 +521,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
           await agent.run();
           logger.debug(`Task completed successfully`);
-          StreamStatusService.set(activeStreamId, 'stopped');
+          StreamStatusService.set(activeStreamId, STATUS.STOPPED);
         } catch (err) {
           logger.error(`Task failed: ${toErrorMessage(err)}`);
-          StreamStatusService.set(activeStreamId, 'error');
+          StreamStatusService.set(activeStreamId, STATUS.ERROR);
           throw err;
         }
       },
