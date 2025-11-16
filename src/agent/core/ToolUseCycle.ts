@@ -7,7 +7,7 @@ import { AgentSharedStore } from './AgentSharedStore';
 import { AgentWorkspaceState } from './AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  type ToolUseCycleShared,
+  type ToolUseCycleContext,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 
@@ -25,20 +25,20 @@ export interface ToolUseCycleOptions<C = unknown>
   modelName?: string;
 }
 
-export interface ToolUseCycleContext<C = unknown> {
+export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
 }
 
 export async function runToolUseCycle<C = unknown>(
-  context: ToolUseCycleContext<C>,
+  input: ToolUseCycleInput<C>,
 ): Promise<void> {
-  const shared: ToolUseCycleShared<C> = {
-    options: context.options,
-    store: context.store,
+  const context: ToolUseCycleContext<C> = {
+    options: input.options,
+    store: input.store,
     state: {
-      messages: context.messages,
+      messages: input.messages,
       shouldStop: false,
       response: undefined,
       responseTime: undefined,
@@ -49,5 +49,5 @@ export async function runToolUseCycle<C = unknown>(
   };
 
   const flow = createToolUseCycleFlow<C>();
-  await flow.run(shared);
+  await flow.run(context);
 }
