@@ -1,11 +1,10 @@
 // Local imports - agent
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+/**
+ * Utility functions for working with message objects in agent conversations.
+ */
 
 // Local imports
-import {
-  isPlainObject,
-  isContentItemArray,
-} from '@common/types/MessageSkeleton';
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
@@ -27,37 +26,35 @@ export function messageToSkeleton(
     return message.map((item) => messageToSkeleton(item, maxContentLength));
   }
 
-  if (!isPlainObject(message)) {
-    return { _type: typeof message };
+  if (typeof message !== 'object') {
+    return typeof message;
   }
 
   const result: any = {};
 
   for (const [key, value] of Object.entries(message)) {
     if (key === 'content') {
-      if (isContentItemArray(value)) {
+      if (Array.isArray(value)) {
         // Handle content arrays (common in Anthropic responses)
-        result[key] = value.map((item) => {
-          if (isPlainObject(item)) {
+        result[key] = value.map((item: any) => {
+          if (typeof item === 'object') {
             const itemSkeleton: any = { type: item.type };
 
-            if (item.text && typeof item.text === 'string') {
-              const text = item.text as string;
+            if (item.text) {
               const truncatedText =
-                text.length > maxContentLength
-                  ? `${text.substring(0, maxContentLength)}... (${text.length} chars)`
-                  : text;
+                item.text.length > maxContentLength
+                  ? `${item.text.substring(0, maxContentLength)}... (${item.text.length} chars)`
+                  : item.text;
               itemSkeleton.text = truncatedText;
             }
 
-            if (item.source && isPlainObject(item.source)) {
-              const source = item.source as any;
-              itemSkeleton.source = { type: source.type };
-              if (source.media_type) {
-                itemSkeleton.source.media_type = source.media_type;
+            if (item.source) {
+              itemSkeleton.source = { type: item.source.type };
+              if (item.source.media_type) {
+                itemSkeleton.source.media_type = item.source.media_type;
               }
-              if (source.data && typeof source.data === 'string') {
-                itemSkeleton.source.data = `[base64 data: ${source.data.length} chars]`;
+              if (item.source.data) {
+                itemSkeleton.source.data = `[base64 data: ${item.source.data.length} chars]`;
               }
             }
 
@@ -65,13 +62,13 @@ export function messageToSkeleton(
               itemSkeleton.cache_control = item.cache_control;
             }
 
-            if (item.thinking && typeof item.thinking === 'string') {
-              itemSkeleton.thinking = `[thinking data: ${(item.thinking as string).length} chars]`;
+            if (item.thinking) {
+              itemSkeleton.thinking = `[thinking data: ${item.thinking.length} chars]`;
             }
 
             return itemSkeleton;
           }
-          return { _type: typeof item };
+          return typeof item;
         });
       } else if (typeof value === 'string') {
         // Handle string content
@@ -81,7 +78,7 @@ export function messageToSkeleton(
             : value;
       } else {
         // Other content types
-        result[key] = { _type: typeof value };
+        result[key] = typeof value;
       }
     } else if (
       key === 'data' &&
@@ -90,17 +87,15 @@ export function messageToSkeleton(
     ) {
       // Truncate large data strings
       result[key] = `[data: ${value.length} chars]`;
-    } else if (isPlainObject(value)) {
+    } else if (
+      typeof value === 'object' &&
+      value !== null &&
+      value !== undefined
+    ) {
       // Recursively process nested objects
-      result[key] = messageToSkeleton(
-        value as ProviderMessage,
-        maxContentLength,
-      );
-    } else if (Array.isArray(value)) {
-      // Recursively process arrays outside content fields
-      result[key] = value.map((item) =>
-        messageToSkeleton(item, maxContentLength),
-      );
+      // Note: We pass 'any' here since nested properties within a message
+      // are not necessarily ProviderMessage instances themselves
+      result[key] = messageToSkeleton(value as any, maxContentLength);
     } else {
       // Pass through primitive values
       result[key] = value;
