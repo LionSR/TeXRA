@@ -61,9 +61,7 @@ export abstract class BaseViewMessageHandler<
     } catch (error) {
       this.logger.error(
         this.channel,
-        `Error handling command ${message.command}: ${
-          toErrorMessage(error)
-        }`,
+        `Error handling command ${message.command}: ${toErrorMessage(error)}`,
       );
 
       // Optionally notify the webview of the error

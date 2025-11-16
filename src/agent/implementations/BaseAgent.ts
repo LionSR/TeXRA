@@ -212,9 +212,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       AgentLifecycleState<string>,
       AgentRunHooks
     >,
-  >(
-    options: Omit<AgentRunFlowOptions<Shared>, 'agent'>,
-  ): Promise<Shared> {
+  >(options: Omit<AgentRunFlowOptions<Shared>, 'agent'>): Promise<Shared> {
     const flowOptions = {
       ...options,
       agent: this as Shared['agent'],

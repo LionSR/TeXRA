@@ -14,12 +14,10 @@ interface FlowLink<Shared> {
 interface CreateAgentRunFlowOptions<Shared> {
   init: AgentInitNodeConfig<Shared>;
   finalize: BaseNode<Shared>;
-  links(
-    nodes: {
-      init: AgentInitNode<Shared>;
-      finalize: BaseNode<Shared>;
-    },
-  ): FlowLink<Shared>[];
+  links(nodes: {
+    init: AgentInitNode<Shared>;
+    finalize: BaseNode<Shared>;
+  }): FlowLink<Shared>[];
 }
 
 export function createAgentRunFlow<Shared>({

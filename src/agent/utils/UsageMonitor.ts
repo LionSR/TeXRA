@@ -45,9 +45,9 @@ export class UsageMonitor {
           );
         } catch (error) {
           logger.debug(
-            `Failed to compute ${runKind} cost for round ${snapshot.round}: ${
-              toErrorMessage(error)
-            }`,
+            `Failed to compute ${runKind} cost for round ${snapshot.round}: ${toErrorMessage(
+              error,
+            )}`,
           );
           return runningTotal;
         }

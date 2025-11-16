@@ -226,7 +226,10 @@ export async function getBase64EncodedMedia(
       }
     }
   } catch (err) {
-    logger.error(CHANNEL, `Error encoding media to base64: ${toErrorMessage(err)}`);
+    logger.error(
+      CHANNEL,
+      `Error encoding media to base64: ${toErrorMessage(err)}`,
+    );
     throw err;
   }
 }
