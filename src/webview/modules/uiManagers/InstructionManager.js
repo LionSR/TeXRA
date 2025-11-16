@@ -2,6 +2,7 @@
 import { setupPasteListener } from '../pasteHandler.js';
 import { safeGetElementById } from '@common/domUtils.js';
 import {
+  awaitTextareaUpgrade,
   insertTextAtCursor,
   resolveTextareaTarget,
 } from '@common/textareaUtils.js';
@@ -40,14 +41,6 @@ export class InstructionManager {
       );
     };
 
-    const needsUpgrade =
-      target.tagName?.toLowerCase?.() === 'vscode-textarea' &&
-      typeof target.updateComplete?.then === 'function';
-
-    if (needsUpgrade) {
-      target.updateComplete.then(() => applySetup());
-    } else {
-      applySetup();
-    }
+    awaitTextareaUpgrade(target, () => applySetup());
   }
 }

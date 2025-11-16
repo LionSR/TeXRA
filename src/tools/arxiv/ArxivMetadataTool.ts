@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, toolResult } from '@tools/result';
 import {
   type ArxivPaperMetadata,
@@ -45,8 +46,9 @@ export class ArxivMetadataTool extends defineTool({
       // Use arxiv-client's ids() method for direct ID lookup
       entries = await createArxivClient().ids([requestId]).execute();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Failed to query arXiv API: ${message}`);
+      throw new ToolError(
+        `Failed to query arXiv API: ${toErrorMessage(error)}`,
+      );
     }
 
     if (!entries || entries.length === 0) {

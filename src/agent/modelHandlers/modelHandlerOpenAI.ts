@@ -70,15 +70,6 @@ type ChatCompletionRequestBase = Omit<
   'stream' | 'stream_options'
 >;
 
-type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
-  reasoning_content?: string;
-};
-
-interface AggregatedToolCall {
-  id: string;
-  function: ChatCompletionMessageFunctionToolCall['function'];
-}
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -97,197 +88,11 @@ const collectTextFromUnknown = (value: unknown): string => {
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
-class DeepSeekStreamAggregator {
-  private readonly contentParts: string[] = [];
-  private readonly reasoningParts: string[] = [];
-  private readonly toolCalls = new Map<number, AggregatedToolCall>();
-  private functionCall: ChatCompletionMessage['function_call'] = null;
-  private lastChunkWithChoices: ChatCompletionChunk | undefined;
-  private usageChunk: ChatCompletionChunk | undefined;
-
-  appendContent(delta: string): void {
-    if (delta) {
-      this.contentParts.push(delta);
-    }
-  }
-
-  appendReasoning(delta: string): void {
-    if (delta) {
-      this.reasoningParts.push(delta);
-    }
-  }
-
-  consumeChunk(chunk: ChatCompletionChunk): void {
-    if (chunk.choices.length > 0) {
-      this.lastChunkWithChoices = chunk;
-    }
-    if (chunk.usage) {
-      this.usageChunk = chunk;
-    }
-
-    const choice = chunk.choices[0];
-    if (!choice) {
-      return;
-    }
-
-    const { delta } = choice;
-
-    if (Array.isArray(delta.tool_calls)) {
-      for (const call of delta.tool_calls) {
-        const existing = this.toolCalls.get(call.index) ?? {
-          id: '',
-          function: { name: '', arguments: '' },
-        };
-        if (call.id) {
-          existing.id += call.id;
-        }
-        if (call.function?.name) {
-          existing.function.name += call.function.name;
-        }
-        if (call.function?.arguments) {
-          existing.function.arguments += call.function.arguments;
-        }
-        this.toolCalls.set(call.index, existing);
-      }
-    }
-
-    if (delta.function_call) {
-      const { name = '', arguments: args = '' } = delta.function_call;
-      const current = this.functionCall ?? { name: '', arguments: '' };
-      this.functionCall = {
-        name: `${current.name}${name}`,
-        arguments: `${current.arguments}${args}`,
-      };
-    }
-  }
-
-  finalize(fallback?: ChatCompletion): ChatCompletion {
-    const base = fallback ?? this.buildFallbackResponse();
-    const primaryChoice = base.choices[0] ?? {
-      index: 0,
-      message: { role: 'assistant', content: '', refusal: null },
-      finish_reason: 'stop',
-      logprobs: null,
-    };
-    const fallbackMessage = primaryChoice.message;
-
-    const mergedMessage: ChatCompletionMessageWithReasoning = {
-      ...fallbackMessage,
-      role: 'assistant',
-      content: this.getFullContent(),
-      refusal: fallbackMessage.refusal ?? null,
-    };
-
-    const reasoning = this.getFullReasoning();
-    if (reasoning) {
-      mergedMessage.reasoning_content = reasoning;
-    }
-
-    const toolCalls = this.buildToolCalls();
-    if (toolCalls.length > 0) {
-      mergedMessage.tool_calls = toolCalls;
-    }
-
-    if (
-      this.functionCall &&
-      (this.functionCall.name.length > 0 ||
-        this.functionCall.arguments.length > 0)
-    ) {
-      mergedMessage.function_call = this.functionCall;
-    }
-
-    const mergedChoice = {
-      ...primaryChoice,
-      index: primaryChoice.index ?? 0,
-      message: mergedMessage,
-      finish_reason: primaryChoice.finish_reason ?? 'stop',
-      logprobs: primaryChoice.logprobs ?? null,
-    };
-
-    const usageCandidate =
-      base.usage ?? this.usageChunk?.usage ?? this.lastChunkWithChoices?.usage;
-    const usage = usageCandidate === null ? undefined : usageCandidate;
-
-    return {
-      ...base,
-      choices: [mergedChoice],
-      usage,
-    };
-  }
-
-  getFullContent(): string {
-    return this.contentParts.join('');
-  }
-
-  getFullReasoning(): string {
-    return this.reasoningParts.join('');
-  }
-
-  private buildToolCalls(): ChatCompletionMessageFunctionToolCall[] {
-    const toolCalls: ChatCompletionMessageFunctionToolCall[] = [];
-    for (const [index, call] of this.toolCalls.entries()) {
-      if (!call.id && !call.function.name && !call.function.arguments) {
-        continue;
-      }
-      toolCalls.push({
-        id: call.id || `tool_call_${index}`,
-        type: 'function',
-        function: {
-          name: call.function.name,
-          arguments: call.function.arguments,
-        },
-      });
-    }
-    return toolCalls;
-  }
-
-  private buildFallbackResponse(): ChatCompletion {
-    const chunk = this.lastChunkWithChoices ?? this.usageChunk;
-    if (!chunk) {
-      return {
-        id: '',
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: '',
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: this.getFullContent(),
-              refusal: null,
-            },
-            finish_reason: 'stop',
-            logprobs: null,
-          },
-        ],
-      };
-    }
-
-    const choice = chunk.choices[0];
-    const usage = chunk.usage === null ? undefined : chunk.usage;
-
-    return {
-      id: chunk.id,
-      object: 'chat.completion',
-      created: chunk.created,
-      model: chunk.model,
-      system_fingerprint: chunk.system_fingerprint,
-      usage,
-      choices: [
-        {
-          index: choice?.index ?? 0,
-          message: {
-            role: 'assistant',
-            content: this.getFullContent(),
-            refusal: null,
-          },
-          finish_reason: choice?.finish_reason ?? 'stop',
-          logprobs: choice?.logprobs ?? null,
-        },
-      ],
-    };
-  }
+export interface StreamingAggregator {
+  appendContent(delta: string): void;
+  appendReasoning(delta: string): void;
+  consumeChunk(chunk: ChatCompletionChunk): void;
+  finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
 const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
@@ -334,6 +139,13 @@ export class ModelHandlerOpenAI extends ModelHandler<
   /** Returns OpenAI client with configured API key. */
   async getClient(): Promise<OpenAI> {
     return this.createOpenAIClient();
+  }
+
+  /**
+   * Allows subclasses to provide a streaming aggregator implementation.
+   */
+  protected createStreamingAggregator(): StreamingAggregator | null {
+    return null;
   }
 
   /** Creates a chat completion with model-specific parameters. */
@@ -459,27 +271,23 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
-        // DeepSeek streaming chunks surface reasoning/tool deltas that we need to
-        // stitch back into the final message. Non-DeepSeek models already return
-        // complete data through the SDK response, so the aggregator isn't needed.
-        const deepSeekAggregator = this.config.fullName.includes('deepseek')
-          ? new DeepSeekStreamAggregator()
-          : null;
+        // Allow subclasses to stitch streaming deltas into a final message shape.
+        const streamingAggregator = this.createStreamingAggregator();
 
         const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
           if (!delta) {
             return;
           }
           output?.append(delta);
-          deepSeekAggregator?.appendContent(delta);
+          streamingAggregator?.appendContent(delta);
         };
 
         const onChunk = (chunk: ChatCompletionChunk): void => {
-          deepSeekAggregator?.consumeChunk(chunk);
+          streamingAggregator?.consumeChunk(chunk);
           const reasoningDelta = extractReasoningDelta(chunk);
           if (reasoningDelta) {
             thinking.append(reasoningDelta);
-            deepSeekAggregator?.appendReasoning(reasoningDelta);
+            streamingAggregator?.appendReasoning(reasoningDelta);
           }
         };
 
@@ -488,8 +296,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
         try {
           const sdkFinalResponse = await stream.finalChatCompletion();
-          const finalResponse = deepSeekAggregator
-            ? deepSeekAggregator.finalize(sdkFinalResponse)
+          const finalResponse = streamingAggregator
+            ? streamingAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
           const finalReasoning = this.processThinkingBlock(finalResponse);
           if (finalReasoning === null) {
@@ -836,7 +644,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
         }
 
         // For usage, we'll use empty values since they're not provided; TODO needs to test at some points
-        const usage = responseObject.usage || {
+        const usage = responseObject.usage ?? {
           prompt_tokens: 0,
           completion_tokens: 0,
         };
@@ -1011,7 +819,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       this.logger.debug('End tag detected - skipping continuation');
       if (lastMessage && Array.isArray(lastMessage.content)) {
         // this is suspicious, because the two conflicts!!!
-        const lastPart = lastMessage.content[lastMessage.content.length - 1];
+        const lastPart = lastMessage.content.at(-1);
         if (lastPart && 'text' in lastPart) {
           lastPart.text = fileContent;
         }

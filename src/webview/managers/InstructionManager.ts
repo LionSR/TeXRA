@@ -4,8 +4,11 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - commands
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+
+// Local imports - logger
 import * as logger from '@logger/logUtils';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
@@ -16,6 +19,12 @@ import {
   FileContext,
 } from '@utils/text/textEnhancementUtils';
 
+// Local imports - types
+import type {
+  PolishInstructionMessage,
+  ClipboardImageMessage,
+} from '../types/messages';
+
 const CHANNEL = 'InstructionManager';
 logger.initialize(CHANNEL);
 
@@ -23,15 +32,16 @@ export class InstructionManager {
   private webview: vscode.WebviewView | undefined;
 
   constructor(private readonly _context: vscode.ExtensionContext) {
-    setTimeout(() => {
-      StorageFS.ensureDir(PASTED_DIR)
-        .then(() => StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS))
-        .catch((e) =>
-          logger.warn(
-            CHANNEL,
-            `Error during initial cleanup: ${e instanceof Error ? e.message : String(e)}`,
-          ),
+    setTimeout(async () => {
+      try {
+        await StorageFS.ensureDir(PASTED_DIR);
+        await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
+      } catch (e) {
+        logger.warn(
+          CHANNEL,
+          `Error during initial cleanup: ${toErrorMessage(e)}`,
         );
+      }
     }, 100);
   }
 
@@ -50,77 +60,99 @@ export class InstructionManager {
 
   /**
    * Validate that the given file path is a non-empty value.
+   * Type guard to ensure file is a string.
    */
-  private _isValidFile(file?: string): boolean {
-    return !!file && file !== 'None' && file !== '';
+  private isValidFile(file?: string): file is string {
+    return Boolean(file) && file !== 'None' && file !== '';
   }
 
   /**
    * Add a single file to the context when it passes validation.
    */
-  private _addSingleFileIfValid(
+  private addSingleFileIfValid(
     context: FileContext,
-    contextKey: keyof FileContext,
+    contextKey: 'inputFile' | 'referenceFile' | 'auxiliaryFile' | 'mediaFile',
     file?: string,
   ): void {
-    if (this._isValidFile(file)) {
-      (context as any)[contextKey] = file;
+    if (this.isValidFile(file)) {
+      context[contextKey] = file;
     }
   }
 
   /**
    * Add a list of files to the context when they are enabled and present.
    */
-  private _addMultipleFilesIfValid(
+  private addMultipleFilesIfValid(
     context: FileContext,
-    contextKey: keyof FileContext,
+    contextKey:
+      | 'inputFiles'
+      | 'referenceFiles'
+      | 'auxiliaryFiles'
+      | 'mediaFiles'
+      | 'outputFiles',
     active: boolean,
     files?: string[],
   ): void {
-    if (active && files && Array.isArray(files) && files.length > 0) {
-      (context as any)[contextKey] = files;
+    if (active && Array.isArray(files) && files.length > 0) {
+      context[contextKey] = files;
     }
   }
 
-  async handlePolishInstructionText(message: any): Promise<void> {
+  async handlePolishInstructionText(
+    message: PolishInstructionMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
     }
     try {
-      const fileContext: FileContext = { agent: message.agent || undefined };
+      const fileContext: FileContext = { agent: message.agent };
 
-      const singleFileMap: Array<[keyof FileContext, keyof typeof message]> = [
-        ['inputFile', 'inputFile'],
-        ['referenceFile', 'referenceFile'],
-        ['auxiliaryFile', 'auxiliaryFile'],
-        ['mediaFile', 'mediaFile'],
-      ];
-      for (const [contextKey, messageKey] of singleFileMap) {
-        this._addSingleFileIfValid(
-          fileContext,
-          contextKey,
-          (message as any)[messageKey],
-        );
-      }
+      // Add single files
+      this.addSingleFileIfValid(fileContext, 'inputFile', message.inputFile);
+      this.addSingleFileIfValid(
+        fileContext,
+        'referenceFile',
+        message.referenceFile,
+      );
+      this.addSingleFileIfValid(
+        fileContext,
+        'auxiliaryFile',
+        message.auxiliaryFile,
+      );
+      this.addSingleFileIfValid(fileContext, 'mediaFile', message.mediaFile);
 
-      const multiFileMap: Array<
-        [keyof FileContext, keyof typeof message, keyof typeof message]
-      > = [
-        ['inputFiles', 'inputFilesActive', 'inputFiles'],
-        ['referenceFiles', 'referenceFilesActive', 'referenceFiles'],
-        ['auxiliaryFiles', 'auxiliaryFilesActive', 'auxiliaryFiles'],
-        ['mediaFiles', 'mediaFilesActive', 'mediaFiles'],
-        ['outputFiles', 'outputFilesActive', 'outputFiles'],
-      ];
-      for (const [contextKey, toggleKey, messageKey] of multiFileMap) {
-        this._addMultipleFilesIfValid(
-          fileContext,
-          contextKey,
-          (message as any)[toggleKey],
-          (message as any)[messageKey],
-        );
-      }
+      // Add multiple files
+      this.addMultipleFilesIfValid(
+        fileContext,
+        'inputFiles',
+        Boolean(message.inputFilesActive),
+        message.inputFiles,
+      );
+      this.addMultipleFilesIfValid(
+        fileContext,
+        'referenceFiles',
+        Boolean(message.referenceFilesActive),
+        message.referenceFiles,
+      );
+      this.addMultipleFilesIfValid(
+        fileContext,
+        'auxiliaryFiles',
+        Boolean(message.auxiliaryFilesActive),
+        message.auxiliaryFiles,
+      );
+      this.addMultipleFilesIfValid(
+        fileContext,
+        'mediaFiles',
+        Boolean(message.mediaFilesActive),
+        message.mediaFiles,
+      );
+      this.addMultipleFilesIfValid(
+        fileContext,
+        'outputFiles',
+        Boolean(message.outputFilesActive),
+        message.outputFiles,
+      );
 
       try {
         const result = await polishTextWithAI(message.text, fileContext);
@@ -132,31 +164,27 @@ export class InstructionManager {
         } else {
           webviewView.webview.postMessage({
             command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-            error: result.error || 'Error polishing text',
+            error: result.error ?? 'Error polishing text',
           });
         }
       } catch (error) {
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-          error:
-            error instanceof Error ? error.message : 'Unknown error occurred',
+          error: toErrorMessage(error),
         });
         logger.error(
           CHANNEL,
-          `Error in handlePolishInstructionText: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          `Error in handlePolishInstructionText: ${toErrorMessage(error)}`,
         );
       }
     } catch (error) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR,
-        error:
-          error instanceof Error ? error.message : 'Unknown error occurred',
+        error: toErrorMessage(error),
       });
       logger.error(
         CHANNEL,
-        `Error setting up text polishing: ${error instanceof Error ? error.message : String(error)}`,
+        `Error setting up text polishing: ${toErrorMessage(error)}`,
       );
     }
   }
@@ -167,7 +195,9 @@ export class InstructionManager {
     );
   }
 
-  async handleClipboardImage(message: any): Promise<void> {
+  async handleClipboardImage(
+    message: ClipboardImageMessage,
+  ): Promise<void> {
     const webviewView = this.getWebview();
     if (!webviewView) {
       return;
@@ -188,7 +218,7 @@ export class InstructionManager {
     } catch (err) {
       logger.error(
         CHANNEL,
-        `Error handling clipboard image: ${err instanceof Error ? err.message : String(err)}`,
+        `Error handling clipboard image: ${toErrorMessage(err)}`,
       );
     }
   }

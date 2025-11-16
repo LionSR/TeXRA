@@ -4,6 +4,7 @@ import * as path from 'path';
 // Local imports - log
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskRunFileService, flexibleFS } from '@utils/files';
 
@@ -57,7 +58,7 @@ export class LatexMediaManager {
       try {
         await this.fileService!.mirrorWorkspaceFile(target);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         this.logger.debug(
           `Unable to mirror figure dependency ${target}: ${message}`,
           groupId ?? undefined,
@@ -115,7 +116,7 @@ export class LatexMediaManager {
                 return undefined;
               }
             } catch (err) {
-              const message = err instanceof Error ? err.message : String(err);
+              const message = toErrorMessage(err);
               this.logger.error(
                 `Failed to stat compiled PDF ${pdfFile}: ${message}`,
                 activeGroupId,

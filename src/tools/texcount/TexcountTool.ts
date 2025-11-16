@@ -12,7 +12,7 @@ import {
 
 // Local imports - tool core
 
-const TexcountInputSchema = z.object({
+const TexcountInputSchema = z.strictObject({
   files: z.union([z.string(), z.array(z.string()).min(1)]),
   mode: z.enum(['separate', 'include', 'sum']).optional(),
   format: z.enum(['raw', 'stats']).optional(),

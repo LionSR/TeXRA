@@ -8,6 +8,7 @@ import {
 import { z } from 'zod';
 
 // Local imports - metadata
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
@@ -97,8 +98,7 @@ export class CrossrefSearchTool extends defineTool({
       );
       response = await crossrefClient.works(options);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ToolError(`Crossref search failed: ${message}`);
+      throw new ToolError(`Crossref search failed: ${toErrorMessage(error)}`);
     }
 
     if (!response.ok || !response.content || !response.content.message) {

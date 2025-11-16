@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - common
+import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+
 // Local imports - log
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -92,7 +95,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
     } catch (openErr) {
       logger.warn(
         CHANNEL,
-        `Could not open file in editor: ${openErr instanceof Error ? openErr.message : String(openErr)}`,
+        `Could not open file in editor: ${toErrorMessage(openErr)}`,
       );
       // Continue anyway - we'll still try to trigger the build
     }
@@ -115,7 +118,7 @@ export async function triggerLaTeXBuild(filePath: string): Promise<void> {
   } catch (buildErr) {
     logger.warn(
       CHANNEL,
-      `Failed to trigger LaTeX build: ${buildErr instanceof Error ? buildErr.message : String(buildErr)}`,
+      `Failed to trigger LaTeX build: ${toErrorMessage(buildErr)}`,
     );
     // Continue anyway, as we'll use whatever diagnostics are available
   }
@@ -145,7 +148,7 @@ export function getDiagnostics(filePath: string): vscode.Diagnostic[] {
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error getting diagnostics for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `Error getting diagnostics for ${filePath}: ${toErrorMessage(err)}`,
     );
     return [];
   }
@@ -171,7 +174,7 @@ export async function getLinterMessages(
   } catch (err) {
     logger.error(
       CHANNEL,
-      `Error formatting linter messages for ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      `Error formatting linter messages for ${filePath}: ${toErrorMessage(err)}`,
     );
     return [];
   }
