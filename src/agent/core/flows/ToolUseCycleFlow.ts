@@ -671,7 +671,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       try {
         result = await withToolEditApprovalContext(
           {
-            streamId: options.logger.channelId,
+            streamId: options.logger.channelId as StreamTabId,
             executionId: options.context.executionId,
             toolCallId: execRes.toolCallId,
           },
