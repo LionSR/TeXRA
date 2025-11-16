@@ -85,6 +85,7 @@ import { toAnthropicTools } from './toolConversion';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { NormalizedToolCall } from './types/NormalizedToolCall';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaBase64ImageSource,
@@ -1554,7 +1555,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return regularThinkingContent;
   }
 
-  extractToolUse(responseObject: BetaMessage): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+  extractToolUse(responseObject: BetaMessage): NormalizedToolCall | null {
     const content = responseObject?.content;
     if (!Array.isArray(content)) {
       return null;

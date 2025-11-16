@@ -48,6 +48,9 @@ import { WorkspaceFS, flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
+// Type imports
+import type { NormalizedToolCall } from './types/NormalizedToolCall';
+
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import {
@@ -1160,7 +1163,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
-  extractToolUse(responseObject: any): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+  extractToolUse(responseObject: any): NormalizedToolCall | null {
     // Try modern tool_calls format first
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
@@ -1183,9 +1186,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
       let input: unknown = {};
       if (functionData.arguments) {
         try {
-          const argsStr = typeof functionData.arguments === 'string'
-            ? functionData.arguments
-            : JSON.stringify(functionData.arguments);
+          const argsStr =
+            typeof functionData.arguments === 'string'
+              ? functionData.arguments
+              : JSON.stringify(functionData.arguments);
           input = JSON.parse(argsStr);
         } catch (err) {
           this.logger.warn(
@@ -1221,9 +1225,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
       let input: unknown = {};
       if (func.arguments) {
         try {
-          const argsStr = typeof func.arguments === 'string'
-            ? func.arguments
-            : JSON.stringify(func.arguments);
+          const argsStr =
+            typeof func.arguments === 'string'
+              ? func.arguments
+              : JSON.stringify(func.arguments);
           input = JSON.parse(argsStr);
         } catch (err) {
           this.logger.warn(

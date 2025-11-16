@@ -36,6 +36,7 @@ import {
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
 import type { IModelHandler } from './types/IModelHandler';
+import type { NormalizedToolCall } from './types/NormalizedToolCall';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -666,9 +667,9 @@ export abstract class ModelHandler<
   /**
    * Extracts tool-use information from provider responses.
    * @param responseObject The raw response object from the model
-   * @returns JSON string with tool call details or null if not present
+   * @returns Normalized tool call or null if not present
    */
-  extractToolUse(_responseObject: any): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+  extractToolUse(_responseObject: any): NormalizedToolCall | null {
     return null;
   }
 

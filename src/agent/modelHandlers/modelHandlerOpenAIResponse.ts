@@ -52,6 +52,7 @@ import { ModelHandler } from './ModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { NormalizedToolCall } from './types/NormalizedToolCall';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {
@@ -1273,7 +1274,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+  extractToolUse(response: Response): NormalizedToolCall | null {
     const items = response?.output;
     if (!Array.isArray(items)) {
       return null;
@@ -1302,9 +1303,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let input: unknown = {};
     if (call.arguments) {
       try {
-        const argsStr = typeof call.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(call.arguments);
+        const argsStr =
+          typeof call.arguments === 'string'
+            ? call.arguments
+            : JSON.stringify(call.arguments);
         input = JSON.parse(argsStr);
       } catch (err) {
         this.logger.warn(

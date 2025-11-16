@@ -77,6 +77,7 @@ import { toGoogleTools } from './toolConversion';
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { NormalizedToolCall } from './types/NormalizedToolCall';
 
 type GoogleRole = 'user' | 'model';
 
@@ -1025,7 +1026,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+  extractToolUse(
+    responseObject: GenerateContentResponse,
+  ): NormalizedToolCall | null {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (!Array.isArray(parts)) {
