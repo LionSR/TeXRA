@@ -34,6 +34,9 @@
               "type": "string"
             },
             "default": [
+              "generic",
+              "generic_cot",
+              "generic_multiple",
               "correct",
               "polish",
               "draw",
