@@ -1025,26 +1025,44 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): string | null {
+  extractToolUse(responseObject: GenerateContentResponse): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
-    if (Array.isArray(parts)) {
-      const funcPart = parts.find((part) => part.functionCall);
-      if (funcPart?.functionCall) {
-        const call = funcPart.functionCall;
-        // Ensure the call has an ID
-        const callId = ensureCallId(call);
-        const callWithId = { ...call, id: callId };
-
-        if (!call.id?.trim()) {
-          this.logger.debug(
-            `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
-          );
-        }
-        return JSON.stringify(callWithId, null, 2);
-      }
+    if (!Array.isArray(parts)) {
+      return null;
     }
-    return null;
+
+    const funcPart = parts.find((part) => part.functionCall);
+    if (!funcPart?.functionCall) {
+      return null;
+    }
+
+    const call = funcPart.functionCall;
+
+    // Google function call structure:
+    // { id?: string, name: string, args: unknown }
+    const name = call.name?.trim();
+
+    if (!name) {
+      this.logger.warn('Google functionCall missing name');
+      return null;
+    }
+
+    // Ensure the call has an ID (generate one if missing)
+    const callId = ensureCallId(call);
+
+    if (!call.id?.trim()) {
+      this.logger.debug(
+        `Generated ID for Google function call '${name}': ${callId}`,
+      );
+    }
+
+    return {
+      callId,
+      name,
+      input: call.args ?? {},
+      rawCall: call,
+    };
   }
 
   private async buildAttachmentPart(

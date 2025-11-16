@@ -10,6 +10,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
+import type { NormalizedToolCall } from './NormalizedToolCall';
 
 /**
  * Common interface implemented by all model handlers.
@@ -185,8 +186,15 @@ export interface IModelHandler<
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
-  /** Extract tool-use details from a provider response. */
-  extractToolUse(responseObject: any): string | null;
+  /**
+   * Extract and normalize tool-use details from a provider response.
+   * Each provider normalizes its specific tool call format to the common
+   * NormalizedToolCall structure.
+   *
+   * @param responseObject - Provider-specific response object
+   * @returns Normalized tool call or null if no tool use found
+   */
+  extractToolUse(responseObject: any): NormalizedToolCall | null;
 
   /**
    * Create provider-specific messages capturing the tool call and result.

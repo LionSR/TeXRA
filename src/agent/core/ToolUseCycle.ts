@@ -42,7 +42,7 @@ export async function runToolUseCycle<C = unknown>(
       shouldStop: false,
       response: undefined,
       responseTime: undefined,
-      toolInfo: undefined,
+      toolCall: undefined,
       text: undefined,
       stopReason: undefined,
     } satisfies ToolUseCycleState,

@@ -1273,14 +1273,53 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): string | null {
+  extractToolUse(response: Response): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
     const items = response?.output;
-    if (!Array.isArray(items)) return null;
+    if (!Array.isArray(items)) {
+      return null;
+    }
 
     const call = items.find(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
-    return call ? JSON.stringify(call, null, 2) : null;
+
+    if (!call) {
+      return null;
+    }
+
+    // OpenAI Response API structure
+    const callId = call.id?.trim();
+    const name = call.name?.trim();
+
+    if (!callId || !name) {
+      this.logger.warn(
+        `OpenAI Response function_call missing required fields: id=${callId}, name=${name}`,
+      );
+      return null;
+    }
+
+    // Parse the arguments if they're a string
+    let input: unknown = {};
+    if (call.arguments) {
+      try {
+        const argsStr = typeof call.arguments === 'string'
+          ? call.arguments
+          : JSON.stringify(call.arguments);
+        input = JSON.parse(argsStr);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to parse OpenAI Response function arguments: ${getSdkErrorMessage(err)}`,
+        );
+        input = call.arguments;
+      }
+    }
+
+    return {
+      callId,
+      name,
+      input,
+      rawCall: call,
+    };
   }
 
   async createToolUseFollowUpMessages(

@@ -1160,15 +1160,91 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
-  extractToolUse(responseObject: any): string | null {
+  extractToolUse(responseObject: any): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
+    // Try modern tool_calls format first
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
+      const toolCall = toolCalls[0];
+
+      // OpenAI tool call structure:
+      // { id: string, type: 'function', function: { name: string, arguments: string } }
+      const callId = toolCall.id?.trim();
+      const functionData = toolCall.function;
+      const name = functionData?.name?.trim();
+
+      if (!callId || !name) {
+        this.logger.warn(
+          `OpenAI tool_call missing required fields: id=${callId}, name=${name}`,
+        );
+        return null;
+      }
+
+      // Parse the arguments JSON string
+      let input: unknown = {};
+      if (functionData.arguments) {
+        try {
+          const argsStr = typeof functionData.arguments === 'string'
+            ? functionData.arguments
+            : JSON.stringify(functionData.arguments);
+          input = JSON.parse(argsStr);
+        } catch (err) {
+          this.logger.warn(
+            `Failed to parse OpenAI tool arguments: ${getSdkErrorMessage(err)}`,
+          );
+          // Keep the raw string if parsing fails
+          input = functionData.arguments;
+        }
+      }
+
+      return {
+        callId,
+        name,
+        input,
+        rawCall: toolCall,
+      };
     }
+
+    // Fallback to legacy function_call format
     const func = responseObject?.choices?.[0]?.message?.function_call;
     if (func) {
-      return JSON.stringify(func, null, 2);
+      const name = func.name?.trim();
+
+      if (!name) {
+        this.logger.warn('OpenAI function_call missing name');
+        return null;
+      }
+
+      // Legacy format doesn't have an ID, generate one
+      const callId = `func_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Parse the arguments JSON string
+      let input: unknown = {};
+      if (func.arguments) {
+        try {
+          const argsStr = typeof func.arguments === 'string'
+            ? func.arguments
+            : JSON.stringify(func.arguments);
+          input = JSON.parse(argsStr);
+        } catch (err) {
+          this.logger.warn(
+            `Failed to parse OpenAI function arguments: ${getSdkErrorMessage(err)}`,
+          );
+          input = func.arguments;
+        }
+      }
+
+      this.logger.debug(
+        `Generated ID for legacy OpenAI function_call: ${callId}`,
+      );
+
+      return {
+        callId,
+        name,
+        input,
+        rawCall: func,
+      };
     }
+
     return null;
   }
 

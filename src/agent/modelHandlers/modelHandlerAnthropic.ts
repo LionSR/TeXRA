@@ -1554,15 +1554,35 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return regularThinkingContent;
   }
 
-  extractToolUse(responseObject: BetaMessage): string | null {
+  extractToolUse(responseObject: BetaMessage): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
     const content = responseObject?.content;
-    if (Array.isArray(content)) {
-      const tu = content.find((c: any) => c.type === 'tool_use');
-      if (tu) {
-        return JSON.stringify(tu, null, 2);
-      }
+    if (!Array.isArray(content)) {
+      return null;
     }
-    return null;
+
+    const toolUseBlock = content.find((c: any) => c.type === 'tool_use');
+    if (!toolUseBlock) {
+      return null;
+    }
+
+    // Anthropic tool_use block structure:
+    // { type: 'tool_use', id: string, name: string, input: unknown }
+    const callId = toolUseBlock.id?.trim();
+    const name = toolUseBlock.name?.trim();
+
+    if (!callId || !name) {
+      this.logger.warn(
+        `Anthropic tool_use block missing required fields: id=${callId}, name=${name}`,
+      );
+      return null;
+    }
+
+    return {
+      callId,
+      name,
+      input: toolUseBlock.input ?? {},
+      rawCall: toolUseBlock,
+    };
   }
 
   async createToolUseFollowUpMessages(

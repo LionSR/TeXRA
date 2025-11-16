@@ -1,6 +1,3 @@
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -8,6 +5,7 @@ import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { NormalizedToolCall } from '@agent/modelHandlers/types/NormalizedToolCall';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 // Type imports
@@ -55,124 +53,6 @@ interface ToolValidationDiagnostics {
   }>;
 }
 
-interface NormalizedToolCall {
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: RawToolCallPayload;
-}
-
-const RawToolCallPayloadSchema = z
-  .object({
-    call_id: z.string().optional(),
-    tool_call_id: z.string().optional(),
-    tool_use_id: z.string().optional(),
-    id: z.string().optional(),
-    name: z.string().optional(),
-    function: z
-      .object({
-        name: z.string().optional(),
-        arguments: z
-          .union([z.string(), z.record(z.string(), z.unknown())])
-          .optional(),
-      })
-      .optional(),
-    input: z.unknown().optional(),
-    args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-    arguments: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional(),
-  })
-  .superRefine((value, ctx) => {
-    const trimmed = (val?: string | null) =>
-      typeof val === 'string' ? val.trim() : '';
-
-    if (
-      !trimmed(value.call_id) &&
-      !trimmed(value.tool_call_id) &&
-      !trimmed(value.tool_use_id) &&
-      !trimmed(value.id)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['call_id'],
-        message: 'Tool call is missing an identifier.',
-      });
-    }
-
-    if (!trimmed(value.name) && !trimmed(value.function?.name ?? '')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['name'],
-        message: 'Tool call is missing a name.',
-      });
-    }
-  });
-
-type RawToolCallPayload = z.infer<typeof RawToolCallPayloadSchema>;
-
-const ToolCallPayloadSchema =
-  RawToolCallPayloadSchema.transform<NormalizedToolCall>((payload) => {
-    const trim = (value?: string | null) =>
-      typeof value === 'string' ? value.trim() : '';
-
-    const callId = [
-      payload.call_id,
-      payload.tool_call_id,
-      payload.tool_use_id,
-      payload.id,
-    ]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
-
-    if (!callId) {
-      throw new Error('Tool call is missing an identifier.');
-    }
-
-    const name = [payload.name, payload.function?.name]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
-
-    if (!name) {
-      throw new Error('Tool call is missing a name.');
-    }
-
-    const argumentSources: Array<unknown> = [
-      payload.input,
-      payload.args,
-      payload.arguments,
-      payload.function?.arguments,
-    ];
-
-    let input: unknown = {};
-    for (const candidate of argumentSources) {
-      if (candidate === undefined || candidate === null) {
-        continue;
-      }
-      if (typeof candidate === 'string') {
-        const trimmed = candidate.trim();
-        if (!trimmed) {
-          continue;
-        }
-        try {
-          input = JSON.parse(trimmed);
-        } catch {
-          input = trimmed;
-        }
-        break;
-      }
-      input = candidate;
-      break;
-    }
-
-    return {
-      callId,
-      name,
-      input,
-      raw: payload,
-    };
-  });
-
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
@@ -218,7 +98,7 @@ export interface ToolUseCycleState {
   shouldStop: boolean;
   response?: unknown;
   responseTime?: number;
-  toolInfo?: string;
+  toolCall?: NormalizedToolCall;
   text?: string;
   stopReason?: ProviderStopReason;
 }
@@ -227,7 +107,7 @@ function resetToolUseState(state: ToolUseCycleState): void {
   state.shouldStop = false;
   state.response = undefined;
   state.responseTime = undefined;
-  state.toolInfo = undefined;
+  state.toolCall = undefined;
   state.text = undefined;
   state.stopReason = undefined;
 }
@@ -403,7 +283,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
-        toolInfo?: string;
+        toolCall?: NormalizedToolCall;
         stopReason: ProviderStopReason;
         text?: string;
         endTurn: boolean;
@@ -428,7 +308,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       }
     }
 
-    const toolInfo = options.modelHandler.extractToolUse(state.response);
+    const toolCall = options.modelHandler.extractToolUse(state.response);
     const [text, usage, stopReason] = options.modelHandler.extractResponse(
       state.response,
       '',
@@ -463,7 +343,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
-    if (!toolInfo || endTurn) {
+    if (!toolCall || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
@@ -472,11 +352,11 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { stopReason, text, endTurn: true };
     }
 
-    state.toolInfo = toolInfo;
+    state.toolCall = toolCall;
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
-    return { toolInfo, stopReason, text: text ?? undefined, endTurn: false };
+    return { toolCall, stopReason, text: text ?? undefined, endTurn: false };
   }
 
   async post(
@@ -485,7 +365,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     execRes:
       | { skipped: true }
       | {
-          toolInfo?: string;
+          toolCall?: NormalizedToolCall;
           stopReason: ProviderStopReason;
           text?: string;
           endTurn: boolean;
@@ -524,15 +404,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   async exec(context: ToolUseCycleShared<C>): Promise<
     | { skipped: true }
     | {
-        raw: RawToolCallPayload;
-        name: string;
-        input: unknown;
-        toolCallId: string;
+        toolCall: NormalizedToolCall;
       }
     | ToolDispatchErrorResult
   > {
     const { options, state, store } = context;
-    if (state.shouldStop || !state.toolInfo) {
+    if (state.shouldStop || !state.toolCall) {
       return { skipped: true };
     }
 
@@ -543,59 +420,17 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return { skipped: true };
     }
 
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(state.toolInfo);
-    } catch (error) {
-      const errorMsg = `Malformed tool JSON: ${toErrorMessage(error)}`;
-      const errorResult = toolResult({ error: errorMsg, isError: true });
-      const toolUseLog = {
-        tool: 'unknown',
-        input: state.toolInfo,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-      return {
-        handledError: true,
-        toolName: 'unknown',
-        result: errorResult,
-        fallbackMessage:
-          'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
-      };
-    }
+    // Tool call is already normalized by the ModelHandler
+    // No need for JSON parsing or Zod validation - that's now done in the ModelHandler
+    const { callId, name, input } = state.toolCall;
 
-    const parsed = ToolCallPayloadSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      const { message, diagnostics } = normalizeToolCallError(
-        'unknown',
-        parsed.error,
-      );
-      const errorResult = toolResult({
-        error: message,
-        isError: true,
-        diagnostics,
-      });
-      const toolUseLog = {
-        tool: 'unknown',
-        input: parsedJson,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-      return {
-        handledError: true,
-        toolName: 'unknown',
-        result: errorResult,
-        raw: parsedJson,
-        fallbackMessage: message,
-      };
-    }
+    options.logger.debug(
+      `Dispatching tool call: ${name} (ID: ${callId})`,
+      groupId,
+    );
 
-    const payload = parsed.data;
     return {
-      raw: payload.raw,
-      name: payload.name,
-      input: payload.input,
-      toolCallId: payload.callId,
+      toolCall: state.toolCall,
     };
   }
 
@@ -605,10 +440,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     execRes:
       | { skipped: true }
       | {
-          raw: RawToolCallPayload;
-          name: string;
-          input: unknown;
-          toolCallId: string;
+          toolCall: NormalizedToolCall;
         }
       | ToolDispatchErrorResult,
   ): Promise<string | undefined> {
@@ -660,11 +492,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return FlowTransition.CONTINUE;
     }
 
-    const tool = options.toolRegistry[execRes.name];
+    const { toolCall } = execRes;
+    const tool = options.toolRegistry[toolCall.name];
     let result: ToolResult;
     if (!tool) {
       result = toolResult({
-        error: `Unknown tool ${execRes.name}`,
+        error: `Unknown tool ${toolCall.name}`,
         isError: true,
       });
     } else {
@@ -673,13 +506,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           {
             streamId: options.logger.channelId,
             executionId: options.context.executionId,
-            toolCallId: execRes.toolCallId,
+            toolCallId: toolCall.callId,
           },
-          () => tool.call(execRes.input),
+          () => tool.call(toolCall.input),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
-          execRes.name,
+          toolCall.name,
           err,
         );
         result = toolResult({
@@ -691,8 +524,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     }
 
     const toolUseLog = {
-      tool: execRes.name,
-      input: execRes.input ?? execRes.raw,
+      tool: toolCall.name,
+      input: toolCall.input ?? toolCall.rawCall,
       output: sanitizeToolResultForLog(result),
     };
     options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
@@ -725,9 +558,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,
-        execRes.toolCallId,
-        execRes.name,
-        execRes.raw,
+        toolCall.callId,
+        toolCall.name,
+        toolCall.rawCall,
         buildToolResultPayload(result),
         store.workspace,
         state.text ?? '',

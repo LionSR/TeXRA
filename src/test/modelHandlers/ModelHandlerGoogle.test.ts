@@ -97,15 +97,19 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
       ],
     };
 
-    const toolInfo = handler.extractToolUse(response);
-    assert.ok(toolInfo, 'expected tool info to be returned');
+    const toolCall = handler.extractToolUse(response);
+    assert.ok(toolCall, 'expected tool call to be returned');
 
-    const parsed = JSON.parse(toolInfo as string);
-    assert.equal(typeof parsed.id, 'string');
-    assert.notEqual(parsed.id.trim(), '');
-    assert.equal(parsed.call_id, parsed.id);
-    assert.equal(parsed.tool_call_id, parsed.id);
-    assert.equal(parsed.tool_use_id, parsed.id);
+    if (!toolCall) {
+      throw new Error('Tool call should not be null');
+    }
+
+    // Tool call is now normalized
+    assert.equal(typeof toolCall.callId, 'string');
+    assert.notEqual(toolCall.callId.trim(), '');
+    assert.equal(toolCall.name, 'get_weather');
+    assert.deepStrictEqual(toolCall.input, { location: 'San Francisco' });
+    assert.ok(toolCall.rawCall, 'expected rawCall to be preserved');
   });
 });
 

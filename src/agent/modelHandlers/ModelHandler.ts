@@ -668,7 +668,7 @@ export abstract class ModelHandler<
    * @param responseObject The raw response object from the model
    * @returns JSON string with tool call details or null if not present
    */
-  extractToolUse(_responseObject: any): string | null {
+  extractToolUse(_responseObject: any): import('@agent/modelHandlers/types/NormalizedToolCall').NormalizedToolCall | null {
     return null;
   }
 

@@ -135,17 +135,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(responseObject: any): string | null {
-    const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
-    }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
-    }
-    return null;
-  }
+  // Inherit extractToolUse from ModelHandlerOpenAI - uses the same format
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
