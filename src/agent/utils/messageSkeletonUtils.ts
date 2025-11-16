@@ -6,6 +6,14 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 
 // Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
+import type {
+  MessageSkeleton,
+  ContentItemSkeleton,
+} from '@common/types/MessageSkeleton';
+import {
+  isPlainObject,
+  isContentItemArray,
+} from '@common/types/MessageSkeleton';
 
 /**
  * Creates a skeleton representation of a message object for debugging.
@@ -17,7 +25,7 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 export function messageToSkeleton(
   message: ProviderMessage | ProviderMessage[],
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): any {
+): MessageSkeleton | MessageSkeleton[] | null {
   if (!message) {
     return null;
   }
@@ -26,19 +34,19 @@ export function messageToSkeleton(
     return message.map((item) => messageToSkeleton(item, maxContentLength));
   }
 
-  if (typeof message !== 'object') {
-    return typeof message;
+  if (!isPlainObject(message)) {
+    return { _type: typeof message } as unknown as MessageSkeleton;
   }
 
-  const result: any = {};
+  const result: MessageSkeleton = {};
 
   for (const [key, value] of Object.entries(message)) {
     if (key === 'content') {
-      if (Array.isArray(value)) {
+      if (isContentItemArray(value)) {
         // Handle content arrays (common in Anthropic responses)
-        result[key] = value.map((item: any) => {
-          if (typeof item === 'object') {
-            const itemSkeleton: any = { type: item.type };
+        result[key] = value.map((item) => {
+          if (isPlainObject(item)) {
+            const itemSkeleton: ContentItemSkeleton = { type: String(item.type) };
 
             if (item.text) {
               const truncatedText =
@@ -68,7 +76,7 @@ export function messageToSkeleton(
 
             return itemSkeleton;
           }
-          return typeof item;
+          return { _type: typeof item };
         });
       } else if (typeof value === 'string') {
         // Handle string content
@@ -78,7 +86,7 @@ export function messageToSkeleton(
             : value;
       } else {
         // Other content types
-        result[key] = typeof value;
+        result[key] = { _type: typeof value };
       }
     } else if (
       key === 'data' &&
@@ -87,15 +95,9 @@ export function messageToSkeleton(
     ) {
       // Truncate large data strings
       result[key] = `[data: ${value.length} chars]`;
-    } else if (
-      typeof value === 'object' &&
-      value !== null &&
-      value !== undefined
-    ) {
+    } else if (isPlainObject(value)) {
       // Recursively process nested objects
-      // Note: We pass 'any' here since nested properties within a message
-      // are not necessarily ProviderMessage instances themselves
-      result[key] = messageToSkeleton(value as any, maxContentLength);
+      result[key] = messageToSkeleton(value as ProviderMessage, maxContentLength);
     } else {
       // Pass through primitive values
       result[key] = value;
