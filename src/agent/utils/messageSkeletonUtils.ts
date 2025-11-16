@@ -2,11 +2,11 @@
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports
-import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import {
   isPlainObject,
   isContentItemArray,
 } from '@common/types/MessageSkeleton';
+import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
 /**
  * Creates a skeleton representation of a message object for debugging.
