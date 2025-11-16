@@ -2,7 +2,11 @@
 import { BaseNode, Flow } from '@agent/node';
 
 // Internal imports
-import { AgentInitNode, type AgentInitNodeConfig } from './AgentInitNode';
+import {
+  AgentInitNode,
+  type AgentInitNodeConfig,
+  type AgentInitShared,
+} from './AgentInitNode';
 import { buildRunFlow } from './buildRunFlow';
 
 interface FlowLink<Shared> {
@@ -11,7 +15,7 @@ interface FlowLink<Shared> {
   to?: BaseNode<Shared>;
 }
 
-interface CreateAgentRunFlowOptions<Shared> {
+interface CreateAgentRunFlowOptions<Shared extends AgentInitShared<any, any>> {
   init: AgentInitNodeConfig<Shared>;
   finalize: BaseNode<Shared>;
   links(nodes: {
@@ -20,7 +24,7 @@ interface CreateAgentRunFlowOptions<Shared> {
   }): FlowLink<Shared>[];
 }
 
-export function createAgentRunFlow<Shared>({
+export function createAgentRunFlow<Shared extends AgentInitShared<any, any>>({
   init,
   finalize,
   links,
