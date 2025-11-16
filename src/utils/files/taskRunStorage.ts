@@ -17,7 +17,11 @@ import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 import { AbsoluteFS } from './absoluteFS';
 import { flexibleFS } from './flexibleFS';
-import { normalizeRunRelative, decodePathComponent, isSafePathSegment } from './pathNormalizer';
+import {
+  normalizeRunRelative,
+  decodePathComponent,
+  isSafePathSegment,
+} from './pathNormalizer';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
@@ -121,13 +125,17 @@ function toWorkspaceRelative(target: string): string {
   const workspaceRoot = WorkspaceFS.getPath();
   if (workspaceRoot) {
     const relative = path.relative(workspaceRoot, target);
-    if (!relative.startsWith('..') && !path.isAbsolute(relative)) return relative;
+    if (!relative.startsWith('..') && !path.isAbsolute(relative))
+      return relative;
   }
 
   const storageRoot = StorageFS.fullPath('');
   const normalizedTarget = path.normalize(target);
   if (storageRoot && normalizedTarget.startsWith(storageRoot)) {
-    const segments = path.relative(storageRoot, normalizedTarget).split(path.sep).filter(Boolean);
+    const segments = path
+      .relative(storageRoot, normalizedTarget)
+      .split(path.sep)
+      .filter(Boolean);
     const taskRunIndex = segments.indexOf(TASK_RUNS_DIR);
     if (taskRunIndex >= 0 && segments.length > taskRunIndex + 2) {
       return segments.slice(taskRunIndex + 2).join(path.sep);
@@ -378,7 +386,9 @@ export class TaskRunFileService {
     const normalizedRoot = path.resolve(root);
     const normalizedCandidate = path.resolve(candidate);
     if (normalizedCandidate === normalizedRoot) return true;
-    const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : `${normalizedRoot}${path.sep}`;
+    const rootWithSep = normalizedRoot.endsWith(path.sep)
+      ? normalizedRoot
+      : `${normalizedRoot}${path.sep}`;
     return normalizedCandidate.startsWith(rootWithSep);
   }
 
