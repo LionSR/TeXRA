@@ -61,7 +61,7 @@ export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
   public logId: number;
-  public outputFiles: { [key: number]: string[] };
+  public outputFiles: { [key: number]: NamedOutputFile[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
   private rawOutputs: { [key: number]: FileLocation | null };
   private roundFileInfos: { [key: number]: OutputFileInfo[] };
@@ -218,7 +218,7 @@ export class OutputHandler implements IOutputHandler {
    * @param round The round index to initialize.
    * @returns The mutable list of outputs for the round.
    */
-  public ensureRound(round: number): string[] {
+  public ensureRound(round: number): NamedOutputFile[] {
     if (!this.outputFiles[round]) {
       this.outputFiles[round] = [];
     }
@@ -326,10 +326,6 @@ export class OutputHandler implements IOutputHandler {
     const mapping = this.getRoundMapping(currRound);
 
     const infos: OutputFileInfo[] = [];
-    const namedOutputs = this.getNamedOutputs(currRound);
-    const namedByStorage = new Map(
-      namedOutputs.map((entry) => [entry.path, entry]),
-    );
     const baseByOutput = new Map<string, string>();
     const prevByOutput = new Map<string, string>();
 
@@ -354,11 +350,8 @@ export class OutputHandler implements IOutputHandler {
       return mapping.locationByOutput.get(relative) ?? null;
     };
 
-    for (const file of roundOutputs) {
-      const named = namedByStorage.get(file);
-      const namedLocation = named?.location;
-      const fallbackLocation = this.fileService.describePath(file);
-      const location = namedLocation ?? fallbackLocation;
+    for (const output of roundOutputs) {
+      const location = output.location;
       const relativePath = location.relativePath;
 
       const baseFile = baseByOutput.get(relativePath) ?? null;
@@ -374,7 +367,7 @@ export class OutputHandler implements IOutputHandler {
       const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBaseActual,
-        file,
+        output.path,
       );
 
       const workspacePath = location.workspace?.absolutePath ?? null;
@@ -389,7 +382,7 @@ export class OutputHandler implements IOutputHandler {
         !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
 
       infos.push({
-        path: file,
+        path: output.path,
         relativePath,
         displayLabel,
         displayDir,
@@ -401,7 +394,7 @@ export class OutputHandler implements IOutputHandler {
         baseLocation: diffBaseLocation ?? null,
         prevLocation: locationFor(prevFile),
         originalLocation: locationFor(originalFile),
-        source: named?.source ?? relativePath ?? null,
+        source: output.source ?? relativePath ?? null,
         rawOutputPath: rawLocation?.absolutePath ?? null,
         rawLocation: rawLocation ?? null,
         xmlSummary: xmlSummarySnapshot,
@@ -495,8 +488,8 @@ export class OutputHandler implements IOutputHandler {
     }
 
     this.roundFileInfos[round] = infos;
-    this.outputFiles[round] = infos.map((info) => info.path);
-    this.outputMappings[round] = this.buildNamedOutputsFromInfos(infos);
+    this.outputFiles[round] = this.buildNamedOutputsFromInfos(infos);
+    this.outputMappings[round] = this.outputFiles[round];
 
     const rawSource =
       infos.find((info) => info.rawLocation || info.rawOutputPath) ?? infos[0];
@@ -560,13 +553,9 @@ export class OutputHandler implements IOutputHandler {
    * @param files The output file paths
    * @param mappings The named output file mappings
    */
-  private setRoundOutputs(
-    round: number,
-    files: string[],
-    mappings: NamedOutputFile[],
-  ): void {
-    this.outputFiles[round] = files;
-    this.outputMappings[round] = mappings;
+  private setRoundOutputs(round: number, outputs: NamedOutputFile[]): void {
+    this.outputFiles[round] = outputs;
+    this.outputMappings[round] = outputs;
     this.invalidateMappingsFromRound(round);
   }
 
@@ -757,7 +746,7 @@ export class OutputHandler implements IOutputHandler {
                 );
               }
               this.rawOutputs[currRound] = rawLocation;
-              this.setRoundOutputs(currRound, processedFiles, processedPairs);
+              this.setRoundOutputs(currRound, processedPairs);
               await this.captureXmlSummary(
                 currRound,
                 rawPath,
@@ -770,7 +759,7 @@ export class OutputHandler implements IOutputHandler {
             this.logger.debug(
               `No processed files were generated from ${outputFile}`,
             );
-            this.setRoundOutputs(currRound, [], []);
+            this.setRoundOutputs(currRound, []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
               rawPath = rawLocation?.absolutePath ?? outputFile;
@@ -787,7 +776,7 @@ export class OutputHandler implements IOutputHandler {
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
-            this.setRoundOutputs(currRound, [], []);
+            this.setRoundOutputs(currRound, []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
               rawPath = rawLocation?.absolutePath ?? outputFile;
@@ -805,19 +794,15 @@ export class OutputHandler implements IOutputHandler {
           this.logger.debug(`Processing single output for ${outputFile}`);
 
           try {
-            const processedLocation =
-              rawLocation ?? this.fileService.describePath(outputFile);
+            const processedLocation = rawLocation
+              ? { ...rawLocation }
+              : this.fileService.describePath(outputFile);
             let processed: NamedOutputFile = {
               source: outputFile,
-              path: processedLocation?.absolutePath ?? rawPath,
-              relativePath:
-                processedLocation?.relativePath ??
-                rawLocation?.relativePath ??
-                outputFile,
-              workspacePath:
-                processedLocation?.workspace?.absolutePath ?? undefined,
-              location:
-                processedLocation ?? this.fileService.describePath(outputFile),
+              path: processedLocation.absolutePath,
+              relativePath: processedLocation.relativePath,
+              workspacePath: processedLocation.workspace?.absolutePath,
+              location: processedLocation,
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>
@@ -845,8 +830,7 @@ export class OutputHandler implements IOutputHandler {
             rawPath = rawLocation?.absolutePath ?? rawPath;
             outputFile = rawPath;
             this.rawOutputs[currRound] = rawLocation;
-            const processedFiles =
-              hasProcessedPath && processed.path ? [processed] : [];
+            const processedFiles = hasProcessedPath ? [processed] : [];
 
             if (hasProcessedPath) {
               if (this.baseFiles && this.baseFiles.length > 0) {
@@ -857,16 +841,12 @@ export class OutputHandler implements IOutputHandler {
                 );
               }
 
-              this.setRoundOutputs(
-                currRound,
-                processedFiles.map((entry) => entry.path),
-                processedFiles,
-              );
+              this.setRoundOutputs(currRound, processedFiles);
             } else {
               this.logger.debug(
                 `No processed file was generated from ${outputFile}`,
               );
-              this.setRoundOutputs(currRound, [], []);
+              this.setRoundOutputs(currRound, []);
             }
 
             await this.captureXmlSummary(
@@ -893,7 +873,7 @@ export class OutputHandler implements IOutputHandler {
               executionId: this.fileService.getExecutionId(),
               filesByRound: { [currRound]: [] },
             });
-            this.setRoundOutputs(currRound, [], []);
+            this.setRoundOutputs(currRound, []);
             await this.captureXmlSummary(currRound, outputFile, [], scope);
           }
         };
@@ -912,7 +892,7 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
-    const outputFiles = this.ensureRound(round).slice();
+    const outputFiles = this.ensureRound(round).map((entry) => ({ ...entry }));
     const processed = this.getNamedOutputs(round).map((entry) => ({
       ...entry,
     }));
