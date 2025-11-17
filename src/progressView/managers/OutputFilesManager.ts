@@ -195,10 +195,10 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [runKey, rounds] of runs.entries()) {
       for (const infos of rounds.values()) {
         if (
-          infos.some((info) =>
-            info.location.runStorage?.storageRelativePath?.includes(
-              executionId,
-            ),
+          infos.some(
+            (info) =>
+              info.location.kind === 'runStorage' &&
+              info.location.executionId === executionId,
           )
         ) {
           return this.getRun(stream, runKey);
@@ -266,18 +266,18 @@ export class OutputFilesManager extends PersistentMapManager<
     info: OutputFileInfo,
   ): void {
     // Current file
-    if (info.location.scope === 'workspace') {
+    if (info.location.kind === 'workspace') {
       this.addWorkspaceAbsolute(target, info.location.absolutePath);
     }
 
     // Lineage files
-    if (info.lineage?.base?.scope === 'workspace') {
+    if (info.lineage?.base?.kind === 'workspace') {
       this.addWorkspaceAbsolute(target, info.lineage.base.absolutePath);
     }
-    if (info.lineage?.previous?.scope === 'workspace') {
+    if (info.lineage?.previous?.kind === 'workspace') {
       this.addWorkspaceAbsolute(target, info.lineage.previous.absolutePath);
     }
-    if (info.lineage?.original?.scope === 'workspace') {
+    if (info.lineage?.original?.kind === 'workspace') {
       this.addWorkspaceAbsolute(target, info.lineage.original.absolutePath);
     }
   }

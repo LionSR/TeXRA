@@ -544,7 +544,16 @@ function getBasePath(info: OutputFileInfo): string | null {
  * Get file description for display - trust source field.
  */
 function describeFile(info: OutputFileInfo): string {
-  return info.source || path.basename(info.location.relativePath);
+  if (info.source) {
+    return info.source;
+  }
+  if (
+    info.location.kind === 'workspace' ||
+    info.location.kind === 'runStorage'
+  ) {
+    return path.basename(info.location.relativePath);
+  }
+  return path.basename(info.location.absolutePath);
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -594,7 +603,11 @@ async function runLatexdiffFromMetadata(params: {
         info,
       });
 
-      const key = info.location.relativePath;
+      const key =
+        info.location.kind === 'workspace' ||
+        info.location.kind === 'runStorage'
+          ? info.location.relativePath
+          : info.location.absolutePath;
       let group = groupedByRelative.get(key);
       if (!group) {
         group = [];
