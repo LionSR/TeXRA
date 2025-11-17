@@ -540,7 +540,6 @@ function getBasePath(info: OutputFileInfo): string | null {
   return base?.absolutePath ?? null;
 }
 
-
 /**
  * Get file description for display - trust source field.
  */
@@ -590,7 +589,9 @@ async function runLatexdiffFromMetadata(params: {
         basePath,
         revisedPath,
         description,
-        cwd: getWorkspaceDir(info) ?? path.dirname(basePath),
+        cwd: info.location.workspace
+          ? path.dirname(info.location.workspace.absolutePath)
+          : path.dirname(basePath),
         round,
         info,
       });
@@ -630,8 +631,12 @@ async function runLatexdiffFromMetadata(params: {
           revisedPath: currPath,
           description,
           cwd:
-            getWorkspaceDir(previous.info) ??
-            getWorkspaceDir(current.info) ??
+            (previous.info.location.workspace
+              ? path.dirname(previous.info.location.workspace.absolutePath)
+              : null) ??
+            (current.info.location.workspace
+              ? path.dirname(current.info.location.workspace.absolutePath)
+              : null) ??
             path.dirname(prevPath),
           fromRound: previous.round,
           toRound: current.round,

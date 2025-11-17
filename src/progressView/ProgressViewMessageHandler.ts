@@ -410,10 +410,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       executionId: normalizedRunId,
     });
 
-    const executionIdFromRun =
-      normalizedRunId ?? this.extractExecutionIdFromOutputs(runOutputs);
+    // Trust stored executionId, don't extract from paths
     const executionId =
-      executionIdFromRun ?? this.provider.state.getExecutionId(stream);
+      normalizedRunId ?? this.provider.state.getExecutionId(stream);
 
     try {
       let directoryToReveal: string | undefined;
@@ -642,36 +641,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       useMultipleOutputs,
       skipProgressViewClear: true,
     });
-  }
-
-  /**
-   * Extract execution ID from file outputs.
-   * Trust FileLocation.runStorage structure.
-   */
-  private extractExecutionIdFromOutputs(
-    outputs: Map<number, OutputFileInfo[]> | undefined,
-  ): ExecutionId | undefined {
-    if (!outputs) {
-      return undefined;
-    }
-
-    // Simply check the first file that has run storage info
-    for (const infos of outputs.values()) {
-      for (const info of infos) {
-        const storagePath = info.location.runStorage?.storageRelativePath;
-        if (storagePath) {
-          // Extract from path: taskRuns/<executionId>/...
-          const segments = storagePath.split(path.sep).filter(Boolean);
-          const runsIndex = segments.indexOf('taskRuns');
-          if (runsIndex !== -1 && runsIndex + 1 < segments.length) {
-            const candidate = segments[runsIndex + 1];
-            return normalizeExecutionId(candidate);
-          }
-        }
-      }
-    }
-
-    return undefined;
   }
 
   /**
