@@ -122,7 +122,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     this.resumeSnapshot = snapshot;
   }
 
-  private async waitForFollowUp(): Promise<string | null> {
+  public async waitForFollowUp(): Promise<string | null> {
     return this.sessionLifecycle.waitForFollowUp(() =>
       this.checkInterruption(),
     );
@@ -159,33 +159,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         extendHooks: (baseHooks: AgentRunHooks) => ({
           ...baseHooks,
           init: (runStage) => this.init(runStage, { createStage: false }),
-          prepareState: () => this.prepareInitialSessionState(),
-          buildCycleOptions: (store) => this.buildToolUseCycleOptions(store),
-          runCycle: (options, messages, store) =>
-            runToolUseCycle({
-              options,
-              messages,
-              store,
-            }),
-          checkInterruption: () => this.checkInterruption(),
-          hasQueuedFollowUp: () => this.sessionLifecycle.hasQueuedFollowUp(),
-          enterWaitingState: () => this.enterWaitingState(),
-          clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
-          waitForFollowUp: () => this.waitForFollowUp(),
-          markRunning: () => this.markRunning(),
-          applyFollowUp: async (followUp, messages) => {
-            this.logger.userMessage(followUp);
-            const updatedMessages =
-              await this.modelHandler.createUserFollowUpMessages(
-                messages,
-                followUp,
-              );
-            this.getActiveState().conversation = [...updatedMessages];
-            return this.getActiveState().conversation;
-          },
-          logFinalizeWarning: (message, error) => {
-            this.logger.warn(message, undefined, undefined, error);
-          },
           cleanup: async () => {
             await baseHooks.cleanup();
             this.sessionLifecycle.dispose();
@@ -197,7 +170,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     }
   }
 
-  private async prepareInitialSessionState(): Promise<{
+  public async prepareInitialSessionState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
@@ -257,7 +230,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return { messages, store, shouldSkipCycle: false };
   }
 
-  private buildToolUseCycleOptions(
+  public buildToolUseCycleOptions(
     store: AgentSharedStore,
   ): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
@@ -280,18 +253,47 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async enterWaitingState(): Promise<void> {
+  public async enterWaitingState(): Promise<void> {
     await this.sessionLifecycle.enterWaitingState(
       this.getActiveState().conversation,
     );
   }
 
-  private async markRunning(): Promise<void> {
+  public async markRunning(): Promise<void> {
     await this.sessionLifecycle.markRunning();
   }
 
-  private async clearPersistedSnapshot(): Promise<void> {
+  public async clearPersistedSnapshot(): Promise<void> {
     await this.sessionLifecycle.clearPersistedSnapshot();
+  }
+
+  public hasQueuedFollowUp(): boolean {
+    return this.sessionLifecycle.hasQueuedFollowUp();
+  }
+
+  public async runToolUseCycle(
+    options: ToolUseCycleOptions<C>,
+    messages: ProviderMessage[],
+    store: AgentSharedStore,
+  ): Promise<void> {
+    await runToolUseCycle({ options, messages, store });
+  }
+
+  public async applyFollowUpMessage(
+    followUp: string,
+    messages: ProviderMessage[],
+  ): Promise<ProviderMessage[]> {
+    this.logger.userMessage(followUp);
+    const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
+      messages,
+      followUp,
+    );
+    this.getActiveState().conversation = [...updatedMessages];
+    return this.getActiveState().conversation;
+  }
+
+  public logFinalizeWarning(message: string, error: unknown): void {
+    this.logger.warn(message, undefined, undefined, error);
   }
 
   private getActiveState(): ToolUseRunState<C> {

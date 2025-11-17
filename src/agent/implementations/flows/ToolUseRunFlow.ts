@@ -49,36 +49,11 @@ export interface ToolUseRunState<C = unknown> {
   runState: AgentRunState;
 }
 
-export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
-  prepareState(): Promise<{
-    messages: ProviderMessage[];
-    store: AgentSharedStore;
-    shouldSkipCycle: boolean;
-  }>;
-  buildCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C>;
-  runCycle(
-    options: ToolUseCycleOptions<C>,
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ): Promise<void>;
-  checkInterruption(): boolean;
-  hasQueuedFollowUp(): boolean;
-  enterWaitingState(): Promise<void>;
-  clearPersistedSnapshot(): Promise<void>;
-  waitForFollowUp(): Promise<string | null>;
-  markRunning(): Promise<void>;
-  applyFollowUp(
-    followUp: string,
-    messages: ProviderMessage[],
-  ): Promise<ProviderMessage[]>;
-  logFinalizeWarning?(message: string, error: unknown): void;
-}
-
 export type ToolUseRunShared<C = unknown> = AgentRunShared<
   BaseToolUseAgent<C>,
   ToolUseRunState<C>,
   ToolUseRunLifecycle,
-  ToolUseRunHooks<C>
+  AgentRunHooks
 >;
 
 class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
@@ -91,8 +66,9 @@ class ToolUsePrepareNode<C> extends BaseNode<ToolUseRunShared<C>> {
     shared: ToolUseRunShared<C>,
   ): Promise<ToolUsePrepareExecResult<C>> {
     return runNodeExecution(async () => {
-      const prepared = await shared.hooks.prepareState();
-      const cycleOptions = shared.hooks.buildCycleOptions(prepared.store);
+      // Call agent methods directly - no hook indirection
+      const prepared = await shared.agent.prepareInitialSessionState();
+      const cycleOptions = shared.agent.buildToolUseCycleOptions(prepared.store);
       return {
         ...prepared,
         cycleOptions,
@@ -132,7 +108,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
   }
 
   async exec(shared: ToolUseRunShared<C>): Promise<ToolUseCycleExecResult> {
-    const { hooks, state } = shared;
+    const { agent, state } = shared;
     const cycleOptions = state.cycleOptions!;
 
     return runNodeExecution(async () => {
@@ -141,29 +117,31 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
           if (!state.store) {
             throw new Error('Tool-use store is not initialized.');
           }
-          await hooks.runCycle(cycleOptions, state.conversation, state.store);
+          // Call agent method directly - no hook indirection
+          await agent.runToolUseCycle(cycleOptions, state.conversation, state.store);
         } else {
           state.shouldSkipCycle = false;
         }
 
-        if (hooks.checkInterruption()) {
+        // Call agent methods directly - no hook indirection
+        if (agent.isInterruptionRequested()) {
           return;
         }
 
-        if (hooks.hasQueuedFollowUp()) {
-          await hooks.clearPersistedSnapshot();
+        if (agent.hasQueuedFollowUp()) {
+          await agent.clearPersistedSnapshot();
         } else {
-          await hooks.enterWaitingState();
+          await agent.enterWaitingState();
         }
 
-        const followUp = await hooks.waitForFollowUp();
-        if (!followUp || hooks.checkInterruption()) {
+        const followUp = await agent.waitForFollowUp();
+        if (!followUp || agent.isInterruptionRequested()) {
           return;
         }
 
-        await hooks.markRunning();
-        await hooks.clearPersistedSnapshot();
-        const updatedMessages = await hooks.applyFollowUp(
+        await agent.markRunning();
+        await agent.clearPersistedSnapshot();
+        const updatedMessages = await agent.applyFollowUpMessage(
           followUp,
           state.conversation,
         );
@@ -197,19 +175,19 @@ export function createToolUseRunFlow<C>(): Flow<ToolUseRunShared<C>> {
     finalizePhase: 'finalize',
     computeStatus: ({ lifecycle }) =>
       lifecycle.status === 'error' ? 'error' : 'stopped',
-    runFinalize: async ({ hooks }, status) => {
-      await hooks.clearPersistedSnapshot();
+    runFinalize: async ({ agent, hooks }, status) => {
+      // Call agent method directly - no hook indirection
+      await agent.clearPersistedSnapshot();
       await hooks.end(status);
     },
     runCleanup: async ({ hooks }) => {
       await hooks.cleanup();
     },
     onSuccess: ({ lifecycle }) => setLifecycleStatus(lifecycle, 'completed'),
-    onSecondaryError: ({ hooks }, error) =>
-      hooks.logFinalizeWarning?.(
-        'Additional finalize error encountered.',
-        error,
-      ),
+    onSecondaryError: ({ agent }, error) => {
+      // Call agent method directly - no hook indirection
+      agent.logFinalizeWarning('Additional finalize error encountered.', error);
+    },
   });
 
   return createAgentRunFlow<ToolUseRunShared<C>>({
