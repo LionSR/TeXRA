@@ -60,10 +60,15 @@ export type SkippableNodeResult<T> =
 
 /**
  * Generic reset function for cycle states.
- * Resets all resettable fields while preserving input data (messages).
+ * Resets base state fields and any additional optional fields to undefined.
+ *
+ * IMPORTANT: Only pass fields that should be reset to undefined.
+ * - Do NOT pass 'messages' (preserved across cycles)
+ * - Do NOT pass boolean fields like 'endTurn' or 'roundFinalized'
+ *   (these should be reset to false separately, not undefined)
  *
  * @param state - The state object to reset
- * @param additionalFields - Additional field names beyond BaseCycleState to reset
+ * @param additionalFields - Field names to reset to undefined (typically optional object fields)
  */
 export function resetCycleState<T extends BaseCycleState>(
   state: T,
@@ -74,11 +79,11 @@ export function resetCycleState<T extends BaseCycleState>(
   state.responseTime = undefined;
   state.stopReason = undefined;
 
-  // Reset additional fields specific to the cycle type
+  // Reset additional optional fields to undefined
   for (const field of additionalFields) {
+    // Skip 'messages' to preserve it across resets
     if (field !== 'messages') {
-      // Preserve messages, reset everything else
-      (state[field] as any) = undefined;
+      state[field] = undefined as T[typeof field];
     }
   }
 }
