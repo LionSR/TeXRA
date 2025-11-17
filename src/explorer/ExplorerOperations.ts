@@ -5,9 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - explorer
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
-import { validateYamlAndPromptAdd } from '@frontend/agents/register';
+import { showLoggedErrorMessage } from '@common/errors';
+import { agentDirectories } from '@frontend/agents';
+import { validateYamlAndPromptAdd } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 import { safeExecuteCommand } from '@utils/system/commandUtils';

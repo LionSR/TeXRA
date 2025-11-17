@@ -5,7 +5,7 @@ import * as path from 'path';
 import { Minimatch } from 'minimatch';
 
 // Local imports - tools
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 import { toPosixPath } from '@tools/pathUtils';
 import { WorkspaceFS, getMimeType } from '@utils/files';

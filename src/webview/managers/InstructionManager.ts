@@ -5,8 +5,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { toErrorMessage } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';

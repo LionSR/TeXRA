@@ -3,7 +3,7 @@ import { CrossrefClient } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - metadata
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 

@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 

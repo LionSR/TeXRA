@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WolframTool } from '@tools/wolfram';
 

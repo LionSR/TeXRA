@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 // Local imports - agent runtime
 import { ModelFactory } from '@agent/runtime/ModelFactory';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 // Type imports
 import type { TaskState } from '@logger/TaskState';

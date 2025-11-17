@@ -6,7 +6,7 @@ import { quote as shellQuote } from 'shell-quote';
 import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Internal imports
 import * as logger from '@logger/logUtils';

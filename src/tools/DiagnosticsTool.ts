@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import {
   getLinterMessages,
   countDiagnosticsBySeverity,

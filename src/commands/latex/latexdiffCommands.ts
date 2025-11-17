@@ -12,7 +12,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
   showLoggedMessageWithDocs,
-} from '@common/errors/errorHandlingUtils';
+} from '@common/errors';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
