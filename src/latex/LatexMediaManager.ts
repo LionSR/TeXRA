@@ -6,7 +6,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskRunFileService, flexibleFS } from '@utils/files';
+import { TaskRunFileService, flexibleFS, pathToLocation } from '@utils/files';
 
 // Local file imports
 import { extractFigurePathsFromLatex } from './extractFigure';
@@ -93,7 +93,7 @@ export class LatexMediaManager {
     const compileResults = await Promise.allSettled(
       texFiles.map(async (file) => {
         const buildDir = path.join(path.dirname(file), 'build');
-        await flexibleFS.ensureDir(buildDir);
+        await flexibleFS.ensureDir(pathToLocation(buildDir));
         const compiled = await compileLatex2Pdf(
           file,
           undefined,
@@ -105,9 +105,9 @@ export class LatexMediaManager {
             buildDir,
             path.basename(file).replace(/\.tex$/, '.pdf'),
           );
-          if (await flexibleFS.exists(pdfFile)) {
+          if (await flexibleFS.exists(pathToLocation(pdfFile))) {
             try {
-              const stats = await flexibleFS.stat(pdfFile);
+              const stats = await flexibleFS.stat(pathToLocation(pdfFile));
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file}: ${pdfFile}`,

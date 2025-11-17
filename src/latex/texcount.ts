@@ -1,7 +1,7 @@
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -14,7 +14,7 @@ logger.initialize(CHANNEL);
  */
 async function hasChinesePackages(filePath: string): Promise<boolean> {
   try {
-    const content = await flexibleFS.read(filePath);
+    const content = await flexibleFS.read(pathToLocation(filePath));
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -70,7 +70,7 @@ async function validateTexFile(
   filePath: string,
   channel: string,
 ): Promise<ValidationResult> {
-  if (!(await flexibleFS.exists(filePath))) {
+  if (!(await flexibleFS.exists(pathToLocation(filePath)))) {
     const reason = `File ${filePath} does not exist.`;
     logger.warn(channel, reason);
     return { valid: false, reason };
