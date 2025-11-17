@@ -42,7 +42,6 @@ import { runLatexFormatter } from '@latex/texFormatter';
 // Local file imports
 import { XmlOutputManager } from './XmlOutputManager';
 import {
-  type NamedOutputFile,
   type OutputFileInfo,
   type OutputXmlSummary,
   type RoundFileMapping,
@@ -61,8 +60,8 @@ export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
   public logId: number;
-  public outputFiles: { [key: number]: NamedOutputFile[] };
-  public outputMappings: { [key: number]: NamedOutputFile[] };
+  public outputFiles: { [key: number]: OutputFileInfo[] };
+  public outputMappings: { [key: number]: OutputFileInfo[] };
   private rawOutputs: { [key: number]: FileLocation | null };
   private roundFileInfos: { [key: number]: OutputFileInfo[] };
   private roundMappings: { [key: number]: RoundFileMapping };
@@ -218,7 +217,7 @@ export class OutputHandler implements IOutputHandler {
    * @param round The round index to initialize.
    * @returns The mutable list of outputs for the round.
    */
-  public ensureRound(round: number): NamedOutputFile[] {
+  public ensureRound(round: number): OutputFileInfo[] {
     if (!this.outputFiles[round]) {
       this.outputFiles[round] = [];
     }
@@ -419,7 +418,7 @@ export class OutputHandler implements IOutputHandler {
     const locationByOutput = new Map<string, FileLocation>();
 
     const registerEntry = (
-      entry: NamedOutputFile,
+      entry: OutputFileInfo,
       { skipIfExists = false }: { skipIfExists?: boolean } = {},
     ) => {
       const key = entry.location.relativePath;
@@ -444,16 +443,15 @@ export class OutputHandler implements IOutputHandler {
     return mapping;
   }
 
+  /**
+   * @deprecated No longer needed - outputFiles now uses OutputFileInfo directly.
+   * This method is kept temporarily during migration but does nothing.
+   */
   private buildNamedOutputsFromInfos(
     infos: OutputFileInfo[],
-  ): NamedOutputFile[] {
-    return infos.map((info) => ({
-      source: info.source,
-      path: info.location.absolutePath,
-      relativePath: info.location.relativePath,
-      workspacePath: info.location.workspace?.absolutePath,
-      location: info.location,
-    }));
+  ): OutputFileInfo[] {
+    // Simply return the infos - no transformation needed
+    return infos;
   }
 
   private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
@@ -495,7 +493,7 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
-  private getNamedOutputs(round: number): NamedOutputFile[] {
+  private getNamedOutputs(round: number): OutputFileInfo[] {
     if (!this.outputMappings[round]) {
       this.outputMappings[round] = [];
     }
@@ -515,9 +513,9 @@ export class OutputHandler implements IOutputHandler {
    * Set output files and mappings for a round, invalidating the cache.
    * @param round The round number
    * @param files The output file paths
-   * @param mappings The named output file mappings
+   * @param outputs The output file infos
    */
-  private setRoundOutputs(round: number, outputs: NamedOutputFile[]): void {
+  private setRoundOutputs(round: number, outputs: OutputFileInfo[]): void {
     this.outputFiles[round] = outputs;
     this.outputMappings[round] = outputs;
     this.invalidateMappingsFromRound(round);
@@ -694,7 +692,9 @@ export class OutputHandler implements IOutputHandler {
               await this.xmlManager.processMultipleXmlOutputs(outputFile);
 
             if (processedPairs && processedPairs.length > 0) {
-              const processedFiles = processedPairs.map((p) => p.path);
+              const processedFiles = processedPairs.map(
+                (p) => p.location.absolutePath,
+              );
               await this.indentLatexFiles(processedFiles);
               this.logger.debug(
                 `Indented multiple output files: ${processedFiles.join(',')}`,
@@ -756,12 +756,11 @@ export class OutputHandler implements IOutputHandler {
             const processedLocation = rawLocation
               ? { ...rawLocation }
               : this.fileService.resolveRelativePath(outputFile);
-            let processed: NamedOutputFile = {
+            let processed: OutputFileInfo = {
               source: outputFile,
-              path: processedLocation.absolutePath,
-              relativePath: processedLocation.relativePath,
-              workspacePath: processedLocation.workspace?.absolutePath,
               location: processedLocation,
+              lineage: undefined,
+              diff: undefined,
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>
@@ -777,12 +776,14 @@ export class OutputHandler implements IOutputHandler {
                 await this.xmlManager.processSingleXmlOutput(outputFile);
             }
 
-            const hasProcessedPath = Boolean(processed && processed.path);
+            const hasProcessedPath = Boolean(
+              processed && processed.location.absolutePath,
+            );
 
-            if (hasProcessedPath && processed.path) {
-              await this.indentLatexFile(processed.path);
+            if (hasProcessedPath && processed.location.absolutePath) {
+              await this.indentLatexFile(processed.location.absolutePath);
               this.logger.debug(
-                `Indented single output file: ${processed.path}`,
+                `Indented single output file: ${processed.location.absolutePath}`,
               );
             }
 
@@ -794,7 +795,7 @@ export class OutputHandler implements IOutputHandler {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  processedFiles.map((entry) => entry.path),
+                  processedFiles.map((entry) => entry.location.absolutePath),
                   this.logger,
                 );
               }
@@ -885,11 +886,12 @@ export class OutputHandler implements IOutputHandler {
   private async captureXmlSummary(
     round: number,
     rawOutput: FileLocation | null,
-    processed: NamedOutputFile[],
+    processed: OutputFileInfo[],
     stage?: AgentLogStage,
   ): Promise<void> {
     const run = async () => {
-      const singleFile = processed.length === 1 ? processed[0].path : null;
+      const singleFile =
+        processed.length === 1 ? processed[0].location.absolutePath : null;
       const sourceLocation = rawOutput ?? this.rawOutputs[round] ?? null;
 
       if (!rawOutput?.absolutePath) {
