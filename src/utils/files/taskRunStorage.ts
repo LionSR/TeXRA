@@ -618,7 +618,12 @@ export class TaskRunFileService {
       throw error;
     }
 
-    const persisted = await flexibleFS.exists(runPaths.absolute);
+    const runLocation = createRunStorageLocation(
+      runPaths.absolute,
+      runPaths.runRelative,
+      executionId,
+    );
+    const persisted = await flexibleFS.exists(runLocation);
     if (!persisted) {
       await removeIfExists(runPaths.absolute);
       throw new Error(
@@ -697,7 +702,7 @@ export function getComparablePath(location: FileLocation): string {
 /**
  * Convert a string path to a FileLocation.
  * Standalone version for use in utilities without TaskRunFileService.
- * 
+ *
  * @param target - Absolute or workspace-relative path
  * @returns FileLocation representing the path
  */
@@ -717,7 +722,7 @@ export function pathToLocation(target: string): FileLocation {
   }
 
   const normalized = path.normalize(target);
-  
+
   // Check if in workspace
   const workspaceRoot = WorkspaceFS.getPath();
   if (workspaceRoot) {

@@ -4,6 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - type
+import type { FileLocation } from '@agent/output/types';
+
 // Local imports - log
 import { logErrorMessage, formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -89,7 +92,12 @@ export class LaTeXdiffService {
       }
 
       // Validate document structure
-      if (!(await this.validateDocumentStructure(inputFile, editedFile))) {
+      if (
+        !(await this.validateDocumentStructure(
+          pathToLocation(inputFile),
+          pathToLocation(editedFile),
+        ))
+      ) {
         return {
           success: false,
           message: 'Files missing document environment',
@@ -157,7 +165,7 @@ export class LaTeXdiffService {
     mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
-      if (!(await this.validateDocumentStructure(inputFile))) {
+      if (!(await this.validateDocumentStructure(pathToLocation(inputFile)))) {
         const message = 'File missing document environment';
         logger.error(this.channel, message);
         vscode.window.showWarningMessage(
@@ -175,7 +183,7 @@ export class LaTeXdiffService {
       await this.commandExecutor.executeDiffVc(inputFile, commitHash, {
         mathMarkup,
       });
-      await this.fileProcessor.processDiffFile(outputPath);
+      await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
 
       return {
         success: true,
@@ -264,8 +272,10 @@ export class LaTeXdiffService {
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const baseExists = await flexibleFS.exists(baseFile);
-      const outputExists = await flexibleFS.exists(outputFile);
+      const baseLocation = pathToLocation(baseFile);
+      const outputLocation = pathToLocation(outputFile);
+      const baseExists = await flexibleFS.exists(baseLocation);
+      const outputExists = await flexibleFS.exists(outputLocation);
       if (baseExists && outputExists) {
         return await this.runDiff(
           baseFile,
@@ -294,8 +304,10 @@ export class LaTeXdiffService {
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const firstExists = await flexibleFS.exists(outputFile1);
-      const secondExists = await flexibleFS.exists(outputFile2);
+      const firstLocation = pathToLocation(outputFile1);
+      const secondLocation = pathToLocation(outputFile2);
+      const firstExists = await flexibleFS.exists(firstLocation);
+      const secondExists = await flexibleFS.exists(secondLocation);
       if (firstExists && secondExists) {
         const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
         const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
@@ -330,7 +342,7 @@ export class LaTeXdiffService {
   }
 
   private async validateDocumentStructure(
-    ...files: string[]
+    ...files: FileLocation[]
   ): Promise<boolean> {
     for (const file of files) {
       const content = await flexibleFS.read(file);

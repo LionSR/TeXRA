@@ -3,6 +3,7 @@ import * as assert from 'assert';
 
 // Internal imports
 import { flexibleFS } from '@utils/files/flexibleFS';
+import { pathToLocation } from '@utils/files/taskRunStorage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
@@ -48,7 +49,7 @@ describe('flexibleFS.write', () => {
           assert.deepEqual(options, { recursive: true, useTrash: false });
         }) as typeof AbsoluteFS.delete;
 
-      await flexibleFS.write('file.tex', 'content');
+      await flexibleFS.write(pathToLocation('file.tex'), 'content');
 
       assert.deepEqual(writes, ['file.tex', 'file.tex']);
       assert.strictEqual(deleteTarget, '/tmp/workspace/file.tex');
