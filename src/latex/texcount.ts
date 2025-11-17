@@ -12,9 +12,11 @@ logger.initialize(CHANNEL);
  * @param filePath Path to the LaTeX file
  * @returns Promise<boolean> True if the file contains Chinese packages
  */
-async function hasChinesePackages(filePath: string): Promise<boolean> {
+async function hasChinesePackages(
+  fileLocation: FileLocation,
+): Promise<boolean> {
   try {
-    const content = await flexibleFS.read(pathToLocation(filePath));
+    const content = await flexibleFS.read(fileLocation);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -89,7 +91,7 @@ async function detectChineseMode(
   filePath: string,
   channel: string,
 ): Promise<boolean> {
-  if (await hasChinesePackages(filePath)) {
+  if (await hasChinesePackages(pathToLocation(filePath))) {
     logger.debug(
       channel,
       `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
@@ -202,7 +204,7 @@ async function getSummedCount(
     validPaths.push(filePath);
 
     if (!enableChineseMode) {
-      const hasChinese = await hasChinesePackages(filePath);
+      const hasChinese = await hasChinesePackages(pathToLocation(filePath));
       if (hasChinese) {
         enableChineseMode = true;
         logger.debug(
