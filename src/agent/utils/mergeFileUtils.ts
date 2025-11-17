@@ -4,6 +4,20 @@
  */
 
 /**
+ * Parsed components from a merge filename.
+ */
+export type FilenameParts = {
+  /** Base name of the file */
+  base: string;
+  /** Agent name that processed the file */
+  agent: string;
+  /** Round number of processing */
+  roundNum: number;
+  /** Model name used for processing */
+  model: string;
+};
+
+/**
  * Extracts agent name from filename parts handling multiple formats.
  * @param parts Array of filename parts split by underscore
  * @param underscoreCount Total number of underscores in filename
@@ -33,12 +47,10 @@ export function extractAgentName(
 /**
  * Extracts components from edited filename for merge operations.
  * @param editedBase Base name of edited file without extension
- * @returns Tuple of [base name, agent name, round number, model name]
+ * @returns Parsed filename components
  * @throws Error if filename components cannot be extracted
  */
-export function parseFilenameParts(
-  editedBase: string,
-): [string, string, number, string] {
+export function parseFilenameParts(editedBase: string): FilenameParts {
   const parts = editedBase.split('_');
   const underscoreCount = parts.length - 1;
   const base = parts[0];
@@ -63,5 +75,5 @@ export function parseFilenameParts(
   // Get model name (last part)
   const model = parts.at(-1) || '';
 
-  return [base, agent, roundNum, model];
+  return { base, agent, roundNum, model };
 }
