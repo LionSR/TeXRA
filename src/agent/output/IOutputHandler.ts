@@ -5,7 +5,6 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 import {
-  NamedOutputFile,
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
@@ -15,10 +14,10 @@ import {
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
   /** Map of generated output files by round. */
-  outputFiles: { [key: number]: NamedOutputFile[] };
+  outputFiles: { [key: number]: OutputFileInfo[] };
 
   /** Mapping of source to processed output files by round. */
-  outputMappings: { [key: number]: NamedOutputFile[] };
+  outputMappings: { [key: number]: OutputFileInfo[] };
 
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
@@ -27,7 +26,7 @@ export interface IOutputHandler {
   readonly diffManager: LatexDiffManager;
 
   /** Ensure storage for a round and return its outputs. */
-  ensureRound(round: number): NamedOutputFile[];
+  ensureRound(round: number): OutputFileInfo[];
 
   /** Determine whether a round has generated outputs. */
   hasRoundOutputs(round: number): boolean;

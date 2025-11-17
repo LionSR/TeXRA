@@ -165,24 +165,7 @@ export interface RoundFileMapping {
 }
 
 // ============================================================================
-// LEGACY SCHEMAS (for migration - will be removed)
+// LEGACY TYPES REMOVED
 // ============================================================================
-
-/**
- * @deprecated Use OutputFile instead.
- * Legacy schema with duplicate path fields. Kept temporarily for migration.
- */
-export const NamedOutputFileSchema = z
-  .object({
-    source: z.string(),
-    path: z.string(), // Duplicate of location.absolutePath
-    relativePath: z.string(), // Duplicate of location.relativePath
-    workspacePath: z.string().optional(), // Duplicate of location.workspace?.absolutePath
-    location: FileLocationSchema,
-  })
-  .strict();
-
-/**
- * @deprecated Use OutputFile instead.
- */
-export type NamedOutputFile = z.infer<typeof NamedOutputFileSchema>;
+// NamedOutputFile has been eliminated. Use OutputFileInfo instead.
+// OutputFileInfo contains all necessary information without duplicate fields.
