@@ -650,40 +650,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   /**
    * Extract execution ID from output file info.
-   * Trust the location structure - no need to check multiple places.
+   * Trust the location structure.
    */
   private resolveExecutionIdFromInfo(
     info: OutputFileInfo,
   ): ExecutionId | undefined {
     const storagePath = info.location.runStorage?.storageRelativePath;
-    return this.extractExecutionIdFromRelative(storagePath);
-  }
-
-  private extractExecutionIdFromRelative(
-    relative: string | null | undefined,
-  ): ExecutionId | undefined {
-    if (!relative) {
+    if (!storagePath) {
       return undefined;
     }
 
-    const segments = relative.split(path.sep).filter(Boolean);
+    const segments = storagePath.split(path.sep).filter(Boolean);
     const runsIndex = segments.indexOf('taskRuns');
-    if (runsIndex === -1) {
-      return undefined;
-    }
-
-    if (runsIndex + 1 >= segments.length) {
+    if (runsIndex === -1 || runsIndex + 1 >= segments.length) {
       return undefined;
     }
 
     const candidate = segments[runsIndex + 1];
-    const normalizedCandidate = normalizeExecutionId(candidate);
-
-    if (normalizedCandidate) {
-      return normalizedCandidate;
-    }
-
-    return undefined;
+    return normalizeExecutionId(candidate);
   }
 
   /**

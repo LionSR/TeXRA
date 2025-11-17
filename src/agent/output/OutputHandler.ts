@@ -392,8 +392,8 @@ export class OutputHandler implements IOutputHandler {
       return existing;
     }
 
-    const currentNamed = this.getNamedOutputs(currRound);
-    const currentRelatives = currentNamed.map(
+    const currentOutputs = this.outputMappings[currRound] || [];
+    const currentRelatives = currentOutputs.map(
       (entry) => entry.location.relativePath,
     );
 
@@ -403,8 +403,11 @@ export class OutputHandler implements IOutputHandler {
       'contains',
     );
 
-    const prevNamed = currRound > 0 ? this.getNamedOutputs(currRound - 1) : [];
-    const prevRelatives = prevNamed.map((entry) => entry.location.relativePath);
+    const prevOutputs =
+      currRound > 0 ? this.outputMappings[currRound - 1] || [] : [];
+    const prevRelatives = prevOutputs.map(
+      (entry) => entry.location.relativePath,
+    );
 
     const prevToOutput =
       currRound > 0
@@ -412,7 +415,10 @@ export class OutputHandler implements IOutputHandler {
         : new Map<string, string>();
 
     const originByOutput = new Map(
-      currentNamed.map((entry) => [entry.location.relativePath, entry.source]),
+      currentOutputs.map((entry) => [
+        entry.location.relativePath,
+        entry.source,
+      ]),
     );
 
     const locationByOutput = new Map<string, FileLocation>();
@@ -430,8 +436,8 @@ export class OutputHandler implements IOutputHandler {
       }
     };
 
-    currentNamed.forEach((entry) => registerEntry(entry));
-    prevNamed.forEach((entry) => registerEntry(entry, { skipIfExists: true }));
+    currentOutputs.forEach((entry) => registerEntry(entry));
+    prevOutputs.forEach((entry) => registerEntry(entry, { skipIfExists: true }));
 
     const mapping: RoundFileMapping = {
       baseToOutput,
@@ -441,17 +447,6 @@ export class OutputHandler implements IOutputHandler {
     };
     this.roundMappings[currRound] = mapping;
     return mapping;
-  }
-
-  /**
-   * @deprecated No longer needed - outputFiles now uses OutputFileInfo directly.
-   * This method is kept temporarily during migration but does nothing.
-   */
-  private buildNamedOutputsFromInfos(
-    infos: OutputFileInfo[],
-  ): OutputFileInfo[] {
-    // Simply return the infos - no transformation needed
-    return infos;
   }
 
   private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
@@ -466,8 +461,8 @@ export class OutputHandler implements IOutputHandler {
     }
 
     this.roundFileInfos[round] = infos;
-    this.outputFiles[round] = this.buildNamedOutputsFromInfos(infos);
-    this.outputMappings[round] = this.outputFiles[round];
+    this.outputFiles[round] = infos;
+    this.outputMappings[round] = infos;
 
     // Note: rawOutput and xmlSummary should come from RoundOutputArtifacts,
     // not from individual file infos. Keep existing values if already set.
@@ -491,13 +486,6 @@ export class OutputHandler implements IOutputHandler {
       const entries = Array.isArray(infos) ? infos : [];
       this.applyHydratedRound(round, entries);
     }
-  }
-
-  private getNamedOutputs(round: number): OutputFileInfo[] {
-    if (!this.outputMappings[round]) {
-      this.outputMappings[round] = [];
-    }
-    return this.outputMappings[round];
   }
 
   private invalidateRoundMapping(round: number): void {
