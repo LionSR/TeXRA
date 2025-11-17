@@ -2,10 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - history view
-import {
-  BaseViewContentProvider,
-  ModuleDescriptor,
-} from '@common/webview/BaseViewContentProvider';
+import { BaseViewContentProvider, ModuleDescriptor } from '@common/webview';
 
 export class HistoryViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {

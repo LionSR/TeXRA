@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - log
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskRunFileService, flexibleFS } from '@utils/files';
 

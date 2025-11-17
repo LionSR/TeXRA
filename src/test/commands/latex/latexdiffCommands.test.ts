@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - commands
-import * as errorHandlingModule from '@common/errors/errorHandlingUtils';
+import * as errorHandlingModule from '@common/errors';
 import * as openBuildModule from '@frontend/latex/openBuild';
 import * as systemModule from '@utils/system';
 import * as configModule from '@utils/config';

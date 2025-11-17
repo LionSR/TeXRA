@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import * as vscode from 'vscode';
 
 // Local imports - test
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import {
   registerMainViewCommands,
   mainViewCommands,

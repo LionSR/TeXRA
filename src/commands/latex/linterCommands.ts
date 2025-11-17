@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports - log
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import {
   getLinterMessages,
   getSeverityString,

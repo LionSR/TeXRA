@@ -2,7 +2,7 @@
 import { ZodError, type ZodType } from 'zod';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - model
 import type { ToolDefinition } from '@model';

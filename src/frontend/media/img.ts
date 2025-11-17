@@ -8,7 +8,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { AbsoluteFS, getMimeType, resolveFilePath } from '@utils/files';

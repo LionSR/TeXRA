@@ -5,7 +5,7 @@ import { XMLParser } from 'fast-xml-parser';
 // Local imports - core
 import { parseAgentConfig } from '@agent/core/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   getActiveEditorWithGuards,

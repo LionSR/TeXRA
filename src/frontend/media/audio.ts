@@ -8,7 +8,7 @@ import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { AbsoluteFS, StorageFS } from '@utils/files';

@@ -13,7 +13,7 @@ import type {
   LogGroupFinishedEvent,
   LogGroupStartedEvent,
   LogMessageEvent,
-} from '@logger/types/LogEventSink';
+} from '@logger/types';
 
 // Internal imports
 import { getConfig } from '@utils/config';
