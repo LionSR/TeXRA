@@ -367,38 +367,18 @@ export class OutputHandler implements IOutputHandler {
       const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBaseActual,
-        output.path,
+        location.absolutePath,
       );
-
-      const workspacePath = location.workspace?.absolutePath ?? null;
-      const displayLabel = this.fileService.getDisplayLabel(
-        baseFile ?? relativePath,
-      );
-      const displayDirSource = baseFile ?? relativePath;
-      const displayDirRaw = displayDirSource
-        ? path.dirname(displayDirSource)
-        : '';
-      const displayDir =
-        !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
 
       infos.push({
-        path: output.path,
-        relativePath,
-        displayLabel,
-        displayDir,
-        workspacePath: workspacePath ?? null,
-        base: baseFile,
-        prev: prevFile,
-        original: originalFile,
+        source: output.source,
         location,
-        baseLocation: diffBaseLocation ?? null,
-        prevLocation: locationFor(prevFile),
-        originalLocation: locationFor(originalFile),
-        source: output.source ?? relativePath ?? null,
-        rawOutputPath: rawLocation?.absolutePath ?? null,
-        rawLocation: rawLocation ?? null,
-        xmlSummary: xmlSummarySnapshot,
-        ...stats,
+        lineage: {
+          base: diffBaseLocation,
+          previous: locationFor(prevFile),
+          original: locationFor(originalFile),
+        },
+        diff: stats,
       });
     }
     return infos;
@@ -468,10 +448,10 @@ export class OutputHandler implements IOutputHandler {
     infos: OutputFileInfo[],
   ): NamedOutputFile[] {
     return infos.map((info) => ({
-      source: info.source ?? info.relativePath,
-      path: info.path,
-      relativePath: info.relativePath,
-      workspacePath: info.workspacePath ?? undefined,
+      source: info.source,
+      path: info.location.absolutePath,
+      relativePath: info.location.relativePath,
+      workspacePath: info.location.workspace?.absolutePath,
       location: info.location,
     }));
   }
@@ -491,26 +471,10 @@ export class OutputHandler implements IOutputHandler {
     this.outputFiles[round] = this.buildNamedOutputsFromInfos(infos);
     this.outputMappings[round] = this.outputFiles[round];
 
-    const rawSource =
-      infos.find((info) => info.rawLocation || info.rawOutputPath) ?? infos[0];
-
-    const rawLocation = rawSource?.rawLocation ?? null;
-
-    this.rawOutputs[round] = rawLocation ?? null;
-
-    const summary = infos
-      .map((info) => info.xmlSummary ?? null)
-      .find((value) => value !== null);
-
-    if (summary) {
-      this.roundXmlSummaries[round] = {
-        tagContents: { ...summary.tagContents },
-        documents: [...summary.documents],
-        singleOutputFile: summary.singleOutputFile,
-        sourceLocation: summary.sourceLocation ?? rawLocation ?? null,
-      };
-    } else {
-      delete this.roundXmlSummaries[round];
+    // Note: rawOutput and xmlSummary should come from RoundOutputArtifacts,
+    // not from individual file infos. Keep existing values if already set.
+    if (!Object.prototype.hasOwnProperty.call(this.rawOutputs, round)) {
+      this.rawOutputs[round] = null;
     }
 
     this.invalidateMappingsFromRound(round);
@@ -678,7 +642,8 @@ export class OutputHandler implements IOutputHandler {
           filesByRound: { [currRound]: fileInfos },
         });
 
-        for (const { path: filePath } of fileInfos) {
+        for (const info of fileInfos) {
+          const filePath = info.location.absolutePath;
           if (this.openedOutputs.has(filePath)) {
             continue;
           }
@@ -890,10 +855,6 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
-    const outputFiles = this.ensureRound(round).map((entry) => ({ ...entry }));
-    const processed = this.getNamedOutputs(round).map((entry) => ({
-      ...entry,
-    }));
     let fileInfos = this.roundFileInfos[round];
     if (!fileInfos) {
       fileInfos = await this.gatherOutputFileInfo(round);
@@ -905,10 +866,7 @@ export class OutputHandler implements IOutputHandler {
     return {
       round,
       rawOutput: rawLocation,
-      rawOutputPath: rawLocation?.absolutePath ?? null,
-      outputFiles,
-      processedFiles: processed,
-      fileInfos,
+      outputs: fileInfos,
       xmlSummary: this.getRoundXmlSummary(round),
     };
   }
