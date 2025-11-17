@@ -18,7 +18,8 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -29,7 +30,6 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
-    private readonly fileService: TaskRunFileService,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
@@ -127,11 +127,10 @@ export class XmlOutputManager {
   }
 
   async splitScratchpadOutputXml(
-    outputFile: string,
+    outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    const outputLocation = this.fileService.resolveRelativePath(outputFile);
     const { dir, name } = path.parse(outputLocation.absolutePath);
     const texFile = path.join(dir, `${name}.tex`);
 
@@ -169,7 +168,7 @@ export class XmlOutputManager {
         return texFile;
       }
       throw new Error(
-        `Failed to extract <${documentTag}> from ${path.basename(outputFile)}`,
+        `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
       );
     } catch (err) {
       throw err;
@@ -177,11 +176,10 @@ export class XmlOutputManager {
   }
 
   async splitScratchpadMultipleOutputXml(
-    outputFile: string,
+    outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<OutputFileInfo[]> {
-    const outputLocation = this.fileService.resolveRelativePath(outputFile);
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -203,7 +201,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (documents) {
-        return this.processMultipleLatexDocuments(documents, outputFile);
+        return this.processMultipleLatexDocuments(documents, outputLocation);
       }
       this.logger.debug(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
@@ -217,7 +215,7 @@ export class XmlOutputManager {
       if (fallbackDocuments) {
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
-          outputFile,
+          outputLocation,
         );
       }
       return [];
@@ -234,7 +232,7 @@ export class XmlOutputManager {
       if (fallbackDocuments) {
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
-          outputFile,
+          outputLocation,
         );
       }
       throw err;
@@ -247,11 +245,11 @@ export class XmlOutputManager {
    */
   private buildOutputFileInfo(
     source: string,
-    outputPath: string,
+    outputLocation: FileLocation,
   ): OutputFileInfo {
     return {
       source,
-      location: this.fileService.resolveRelativePath(outputPath),
+      location: outputLocation,
       lineage: null,
       diff: null,
     };
@@ -260,24 +258,26 @@ export class XmlOutputManager {
   /**
    * Build a clean output file reference (new simplified format).
    */
-  private buildOutputFile(source: string, outputPath: string): OutputFile {
-    const location = this.fileService.resolveRelativePath(outputPath);
+  private buildOutputFile(
+    source: string,
+    outputLocation: FileLocation,
+  ): OutputFile {
     return {
       source,
-      location,
+      location: outputLocation,
     };
   }
 
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
-    outputFile: string,
+    outputLocation: FileLocation,
   ): Promise<OutputFileInfo[]> {
     const outputFiles: OutputFileInfo[] = [];
-    const outputParts = path.basename(outputFile).split('_');
+    const outputParts = path.basename(outputLocation.absolutePath).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    const roundMatch = outputFile.match(/_r(\d+)_/);
+    const roundMatch = outputLocation.absolutePath.match(/_r(\d+)_/);
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
@@ -303,9 +303,9 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      const outputLocation = this.fileService.resolveRelativePath(texFile);
-      await AbsoluteFS.write(outputLocation.absolutePath, doc.content.trim());
-      outputFiles.push(this.buildOutputFileInfo(source, texFile));
+      const texLocation = pathToLocation(texFile);
+      await AbsoluteFS.write(texLocation.absolutePath, doc.content.trim());
+      outputFiles.push(this.buildOutputFileInfo(source, texLocation));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -314,16 +314,19 @@ export class XmlOutputManager {
     return outputFiles;
   }
 
-  async processSingleXmlOutput(outputFile: string): Promise<OutputFileInfo> {
-    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
+  async processSingleXmlOutput(
+    outputLocation: FileLocation,
+  ): Promise<OutputFileInfo> {
+    this.logger.debug(
+      `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
+    );
 
     const processedOutputFile = await this.splitScratchpadOutputXml(
-      outputFile,
+      outputLocation,
       this.agentSetting.documentTag,
     );
 
-    const xmlLocation = this.fileService.resolveRelativePath(outputFile);
-    const xmlContent = await AbsoluteFS.read(xmlLocation.absolutePath);
+    const xmlContent = await AbsoluteFS.read(outputLocation.absolutePath);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -332,30 +335,31 @@ export class XmlOutputManager {
 
     return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
-      processedOutputFile,
+      pathToLocation(processedOutputFile),
     );
   }
 
   async processMultipleXmlOutputs(
-    outputFile: string,
+    outputLocation: FileLocation,
   ): Promise<OutputFileInfo[]> {
     this.logger.debug(
-      `Splitting multiple scratchpad output XML: ${outputFile}`,
+      `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
     );
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
-      outputFile,
+      outputLocation,
       this.agentSetting.documentTag,
     );
     return processedOutputFiles;
   }
 
   async ensureCorrectXmlStructure(
-    filePath: string,
+    fileLocation: FileLocation,
     documentTag: string,
   ): Promise<void> {
-    this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    const xmlLocation = this.fileService.resolveRelativePath(filePath);
-    const originalContent = await AbsoluteFS.read(xmlLocation.absolutePath);
+    this.logger.debug(
+      `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
+    );
+    const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
     let content = await this.processXmlContent(originalContent);
 
     let fixed = false;
@@ -374,7 +378,7 @@ export class XmlOutputManager {
     }
 
     if (fixed || content !== originalContent) {
-      await AbsoluteFS.write(xmlLocation.absolutePath, content);
+      await AbsoluteFS.write(fileLocation.absolutePath, content);
     }
   }
 }
