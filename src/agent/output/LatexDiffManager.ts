@@ -9,7 +9,7 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { TaskRunFileService, flexibleFS } from '@utils/files';
+import { TaskRunFileService, flexibleFS, WorkspaceFS } from '@utils/files';
 // Type imports
 import type { FileLocation } from '@utils/files';
 
