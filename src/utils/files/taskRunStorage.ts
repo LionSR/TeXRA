@@ -325,28 +325,6 @@ export class TaskRunFileService {
     return this.useRunStorage;
   }
 
-  public getWorkspaceLocation(
-    target: string | FileLocation | null | undefined,
-  ): string | null {
-    if (!target) {
-      return null;
-    }
-
-    const location =
-      typeof target === 'string' ? this.describePath(target) : target;
-
-    return location.kind === 'workspace' ? location.relativePath : null;
-  }
-
-  public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
-    if (!location || location.kind !== 'workspace') {
-      return null;
-    }
-    const root = this.workspaceRoot;
-    if (!root) return null;
-    return path.join(root, location.relativePath);
-  }
-
   private isWithinWorkspace(candidate: string): boolean {
     const root = this.workspaceRoot;
     if (!root) return false;
@@ -556,39 +534,6 @@ export class TaskRunFileService {
     this.hasPreparedSnapshot = true;
   }
 
-  /**
-   * Convert an absolute or storage path back into a workspace-relative path.
-   * @param target Path that may point to run storage or the workspace.
-   */
-  public getWorkspaceRelativePath(target: string): string {
-    if (!target) {
-      return '';
-    }
-
-    const workspaceRoot = WorkspaceFS.getPath();
-    if (workspaceRoot) {
-      const normalized = path.normalize(target);
-      const relative = path.relative(workspaceRoot, normalized);
-      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-        return relative;
-      }
-    }
-
-    return target;
-  }
-
-  public getWorkspaceDisplayPath(target: string): string {
-    if (!target) {
-      return '';
-    }
-
-    const location = this.describePath(target);
-    if (location.kind === 'workspace' || location.kind === 'runStorage') {
-      return location.relativePath || '';
-    }
-    return target;
-  }
-
   public getDisplayLabel(relativePath: string): string {
     if (!relativePath) {
       return '';
@@ -625,10 +570,6 @@ export class TaskRunFileService {
     }
 
     return createWorkspaceLocation(workspaceAbsolute, normalized);
-  }
-
-  public resolveExpectedPath(target: string): string {
-    return this.resolveRelativePath(target).absolutePath;
   }
 
   /**
