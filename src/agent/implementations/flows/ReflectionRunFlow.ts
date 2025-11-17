@@ -36,15 +36,11 @@ export interface ReflectionRunState {
   continueRounds: boolean;
 }
 
-export interface ReflectionRunHooks extends AgentRunHooks {
-  resetPromptBuilder(): void;
-}
-
 export type ReflectionRunShared<C = unknown> = AgentRunShared<
   BaseReflectionAgent<C>,
   ReflectionRunState,
   ReflectionRunLifecycle,
-  ReflectionRunHooks
+  AgentRunHooks
 >;
 
 interface ReflectionRoundPrep<C> {
@@ -198,7 +194,8 @@ export function createReflectionRunFlow<C>(): Flow<ReflectionRunShared<C>> {
     init: {
       phase: 'init',
       beforeInitialize: (shared) => {
-        shared.hooks.resetPromptBuilder();
+        // Call agent method directly - no hook indirection
+        shared.agent.resetPromptBuilder();
       },
       onSuccess: (shared) => {
         beginLifecyclePhase(shared.lifecycle, 'rounds');

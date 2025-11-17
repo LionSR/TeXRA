@@ -28,7 +28,6 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
 import {
   createReflectionRunFlow,
-  type ReflectionRunHooks,
   type ReflectionRunShared,
   type ReflectionRunState,
   type ReflectionRunPhase,
@@ -254,7 +253,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return this.promptBuilder;
   }
 
-  protected resetPromptBuilder(): void {
+  public resetPromptBuilder(): void {
     this.promptBuilder = undefined;
   }
 
@@ -699,8 +698,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               }
               return runStage;
             },
-            resetPromptBuilder: () => this.resetPromptBuilder(),
-          } satisfies ReflectionRunHooks;
+          };
         },
       });
     } finally {
