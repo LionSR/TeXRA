@@ -86,16 +86,28 @@ export class FileList {
             file.lineage?.original?.absolutePath || '';
           fileItem.dataset.base = file.lineage?.base?.absolutePath || '';
           fileItem.dataset.round = round;
-          if (file.location.workspace?.absolutePath) {
-            fileItem.dataset.workspace = file.location.workspace.absolutePath;
+          if (file.location.kind === 'workspace') {
+            fileItem.dataset.workspace = file.location.absolutePath;
           }
-          fileItem.dataset.relative = file.location.relativePath;
+          if (
+            file.location.kind === 'workspace' ||
+            file.location.kind === 'runStorage'
+          ) {
+            fileItem.dataset.relative = file.location.relativePath;
+          }
         }
 
         // Set the file path display
         if (dirSpan) dirSpan.textContent = dirPath ? `${dirPath}/` : '';
         if (basenameSpan) basenameSpan.textContent = displayLabel;
-        if (filePathSpan) filePathSpan.title = file.location.relativePath;
+        if (filePathSpan) {
+          const displayPath =
+            file.location.kind === 'workspace' ||
+            file.location.kind === 'runStorage'
+              ? file.location.relativePath
+              : file.location.absolutePath;
+          filePathSpan.title = displayPath;
+        }
 
         // Handle diff stats (use schema field names: added/removed)
         if (statsSpan) {

@@ -1108,22 +1108,9 @@ export class LogEntryFormatter {
       value && typeof value === 'object' ? value : null;
     const describeLocation = (location) => {
       if (!location) return '';
-      if (
-        location.workspace &&
-        typeof location.workspace.relativePath === 'string' &&
-        location.workspace.relativePath
-      ) {
-        return location.workspace.relativePath;
-      }
-      if (
-        location.runStorage &&
-        typeof location.runStorage.storageRelativePath === 'string' &&
-        location.runStorage.storageRelativePath
-      ) {
-        return location.runStorage.storageRelativePath;
-      }
-      if (typeof location.relativePath === 'string' && location.relativePath) {
-        return location.relativePath;
+      // Trust the discriminated union - kind field is the source of truth
+      if (location.kind === 'workspace' || location.kind === 'runStorage') {
+        return location.relativePath || '';
       }
       return '';
     };
