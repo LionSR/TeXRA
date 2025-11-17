@@ -23,22 +23,20 @@ import type { FileLocation } from './taskRunStorage';
  */
 export function createFileMapping(
   sourceFiles: FileLocation[],
-  targetFiles: string[],
+  targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
   roundAware: boolean = false,
 ): Map<string, string> {
   const fileMapping = new Map<string, string>();
 
-  if (!sourceFiles?.length || !targetFiles?.length) {
+  if (sourceFiles.length === 0 || targetFiles.length === 0) {
     return fileMapping;
   }
 
-  for (const targetFile of targetFiles) {
-    if (!targetFile || typeof targetFile !== 'string') {
-      continue;
-    }
-
-    const targetBaseName = path.basename(targetFile);
+  for (const target of targetFiles) {
+    const targetPath =
+      target.kind !== 'external' ? target.relativePath : target.absolutePath;
+    const targetBaseName = path.basename(targetPath);
 
     let bestMatch: string | null = null;
     let bestMatchScore = 0;
@@ -82,7 +80,7 @@ export function createFileMapping(
     }
 
     if (bestMatch) {
-      fileMapping.set(bestMatch, targetFile);
+      fileMapping.set(bestMatch, targetPath);
     }
   }
 
@@ -173,10 +171,10 @@ function buildReplacementLookup(
 
 export async function replaceInputCommands(
   baseFiles: FileLocation[],
-  outputFiles: string[],
+  outputFiles: FileLocation[],
   logger?: AgentLogger,
 ): Promise<void> {
-  if (!baseFiles?.length || !outputFiles?.length) {
+  if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');
     return;
   }
@@ -207,13 +205,14 @@ export async function replaceInputCommands(
     return;
   }
 
-  for (const outputFile of outputFiles) {
-    if (!outputFile) {
-      continue;
-    }
+  for (const outputLocation of outputFiles) {
+    const outputPath =
+      outputLocation.kind !== 'external'
+        ? outputLocation.relativePath
+        : outputLocation.absolutePath;
 
     try {
-      const content = await flexibleFS.read(pathToLocation(outputFile));
+      const content = await flexibleFS.read(outputLocation);
       const newContent = content.replace(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -234,12 +233,12 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await flexibleFS.write(pathToLocation(outputFile), newContent);
-        logger?.debug(`Updated input commands in ${outputFile}`);
+        await flexibleFS.write(outputLocation, newContent);
+        logger?.debug(`Updated input commands in ${outputPath}`);
       }
     } catch (err) {
       logger?.warn(
-        `Error processing input commands in ${outputFile}: ${toErrorMessage(err)}`,
+        `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
       );
     }
   }
