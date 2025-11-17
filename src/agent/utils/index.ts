@@ -10,3 +10,4 @@ export * from './text';
 export * from './UsageMonitor';
 export * from './debugMessageSaver';
 export * from './continuationMessage';
+export * from './mergeFileUtils';
