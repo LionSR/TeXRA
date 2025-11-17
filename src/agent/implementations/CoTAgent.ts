@@ -9,7 +9,6 @@ import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
  */
 export class CoTAgent extends BaseReflectionAgent {
-
   /**
    * Processes output for the current round with XML validation.
    * Ensures proper sequencing of XML processing, file processing, and logging.
