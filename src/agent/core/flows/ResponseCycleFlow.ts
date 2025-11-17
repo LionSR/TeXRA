@@ -103,7 +103,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
     const interrupted = Boolean(await options.checkInterruption());
     const outputLocation = fileService.resolveRelativePath(state.outputFile);
-    const exists = await flexibleFS.exists(outputLocation.absolutePath);
+    const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -492,7 +492,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
-        outputLocation.absolutePath,
+        outputLocation,
         (result.bestConnector ?? '') + processedResponse,
       );
     }
