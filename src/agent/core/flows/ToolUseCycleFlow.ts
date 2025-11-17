@@ -9,6 +9,9 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import {
   BaseCycleState,
   resetCycleState,
+  CycleDebugContext,
+  CycleDebugFileOptions,
+  SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -35,17 +38,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
-
-interface DebugContext {
-  logger: ToolUseCycleOptions['logger'];
-  modelName?: string;
-  executionId?: ExecutionId;
-}
-
-interface DebugFileOptions {
-  continuationCount: number;
-  baseName: string;
-}
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -224,33 +216,29 @@ export interface ToolUseCycleState extends BaseCycleState {
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, [
-    'response' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
-    'toolInfo' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
-    'text' as keyof Omit<ToolUseCycleState, keyof BaseCycleState>,
-  ]);
+  resetCycleState(state, ['response', 'toolInfo', 'text']);
 }
 
-export interface ToolUseCycleShared<C = unknown> {
+export interface ToolUseCycleContext<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
   store: AgentSharedStore;
 }
 
-class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<{
+class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
+  async prep(shared: ToolUseCycleContext<C>): Promise<{
     interrupted: boolean;
-    debugContext: DebugContext;
-    debugFileOptions: DebugFileOptions;
+    debugContext: CycleDebugContext;
+    debugFileOptions: CycleDebugFileOptions;
   }> {
     const { options, state, store } = shared;
     const interrupted = Boolean(await options.checkInterruption());
-    const debugContext: DebugContext = {
+    const debugContext: CycleDebugContext = {
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
     };
-    const debugFileOptions: DebugFileOptions = {
+    const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: store.round.roundIndex,
       baseName: 'tooluse',
     };
@@ -258,11 +246,11 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 
   async post(
-    { state }: ToolUseCycleShared<C>,
+    { state }: ToolUseCycleContext<C>,
     prepRes: {
       interrupted: boolean;
-      debugContext: DebugContext;
-      debugFileOptions: DebugFileOptions;
+      debugContext: CycleDebugContext;
+      debugFileOptions: CycleDebugFileOptions;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
@@ -302,31 +290,30 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   return payload;
 }
 
-class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
+  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleShared<C>): Promise<
-    | { skipped: true }
-    | {
-        response: unknown;
-        responseTime?: number;
-        debugContext: DebugContext;
-        debugFileOptions: DebugFileOptions;
-      }
+  async exec(context: ToolUseCycleContext<C>): Promise<
+    SkippableNodeResult<{
+      response: unknown;
+      responseTime?: number;
+      debugContext: CycleDebugContext;
+      debugFileOptions: CycleDebugFileOptions;
+    }>
   > {
     const { options, state, store } = context;
     if (state.shouldStop) {
       return { skipped: true };
     }
 
-    const debugContext: DebugContext = {
+    const debugContext: CycleDebugContext = {
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
     };
-    const debugFileOptions: DebugFileOptions = {
+    const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: store.round.roundIndex,
       baseName: 'tooluse_response',
     };
@@ -353,39 +340,43 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const responseTime = (Date.now() - start) / 1000;
 
-    return { response, responseTime, debugContext, debugFileOptions };
+    return {
+      skipped: false,
+      value: { response, responseTime, debugContext, debugFileOptions },
+    };
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseCycleShared<C>,
-    execRes:
-      | { skipped: true }
-      | {
-          response: unknown;
-          responseTime?: number;
-          debugContext: DebugContext;
-          debugFileOptions: DebugFileOptions;
-        },
+    _shared: ToolUseCycleContext<C>,
+    prepRes: ToolUseCycleContext<C>,
+    execRes: SkippableNodeResult<{
+      response: unknown;
+      responseTime?: number;
+      debugContext: CycleDebugContext;
+      debugFileOptions: CycleDebugFileOptions;
+    }>,
   ): Promise<string | undefined> {
     const { options, state } = prepRes;
 
-    if ('skipped' in execRes) {
+    if (execRes.skipped) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    state.response = execRes.response;
-    state.responseTime = execRes.responseTime;
+    const { response, responseTime, debugContext, debugFileOptions } =
+      execRes.value;
+
+    state.response = response;
+    state.responseTime = responseTime;
 
     await maybeSaveDebugObject({
-      context: execRes.debugContext,
-      fileOptions: execRes.debugFileOptions,
-      object: execRes.response,
+      context: debugContext,
+      fileOptions: debugFileOptions,
+      object: response,
       objectType: 'response',
     });
 
-    if (!execRes.response) {
+    if (!response) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
@@ -394,19 +385,18 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 }
 
-class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
+  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleShared<C>): Promise<
-    | { skipped: true }
-    | {
-        toolInfo?: string;
-        stopReason: ProviderStopReason;
-        text?: string;
-        endTurn: boolean;
-      }
+  async exec(context: ToolUseCycleContext<C>): Promise<
+    SkippableNodeResult<{
+      toolInfo?: string;
+      stopReason: ProviderStopReason;
+      text?: string;
+      endTurn: boolean;
+    }>
   > {
     const { options, state, store } = context;
     if (state.shouldStop || !state.response) {
@@ -468,31 +458,35 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
         store.workspace.assembly.updateLastResponse(text);
       }
       state.shouldStop = true;
-      return { stopReason, text, endTurn: true };
+      return {
+        skipped: false,
+        value: { stopReason, text, endTurn: true },
+      };
     }
 
     state.toolInfo = toolInfo;
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
-    return { toolInfo, stopReason, text: text ?? undefined, endTurn: false };
+    return {
+      skipped: false,
+      value: { toolInfo, stopReason, text: text ?? undefined, endTurn: false },
+    };
   }
 
   async post(
-    shared: ToolUseCycleShared<C>,
+    shared: ToolUseCycleContext<C>,
     _prepRes: unknown,
-    execRes:
-      | { skipped: true }
-      | {
-          toolInfo?: string;
-          stopReason: ProviderStopReason;
-          text?: string;
-          endTurn: boolean;
-        },
+    execRes: SkippableNodeResult<{
+      toolInfo?: string;
+      stopReason: ProviderStopReason;
+      text?: string;
+      endTurn: boolean;
+    }>,
   ): Promise<string | undefined> {
     const { options, state, store } = shared;
 
-    if ('skipped' in execRes) {
+    if (execRes.skipped) {
       store.round.clearUsage();
       return FlowTransition.COMPLETE;
     }
@@ -503,9 +497,9 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
 
     const nextRoundIndex = completedRound.roundIndex + 1;
 
-    if (execRes.endTurn) {
+    if (execRes.value.endTurn) {
       state.shouldStop = true;
-      state.stopReason = execRes.stopReason;
+      state.stopReason = execRes.value.stopReason;
       store.resetRound(nextRoundIndex);
       return FlowTransition.COMPLETE;
     }
@@ -515,20 +509,21 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleShared<C>> {
   }
 }
 
-class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
+class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
+  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleShared<C>): Promise<
-    | { skipped: true }
-    | {
-        raw: RawToolCallPayload;
-        name: string;
-        input: unknown;
-        toolCallId: string;
-      }
-    | ToolDispatchErrorResult
+  async exec(context: ToolUseCycleContext<C>): Promise<
+    SkippableNodeResult<
+      | {
+          raw: RawToolCallPayload;
+          name: string;
+          input: unknown;
+          toolCallId: string;
+        }
+      | ToolDispatchErrorResult
+    >
   > {
     const { options, state, store } = context;
     if (state.shouldStop || !state.toolInfo) {
@@ -555,11 +550,14 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       };
       options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       return {
-        handledError: true,
-        toolName: 'unknown',
-        result: errorResult,
-        fallbackMessage:
-          'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
+        skipped: false,
+        value: {
+          handledError: true,
+          toolName: 'unknown',
+          result: errorResult,
+          fallbackMessage:
+            'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
+        },
       };
     }
 
@@ -581,45 +579,52 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       };
       options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
       return {
-        handledError: true,
-        toolName: 'unknown',
-        result: errorResult,
-        raw: parsedJson,
-        fallbackMessage: message,
+        skipped: false,
+        value: {
+          handledError: true,
+          toolName: 'unknown',
+          result: errorResult,
+          raw: parsedJson,
+          fallbackMessage: message,
+        },
       };
     }
 
     const payload = parsed.data;
     return {
-      raw: payload.raw,
-      name: payload.name,
-      input: payload.input,
-      toolCallId: payload.callId,
+      skipped: false,
+      value: {
+        raw: payload.raw,
+        name: payload.name,
+        input: payload.input,
+        toolCallId: payload.callId,
+      },
     };
   }
 
   async post(
-    _shared: ToolUseCycleShared<C>,
-    prepRes: ToolUseCycleShared<C>,
-    execRes:
-      | { skipped: true }
+    _shared: ToolUseCycleContext<C>,
+    prepRes: ToolUseCycleContext<C>,
+    execRes: SkippableNodeResult<
       | {
           raw: RawToolCallPayload;
           name: string;
           input: unknown;
           toolCallId: string;
         }
-      | ToolDispatchErrorResult,
+      | ToolDispatchErrorResult
+    >,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
     const groupId = options.logger.withCurrentGroup((id) => id);
-    if ('skipped' in execRes) {
+    if (execRes.skipped) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
     }
 
-    if ('handledError' in execRes) {
-      const { toolCallId, result, fallbackMessage, toolName, raw } = execRes;
+    if ('handledError' in execRes.value) {
+      const { toolCallId, result, fallbackMessage, toolName, raw } =
+        execRes.value;
       const workspace = store.workspace;
 
       if (toolCallId) {
@@ -659,11 +664,12 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
       return FlowTransition.CONTINUE;
     }
 
-    const tool = options.toolRegistry[execRes.name];
+    const normalResult = execRes.value;
+    const tool = options.toolRegistry[normalResult.name];
     let result: ToolResult;
     if (!tool) {
       result = toolResult({
-        error: `Unknown tool ${execRes.name}`,
+        error: `Unknown tool ${normalResult.name}`,
         isError: true,
       });
     } else {
@@ -672,13 +678,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
           {
             streamId: options.logger.channelId,
             executionId: options.context.executionId,
-            toolCallId: execRes.toolCallId,
+            toolCallId: normalResult.toolCallId,
           },
-          () => tool.call(execRes.input),
+          () => tool.call(normalResult.input),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
-          execRes.name,
+          normalResult.name,
           err,
         );
         result = toolResult({
@@ -690,8 +696,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     }
 
     const toolUseLog = {
-      tool: execRes.name,
-      input: execRes.input ?? execRes.raw,
+      tool: normalResult.name,
+      input: normalResult.input ?? normalResult.raw,
       output: sanitizeToolResultForLog(result),
     };
     options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
@@ -724,9 +730,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,
-        execRes.toolCallId,
-        execRes.name,
-        execRes.raw,
+        normalResult.toolCallId,
+        normalResult.name,
+        normalResult.raw,
         buildToolResultPayload(result),
         store.workspace,
         state.text ?? '',
@@ -746,7 +752,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleShared<C>> {
     return FlowTransition.CONTINUE;
   }
 }
-export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleShared<C>> {
+export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleContext<C>> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
   const processNode = new ToolUseProcessNode<C>();
@@ -758,5 +764,5 @@ export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleShared<C>> {
 
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleShared<C>>(prepNode);
+  return new Flow<ToolUseCycleContext<C>>(prepNode);
 }
