@@ -7,8 +7,9 @@ import {
   toErrorMessage,
 } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-// Type imports
 import type { TaskState } from '@logger/TaskState';
+import { setPendingState } from '@utils/pendingStateManager';
+// Type imports
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
@@ -77,16 +78,8 @@ export const stateRestoreCommand = {
 };
 
 async function storeStateForLater(state: TaskState): Promise<void> {
-  await vscode.commands.executeCommand(
-    'setContext',
-    'texra.hasStateToRestore',
-    true,
-  );
-  await vscode.commands.executeCommand(
-    'setContext',
-    'texra.stateToRestore',
-    state,
-  );
+  // Store the state in memory for the MainViewProvider to pick up
+  setPendingState(state);
   await vscode.commands.executeCommand('texra.mainView.focus');
-  logger.info(CHANNEL, 'State stored in context for later restoration');
+  logger.info(CHANNEL, 'State stored for later restoration');
 }
