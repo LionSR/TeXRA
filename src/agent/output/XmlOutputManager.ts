@@ -22,7 +22,7 @@ import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
-import { NamedOutputFile } from './types';
+import type { OutputFile, NamedOutputFile } from './types';
 
 export class XmlOutputManager {
   constructor(
@@ -252,6 +252,17 @@ export class XmlOutputManager {
       path: location.absolutePath,
       relativePath: location.relativePath,
       workspacePath: location.workspace?.absolutePath ?? undefined,
+      location,
+    };
+  }
+
+  /**
+   * Build a clean output file reference (new simplified format).
+   */
+  private buildOutputFile(source: string, outputPath: string): OutputFile {
+    const location = this.fileService.resolveRelativePath(outputPath);
+    return {
+      source,
       location,
     };
   }
