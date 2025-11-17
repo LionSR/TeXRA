@@ -9,7 +9,7 @@ import {
   showLoggedErrorMessage,
   showLoggedMessage,
   toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
+} from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 

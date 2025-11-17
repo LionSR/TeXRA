@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - latex
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolError, toolResult } from '@tools/result';
 import {
   type ArxivPaperMetadata,

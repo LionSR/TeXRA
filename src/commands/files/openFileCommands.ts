@@ -2,11 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - utilities
+import { fileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { fileLister } from '@frontend/files/fileLister';
 import { resolveFilePath, WorkspaceFS } from '@utils/files';
 
 export async function openFile(file: string): Promise<void> {

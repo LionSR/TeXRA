@@ -14,10 +14,7 @@ import {
   DEFAULT_WORKFLOW_AGENT,
   type AgentDirectoryMap,
 } from '@agent/utils/agentOptionMetadata';
-import {
-  BaseViewContentProvider,
-  ModuleDescriptor,
-} from '@common/webview/BaseViewContentProvider';
+import { BaseViewContentProvider, ModuleDescriptor } from '@common/webview';
 import { getConfig } from '@utils/config';
 import { GlobalStorageFS } from '@utils/files';
 

@@ -4,7 +4,7 @@ import { gfm } from 'turndown-plugin-gfm';
 import nodePandoc from 'node-pandoc';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
