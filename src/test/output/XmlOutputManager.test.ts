@@ -10,7 +10,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskRunFileService, WorkspaceFS } from '@utils/files';
+import { TaskRunFileService, WorkspaceFS, pathToLocation } from '@utils/files';
 
 describe('XmlOutputManager markdown fallback', () => {
   const setting: AgentSetting = {
