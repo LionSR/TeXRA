@@ -639,7 +639,7 @@ export class OutputHandler implements IOutputHandler {
    * Processes output files from XML or direct input.
    */
   public async processOutputFiles(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void> {
