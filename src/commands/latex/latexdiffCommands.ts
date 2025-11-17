@@ -611,9 +611,9 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      const revisedPath = resolveInfoPath(info, fileService);
-      const basePath = resolveBasePath(info, fileService);
-      const description = `${describeInfo(info)} (r${round})`;
+      const revisedPath = getOutputPath(info);
+      const basePath = getBasePath(info);
+      const description = `${describeFile(info)} (r${round})`;
 
       if (!revisedPath || !basePath) {
         immediateResults.push({
