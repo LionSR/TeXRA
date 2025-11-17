@@ -12,6 +12,7 @@ import * as configModule from '@utils/config';
 import { StorageFS, WorkspaceFS } from '@utils/files';
 import {
   moveToTarget,
+  pathToLocation,
   TASK_RUNS_DIR,
   TaskRunFileService,
 } from '@utils/files/taskRunStorage';
@@ -80,7 +81,7 @@ describe('taskRunStorage moveToTarget', () => {
     await fs.writeFile(path.join(destDir, 'old.txt'), 'old');
 
     await withPatchedRename('EISDIR', async () => {
-      await moveToTarget(sourceDir, destDir);
+      await moveToTarget(pathToLocation(sourceDir), destDir);
     });
 
     const destEntries = await fs.readdir(destDir);
@@ -100,7 +101,7 @@ describe('taskRunStorage moveToTarget', () => {
     await fs.writeFile(path.join(destDir, 'stale.txt'), 'old');
 
     await withPatchedRename('ENOTEMPTY', async () => {
-      await moveToTarget(sourceDir, destDir);
+      await moveToTarget(pathToLocation(sourceDir), destDir);
     });
 
     const destEntries = await fs.readdir(destDir);
@@ -120,7 +121,7 @@ describe('taskRunStorage moveToTarget', () => {
     await fs.writeFile(destDir, 'stale-file');
 
     await withPatchedRename('ENOTDIR', async () => {
-      await moveToTarget(sourceDir, destDir);
+      await moveToTarget(pathToLocation(sourceDir), destDir);
     });
 
     const destEntries = await fs.readdir(destDir);
