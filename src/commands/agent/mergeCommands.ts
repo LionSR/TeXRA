@@ -6,7 +6,7 @@ import { executeMergeAgent } from '@agent/runtime/executeAgent';
 import {
   showLoggedMessageWithDocs,
   showLoggedErrorMessage,
-} from '@common/errors/errorHandlingUtils';
+} from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 

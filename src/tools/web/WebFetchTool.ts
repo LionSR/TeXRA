@@ -7,7 +7,7 @@ import TurndownService from 'turndown';
 import { z } from 'zod';
 
 // Local imports - core
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 

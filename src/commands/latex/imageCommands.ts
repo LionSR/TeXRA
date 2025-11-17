@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - errors
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors';
 import {
   countPdfPages,
   getBase64EncodedMedia,
