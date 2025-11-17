@@ -48,8 +48,8 @@ export interface FileLocation {
   scope: FileLocationScope;
   relativePath: string;
   relativeScope: FileRelativeScope;
-  workspace?: WorkspaceLocationInfo | null;
-  runStorage?: RunStorageLocationInfo | null;
+  workspace: WorkspaceLocationInfo | null;
+  runStorage: RunStorageLocationInfo | null;
 }
 
 function createFileLocation(params: {
