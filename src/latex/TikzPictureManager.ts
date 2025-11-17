@@ -6,7 +6,7 @@ import * as nunjucks from 'nunjucks';
 
 // Local imports - log
 import { renderPrompt } from '@agent/utils/promptUtils';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config';

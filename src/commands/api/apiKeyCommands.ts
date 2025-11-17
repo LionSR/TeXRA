@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 
 export const PROVIDER_URLS: Record<ApiProvider, string> = {

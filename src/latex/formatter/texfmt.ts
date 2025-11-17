@@ -1,5 +1,5 @@
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
 import { runToolWithCheck } from '@utils/system';

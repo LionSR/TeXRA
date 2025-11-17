@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - utilities
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   bestConnectionMethod,
