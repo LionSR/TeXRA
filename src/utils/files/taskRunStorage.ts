@@ -30,37 +30,23 @@ export const TASK_RUNS_DIR = 'taskRuns';
 
 export type FileLocationScope = 'workspace' | 'runStorage' | 'external';
 
-export type FileRelativeScope = 'workspace' | 'runStorage' | 'absolute';
-
-export interface WorkspaceLocationInfo {
-  relativePath: string;  // Only store the relative part (no duplication)
-}
-
-export interface RunStorageLocationInfo {
-  relativePath: string;         // Run-relative (e.g., 'r0/draft.tex')
-  storageRelativePath: string;  // Storage-relative (e.g., 'taskRuns/<id>/r0/draft.tex')
-}
-
 export interface FileLocation {
-  absolutePath: string;  // The ONE absolute path
+  absolutePath: string;
   scope: FileLocationScope;
-  workspace: WorkspaceLocationInfo | null;
-  runStorage: RunStorageLocationInfo | null;
+  relativePath: string | null;  // Relative to workspace or runStorage, depending on scope
 }
 
 function createFileLocation(params: {
   absolutePath: string;
   scope: FileLocationScope;
-  workspace?: WorkspaceLocationInfo | null;
-  runStorage?: RunStorageLocationInfo | null;
+  relativePath?: string | null;
 }): FileLocation {
-  const { absolutePath, scope, workspace, runStorage } = params;
+  const { absolutePath, scope, relativePath } = params;
 
   return {
     absolutePath,
     scope,
-    workspace: workspace ?? null,
-    runStorage: runStorage ?? null,
+    relativePath: relativePath ?? null,
   };
 }
 
@@ -295,7 +281,7 @@ export class TaskRunFileService {
 
   public getWorkspaceLocation(
     target: string | FileLocation | null | undefined,
-  ): WorkspaceLocationInfo | null {
+  ): string | null {
     if (!target) {
       return null;
     }
@@ -303,26 +289,20 @@ export class TaskRunFileService {
     const location =
       typeof target === 'string' ? this.describePath(target) : target;
 
-    if (location.workspace) {
-      return location.workspace;
-    }
-
-    if (location.workspace) {
-      return this.resolveWorkspaceRelative(location.workspace.relativePath);
-    }
-
-    if (location.runStorage?.relativePath) {
-      return this.resolveWorkspaceRelative(location.runStorage.relativePath);
+    if (location.scope === 'workspace' && location.relativePath) {
+      return location.relativePath;
     }
 
     return null;
   }
 
   public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
-    if (!location?.workspace) return null;
+    if (!location || location.scope !== 'workspace' || !location.relativePath) {
+      return null;
+    }
     const root = this.workspaceRoot;
     if (!root) return null;
-    return path.join(root, location.workspace.relativePath);
+    return path.join(root, location.relativePath);
   }
 
   private isWithinWorkspace(candidate: string): boolean {
@@ -438,19 +418,21 @@ export class TaskRunFileService {
     }
 
     const normalized = path.normalize(target);
-    const workspace = this.describeWorkspaceAbsolute(normalized);
-    const runStorage = this.describeRunStorageAbsolute(normalized);
-    const scope = runStorage
+    const workspaceRelative = this.describeWorkspaceAbsolute(normalized);
+    const runStorageRelative = this.describeRunStorageAbsolute(normalized);
+    
+    const scope = runStorageRelative
       ? 'runStorage'
-      : workspace
+      : workspaceRelative
         ? 'workspace'
         : 'external';
+    
+    const relativePath = runStorageRelative ?? workspaceRelative ?? null;
 
     return createFileLocation({
       absolutePath: normalized,
       scope,
-      workspace,
-      runStorage,
+      relativePath,
     });
   }
 
