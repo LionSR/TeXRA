@@ -4,10 +4,12 @@
 
 After the main refactoring, we identified and removed **4 additional unnecessary methods**:
 
-### 1. **`buildNamedOutputsFromInfos()`** in `OutputHandler`  
+### 1. **`buildNamedOutputsFromInfos()`** in `OutputHandler`
+
 **Status**: ❌ REMOVED
 
 **Before** (No-op passthrough):
+
 ```typescript
 private buildNamedOutputsFromInfos(
   infos: OutputFileInfo[],
@@ -21,6 +23,7 @@ this.outputFiles[round] = this.buildNamedOutputsFromInfos(infos);
 ```
 
 **After** (Direct assignment):
+
 ```typescript
 // No method needed - direct assignment
 this.outputFiles[round] = infos;
@@ -30,10 +33,12 @@ this.outputFiles[round] = infos;
 
 ---
 
-### 2. **`getNamedOutputs()`** in `OutputHandler`  
+### 2. **`getNamedOutputs()`** in `OutputHandler`
+
 **Status**: ❌ REMOVED & INLINED
 
 **Before** (Wrapper for map access):
+
 ```typescript
 private getNamedOutputs(round: number): OutputFileInfo[] {
   if (!this.outputMappings[round]) {
@@ -48,6 +53,7 @@ const prevNamed = this.getNamedOutputs(currRound - 1);
 ```
 
 **After** (Direct access with default):
+
 ```typescript
 // No method - direct access
 const currentOutputs = this.outputMappings[currRound] || [];
@@ -58,10 +64,12 @@ const prevOutputs = this.outputMappings[currRound - 1] || [];
 
 ---
 
-### 3. **`buildNamedOutput()`** in `XmlOutputManager`  
+### 3. **`buildNamedOutput()`** in `XmlOutputManager`
+
 **Status**: ❌ REMOVED (replaced with better-named method)
 
 **Before** (Deprecated wrapper):
+
 ```typescript
 /**
  * @deprecated This method creates a minimal OutputFileInfo
@@ -78,6 +86,7 @@ private buildNamedOutput(source: string, outputPath: string): OutputFileInfo {
 ```
 
 **After** (Better-named method):
+
 ```typescript
 /**
  * Build minimal output file info from source and path.
@@ -97,10 +106,12 @@ private buildOutputFileInfo(source: string, outputPath: string): OutputFileInfo 
 
 ---
 
-### 4. **`extractExecutionIdFromRelative()`** in `ProgressViewMessageHandler`  
+### 4. **`extractExecutionIdFromRelative()`** in `ProgressViewMessageHandler`
+
 **Status**: ❌ REMOVED & INLINED
 
 **Before** (Extracted method with extra indirection):
+
 ```typescript
 private resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefined {
   const storagePath = info.location.runStorage?.storageRelativePath;
@@ -136,6 +147,7 @@ private extractExecutionIdFromRelative(
 ```
 
 **After** (Single consolidated method):
+
 ```typescript
 private resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefined {
   const storagePath = info.location.runStorage?.storageRelativePath;
@@ -161,14 +173,16 @@ private resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefine
 ## 📊 Total Impact
 
 ### Lines Removed
+
 - `buildNamedOutputsFromInfos()`: **6 lines**
-- `getNamedOutputs()`: **7 lines**  
+- `getNamedOutputs()`: **7 lines**
 - `buildNamedOutput()`: **8 lines** (replaced with better version)
 - `extractExecutionIdFromRelative()`: **20 lines**
 
 **Total**: ~**40 lines of unnecessary code removed**
 
 ### Complexity Reduced
+
 - **No-op wrappers**: 2 → 0
 - **Unnecessary abstractions**: 2 → 0
 - **Indirection layers**: 4 → 0
@@ -189,6 +203,7 @@ These methods became unnecessary because they were:
 ## ✅ Result
 
 The code is now:
+
 - ✅ **More direct**: Access data structures directly when appropriate
 - ✅ **Less layered**: Removed unnecessary indirection
 - ✅ **Clearer intent**: Method names match their actual purpose
