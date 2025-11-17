@@ -589,9 +589,7 @@ async function runLatexdiffFromMetadata(params: {
         basePath,
         revisedPath,
         description,
-        cwd: info.location.workspace
-          ? path.dirname(info.location.workspace.absolutePath)
-          : path.dirname(basePath),
+        cwd: WorkspaceFS.getPath() ?? path.dirname(basePath),
         round,
         info,
       });
@@ -630,14 +628,7 @@ async function runLatexdiffFromMetadata(params: {
           basePath: prevPath,
           revisedPath: currPath,
           description,
-          cwd:
-            (previous.info.location.workspace
-              ? path.dirname(previous.info.location.workspace.absolutePath)
-              : null) ??
-            (current.info.location.workspace
-              ? path.dirname(current.info.location.workspace.absolutePath)
-              : null) ??
-            path.dirname(prevPath),
+          cwd: WorkspaceFS.getPath() ?? path.dirname(prevPath),
           fromRound: previous.round,
           toRound: current.round,
           info: current.info,
