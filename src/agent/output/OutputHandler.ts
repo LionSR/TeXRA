@@ -591,7 +591,7 @@ export class OutputHandler implements IOutputHandler {
    * emits an event with the collected files.
    */
   public async finalizeRound(
-    outputFile: string,
+    outputFile: FileLocation,
     currRound: number,
     options: { endTurn: boolean; stage?: AgentLogStage },
   ): Promise<void> {
@@ -601,11 +601,7 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         const data = this.ensureRoundData(currRound);
-        const rawLocation =
-          data.rawOutput ??
-          (outputFile
-            ? this.fileService.resolveRelativePath(outputFile)
-            : null);
+        const rawLocation = data.rawOutput ?? outputFile;
         data.rawOutput = rawLocation;
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
@@ -613,7 +609,11 @@ export class OutputHandler implements IOutputHandler {
 
         if (endTurn) {
           try {
-            await this.validateExpectedOutputs(outputFile, currRound, scope);
+            await this.validateExpectedOutputs(
+              outputFile.absolutePath,
+              currRound,
+              scope,
+            );
             this.logger.debug(
               `Expected outputs validated for round ${currRound}`,
             );

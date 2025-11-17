@@ -154,10 +154,10 @@ async function removeIfExists(target: string): Promise<void> {
 }
 
 export async function moveToTarget(
-  source: string,
+  source: FileLocation,
   destination: string,
 ): Promise<void> {
-  const resolvedSource = path.resolve(source);
+  const resolvedSource = source.absolutePath;
   const resolvedDestination = path.resolve(destination);
   if (resolvedSource === resolvedDestination) {
     return;
@@ -208,17 +208,18 @@ export async function moveToTarget(
 }
 
 async function createSymlink(
-  source: string,
+  source: FileLocation,
   destination: string,
 ): Promise<void> {
+  const sourceAbsolute = source.absolutePath;
   await ensureParentDir(destination);
   try {
-    await fs.symlink(source, destination);
+    await fs.symlink(sourceAbsolute, destination);
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'EEXIST') {
       await fs.rm(destination, { recursive: true, force: true });
-      await fs.symlink(source, destination);
+      await fs.symlink(sourceAbsolute, destination);
       return;
     }
     if (
@@ -227,13 +228,13 @@ async function createSymlink(
     ) {
       logger.warn(
         CHANNEL,
-        `Falling back to copy ${source} -> ${destination} due to ${err.code}`,
+        `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${err.code}`,
       );
-      const stats = await fs.lstat(source);
+      const stats = await fs.lstat(sourceAbsolute);
       if (stats.isDirectory()) {
-        await fs.cp(source, destination, { recursive: true });
+        await fs.cp(sourceAbsolute, destination, { recursive: true });
       } else {
-        await fs.copyFile(source, destination);
+        await fs.copyFile(sourceAbsolute, destination);
       }
       return;
     }
@@ -611,7 +612,7 @@ export class TaskRunFileService {
         await ensureParentDir(runPaths.absolute);
         await fs.copyFile(source.absolutePath, runPaths.absolute);
       } else {
-        await moveToTarget(source.absolutePath, runPaths.absolute);
+        await moveToTarget(source, runPaths.absolute);
       }
     } catch (error) {
       await removeIfExists(runPaths.absolute);
@@ -662,7 +663,7 @@ export class TaskRunFileService {
     const runPaths = getRunStoragePaths(executionId, location.relativePath);
 
     if (!this.mirroredDependencies.has(location.relativePath)) {
-      await createSymlink(location.absolutePath, runPaths.absolute);
+      await createSymlink(location, runPaths.absolute);
       this.mirroredDependencies.add(location.relativePath);
     }
 

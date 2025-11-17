@@ -5,6 +5,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 import {
+  type FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
@@ -56,7 +57,7 @@ export interface IOutputHandler {
 
   /** Finalize processing for a round. */
   finalizeRound(
-    outputFile: string,
+    outputFile: FileLocation,
     currRound: number,
     options: {
       endTurn: boolean;
