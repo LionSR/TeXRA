@@ -52,6 +52,7 @@ CLAUDE.md
 !src/common/webview/*.js
 !src/common/webview/commands.js
 !src/common/modules/*.js
+!src/common/modules/files/*.js
 
 !src/historyView/modules/*.js
 !src/historyView/modules/uiManagers/*.js
