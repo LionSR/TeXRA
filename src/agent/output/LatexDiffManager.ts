@@ -119,7 +119,8 @@ export class LatexDiffManager {
       return;
     }
 
-    if (!(await flexibleFS.exists(target))) {
+    const targetLocation = this.fileService.describePath(target);
+    if (!(await flexibleFS.exists(targetLocation))) {
       return;
     }
 
