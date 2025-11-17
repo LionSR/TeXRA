@@ -265,8 +265,8 @@ export class LatexDiffManager {
             createWorkspaceLocation(WorkspaceFS.fullPath(actual), actual);
 
           const result = await this.latexdiffService.runDiffForRound(
-            baseAbsolute,
-            actual,
+            baseLocation,
+            revisedLocation,
             currRound,
             undefined,
             { cwd },
@@ -384,8 +384,8 @@ export class LatexDiffManager {
             currPaths.workspaceDir ??
             path.dirname(prevPaths.actual);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevPaths.actual,
-            currPaths.actual,
+            prevLocation!,
+            currLocation!,
             undefined,
             { cwd },
           );

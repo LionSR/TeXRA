@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - errors
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, pathToLocation } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -56,7 +56,9 @@ async function handleExtractFigurePaths(): Promise<void> {
     logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
-    const figurePaths = await extractFigurePathsFromLatex(filePath);
+    const figurePaths = await extractFigurePathsFromLatex(
+      pathToLocation(filePath),
+    );
 
     if (figurePaths.length > 0) {
       // Show results in QuickPick
