@@ -666,8 +666,12 @@ async function runLatexdiffFromMetadata(params: {
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await flexibleFS.exists(pathToLocation(operation.basePath));
-    const revisedExists = await flexibleFS.exists(pathToLocation(operation.revisedPath));
+    const baseExists = await flexibleFS.exists(
+      pathToLocation(operation.basePath),
+    );
+    const revisedExists = await flexibleFS.exists(
+      pathToLocation(operation.revisedPath),
+    );
 
     if (!baseExists || !revisedExists) {
       results.push({

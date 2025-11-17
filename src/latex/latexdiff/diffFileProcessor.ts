@@ -102,8 +102,10 @@ export class DiffFileProcessor {
     return newContent;
   }
 
-  private async processTikzPictureEndings(filePath: string): Promise<void> {
-    const content = await flexibleFS.read(pathToLocation(filePath));
+  private async processTikzPictureEndings(
+    fileLocation: FileLocation,
+  ): Promise<void> {
+    const content = await flexibleFS.read(fileLocation);
     let newContent = content;
 
     const patterns = [
@@ -115,6 +117,6 @@ export class DiffFileProcessor {
       newContent = newContent.replace(pattern, replacement as string);
     }
 
-    await flexibleFS.write(pathToLocation(filePath), newContent);
+    await flexibleFS.write(fileLocation, newContent);
   }
 }

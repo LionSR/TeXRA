@@ -107,7 +107,7 @@ export class LatexMediaManager {
           );
           const pdfLocation = pathToLocation(pdfFile);
           if (await flexibleFS.exists(pdfLocation)) {
-            try:
+            try {
               const stats = await flexibleFS.stat(pdfLocation);
               if (stats.size === 0) {
                 this.logger.warn(
@@ -228,7 +228,7 @@ export class LatexMediaManager {
     const existingFilesInfo = await Promise.all(
       files.map(async (file) => ({
         file,
-        exists: await flexibleFS.exists(file),
+        exists: await flexibleFS.exists(pathToLocation(file)),
       })),
     );
     const existingFiles = existingFilesInfo
