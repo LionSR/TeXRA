@@ -650,13 +650,10 @@ export class OutputHandler implements IOutputHandler {
         this.ensureRound(currRound);
         const rawLocation =
           this.rawOutputs[currRound] ??
-          (outputFile ? this.fileService.describePath(outputFile) : null);
+          (outputFile
+            ? this.fileService.resolveRelativePath(outputFile)
+            : null);
         this.rawOutputs[currRound] = rawLocation;
-
-        let rawPath = outputFile;
-        if (rawLocation?.absolutePath) {
-          rawPath = rawLocation.absolutePath;
-        }
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -716,11 +713,11 @@ export class OutputHandler implements IOutputHandler {
 
         const rawLocation =
           this.rawOutputs[currRound] ??
-          (outputFile ? this.fileService.describePath(outputFile) : null);
-        let rawPath = outputFile;
-        if (rawLocation?.absolutePath) {
-          rawPath = rawLocation.absolutePath;
-        }
+          (outputFile
+            ? this.fileService.resolveRelativePath(outputFile)
+            : null);
+        this.rawOutputs[currRound] = rawLocation;
+        let rawPath = rawLocation?.absolutePath ?? outputFile;
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -745,11 +742,10 @@ export class OutputHandler implements IOutputHandler {
                   this.logger,
                 );
               }
-              this.rawOutputs[currRound] = rawLocation;
               this.setRoundOutputs(currRound, processedPairs);
               await this.captureXmlSummary(
                 currRound,
-                rawPath,
+                rawLocation,
                 processedPairs,
                 scope,
               );
@@ -765,8 +761,7 @@ export class OutputHandler implements IOutputHandler {
               rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
-            this.rawOutputs[currRound] = rawLocation ?? null;
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            await this.captureXmlSummary(currRound, rawLocation, [], scope);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation);
             }
@@ -782,8 +777,7 @@ export class OutputHandler implements IOutputHandler {
               rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
-            this.rawOutputs[currRound] = rawLocation ?? null;
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            await this.captureXmlSummary(currRound, rawLocation, [], scope);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation);
             }
@@ -796,7 +790,7 @@ export class OutputHandler implements IOutputHandler {
           try {
             const processedLocation = rawLocation
               ? { ...rawLocation }
-              : this.fileService.describePath(outputFile);
+              : this.fileService.resolveRelativePath(outputFile);
             let processed: NamedOutputFile = {
               source: outputFile,
               path: processedLocation.absolutePath,
@@ -827,9 +821,8 @@ export class OutputHandler implements IOutputHandler {
               );
             }
 
-            rawPath = rawLocation?.absolutePath ?? rawPath;
-            outputFile = rawPath;
-            this.rawOutputs[currRound] = rawLocation;
+            const resolvedRawPath = rawLocation?.absolutePath ?? rawPath;
+            outputFile = resolvedRawPath;
             const processedFiles = hasProcessedPath ? [processed] : [];
 
             if (hasProcessedPath) {
@@ -851,7 +844,7 @@ export class OutputHandler implements IOutputHandler {
 
             await this.captureXmlSummary(
               currRound,
-              rawPath,
+              rawLocation,
               processedFiles,
               scope,
             );
@@ -874,7 +867,12 @@ export class OutputHandler implements IOutputHandler {
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            await this.captureXmlSummary(
+              currRound,
+              this.rawOutputs[currRound] ?? rawLocation ?? null,
+              [],
+              scope,
+            );
           }
         };
 
@@ -928,15 +926,15 @@ export class OutputHandler implements IOutputHandler {
 
   private async captureXmlSummary(
     round: number,
-    rawOutputPath: string,
+    rawOutput: FileLocation | null,
     processed: NamedOutputFile[],
     stage?: AgentLogStage,
   ): Promise<void> {
     const run = async () => {
       const singleFile = processed.length === 1 ? processed[0].path : null;
-      const sourceLocation = this.rawOutputs[round] ?? null;
+      const sourceLocation = rawOutput ?? this.rawOutputs[round] ?? null;
 
-      if (!rawOutputPath) {
+      if (!rawOutput?.absolutePath) {
         this.roundXmlSummaries[round] = {
           tagContents: {},
           documents: [],
@@ -947,7 +945,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await flexibleFS.read(rawOutputPath);
+        const rawContent = await flexibleFS.read(rawOutput.absolutePath);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 
