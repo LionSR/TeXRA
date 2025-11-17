@@ -525,66 +525,36 @@ function normalizeOutputsByRound(
   return new Map([...roundMap.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-function resolveInfoPath(
-  info: OutputFileInfo,
-  fileService: TaskRunFileService,
-): string | null {
-  if (info.location?.absolutePath) {
-    return info.location.absolutePath;
-  }
-
-  // Path is always available in location.absolutePath for new structure
-  // This fallback is only for legacy data
-
-  return null;
+/**
+ * Get output file path - trust the data structure.
+ */
+function getOutputPath(info: OutputFileInfo): string {
+  return info.location.absolutePath;
 }
 
-function resolveBasePath(
-  info: OutputFileInfo,
-  fileService: TaskRunFileService,
-): string | null {
-  const candidateLocation = info.lineage?.base ?? info.lineage?.original ?? null;
-  if (candidateLocation?.absolutePath) {
-    return candidateLocation.absolutePath;
-  }
-
-  if (info.location?.workspace?.absolutePath) {
-    return info.location.workspace.absolutePath;
-  }
-
-  return null;
+/**
+ * Get base file path for comparison - trust lineage structure.
+ */
+function getBasePath(info: OutputFileInfo): string | null {
+  const base = info.lineage?.base ?? info.lineage?.original;
+  return base?.absolutePath ?? null;
 }
 
-function workspaceDirFromInfo(info: OutputFileInfo): string | undefined {
-  const workspaceSource =
+/**
+ * Get workspace directory - trust location structure.
+ */
+function getWorkspaceDir(info: OutputFileInfo): string | undefined {
+  const workspacePath =
     info.lineage?.base?.workspace?.absolutePath ??
-    info.location.workspace?.absolutePath ??
-    null;
-
-  return workspaceSource ? path.dirname(workspaceSource) : undefined;
+    info.location.workspace?.absolutePath;
+  return workspacePath ? path.dirname(workspacePath) : undefined;
 }
 
-function describeInfo(info: OutputFileInfo): string {
-  if (info.displayLabel) {
-    return info.displayLabel;
-  }
-  return info.location.relativePath;
-}
-
-function describeRevisedInfo(
-  info: OutputFileInfo,
-  fallbackPath?: string | null,
-): string {
-  if (info.relativePath) {
-    return info.relativePath;
-  }
-  if (info.location?.relativePath) {
-    return info.location.relativePath;
-  }
-  if (fallbackPath) {
-    return path.basename(fallbackPath);
-  }
-  return path.basename(info.location.absolutePath);
+/**
+ * Get file description for display - trust source field.
+ */
+function describeFile(info: OutputFileInfo): string {
+  return info.source || path.basename(info.location.relativePath);
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -629,13 +599,12 @@ async function runLatexdiffFromMetadata(params: {
         basePath,
         revisedPath,
         description,
-        cwd: workspaceDirFromInfo(info) ?? path.dirname(basePath),
+        cwd: getWorkspaceDir(info) ?? path.dirname(basePath),
         round,
         info,
       });
 
-      const key =
-        info.location.relativePath;
+      const key = info.location.relativePath;
       let group = groupedByRelative.get(key);
       if (!group) {
         group = [];
@@ -651,12 +620,9 @@ async function runLatexdiffFromMetadata(params: {
       for (let index = 1; index < group.length; index += 1) {
         const previous = group[index - 1];
         const current = group[index];
-        const prevPath = resolveInfoPath(previous.info, fileService);
-        const currPath = resolveInfoPath(current.info, fileService);
-        const description = `${describeRevisedInfo(
-          current.info,
-          currPath,
-        )} (r${previous.round}→r${current.round})`;
+        const prevPath = getOutputPath(previous.info);
+        const currPath = getOutputPath(current.info);
+        const description = `${describeFile(current.info)} (r${previous.round}→r${current.round})`;
 
         if (!prevPath || !currPath) {
           immediateResults.push({
@@ -673,8 +639,8 @@ async function runLatexdiffFromMetadata(params: {
           revisedPath: currPath,
           description,
           cwd:
-            workspaceDirFromInfo(previous.info) ??
-            workspaceDirFromInfo(current.info) ??
+            getWorkspaceDir(previous.info) ??
+            getWorkspaceDir(current.info) ??
             path.dirname(prevPath),
           fromRound: previous.round,
           toRound: current.round,
