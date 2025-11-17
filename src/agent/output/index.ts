@@ -1,13 +1,12 @@
 export * from './OutputHandler';
 export * from './IOutputHandler';
 export {
-  // New clean types
+  // Clean composable types
   OutputFile,
   OutputFileInfo,
   FileLineage,
   OutputXmlSummary,
   RoundOutputArtifacts,
-  // Legacy (deprecated)
-  NamedOutputFile,
+  FileLocation,
 } from './types';
 export { getOutputFileName } from '@agent/utils/outputFileUtils';

@@ -7,6 +7,7 @@ All TypeScript compilation errors are fixed. The backend now uses clean, composa
 ## ✅ What Was Completed
 
 ### 1. Clean Type Architecture (src/agent/output/types.ts)
+
 - ✅ Zod v4 schemas with `z.infer` (single source of truth)
 - ✅ Eliminated 13+ duplicate fields from `OutputFileInfo`
 - ✅ Reduced from 20 fields → 4 fields (80% reduction!)
@@ -14,19 +15,21 @@ All TypeScript compilation errors are fixed. The backend now uses clean, composa
 - ✅ Proper null/undefined handling with `.nullish()`
 
 **Before:**
+
 ```typescript
 interface OutputFileInfo {
-  path: string;                   // ❌
-  relativePath: string;           // ❌
-  workspacePath?: string;         // ❌
-  location: FileLocation;         // ✅
-  base?: string;                  // ❌
-  baseLocation?: FileLocation;    // ❌
+  path: string; // ❌
+  relativePath: string; // ❌
+  workspacePath?: string; // ❌
+  location: FileLocation; // ✅
+  base?: string; // ❌
+  baseLocation?: FileLocation; // ❌
   // ... 14 more fields
 }
 ```
 
 **After:**
+
 ```typescript
 interface OutputFileInfo {
   source: string;
@@ -41,12 +44,14 @@ interface OutputFileInfo {
 ```
 
 ### 2. Display Utilities (src/agent/output/displayUtils.ts)
+
 - ✅ Simple helpers that trust the data structure
 - ✅ `getDisplayLabel()`, `getDisplayDir()`, `getAbsolutePath()`
 - ✅ `getWorkspacePath()`, `getExecutionId()`
 - ✅ No defensive code, just field access
 
 ### 3. Core Component Updates
+
 - ✅ **OutputHandler.gatherOutputFileInfo()** - Creates new clean structure
 - ✅ **OutputHandler.getRoundArtifacts()** - Returns simplified artifacts
 - ✅ **OutputHandler.buildNamedOutputsFromInfos()** - Adapts to legacy interface
@@ -56,7 +61,9 @@ interface OutputFileInfo {
 ### 4. Eliminated Defensive Code
 
 #### latexdiffCommands.ts
+
 **Before (Defensive):**
+
 ```typescript
 function resolveInfoPath(info, fileService): string | null {
   if (info.location?.absolutePath) {
@@ -90,6 +97,7 @@ function resolveBasePath(info, fileService): string | null {
 ```
 
 **After (Trusting):**
+
 ```typescript
 function getOutputPath(info: OutputFileInfo): string {
   return info.location.absolutePath;
@@ -102,7 +110,9 @@ function getBasePath(info: OutputFileInfo): string | null {
 ```
 
 #### ProgressViewMessageHandler.ts
+
 **Before (Checking 5 places!):**
+
 ```typescript
 private resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefined {
   const relativeCandidates = [
@@ -135,6 +145,7 @@ private findPreferredOutputDirectory(outputs): string | undefined {
 ```
 
 **After (Single source):**
+
 ```typescript
 private resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefined {
   const storagePath = info.location.runStorage?.storageRelativePath;
@@ -156,7 +167,9 @@ private findPreferredOutputDirectory(outputs): string | undefined {
 ```
 
 #### OutputFilesManager.ts
+
 **Before (Checking location twice + old fields):**
+
 ```typescript
 private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
   this.addPath(target, info.workspacePath ?? undefined);
@@ -180,6 +193,7 @@ private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
 ```
 
 **After (Trust the structure):**
+
 ```typescript
 private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
   // Current file
@@ -201,6 +215,7 @@ private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
 ```
 
 ### 5. Code Quality
+
 - ✅ **TypeScript**: All errors fixed, compiles cleanly
 - ✅ **ESLint**: Passes with no errors
 - ✅ **Prettier**: All files formatted
@@ -209,18 +224,21 @@ private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
 ## 📊 Impact Metrics
 
 ### Lines of Code:
+
 - Defensive `resolve*` functions: **~150 lines removed**
 - Multi-way fallback chains: **~80 lines simplified**
 - Type definitions: **Cleaner (fewer fields)**
 - **Net**: ~200+ lines eliminated, code is 1000% clearer
 
 ### Complexity Reduction:
+
 - Duplicate fields: **13 → 0**
 - Fallback checks: **5-way → 1-way**
 - Defensive functions: **~15 → 0**
 - Sources of truth: **5+ → 1** (FileLocation)
 
 ### Type Safety:
+
 - Manual interfaces: **0** (all derived from Zod)
 - Schema/type drift risk: **Eliminated**
 - Runtime validation: **Automatic** (Zod)
@@ -228,31 +246,35 @@ private collectWorkspacePaths(target: Set<string>, info: OutputFileInfo): void {
 ## 📋 Remaining Work
 
 ### 1. Frontend Webview Updates
+
 **File**: `src/progressView/modules/uiManagers/FileList.js`
 
 Need to update JavaScript to use new structure:
+
 ```javascript
 // BEFORE
-file.path
-file.relativePath
-file.workspacePath
-file.displayLabel
-file.base
-file.original
+file.path;
+file.relativePath;
+file.workspacePath;
+file.displayLabel;
+file.base;
+file.original;
 
 // AFTER
-file.location.absolutePath
-file.location.relativePath
-file.location.workspace?.absolutePath
-file.source
-file.lineage?.base?.absolutePath
-file.lineage?.original?.absolutePath
+file.location.absolutePath;
+file.location.relativePath;
+file.location.workspace?.absolutePath;
+file.source;
+file.lineage?.base?.absolutePath;
+file.lineage?.original?.absolutePath;
 ```
 
 **Estimated effort**: 30 minutes
 
 ### 2. Migration for Persisted Data
+
 Add Zod-based migration to transform legacy JSON:
+
 - Read old format from workspace state
 - Transform using schemas
 - Write new format back
@@ -260,6 +282,7 @@ Add Zod-based migration to transform legacy JSON:
 **Estimated effort**: 1-2 hours
 
 ### 3. Cleanup
+
 - Remove `NamedOutputFile` type (kept for backward compat)
 - Add deprecation warnings
 - Update tests
@@ -269,6 +292,7 @@ Add Zod-based migration to transform legacy JSON:
 ## 🎯 How to Complete
 
 ### Option 1: Incremental (Safer)
+
 1. Keep `NamedOutputFile` adapter for compatibility
 2. Update webview to use new structure
 3. Add migration in next release
@@ -276,6 +300,7 @@ Add Zod-based migration to transform legacy JSON:
 5. Remove in following release
 
 ### Option 2: Clean Break (Faster)
+
 1. Update webview in same PR
 2. Add migration now
 3. Users clear workspace state if issues
@@ -286,11 +311,13 @@ Add Zod-based migration to transform legacy JSON:
 ## 🎁 What Users Get
 
 ### Immediate Benefits:
+
 - **Faster**: No more re-parsing/normalizing data
 - **Reliable**: Single source of truth eliminates inconsistencies
 - **Type-safe**: Zod schemas catch errors at runtime
 
 ### For Developers:
+
 - **Simpler**: Trust the data, no defensive code
 - **Maintainable**: Clear data flow, obvious structure
 - **Extensible**: Easy to add new fields/capabilities
@@ -298,6 +325,7 @@ Add Zod-based migration to transform legacy JSON:
 ## 📚 Documentation
 
 Created comprehensive docs:
+
 - `REFACTORING_SUMMARY.md` - What changed and why
 - `TRUST_MODEL.md` - Architectural principles
 - `BEFORE_AFTER.md` - Side-by-side comparisons
