@@ -42,7 +42,6 @@ import { runLatexFormatter } from '@latex/texFormatter';
 // Local file imports
 import { XmlOutputManager } from './XmlOutputManager';
 import {
-  OutputFileInfoSchema,
   type NamedOutputFile,
   type OutputFileInfo,
   type OutputXmlSummary,
@@ -62,7 +61,7 @@ export class OutputHandler implements IOutputHandler {
   public agentSetting: AgentWorkflowSetting;
   public agentConfig: AgentConfig;
   public logId: number;
-  public outputFiles: { [key: number]: string[] };
+  public outputFiles: { [key: number]: NamedOutputFile[] };
   public outputMappings: { [key: number]: NamedOutputFile[] };
   private rawOutputs: { [key: number]: FileLocation | null };
   private roundFileInfos: { [key: number]: OutputFileInfo[] };
@@ -214,24 +213,12 @@ export class OutputHandler implements IOutputHandler {
     return stage.run(() => fn(stage));
   }
 
-  private resolveOutputLocation(
-    target: string | null | undefined,
-  ): FileLocation | null {
-    if (!target) {
-      return null;
-    }
-
-    return this.fileService.resolveRelativePath(target, {
-      preferWorkspace: true,
-    });
-  }
-
   /**
    * Ensure that storage exists for a round and return its output list.
    * @param round The round index to initialize.
    * @returns The mutable list of outputs for the round.
    */
-  public ensureRound(round: number): string[] {
+  public ensureRound(round: number): NamedOutputFile[] {
     if (!this.outputFiles[round]) {
       this.outputFiles[round] = [];
     }
@@ -339,9 +326,6 @@ export class OutputHandler implements IOutputHandler {
     const mapping = this.getRoundMapping(currRound);
 
     const infos: OutputFileInfo[] = [];
-    const namedByStorage = new Map(
-      this.getNamedOutputs(currRound).map((entry) => [entry.path, entry]),
-    );
     const baseByOutput = new Map<string, string>();
     const prevByOutput = new Map<string, string>();
 
@@ -361,36 +345,32 @@ export class OutputHandler implements IOutputHandler {
       sourceLocation: xmlSummary.sourceLocation ?? rawLocation ?? null,
     };
 
-    for (const file of roundOutputs) {
-      const named = namedByStorage.get(file);
-      const namedLocation = named?.location;
-      const relativeKey = namedLocation
-        ? namedLocation.relativePath
-        : this.fileService.getWorkspaceDisplayPath(file);
+    const locationFor = (relative: string | null): FileLocation | null => {
+      if (!relative) return null;
+      return mapping.locationByOutput.get(relative) ?? null;
+    };
 
-      const baseFile = baseByOutput.get(relativeKey) ?? null;
-      const prevFile = prevByOutput.get(relativeKey) ?? null;
-      const originalFile = mapping.originByOutput.get(relativeKey) || null;
+    for (const output of roundOutputs) {
+      const location = output.location;
+      const relativePath = location.relativePath;
+
+      const baseFile = baseByOutput.get(relativePath) ?? null;
+      const prevFile = prevByOutput.get(relativePath) ?? null;
+      const originalFile = mapping.originByOutput.get(relativePath) || null;
 
       const diffBaseRelative = getEffectiveBaseFile(
         baseFile,
         originalFile,
-        relativeKey,
+        relativePath,
       );
-      const diffBaseLocation = diffBaseRelative
-        ? this.fileService.resolveRelativePath(diffBaseRelative, {
-            preferWorkspace: true,
-          })
-        : null;
+      const diffBaseLocation = locationFor(diffBaseRelative);
       const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBaseActual,
-        file,
+        output.path,
       );
 
-      const workspacePath = namedLocation?.workspace?.absolutePath ?? null;
-
-      const relativePath = relativeKey;
+      const workspacePath = location.workspace?.absolutePath ?? null;
       const displayLabel = this.fileService.getDisplayLabel(
         baseFile ?? relativePath,
       );
@@ -401,12 +381,8 @@ export class OutputHandler implements IOutputHandler {
       const displayDir =
         !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
 
-      const location =
-        namedLocation ??
-        this.fileService.resolveRelativePath(file, { preferWorkspace: true });
-
       infos.push({
-        path: file,
+        path: output.path,
         relativePath,
         displayLabel,
         displayDir,
@@ -416,17 +392,9 @@ export class OutputHandler implements IOutputHandler {
         original: originalFile,
         location,
         baseLocation: diffBaseLocation ?? null,
-        prevLocation: prevFile
-          ? this.fileService.resolveRelativePath(prevFile, {
-              preferWorkspace: true,
-            })
-          : null,
-        originalLocation: originalFile
-          ? this.fileService.resolveRelativePath(originalFile, {
-              preferWorkspace: true,
-            })
-          : null,
-        source: named?.source ?? relativePath ?? null,
+        prevLocation: locationFor(prevFile),
+        originalLocation: locationFor(originalFile),
+        source: output.source ?? relativePath ?? null,
         rawOutputPath: rawLocation?.absolutePath ?? null,
         rawLocation: rawLocation ?? null,
         xmlSummary: xmlSummarySnapshot,
@@ -508,30 +476,8 @@ export class OutputHandler implements IOutputHandler {
     }));
   }
 
-  private normalizeHydratedInfos(
-    round: number,
-    infos: OutputFileInfo[],
-  ): OutputFileInfo[] {
-    const normalized: OutputFileInfo[] = [];
-    for (const candidate of infos) {
-      const parsed = OutputFileInfoSchema.safeParse(candidate);
-      if (!parsed.success) {
-        this.logger.debug(
-          `Skipping invalid output file info while hydrating round ${round}: ${parsed.error.message}`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        continue;
-      }
-      normalized.push(parsed.data);
-    }
-    return normalized;
-  }
-
   private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
-    const normalized = this.normalizeHydratedInfos(round, infos);
-
-    if (normalized.length === 0) {
+    if (infos.length === 0) {
       delete this.outputFiles[round];
       delete this.outputMappings[round];
       delete this.roundFileInfos[round];
@@ -541,23 +487,18 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    this.roundFileInfos[round] = normalized;
-    this.outputFiles[round] = normalized.map((info) => info.path);
-    this.outputMappings[round] = this.buildNamedOutputsFromInfos(normalized);
+    this.roundFileInfos[round] = infos;
+    this.outputFiles[round] = this.buildNamedOutputsFromInfos(infos);
+    this.outputMappings[round] = this.outputFiles[round];
 
     const rawSource =
-      normalized.find((info) => info.rawLocation || info.rawOutputPath) ??
-      normalized[0];
+      infos.find((info) => info.rawLocation || info.rawOutputPath) ?? infos[0];
 
-    const rawLocation =
-      rawSource?.rawLocation ??
-      (rawSource?.rawOutputPath
-        ? this.fileService.describePath(rawSource.rawOutputPath)
-        : null);
+    const rawLocation = rawSource?.rawLocation ?? null;
 
     this.rawOutputs[round] = rawLocation ?? null;
 
-    const summary = normalized
+    const summary = infos
       .map((info) => info.xmlSummary ?? null)
       .find((value) => value !== null);
 
@@ -606,98 +547,15 @@ export class OutputHandler implements IOutputHandler {
     this.invalidateRoundMapping(round + 1);
   }
 
-  private async relocateRoundArtifacts(
-    rawOutput: FileLocation | null,
-    processed: NamedOutputFile[],
-  ): Promise<{
-    raw: FileLocation | null;
-    processed: NamedOutputFile[];
-  }> {
-    let relocatedRaw = rawOutput;
-    const initialRawPath = rawOutput?.absolutePath ?? null;
-    const runStorageActive = this.fileService.isRunStorageEnabled();
-    const shouldForceRunStorage = runStorageActive;
-
-    if (rawOutput) {
-      await this.cleanupLatexBackups(rawOutput);
-      if (runStorageActive) {
-        relocatedRaw = await this.fileService.relocateToRunStorage(
-          rawOutput.absolutePath,
-          shouldForceRunStorage ? { forceRunStorage: true } : undefined,
-        );
-      } else {
-        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
-      }
-    }
-
-    const relocatedProcessed: NamedOutputFile[] = [];
-    for (const entry of processed) {
-      try {
-        if (initialRawPath && entry.location.absolutePath === initialRawPath) {
-          relocatedProcessed.push({
-            ...entry,
-            path: relocatedRaw?.absolutePath ?? entry.path,
-            relativePath: relocatedRaw?.relativePath ?? entry.relativePath,
-            workspacePath:
-              entry.workspacePath ?? relocatedRaw?.workspace?.absolutePath,
-            location: relocatedRaw ?? entry.location,
-          });
-          continue;
-        }
-
-        await this.cleanupLatexBackups(entry.location);
-        if (!runStorageActive) {
-          const described = this.fileService.describePath(
-            entry.location.absolutePath,
-          );
-          relocatedProcessed.push({
-            ...entry,
-            path: described.absolutePath,
-            relativePath: described.relativePath,
-            workspacePath:
-              entry.workspacePath ?? described.workspace?.absolutePath,
-            location: described,
-          });
-          continue;
-        }
-
-        const relocation = await this.fileService.relocateToRunStorage(
-          entry.location.absolutePath,
-        );
-        relocatedProcessed.push({
-          ...entry,
-          path: relocation.absolutePath,
-          relativePath: relocation.relativePath,
-          workspacePath:
-            entry.workspacePath ?? relocation.workspace?.absolutePath,
-          location: relocation,
-        });
-      } catch (error) {
-        throw Object.assign(
-          new Error(
-            `Failed to relocate processed output ${entry.location.absolutePath}: ${toErrorMessage(error)}`,
-          ),
-          { cause: error },
-        );
-      }
-    }
-
-    return { raw: relocatedRaw ?? null, processed: relocatedProcessed };
-  }
-
   /**
    * Set output files and mappings for a round, invalidating the cache.
    * @param round The round number
    * @param files The output file paths
    * @param mappings The named output file mappings
    */
-  private setRoundOutputs(
-    round: number,
-    files: string[],
-    mappings: NamedOutputFile[],
-  ): void {
-    this.outputFiles[round] = files;
-    this.outputMappings[round] = mappings;
+  private setRoundOutputs(round: number, outputs: NamedOutputFile[]): void {
+    this.outputFiles[round] = outputs;
+    this.outputMappings[round] = outputs;
     this.invalidateMappingsFromRound(round);
   }
 
@@ -790,19 +648,12 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         this.ensureRound(currRound);
-        let rawLocation =
-          this.rawOutputs[currRound] ?? this.resolveOutputLocation(outputFile);
-        if (!rawLocation && outputFile) {
-          rawLocation = this.resolveOutputLocation(outputFile);
-        }
+        const rawLocation =
+          this.rawOutputs[currRound] ??
+          (outputFile
+            ? this.fileService.resolveRelativePath(outputFile)
+            : null);
         this.rawOutputs[currRound] = rawLocation;
-
-        let rawPath = outputFile;
-        if (rawLocation?.absolutePath) {
-          rawPath = rawLocation.absolutePath;
-        }
-
-        const runStorageEnabled = this.fileService.isRunStorageEnabled();
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -860,18 +711,13 @@ export class OutputHandler implements IOutputHandler {
         this.ensureRound(currRound);
         await this.prepareRunWorkspaceIfNeeded();
 
-        let rawLocation =
+        const rawLocation =
           this.rawOutputs[currRound] ??
-          (outputFile ? this.resolveOutputLocation(outputFile) : null);
-        if (!rawLocation && outputFile) {
-          rawLocation = this.resolveOutputLocation(outputFile);
-        }
-        let rawPath = outputFile;
-        if (rawLocation?.absolutePath) {
-          rawPath = rawLocation.absolutePath;
-        }
-
-        const runStorageEnabled = this.fileService.isRunStorageEnabled();
+          (outputFile
+            ? this.fileService.resolveRelativePath(outputFile)
+            : null);
+        this.rawOutputs[currRound] = rawLocation;
+        let rawPath = rawLocation?.absolutePath ?? outputFile;
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -889,32 +735,18 @@ export class OutputHandler implements IOutputHandler {
                 `Indented multiple output files: ${processedFiles.join(',')}`,
               );
 
-              const relocated = await this.relocateRoundArtifacts(
-                rawLocation,
-                processedPairs,
-              );
-              rawLocation = relocated.raw;
-              rawPath = rawLocation?.absolutePath ?? rawPath;
-              outputFile = rawPath;
-              this.rawOutputs[currRound] = rawLocation;
-              const relocatedFiles = relocated.processed.map((p) => p.path);
-
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  relocatedFiles,
+                  processedFiles,
                   this.logger,
                 );
               }
-              this.setRoundOutputs(
-                currRound,
-                relocatedFiles,
-                relocated.processed,
-              );
+              this.setRoundOutputs(currRound, processedPairs);
               await this.captureXmlSummary(
                 currRound,
-                rawPath,
-                relocated.processed,
+                rawLocation,
+                processedPairs,
                 scope,
               );
               return;
@@ -923,21 +755,13 @@ export class OutputHandler implements IOutputHandler {
             this.logger.debug(
               `No processed files were generated from ${outputFile}`,
             );
-            this.setRoundOutputs(currRound, [], []);
+            this.setRoundOutputs(currRound, []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = runStorageEnabled
-                ? await this.fileService.relocateToRunStorage(
-                    relocationSource,
-                    { forceRunStorage: true },
-                  )
-                : this.fileService.describePath(relocationSource);
-              rawPath = rawLocation.absolutePath;
+              rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
-            this.rawOutputs[currRound] = rawLocation ?? null;
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            await this.captureXmlSummary(currRound, rawLocation, [], scope);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation);
             }
@@ -947,21 +771,13 @@ export class OutputHandler implements IOutputHandler {
               undefined,
               MESSAGE_TYPES.INTERNAL,
             );
-            this.setRoundOutputs(currRound, [], []);
+            this.setRoundOutputs(currRound, []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = runStorageEnabled
-                ? await this.fileService.relocateToRunStorage(
-                    relocationSource,
-                    { forceRunStorage: true },
-                  )
-                : this.fileService.describePath(relocationSource);
-              rawPath = rawLocation.absolutePath;
+              rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
-            this.rawOutputs[currRound] = rawLocation ?? null;
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            await this.captureXmlSummary(currRound, rawLocation, [], scope);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation);
             }
@@ -972,22 +788,15 @@ export class OutputHandler implements IOutputHandler {
           this.logger.debug(`Processing single output for ${outputFile}`);
 
           try {
-            const fallbackLocation = this.resolveOutputLocation(outputFile);
-            const processedLocation = rawLocation ?? fallbackLocation;
+            const processedLocation = rawLocation
+              ? { ...rawLocation }
+              : this.fileService.resolveRelativePath(outputFile);
             let processed: NamedOutputFile = {
               source: outputFile,
-              path: processedLocation?.absolutePath ?? rawPath,
-              relativePath:
-                processedLocation?.relativePath ??
-                rawLocation?.relativePath ??
-                outputFile,
-              workspacePath:
-                processedLocation?.workspace?.absolutePath ?? undefined,
-              location:
-                processedLocation ??
-                this.fileService.resolveRelativePath(outputFile, {
-                  preferWorkspace: true,
-                }),
+              path: processedLocation.absolutePath,
+              relativePath: processedLocation.relativePath,
+              workspacePath: processedLocation.workspace?.absolutePath,
+              location: processedLocation,
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>
@@ -1012,41 +821,31 @@ export class OutputHandler implements IOutputHandler {
               );
             }
 
-            const relocation = await this.relocateRoundArtifacts(
-              rawLocation,
-              hasProcessedPath && processed.path ? [processed] : [],
-            );
-            rawLocation = relocation.raw;
-            rawPath = rawLocation?.absolutePath ?? rawPath;
-            outputFile = rawPath;
-            this.rawOutputs[currRound] = rawLocation;
-            const relocatedFiles = relocation.processed.map((p) => p.path);
+            const resolvedRawPath = rawLocation?.absolutePath ?? rawPath;
+            outputFile = resolvedRawPath;
+            const processedFiles = hasProcessedPath ? [processed] : [];
 
             if (hasProcessedPath) {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  relocatedFiles,
+                  processedFiles.map((entry) => entry.path),
                   this.logger,
                 );
               }
 
-              this.setRoundOutputs(
-                currRound,
-                relocatedFiles,
-                relocation.processed,
-              );
+              this.setRoundOutputs(currRound, processedFiles);
             } else {
               this.logger.debug(
                 `No processed file was generated from ${outputFile}`,
               );
-              this.setRoundOutputs(currRound, [], []);
+              this.setRoundOutputs(currRound, []);
             }
 
             await this.captureXmlSummary(
               currRound,
-              rawPath,
-              relocation.processed,
+              rawLocation,
+              processedFiles,
               scope,
             );
           } catch (err) {
@@ -1067,8 +866,13 @@ export class OutputHandler implements IOutputHandler {
               executionId: this.fileService.getExecutionId(),
               filesByRound: { [currRound]: [] },
             });
-            this.setRoundOutputs(currRound, [], []);
-            await this.captureXmlSummary(currRound, outputFile, [], scope);
+            this.setRoundOutputs(currRound, []);
+            await this.captureXmlSummary(
+              currRound,
+              this.rawOutputs[currRound] ?? rawLocation ?? null,
+              [],
+              scope,
+            );
           }
         };
 
@@ -1086,7 +890,7 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
-    const outputFiles = this.ensureRound(round).slice();
+    const outputFiles = this.ensureRound(round).map((entry) => ({ ...entry }));
     const processed = this.getNamedOutputs(round).map((entry) => ({
       ...entry,
     }));
@@ -1122,15 +926,15 @@ export class OutputHandler implements IOutputHandler {
 
   private async captureXmlSummary(
     round: number,
-    rawOutputPath: string,
+    rawOutput: FileLocation | null,
     processed: NamedOutputFile[],
     stage?: AgentLogStage,
   ): Promise<void> {
     const run = async () => {
       const singleFile = processed.length === 1 ? processed[0].path : null;
-      const sourceLocation = this.rawOutputs[round] ?? null;
+      const sourceLocation = rawOutput ?? this.rawOutputs[round] ?? null;
 
-      if (!rawOutputPath) {
+      if (!rawOutput?.absolutePath) {
         this.roundXmlSummaries[round] = {
           tagContents: {},
           documents: [],
@@ -1141,7 +945,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await flexibleFS.read(rawOutputPath);
+        const rawContent = await flexibleFS.read(rawOutput.absolutePath);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 
