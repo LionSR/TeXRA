@@ -8,6 +8,7 @@ import { parseFilenameParts } from '@agent/utils';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import type { NamedOutputFile } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 
 // Local file imports
@@ -81,7 +82,7 @@ export class MergeAgent extends DirectAgent {
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     const { outputFile, endTurn } = options;
     if (endTurn) {
       this.logger.debug(`Processing merge output for round ${currRound}`);

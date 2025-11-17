@@ -23,6 +23,13 @@ const createLocation = (file: string) => ({
   runStorage: null,
 });
 
+const createNamedOutput = (file: string) => ({
+  source: file,
+  path: file,
+  relativePath: file,
+  location: createLocation(file),
+});
+
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
@@ -97,11 +104,11 @@ describe('OutputHandler round helpers', () => {
     assert.ok(Array.isArray(roundOutputs));
     assert.strictEqual(roundOutputs.length, 0);
 
-    roundOutputs.push('out.tex');
+    roundOutputs.push(createNamedOutput('out.tex'));
     const retrieved = handler.ensureRound(2);
 
     assert.strictEqual(retrieved, roundOutputs);
-    assert.deepEqual(retrieved, ['out.tex']);
+    assert.deepEqual(retrieved, [createNamedOutput('out.tex')]);
   });
 
   it('reflects whether rounds contain outputs', () => {
@@ -109,7 +116,7 @@ describe('OutputHandler round helpers', () => {
 
     assert.strictEqual(handler.hasRoundOutputs(1), false);
 
-    handler.ensureRound(1).push('out-1.tex');
+    handler.ensureRound(1).push(createNamedOutput('out-1.tex'));
 
     assert.strictEqual(handler.hasRoundOutputs(1), true);
     assert.strictEqual(handler.hasRoundOutputs(3), false);
@@ -129,13 +136,13 @@ describe('OutputHandler round helpers', () => {
 
   it('ensureRound returns existing outputs when called multiple times', () => {
     const handler = new MockOutputHandler(baseSetting, baseConfig);
-    handler.ensureRound(2).push('existing.tex');
+    handler.ensureRound(2).push(createNamedOutput('existing.tex'));
 
     const outputs = handler.ensureRound(2);
 
     assert.ok(Array.isArray(outputs));
     assert.strictEqual(outputs.length, 1);
-    assert.strictEqual(outputs[0], 'existing.tex');
+    assert.deepEqual(outputs[0], createNamedOutput('existing.tex'));
 
     // Verify reference equality (returns the actual array, not a copy)
     assert.strictEqual(outputs, handler.outputFiles[2]);
@@ -152,15 +159,10 @@ describe('OutputHandler.getRoundMapping', () => {
       new AgentLogger('TestOutputHandlerMapping'),
     );
 
-    handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
-    handler.outputMappings[0] = [
-      {
-        source: path.join('workspace', 'chapter_r0.tex'),
-        path: path.join('workspace', 'chapter_r0.tex'),
-        relativePath: path.join('workspace', 'chapter_r0.tex'),
-        location: createLocation(path.join('workspace', 'chapter_r0.tex')),
-      },
+    handler.outputFiles[0] = [
+      createNamedOutput(path.join('workspace', 'chapter_r0.tex')),
     ];
+    handler.outputMappings[0] = handler.outputFiles[0];
 
     const first = handler.getRoundMapping(0);
     const second = handler.getRoundMapping(0);
@@ -168,7 +170,7 @@ describe('OutputHandler.getRoundMapping', () => {
     assert.strictEqual(second, first, 'expected mapping to be cached');
 
     handler.outputFiles[0].push(
-      path.join('workspace', 'chapter_appendix_r0.tex'),
+      createNamedOutput(path.join('workspace', 'chapter_appendix_r0.tex')),
     );
     (handler as any).invalidateRoundMapping(0);
 
