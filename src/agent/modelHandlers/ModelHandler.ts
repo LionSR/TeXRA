@@ -25,6 +25,7 @@ import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
 
 // Local file imports
+import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import { resolveBaseUrl } from './support/ProxyConfigResolver';
 import {
@@ -36,7 +37,6 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
-import type { FileLocation } from '@utils/files';
 import type { IModelHandler } from './types/IModelHandler';
 
 // Default continuation limits

@@ -6,7 +6,6 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation } from '@utils/files';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
 import { hasEndTag } from '@agent/core/AgentDataclass';
@@ -34,6 +33,7 @@ import { cleanFileContent } from '@replacement/engine';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
+import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';

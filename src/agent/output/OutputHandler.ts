@@ -29,9 +29,9 @@ import {
   WorkspaceFS,
   AbsoluteFS,
 } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 // Type imports
-import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
