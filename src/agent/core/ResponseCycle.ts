@@ -5,7 +5,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
-  type ResponseCycleShared,
+  type ResponseCycleContext,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 
@@ -18,7 +18,7 @@ export interface ResponseCycleOptions<C = unknown>
   agentConfig: AgentConfig;
 }
 
-export interface ResponseCycleContext<C = unknown> {
+export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
   outputFile: string;
@@ -31,14 +31,14 @@ export interface ResponseCycleResult {
 }
 
 export async function runResponseCycle<C = unknown>(
-  context: ResponseCycleContext<C>,
+  input: ResponseCycleInput<C>,
 ): Promise<ResponseCycleResult> {
-  const shared: ResponseCycleShared<C> = {
-    options: context.options,
-    store: context.store,
+  const context: ResponseCycleContext<C> = {
+    options: input.options,
+    store: input.store,
     state: {
-      messages: context.messages,
-      outputFile: context.outputFile,
+      messages: input.messages,
+      outputFile: input.outputFile,
       endTurn: false,
       shouldStop: false,
       outputExists: false,
@@ -55,10 +55,10 @@ export async function runResponseCycle<C = unknown>(
   };
 
   const flow = createResponseCycleFlow<C>();
-  await flow.run(shared);
+  await flow.run(context);
 
   return {
-    store: shared.store,
-    endTurn: shared.state.endTurn,
+    store: context.store,
+    endTurn: context.state.endTurn,
   };
 }
