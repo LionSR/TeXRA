@@ -4,7 +4,8 @@ import * as path from 'path';
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -46,11 +47,12 @@ function parseGraphicspath(content: string): string[] {
  * @returns Array of relative paths to figures
  */
 export async function extractFigurePathsFromLatex(
-  latexFile: string,
+  latexFileLocation: FileLocation,
 ): Promise<string[]> {
   const figurePaths: string[] = [];
 
   try {
+    const latexFile = latexFileLocation.absolutePath;
     const latexDir = path.dirname(latexFile);
     const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
@@ -61,7 +63,7 @@ export async function extractFigurePathsFromLatex(
     ];
 
     // Read file content
-    const content = await flexibleFS.read(pathToLocation(latexFile));
+    const content = await flexibleFS.read(latexFileLocation);
 
     // Parse graphicspaths
     const paths = parseGraphicspath(content);
@@ -98,7 +100,12 @@ export async function extractFigurePathsFromLatex(
           for (const ext of extensions) {
             const pathToCheck = normPath + ext;
 
-            if (await flexibleFS.exists(pathToLocation(pathToCheck))) {
+            if (
+              await flexibleFS.exists({
+                kind: 'external',
+                absolutePath: pathToCheck,
+              })
+            ) {
               const relative = path.relative(latexDir, pathToCheck);
               if (!discovered.has(relative)) {
                 figurePaths.push(relative);

@@ -31,7 +31,6 @@ interface UploadedAnthropicAttachment {
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation } from '@utils/files';
 // Internal imports
 import {
   AgentSetting,
@@ -68,6 +67,7 @@ import replacementEngine from '@replacement/engine';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
+import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
