@@ -15,20 +15,40 @@ export interface AgentFinalizeNodeOptions<
 > {
   finalizePhase: Shared['lifecycle']['phase'];
   computeStatus(
-    context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+    context: FinalizeNodeContext<
+      Shared['agent'],
+      Shared['lifecycle'],
+      Shared['hooks']
+    >,
   ): Status;
   runFinalize(
-    context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+    context: FinalizeNodeContext<
+      Shared['agent'],
+      Shared['lifecycle'],
+      Shared['hooks']
+    >,
     status: Status,
   ): Promise<void>;
   runCleanup(
-    context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+    context: FinalizeNodeContext<
+      Shared['agent'],
+      Shared['lifecycle'],
+      Shared['hooks']
+    >,
   ): Promise<void>;
   onSuccess?(
-    context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+    context: FinalizeNodeContext<
+      Shared['agent'],
+      Shared['lifecycle'],
+      Shared['hooks']
+    >,
   ): void | Promise<void>;
   onSecondaryError?(
-    context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+    context: FinalizeNodeContext<
+      Shared['agent'],
+      Shared['lifecycle'],
+      Shared['hooks']
+    >,
     error: unknown,
   ): void;
 }
@@ -40,16 +60,27 @@ export function createAgentFinalizeNode<
   return new (class AgentFinalizeNode extends BaseNode<Shared> {
     async prep(
       shared: Shared,
-    ): Promise<FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>> {
+    ): Promise<
+      FinalizeNodeContext<Shared['agent'], Shared['lifecycle'], Shared['hooks']>
+    > {
       setLifecyclePhase(shared.lifecycle, options.finalizePhase);
       return {
+        agent: shared.agent,
         lifecycle: shared.lifecycle,
         hooks: shared.hooks,
-      } satisfies FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>;
+      } satisfies FinalizeNodeContext<
+        Shared['agent'],
+        Shared['lifecycle'],
+        Shared['hooks']
+      >;
     }
 
     async exec(
-      context: FinalizeNodeContext<Shared['lifecycle'], Shared['hooks']>,
+      context: FinalizeNodeContext<
+        Shared['agent'],
+        Shared['lifecycle'],
+        Shared['hooks']
+      >,
     ): Promise<void> {
       const status = options.computeStatus(context);
       await finalizeLifecycle({
