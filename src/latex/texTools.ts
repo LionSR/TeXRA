@@ -6,7 +6,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -28,7 +28,7 @@ export async function compileLatex2Pdf(
 ): Promise<boolean> {
   try {
     const outDir = outputDirectory || path.dirname(latexFile);
-    await flexibleFS.ensureDir(outDir);
+    await flexibleFS.ensureDir(pathToLocation(outDir));
 
     // Get TikZ input directory from configuration
     const tikzInputDirectory = getConfig<string>(

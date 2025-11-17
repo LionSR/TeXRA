@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
-import { flexibleFS, WorkspaceFS } from '@utils/files';
+import { flexibleFS, WorkspaceFS, pathToLocation } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
@@ -52,12 +52,12 @@ async function handleCompare(
     const editedUri = vscode.Uri.file(editedAbsolute);
 
     // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUse))) {
+    if (!(await flexibleFS.exists(pathToLocation(fileToUse)))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await flexibleFS.exists(editedFile))) {
+    if (!(await flexibleFS.exists(pathToLocation(editedFile)))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
@@ -136,18 +136,18 @@ async function handleAcceptEdited(
     }
 
     // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUse))) {
+    if (!(await flexibleFS.exists(pathToLocation(fileToUse)))) {
       vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
       return;
     }
 
-    if (!(await flexibleFS.exists(editedFile))) {
+    if (!(await flexibleFS.exists(pathToLocation(editedFile)))) {
       vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
       return;
     }
 
     // Read content from edited file using workspace utilities
-    const editedContent = await flexibleFS.read(editedFile);
+    const editedContent = await flexibleFS.read(pathToLocation(editedFile));
 
     // Confirm with user
     const baseFileName = path.basename(fileToUse);
@@ -165,7 +165,7 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    await flexibleFS.write(fileToUse, editedContent);
+    await flexibleFS.write(pathToLocation(fileToUse), editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,

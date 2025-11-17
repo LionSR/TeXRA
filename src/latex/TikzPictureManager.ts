@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '@agent/utils/promptUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -57,7 +57,7 @@ export class TikzPictureManager {
     channel: string = this.channel,
   ): Promise<[string, string[]][]> {
     try {
-      const content = await flexibleFS.read(latexFile);
+      const content = await flexibleFS.read(pathToLocation(latexFile));
 
       // Regular expressions to match figure environments and tikzpictures
       const figurePattern =
@@ -116,7 +116,7 @@ export class TikzPictureManager {
       const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
       const filePath = path.join(buildDir, filename);
 
-      await flexibleFS.write(filePath, standaloneContent);
+      await flexibleFS.write(pathToLocation(filePath), standaloneContent);
       logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
 
       return filePath;
@@ -143,7 +143,7 @@ export class TikzPictureManager {
       const inputDir = path.dirname(latexFile);
       const inputName = path.parse(path.basename(latexFile)).name;
       const buildDir = path.join(inputDir, 'build', inputName);
-      await flexibleFS.ensureDir(buildDir);
+      await flexibleFS.ensureDir(pathToLocation(buildDir));
 
       logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
       const labeledTikzPictures = await this.extract(latexFile, channel);
@@ -174,7 +174,7 @@ export class TikzPictureManager {
           await compileLatex2Pdf(texFile, channel);
 
           const pdfFile = texFile.replace(/\.tex$/, '.pdf');
-          if (await flexibleFS.exists(pdfFile)) {
+          if (await flexibleFS.exists(pathToLocation(pdfFile))) {
             compiledFiles.push(pdfFile);
             logger.debug(channel, `Successfully compiled: ${pdfFile}`);
           }

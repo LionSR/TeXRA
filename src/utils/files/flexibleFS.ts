@@ -13,19 +13,12 @@ const CHANNEL = 'flexibleFS';
 logger.initialize(CHANNEL);
 
 /**
- * Filesystem operations for FileLocation objects and string paths.
- * Prefer using FileLocation for type safety and clarity.
+ * Filesystem operations for FileLocation objects.
+ * All paths must be FileLocation - use pathToLocation() to convert strings.
  */
 export class FlexibleFS {
-  private toAbsolutePath(target: string | FileLocation): string {
-    if (typeof target === 'string') {
-      return path.isAbsolute(target) ? target : WorkspaceFS.fullPath(target);
-    }
-    return target.absolutePath;
-  }
-
-  exists(target: string | FileLocation): Promise<boolean> {
-    return AbsoluteFS.exists(this.toAbsolutePath(target));
+  exists(target: FileLocation): Promise<boolean> {
+    return AbsoluteFS.exists(target.absolutePath);
   }
 
   /**
@@ -37,7 +30,7 @@ export class FlexibleFS {
    * outputs without scanning their contents.
    */
   async existsAndNonTrivial(
-    target: string | FileLocation,
+    target: FileLocation,
     threshold: number = 15,
   ): Promise<boolean> {
     if (!(await this.exists(target))) {
@@ -48,26 +41,23 @@ export class FlexibleFS {
     return content.length > threshold;
   }
 
-  read(target: string | FileLocation): Promise<string> {
-    return AbsoluteFS.read(this.toAbsolutePath(target));
+  read(target: FileLocation): Promise<string> {
+    return AbsoluteFS.read(target.absolutePath);
   }
 
-  readBytes(target: string | FileLocation): Promise<Buffer> {
-    return AbsoluteFS.readBytes(this.toAbsolutePath(target));
+  readBytes(target: FileLocation): Promise<Buffer> {
+    return AbsoluteFS.readBytes(target.absolutePath);
   }
 
-  appendFile(
-    target: string | FileLocation,
-    content: string | Uint8Array,
-  ): Promise<void> {
-    return AbsoluteFS.appendFile(this.toAbsolutePath(target), content);
+  appendFile(target: FileLocation, content: string | Uint8Array): Promise<void> {
+    return AbsoluteFS.appendFile(target.absolutePath, content);
   }
 
   async write(
-    target: string | FileLocation,
+    target: FileLocation,
     content: string | Uint8Array,
   ): Promise<void> {
-    const absolutePath = this.toAbsolutePath(target);
+    const absolutePath = target.absolutePath;
 
     try {
       await AbsoluteFS.write(absolutePath, content);
@@ -93,19 +83,19 @@ export class FlexibleFS {
     }
   }
 
-  async ensureDir(target: string | FileLocation): Promise<void> {
-    await AbsoluteFS.ensureDir(this.toAbsolutePath(target));
+  async ensureDir(target: FileLocation): Promise<void> {
+    await AbsoluteFS.ensureDir(target.absolutePath);
   }
 
   async delete(
-    target: string | FileLocation,
+    target: FileLocation,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    await AbsoluteFS.delete(this.toAbsolutePath(target), options);
+    await AbsoluteFS.delete(target.absolutePath, options);
   }
 
-  stat(target: string | FileLocation) {
-    return AbsoluteFS.stat(this.toAbsolutePath(target));
+  stat(target: FileLocation) {
+    return AbsoluteFS.stat(target.absolutePath);
   }
 }
 
