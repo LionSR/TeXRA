@@ -45,7 +45,7 @@ import { bestConnectionMethod } from '@latex';
 import { FlowTransition } from './FlowTransitions';
 
 export interface ResponseCycleInputState {
-  outputFile: string;
+  outputLocation: FileLocation;
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
@@ -101,9 +101,9 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     outputLocation: FileLocation;
   }> {
     const { options, state, store } = shared;
-    const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
+    const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const outputLocation = fileService.resolveRelativePath(state.outputFile);
+    const outputLocation = state.outputLocation;
     const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
@@ -121,7 +121,10 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       ? undefined
       : {
           continuationCount: store.round.continuationCount,
-          outputFile: state.outputFile,
+          outputFile:
+            state.outputLocation.kind !== 'external'
+              ? state.outputLocation.relativePath
+              : state.outputLocation.absolutePath,
         };
 
     return {
@@ -477,10 +480,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    const outputLocation =
-      state.outputLocation ??
-      options.fileService.resolveRelativePath(state.outputFile);
-    state.outputLocation = outputLocation;
+    const outputLocation = state.outputLocation;
 
     await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
 

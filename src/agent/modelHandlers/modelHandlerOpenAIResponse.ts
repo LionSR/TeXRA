@@ -6,6 +6,7 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { FileLocation } from '@utils/files';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
 import { hasEndTag } from '@agent/core/AgentDataclass';
@@ -1071,12 +1072,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(pathToLocation(outputFile)))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage) {
@@ -1096,7 +1097,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    let fileContent = await flexibleFS.read(pathToLocation(outputFile));
+    let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
     const scratchpad = await xmlUtils.extractScratchpad(
@@ -1107,7 +1108,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(pathToLocation(outputFile), fileContent);
+    await flexibleFS.write(outputLocation, fileContent);
 
     messages.push(this.createAssistantMessage(fileContent));
 
@@ -1125,7 +1126,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
-        pathToLocation(outputFile),
+        outputLocation,
         workspaceState.assembly.accumulatedOutput,
       );
     }
