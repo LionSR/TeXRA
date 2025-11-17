@@ -85,6 +85,11 @@ export class FlexibleFS {
     }
   }
 
+  async appendFile(target: string, content: string): Promise<void> {
+    const existing = (await this.exists(target)) ? await this.read(target) : '';
+    await this.write(target, `${existing}${content}`);
+  }
+
   async ensureDir(target: string): Promise<void> {
     if (isAbsolute(target)) {
       await AbsoluteFS.ensureDir(target);

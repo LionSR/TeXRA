@@ -167,15 +167,16 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
 
+    // Initialize logging
+    this.logId = 0;
+
+    // Initialize file service first (needed by getOutputFile)
+    this.fileService = new TaskRunFileService(context.executionId);
+
     // Set output files for all rounds
     for (let i = 0; i < numRounds; i++) {
       this.outputFile[i] = this.getOutputFile(i);
     }
-
-    // Initialize logging
-    this.logId = 0;
-
-    this.fileService = new TaskRunFileService(context.executionId);
 
     this.outputHandler = new OutputHandler(
       this.agentSetting,

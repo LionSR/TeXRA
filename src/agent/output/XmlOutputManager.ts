@@ -338,25 +338,53 @@ export class XmlOutputManager {
   async ensureCorrectXmlStructure(
     filePath: string,
     documentTag: string,
-  ): Promise<void> {
+  ): Promise<{ fixed: boolean; reason?: string }> {
+    // Skip XML processing if agent doesn't produce XML
+    if (!this.agentSetting.producesXml) {
+      this.logger.debug(
+        `Skipping XML structure validation: agent does not produce XML`,
+        undefined,
+        MESSAGE_TYPES.INTERNAL,
+      );
+      return { fixed: false };
+    }
+
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
     let content = await flexibleFS.read(filePath);
 
     content = await this.processXmlContent(content);
 
+    let fixed = false;
+    let reason: string | undefined;
+
     if (!content.endsWith(`</${documentTag}>`)) {
+      fixed = true;
       if (
         !content.includes(`</${documentTag}>`) &&
         content.includes(`<${documentTag}>`)
       ) {
+        reason = 'missing_closing_tag';
         content += `\n</${documentTag}>`;
+        this.logger.info(
+          `Added missing closing tag </${documentTag}>`,
+          undefined,
+          MESSAGE_TYPES.PARTIAL_XML_OUTPUT,
+        );
       } else {
+        reason = 'malformed_closing_tag';
         content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
         if (content.includes(`<${documentTag}>`)) {
           content += `\n</${documentTag}>`;
+          this.logger.info(
+            `Fixed malformed closing tag </${documentTag}>`,
+            undefined,
+            MESSAGE_TYPES.PARTIAL_XML_OUTPUT,
+          );
         }
       }
     }
+
     await flexibleFS.write(filePath, content);
+    return { fixed, reason };
   }
 }

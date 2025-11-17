@@ -31,10 +31,16 @@ export class DirectAgent extends BaseReflectionAgent {
         this.logger.debug(`Processing output for round ${currRound}`);
 
         if (this.useScratchpad) {
-          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-            outputFile,
-            this.agentSetting.documentTag,
-          );
+          const xmlResult =
+            await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+              outputFile,
+              this.agentSetting.documentTag,
+            );
+          if (xmlResult.fixed) {
+            this.logger.debug(
+              `XML structure was auto-fixed: ${xmlResult.reason}`,
+            );
+          }
         }
 
         await this.outputHandler.processOutputFiles(
