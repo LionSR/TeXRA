@@ -57,7 +57,7 @@ export class MergeAgent extends DirectAgent {
     const editedBase = path.parse(editedFile).name;
 
     // Parse filename components
-    const [base, agent, roundNum, model] = parseFilenameParts(editedBase);
+    const { base, agent, roundNum, model } = parseFilenameParts(editedBase);
 
     // Use original input base if it differs from edited base
     const finalBase = inputBase !== base ? inputBase : base;
