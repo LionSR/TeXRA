@@ -18,7 +18,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { flexibleFS, TaskRunFileService } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -131,10 +131,11 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<string> {
-    const { dir, name } = path.parse(outputFile);
+    const outputLocation = this.fileService.resolveRelativePath(outputFile);
+    const { dir, name } = path.parse(outputLocation.absolutePath);
     const texFile = path.join(dir, `${name}.tex`);
 
-    let outputContent = await flexibleFS.read(outputFile);
+    let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const tagsToWrap = [documentTag, thinkingTag];
     outputContent = xmlUtils.addCdataToTags(outputContent, tagsToWrap);
 
@@ -144,7 +145,7 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await flexibleFS.write(texFile, namedDocumentContent);
+      await AbsoluteFS.write(texFile, namedDocumentContent);
       return texFile;
     }
 
@@ -164,7 +165,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await flexibleFS.write(texFile, latexDocument);
+        await AbsoluteFS.write(texFile, latexDocument);
         return texFile;
       }
       throw new Error(
@@ -180,7 +181,8 @@ export class XmlOutputManager {
     documentTag: string,
     thinkingTag: string = 'scratchpad',
   ): Promise<NamedOutputFile[]> {
-    let outputContent = await flexibleFS.read(outputFile);
+    const outputLocation = this.fileService.resolveRelativePath(outputFile);
+    let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
 
     const tagsToWrap = [thinkingTag, 'document'];
     outputContent = xmlUtils.addCdataToTagsMultiple(outputContent, tagsToWrap);
@@ -243,9 +245,7 @@ export class XmlOutputManager {
     source: string,
     outputPath: string,
   ): NamedOutputFile {
-    const location = this.fileService.resolveRelativePath(outputPath, {
-      preferWorkspace: true,
-    });
+    const location = this.fileService.resolveRelativePath(outputPath);
 
     return {
       source,
@@ -291,7 +291,8 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      await flexibleFS.write(texFile, doc.content.trim());
+      const outputLocation = this.fileService.resolveRelativePath(texFile);
+      await AbsoluteFS.write(outputLocation.absolutePath, doc.content.trim());
       outputFiles.push(this.buildNamedOutput(source, texFile));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -309,7 +310,8 @@ export class XmlOutputManager {
       this.agentSetting.documentTag,
     );
 
-    const xmlContent = await flexibleFS.read(outputFile);
+    const xmlLocation = this.fileService.resolveRelativePath(outputFile);
+    const xmlContent = await AbsoluteFS.read(xmlLocation.absolutePath);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
@@ -340,7 +342,8 @@ export class XmlOutputManager {
     documentTag: string,
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    let content = await flexibleFS.read(filePath);
+    const xmlLocation = this.fileService.resolveRelativePath(filePath);
+    let content = await AbsoluteFS.read(xmlLocation.absolutePath);
 
     content = await this.processXmlContent(content);
 
@@ -357,6 +360,6 @@ export class XmlOutputManager {
         }
       }
     }
-    await flexibleFS.write(filePath, content);
+    await AbsoluteFS.write(xmlLocation.absolutePath, content);
   }
 }
