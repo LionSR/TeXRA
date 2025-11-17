@@ -280,10 +280,10 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const workspaceAbsolute = path.join(
-      workspaceRoot,
-      workspaceLocation.relativePath,
-    );
+    if (!workspaceLocation) {
+      return;
+    }
+    const workspaceAbsolute = path.join(workspaceRoot, workspaceLocation);
 
     if (!workspaceAbsolute) {
       return;
@@ -354,10 +354,7 @@ export class OutputHandler implements IOutputHandler {
 
     for (const output of roundOutputs) {
       const location = output.location;
-      const relativePath =
-        location.workspace?.relativePath ??
-        location.runStorage?.relativePath ??
-        location.absolutePath;
+      const relativePath = location.relativePath ?? location.absolutePath;
 
       const baseFile = baseByOutput.get(relativePath) ?? null;
       const prevFile = prevByOutput.get(relativePath) ?? null;
@@ -399,10 +396,8 @@ export class OutputHandler implements IOutputHandler {
     }
 
     const currentOutputs = this.outputMappings[currRound] || [];
-    const currentRelatives = currentOutputs.map((entry) =>
-      entry.location.workspace?.relativePath ??
-      entry.location.runStorage?.relativePath ??
-      entry.location.absolutePath,
+    const currentRelatives = currentOutputs.map(
+      (entry) => entry.location.relativePath ?? entry.location.absolutePath,
     );
 
     const baseToOutput = createFileMapping(
@@ -413,10 +408,8 @@ export class OutputHandler implements IOutputHandler {
 
     const prevOutputs =
       currRound > 0 ? this.outputMappings[currRound - 1] || [] : [];
-    const prevRelatives = prevOutputs.map((entry) =>
-      entry.location.workspace?.relativePath ??
-      entry.location.runStorage?.relativePath ??
-      entry.location.absolutePath,
+    const prevRelatives = prevOutputs.map(
+      (entry) => entry.location.relativePath ?? entry.location.absolutePath,
     );
 
     const prevToOutput =
@@ -426,9 +419,7 @@ export class OutputHandler implements IOutputHandler {
 
     const originByOutput = new Map(
       currentOutputs.map((entry) => [
-        entry.location.workspace?.relativePath ??
-          entry.location.runStorage?.relativePath ??
-          entry.location.absolutePath,
+        entry.location.relativePath ?? entry.location.absolutePath,
         entry.source,
       ]),
     );
@@ -439,10 +430,7 @@ export class OutputHandler implements IOutputHandler {
       entry: OutputFileInfo,
       { skipIfExists = false }: { skipIfExists?: boolean } = {},
     ) => {
-      const key =
-        entry.location.workspace?.relativePath ??
-        entry.location.runStorage?.relativePath ??
-        entry.location.absolutePath;
+      const key = entry.location.relativePath ?? entry.location.absolutePath;
       if (skipIfExists && locationByOutput.has(key)) {
         return;
       }
