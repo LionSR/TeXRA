@@ -78,8 +78,10 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await flexibleFS.exists(pathToLocation(inputFile));
-      const editedExists = await flexibleFS.exists(pathToLocation(editedFile));
+      const inputLocation = pathToLocation(inputFile);
+      const editedLocation = pathToLocation(editedFile);
+      const inputExists = await flexibleFS.exists(inputLocation);
+      const editedExists = await flexibleFS.exists(editedLocation);
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -122,8 +124,9 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await flexibleFS.write(pathToLocation(outputPath), result.stdout);
-      await this.fileProcessor.processDiffFile(outputPath);
+      const outputLocation = pathToLocation(outputPath);
+      await flexibleFS.write(outputLocation, result.stdout);
+      await this.fileProcessor.processDiffFile(outputLocation);
 
       logger.debug(
         this.channel,

@@ -105,9 +105,10 @@ export class LatexMediaManager {
             buildDir,
             path.basename(file).replace(/\.tex$/, '.pdf'),
           );
-          if (await flexibleFS.exists(pathToLocation(pdfFile))) {
-            try {
-              const stats = await flexibleFS.stat(pathToLocation(pdfFile));
+          const pdfLocation = pathToLocation(pdfFile);
+          if (await flexibleFS.exists(pdfLocation)) {
+            try:
+              const stats = await flexibleFS.stat(pdfLocation);
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file}: ${pdfFile}`,
