@@ -251,27 +251,27 @@ export class OutputHandler implements IOutputHandler {
   /**
    * Indents a LaTeX file for better readability
    */
-  public async indentLatexFile(filePath: string): Promise<void> {
-    if (!filePath.includes('.tex')) {
+  public async indentLatexFile(fileLocation: FileLocation): Promise<void> {
+    if (!fileLocation.absolutePath.includes('.tex')) {
       return;
     }
-    this.logger.debug(`Formatting ${filePath}`);
-    await runLatexFormatter(filePath);
+    this.logger.debug(`Formatting ${fileLocation.absolutePath}`);
+    await runLatexFormatter(fileLocation.absolutePath);
   }
 
   /**
    * Indents multiple LaTeX files for better readability
    */
-  public async indentLatexFiles(filePaths: string[]): Promise<void> {
-    for (const filePath of filePaths) {
-      await this.indentLatexFile(filePath);
+  public async indentLatexFiles(fileLocations: FileLocation[]): Promise<void> {
+    for (const location of fileLocations) {
+      await this.indentLatexFile(location);
     }
   }
 
   private async cleanupLatexBackups(
-    original?: string | FileLocation | null,
+    fileLocation: FileLocation | null,
   ): Promise<void> {
-    if (!original) {
+    if (!fileLocation) {
       return;
     }
 
@@ -280,10 +280,7 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const originalLocation =
-      typeof original === 'string'
-        ? this.fileService.describePath(original)
-        : original;
+    const originalLocation = fileLocation;
     if (originalLocation.kind !== 'workspace') {
       return;
     }
@@ -498,7 +495,7 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public async validateExpectedOutputs(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void> {
@@ -519,30 +516,20 @@ export class OutputHandler implements IOutputHandler {
 
         const checks = expected.map(async (file) => ({
           file,
-          exists: await AbsoluteFS.exists(
-            this.fileService.resolveRelativePath(file).absolutePath,
+          exists: await flexibleFS.exists(
+            this.fileService.resolveRelativePath(file),
           ),
         }));
         const results = await Promise.all(checks);
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
 
         if (missing.length > 0) {
-          const xmlPath = outputFile
-            ? outputFile
-            : getOutputFileName(
-                this.agentConfig.inputFile,
-                this.agentConfig.agent,
-                this.agentConfig.model,
-                'xml',
-                currRound,
-              );
-
-          const xmlLocation = this.fileService.resolveRelativePath(xmlPath);
-          const xmlExists = await AbsoluteFS.exists(xmlLocation.absolutePath);
+          const xmlLocation = outputLocation;
+          const xmlExists = await flexibleFS.exists(xmlLocation);
 
           const missingOutputsData = {
             missing,
-            xmlFile: xmlExists ? xmlPath : null,
+            xmlFile: xmlExists ? xmlLocation.absolutePath : null,
             documentTag: this.agentSetting.documentTag,
           };
 
@@ -594,11 +581,7 @@ export class OutputHandler implements IOutputHandler {
 
         if (endTurn) {
           try {
-            await this.validateExpectedOutputs(
-              outputFile.absolutePath,
-              currRound,
-              scope,
-            );
+            await this.validateExpectedOutputs(outputFile, currRound, scope);
             this.logger.debug(
               `Expected outputs validated for round ${currRound}`,
             );
@@ -651,38 +634,31 @@ export class OutputHandler implements IOutputHandler {
         await this.prepareRunWorkspaceIfNeeded();
 
         const data = this.ensureRoundData(currRound);
-        const rawLocation =
-          data.rawOutput ??
-          (outputFile
-            ? this.fileService.resolveRelativePath(outputFile)
-            : null);
+        const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
-        let rawPath = rawLocation?.absolutePath ?? outputFile;
+        const rawPath = rawLocation.absolutePath;
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
-            `Processing multiple outputs for ${outputFile}; outputFiles: ${this.agentConfig.outputFiles}`,
+            `Processing multiple outputs for ${outputLocation.absolutePath}; outputFiles: ${this.agentConfig.outputFiles}`,
           );
 
           try {
             const processedPairs =
-              await this.xmlManager.processMultipleXmlOutputs(
-                this.fileService.resolveRelativePath(outputFile),
-              );
+              await this.xmlManager.processMultipleXmlOutputs(outputLocation);
 
             if (processedPairs && processedPairs.length > 0) {
-              const processedFiles = processedPairs.map(
-                (p) => p.location.absolutePath,
+              await this.indentLatexFiles(
+                processedPairs.map((p) => p.location),
               );
-              await this.indentLatexFiles(processedFiles);
               this.logger.debug(
-                `Indented multiple output files: ${processedFiles.join(',')}`,
+                `Indented multiple output files: ${processedPairs.map((p) => p.location.absolutePath).join(',')}`,
               );
 
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  processedFiles,
+                  processedPairs.map((p) => p.location.absolutePath),
                   this.logger,
                 );
               }
@@ -697,18 +673,11 @@ export class OutputHandler implements IOutputHandler {
             }
 
             this.logger.debug(
-              `No processed files were generated from ${outputFile}`,
+              `No processed files were generated from ${outputLocation.absolutePath}`,
             );
             this.setRoundOutputs(currRound, []);
-            if (outputFile) {
-              await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              rawPath = rawLocation?.absolutePath ?? outputFile;
-              outputFile = rawPath;
-            }
+            await this.cleanupLatexBackups(rawLocation);
             await this.captureXmlSummary(currRound, rawLocation, [], scope);
-            if (outputFile) {
-              await this.cleanupLatexBackups(rawLocation);
-            }
           } catch (err) {
             this.logger.debug(
               `Error processing output files: ${toErrorMessage(err)}`,
@@ -716,15 +685,8 @@ export class OutputHandler implements IOutputHandler {
               MESSAGE_TYPES.INTERNAL,
             );
             this.setRoundOutputs(currRound, []);
-            if (outputFile) {
-              await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              rawPath = rawLocation?.absolutePath ?? outputFile;
-              outputFile = rawPath;
-            }
+            await this.cleanupLatexBackups(rawLocation);
             await this.captureXmlSummary(currRound, rawLocation, [], scope);
-            if (outputFile) {
-              await this.cleanupLatexBackups(rawLocation);
-            }
           }
         };
 
@@ -736,7 +698,10 @@ export class OutputHandler implements IOutputHandler {
           try {
             const processedLocation = rawLocation ?? outputLocation;
             let processed: OutputFileInfo = {
-              source: outputLocation.relativePath ?? outputLocation.absolutePath,
+              source:
+                outputLocation.kind !== 'external'
+                  ? outputLocation.relativePath
+                  : outputLocation.absolutePath,
               location: processedLocation,
               lineage: null,
               diff: null,
@@ -751,9 +716,8 @@ export class OutputHandler implements IOutputHandler {
                 hasScratchpadPrefill);
 
             if (shouldProcessXml) {
-              processed = await this.xmlManager.processSingleXmlOutput(
-                outputLocation,
-              );
+              processed =
+                await this.xmlManager.processSingleXmlOutput(outputLocation);
             }
 
             const hasProcessedPath = Boolean(
@@ -767,8 +731,6 @@ export class OutputHandler implements IOutputHandler {
               );
             }
 
-            const resolvedRawPath = rawLocation?.absolutePath ?? rawPath;
-            outputFile = resolvedRawPath;
             const processedFiles = hasProcessedPath ? [processed] : [];
 
             if (hasProcessedPath) {
@@ -783,7 +745,7 @@ export class OutputHandler implements IOutputHandler {
               this.setRoundOutputs(currRound, processedFiles);
             } else {
               this.logger.debug(
-                `No processed file was generated from ${outputFile}`,
+                `No processed file was generated from ${outputLocation.absolutePath}`,
               );
               this.setRoundOutputs(currRound, []);
             }
@@ -802,7 +764,7 @@ export class OutputHandler implements IOutputHandler {
             );
             const missingOutputsData = {
               missing: [],
-              xmlFile: outputFile,
+              xmlFile: outputLocation.absolutePath,
               documentTag: this.agentSetting.documentTag,
             };
             this.logger.missingOutputs(missingOutputsData);
