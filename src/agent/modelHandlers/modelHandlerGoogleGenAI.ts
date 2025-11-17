@@ -27,7 +27,6 @@ import {
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation } from '@utils/files';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
@@ -58,6 +57,7 @@ import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
 import type { ToolFileAttachment } from '@tools/result';
+import type { FileLocation } from '@utils/files';
 
 // Google finish reasons are re-exported from the SDK
 

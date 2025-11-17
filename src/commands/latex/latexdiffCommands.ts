@@ -194,8 +194,8 @@ async function handleLatexdiff(
 
     // Get the result from LaTeXdiffService
     const result = await service.runDiff(
-      fileToUse,
-      editedFile,
+      pathToLocation(fileToUse),
+      pathToLocation(editedFile),
       '_diff',
       false,
       mathMarkup,
@@ -233,7 +233,11 @@ async function handleLatexdiffvc(
     );
 
     // Get the result from LaTeXdiffService
-    const result = await service.runDiffVc(fileToUse, commitHash, mathMarkup);
+    const result = await service.runDiffVc(
+      pathToLocation(fileToUse),
+      commitHash,
+      mathMarkup,
+    );
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
@@ -693,16 +697,16 @@ async function runLatexdiffFromMetadata(params: {
 
     if (operation.type === 'round') {
       diffResult = await service.runDiffForRound(
-        operation.basePath,
-        operation.revisedPath,
+        pathToLocation(operation.basePath),
+        pathToLocation(operation.revisedPath),
         operation.round ?? 0,
         mathMarkup,
         { cwd: operation.cwd },
       );
     } else {
       diffResult = await service.runDiffBetweenRounds(
-        operation.basePath,
-        operation.revisedPath,
+        pathToLocation(operation.basePath),
+        pathToLocation(operation.revisedPath),
         mathMarkup,
         { cwd: operation.cwd },
       );
@@ -854,8 +858,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
       const cwd = path.dirname(resolvedOutput);
 
       const result = await service.runDiffForRound(
-        resolvedBase,
-        resolvedOutput,
+        pathToLocation(resolvedBase),
+        pathToLocation(resolvedOutput),
         round,
         mathMarkup,
         { cwd },
@@ -897,8 +901,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
         const cwd = path.dirname(resolvedCurrent);
 
         const result = await service.runDiffBetweenRounds(
-          resolvedCurrent,
-          resolvedNext,
+          pathToLocation(resolvedCurrent),
+          pathToLocation(resolvedNext),
           mathMarkup,
           { cwd },
         );
