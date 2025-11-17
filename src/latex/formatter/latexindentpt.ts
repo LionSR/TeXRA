@@ -5,7 +5,7 @@ import * as path from 'path';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';

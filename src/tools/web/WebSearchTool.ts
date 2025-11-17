@@ -3,7 +3,7 @@ import axios from 'axios';
 import { z } from 'zod';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 

@@ -6,8 +6,8 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
-import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
-import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
+import { BaseWebviewProvider } from '@common/webview';
+import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 

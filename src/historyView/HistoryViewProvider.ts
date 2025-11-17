@@ -2,8 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
-import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
+import { BaseWebviewProvider } from '@common/webview';
+import { getSharedLocalResourceRoots } from '@common/webview';
 
 // Local imports - history view components
 import { HistoryViewContentProvider } from './HistoryViewContentProvider';

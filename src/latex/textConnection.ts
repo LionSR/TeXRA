@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 // Local imports - error utils
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 

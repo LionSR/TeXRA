@@ -5,7 +5,7 @@ import { strict as assert } from 'assert';
 import {
   getAgentRegistrationSkipReason,
   type AgentVariantMetadata,
-} from '@frontend/agents/register';
+} from '@frontend/agents';
 
 describe('getAgentRegistrationSkipReason', () => {
   it('returns alreadyRegistered when the agent is present', () => {

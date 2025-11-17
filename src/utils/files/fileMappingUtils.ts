@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - logger
 import { AgentLogger } from '@logger/AgentLogger';

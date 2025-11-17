@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - system utilities
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { executeCommand, checkToolInstalled } from '@utils/system';
 
 // Wolfram configuration is now in toolUtils.ts
