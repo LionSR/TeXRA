@@ -15,7 +15,7 @@ import {
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
   /** Map of generated output files by round. */
-  outputFiles: { [key: number]: string[] };
+  outputFiles: { [key: number]: NamedOutputFile[] };
 
   /** Mapping of source to processed output files by round. */
   outputMappings: { [key: number]: NamedOutputFile[] };
@@ -27,7 +27,7 @@ export interface IOutputHandler {
   readonly diffManager: LatexDiffManager;
 
   /** Ensure storage for a round and return its outputs. */
-  ensureRound(round: number): string[];
+  ensureRound(round: number): NamedOutputFile[];
 
   /** Determine whether a round has generated outputs. */
   hasRoundOutputs(round: number): boolean;

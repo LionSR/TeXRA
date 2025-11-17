@@ -7,6 +7,7 @@ import {
   getOutputFileName,
   type RoundOutputArtifacts,
 } from '@agent/output';
+import type { NamedOutputFile } from '@agent/output/types';
 
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -364,7 +365,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: ConversationRoundState,
     _runState: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     const { outputFile, endTurn, stage } = options;
     this.outputHandler.setActiveRun(options.runGroupId);
     // If this is the end of a turn, handle latexdiff operations as a separate step
@@ -627,7 +628,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     if (outputFiles.length === 0) {
       const previousRoundFiles = this.outputHandler.ensureRound(currRound - 1);
       if (previousRoundFiles.length > 0) {
-        outputFiles = [previousRoundFiles[0]];
+        outputFiles = [previousRoundFiles[0].path];
       }
     }
 

@@ -1,5 +1,6 @@
 // Local imports - agent components
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import type { NamedOutputFile } from '@agent/output/types';
 
 // Local file imports
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
@@ -19,7 +20,7 @@ export class CoTAgent extends BaseReflectionAgent {
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<string[]> {
+  ): Promise<NamedOutputFile[]> {
     const { outputFile, endTurn, stage } = options;
 
     try {
