@@ -693,3 +693,39 @@ export function getComparablePath(location: FileLocation): string {
     ? location.absolutePath
     : location.relativePath;
 }
+
+/**
+ * Convert a string path to a FileLocation.
+ * Standalone version for use in utilities without TaskRunFileService.
+ * 
+ * @param target - Absolute or workspace-relative path
+ * @returns FileLocation representing the path
+ */
+export function pathToLocation(target: string): FileLocation {
+  if (!target) {
+    return createExternalLocation(target);
+  }
+
+  if (!path.isAbsolute(target)) {
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (!workspaceRoot) {
+      return createExternalLocation(target);
+    }
+    const normalized = path.normalize(target);
+    const absolutePath = path.join(workspaceRoot, normalized);
+    return createWorkspaceLocation(absolutePath, normalized);
+  }
+
+  const normalized = path.normalize(target);
+  
+  // Check if in workspace
+  const workspaceRoot = WorkspaceFS.getPath();
+  if (workspaceRoot) {
+    const relative = path.relative(workspaceRoot, normalized);
+    if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+      return createWorkspaceLocation(normalized, relative);
+    }
+  }
+
+  return createExternalLocation(normalized);
+}

@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { logErrorMessage, formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -78,8 +78,8 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await flexibleFS.exists(inputFile);
-      const editedExists = await flexibleFS.exists(editedFile);
+      const inputExists = await flexibleFS.exists(pathToLocation(inputFile));
+      const editedExists = await flexibleFS.exists(pathToLocation(editedFile));
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -122,7 +122,7 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await flexibleFS.write(outputPath, result.stdout);
+      await flexibleFS.write(pathToLocation(outputPath), result.stdout);
       await this.fileProcessor.processDiffFile(outputPath);
 
       logger.debug(

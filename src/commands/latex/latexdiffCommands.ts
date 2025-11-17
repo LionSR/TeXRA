@@ -16,7 +16,12 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, TaskRunFileService, flexibleFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  TaskRunFileService,
+  flexibleFS,
+  pathToLocation,
+} from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import {
@@ -107,7 +112,7 @@ async function openLatexdiffResult(
     : basePath;
   const diffFilePath = path.join(baseDirectory, diffFileName);
 
-  if (!(await flexibleFS.exists(diffFilePath))) {
+  if (!(await flexibleFS.exists(pathToLocation(diffFilePath)))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,
@@ -661,8 +666,8 @@ async function runLatexdiffFromMetadata(params: {
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await flexibleFS.exists(operation.basePath);
-    const revisedExists = await flexibleFS.exists(operation.revisedPath);
+    const baseExists = await flexibleFS.exists(pathToLocation(operation.basePath));
+    const revisedExists = await flexibleFS.exists(pathToLocation(operation.revisedPath));
 
     if (!baseExists || !revisedExists) {
       results.push({
