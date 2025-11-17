@@ -97,15 +97,15 @@ export class FileList {
         if (basenameSpan) basenameSpan.textContent = displayLabel;
         if (filePathSpan) filePathSpan.title = file.location.relativePath;
 
-        // Handle diff stats using new structure
+        // Handle diff stats (use schema field names: added/removed)
         if (statsSpan) {
           if (
-            file.diff?.linesAdded !== undefined &&
-            file.diff?.linesRemoved !== undefined
+            file.diff?.added !== undefined &&
+            file.diff?.removed !== undefined
           ) {
-            statsSpan.innerHTML = `<span class="added">+${file.diff.linesAdded}</span><span class="removed">-${file.diff.linesRemoved}</span>`;
-          } else if (file.diff?.linesAdded !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.diff.linesAdded}</span>`;
+            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
+          } else if (file.diff?.added !== undefined) {
+            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
           } else {
             statsSpan.remove();
           }
