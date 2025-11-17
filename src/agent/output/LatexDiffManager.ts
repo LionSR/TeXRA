@@ -72,9 +72,7 @@ export class LatexDiffManager {
 
     // Trust FileLocation - no defensive existence checks or fallbacks
     const actual = await this.resolveSymlinks(location.absolutePath);
-    const workspaceDir = location.workspace
-      ? path.dirname(location.workspace.absolutePath)
-      : null;
+    const workspaceDir = WorkspaceFS.getPath() ?? null;
 
     return { actual, workspaceDir };
   }
@@ -225,10 +223,8 @@ export class LatexDiffManager {
           }
 
           await this.ensureWorkspaceDependency(baseAbsolute);
-          if (location?.workspace?.absolutePath) {
-            await this.ensureWorkspaceDependency(
-              location.workspace.absolutePath,
-            );
+          if (location?.absolutePath) {
+            await this.ensureWorkspaceDependency(location.absolutePath);
           }
           const cwd = workspaceDir ?? path.dirname(baseAbsolute);
 
@@ -332,15 +328,11 @@ export class LatexDiffManager {
             continue;
           }
 
-          if (prevLocation?.workspace?.absolutePath) {
-            await this.ensureWorkspaceDependency(
-              prevLocation.workspace.absolutePath,
-            );
+          if (prevLocation?.absolutePath) {
+            await this.ensureWorkspaceDependency(prevLocation.absolutePath);
           }
-          if (currLocation?.workspace?.absolutePath) {
-            await this.ensureWorkspaceDependency(
-              currLocation.workspace.absolutePath,
-            );
+          if (currLocation?.absolutePath) {
+            await this.ensureWorkspaceDependency(currLocation.absolutePath);
           }
 
           const cwd =
