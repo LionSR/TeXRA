@@ -123,7 +123,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
       this.fileService,
     );
-    this.diffStatsManager = new DiffStatsManager();
+    this.diffStatsManager = new DiffStatsManager(this.fileService);
     this.openedOutputs = new Set();
     this.currentRunId = null;
     this.runPreparation = null;
@@ -900,7 +900,7 @@ export class OutputHandler implements IOutputHandler {
       }
 
       try {
-        const rawContent = await flexibleFS.read(rawOutput.absolutePath);
+        const rawContent = await flexibleFS.read(rawOutput);
         const tagContents: Record<string, string | string[]> = {};
         const documents: string[] = [];
 
