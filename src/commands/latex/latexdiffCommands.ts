@@ -112,7 +112,9 @@ async function openLatexdiffResult(
     : basePath;
   const diffFilePath = path.join(baseDirectory, diffFileName);
 
-  if (!(await flexibleFS.exists(pathToLocation(diffFilePath)))) {
+  const diffLocation = pathToLocation(diffFilePath);
+
+  if (!(await flexibleFS.exists(diffLocation))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,
@@ -120,7 +122,7 @@ async function openLatexdiffResult(
     return undefined;
   }
 
-  await openBuildDisplayIfTex(diffFilePath, { preserveFocus: true });
+  await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
   return diffFilePath;
 }
 
