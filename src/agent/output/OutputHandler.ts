@@ -620,12 +620,20 @@ export class OutputHandler implements IOutputHandler {
 
     if (rawOutput) {
       await this.cleanupLatexBackups(rawOutput);
-      if (runStorageActive) {
+      // Skip relocation if file is already in correct storage location
+      const isAlreadyInRunStorage = rawOutput.scope === 'runStorage';
+      const needsRelocation = runStorageActive && !isAlreadyInRunStorage;
+
+      if (needsRelocation) {
         relocatedRaw = await this.fileService.relocateToRunStorage(
           rawOutput.absolutePath,
           shouldForceRunStorage ? { forceRunStorage: true } : undefined,
         );
+      } else if (runStorageActive && isAlreadyInRunStorage) {
+        // Already in run storage, just describe the path
+        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
       } else {
+        // Not using run storage, describe workspace path
         relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
       }
     }
@@ -646,31 +654,29 @@ export class OutputHandler implements IOutputHandler {
         }
 
         await this.cleanupLatexBackups(entry.location);
-        if (!runStorageActive) {
-          const described = this.fileService.describePath(
+
+        // Skip relocation if file is already in correct storage location
+        const isAlreadyInRunStorage = entry.location.scope === 'runStorage';
+        const needsRelocation = runStorageActive && !isAlreadyInRunStorage;
+
+        let finalLocation: FileLocation;
+        if (needsRelocation) {
+          finalLocation = await this.fileService.relocateToRunStorage(
             entry.location.absolutePath,
           );
-          relocatedProcessed.push({
-            ...entry,
-            path: described.absolutePath,
-            relativePath: described.relativePath,
-            workspacePath:
-              entry.workspacePath ?? described.workspace?.absolutePath,
-            location: described,
-          });
-          continue;
+        } else {
+          finalLocation = this.fileService.describePath(
+            entry.location.absolutePath,
+          );
         }
 
-        const relocation = await this.fileService.relocateToRunStorage(
-          entry.location.absolutePath,
-        );
         relocatedProcessed.push({
           ...entry,
-          path: relocation.absolutePath,
-          relativePath: relocation.relativePath,
+          path: finalLocation.absolutePath,
+          relativePath: finalLocation.relativePath,
           workspacePath:
-            entry.workspacePath ?? relocation.workspace?.absolutePath,
-          location: relocation,
+            entry.workspacePath ?? finalLocation.workspace?.absolutePath,
+          location: finalLocation,
         });
       } catch (error) {
         throw Object.assign(

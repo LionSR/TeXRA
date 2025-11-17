@@ -93,6 +93,8 @@ export const AgentSettingBaseSchema = z.strictObject({
     .prefault([]),
 
   tools: z.array(ToolDefinitionSchema).prefault([]),
+  /** Flag indicating whether this agent produces XML output (default: true, false for DirectAgent) */
+  producesXml: z.boolean().prefault(true),
 });
 
 /**

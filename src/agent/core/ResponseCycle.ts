@@ -13,6 +13,9 @@ import {
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 import type { AgentConfig } from './AgentConfig';
 
+// Type imports
+import type { FileLocation } from '@utils/files';
+
 export interface ResponseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   agentConfig: AgentConfig;
@@ -22,6 +25,7 @@ export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
   outputFile: string;
+  outputLocation?: FileLocation;
   store: AgentSharedStore;
 }
 
@@ -39,6 +43,7 @@ export async function runResponseCycle<C = unknown>(
     state: {
       messages: input.messages,
       outputFile: input.outputFile,
+      outputLocation: input.outputLocation,
       endTurn: false,
       shouldStop: false,
       outputExists: false,

@@ -33,7 +33,9 @@ import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS } from '@utils/files';
+// Type imports
+import type { FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -42,6 +44,7 @@ import { FlowTransition } from './FlowTransitions';
 
 export interface ResponseCycleInputState {
   outputFile: string;
+  outputLocation?: FileLocation;
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
@@ -97,7 +100,11 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     const { options, state, store } = shared;
     const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const exists = await WorkspaceFS.exists(state.outputFile);
+    // Check existence using FileLocation path if available
+    const checkPath = state.outputLocation?.absolutePath ?? state.outputFile;
+    const exists = state.outputLocation
+      ? await flexibleFS.exists(checkPath)
+      : await WorkspaceFS.exists(state.outputFile);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -467,16 +474,31 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return FlowTransition.COMPLETE;
     }
 
+    // Use FileLocation for direct writes to correct storage location
+    const targetPath = state.outputLocation?.absolutePath ?? state.outputFile;
+    const useFlexibleFS = Boolean(state.outputLocation);
+
     if (!state.outputExists) {
-      options.logger.debug(`Creating new file: ${state.outputFile}`);
-      await WorkspaceFS.write(state.outputFile, processedResponse);
+      options.logger.debug(`Creating new file: ${targetPath}`);
+      if (useFlexibleFS) {
+        await flexibleFS.write(targetPath, processedResponse);
+      } else {
+        await WorkspaceFS.write(state.outputFile, processedResponse);
+      }
       state.outputExists = true;
     } else {
-      options.logger.debug(`Appending to existing file: ${state.outputFile}`);
-      await WorkspaceFS.appendFile(
-        state.outputFile,
-        (result.bestConnector ?? '') + processedResponse,
-      );
+      options.logger.debug(`Appending to existing file: ${targetPath}`);
+      if (useFlexibleFS) {
+        await flexibleFS.appendFile(
+          targetPath,
+          (result.bestConnector ?? '') + processedResponse,
+        );
+      } else {
+        await WorkspaceFS.appendFile(
+          state.outputFile,
+          (result.bestConnector ?? '') + processedResponse,
+        );
+      }
     }
 
     const responseUsage = result.responseUsage ?? {};

@@ -53,6 +53,8 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 // Local imports - configuration
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
+// Type imports
+import type { FileLocation } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -97,6 +99,7 @@ interface RoundPipelineContext {
   preparedMessages: any[];
   prefill: string;
   outputPath: string;
+  outputLocation?: FileLocation;
 }
 
 /**
@@ -105,8 +108,8 @@ interface RoundPipelineContext {
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
-  /** File paths for each round's raw model output. */
-  protected outputFile: string[];
+  /** File locations for each round's raw model output. */
+  protected outputFile: FileLocation[];
   protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
   protected override agentSetting: AgentWorkflowSetting;
@@ -282,17 +285,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Generates output file path for specified conversation round.
-   * Default implementation uses scratchpad mode detection to determine file extension.
+   * Generates output file location for specified conversation round.
+   * Returns a FileLocation that respects the storage mode configuration.
    * Override for specialized naming logic (e.g., MergeAgent).
    */
-  protected getOutputFile(currRound: number): string {
+  protected getOutputFile(currRound: number): FileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;
 
-    return getOutputFileName(
+    const relativePath = getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
@@ -300,6 +303,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
+
+    // Resolve to FileLocation based on storage mode configuration
+    return this.fileService.resolveRelativePath(relativePath, {
+      preferWorkspace: false, // Respect storage mode for initial write
+    });
   }
 
   /**
@@ -413,6 +421,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     preparedMessages,
     prefill,
     outputPath,
+    outputLocation,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
@@ -439,6 +448,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
         outputFile: outputPath,
+        outputLocation,
         store,
       });
 
@@ -665,16 +675,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               messages,
               workspaceState,
             ),
-          runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
-            this.runRoundPipeline({
+          runRoundPipeline: ({ stateRound, preparedMessages, prefill }) => {
+            const outputLocation = this.outputFile[roundIndex];
+            return this.runRoundPipeline({
               roundIndex,
               roundState: stateRound,
               runState,
               workspaceState,
               preparedMessages,
               prefill,
-              outputPath: this.outputFile[roundIndex],
-            }),
+              outputPath: outputLocation.absolutePath,
+              outputLocation,
+            });
+          },
           createSkipResult: (stateRound) => ({
             roundState: stateRound,
             runState,

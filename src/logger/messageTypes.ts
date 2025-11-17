@@ -12,6 +12,10 @@ export const MESSAGE_TYPES = {
   /** Messages that should be hidden from the progress view */
   INTERNAL: 'internal',
   DEFAULT: 'default',
+  /** Partial XML output detected (continuation/incomplete XML) */
+  PARTIAL_XML_OUTPUT: 'partialXmlOutput',
+  /** XML parse error (tag matching failures) */
+  XML_PARSE_ERROR: 'xmlParseError',
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
