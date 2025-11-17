@@ -11,7 +11,7 @@ import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { AgentType } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
 import { GlobalStorageFS, StorageFS } from '@utils/files';

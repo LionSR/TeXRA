@@ -16,12 +16,9 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import {
-  BaseViewMessageHandler,
-  MessageHandler,
-} from '@common/webview/BaseViewMessageHandler';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { toErrorMessage } from '@common/errors';
+import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
+import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,

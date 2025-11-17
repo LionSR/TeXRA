@@ -11,10 +11,10 @@ import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersiste
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
+import { FileLister } from '@frontend/files';
+import { agentDirectories } from '@frontend/agents';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { FileLister } from '@frontend/files/fileLister';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import * as logger from '@logger/logUtils';
 import { initializeToolEditApproval } from '@tools/approval/toolEditApproval';
 import { StorageFS } from '@utils/files';

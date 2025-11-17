@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tools
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import {
   createGlobMatcher,

@@ -8,12 +8,9 @@ import { workspace } from 'vscode';
 // Local imports - webview
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import {
-  showLoggedMessage,
-  toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { fileLister } from '@frontend/files/fileLister';
+import { showLoggedMessage, toErrorMessage } from '@common/errors';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { fileLister } from '@frontend/files';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';

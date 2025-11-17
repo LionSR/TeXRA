@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system';
 import { getConfig } from '@utils/config';
