@@ -3,8 +3,9 @@ import * as path from 'path';
 
 // Local imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
-import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
+import { parseFilenameParts } from '@agent/utils';
+import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
@@ -38,42 +39,6 @@ export class MergeAgent extends DirectAgent {
   }
 
   /**
-   * Extracts components from edited filename for merge operations.
-   * @param editedBase Base name of edited file without extension
-   * @returns Tuple of [base name, agent name, round number, model name]
-   * @throws Error if filename components cannot be extracted
-   */
-  private parseFilenameParts(
-    editedBase: string,
-  ): [string, string, number, string] {
-    const parts = editedBase.split('_');
-    const underscoreCount = editedBase.split('_').length - 1;
-    const base = parts[0];
-
-    // Extract agent name
-    const agent = this.extractAgentName(parts, underscoreCount);
-    if (!agent) {
-      throw new Error(
-        `Could not extract agent name from edited base: ${editedBase}`,
-      );
-    }
-
-    // Extract round number
-    const roundMatch = editedBase.match(/_r(\d+)_/);
-    if (!roundMatch) {
-      throw new Error(
-        `Could not extract round number from edited base: ${editedBase}`,
-      );
-    }
-    const roundNum = parseInt(roundMatch[1], 10);
-
-    // Get model name (last part)
-    const model = parts.at(-1) || '';
-
-    return [base, agent, roundNum, model];
-  }
-
-  /**
    * Generates output filename for merged content based on input and edited files.
    * @param currRound Current round number (unused in merge operations)
    * @returns Path to output file for merged content
@@ -92,7 +57,7 @@ export class MergeAgent extends DirectAgent {
     const editedBase = path.parse(editedFile).name;
 
     // Parse filename components
-    const [base, agent, roundNum, model] = this.parseFilenameParts(editedBase);
+    const { base, agent, roundNum, model } = parseFilenameParts(editedBase);
 
     // Use original input base if it differs from edited base
     const finalBase = inputBase !== base ? inputBase : base;
@@ -101,33 +66,6 @@ export class MergeAgent extends DirectAgent {
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
     return outputPath;
-  }
-
-  /**
-   * Extracts agent name from filename parts handling multiple formats.
-   * @param parts Array of filename parts split by underscore
-   * @param underscoreCount Total number of underscores in filename
-   * @returns Agent name or null if not found
-   */
-  private extractAgentName(
-    parts: string[],
-    underscoreCount: number,
-  ): string | null {
-    if (underscoreCount === 3) {
-      // Standard format
-      return parts[1];
-    }
-
-    // Complex format - collect parts until round number
-    const agentParts: string[] = [];
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      if (part.startsWith('r') && /^\d+$/.test(part.slice(1))) {
-        return agentParts.join('_');
-      }
-      agentParts.push(part);
-    }
-    return null;
   }
 
   /**
