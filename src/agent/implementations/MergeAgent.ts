@@ -10,7 +10,9 @@ import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import { WorkspaceFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
