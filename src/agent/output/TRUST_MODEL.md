@@ -12,7 +12,7 @@ These functions are at the **boundary** where we create FileLocation objects fro
 // TaskRunFileService - THE SOURCE OF TRUTH
 class TaskRunFileService {
   metadata: {
-    executionId?: ExecutionId;  // ← Embedded in service
+    executionId?: ExecutionId; // ← Embedded in service
     mode: 'workspace' | 'taskRunStorage';
     runDirectory?: string;
   };
@@ -21,7 +21,7 @@ class TaskRunFileService {
   resolveRelativePath(relative: string): FileLocation {
     // Returns trusted, complete FileLocation with:
     // - absolutePath
-    // - relativePath  
+    // - relativePath
     // - scope ('workspace' | 'runStorage' | 'external')
     // - workspace info (if in workspace)
     // - runStorage info (if in run storage, includes executionId!)
@@ -41,6 +41,7 @@ class TaskRunFileService {
 Once FileLocation exists, these functions are **defensive code smell**:
 
 ### Before (Defensive, Distrustful):
+
 ```typescript
 // ❌ Checking if location exists before using it
 function resolveInfoPath(info: OutputFileInfo): string | null {
@@ -71,7 +72,7 @@ function resolveExecutionId(info: OutputFileInfo): ExecutionId | undefined {
     info.baseLocation?.runStorage?.storageRelativePath,
     info.prevLocation?.runStorage?.storageRelativePath,
   ];
-  
+
   for (const path of candidates) {
     const id = extractFromPath(path);
     if (id) return id;
@@ -81,6 +82,7 @@ function resolveExecutionId(info: OutputFileInfo): ExecutionId | undefined {
 ```
 
 ### After (Trusting, Clean):
+
 ```typescript
 // ✅ Trust the data
 function getOutputPath(info: OutputFileInfo): string {
@@ -96,7 +98,7 @@ function getBasePath(info: OutputFileInfo): string | undefined {
 function getExecutionId(info: OutputFileInfo): ExecutionId | undefined {
   const storagePath = info.location.runStorage?.storageRelativePath;
   if (!storagePath) return undefined;
-  
+
   // Extract once, trust it
   const segments = storagePath.split(path.sep);
   const idx = segments.indexOf('taskRuns');
@@ -107,6 +109,7 @@ function getExecutionId(info: OutputFileInfo): ExecutionId | undefined {
 ## 🔥 Anti-Patterns to Eliminate
 
 ### 1. Optional Chaining Paranoia
+
 ```typescript
 // ❌ BEFORE: Defensive
 if (info.location?.absolutePath) {
@@ -118,6 +121,7 @@ const path = info.location.absolutePath;
 ```
 
 ### 2. Multi-Way Fallback Chains
+
 ```typescript
 // ❌ BEFORE: Checking 5 places!
 const workspacePath =
@@ -132,6 +136,7 @@ const workspacePath = info.location.workspace?.absolutePath;
 ```
 
 ### 3. Re-Normalization
+
 ```typescript
 // ❌ BEFORE: Normalizing already-normalized data
 function normalizeOutputInfo(info: OutputFileInfo): NormalizedInfo {
@@ -150,17 +155,22 @@ function getDisplayInfo(info: OutputFileInfo): DisplayInfo {
 ```
 
 ### 4. ExecutionId Re-Extraction
+
 ```typescript
 // ❌ BEFORE: Extracting from multiple sources, normalizing, validating
-function resolveExecutionIdFromInfo(info: OutputFileInfo): ExecutionId | undefined {
+function resolveExecutionIdFromInfo(
+  info: OutputFileInfo,
+): ExecutionId | undefined {
   // Check rawLocation
-  const raw = extractFromPath(info.rawLocation?.runStorage?.storageRelativePath);
+  const raw = extractFromPath(
+    info.rawLocation?.runStorage?.storageRelativePath,
+  );
   if (raw) return normalizeExecutionId(raw);
-  
+
   // Check location
   const loc = extractFromPath(info.location.runStorage?.storageRelativePath);
   if (loc) return normalizeExecutionId(loc);
-  
+
   // Check originalLocation
   // ... and so on
 }
@@ -188,7 +198,7 @@ function getExecutionId(location: FileLocation): ExecutionId | undefined {
 │ - Single source of truth                                │
 └────────────────┬────────────────────────────────────────┘
                  │ resolveRelativePath()
-                 │ 
+                 │
                  ▼
          ┌──────────────┐
          │ FileLocation │ ← TRUSTED, COMPLETE, IMMUTABLE
@@ -210,6 +220,7 @@ OutputHandler  WebView  Commands
 ## 📋 Refactoring Checklist
 
 ### Files to Clean Up:
+
 - [ ] `src/commands/latex/latexdiffCommands.ts`
   - Remove: `resolveInfoPath`, `resolveBasePath`
   - Replace with: `getOutputPath`, `getBasePath`
@@ -228,6 +239,7 @@ OutputHandler  WebView  Commands
   - Remove: Any defensive checks AFTER FileLocation created
 
 ### Pattern to Follow:
+
 1. **At boundaries**: Use `TaskRunFileService.resolveRelativePath()` to CREATE FileLocation
 2. **Everywhere else**: TRUST the FileLocation, access fields directly
 3. **ExecutionId**: Get from `TaskRunFileService.metadata.executionId` or extract ONCE from location

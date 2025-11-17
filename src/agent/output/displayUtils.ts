@@ -41,9 +41,7 @@ export function getAbsolutePath(location: FileLocation): string {
  * Get the workspace absolute path if the file is in workspace.
  * Returns undefined if file is not in workspace.
  */
-export function getWorkspacePath(
-  location: FileLocation,
-): string | undefined {
+export function getWorkspacePath(location: FileLocation): string | undefined {
   return location.workspace?.absolutePath;
 }
 
@@ -51,9 +49,7 @@ export function getWorkspacePath(
  * Extract execution ID from a file location.
  * Returns undefined if the file is not in run storage.
  */
-export function getExecutionId(
-  location: FileLocation,
-): string | undefined {
+export function getExecutionId(location: FileLocation): string | undefined {
   const storagePath = location.runStorage?.storageRelativePath;
   if (!storagePath) {
     return undefined;
