@@ -16,9 +16,6 @@ export interface IOutputHandler {
   /** Map of generated output files by round. */
   outputFiles: { [key: number]: OutputFileInfo[] };
 
-  /** Mapping of source to processed output files by round. */
-  outputMappings: { [key: number]: OutputFileInfo[] };
-
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
 
