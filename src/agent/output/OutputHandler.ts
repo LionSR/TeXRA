@@ -56,6 +56,7 @@ import { DiffStatsManager } from './DiffStatsManager';
 import type { IOutputHandler } from './IOutputHandler';
 
 // Local imports - types
+import type { MissingOutputFile } from '@eventBus/ProgressEventBus';
 
 /** Handles output file processing and validation for agent responses. */
 export class OutputHandler implements IOutputHandler {
@@ -734,9 +735,9 @@ export class OutputHandler implements IOutputHandler {
           ),
         }));
         const results = await Promise.all(checks);
-        const missing = results.filter((r) => !r.exists).map((r) => r.file);
+        const missingPaths = results.filter((r) => !r.exists).map((r) => r.file);
 
-        if (missing.length > 0) {
+        if (missingPaths.length > 0) {
           const xmlPath = outputFile
             ? outputFile
             : getOutputFileName(
@@ -751,7 +752,7 @@ export class OutputHandler implements IOutputHandler {
           const xmlExists = await AbsoluteFS.exists(resolvedXmlPath);
 
           const missingOutputsData = {
-            missing,
+            missing: missingPaths,
             xmlFile: xmlExists ? xmlPath : null,
             documentTag: this.agentSetting.documentTag,
           };
@@ -762,7 +763,7 @@ export class OutputHandler implements IOutputHandler {
             'Missing output files detected',
           );
           this.logger.debug(
-            `Missing expected outputs for round ${currRound}: ${missing.join(', ')}`,
+            `Missing expected outputs for round ${currRound}: ${missingPaths.join(', ')}`,
           );
         } else {
           this.logger.debug(
@@ -770,11 +771,21 @@ export class OutputHandler implements IOutputHandler {
           );
         }
 
+        // Convert missing paths to MissingOutputFile objects with FileLocation
+        const missingWithLocation: MissingOutputFile[] = missingPaths.map(
+          (file) => ({
+            path: file,
+            location: this.fileService.resolveRelativePath(file, {
+              preferWorkspace: true,
+            }),
+          }),
+        );
+
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
           groupId: this.currentRunId ?? undefined,
           executionId: this.fileService.getExecutionId(),
-          filesByRound: { [currRound]: missing },
+          filesByRound: { [currRound]: missingWithLocation },
         });
       },
     );
@@ -1067,6 +1078,7 @@ export class OutputHandler implements IOutputHandler {
               documentTag: this.agentSetting.documentTag,
             };
             this.logger.missingOutputs(missingOutputsData);
+            // No files missing in error case, send empty array
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
               groupId: this.currentRunId ?? undefined,

@@ -12,6 +12,7 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+import type { FileLocation } from '@utils/files';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -53,6 +54,17 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
+/**
+ * Information about a missing expected output file.
+ * Includes FileLocation so frontend can construct proper paths without guessing.
+ */
+export interface MissingOutputFile {
+  /** Original relative path of the expected file */
+  path: string;
+  /** Resolved FileLocation with workspace and run storage paths */
+  location: FileLocation;
+}
+
 export interface ProgressEventPayloads {
   addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
   updateLogMessage: { stream: StreamTabId; logMessage: LogMessageUpdate };
@@ -70,7 +82,7 @@ export interface ProgressEventPayloads {
     stream: StreamTabId;
     groupId?: string;
     executionId?: ExecutionId;
-    filesByRound: { [key: number]: string[] };
+    filesByRound: { [key: number]: MissingOutputFile[] };
   };
   clearMissingOutputs: StreamTabId;
   clearOutputFiles: StreamTabId;
