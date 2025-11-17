@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // Local file imports

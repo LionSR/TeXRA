@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import { showLoggedMessage } from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { bus } from '@eventBus/ProgressEventBus';
 import {

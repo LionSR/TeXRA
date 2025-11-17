@@ -2,10 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { showLoggedErrorMessage } from '@common/errors';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import { showLoggedErrorMessage } from '@common/errors/errorHandlingUtils';
+import { fileLister } from '@frontend/files';
 import { showInfoMessage } from '@frontend/ui/messageUtils';
-import { fileLister } from '@frontend/files/fileLister';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { selectFile, selectFiles } from '@utils/dialogs';

@@ -2,9 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
-import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { BaseWebviewProvider } from '@common/webview';
+import { getSharedLocalResourceRoots } from '@common/webview';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
