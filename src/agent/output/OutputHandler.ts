@@ -42,7 +42,6 @@ import { runLatexFormatter } from '@latex/texFormatter';
 // Local file imports
 import { XmlOutputManager } from './XmlOutputManager';
 import {
-  OutputFileInfoSchema,
   type NamedOutputFile,
   type OutputFileInfo,
   type OutputXmlSummary,
@@ -212,18 +211,6 @@ export class OutputHandler implements IOutputHandler {
       skip: true,
     });
     return stage.run(() => fn(stage));
-  }
-
-  private resolveOutputLocation(
-    target: string | null | undefined,
-  ): FileLocation | null {
-    if (!target) {
-      return null;
-    }
-
-    return this.fileService.resolveRelativePath(target, {
-      preferWorkspace: true,
-    });
   }
 
   /**
@@ -508,30 +495,8 @@ export class OutputHandler implements IOutputHandler {
     }));
   }
 
-  private normalizeHydratedInfos(
-    round: number,
-    infos: OutputFileInfo[],
-  ): OutputFileInfo[] {
-    const normalized: OutputFileInfo[] = [];
-    for (const candidate of infos) {
-      const parsed = OutputFileInfoSchema.safeParse(candidate);
-      if (!parsed.success) {
-        this.logger.debug(
-          `Skipping invalid output file info while hydrating round ${round}: ${parsed.error.message}`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
-        continue;
-      }
-      normalized.push(parsed.data);
-    }
-    return normalized;
-  }
-
   private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
-    const normalized = this.normalizeHydratedInfos(round, infos);
-
-    if (normalized.length === 0) {
+    if (infos.length === 0) {
       delete this.outputFiles[round];
       delete this.outputMappings[round];
       delete this.roundFileInfos[round];
@@ -541,23 +506,18 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    this.roundFileInfos[round] = normalized;
-    this.outputFiles[round] = normalized.map((info) => info.path);
-    this.outputMappings[round] = this.buildNamedOutputsFromInfos(normalized);
+    this.roundFileInfos[round] = infos;
+    this.outputFiles[round] = infos.map((info) => info.path);
+    this.outputMappings[round] = this.buildNamedOutputsFromInfos(infos);
 
     const rawSource =
-      normalized.find((info) => info.rawLocation || info.rawOutputPath) ??
-      normalized[0];
+      infos.find((info) => info.rawLocation || info.rawOutputPath) ?? infos[0];
 
-    const rawLocation =
-      rawSource?.rawLocation ??
-      (rawSource?.rawOutputPath
-        ? this.fileService.describePath(rawSource.rawOutputPath)
-        : null);
+    const rawLocation = rawSource?.rawLocation ?? null;
 
     this.rawOutputs[round] = rawLocation ?? null;
 
-    const summary = normalized
+    const summary = infos
       .map((info) => info.xmlSummary ?? null)
       .find((value) => value !== null);
 
@@ -604,33 +564,6 @@ export class OutputHandler implements IOutputHandler {
   private invalidateMappingsFromRound(round: number): void {
     this.invalidateRoundMapping(round);
     this.invalidateRoundMapping(round + 1);
-  }
-
-  private async relocateRoundArtifacts(
-    rawOutput: FileLocation | null,
-    processed: NamedOutputFile[],
-  ): Promise<{
-    raw: FileLocation | null;
-    processed: NamedOutputFile[];
-  }> {
-    const normalizedRaw = rawOutput
-      ? this.fileService.describePath(rawOutput.absolutePath)
-      : null;
-
-    const normalizedProcessed = processed.map((entry) => {
-      const described = this.fileService.describePath(
-        entry.location.absolutePath,
-      );
-      return {
-        ...entry,
-        path: described.absolutePath,
-        relativePath: described.relativePath,
-        workspacePath: entry.workspacePath ?? described.workspace?.absolutePath,
-        location: described,
-      };
-    });
-
-    return { raw: normalizedRaw, processed: normalizedProcessed };
   }
 
   /**
@@ -738,19 +671,15 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async (scope) => {
         this.ensureRound(currRound);
-        let rawLocation =
-          this.rawOutputs[currRound] ?? this.resolveOutputLocation(outputFile);
-        if (!rawLocation && outputFile) {
-          rawLocation = this.resolveOutputLocation(outputFile);
-        }
+        const rawLocation =
+          this.rawOutputs[currRound] ??
+          (outputFile ? this.fileService.describePath(outputFile) : null);
         this.rawOutputs[currRound] = rawLocation;
 
         let rawPath = outputFile;
         if (rawLocation?.absolutePath) {
           rawPath = rawLocation.absolutePath;
         }
-
-        const runStorageEnabled = this.fileService.isRunStorageEnabled();
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         this.roundFileInfos[currRound] = fileInfos;
@@ -808,18 +737,13 @@ export class OutputHandler implements IOutputHandler {
         this.ensureRound(currRound);
         await this.prepareRunWorkspaceIfNeeded();
 
-        let rawLocation =
+        const rawLocation =
           this.rawOutputs[currRound] ??
-          (outputFile ? this.resolveOutputLocation(outputFile) : null);
-        if (!rawLocation && outputFile) {
-          rawLocation = this.resolveOutputLocation(outputFile);
-        }
+          (outputFile ? this.fileService.describePath(outputFile) : null);
         let rawPath = outputFile;
         if (rawLocation?.absolutePath) {
           rawPath = rawLocation.absolutePath;
         }
-
-        const runStorageEnabled = this.fileService.isRunStorageEnabled();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -837,32 +761,19 @@ export class OutputHandler implements IOutputHandler {
                 `Indented multiple output files: ${processedFiles.join(',')}`,
               );
 
-              const relocated = await this.relocateRoundArtifacts(
-                rawLocation,
-                processedPairs,
-              );
-              rawLocation = relocated.raw;
-              rawPath = rawLocation?.absolutePath ?? rawPath;
-              outputFile = rawPath;
-              this.rawOutputs[currRound] = rawLocation;
-              const relocatedFiles = relocated.processed.map((p) => p.path);
-
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  relocatedFiles,
+                  processedFiles,
                   this.logger,
                 );
               }
-              this.setRoundOutputs(
-                currRound,
-                relocatedFiles,
-                relocated.processed,
-              );
+              this.rawOutputs[currRound] = rawLocation;
+              this.setRoundOutputs(currRound, processedFiles, processedPairs);
               await this.captureXmlSummary(
                 currRound,
                 rawPath,
-                relocated.processed,
+                processedPairs,
                 scope,
               );
               return;
@@ -874,14 +785,7 @@ export class OutputHandler implements IOutputHandler {
             this.setRoundOutputs(currRound, [], []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = runStorageEnabled
-                ? await this.fileService.relocateToRunStorage(
-                    relocationSource,
-                    { forceRunStorage: true },
-                  )
-                : this.fileService.describePath(relocationSource);
-              rawPath = rawLocation.absolutePath;
+              rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
             this.rawOutputs[currRound] = rawLocation ?? null;
@@ -898,14 +802,7 @@ export class OutputHandler implements IOutputHandler {
             this.setRoundOutputs(currRound, [], []);
             if (outputFile) {
               await this.cleanupLatexBackups(rawLocation ?? outputFile);
-              const relocationSource = rawLocation?.absolutePath ?? outputFile;
-              rawLocation = runStorageEnabled
-                ? await this.fileService.relocateToRunStorage(
-                    relocationSource,
-                    { forceRunStorage: true },
-                  )
-                : this.fileService.describePath(relocationSource);
-              rawPath = rawLocation.absolutePath;
+              rawPath = rawLocation?.absolutePath ?? outputFile;
               outputFile = rawPath;
             }
             this.rawOutputs[currRound] = rawLocation ?? null;
@@ -920,8 +817,8 @@ export class OutputHandler implements IOutputHandler {
           this.logger.debug(`Processing single output for ${outputFile}`);
 
           try {
-            const fallbackLocation = this.resolveOutputLocation(outputFile);
-            const processedLocation = rawLocation ?? fallbackLocation;
+            const processedLocation =
+              rawLocation ?? this.fileService.describePath(outputFile);
             let processed: NamedOutputFile = {
               source: outputFile,
               path: processedLocation?.absolutePath ?? rawPath,
@@ -932,10 +829,7 @@ export class OutputHandler implements IOutputHandler {
               workspacePath:
                 processedLocation?.workspace?.absolutePath ?? undefined,
               location:
-                processedLocation ??
-                this.fileService.resolveRelativePath(outputFile, {
-                  preferWorkspace: true,
-                }),
+                processedLocation ?? this.fileService.describePath(outputFile),
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>
@@ -960,29 +854,25 @@ export class OutputHandler implements IOutputHandler {
               );
             }
 
-            const relocation = await this.relocateRoundArtifacts(
-              rawLocation,
-              hasProcessedPath && processed.path ? [processed] : [],
-            );
-            rawLocation = relocation.raw;
             rawPath = rawLocation?.absolutePath ?? rawPath;
             outputFile = rawPath;
             this.rawOutputs[currRound] = rawLocation;
-            const relocatedFiles = relocation.processed.map((p) => p.path);
+            const processedFiles =
+              hasProcessedPath && processed.path ? [processed] : [];
 
             if (hasProcessedPath) {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  relocatedFiles,
+                  processedFiles.map((entry) => entry.path),
                   this.logger,
                 );
               }
 
               this.setRoundOutputs(
                 currRound,
-                relocatedFiles,
-                relocation.processed,
+                processedFiles.map((entry) => entry.path),
+                processedFiles,
               );
             } else {
               this.logger.debug(
@@ -994,7 +884,7 @@ export class OutputHandler implements IOutputHandler {
             await this.captureXmlSummary(
               currRound,
               rawPath,
-              relocation.processed,
+              processedFiles,
               scope,
             );
           } catch (err) {
