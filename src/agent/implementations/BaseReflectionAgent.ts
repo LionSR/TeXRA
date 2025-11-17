@@ -498,6 +498,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return {
       ...baseOptions,
       agentConfig: this.agentConfig,
+      fileService: this.fileService,
     };
   }
 

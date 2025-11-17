@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -33,7 +36,7 @@ import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { WorkspaceFS } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -53,6 +56,7 @@ export interface ResponseCycleRuntimeState extends BaseCycleState {
   startTime?: number;
   responseObject?: unknown;
   processedResponse?: string;
+  outputLocation?: ReturnType<TaskRunFileService['resolveRelativePath']>;
   roundFinalized: boolean;
 }
 
@@ -93,11 +97,13 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     systemPrompt?: string;
     debugContext?: CycleDebugContext;
     debugFileOptions?: CycleDebugFileOptions;
+    outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
   }> {
     const { options, state, store } = shared;
-    const { agentPrompt, userVars, logger, agentConfig } = options;
+    const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const exists = await WorkspaceFS.exists(state.outputFile);
+    const outputLocation = fileService.resolveRelativePath(state.outputFile);
+    const exists = await AbsoluteFS.exists(outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -123,6 +129,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       systemPrompt,
       debugContext,
       debugFileOptions,
+      outputLocation,
     };
   }
 
@@ -134,6 +141,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       systemPrompt?: string;
       debugContext?: CycleDebugContext;
       debugFileOptions?: CycleDebugFileOptions;
+      outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
@@ -146,6 +154,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     state.systemPrompt = prepRes.systemPrompt;
     state.debugContext = prepRes.debugContext;
     state.debugFileOptions = prepRes.debugFileOptions;
+    state.outputLocation = prepRes.outputLocation;
     state.startTime = Date.now();
     resetResponseCycleState(state);
 
@@ -467,15 +476,27 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return FlowTransition.COMPLETE;
     }
 
+    const outputLocation =
+      state.outputLocation ??
+      options.fileService.resolveRelativePath(state.outputFile);
+    state.outputLocation = outputLocation;
+
+    await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
+
     if (!state.outputExists) {
-      options.logger.debug(`Creating new file: ${state.outputFile}`);
-      await WorkspaceFS.write(state.outputFile, processedResponse);
+      options.logger.debug(`Creating new file: ${outputLocation.absolutePath}`);
+      await AbsoluteFS.write(outputLocation.absolutePath, processedResponse);
       state.outputExists = true;
     } else {
-      options.logger.debug(`Appending to existing file: ${state.outputFile}`);
-      await WorkspaceFS.appendFile(
-        state.outputFile,
-        (result.bestConnector ?? '') + processedResponse,
+      options.logger.debug(
+        `Appending to existing file: ${outputLocation.absolutePath}`,
+      );
+      const existing = (await AbsoluteFS.exists(outputLocation.absolutePath))
+        ? await AbsoluteFS.read(outputLocation.absolutePath)
+        : '';
+      await AbsoluteFS.write(
+        outputLocation.absolutePath,
+        `${existing}${(result.bestConnector ?? '') + processedResponse}`,
       );
     }
 
