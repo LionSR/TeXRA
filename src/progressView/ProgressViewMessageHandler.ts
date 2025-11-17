@@ -423,7 +423,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         await ensureRunDir(safeExecutionId);
         directoryToReveal = getRunDir(safeExecutionId);
       } else if (runOutputs) {
-        directoryToReveal = this.findPreferredOutputDirectory(runOutputs);
+        // Fallback: find any output directory
+        for (const infos of runOutputs.values()) {
+          for (const info of infos) {
+            const runStoragePath = info.location.runStorage?.absolutePath;
+            if (runStoragePath) {
+              directoryToReveal = path.dirname(runStoragePath);
+              break;
+            }
+            const workspacePath = info.location.workspace?.absolutePath;
+            if (workspacePath) {
+              directoryToReveal = path.dirname(workspacePath);
+              break;
+            }
+          }
+          if (directoryToReveal) break;
+        }
       }
 
       if (!directoryToReveal) {
@@ -629,6 +644,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
+  /**
+   * Extract execution ID from file outputs.
+   * Trust FileLocation.runStorage structure.
+   */
   private extractExecutionIdFromOutputs(
     outputs: Map<number, OutputFileInfo[]> | undefined,
   ): ExecutionId | undefined {
@@ -636,59 +655,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       return undefined;
     }
 
+    // Simply check the first file that has run storage info
     for (const infos of outputs.values()) {
       for (const info of infos) {
-        const candidate = this.resolveExecutionIdFromInfo(info);
-        if (candidate) {
-          return candidate;
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Extract execution ID from output file info.
-   * Trust the location structure.
-   */
-  private resolveExecutionIdFromInfo(
-    info: OutputFileInfo,
-  ): ExecutionId | undefined {
-    const storagePath = info.location.runStorage?.storageRelativePath;
-    if (!storagePath) {
-      return undefined;
-    }
-
-    const segments = storagePath.split(path.sep).filter(Boolean);
-    const runsIndex = segments.indexOf('taskRuns');
-    if (runsIndex === -1 || runsIndex + 1 >= segments.length) {
-      return undefined;
-    }
-
-    const candidate = segments[runsIndex + 1];
-    return normalizeExecutionId(candidate);
-  }
-
-  /**
-   * Find preferred output directory from file infos.
-   * Trust the location structure.
-   */
-  private findPreferredOutputDirectory(
-    outputs: Map<number, OutputFileInfo[]>,
-  ): string | undefined {
-    for (const infos of outputs.values()) {
-      for (const info of infos) {
-        // Check run storage first
-        const runStoragePath = info.location.runStorage?.absolutePath;
-        if (runStoragePath) {
-          return path.dirname(runStoragePath);
-        }
-
-        // Then check workspace
-        const workspacePath = info.location.workspace?.absolutePath;
-        if (workspacePath) {
-          return path.dirname(workspacePath);
+        const storagePath = info.location.runStorage?.storageRelativePath;
+        if (storagePath) {
+          // Extract from path: taskRuns/<executionId>/...
+          const segments = storagePath.split(path.sep).filter(Boolean);
+          const runsIndex = segments.indexOf('taskRuns');
+          if (runsIndex !== -1 && runsIndex + 1 < segments.length) {
+            const candidate = segments[runsIndex + 1];
+            return normalizeExecutionId(candidate);
+          }
         }
       }
     }
