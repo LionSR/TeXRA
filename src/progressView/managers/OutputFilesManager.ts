@@ -11,6 +11,7 @@ import {
   OutputFileInfoListSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
+import type { MissingOutputFile } from '@eventBus/ProgressEventBus';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
@@ -94,7 +95,7 @@ export class OutputFilesManager extends PersistentMapManager<
   async updateMissingOutputs(
     stream: StreamTabId,
     groupId: string | null | undefined,
-    filesByRound: { [key: number]: string[] },
+    filesByRound: { [key: number]: MissingOutputFile[] },
     options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
@@ -112,7 +113,7 @@ export class OutputFilesManager extends PersistentMapManager<
       streamMissing.set(runId, runMissing);
     }
 
-    for (const [round, files] of Object.entries(filesByRound)) {
+    for (const [round, missingFiles] of Object.entries(filesByRound)) {
       const roundNum = Number.parseInt(round, 10);
       if (Number.isNaN(roundNum)) {
         this.logger.warn(
@@ -120,7 +121,9 @@ export class OutputFilesManager extends PersistentMapManager<
         );
         continue;
       }
-      runMissing.set(roundNum, files);
+      // Extract just the paths for internal storage (backward compatible)
+      const paths = missingFiles.map((f) => f.path);
+      runMissing.set(roundNum, paths);
     }
 
     await this.saveMissingOutputs();

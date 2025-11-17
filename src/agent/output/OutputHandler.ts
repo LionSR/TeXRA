@@ -630,11 +630,8 @@ export class OutputHandler implements IOutputHandler {
           rawOutput.absolutePath,
           shouldForceRunStorage ? { forceRunStorage: true } : undefined,
         );
-      } else if (runStorageActive && isAlreadyInRunStorage) {
-        // Already in run storage, just describe the path
-        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
       } else {
-        // Not using run storage, describe workspace path
+        // Already in correct location, just describe the path
         relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
       }
     }
