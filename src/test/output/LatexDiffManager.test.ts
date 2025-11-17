@@ -12,7 +12,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 // Type imports
-import type { NamedOutputFile } from '@agent/output/types';
+import type { OutputFileInfo } from '@agent/output/types';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
@@ -89,12 +89,12 @@ describe('LatexDiffManager mapping reuse', () => {
   function createNamedOutput(
     filePath: string,
     source: string = filePath,
-  ): NamedOutputFile {
+  ): OutputFileInfo {
     return {
       source,
-      path: filePath,
-      relativePath: filePath,
       location: makeLocation(filePath),
+      lineage: undefined,
+      diff: undefined,
     };
   }
 

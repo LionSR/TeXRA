@@ -22,7 +22,7 @@ import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
-import type { OutputFile, NamedOutputFile } from './types';
+import type { OutputFile, OutputFileInfo } from './types';
 
 export class XmlOutputManager {
   constructor(
@@ -180,7 +180,7 @@ export class XmlOutputManager {
     outputFile: string,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<NamedOutputFile[]> {
+  ): Promise<OutputFileInfo[]> {
     const outputLocation = this.fileService.resolveRelativePath(outputFile);
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
 
@@ -241,18 +241,18 @@ export class XmlOutputManager {
     }
   }
 
-  private buildNamedOutput(
-    source: string,
-    outputPath: string,
-  ): NamedOutputFile {
+  /**
+   * Build output file info from source and path.
+   * @deprecated This method creates a minimal OutputFileInfo - lineage and diff are added later.
+   */
+  private buildNamedOutput(source: string, outputPath: string): OutputFileInfo {
     const location = this.fileService.resolveRelativePath(outputPath);
 
     return {
       source,
-      path: location.absolutePath,
-      relativePath: location.relativePath,
-      workspacePath: location.workspace?.absolutePath ?? undefined,
       location,
+      lineage: undefined,
+      diff: undefined,
     };
   }
 
@@ -270,8 +270,8 @@ export class XmlOutputManager {
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputFile: string,
-  ): Promise<NamedOutputFile[]> {
-    const outputFiles: NamedOutputFile[] = [];
+  ): Promise<OutputFileInfo[]> {
+    const outputFiles: OutputFileInfo[] = [];
     const outputParts = path.basename(outputFile).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
@@ -313,7 +313,7 @@ export class XmlOutputManager {
     return outputFiles;
   }
 
-  async processSingleXmlOutput(outputFile: string): Promise<NamedOutputFile> {
+  async processSingleXmlOutput(outputFile: string): Promise<OutputFileInfo> {
     this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
 
     const processedOutputFile = await this.splitScratchpadOutputXml(
@@ -337,7 +337,7 @@ export class XmlOutputManager {
 
   async processMultipleXmlOutputs(
     outputFile: string,
-  ): Promise<NamedOutputFile[]> {
+  ): Promise<OutputFileInfo[]> {
     this.logger.debug(
       `Splitting multiple scratchpad output XML: ${outputFile}`,
     );
