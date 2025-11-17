@@ -34,7 +34,11 @@ export class CoTAgent extends BaseReflectionAgent {
           this.agentSetting.documentTag,
         );
 
-        await this.outputHandler.processOutputFiles(outputFile, currRound, stage);
+        await this.outputHandler.processOutputFiles(
+          outputFile,
+          currRound,
+          stage,
+        );
       }
 
       return super.handleOutput(currRound, stateRound, stateGlobal, options);
