@@ -33,21 +33,17 @@ export type FileLocationScope = 'workspace' | 'runStorage' | 'external';
 export type FileRelativeScope = 'workspace' | 'runStorage' | 'absolute';
 
 export interface WorkspaceLocationInfo {
-  absolutePath: string;
-  relativePath: string;
+  relativePath: string;  // Only store the relative part (no duplication)
 }
 
 export interface RunStorageLocationInfo {
-  absolutePath: string;
-  relativePath: string;
-  storageRelativePath: string;
+  relativePath: string;         // Run-relative (e.g., 'r0/draft.tex')
+  storageRelativePath: string;  // Storage-relative (e.g., 'taskRuns/<id>/r0/draft.tex')
 }
 
 export interface FileLocation {
-  absolutePath: string;
+  absolutePath: string;  // The ONE absolute path
   scope: FileLocationScope;
-  relativePath: string;
-  relativeScope: FileRelativeScope;
   workspace: WorkspaceLocationInfo | null;
   runStorage: RunStorageLocationInfo | null;
 }
@@ -57,24 +53,12 @@ function createFileLocation(params: {
   scope: FileLocationScope;
   workspace?: WorkspaceLocationInfo | null;
   runStorage?: RunStorageLocationInfo | null;
-  preferredRelative?: { path: string; scope: FileRelativeScope };
 }): FileLocation {
-  const { absolutePath, scope, workspace, runStorage, preferredRelative } =
-    params;
-
-  const fallbackPath = workspace?.relativePath
-    ? { path: workspace.relativePath, scope: 'workspace' as const }
-    : runStorage?.relativePath
-      ? { path: runStorage.relativePath, scope: 'runStorage' as const }
-      : { path: absolutePath, scope: 'absolute' as const };
-
-  const relative = preferredRelative ?? fallbackPath;
+  const { absolutePath, scope, workspace, runStorage } = params;
 
   return {
     absolutePath,
     scope,
-    relativePath: relative.path,
-    relativeScope: relative.scope,
     workspace: workspace ?? null,
     runStorage: runStorage ?? null,
   };
@@ -323,8 +307,8 @@ export class TaskRunFileService {
       return location.workspace;
     }
 
-    if (location.relativeScope === 'workspace') {
-      return this.resolveWorkspaceRelative(location.relativePath);
+    if (location.workspace) {
+      return this.resolveWorkspaceRelative(location.workspace.relativePath);
     }
 
     if (location.runStorage?.relativePath) {
@@ -335,7 +319,10 @@ export class TaskRunFileService {
   }
 
   public toWorkspaceAbsolute(location?: FileLocation | null): string | null {
-    return this.getWorkspaceLocation(location)?.absolutePath ?? null;
+    if (!location?.workspace) return null;
+    const root = this.workspaceRoot;
+    if (!root) return null;
+    return path.join(root, location.workspace.relativePath);
   }
 
   private isWithinWorkspace(candidate: string): boolean {
@@ -629,9 +616,8 @@ export class TaskRunFileService {
       return location.workspace.relativePath || '';
     }
 
-    return location.relativeScope === 'absolute'
-      ? target
-      : location.relativePath;
+    // Return the best relative path for display
+    return location.workspace?.relativePath ?? location.runStorage?.relativePath ?? target;
   }
 
   public getDisplayLabel(relativePath: string): string {

@@ -22,25 +22,21 @@ const FileRelativeScopeSchema = z.union([
 
 const WorkspaceLocationSchema = z
   .object({
-    absolutePath: z.string(),
-    relativePath: z.string(),
+    relativePath: z.string(),  // Only the relative part
   })
   .strict();
 
 const RunStorageLocationSchema = z
   .object({
-    absolutePath: z.string(),
-    relativePath: z.string(),
-    storageRelativePath: z.string(),
+    relativePath: z.string(),         // Run-relative
+    storageRelativePath: z.string(),  // Storage-relative
   })
   .strict();
 
 export const FileLocationSchema = z
   .object({
-    absolutePath: z.string(),
+    absolutePath: z.string(),  // The ONE absolute path
     scope: FileLocationScopeSchema,
-    relativePath: z.string(),
-    relativeScope: FileRelativeScopeSchema,
     workspace: WorkspaceLocationSchema.nullable(),
     runStorage: RunStorageLocationSchema.nullable(),
   })
