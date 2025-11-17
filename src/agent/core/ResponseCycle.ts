@@ -1,6 +1,6 @@
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { TaskRunFileService } from '@utils/files';
+import type { TaskRunFileService, FileLocation } from '@utils/files';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
@@ -23,7 +23,7 @@ export interface ResponseCycleOptions<C = unknown>
 export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  outputFile: string;
+  outputLocation: FileLocation;
   store: AgentSharedStore;
 }
 
@@ -40,7 +40,7 @@ export async function runResponseCycle<C = unknown>(
     store: input.store,
     state: {
       messages: input.messages,
-      outputFile: input.outputFile,
+      outputLocation: input.outputLocation,
       endTurn: false,
       shouldStop: false,
       outputExists: false,
