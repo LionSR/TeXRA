@@ -15,4 +15,4 @@ webview-common/
 # VitePress
 docs/.vitepress/cache/
 docs/.vitepress/dist/
-docs/.vitepress/.temp/
+docs/.vitepress/.temp/core
