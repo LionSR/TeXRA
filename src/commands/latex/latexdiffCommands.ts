@@ -540,16 +540,6 @@ function getBasePath(info: OutputFileInfo): string | null {
   return base?.absolutePath ?? null;
 }
 
-/**
- * Get workspace directory for use as cwd.
- * Simply extracts directory from location.workspace path.
- */
-function getWorkspaceDir(info: OutputFileInfo): string | undefined {
-  // Trust FileLocation - no defensive fallbacks
-  return info.location.workspace
-    ? path.dirname(info.location.workspace.absolutePath)
-    : undefined;
-}
 
 /**
  * Get file description for display - trust source field.
