@@ -533,16 +533,8 @@ function resolveInfoPath(
     return info.location.absolutePath;
   }
 
-  if (info.path) {
-    try {
-      return fileService.resolveRelativePath(info.path).absolutePath;
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Unable to resolve output path ${info.path}: ${String(error)}`,
-      );
-    }
-  }
+  // Path is always available in location.absolutePath for new structure
+  // This fallback is only for legacy data
 
   return null;
 }
@@ -551,23 +543,9 @@ function resolveBasePath(
   info: OutputFileInfo,
   fileService: TaskRunFileService,
 ): string | null {
-  const candidateLocation = info.baseLocation ?? info.originalLocation ?? null;
+  const candidateLocation = info.lineage?.base ?? info.lineage?.original ?? null;
   if (candidateLocation?.absolutePath) {
     return candidateLocation.absolutePath;
-  }
-
-  const candidatePath = info.base ?? info.original ?? null;
-  if (candidatePath) {
-    try {
-      return fileService.resolveRelativePath(candidatePath, {
-        preferWorkspace: true,
-      }).absolutePath;
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Unable to resolve base path ${candidatePath}: ${String(error)}`,
-      );
-    }
   }
 
   if (info.location?.workspace?.absolutePath) {
@@ -579,8 +557,8 @@ function resolveBasePath(
 
 function workspaceDirFromInfo(info: OutputFileInfo): string | undefined {
   const workspaceSource =
-    info.baseLocation?.workspace?.absolutePath ??
-    info.location?.workspace?.absolutePath ??
+    info.lineage?.base?.workspace?.absolutePath ??
+    info.location.workspace?.absolutePath ??
     null;
 
   return workspaceSource ? path.dirname(workspaceSource) : undefined;
@@ -590,10 +568,7 @@ function describeInfo(info: OutputFileInfo): string {
   if (info.displayLabel) {
     return info.displayLabel;
   }
-  if (info.relativePath) {
-    return info.relativePath;
-  }
-  return info.path;
+  return info.location.relativePath;
 }
 
 function describeRevisedInfo(
@@ -609,7 +584,7 @@ function describeRevisedInfo(
   if (fallbackPath) {
     return path.basename(fallbackPath);
   }
-  return info.path;
+  return path.basename(info.location.absolutePath);
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -660,10 +635,7 @@ async function runLatexdiffFromMetadata(params: {
       });
 
       const key =
-        info.relativePath ||
-        info.location?.workspace?.relativePath ||
-        info.location?.runStorage?.relativePath ||
-        info.path;
+        info.location.relativePath;
       let group = groupedByRelative.get(key);
       if (!group) {
         group = [];
