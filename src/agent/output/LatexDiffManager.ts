@@ -18,7 +18,7 @@ import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import type { RoundFileMapping } from './types';
+import type { NamedOutputFile, RoundFileMapping } from './types';
 
 interface LatexDiffDependencies {
   checkToolInstalled: typeof checkToolInstalled;
@@ -37,7 +37,7 @@ export class LatexDiffManager {
 
   constructor(
     private readonly agentSetting: AgentWorkflowSetting,
-    private readonly outputFiles: { [key: number]: string[] },
+    private readonly outputFiles: { [key: number]: NamedOutputFile[] },
     private readonly baseFiles: string[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
@@ -190,7 +190,8 @@ export class LatexDiffManager {
       }
 
       const outputFiles = this.outputFiles[currRound] || [];
-      if (outputFiles.length === 0) {
+      const outputPaths = outputFiles.map((entry) => entry.path);
+      if (outputPaths.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
         );
@@ -198,7 +199,7 @@ export class LatexDiffManager {
       }
 
       this.logger.debug(`Base files: ${this.baseFiles}`);
-      this.logger.debug(`r${currRound} output files: ${outputFiles}`);
+      this.logger.debug(`r${currRound} output files: ${outputPaths}`);
 
       const basePairs = Array.from(mapping.baseToOutput.entries());
       if (basePairs.length > 0) {
