@@ -49,7 +49,10 @@ export class FlexibleFS {
     return AbsoluteFS.readBytes(target.absolutePath);
   }
 
-  appendFile(target: FileLocation, content: string | Uint8Array): Promise<void> {
+  appendFile(
+    target: FileLocation,
+    content: string | Uint8Array,
+  ): Promise<void> {
     return AbsoluteFS.appendFile(target.absolutePath, content);
   }
 

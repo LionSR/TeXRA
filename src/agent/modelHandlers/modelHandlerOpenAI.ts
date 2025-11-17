@@ -843,7 +843,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
-        outputFile,
+        pathToLocation(outputFile),
         workspaceState.assembly.accumulatedOutput,
       );
     }

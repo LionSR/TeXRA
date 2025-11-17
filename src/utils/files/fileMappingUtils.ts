@@ -9,6 +9,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import { flexibleFS } from './flexibleFS';
+import { pathToLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -203,7 +204,7 @@ export async function replaceInputCommands(
     }
 
     try {
-      const content = await flexibleFS.read(outputFile);
+      const content = await flexibleFS.read(pathToLocation(outputFile));
       const newContent = content.replace(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -224,7 +225,7 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await flexibleFS.write(outputFile, newContent);
+        await flexibleFS.write(pathToLocation(outputFile), newContent);
         logger?.debug(`Updated input commands in ${outputFile}`);
       }
     } catch (err) {
