@@ -9,7 +9,12 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { TaskRunFileService, flexibleFS, WorkspaceFS } from '@utils/files';
+import {
+  TaskRunFileService,
+  flexibleFS,
+  WorkspaceFS,
+  createSiblingLocation,
+} from '@utils/files';
 // Type imports
 import type { FileLocation } from '@utils/files';
 
@@ -130,16 +135,20 @@ export class LatexDiffManager {
 
   /**
    * Relocate diff artifact to run storage, returning its FileLocation.
-   * Avoids round-trip through string by preserving FileLocation.
+   * Takes a FileLocation and returns the relocated version.
    */
-  private async relocateDiffArtifact(diffPath: string): Promise<FileLocation> {
+  private async relocateDiffArtifact(
+    diffLocation: FileLocation,
+  ): Promise<FileLocation> {
     if (!this.fileService.hasRunDirectory()) {
-      // Describe once - don't convert back and forth
-      return this.fileService.describePath(diffPath);
+      // No run storage - return as-is
+      return diffLocation;
     }
 
     // relocateToRunStorage already returns FileLocation - use it directly!
-    return await this.fileService.relocateToRunStorage(diffPath);
+    return await this.fileService.relocateToRunStorage(
+      diffLocation.absolutePath,
+    );
   }
 
   async handleLatexdiffofOutput(
@@ -235,6 +244,13 @@ export class LatexDiffManager {
           }
           const cwd = workspaceDir ?? path.dirname(baseAbsolute);
 
+          // Compute FileLocations first - we'll need baseLocation for createSiblingLocation
+          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
+            preferWorkspace: true,
+          });
+          const revisedLocation =
+            location ?? this.fileService.resolveRelativePath(actual);
+
           const result = await this.latexdiffService.runDiffForRound(
             baseAbsolute,
             actual,
@@ -246,12 +262,14 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Create FileLocation from the start - compute directory once
-            const baseDir = path.dirname(baseAbsolute);
-            const diffPathStr = path.join(baseDir, result.diffFileName);
-            diffLocation = this.fileService.describePath(diffPathStr);
+            // Use createSiblingLocation - no expensive re-inference!
+            diffLocation = createSiblingLocation(
+              baseLocation,
+              result.diffFileName,
+            );
 
-            // Reuse baseDir instead of re-extracting from diffLocation
+            // Get directory from location
+            const baseDir = path.dirname(diffLocation.absolutePath);
             const buildDir = path.join(baseDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
@@ -261,19 +279,11 @@ export class LatexDiffManager {
             );
 
             if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(
-                diffLocation.absolutePath,
-              );
+              diffLocation = await this.relocateDiffArtifact(diffLocation);
               // Leave the build directory in place; it mainly caches temporary
               // LaTeX intermediates and can be regenerated on demand.
             }
           }
-
-          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
-            preferWorkspace: true,
-          });
-          const revisedLocation =
-            location ?? this.fileService.resolveRelativePath(actual);
 
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(baseFile),
@@ -360,12 +370,14 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Create FileLocation from the start - compute directory once
-            const prevDir = path.dirname(prevPaths.actual);
-            const diffPathStr = path.join(prevDir, result.diffFileName);
-            diffLocation = this.fileService.describePath(diffPathStr);
+            // Use createSiblingLocation - no expensive re-inference!
+            diffLocation = createSiblingLocation(
+              prevLocation ?? currLocation!,
+              result.diffFileName,
+            );
 
-            // Reuse prevDir instead of re-extracting from diffLocation
+            // Get directory from location
+            const prevDir = path.dirname(diffLocation.absolutePath);
             const buildDir = path.join(prevDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
@@ -375,9 +387,7 @@ export class LatexDiffManager {
             );
 
             if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(
-                diffLocation.absolutePath,
-              );
+              diffLocation = await this.relocateDiffArtifact(diffLocation);
               // Build folders stay in the workspace to avoid copying the entire
               // compilation output tree into run storage.
             }
