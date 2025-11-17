@@ -80,6 +80,16 @@ export abstract class BaseFS {
     await vscode.workspace.fs.writeFile(this.toUri(target), data);
   }
 
+  public static async appendFile(
+    this: typeof BaseFS,
+    target: PathInput,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    const data =
+      typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+    await fs.promises.appendFile(this.preparePath(target), data);
+  }
+
   public static async delete(
     this: typeof BaseFS,
     target: PathInput,

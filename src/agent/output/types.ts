@@ -52,7 +52,7 @@ export interface RoundOutputArtifacts {
   round: number;
   rawOutput: FileLocation | null;
   rawOutputPath: string | null;
-  outputFiles: string[];
+  outputFiles: NamedOutputFile[];
   processedFiles: NamedOutputFile[];
   fileInfos: OutputFileInfo[];
   xmlSummary: OutputXmlSummary;
