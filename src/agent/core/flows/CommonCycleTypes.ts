@@ -43,14 +43,6 @@ export interface CycleDebugFileOptions {
 }
 
 /**
- * Generic result type for node execution that can succeed or fail.
- * Use this for nodes that always execute (no skipping).
- */
-export type NodeResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: unknown };
-
-/**
  * Result type for nodes that can be skipped based on flow state.
  * Use this when a node might not execute due to prior failures or conditions.
  */
