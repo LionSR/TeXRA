@@ -243,29 +243,33 @@ export class LatexDiffManager {
             { cwd },
           );
           this.logLatexdiffResult(result, 'round-diff');
-          let diffPath = '';
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            diffPath = path.join(
+            // Create FileLocation from the start
+            const diffPathStr = path.join(
               path.dirname(baseAbsolute),
               result.diffFileName,
             );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
+            diffLocation = this.fileService.describePath(diffPathStr);
+
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
+            );
             await this.dependencies.compileLatex2Pdf(
-              diffPath,
+              diffLocation.absolutePath,
               this.channel,
               buildDir,
               true,
             );
+
             if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(diffPath);
-              diffPath = diffLocation.absolutePath;
+              diffLocation = await this.relocateDiffArtifact(
+                diffLocation.absolutePath,
+              );
               // Leave the build directory in place; it mainly caches temporary
               // LaTeX intermediates and can be regenerated on demand.
-            } else {
-              // No run storage - describe the workspace location
-              diffLocation = this.fileService.describePath(diffPath);
             }
           }
 
@@ -280,7 +284,7 @@ export class LatexDiffManager {
             basePath: baseAbsolute,
             revisedLabel: this.fileService.getDisplayLabel(outputFile),
             revisedPath: actual,
-            diffPath: diffPath || undefined,
+            diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
             runId: this.fileService.metadata.executionId ?? null,
@@ -357,29 +361,33 @@ export class LatexDiffManager {
             { cwd },
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
-          let diffPath = '';
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            diffPath = path.join(
+            // Create FileLocation from the start
+            const diffPathStr = path.join(
               path.dirname(prevPaths.actual),
               result.diffFileName,
             );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
+            diffLocation = this.fileService.describePath(diffPathStr);
+
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
+            );
             await this.dependencies.compileLatex2Pdf(
-              diffPath,
+              diffLocation.absolutePath,
               this.channel,
               buildDir,
               true,
             );
+
             if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(diffPath);
-              diffPath = diffLocation.absolutePath;
+              diffLocation = await this.relocateDiffArtifact(
+                diffLocation.absolutePath,
+              );
               // Build folders stay in the workspace to avoid copying the entire
               // compilation output tree into run storage.
-            } else {
-              // No run storage - describe the workspace location
-              diffLocation = this.fileService.describePath(diffPath);
             }
           }
 
@@ -388,7 +396,7 @@ export class LatexDiffManager {
             basePath: prevLocation?.absolutePath,
             revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
             revisedPath: currPaths.actual,
-            diffPath: diffPath || undefined,
+            diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
             runId: this.fileService.metadata.executionId ?? null,
