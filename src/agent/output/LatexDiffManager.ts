@@ -44,7 +44,7 @@ export class LatexDiffManager {
   constructor(
     private readonly agentSetting: AgentWorkflowSetting,
     private readonly outputFiles: { [key: number]: OutputFileInfo[] },
-    private readonly baseFiles: string[],
+    private readonly baseFiles: FileLocation[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
     private readonly fileService: TaskRunFileService,
