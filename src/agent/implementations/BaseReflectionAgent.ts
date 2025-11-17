@@ -149,6 +149,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Initialize basic attributes
     const numRounds = this.getTotalRounds();
+    // Initialize fileService first so we can use it below
+    this.fileService = new TaskRunFileService(context.executionId);
+
     this.outputFile = new Array(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
@@ -156,8 +159,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
-        ? [...this.agentConfig.outputFiles]
-        : [this.agentConfig.inputFile];
+        ? this.agentConfig.outputFiles.map((f) =>
+            this.fileService.resolveRelativePath(f),
+          )
+        : [this.fileService.resolveRelativePath(this.agentConfig.inputFile)];
 
     // Check scratchpad usage
     // this is not so neat
@@ -171,8 +176,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Initialize logging
     this.logId = 0;
-
-    this.fileService = new TaskRunFileService(context.executionId);
 
     this.outputHandler = new OutputHandler(
       this.agentSetting,
@@ -333,14 +336,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       this.logger.debug(`Completed round ${currRound}`);
 
-      await this.outputHandler.finalizeRound(
-        outputFile,
-        currRound,
-        {
-          endTurn,
-          stage: scope,
-        },
-      );
+      await this.outputHandler.finalizeRound(outputFile, currRound, {
+        endTurn,
+        stage: scope,
+      });
 
       const output = await this.outputHandler.getRoundArtifacts(currRound);
       this.roundOutputs[currRound] = output;
@@ -374,7 +373,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
+        this.baseFiles.map(
+          async (f) => await WorkspaceFS.exists(f.absolutePath),
+        ),
       );
 
       if (existingBase.some((e) => e)) {

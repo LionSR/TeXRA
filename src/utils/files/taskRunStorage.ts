@@ -449,7 +449,7 @@ export class TaskRunFileService {
 
     if (options.mirrorBaseFiles !== false) {
       for (const base of baseFiles) {
-        registerLink(base);
+        registerLink(base.absolutePath);
       }
     }
 
@@ -462,7 +462,7 @@ export class TaskRunFileService {
         return;
       }
 
-      const sourceLocation = this.describePath(target);
+      const sourceLocation = target;
       if (sourceLocation.kind !== 'workspace') {
         return;
       }
