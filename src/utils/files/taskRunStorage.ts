@@ -6,7 +6,7 @@ import { promises as fs } from 'fs';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - common
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Internal imports
 import * as logger from '@logger/logUtils';

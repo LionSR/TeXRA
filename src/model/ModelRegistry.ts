@@ -9,16 +9,18 @@
 
 // Local imports - agent components
 import { ModelConfig } from './ModelConfig';
-import { ANTHROPIC_MODELS } from './providers/anthropicModels';
-import { OPENAI_REASONING_MODELS } from './providers/openaiReasoningModels';
-import { OPENAI_MODELS } from './providers/openaiModels';
-import { GOOGLE_MODELS } from './providers/googleModels';
-import { XAI_MODELS } from './providers/xaiModels';
-import { OTHER_MODELS } from './providers/otherModels';
-import { DEEPSEEK_MODELS } from './providers/deepseekModels';
-import { MOONSHOT_MODELS } from './providers/moonshotModels';
-import { DASHSCOPE_MODELS } from './providers/dashscopeModels';
-import { COPILOT_MODELS } from './providers/copilotModels';
+import {
+  ANTHROPIC_MODELS,
+  OPENAI_REASONING_MODELS,
+  OPENAI_MODELS,
+  GOOGLE_MODELS,
+  XAI_MODELS,
+  OTHER_MODELS,
+  DEEPSEEK_MODELS,
+  MOONSHOT_MODELS,
+  DASHSCOPE_MODELS,
+  COPILOT_MODELS,
+} from './providers';
 
 /**
  * Available model configurations indexed by short name.

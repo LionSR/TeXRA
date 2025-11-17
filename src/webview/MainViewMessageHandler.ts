@@ -3,18 +3,15 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { computeAgentOptions } from '@agent/computeAgentOptions';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - webview
-import {
-  BaseViewMessageHandler,
-  MessageHandler,
-} from '@common/webview/BaseViewMessageHandler';
+import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 // @ts-ignore - Import JavaScript module
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager } from '@frontend/secretManager';
+import { agentDirectories } from '@frontend/agents';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { getConfig, setConfig } from '@utils/config';
 import {

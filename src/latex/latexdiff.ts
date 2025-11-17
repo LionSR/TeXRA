@@ -5,11 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import {
-  logErrorMessage,
-  formatError,
-  toErrorMessage,
-} from '@common/errors/errorHandlingUtils';
+import { logErrorMessage, formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { flexibleFS } from '@utils/files';

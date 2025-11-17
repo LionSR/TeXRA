@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';

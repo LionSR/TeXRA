@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import { LsTool } from '@tools/ls';
 import { ToolError, ToolResult, toolResult } from '@tools/result';
 import { formatToolOutput, toPosixPath } from '@tools/utils';

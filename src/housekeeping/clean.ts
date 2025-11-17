@@ -9,7 +9,7 @@ import { sync as globSync } from 'glob';
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';

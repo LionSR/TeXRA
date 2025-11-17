@@ -8,7 +8,7 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
