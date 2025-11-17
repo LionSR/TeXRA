@@ -44,9 +44,6 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  private readonly parseStringValue = (value: unknown): string | null =>
-    typeof value === 'string' ? value : null;
-
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
@@ -476,7 +473,7 @@ export class OutputFilesManager extends PersistentMapManager<
       if (looksLegacy) {
         const rounds = this.deserializeRoundMap<string>(
           raw as Record<string, unknown>,
-          this.parseStringValue,
+          (v) => (typeof v === 'string' ? v : null),
         );
         if (rounds.size > 0) {
           runMap.set(normalizeRunId(null), rounds);
@@ -488,7 +485,7 @@ export class OutputFilesManager extends PersistentMapManager<
           }
           const rounds = this.deserializeRoundMap<string>(
             value as Record<string, unknown>,
-            this.parseStringValue,
+            (v) => (typeof v === 'string' ? v : null),
           );
           if (rounds.size > 0) {
             runMap.set(runId, rounds);
@@ -595,7 +592,16 @@ export class OutputFilesManager extends PersistentMapManager<
     const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
 
     if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(record);
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(
+        record,
+        (v) => {
+          try {
+            return OutputFileInfoListSchema.parse([v])[0] ?? null;
+          } catch {
+            return null;
+          }
+        },
+      );
       if (rounds.size > 0) {
         runMap.set(normalizeRunId(null), rounds);
       }
@@ -609,6 +615,13 @@ export class OutputFilesManager extends PersistentMapManager<
 
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         value as Record<string, unknown>,
+        (v) => {
+          try {
+            return OutputFileInfoListSchema.parse([v])[0] ?? null;
+          } catch {
+            return null;
+          }
+        },
       );
       if (rounds.size > 0) {
         runMap.set(runId, rounds);
