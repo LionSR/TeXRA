@@ -459,7 +459,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store.round,
         store.run,
         {
-          outputFile: this.fileService.resolveRelativePath(outputPath),
+          outputFile: createWorkspaceLocation(
+            WorkspaceFS.fullPath(outputPath),
+            outputPath,
+          ),
           endTurn: cycleResult.endTurn,
           runGroupId,
         },
@@ -483,7 +486,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.round,
       store.run,
       {
-        outputFile: this.fileService.resolveRelativePath(outputPath),
+        outputFile: createWorkspaceLocation(
+          WorkspaceFS.fullPath(outputPath),
+          outputPath,
+        ),
         endTurn,
         runGroupId,
       },

@@ -26,8 +26,10 @@ import {
   TaskRunFileService,
   flexibleFS,
   getComparablePath,
+  WorkspaceFS,
+  AbsoluteFS,
 } from '@utils/files';
-import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 // Type imports
 import type { FileLocation } from '@utils/files';
 
@@ -495,7 +497,7 @@ export class OutputHandler implements IOutputHandler {
         const checks = expected.map(async (file) => ({
           file,
           exists: await flexibleFS.exists(
-            this.fileService.resolveRelativePath(file),
+            createWorkspaceLocation(WorkspaceFS.fullPath(file), file),
           ),
         }));
         const results = await Promise.all(checks);
