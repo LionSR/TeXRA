@@ -107,7 +107,6 @@ describe('LatexDiffManager mapping reuse', () => {
     handler.outputFiles[0] = [
       createNamedOutput(path.join('workspace', 'chapter_r0.tex')),
     ];
-    handler.outputMappings[0] = handler.outputFiles[0];
 
     const mapping = handler.getRoundMapping(0);
 
@@ -171,11 +170,9 @@ describe('LatexDiffManager mapping reuse', () => {
     handler.outputFiles[0] = [
       createNamedOutput(path.join('workspace', 'paper_r0.tex')),
     ];
-    handler.outputMappings[0] = handler.outputFiles[0];
     handler.outputFiles[1] = [
       createNamedOutput(path.join('workspace', 'paper_r1.tex')),
     ];
-    handler.outputMappings[1] = handler.outputFiles[1];
 
     const mapping = handler.getRoundMapping(1);
 
