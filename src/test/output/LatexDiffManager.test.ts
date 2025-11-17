@@ -99,7 +99,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseSetting,
       baseConfig,
       0,
-      baseFiles,
+      baseFiles.map((f) => pathToLocation(f)),
       logger,
       new TaskRunFileService(),
     );
@@ -121,7 +121,7 @@ describe('LatexDiffManager mapping reuse', () => {
     const manager = new LatexDiffManager(
       handler.agentSetting,
       handler.outputFiles,
-      baseFiles,
+      baseFiles.map((f) => pathToLocation(f)),
       testLogger,
       'channel',
       new TaskRunFileService(),
@@ -162,7 +162,7 @@ describe('LatexDiffManager mapping reuse', () => {
       baseSetting,
       baseConfig,
       0,
-      baseFiles,
+      baseFiles.map((f) => pathToLocation(f)),
       logger,
       new TaskRunFileService(),
     );
@@ -185,7 +185,7 @@ describe('LatexDiffManager mapping reuse', () => {
     const manager = new LatexDiffManager(
       handler.agentSetting,
       handler.outputFiles,
-      baseFiles,
+      baseFiles.map((f) => pathToLocation(f)),
       testLogger,
       'channel',
       new TaskRunFileService(),

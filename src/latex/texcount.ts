@@ -2,6 +2,7 @@
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { flexibleFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
