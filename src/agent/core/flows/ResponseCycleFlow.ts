@@ -37,6 +37,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -56,7 +57,7 @@ export interface ResponseCycleRuntimeState extends BaseCycleState {
   startTime?: number;
   responseObject?: unknown;
   processedResponse?: string;
-  outputLocation?: ReturnType<TaskRunFileService['resolveRelativePath']>;
+  outputLocation?: FileLocation;
   roundFinalized: boolean;
 }
 
@@ -97,7 +98,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     systemPrompt?: string;
     debugContext?: CycleDebugContext;
     debugFileOptions?: CycleDebugFileOptions;
-    outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
+    outputLocation: FileLocation;
   }> {
     const { options, state, store } = shared;
     const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
@@ -141,7 +142,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       systemPrompt?: string;
       debugContext?: CycleDebugContext;
       debugFileOptions?: CycleDebugFileOptions;
-      outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
+      outputLocation: FileLocation;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
