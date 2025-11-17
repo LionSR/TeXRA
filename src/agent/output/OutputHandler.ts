@@ -45,7 +45,7 @@ import {
   type OutputFileInfo,
   type OutputXmlSummary,
   type RoundFileMapping,
-  type RoundOutputArtifacts,
+  type RoundOutput,
 } from './types';
 import { LatexDiffManager } from './LatexDiffManager';
 import { DiffStatsManager } from './DiffStatsManager';
@@ -437,7 +437,9 @@ export class OutputHandler implements IOutputHandler {
     };
 
     currentOutputs.forEach((entry) => registerEntry(entry));
-    prevOutputs.forEach((entry) => registerEntry(entry, { skipIfExists: true }));
+    prevOutputs.forEach((entry) =>
+      registerEntry(entry, { skipIfExists: true }),
+    );
 
     const mapping: RoundFileMapping = {
       baseToOutput,
@@ -464,8 +466,8 @@ export class OutputHandler implements IOutputHandler {
     this.outputFiles[round] = infos;
     this.outputMappings[round] = infos;
 
-    // Note: rawOutput and xmlSummary should come from RoundOutputArtifacts,
-    // not from individual file infos. Keep existing values if already set.
+    // Note: rawOutput and xmlSummary are round-level metadata,
+    // not per-file. Keep existing values if already set.
     if (!Object.prototype.hasOwnProperty.call(this.rawOutputs, round)) {
       this.rawOutputs[round] = null;
     }
@@ -843,7 +845,7 @@ export class OutputHandler implements IOutputHandler {
     );
   }
 
-  public async getRoundArtifacts(round: number): Promise<RoundOutputArtifacts> {
+  public async getRoundArtifacts(round: number): Promise<RoundOutput> {
     let fileInfos = this.roundFileInfos[round];
     if (!fileInfos) {
       fileInfos = await this.gatherOutputFileInfo(round);
