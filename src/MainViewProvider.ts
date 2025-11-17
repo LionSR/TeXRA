@@ -6,6 +6,7 @@ import { BaseWebviewProvider } from '@common/webview/BaseWebviewProvider';
 import { getSharedLocalResourceRoots } from '@common/webview/resourceRoots';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { watchConfig, getConfig } from '@utils/config';
+import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
 
 // Local file imports
@@ -146,39 +147,14 @@ export class MainViewProvider
       command: MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE,
     });
 
-    // Check if there's state to restore from the command
-    const hasStateToRestore = await vscode.commands.executeCommand<boolean>(
-      'vscode.getContextKeyValue',
-      'texra.hasStateToRestore',
-    );
+    // Check if there's state to restore (consume it from pending state)
+    const state = consumePendingState();
 
-    if (!hasStateToRestore) {
-      return;
-    }
-
-    try {
-      const state = (await vscode.commands.executeCommand(
-        'vscode.getContextKeyValue',
-        'texra.stateToRestore',
-      )) as unknown;
-
-      if (state) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state,
-        });
-      }
-    } finally {
-      await vscode.commands.executeCommand(
-        'setContext',
-        'texra.hasStateToRestore',
-        false,
-      );
-      await vscode.commands.executeCommand(
-        'setContext',
-        'texra.stateToRestore',
-        undefined,
-      );
+    if (state) {
+      webviewView.webview.postMessage({
+        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+        state,
+      });
     }
   }
 }
