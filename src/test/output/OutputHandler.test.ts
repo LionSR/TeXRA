@@ -23,6 +23,13 @@ const createLocation = (file: string) => ({
   runStorage: null,
 });
 
+const createNamedOutput = (file: string) => ({
+  source: file,
+  path: file,
+  relativePath: file,
+  location: createLocation(file),
+});
+
 class MockOutputHandler extends OutputHandler {
   public gatherCalled = false;
   public validateCalled = false;
@@ -97,11 +104,11 @@ describe('OutputHandler round helpers', () => {
     assert.ok(Array.isArray(roundOutputs));
     assert.strictEqual(roundOutputs.length, 0);
 
-    roundOutputs.push('out.tex');
+    roundOutputs.push(createNamedOutput('out.tex'));
     const retrieved = handler.ensureRound(2);
 
     assert.strictEqual(retrieved, roundOutputs);
-    assert.deepEqual(retrieved, ['out.tex']);
+    assert.deepEqual(retrieved, [createNamedOutput('out.tex')]);
   });
 
   it('reflects whether rounds contain outputs', () => {
@@ -109,7 +116,7 @@ describe('OutputHandler round helpers', () => {
 
     assert.strictEqual(handler.hasRoundOutputs(1), false);
 
-    handler.ensureRound(1).push('out-1.tex');
+    handler.ensureRound(1).push(createNamedOutput('out-1.tex'));
 
     assert.strictEqual(handler.hasRoundOutputs(1), true);
     assert.strictEqual(handler.hasRoundOutputs(3), false);
@@ -129,13 +136,13 @@ describe('OutputHandler round helpers', () => {
 
   it('ensureRound returns existing outputs when called multiple times', () => {
     const handler = new MockOutputHandler(baseSetting, baseConfig);
-    handler.ensureRound(2).push('existing.tex');
+    handler.ensureRound(2).push(createNamedOutput('existing.tex'));
 
     const outputs = handler.ensureRound(2);
 
     assert.ok(Array.isArray(outputs));
     assert.strictEqual(outputs.length, 1);
-    assert.strictEqual(outputs[0], 'existing.tex');
+    assert.deepEqual(outputs[0], createNamedOutput('existing.tex'));
 
     // Verify reference equality (returns the actual array, not a copy)
     assert.strictEqual(outputs, handler.outputFiles[2]);
@@ -152,15 +159,10 @@ describe('OutputHandler.getRoundMapping', () => {
       new AgentLogger('TestOutputHandlerMapping'),
     );
 
-    handler.outputFiles[0] = [path.join('workspace', 'chapter_r0.tex')];
-    handler.outputMappings[0] = [
-      {
-        source: path.join('workspace', 'chapter_r0.tex'),
-        path: path.join('workspace', 'chapter_r0.tex'),
-        relativePath: path.join('workspace', 'chapter_r0.tex'),
-        location: createLocation(path.join('workspace', 'chapter_r0.tex')),
-      },
+    handler.outputFiles[0] = [
+      createNamedOutput(path.join('workspace', 'chapter_r0.tex')),
     ];
+    handler.outputMappings[0] = handler.outputFiles[0];
 
     const first = handler.getRoundMapping(0);
     const second = handler.getRoundMapping(0);
@@ -168,7 +170,7 @@ describe('OutputHandler.getRoundMapping', () => {
     assert.strictEqual(second, first, 'expected mapping to be cached');
 
     handler.outputFiles[0].push(
-      path.join('workspace', 'chapter_appendix_r0.tex'),
+      createNamedOutput(path.join('workspace', 'chapter_appendix_r0.tex')),
     );
     (handler as any).invalidateRoundMapping(0);
 
@@ -219,235 +221,6 @@ describe('OutputHandler.finalizeRound', () => {
     assert.strictEqual(handler.validateCalled, false);
     assert.equal(events.length, 1);
     dispose();
-  });
-});
-
-describe('OutputHandler relocation helpers', () => {
-  it('skips relocating processed entries that match the raw output path', async () => {
-    const handler = new OutputHandler(
-      baseSetting,
-      baseConfig,
-      0,
-      [],
-      new AgentLogger('TestRelocationHandler'),
-    );
-
-    (
-      handler as unknown as { cleanupLatexBackups: () => Promise<void> }
-    ).cleanupLatexBackups = async () => {};
-
-    const relocations: string[] = [];
-    const makeWorkspaceLocation = (name: string) => ({
-      absolutePath: `/workspace/${name}`,
-      scope: 'workspace' as const,
-      relativePath: name,
-      relativeScope: 'workspace' as const,
-      workspace: {
-        absolutePath: `/workspace/${name}`,
-        relativePath: name,
-      },
-      runStorage: {
-        absolutePath: `/storage/${name}`,
-        relativePath: name,
-        storageRelativePath: `taskRuns/test/${name}`,
-      },
-    });
-    const makeStorageLocation = (name: string) => ({
-      absolutePath: `/storage/${name}`,
-      scope: 'runStorage' as const,
-      relativePath: name,
-      relativeScope: 'runStorage' as const,
-      workspace: {
-        absolutePath: `/workspace/${name}`,
-        relativePath: name,
-      },
-      runStorage: {
-        absolutePath: `/storage/${name}`,
-        relativePath: name,
-        storageRelativePath: `taskRuns/test/${name}`,
-      },
-    });
-
-    const resolveName = (target: string) => {
-      if (target.startsWith('/workspace/')) {
-        return target.slice('/workspace/'.length);
-      }
-      if (target.startsWith('/storage/')) {
-        return target.slice('/storage/'.length);
-      }
-      return target;
-    };
-
-    const stubFileService = {
-      isRunStorageEnabled: () => true,
-      relocateToRunStorage: async (target: string) => {
-        relocations.push(target);
-        const name = resolveName(target);
-        return makeStorageLocation(name);
-      },
-      describePath: (target: string) => {
-        const name = resolveName(target);
-        if (target.startsWith('/storage/')) {
-          return makeStorageLocation(name);
-        }
-        return makeWorkspaceLocation(name);
-      },
-    };
-
-    (
-      handler as unknown as { fileService: typeof stubFileService }
-    ).fileService = stubFileService;
-
-    type ProcessedEntry = {
-      source: string;
-      path: string;
-      relativePath: string;
-      workspacePath?: string;
-      location: ReturnType<typeof makeWorkspaceLocation>;
-    };
-    const processed: ProcessedEntry[] = [
-      {
-        source: 'output.xml',
-        path: '/workspace/output.tex',
-        relativePath: 'output.tex',
-        workspacePath: '/workspace/output.tex',
-        location: makeWorkspaceLocation('output.tex'),
-      },
-      {
-        source: 'output.xml',
-        path: '/workspace/summary.tex',
-        relativePath: 'summary.tex',
-        workspacePath: 'workspace/summary.tex',
-        location: makeWorkspaceLocation('summary.tex'),
-      },
-    ];
-
-    const result = await (
-      handler as unknown as {
-        relocateRoundArtifacts: (
-          rawOutput: ReturnType<typeof makeWorkspaceLocation>,
-          processed: ProcessedEntry[],
-        ) => Promise<{
-          raw: ReturnType<typeof makeWorkspaceLocation>;
-          processed: ProcessedEntry[];
-        }>;
-      }
-    ).relocateRoundArtifacts(makeWorkspaceLocation('output.tex'), processed);
-
-    assert.deepEqual(relocations, [
-      '/workspace/output.tex',
-      '/workspace/summary.tex',
-    ]);
-    assert.deepEqual(result.raw, makeStorageLocation('output.tex'));
-    assert.deepEqual(result.processed, [
-      {
-        source: 'output.xml',
-        path: '/storage/output.tex',
-        relativePath: 'output.tex',
-        workspacePath: '/workspace/output.tex',
-        location: makeStorageLocation('output.tex'),
-      },
-      {
-        source: 'output.xml',
-        path: '/storage/summary.tex',
-        relativePath: 'summary.tex',
-        workspacePath: 'workspace/summary.tex',
-        location: makeStorageLocation('summary.tex'),
-      },
-    ]);
-  });
-
-  it('keeps artifacts in the workspace when run storage is disabled', async () => {
-    const handler = new OutputHandler(
-      baseSetting,
-      baseConfig,
-      0,
-      [],
-      new AgentLogger('TestRelocationWorkspaceOnly'),
-    );
-
-    (
-      handler as unknown as { cleanupLatexBackups: () => Promise<void> }
-    ).cleanupLatexBackups = async () => {};
-
-    const makeWorkspaceLocation = (name: string) => ({
-      absolutePath: `/workspace/${name}`,
-      scope: 'workspace' as const,
-      relativePath: name,
-      relativeScope: 'workspace' as const,
-      workspace: {
-        absolutePath: `/workspace/${name}`,
-        relativePath: name,
-      },
-      runStorage: null,
-    });
-
-    type ProcessedEntry = {
-      source: string;
-      path: string;
-      relativePath: string;
-      workspacePath?: string;
-      location: ReturnType<typeof makeWorkspaceLocation>;
-    };
-
-    const processed: ProcessedEntry[] = [
-      {
-        source: 'output.xml',
-        path: '/workspace/output.tex',
-        relativePath: 'output.tex',
-        workspacePath: '/workspace/output.tex',
-        location: makeWorkspaceLocation('output.tex'),
-      },
-      {
-        source: 'output.xml',
-        path: '/workspace/summary.tex',
-        relativePath: 'summary.tex',
-        workspacePath: '/workspace/summary.tex',
-        location: makeWorkspaceLocation('summary.tex'),
-      },
-    ];
-
-    const stubFileService = {
-      isRunStorageEnabled: () => false,
-      relocateToRunStorage: async () => {
-        throw new Error('relocateToRunStorage should not be called');
-      },
-      describePath: (target: string) => {
-        const name = target.startsWith('/workspace/')
-          ? target.slice('/workspace/'.length)
-          : target;
-        return makeWorkspaceLocation(name);
-      },
-    };
-
-    (
-      handler as unknown as { fileService: typeof stubFileService }
-    ).fileService = stubFileService;
-
-    const result = await (
-      handler as unknown as {
-        relocateRoundArtifacts: (
-          rawOutput: ReturnType<typeof makeWorkspaceLocation>,
-          processed: ProcessedEntry[],
-        ) => Promise<{
-          raw: ReturnType<typeof makeWorkspaceLocation> | null;
-          processed: ProcessedEntry[];
-        }>;
-      }
-    ).relocateRoundArtifacts(makeWorkspaceLocation('output.tex'), processed);
-
-    assert.equal(result.raw?.scope, 'workspace');
-    assert.equal(result.raw?.absolutePath, '/workspace/output.tex');
-    assert.deepEqual(
-      result.processed.map((entry) => ({
-        path: entry.path,
-        scope: entry.location.scope,
-      })),
-      [
-        { path: '/workspace/output.tex', scope: 'workspace' },
-        { path: '/workspace/summary.tex', scope: 'workspace' },
-      ],
-    );
   });
 });
 

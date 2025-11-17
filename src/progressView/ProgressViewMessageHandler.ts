@@ -34,7 +34,7 @@ import {
 import {
   ensureRunDir,
   getRunDir,
-  isValidExecutionId,
+  normalizeExecutionId,
 } from '@utils/files/taskRunStorage';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import {
@@ -407,27 +407,24 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
       persist: false,
     });
+    const normalizedRunId = normalizeExecutionId(resolvedRunId);
     const runOutputs = this.provider.state.getRunOutputFiles(stream, {
       runId: resolvedRunId ?? undefined,
-      executionId:
-        resolvedRunId && isValidExecutionId(resolvedRunId)
-          ? (resolvedRunId as ExecutionId)
-          : undefined,
+      executionId: normalizedRunId,
     });
 
     const executionIdFromRun =
-      resolvedRunId && isValidExecutionId(resolvedRunId)
-        ? (resolvedRunId as ExecutionId)
-        : this.extractExecutionIdFromOutputs(runOutputs);
+      normalizedRunId ?? this.extractExecutionIdFromOutputs(runOutputs);
     const executionId =
       executionIdFromRun ?? this.provider.state.getExecutionId(stream);
 
     try {
       let directoryToReveal: string | undefined;
 
-      if (executionId && isValidExecutionId(executionId)) {
-        await ensureRunDir(executionId);
-        directoryToReveal = getRunDir(executionId);
+      const safeExecutionId = normalizeExecutionId(executionId);
+      if (safeExecutionId) {
+        await ensureRunDir(safeExecutionId);
+        directoryToReveal = getRunDir(safeExecutionId);
       } else if (runOutputs) {
         directoryToReveal = this.findPreferredOutputDirectory(runOutputs);
       }
@@ -693,9 +690,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     const candidate = segments[runsIndex + 1];
+    const normalizedCandidate = normalizeExecutionId(candidate);
 
-    if (candidate && isValidExecutionId(candidate)) {
-      return candidate;
+    if (normalizedCandidate) {
+      return normalizedCandidate;
     }
 
     return undefined;
