@@ -6,7 +6,7 @@ export {
   OutputFileInfo,
   FileLineage,
   OutputXmlSummary,
-  RoundOutputArtifacts,
+  RoundOutput,
   FileLocation,
 } from './types';
 export { getOutputFileName } from '@agent/utils/outputFileUtils';
