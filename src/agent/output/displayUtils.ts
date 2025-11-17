@@ -9,7 +9,16 @@ import type { OutputFileInfo, FileLocation } from './types';
  * Uses the source name (e.g., "main.tex" from XML) or falls back to basename.
  */
 export function getDisplayLabel(info: OutputFileInfo): string {
-  return info.source || path.basename(info.location.relativePath);
+  if (info.source) {
+    return info.source;
+  }
+  if (
+    info.location.kind === 'workspace' ||
+    info.location.kind === 'runStorage'
+  ) {
+    return path.basename(info.location.relativePath);
+  }
+  return path.basename(info.location.absolutePath);
 }
 
 /**
@@ -17,8 +26,14 @@ export function getDisplayLabel(info: OutputFileInfo): string {
  * Returns the directory portion of the relative path, or empty string for root.
  */
 export function getDisplayDir(info: OutputFileInfo): string {
-  const dir = path.dirname(info.location.relativePath);
-  return !dir || dir === '.' ? '' : dir;
+  if (
+    info.location.kind === 'workspace' ||
+    info.location.kind === 'runStorage'
+  ) {
+    const dir = path.dirname(info.location.relativePath);
+    return !dir || dir === '.' ? '' : dir;
+  }
+  return '';
 }
 
 /**
@@ -26,7 +41,10 @@ export function getDisplayDir(info: OutputFileInfo): string {
  * Returns the most user-friendly relative path.
  */
 export function getDisplayPath(location: FileLocation): string {
-  return location.relativePath;
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return location.relativePath;
+  }
+  return location.absolutePath;
 }
 
 /**
@@ -42,7 +60,7 @@ export function getAbsolutePath(location: FileLocation): string {
  * Returns undefined if file is not in workspace.
  */
 export function getWorkspacePath(location: FileLocation): string | undefined {
-  return location.workspace?.absolutePath;
+  return location.kind === 'workspace' ? location.absolutePath : undefined;
 }
 
 /**
@@ -50,16 +68,5 @@ export function getWorkspacePath(location: FileLocation): string | undefined {
  * Returns undefined if the file is not in run storage.
  */
 export function getExecutionId(location: FileLocation): string | undefined {
-  const storagePath = location.runStorage?.storageRelativePath;
-  if (!storagePath) {
-    return undefined;
-  }
-
-  const segments = storagePath.split(path.sep).filter(Boolean);
-  const runsIndex = segments.indexOf('taskRuns');
-  if (runsIndex === -1 || runsIndex + 1 >= segments.length) {
-    return undefined;
-  }
-
-  return segments[runsIndex + 1];
+  return location.kind === 'runStorage' ? location.executionId : undefined;
 }
