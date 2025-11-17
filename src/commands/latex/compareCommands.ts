@@ -9,6 +9,7 @@ import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
 import { flexibleFS, WorkspaceFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
@@ -28,10 +29,13 @@ export function registerCompareCommands(context: vscode.ExtensionContext) {
  * Handles the compare command to show two files in VS Code's built-in diff editor
  */
 async function handleCompare(
-  inputFile: string,
-  baseFile: string,
-  editedFile: string,
+  inputLocation: FileLocation,
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
 ) {
+  const inputFile = inputLocation.absolutePath;
+  const baseFile = baseLocation.absolutePath;
+  const editedFile = editedLocation.absolutePath;
   try {
     const fileToUse = baseFile || inputFile;
     if (!fileToUse || !editedFile) {
@@ -122,10 +126,13 @@ async function handleCompare(
  * Handles accepting the content of the edited file and overwriting the base file
  */
 async function handleAcceptEdited(
-  inputFile: string,
-  baseFile: string,
-  editedFile: string,
+  inputLocation: FileLocation,
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
 ) {
+  const inputFile = inputLocation.absolutePath;
+  const baseFile = baseLocation.absolutePath;
+  const editedFile = editedLocation.absolutePath;
   try {
     const fileToUse = baseFile || inputFile;
     if (!fileToUse || !editedFile) {
