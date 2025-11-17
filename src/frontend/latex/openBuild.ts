@@ -10,6 +10,7 @@ import {
   resolveFilePath,
   isTexFile,
 } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import {
   LATEX_VIEWER_OPEN_DELAY_MS,
   LATEX_VIEWER_REFRESH_DELAY_MS,
@@ -70,9 +71,10 @@ export async function openAndBuildIfTex(
  * @param options Optional settings for showing the document
  */
 export async function openBuildDisplayIfTex(
-  file: string,
+  fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
 ): Promise<void> {
+  const file = fileLocation.absolutePath;
   await openAndBuildIfTex(file, options);
 
   if (isTexFile(file)) {
