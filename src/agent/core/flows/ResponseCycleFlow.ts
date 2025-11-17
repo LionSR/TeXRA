@@ -491,12 +491,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       options.logger.debug(
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
-      const existing = (await AbsoluteFS.exists(outputLocation.absolutePath))
-        ? await AbsoluteFS.read(outputLocation.absolutePath)
-        : '';
-      await AbsoluteFS.write(
+      await flexibleFS.appendFile(
         outputLocation.absolutePath,
-        `${existing}${(result.bestConnector ?? '') + processedResponse}`,
+        (result.bestConnector ?? '') + processedResponse,
       );
     }
 
