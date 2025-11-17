@@ -20,7 +20,6 @@ import {
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation } from '@utils/files';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
@@ -44,6 +43,7 @@ import type { ModelConfig, ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
+import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';

@@ -255,19 +255,6 @@ export class XmlOutputManager {
     };
   }
 
-  /**
-   * Build a clean output file reference (new simplified format).
-   */
-  private buildOutputFile(
-    source: string,
-    outputLocation: FileLocation,
-  ): OutputFile {
-    return {
-      source,
-      location: outputLocation,
-    };
-  }
-
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
     outputLocation: FileLocation,

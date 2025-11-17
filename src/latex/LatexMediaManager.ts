@@ -148,7 +148,7 @@ export class LatexMediaManager {
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
     const figureResults = await Promise.allSettled(
-      files.map((file) => extractFigurePathsFromLatex(file)),
+      files.map((file) => extractFigurePathsFromLatex(pathToLocation(file))),
     );
 
     const mirrorTasks: Promise<void>[] = [];

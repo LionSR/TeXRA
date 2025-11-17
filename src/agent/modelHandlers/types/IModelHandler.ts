@@ -1,6 +1,5 @@
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { FileLocation } from '@utils/files';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
@@ -9,6 +8,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
