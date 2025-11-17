@@ -39,7 +39,10 @@ export class MergeAgent extends DirectAgent {
       agentPath,
       context,
     );
-    this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
+    this.outputFile = [
+      this.getOutputFileLocation(0),
+      this.getOutputFileLocation(1),
+    ];
   }
 
   /**
@@ -48,7 +51,7 @@ export class MergeAgent extends DirectAgent {
    * @returns Path to output file for merged content
    * @throws Error if editedFile is not specified
    */
-  protected getOutputFile(currRound: number): FileLocation {
+  protected getOutputFileLocation(currRound: number): FileLocation {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 

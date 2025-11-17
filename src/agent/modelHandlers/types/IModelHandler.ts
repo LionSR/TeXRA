@@ -1,5 +1,6 @@
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { FileLocation } from '@utils/files';
 // Internal imports
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
@@ -134,7 +135,7 @@ export interface IModelHandler<
     agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]>;
 
