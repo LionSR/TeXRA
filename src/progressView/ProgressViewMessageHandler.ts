@@ -648,25 +648,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     return undefined;
   }
 
+  /**
+   * Extract execution ID from output file info.
+   * Trust the location structure - no need to check multiple places.
+   */
   private resolveExecutionIdFromInfo(
     info: OutputFileInfo,
   ): ExecutionId | undefined {
-    const relativeCandidates = [
-      info.rawLocation?.runStorage?.storageRelativePath,
-      info.location.runStorage?.storageRelativePath,
-      info.originalLocation?.runStorage?.storageRelativePath,
-      info.baseLocation?.runStorage?.storageRelativePath,
-      info.prevLocation?.runStorage?.storageRelativePath,
-    ];
-
-    for (const relative of relativeCandidates) {
-      const candidate = this.extractExecutionIdFromRelative(relative);
-      if (candidate) {
-        return candidate;
-      }
-    }
-
-    return undefined;
+    const storagePath = info.location.runStorage?.storageRelativePath;
+    return this.extractExecutionIdFromRelative(storagePath);
   }
 
   private extractExecutionIdFromRelative(
@@ -696,29 +686,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     return undefined;
   }
 
+  /**
+   * Find preferred output directory from file infos.
+   * Trust the location structure.
+   */
   private findPreferredOutputDirectory(
     outputs: Map<number, OutputFileInfo[]>,
   ): string | undefined {
     for (const infos of outputs.values()) {
       for (const info of infos) {
-        const runStoragePath =
-          info.rawLocation?.runStorage?.absolutePath ??
-          info.location.runStorage?.absolutePath ??
-          info.originalLocation?.runStorage?.absolutePath ??
-          info.baseLocation?.runStorage?.absolutePath ??
-          info.prevLocation?.runStorage?.absolutePath;
-
+        // Check run storage first
+        const runStoragePath = info.location.runStorage?.absolutePath;
         if (runStoragePath) {
           return path.dirname(runStoragePath);
         }
 
-        const workspacePath =
-          info.rawLocation?.workspace?.absolutePath ??
-          info.workspacePath ??
-          info.location.workspace?.absolutePath ??
-          info.original ??
-          (path.isAbsolute(info.path) ? info.path : undefined);
-
+        // Then check workspace
+        const workspacePath = info.location.workspace?.absolutePath;
         if (workspacePath) {
           return path.dirname(workspacePath);
         }

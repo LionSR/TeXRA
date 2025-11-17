@@ -64,12 +64,13 @@ export const OutputFileSchema = z
 /**
  * File lineage - tracks where files came from.
  * Uses full FileLocation objects (not split across string + location fields).
+ * Fields are nullable to support cases where lineage doesn't exist.
  */
 export const FileLineageSchema = z
   .object({
-    base: FileLocationSchema.optional(),
-    previous: FileLocationSchema.optional(),
-    original: FileLocationSchema.optional(),
+    base: FileLocationSchema.nullish(),
+    previous: FileLocationSchema.nullish(),
+    original: FileLocationSchema.nullish(),
   })
   .strict();
 
@@ -84,8 +85,8 @@ export const OutputFileInfoSchema = z
   .object({
     source: z.string(),
     location: FileLocationSchema,
-    lineage: FileLineageSchema.optional(),
-    diff: DiffStatsSchema.optional(),
+    lineage: FileLineageSchema.nullish(),
+    diff: DiffStatsSchema.nullish(),
   })
   .strict();
 
