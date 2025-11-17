@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent components
 import type { IModelHandler } from '@agent/modelHandlers';
 // Internal imports
@@ -53,7 +56,10 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
+import {
+  createWorkspaceLocation,
+  createRunStorageLocation,
+} from '@utils/files/taskRunStorage';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -309,7 +315,26 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
-    return this.fileService.resolveRelativePath(fileName);
+
+    // Create FileLocation directly based on storage mode
+    const normalized = fileName ? path.normalize(fileName) : '';
+    const workspaceAbsolute = WorkspaceFS.fullPath(normalized);
+
+    // Check if run storage is enabled
+    if (
+      this.fileService.isRunStorageEnabled() &&
+      this.fileService.metadata.executionId
+    ) {
+      const executionId = this.fileService.metadata.executionId;
+      const runDir = this.fileService.getRunDirectory();
+      if (runDir) {
+        const runAbsolute = path.join(runDir, normalized);
+        return createRunStorageLocation(runAbsolute, normalized, executionId);
+      }
+    }
+
+    // Default to workspace location
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
   }
 
   /**
