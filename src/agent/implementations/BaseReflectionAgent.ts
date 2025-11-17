@@ -53,6 +53,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -160,9 +161,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
         ? this.agentConfig.outputFiles.map((f) =>
-            this.fileService.resolveRelativePath(f),
+            createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
           )
-        : [this.fileService.resolveRelativePath(this.agentConfig.inputFile)];
+        : [
+            createWorkspaceLocation(
+              WorkspaceFS.fullPath(this.agentConfig.inputFile),
+              this.agentConfig.inputFile,
+            ),
+          ];
 
     // Check scratchpad usage
     // this is not so neat
