@@ -61,6 +61,7 @@ export class LatexDiffManager {
 
   /**
    * Get paths for diff operation - trust FileLocation.
+   * Returns the file's directory as cwd so latexdiff can resolve relative includes.
    */
   private async getDiffPaths(location: FileLocation | undefined): Promise<{
     actual: string | null;
@@ -72,7 +73,8 @@ export class LatexDiffManager {
 
     // Trust FileLocation - no defensive existence checks or fallbacks
     const actual = await this.resolveSymlinks(location.absolutePath);
-    const workspaceDir = WorkspaceFS.getPath() ?? null;
+    // Use the file's directory as cwd, not workspace root, so relative includes work
+    const workspaceDir = path.dirname(actual);
 
     return { actual, workspaceDir };
   }
