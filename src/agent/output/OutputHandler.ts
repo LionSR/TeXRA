@@ -216,11 +216,12 @@ export class OutputHandler implements IOutputHandler {
    * @returns The mutable list of outputs for the round.
    */
   /**
-   * Get or create round data, ensuring it exists.
+   * Get or create round data.
    */
   private ensureRoundData(round: number): RoundData {
-    if (!this.rounds.has(round)) {
-      this.rounds.set(round, {
+    let data = this.rounds.get(round);
+    if (!data) {
+      data = {
         outputs: [],
         rawOutput: null,
         xmlSummary: {
@@ -229,23 +230,18 @@ export class OutputHandler implements IOutputHandler {
           singleOutputFile: null,
           sourceLocation: null,
         },
-      });
+      };
+      this.rounds.set(round, data);
     }
-    return this.rounds.get(round)!;
+    return data;
   }
 
   public ensureRound(round: number): OutputFileInfo[] {
     return this.ensureRoundData(round).outputs;
   }
 
-  /**
-   * Check if a round has any generated outputs.
-   * @param round The round index to inspect.
-   * @returns True when the round has at least one output.
-   */
   public hasRoundOutputs(round: number): boolean {
-    const data = this.rounds.get(round);
-    return data ? data.outputs.length > 0 : false;
+    return (this.rounds.get(round)?.outputs.length ?? 0) > 0;
   }
 
   /**
@@ -343,12 +339,6 @@ export class OutputHandler implements IOutputHandler {
     const rawLocation = roundData?.rawOutput ?? null;
     const xmlSummary =
       roundData?.xmlSummary ?? this.getRoundXmlSummary(currRound);
-    const xmlSummarySnapshot: OutputXmlSummary = {
-      tagContents: { ...xmlSummary.tagContents },
-      documents: [...xmlSummary.documents],
-      singleOutputFile: xmlSummary.singleOutputFile,
-      sourceLocation: xmlSummary.sourceLocation ?? rawLocation ?? null,
-    };
 
     const locationFor = (relative: string | null): FileLocation | null => {
       if (!relative) return null;
@@ -447,26 +437,6 @@ export class OutputHandler implements IOutputHandler {
     };
   }
 
-  private applyHydratedRound(round: number, infos: OutputFileInfo[]): void {
-    if (infos.length === 0) {
-      this.rounds.delete(round);
-      return;
-    }
-
-    // Get or create round data, preserving existing metadata
-    const existing = this.rounds.get(round);
-    this.rounds.set(round, {
-      outputs: infos,
-      rawOutput: existing?.rawOutput ?? null,
-      xmlSummary: existing?.xmlSummary ?? {
-        tagContents: {},
-        documents: [],
-        singleOutputFile: null,
-        sourceLocation: null,
-      },
-    });
-  }
-
   public hydrateFromArtifacts(
     runId: string | null | undefined,
     rounds: Map<number, OutputFileInfo[]>,
@@ -477,8 +447,18 @@ export class OutputHandler implements IOutputHandler {
     }
 
     for (const [round, infos] of rounds.entries()) {
-      const entries = Array.isArray(infos) ? infos : [];
-      this.applyHydratedRound(round, entries);
+      if (infos.length > 0) {
+        this.rounds.set(round, {
+          outputs: infos,
+          rawOutput: null,
+          xmlSummary: {
+            tagContents: {},
+            documents: [],
+            singleOutputFile: null,
+            sourceLocation: null,
+          },
+        });
+      }
     }
   }
 
@@ -604,7 +584,7 @@ export class OutputHandler implements IOutputHandler {
           }
 
           try {
-            await openBuildDisplayIfTex(filePath, { preserveFocus: true });
+            await openBuildDisplayIfTex(info.location, { preserveFocus: true });
             this.openedOutputs.add(filePath);
           } catch (error) {
             this.logger.error(
