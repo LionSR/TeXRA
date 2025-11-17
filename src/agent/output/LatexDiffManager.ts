@@ -13,7 +13,8 @@ import {
   TaskRunFileService,
   flexibleFS,
   WorkspaceFS,
-  createSiblingLocation,
+  createWorkspaceLocation,
+  createExternalLocation,
 } from '@utils/files';
 // Type imports
 import type { FileLocation } from '@utils/files';
@@ -244,7 +245,7 @@ export class LatexDiffManager {
           }
           const cwd = workspaceDir ?? path.dirname(baseAbsolute);
 
-          // Compute FileLocations first - we'll need baseLocation for createSiblingLocation
+          // Compute FileLocations and extract directory info once
           const baseLocation = this.fileService.resolveRelativePath(baseFile, {
             preferWorkspace: true,
           });
@@ -262,14 +263,22 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Use createSiblingLocation - no expensive re-inference!
-            diffLocation = createSiblingLocation(
-              baseLocation,
-              result.diffFileName,
-            );
+            // Extract directory once, use for both diff and build
+            const baseDir = path.dirname(baseLocation.absolutePath);
 
-            // Get directory from location
-            const baseDir = path.dirname(diffLocation.absolutePath);
+            // Create diff location directly - no helper needed
+            if (baseLocation.kind === 'workspace') {
+              const baseRelDir = path.dirname(baseLocation.relativePath);
+              diffLocation = createWorkspaceLocation(
+                path.join(baseDir, result.diffFileName),
+                path.join(baseRelDir, result.diffFileName),
+              );
+            } else {
+              diffLocation = createExternalLocation(
+                path.join(baseDir, result.diffFileName),
+              );
+            }
+
             const buildDir = path.join(baseDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
@@ -370,14 +379,23 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Use createSiblingLocation - no expensive re-inference!
-            diffLocation = createSiblingLocation(
-              prevLocation ?? currLocation!,
-              result.diffFileName,
-            );
+            // Extract directory once, use for both diff and build
+            const refLocation = prevLocation ?? currLocation!;
+            const prevDir = path.dirname(refLocation.absolutePath);
 
-            // Get directory from location
-            const prevDir = path.dirname(diffLocation.absolutePath);
+            // Create diff location directly - no helper needed
+            if (refLocation.kind === 'workspace') {
+              const prevRelDir = path.dirname(refLocation.relativePath);
+              diffLocation = createWorkspaceLocation(
+                path.join(prevDir, result.diffFileName),
+                path.join(prevRelDir, result.diffFileName),
+              );
+            } else {
+              diffLocation = createExternalLocation(
+                path.join(prevDir, result.diffFileName),
+              );
+            }
+
             const buildDir = path.join(prevDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
