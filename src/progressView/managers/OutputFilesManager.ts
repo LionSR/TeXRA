@@ -195,11 +195,10 @@ export class OutputFilesManager extends PersistentMapManager<
     for (const [runKey, rounds] of runs.entries()) {
       for (const infos of rounds.values()) {
         if (
-          infos.some(
-            (info) =>
-              info.rawLocation?.runStorage?.storageRelativePath?.includes(
-                executionId,
-              ) || info.rawOutputPath?.includes(executionId),
+          infos.some((info) =>
+            info.location.runStorage?.storageRelativePath?.includes(
+              executionId,
+            ),
           )
         ) {
           return this.getRun(stream, runKey);
@@ -250,45 +249,36 @@ export class OutputFilesManager extends PersistentMapManager<
     return paths;
   }
 
+  /**
+   * Collect all paths from an output file info (absolute paths).
+   */
   private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
-    this.addPath(target, info.path);
-    this.addPath(target, info.original);
+    this.addPath(target, info.location.absolutePath);
+    this.addPath(target, info.lineage?.original?.absolutePath);
   }
 
+  /**
+   * Collect workspace paths from an output file info.
+   * Trust the location structure - no defensive checks needed.
+   */
   private collectWorkspacePaths(
     target: Set<string>,
     info: OutputFileInfo,
   ): void {
-    this.addPath(target, info.workspacePath ?? undefined);
-    this.addWorkspaceAbsolute(target, info.location.workspace?.absolutePath);
-    this.addPath(target, info.original ?? undefined);
-    this.addWorkspaceAbsolute(
-      target,
-      info.originalLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.baseLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.prevLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.rawLocation?.workspace?.absolutePath,
-    );
-
+    // Current file
     if (info.location.scope === 'workspace') {
       this.addWorkspaceAbsolute(target, info.location.absolutePath);
     }
 
-    if (info.rawLocation?.scope === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.rawLocation.absolutePath);
+    // Lineage files
+    if (info.lineage?.base?.scope === 'workspace') {
+      this.addWorkspaceAbsolute(target, info.lineage.base.absolutePath);
     }
-
-    if (this.isWorkspacePath(info.rawOutputPath)) {
-      this.addWorkspaceAbsolute(target, info.rawOutputPath);
+    if (info.lineage?.previous?.scope === 'workspace') {
+      this.addWorkspaceAbsolute(target, info.lineage.previous.absolutePath);
+    }
+    if (info.lineage?.original?.scope === 'workspace') {
+      this.addWorkspaceAbsolute(target, info.lineage.original.absolutePath);
     }
   }
 
