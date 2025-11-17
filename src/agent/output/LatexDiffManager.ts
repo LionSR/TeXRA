@@ -221,9 +221,7 @@ export class LatexDiffManager {
         for (const [baseFile, outputFile] of basePairs) {
           const location = mapping.locationByOutput.get(outputFile);
           const { actual, workspaceDir } = await this.getDiffPaths(location);
-          const baseAbsolute = this.fileService.resolveRelativePath(baseFile, {
-            preferWorkspace: true,
-          }).absolutePath;
+          const baseAbsolute = WorkspaceFS.fullPath(baseFile);
 
           if (!actual) {
             this.logger.warn(
@@ -247,11 +245,13 @@ export class LatexDiffManager {
           const cwd = workspaceDir ?? path.dirname(baseAbsolute);
 
           // Compute FileLocations and extract directory info once
-          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
-            preferWorkspace: true,
-          });
+          const baseLocation = createWorkspaceLocation(
+            WorkspaceFS.fullPath(baseFile),
+            baseFile,
+          );
           const revisedLocation =
-            location ?? this.fileService.resolveRelativePath(actual);
+            location ??
+            createWorkspaceLocation(WorkspaceFS.fullPath(actual), actual);
 
           const result = await this.latexdiffService.runDiffForRound(
             baseAbsolute,
