@@ -3,11 +3,15 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
+import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type {
   BaseReflectionAgent,
-  ReflectionRoundContext,
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
+import {
+  createReflectionRoundFlow,
+  type ReflectionRoundShared,
+} from './ReflectionRoundFlow';
 // Internal imports
 import {
   createAgentRunFlow,
@@ -84,15 +88,31 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
     try {
       prepRes.agent.setCurrentRound(prepRes.roundIndex);
-      const result = await prepRes.agent.runReflectionRound({
-        roundIndex: prepRes.roundIndex,
-        runState: prepRes.state.runState,
-        messages: prepRes.state.conversation,
-      } satisfies ReflectionRoundContext);
+
+      // Call ReflectionRoundFlow directly - no agent round-trip
+      const workspaceState = new AgentWorkspaceState();
+      const shared: ReflectionRoundShared<C> = {
+        agent: prepRes.agent,
+        runtime: {
+          roundIndex: prepRes.roundIndex,
+          runState: prepRes.runState,
+          messages: prepRes.messages,
+          workspaceState,
+        },
+      };
+
+      const flow = createReflectionRoundFlow<C>();
+      await prepRes.agent.withRoundStage(`r${prepRes.roundIndex}`, async () => {
+        await flow.run(shared);
+      });
+
+      if (!shared.runtime.result) {
+        throw new Error('Reflection round did not produce a result.');
+      }
 
       return {
         ...prepRes,
-        result,
+        result: shared.runtime.result,
       };
     } catch (error) {
       const contextualError =
@@ -131,12 +151,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    shared.agent.roundStates.push(result.roundState);
-    shared.agent.workspaceStates.push(result.workspaceState);
-    if (result.outputArtifacts) {
-      shared.agent.roundOutputArtifacts[result.outputArtifacts.round] =
-        result.outputArtifacts;
-    }
+    // Let agent record its own state - don't mutate agent internals
+    shared.agent.recordRoundResult(result);
+
+    // Update flow state with results
     shared.state.runState = result.runState;
     shared.state.conversation = [...result.messages];
     shared.state.continueRounds = result.shouldContinue;

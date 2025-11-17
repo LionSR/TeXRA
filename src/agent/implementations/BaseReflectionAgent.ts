@@ -69,12 +69,6 @@ export interface RoundOutputOptions {
   runGroupId?: string | null;
 }
 
-export interface ReflectionRoundContext {
-  roundIndex: number;
-  runState: AgentRunState;
-  messages: any[];
-}
-
 export interface ReflectionRoundResult {
   roundState: ConversationRoundState;
   runState: AgentRunState;
@@ -287,7 +281,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
    */
-  protected getOutputFile(currRound: number): string {
+  public getOutputFile(currRound: number): string {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
@@ -406,7 +400,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param outputPath - Filesystem path where model output for this round is stored.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
-  private async runRoundPipeline({
+  public async runRoundPipeline({
     roundIndex,
     roundState,
     runState,
@@ -503,7 +497,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareRoundContext(
+  public async prepareRoundContext(
     currRound: number,
     _runState: AgentRunState,
     messages: any[],
@@ -591,7 +585,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareAgentWorkspaceState(
+  public async prepareAgentWorkspaceState(
     currRound: number,
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
@@ -644,59 +638,17 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
   }
 
-  public async runReflectionRound({
-    roundIndex,
-    runState,
-    messages,
-  }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
-    this.logger.debug(`Processing round ${roundIndex}`);
-    const workspaceState = new AgentWorkspaceState();
-
-    return this.withRoundStage(`r${roundIndex}`, async () => {
-      const shared: ReflectionRoundShared = {
-        runtime: {
-          workspaceState,
-        },
-        hooks: {
-          prepareAgentWorkspaceState: () =>
-            this.prepareAgentWorkspaceState(roundIndex, workspaceState),
-          prepareRoundContext: () =>
-            this.prepareRoundContext(
-              roundIndex,
-              runState,
-              messages,
-              workspaceState,
-            ),
-          runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
-            this.runRoundPipeline({
-              roundIndex,
-              roundState: stateRound,
-              runState,
-              workspaceState,
-              preparedMessages,
-              prefill,
-              outputPath: this.outputFile[roundIndex],
-            }),
-          createSkipResult: (stateRound) => ({
-            roundState: stateRound,
-            runState,
-            messages,
-            shouldContinue: true,
-            workspaceState,
-            outputArtifacts: null,
-          }),
-        },
-      };
-
-      const flow = createReflectionRoundFlow();
-      await flow.run(shared);
-
-      if (!shared.runtime.result) {
-        throw new Error('Reflection round did not produce a result.');
-      }
-
-      return shared.runtime.result;
-    });
+  /**
+   * Records the result of a completed round.
+   * Called by ReflectionRunFlow after each round completes.
+   */
+  public recordRoundResult(result: ReflectionRoundResult): void {
+    this.roundStates.push(result.roundState);
+    this.workspaceStates.push(result.workspaceState);
+    if (result.outputArtifacts) {
+      this.roundOutputArtifacts[result.outputArtifacts.round] =
+        result.outputArtifacts;
+    }
   }
 
   /**

@@ -45,7 +45,7 @@ export class MergeAgent extends DirectAgent {
    * @returns Path to output file for merged content
    * @throws Error if editedFile is not specified
    */
-  protected getOutputFile(currRound: number): string {
+  public override getOutputFile(currRound: number): string {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 
