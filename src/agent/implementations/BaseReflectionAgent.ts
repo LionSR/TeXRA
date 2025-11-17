@@ -345,11 +345,21 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
+   * Template method to determine if XML validation should be performed.
+   * Override in subclasses to customize XML validation behavior.
+   * - DirectAgent: validates only if useScratchpad is true (default behavior)
+   * - CoTAgent: always validates
+   */
+  protected shouldValidateXml(): boolean {
+    return this.useScratchpad;
+  }
+
+  /**
    * Processes output files for current round.
-   * This method orchestrates the overall output processing flow with clear separation of concerns:
-   * - LaTeX diff operations via diffManager.handleLatexdiffofOutput (only when endTurn is true)
-   *
-   * The actual file processing is handled separately in processOutputFiles.
+   * This method orchestrates the overall output processing flow:
+   * - XML validation (if needed based on shouldValidateXml())
+   * - Output file processing via outputHandler.processOutputFiles
+   * - LaTeX diff operations via diffManager.handleLatexdiffofOutput
    *
    * @returns Array of processed output file paths
    */
@@ -361,28 +371,57 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   ): Promise<NamedOutputFile[]> {
     const { outputFile, endTurn, stage } = options;
     this.outputHandler.setActiveRun(options.runGroupId);
-    // If this is the end of a turn, handle latexdiff operations as a separate step
-    if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
-      const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
-      );
 
-      if (existingBase.some((e) => e)) {
-        // Pass the process group ID to maintain proper nesting in the log hierarchy
-        const mapping = this.outputHandler.getRoundMapping(currRound);
-        await this.outputHandler.diffManager.handleLatexdiffofOutput(
+    try {
+      this.outputHandler.ensureRound(currRound);
+
+      if (endTurn) {
+        this.logger.debug(`Processing output for round ${currRound}`);
+
+        // XML validation if needed (template method pattern)
+        if (this.shouldValidateXml()) {
+          await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+            outputFile,
+            this.agentSetting.documentTag,
+          );
+        }
+
+        await this.outputHandler.processOutputFiles(
+          outputFile,
           currRound,
-          mapping,
           stage,
         );
-      } else {
-        this.logger.debug(
-          `Skipping latexdiff for round ${currRound} - base files missing`,
-        );
+        this.logger.debug(`Output files processed for round ${currRound}`);
       }
-    }
 
-    return this.outputHandler.ensureRound(currRound);
+      // Handle latexdiff operations as a separate step
+      if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
+        const existingBase = await Promise.all(
+          this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
+        );
+
+        if (existingBase.some((e) => e)) {
+          // Pass the process group ID to maintain proper nesting in the log hierarchy
+          const mapping = this.outputHandler.getRoundMapping(currRound);
+          await this.outputHandler.diffManager.handleLatexdiffofOutput(
+            currRound,
+            mapping,
+            stage,
+          );
+        } else {
+          this.logger.debug(
+            `Skipping latexdiff for round ${currRound} - base files missing`,
+          );
+        }
+      }
+
+      return this.outputHandler.ensureRound(currRound);
+    } catch (error) {
+      this.logger.error(
+        `Error in handleOutput for round ${currRound}: ${error}`,
+      );
+      throw error;
+    }
   }
 
   /**
