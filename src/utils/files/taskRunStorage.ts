@@ -63,7 +63,7 @@ export type FileLocation =
   | RunStorageFileLocation
   | ExternalFileLocation;
 
-function createWorkspaceLocation(
+export function createWorkspaceLocation(
   absolutePath: string,
   relativePath: string,
 ): WorkspaceFileLocation {
@@ -74,7 +74,7 @@ function createWorkspaceLocation(
   };
 }
 
-function createRunStorageLocation(
+export function createRunStorageLocation(
   absolutePath: string,
   relativePath: string,
   executionId: string,
@@ -87,7 +87,9 @@ function createRunStorageLocation(
   };
 }
 
-function createExternalLocation(absolutePath: string): ExternalFileLocation {
+export function createExternalLocation(
+  absolutePath: string,
+): ExternalFileLocation {
   return {
     kind: 'external',
     absolutePath,
@@ -749,4 +751,41 @@ export function getComparablePath(location: FileLocation): string {
   return location.kind === 'external'
     ? location.absolutePath
     : location.relativePath;
+}
+
+/**
+ * Create a FileLocation for a file in the same directory as a reference file.
+ * Much faster than describePath since we already know the location kind and directory.
+ *
+ * @param reference - The reference FileLocation (provides directory and kind)
+ * @param newFileName - The name of the new file
+ * @returns A new FileLocation in the same directory as the reference
+ */
+export function createSiblingLocation(
+  reference: FileLocation,
+  newFileName: string,
+): FileLocation {
+  switch (reference.kind) {
+    case 'workspace': {
+      const parentDir = path.dirname(reference.absolutePath);
+      const parentRelative = path.dirname(reference.relativePath);
+      return createWorkspaceLocation(
+        path.join(parentDir, newFileName),
+        path.join(parentRelative, newFileName),
+      );
+    }
+    case 'runStorage': {
+      const parentDir = path.dirname(reference.absolutePath);
+      const parentRelative = path.dirname(reference.relativePath);
+      return createRunStorageLocation(
+        path.join(parentDir, newFileName),
+        path.join(parentRelative, newFileName),
+        reference.executionId,
+      );
+    }
+    case 'external': {
+      const parentDir = path.dirname(reference.absolutePath);
+      return createExternalLocation(path.join(parentDir, newFileName));
+    }
+  }
 }
