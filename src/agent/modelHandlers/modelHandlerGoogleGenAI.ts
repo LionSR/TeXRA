@@ -27,6 +27,7 @@ import {
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { FileLocation } from '@utils/files';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
@@ -872,17 +873,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     agentSetting: AgentSetting,
     messages: Content[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, Content[]]> {
     let endTurn = false;
     this.logger.debug(
-      `Initializing output and prefill for ${outputFile}. Prefill content: "${prefill.slice(0, 100)}..."`,
+      `Initializing output and prefill for ${outputLocation.absolutePath}. Prefill content: "${prefill.slice(0, 100)}..."`,
     );
 
-    if (!(await flexibleFS.existsAndNonTrivial(pathToLocation(outputFile)))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       this.logger.debug(
-        `Output file ${outputFile} does not exist or is empty.`,
+        `Output file ${outputLocation.absolutePath} does not exist or is empty.`,
       );
       workspaceState.assembly.updateAccumulatedOutput(prefill);
 
@@ -905,9 +906,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     this.logger.debug(
-      `Output file ${outputFile} exists and is non-trivial. Reading content.`,
+      `Output file ${outputLocation.absolutePath} exists and is non-trivial. Reading content.`,
     );
-    let fileContent = await flexibleFS.read(pathToLocation(outputFile));
+    let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -919,8 +920,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(pathToLocation(outputFile), fileContent);
-    this.logger.debug(`Cleaned and saved existing content to ${outputFile}.`);
+    await flexibleFS.write(outputLocation, fileContent);
+    this.logger.debug(
+      `Cleaned and saved existing content to ${outputLocation.absolutePath}.`,
+    );
     messages.push({
       role: 'model',
       parts: [createPartFromText(fileContent)],
@@ -950,7 +953,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       agentSetting,
       agentConfig,
     );
-    endTurn = false;
     return [endTurn, messages];
   }
 
