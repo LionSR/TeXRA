@@ -246,17 +246,13 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Create FileLocation from the start
-            const diffPathStr = path.join(
-              path.dirname(baseAbsolute),
-              result.diffFileName,
-            );
+            // Create FileLocation from the start - compute directory once
+            const baseDir = path.dirname(baseAbsolute);
+            const diffPathStr = path.join(baseDir, result.diffFileName);
             diffLocation = this.fileService.describePath(diffPathStr);
 
-            const buildDir = path.join(
-              path.dirname(diffLocation.absolutePath),
-              'build',
-            );
+            // Reuse baseDir instead of re-extracting from diffLocation
+            const buildDir = path.join(baseDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
               this.channel,
@@ -364,17 +360,13 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Create FileLocation from the start
-            const diffPathStr = path.join(
-              path.dirname(prevPaths.actual),
-              result.diffFileName,
-            );
+            // Create FileLocation from the start - compute directory once
+            const prevDir = path.dirname(prevPaths.actual);
+            const diffPathStr = path.join(prevDir, result.diffFileName);
             diffLocation = this.fileService.describePath(diffPathStr);
 
-            const buildDir = path.join(
-              path.dirname(diffLocation.absolutePath),
-              'build',
-            );
+            // Reuse prevDir instead of re-extracting from diffLocation
+            const buildDir = path.join(prevDir, 'build');
             await this.dependencies.compileLatex2Pdf(
               diffLocation.absolutePath,
               this.channel,
