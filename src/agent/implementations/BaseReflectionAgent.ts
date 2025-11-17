@@ -52,6 +52,7 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 // Local imports - configuration
 import { getConfig } from '@utils/config';
 import { WorkspaceFS, TaskRunFileService } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -61,7 +62,7 @@ import { LatexMediaManager } from '@latex';
  * @property endTurn - A flag indicating whether the current turn should be ended after processing.
  */
 export interface RoundOutputOptions {
-  outputFile: string;
+  outputFile: FileLocation;
   endTurn: boolean;
   stage?: AgentLogStage;
   runGroupId?: string | null;
@@ -107,7 +108,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /** File paths for each round's raw model output. */
   protected outputFile: string[];
   protected outputFiles: { [key: number]: string[] };
-  protected baseFiles: string[];
+  protected baseFiles: FileLocation[];
   protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
@@ -333,7 +334,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logger.debug(`Completed round ${currRound}`);
 
       await this.outputHandler.finalizeRound(
-        this.fileService.resolveRelativePath(outputFile),
+        outputFile,
         currRound,
         {
           endTurn,
@@ -450,7 +451,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store.round,
         store.run,
         {
-          outputFile: outputPath,
+          outputFile: this.fileService.resolveRelativePath(outputPath),
           endTurn: cycleResult.endTurn,
           runGroupId,
         },
@@ -474,7 +475,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.round,
       store.run,
       {
-        outputFile: outputPath,
+        outputFile: this.fileService.resolveRelativePath(outputPath),
         endTurn,
         runGroupId,
       },
