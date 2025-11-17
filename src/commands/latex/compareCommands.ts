@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, WorkspaceFS } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
@@ -41,9 +41,15 @@ async function handleCompare(
       return;
     }
 
-    // Create URIs for both files
-    const baseUri = vscode.Uri.file(flexibleFS.toAbsolutePath(fileToUse));
-    const editedUri = vscode.Uri.file(flexibleFS.toAbsolutePath(editedFile));
+    // Create URIs for both files - handle both absolute and relative paths
+    const baseAbsolute = path.isAbsolute(fileToUse)
+      ? fileToUse
+      : WorkspaceFS.fullPath(fileToUse);
+    const editedAbsolute = path.isAbsolute(editedFile)
+      ? editedFile
+      : WorkspaceFS.fullPath(editedFile);
+    const baseUri = vscode.Uri.file(baseAbsolute);
+    const editedUri = vscode.Uri.file(editedAbsolute);
 
     // Verify both files exist
     if (!(await flexibleFS.exists(fileToUse))) {
@@ -159,8 +165,7 @@ async function handleAcceptEdited(
     }
 
     // Write content to base file using workspace utilities
-    const targetPath = flexibleFS.toAbsolutePath(fileToUse);
-    await flexibleFS.write(targetPath, editedContent);
+    await flexibleFS.write(fileToUse, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,
