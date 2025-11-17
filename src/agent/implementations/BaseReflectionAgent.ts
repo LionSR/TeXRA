@@ -5,7 +5,7 @@ import {
   OutputHandler,
   IOutputHandler,
   getOutputFileName,
-  type RoundOutputArtifacts,
+  type RoundOutput,
   type OutputFileInfo,
 } from '@agent/output';
 
@@ -79,7 +79,7 @@ export interface ReflectionRoundResult {
   messages: any[];
   shouldContinue: boolean;
   workspaceState: AgentWorkspaceState;
-  outputArtifacts: RoundOutputArtifacts | null;
+  output: RoundOutput | null;
 }
 
 export interface AgentRuntimeXmlExports {
@@ -117,7 +117,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected promptBuilder?: PromptBuilder;
   public roundStates: ConversationRoundState[] = [];
   public workspaceStates: AgentWorkspaceState[] = [];
-  public roundOutputArtifacts: RoundOutputArtifacts[] = [];
+  public roundOutputs: RoundOutput[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
     documents: [],
@@ -194,7 +194,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
-      this.roundOutputArtifacts = [];
+      this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
       this.outputHandler.hydrateFromArtifacts(
         params.runId ?? null,
@@ -209,8 +209,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       try {
         for (const round of sortedRounds) {
-          const artifacts = await this.outputHandler.getRoundArtifacts(round);
-          this.roundOutputArtifacts[round] = artifacts;
+          const output = await this.outputHandler.getRoundArtifacts(round);
+          this.roundOutputs[round] = output;
         }
 
         hydratedCount = sortedRounds.length;
@@ -309,7 +309,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: ConversationRoundState,
     runState: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<RoundOutputArtifacts> {
+  ): Promise<RoundOutput> {
     const runGroupId =
       options.runGroupId ??
       this.runStage?.id ??
@@ -337,9 +337,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         stage: scope,
       });
 
-      const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
-      this.roundOutputArtifacts[currRound] = artifacts;
-      return artifacts;
+      const output = await this.outputHandler.getRoundArtifacts(currRound);
+      this.roundOutputs[currRound] = output;
+      return output;
     };
 
     if (stage) {
@@ -458,7 +458,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
         workspaceState: store.workspace,
-        outputArtifacts: artifacts,
+        output: artifacts,
       };
     }
 
@@ -482,7 +482,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       messages: updatedMessages,
       shouldContinue: endTurn,
       workspaceState,
-      outputArtifacts: artifacts,
+      output: artifacts,
     };
   }
 
@@ -681,7 +681,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             messages,
             shouldContinue: true,
             workspaceState,
-            outputArtifacts: null,
+            output: null,
           }),
         },
       };
@@ -706,7 +706,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const previousHydratedRounds = this.hydratedRoundCount;
     const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {
-      this.roundOutputArtifacts = [];
+      this.roundOutputs = [];
     }
     this.runtimeXmlExports = {
       tagContents: {},
@@ -750,10 +750,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      const currentArtifacts = this.roundOutputArtifacts.filter(Boolean).length;
+      const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
-        currentArtifacts,
+        currentOutputs,
       );
     }
 
@@ -767,20 +767,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
     };
 
-    if (this.roundOutputArtifacts.length === 0) {
+    if (this.roundOutputs.length === 0) {
       return summary;
     }
 
-    const lastWithSummary = [...this.roundOutputArtifacts]
-      .reverse()
-      .find((artifact) => {
-        const xml = artifact.xmlSummary;
-        return (
-          Object.keys(xml.tagContents).length > 0 ||
-          xml.documents.length > 0 ||
-          xml.singleOutputFile !== null
-        );
-      });
+    const lastWithSummary = [...this.roundOutputs].reverse().find((output) => {
+      const xml = output.xmlSummary;
+      return (
+        Object.keys(xml.tagContents).length > 0 ||
+        xml.documents.length > 0 ||
+        xml.singleOutputFile !== null
+      );
+    });
 
     if (!lastWithSummary) {
       return summary;

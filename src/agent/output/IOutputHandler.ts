@@ -8,7 +8,7 @@ import {
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
-  RoundOutputArtifacts,
+  RoundOutput,
 } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
@@ -72,7 +72,7 @@ export interface IOutputHandler {
     rounds: Map<number, OutputFileInfo[]>,
   ): void;
 
-  getRoundArtifacts(round: number): Promise<RoundOutputArtifacts>;
+  getRoundArtifacts(round: number): Promise<RoundOutput>;
   getRoundXmlSummary(round: number): OutputXmlSummary;
   setActiveRun(runId?: string | null): void;
 }

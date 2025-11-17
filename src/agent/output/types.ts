@@ -130,13 +130,13 @@ export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 // ============================================================================
 
 /**
- * Complete artifacts from a conversation round.
+ * Output from processing a conversation round.
  * - round: Round number
  * - rawOutput: The XML file the LLM wrote (before extraction)
  * - outputs: Extracted output files with metadata
- * - xmlSummary: Parsed XML summary (tags, documents, etc.)
+ * - xmlSummary: Parsed XML metadata (TODO: Can this be simplified/removed?)
  */
-export const RoundOutputArtifactsSchema = z
+export const RoundOutputSchema = z
   .object({
     round: z.number(),
     rawOutput: FileLocationSchema.nullable(),
@@ -146,7 +146,7 @@ export const RoundOutputArtifactsSchema = z
   .strict();
 
 // Derive type from schema (Zod v4)
-export type RoundOutputArtifacts = z.infer<typeof RoundOutputArtifactsSchema>;
+export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
 // ============================================================================
 // INTERNAL MAPPING SCHEMAS (used by OutputHandler)

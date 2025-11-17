@@ -9,16 +9,18 @@
 **What it actually is**: Results from processing a conversation round
 
 **Current Structure**:
+
 ```typescript
 interface RoundOutputArtifacts {
   round: number;
-  rawOutput: FileLocation | null;  // The XML file LLM wrote
-  outputs: OutputFileInfo[];        // Extracted/processed files
-  xmlSummary: OutputXmlSummary;     // ??? What is this?
+  rawOutput: FileLocation | null; // The XML file LLM wrote
+  outputs: OutputFileInfo[]; // Extracted/processed files
+  xmlSummary: OutputXmlSummary; // ??? What is this?
 }
 ```
 
 **Better Name Options**:
+
 - `RoundOutput` - Simple, clear
 - `RoundResult` - What came out of processing
 - `ProcessedRound` - Emphasizes it's been processed
@@ -30,22 +32,25 @@ interface RoundOutputArtifacts {
 ### 2. **Mysterious `xmlSummary`** ⚠️ INVESTIGATE
 
 **What it contains**:
+
 ```typescript
 interface OutputXmlSummary {
-  tagContents: Record<string, string | string[]>;  // XML tag contents
-  documents: string[];                             // Document strings  
-  singleOutputFile: string | null;                 // Single output path
-  sourceLocation: FileLocation | null;             // Where XML came from
+  tagContents: Record<string, string | string[]>; // XML tag contents
+  documents: string[]; // Document strings
+  singleOutputFile: string | null; // Single output path
+  sourceLocation: FileLocation | null; // Where XML came from
 }
 ```
 
 **Questions**:
+
 1. **Is this actually used anywhere important?**
 2. **Why do we need to cache XML tag contents?**
 3. **Shouldn't the `outputs` array be enough?**
 4. **Is this legacy code that can be removed?**
 
 **Usage Found**:
+
 - Stored in `OutputHandler.roundXmlSummaries`
 - Returned in `getRoundArtifacts()`
 - Captured in `captureXmlSummary()`
@@ -58,6 +63,7 @@ interface OutputXmlSummary {
 ### 3. **Unnecessary `getWorkspaceDir()`** ❌ REMOVE
 
 **Current Code**:
+
 ```typescript
 function getWorkspaceDir(info: OutputFileInfo): string | undefined {
   const workspacePath =
@@ -67,24 +73,26 @@ function getWorkspaceDir(info: OutputFileInfo): string | undefined {
 }
 
 // Used for latexdiff cwd
-cwd: getWorkspaceDir(info) ?? path.dirname(basePath)
+cwd: getWorkspaceDir(info) ?? path.dirname(basePath);
 ```
 
 **Problems**:
+
 1. **FileLocation already has all workspace info!**
 2. **Computing `path.dirname()` - but why?**
 3. **The workspace path IS the file path, dirname gets parent dir**
 4. **This is defensive - shouldn't need to compute**
 
 **What we should do instead**:
+
 ```typescript
 // The cwd should come directly from FileLocation
-cwd: info.location.workspace?.absolutePath 
+cwd: info.location.workspace?.absolutePath
   ? path.dirname(info.location.workspace.absolutePath)
-  : path.dirname(info.location.absolutePath)
+  : path.dirname(info.location.absolutePath);
 
 // OR even better - FileLocation should have a .directory property!
-cwd: info.location.directory
+cwd: info.location.directory;
 ```
 
 **Root Issue**: We're computing paths instead of trusting FileLocation
@@ -96,6 +104,7 @@ cwd: info.location.directory
 **Found Two Defensive Methods**:
 
 #### A. `resolveActualPath()` - Resolving Symlinks
+
 ```typescript
 private async resolveActualPath(target: string): Promise<string> {
   try {
@@ -107,11 +116,13 @@ private async resolveActualPath(target: string): Promise<string> {
 ```
 
 **Why is this defensive?**
+
 - FileLocation should already be the correct absolute path
 - If we need symlink resolution, it should happen in FileService
 - Why are we resolving symlinks at usage time?
 
 #### B. `resolveDiffTarget()` - Multi-Way Fallback
+
 ```typescript
 private async resolveDiffTarget(
   relativePath: string,
@@ -154,17 +165,19 @@ private async resolveDiffTarget(
 ```
 
 **Why is this EXTREMELY defensive?**
+
 1. **Checking if files exist** - FileLocation should be correct!
 2. **Fallback to workspace reference** - Why?
 3. **Re-resolving paths** - Already done by FileService!
 4. **Multiple candidates** - Trust the data!
 
 **What we should do instead**:
+
 ```typescript
 // Just use the location directly!
 const filePath = location.absolutePath;
-const workspaceDir = location.workspace?.absolutePath 
-  ? path.dirname(location.workspace.absolutePath) 
+const workspaceDir = location.workspace?.absolutePath
+  ? path.dirname(location.workspace.absolutePath)
   : undefined;
 
 // That's it! No defensive checks, no fallbacks.
@@ -188,21 +201,25 @@ Despite our refactoring, we still have:
 ## 📊 Remaining Blockers to Single Source of Truth
 
 ### Blocker 1: Path Computation
+
 - **getWorkspaceDir()** - Computing dirname instead of using FileLocation
 - **Multiple path.dirname() calls** - Recomputing paths
 - **Should**: Add `.directory` property to FileLocation if needed
 
 ### Blocker 2: Defensive Resolution
+
 - **resolveActualPath()** - Resolving symlinks at usage time
 - **resolveDiffTarget()** - Multi-way fallback with existence checks
 - **Should**: Trust FileLocation.absolutePath
 
 ### Blocker 3: Unclear Metadata
+
 - **xmlSummary** - Cached XML parsing results, unclear if needed
 - **RoundOutputArtifacts** - Confusing name
 - **Should**: Investigate usage, rename or remove
 
 ### Blocker 4: Path Manipulations
+
 - **path.dirname() all over the place** - Computing paths dynamically
 - **path.join() for resolution** - Re-resolving paths
 - **Should**: FileLocation should have all variants pre-computed
@@ -212,27 +229,32 @@ Despite our refactoring, we still have:
 ## 🎯 Recommended Surgery
 
 ### Phase 1: Investigate xmlSummary
+
 - **Search**: Find all actual usage of `xmlSummary` fields
 - **Decide**: Is it needed? If not, remove it
 - **Impact**: Could simplify RoundOutput significantly
 
 ### Phase 2: Remove Defensive Methods
+
 - **Delete**: `resolveActualPath()`
-- **Delete**: `resolveDiffTarget()`  
+- **Delete**: `resolveDiffTarget()`
 - **Delete**: `getWorkspaceDir()`
 - **Replace**: With direct FileLocation property access
 
 ### Phase 3: Enhance FileLocation (Optional)
+
 If we keep computing `path.dirname()` everywhere, consider:
+
 ```typescript
 interface FileLocation {
   absolutePath: string;
-  directory: string;  // NEW: Pre-computed directory
+  directory: string; // NEW: Pre-computed directory
   // ... rest
 }
 ```
 
 ### Phase 4: Rename Types
+
 - **RoundOutputArtifacts** → **RoundOutput**
 - Make the naming clear and obvious
 
