@@ -128,19 +128,8 @@ export class OutputHandler implements IOutputHandler {
     this.runPreparation = null;
   }
 
-  private collectRunSnapshotFiles(): string[] {
-    const unique = new Set<string>();
-    for (const candidate of this.baseFiles) {
-      if (!candidate) {
-        continue;
-      }
-      const trimmed = candidate.trim();
-      if (trimmed.length === 0) {
-        continue;
-      }
-      unique.add(trimmed);
-    }
-    return Array.from(unique);
+  private collectRunSnapshotFiles(): FileLocation[] {
+    return this.baseFiles.filter((candidate) => candidate !== null);
   }
 
   private collectRunSupportFiles(): string[] {
@@ -421,13 +410,11 @@ export class OutputHandler implements IOutputHandler {
 
     const prevData = currRound > 0 ? this.rounds.get(currRound - 1) : undefined;
     const prevOutputs = prevData?.outputs ?? [];
-    const prevRelatives = prevOutputs.map((entry) =>
-      getComparablePath(entry.location),
-    );
+    const prevLocations = prevOutputs.map((entry) => entry.location);
 
     const prevToOutput =
       currRound > 0
-        ? createFileMapping(prevRelatives, currentRelatives, 'basename', true)
+        ? createFileMapping(prevLocations, currentRelatives, 'basename', true)
         : new Map<string, string>();
 
     const originByOutput = new Map(

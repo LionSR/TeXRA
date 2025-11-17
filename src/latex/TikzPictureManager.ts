@@ -171,7 +171,7 @@ export class TikzPictureManager {
             suffix,
             channel,
           );
-          await compileLatex2Pdf(texFile, channel);
+          await compileLatex2Pdf(pathToLocation(texFile), channel);
 
           const pdfFile = texFile.replace(/\.tex$/, '.pdf');
           if (await flexibleFS.exists(pathToLocation(pdfFile))) {

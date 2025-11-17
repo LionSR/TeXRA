@@ -10,6 +10,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local file imports
 import { flexibleFS } from './flexibleFS';
 import { pathToLocation } from './taskRunStorage';
+import type { FileLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
@@ -21,7 +22,7 @@ import { pathToLocation } from './taskRunStorage';
  * @returns Map of source files to their best matching target files
  */
 export function createFileMapping(
-  sourceFiles: string[],
+  sourceFiles: FileLocation[],
   targetFiles: string[],
   matchStrategy: 'basename' | 'contains' = 'basename',
   roundAware: boolean = false,
@@ -43,11 +44,15 @@ export function createFileMapping(
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
-      if (!sourceFile || typeof sourceFile !== 'string') {
+      if (!sourceFile) {
         continue;
       }
 
-      const sourceBaseName = path.basename(sourceFile);
+      const sourcePath =
+        sourceFile.kind === 'workspace'
+          ? sourceFile.relativePath
+          : sourceFile.absolutePath;
+      const sourceBaseName = path.basename(sourcePath);
 
       const sourceName = path.parse(sourceBaseName).name;
       const targetName = path.parse(targetBaseName).name;
@@ -72,7 +77,7 @@ export function createFileMapping(
 
       if (isMatch && matchScore > bestMatchScore) {
         bestMatchScore = matchScore;
-        bestMatch = sourceFile;
+        bestMatch = sourcePath;
       }
     }
 
@@ -175,6 +180,10 @@ export async function replaceInputCommands(
     logger?.debug('No files to process for input command replacement');
     return;
   }
+
+  const baseFilePaths = baseFiles.map((f) =>
+    f.kind === 'workspace' ? f.relativePath : f.absolutePath,
+  );
 
   const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
 
