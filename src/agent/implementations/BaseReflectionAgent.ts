@@ -97,7 +97,7 @@ interface RoundPipelineContext {
   workspaceState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
-  outputPath: string;
+  outputLocation: FileLocation;
 }
 
 /**
@@ -177,7 +177,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Set output files for all rounds
     for (let i = 0; i < numRounds; i++) {
-      this.outputFile[i] = this.getOutputFile(i);
+      this.outputFile[i] = this.getOutputFileLocation(i);
     }
 
     // Initialize logging
@@ -295,7 +295,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
    */
-  protected getOutputFile(currRound: number): FileLocation {
+  protected getOutputFileLocation(currRound: number): FileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
@@ -414,7 +414,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param workspaceState - Current tool invocation state passed between rounds.
    * @param preparedMessages - Messages prepared for the model before execution.
    * @param prefill - Initial text inserted into the model response buffer.
-   * @param outputPath - Filesystem path where model output for this round is stored.
+   * @param outputLocation - File location where model output for this round is stored.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
   private async runRoundPipeline({
@@ -424,7 +424,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     workspaceState,
     preparedMessages,
     prefill,
-    outputPath,
+    outputLocation,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
@@ -432,7 +432,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.agentSetting,
         preparedMessages,
         workspaceState,
-        outputPath,
+        outputLocation,
         prefill,
       );
 
@@ -450,7 +450,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
-        outputFile: outputPath,
+        outputLocation: outputLocation,
         store,
       });
 
@@ -459,10 +459,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store.round,
         store.run,
         {
-          outputFile: createWorkspaceLocation(
-            WorkspaceFS.fullPath(outputPath),
-            outputPath,
-          ),
+          outputFile: outputLocation,
           endTurn: cycleResult.endTurn,
           runGroupId,
         },
@@ -486,10 +483,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.round,
       store.run,
       {
-        outputFile: createWorkspaceLocation(
-          WorkspaceFS.fullPath(outputPath),
-          outputPath,
-        ),
+        outputFile: outputLocation,
         endTurn,
         runGroupId,
       },
@@ -692,7 +686,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               workspaceState,
               preparedMessages,
               prefill,
-              outputPath: this.outputFile[roundIndex].absolutePath,
+              outputLocation: this.outputFile[roundIndex],
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,

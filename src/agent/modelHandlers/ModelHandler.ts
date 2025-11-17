@@ -36,6 +36,7 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
+import type { FileLocation } from '@utils/files';
 import type { IModelHandler } from './types/IModelHandler';
 
 // Default continuation limits
@@ -516,7 +517,7 @@ export abstract class ModelHandler<
     agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]>;
 
