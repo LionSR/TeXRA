@@ -354,7 +354,10 @@ export class OutputHandler implements IOutputHandler {
 
     for (const output of roundOutputs) {
       const location = output.location;
-      const relativePath = location.relativePath ?? location.absolutePath;
+      const relativePath =
+        location.kind === 'workspace' || location.kind === 'runStorage'
+          ? location.relativePath
+          : location.absolutePath;
 
       const baseFile = baseByOutput.get(relativePath) ?? null;
       const prevFile = prevByOutput.get(relativePath) ?? null;
@@ -396,9 +399,12 @@ export class OutputHandler implements IOutputHandler {
     }
 
     const currentOutputs = this.outputMappings[currRound] || [];
-    const currentRelatives = currentOutputs.map(
-      (entry) => entry.location.relativePath ?? entry.location.absolutePath,
-    );
+    const currentRelatives = currentOutputs.map((entry) => {
+      const loc = entry.location;
+      return loc.kind === 'workspace' || loc.kind === 'runStorage'
+        ? loc.relativePath
+        : loc.absolutePath;
+    });
 
     const baseToOutput = createFileMapping(
       this.baseFiles,
@@ -408,9 +414,12 @@ export class OutputHandler implements IOutputHandler {
 
     const prevOutputs =
       currRound > 0 ? this.outputMappings[currRound - 1] || [] : [];
-    const prevRelatives = prevOutputs.map(
-      (entry) => entry.location.relativePath ?? entry.location.absolutePath,
-    );
+    const prevRelatives = prevOutputs.map((entry) => {
+      const loc = entry.location;
+      return loc.kind === 'workspace' || loc.kind === 'runStorage'
+        ? loc.relativePath
+        : loc.absolutePath;
+    });
 
     const prevToOutput =
       currRound > 0
@@ -418,10 +427,14 @@ export class OutputHandler implements IOutputHandler {
         : new Map<string, string>();
 
     const originByOutput = new Map(
-      currentOutputs.map((entry) => [
-        entry.location.relativePath ?? entry.location.absolutePath,
-        entry.source,
-      ]),
+      currentOutputs.map((entry) => {
+        const loc = entry.location;
+        const key =
+          loc.kind === 'workspace' || loc.kind === 'runStorage'
+            ? loc.relativePath
+            : loc.absolutePath;
+        return [key, entry.source];
+      }),
     );
 
     const locationByOutput = new Map<string, FileLocation>();
@@ -430,7 +443,11 @@ export class OutputHandler implements IOutputHandler {
       entry: OutputFileInfo,
       { skipIfExists = false }: { skipIfExists?: boolean } = {},
     ) => {
-      const key = entry.location.relativePath ?? entry.location.absolutePath;
+      const loc = entry.location;
+      const key =
+        loc.kind === 'workspace' || loc.kind === 'runStorage'
+          ? loc.relativePath
+          : loc.absolutePath;
       if (skipIfExists && locationByOutput.has(key)) {
         return;
       }

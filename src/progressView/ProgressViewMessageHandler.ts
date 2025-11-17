@@ -425,14 +425,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         // Fallback: find any output directory
         for (const infos of runOutputs.values()) {
           for (const info of infos) {
-            const runStoragePath = info.location.runStorage?.absolutePath;
-            if (runStoragePath) {
-              directoryToReveal = path.dirname(runStoragePath);
-              break;
-            }
-            const workspacePath = info.location.workspace?.absolutePath;
-            if (workspacePath) {
-              directoryToReveal = path.dirname(workspacePath);
+            if (
+              info.location.kind === 'runStorage' ||
+              info.location.kind === 'workspace'
+            ) {
+              directoryToReveal = path.dirname(info.location.absolutePath);
               break;
             }
           }
