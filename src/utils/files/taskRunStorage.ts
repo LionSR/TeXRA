@@ -86,11 +86,12 @@ function createFileLocation(params: {
  * @param id - The execution ID to validate
  * @returns True if the ID is valid, false otherwise
  */
-export function isValidExecutionId(
-  id: ExecutionId | undefined,
-): id is ExecutionId {
-  if (!id) return false;
-  return /^[A-Za-z0-9._-]+$/.test(id);
+export function normalizeExecutionId(
+  id: ExecutionId | undefined | null,
+): ExecutionId | undefined {
+  if (!id) return undefined;
+  const normalized = id.trim().replace(/[^A-Za-z0-9_-]/g, '');
+  return normalized || undefined;
 }
 
 /**
@@ -100,22 +101,24 @@ export function isValidExecutionId(
  * @throws Error if the execution ID is invalid
  */
 export function getRunDir(id: ExecutionId): string {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
+  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, safeId));
 }
 
 export function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
 
   const relative = workspaceRelative ? path.normalize(workspaceRelative) : '';
-  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
+  const storageRelative = path.join(TASK_RUNS_DIR, safeId, relative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
     storageRelative,
@@ -268,29 +271,23 @@ export class TaskRunFileService {
       'texra.agentOutputs.storageMode',
       'workspace',
     );
-    const normalizedId = executionId ?? undefined;
-    const validExecutionId =
-      normalizedId && isValidExecutionId(normalizedId)
-        ? normalizedId
-        : undefined;
+    const normalizedId = normalizeExecutionId(executionId ?? undefined);
     const shouldUseRunStorage =
-      storageMode === 'taskRunStorage' && Boolean(validExecutionId);
+      storageMode === 'taskRunStorage' && Boolean(normalizedId);
 
     const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
       ? 'taskRunStorage'
       : 'workspace';
     const nextRunDirectory =
-      shouldUseRunStorage && validExecutionId
-        ? getRunDir(validExecutionId)
-        : null;
+      shouldUseRunStorage && normalizedId ? getRunDir(normalizedId) : null;
 
     const contextChanged =
       this.metadata.mode !== nextMode ||
-      this.metadata.executionId !== validExecutionId ||
+      this.metadata.executionId !== normalizedId ||
       this.metadata.runDirectory !== nextRunDirectory;
 
     this.metadata.mode = nextMode;
-    this.metadata.executionId = validExecutionId;
+    this.metadata.executionId = normalizedId;
     this.metadata.runDirectory = nextRunDirectory;
     this.useRunStorage = shouldUseRunStorage;
 
@@ -827,9 +824,10 @@ export class TaskRunFileService {
  * @throws Error if the execution ID is invalid
  */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
   await StorageFS.ensureDir(TASK_RUNS_DIR);
-  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, id));
+  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, safeId));
 }

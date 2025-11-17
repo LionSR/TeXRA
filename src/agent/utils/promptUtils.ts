@@ -14,7 +14,7 @@ import {
   StorageFS,
   TASK_RUNS_DIR,
   WorkspaceFS,
-  isValidExecutionId,
+  normalizeExecutionId,
 } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
@@ -153,8 +153,9 @@ export async function writePromptToXml(
     const agentName = getAgentFirstNameChunk(agent);
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
 
-    if (isValidExecutionId(executionId)) {
-      const runDir = path.join(TASK_RUNS_DIR, executionId);
+    const normalizedExecutionId = normalizeExecutionId(executionId);
+    if (normalizedExecutionId) {
+      const runDir = path.join(TASK_RUNS_DIR, normalizedExecutionId);
       const relativeOutputFile = path.join(
         runDir,
         `${name}_${agentName}_input.xml`,
