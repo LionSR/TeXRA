@@ -106,8 +106,8 @@ interface RoundPipelineContext {
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /** File paths for each round's raw model output. */
-  protected outputFile: string[];
-  protected outputFiles: { [key: number]: string[] };
+  protected outputFile: FileLocation[];
+  protected outputFiles: { [key: number]: FileLocation[] };
   protected baseFiles: FileLocation[];
   protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
@@ -152,7 +152,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Initialize fileService first so we can use it below
     this.fileService = new TaskRunFileService(context.executionId);
 
-    this.outputFile = new Array(numRounds);
+    this.outputFile = new Array<FileLocation>(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
       this.outputFiles[i] = [];
@@ -289,13 +289,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
    */
-  protected getOutputFile(currRound: number): string {
+  protected getOutputFile(currRound: number): FileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;
 
-    return getOutputFileName(
+    const fileName = getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
@@ -303,6 +303,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
+    return this.fileService.resolveRelativePath(fileName);
   }
 
   /**
@@ -679,7 +680,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               workspaceState,
               preparedMessages,
               prefill,
-              outputPath: this.outputFile[roundIndex],
+              outputPath: this.outputFile[roundIndex].absolutePath,
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,
