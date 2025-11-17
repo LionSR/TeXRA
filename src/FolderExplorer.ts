@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Internal imports
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { agentDirectories } from '@frontend/agents';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 

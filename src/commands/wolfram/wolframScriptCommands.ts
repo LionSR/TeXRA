@@ -3,10 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import {
-  showLoggedMessage,
-  showLoggedMessageWithDocs,
-} from '@common/errors/errorHandlingUtils';
+import { showLoggedMessage, showLoggedMessageWithDocs } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
   executeWolframCode,
