@@ -13,7 +13,7 @@ export function extractAgentName(
   parts: string[],
   underscoreCount: number,
 ): string | null {
-  if (underscoreCount === 3) {
+  if (underscoreCount === 3 && parts.length >= 2) {
     // Standard format
     return parts[1];
   }
@@ -40,7 +40,7 @@ export function parseFilenameParts(
   editedBase: string,
 ): [string, string, number, string] {
   const parts = editedBase.split('_');
-  const underscoreCount = editedBase.split('_').length - 1;
+  const underscoreCount = parts.length - 1;
   const base = parts[0];
 
   // Extract agent name
