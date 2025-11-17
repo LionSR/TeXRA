@@ -23,11 +23,11 @@ const createLocation = (file: string) => ({
   runStorage: null,
 });
 
-const createNamedOutput = (file: string) => ({
+const createOutputFileInfo = (file: string) => ({
   source: file,
-  path: file,
-  relativePath: file,
   location: createLocation(file),
+  lineage: null,
+  diff: null,
 });
 
 class MockOutputHandler extends OutputHandler {
