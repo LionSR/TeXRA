@@ -38,11 +38,7 @@ export class DirectAgent extends BaseReflectionAgent {
           );
         }
 
-        await this.outputHandler.processOutputFiles(
-          outputFile.absolutePath,
-          currRound,
-          stage,
-        );
+        await this.outputHandler.processOutputFiles(outputFile, currRound, stage);
         this.logger.debug(`Output files processed for round ${currRound}`);
       }
 
