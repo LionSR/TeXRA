@@ -295,9 +295,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(
-    context: ToolUseCycleContext<C>,
-  ): Promise<
+  async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<{
       response: unknown;
       responseTime?: number;
@@ -392,9 +390,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(
-    context: ToolUseCycleContext<C>,
-  ): Promise<
+  async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<{
       toolInfo?: string;
       stopReason: ProviderStopReason;
@@ -518,9 +514,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(
-    context: ToolUseCycleContext<C>,
-  ): Promise<
+  async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<
       | {
           raw: RawToolCallPayload;
