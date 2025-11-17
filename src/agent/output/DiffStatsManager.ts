@@ -5,9 +5,11 @@ import { diff_match_patch } from 'diff-match-patch';
 import type { DiffStats } from '@agent/types/DiffTypes';
 
 // Local imports
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, TaskRunFileService } from '@utils/files';
 
 export class DiffStatsManager {
+  constructor(private fileService: TaskRunFileService) {}
+
   private countLines(text: string): number {
     if (text.length === 0) return 0;
     return text.endsWith('\n')
@@ -20,15 +22,18 @@ export class DiffStatsManager {
     outputFile: string,
   ): Promise<DiffStats> {
     try {
+      const outputLocation = this.fileService.describePath(outputFile);
+
       if (!baseFile) {
-        const outContent = await flexibleFS.read(outputFile);
+        const outContent = await flexibleFS.read(outputLocation);
         const added = this.countLines(outContent);
         return { added };
       }
 
+      const baseLocation = this.fileService.describePath(baseFile);
       const [baseContent, outContent] = await Promise.all([
-        flexibleFS.read(baseFile),
-        flexibleFS.read(outputFile),
+        flexibleFS.read(baseLocation),
+        flexibleFS.read(outputLocation),
       ]);
 
       const dmp = new diff_match_patch();
