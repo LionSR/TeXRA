@@ -81,7 +81,7 @@ export class OutputHandler implements IOutputHandler {
     });
     return result;
   }
-  public baseFiles: string[];
+  public baseFiles: FileLocation[];
   protected logger: AgentLogger;
   protected channel: string;
   public readonly xmlManager: XmlOutputManager;
@@ -96,7 +96,7 @@ export class OutputHandler implements IOutputHandler {
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     logId: number,
-    baseFiles: string[] = [],
+    baseFiles: FileLocation[] = [],
     logger?: AgentLogger,
     fileService?: TaskRunFileService,
   ) {
@@ -113,7 +113,6 @@ export class OutputHandler implements IOutputHandler {
       this.agentSetting,
       this.agentConfig,
       this.logger,
-      this.fileService,
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
@@ -123,7 +122,7 @@ export class OutputHandler implements IOutputHandler {
       this.channel,
       this.fileService,
     );
-    this.diffStatsManager = new DiffStatsManager(this.fileService);
+    this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
     this.currentRunId = null;
     this.runPreparation = null;
@@ -384,10 +383,9 @@ export class OutputHandler implements IOutputHandler {
         relativePath,
       );
       const diffBaseLocation = locationFor(diffBaseRelative);
-      const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
-        diffBaseActual,
-        location.absolutePath,
+        diffBaseLocation,
+        location,
       );
 
       infos.push({
@@ -681,7 +679,9 @@ export class OutputHandler implements IOutputHandler {
 
           try {
             const processedPairs =
-              await this.xmlManager.processMultipleXmlOutputs(outputFile);
+              await this.xmlManager.processMultipleXmlOutputs(
+                this.fileService.resolveRelativePath(outputFile),
+              );
 
             if (processedPairs && processedPairs.length > 0) {
               const processedFiles = processedPairs.map(
@@ -764,8 +764,9 @@ export class OutputHandler implements IOutputHandler {
                 hasScratchpadPrefill);
 
             if (shouldProcessXml) {
-              processed =
-                await this.xmlManager.processSingleXmlOutput(outputFile);
+              processed = await this.xmlManager.processSingleXmlOutput(
+                this.fileService.resolveRelativePath(outputFile),
+              );
             }
 
             const hasProcessedPath = Boolean(

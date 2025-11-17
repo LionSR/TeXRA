@@ -35,7 +35,7 @@ export class CoTAgent extends BaseReflectionAgent {
         );
 
         await this.outputHandler.processOutputFiles(
-          outputFile,
+          outputFile.absolutePath,
           currRound,
           stage,
         );

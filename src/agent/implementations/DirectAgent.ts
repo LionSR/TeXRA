@@ -39,7 +39,7 @@ export class DirectAgent extends BaseReflectionAgent {
         }
 
         await this.outputHandler.processOutputFiles(
-          outputFile,
+          outputFile.absolutePath,
           currRound,
           stage,
         );
