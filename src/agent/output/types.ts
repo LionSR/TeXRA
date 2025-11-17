@@ -7,56 +7,9 @@ import { DiffStatsSchema, type DiffStats } from '@agent/types/DiffTypes';
 // Local imports - files
 import type { FileLocation } from '@utils/files/taskRunStorage';
 
-export interface OutputXmlSummary {
-  tagContents: Record<string, string | string[]>;
-  documents: string[];
-  singleOutputFile: string | null;
-  sourceLocation: FileLocation | null;
-}
-
-export interface NamedOutputFile {
-  source: string;
-  path: string;
-  relativePath: string;
-  workspacePath?: string;
-  location: FileLocation;
-}
-
-export interface OutputFileInfo extends DiffStats {
-  path: string;
-  relativePath: string;
-  displayLabel: string;
-  displayDir: string;
-  workspacePath?: string | null;
-  base?: string | null;
-  prev?: string | null;
-  original?: string | null;
-  location: FileLocation;
-  baseLocation?: FileLocation | null;
-  prevLocation?: FileLocation | null;
-  originalLocation?: FileLocation | null;
-  source?: string | null;
-  rawOutputPath?: string | null;
-  rawLocation?: FileLocation | null;
-  xmlSummary?: OutputXmlSummary | null;
-}
-
-export interface RoundFileMapping {
-  baseToOutput: Map<string, string>;
-  prevToOutput: Map<string, string>;
-  originByOutput: Map<string, string | undefined>;
-  locationByOutput: Map<string, FileLocation>;
-}
-
-export interface RoundOutputArtifacts {
-  round: number;
-  rawOutput: FileLocation | null;
-  rawOutputPath: string | null;
-  outputFiles: NamedOutputFile[];
-  processedFiles: NamedOutputFile[];
-  fileInfos: OutputFileInfo[];
-  xmlSummary: OutputXmlSummary;
-}
+// ============================================================================
+// SCHEMAS (Zod v3 - define schemas, then infer types)
+// ============================================================================
 
 const FileLocationScopeSchema = z.union([
   z.literal('workspace'),
@@ -85,16 +38,71 @@ const RunStorageLocationSchema = z
   })
   .strict();
 
-const FileLocationSchema = z
+export const FileLocationSchema = z
   .object({
     absolutePath: z.string(),
     scope: FileLocationScopeSchema,
     relativePath: z.string(),
     relativeScope: FileRelativeScopeSchema,
-    workspace: WorkspaceLocationSchema.nullish().optional(),
-    runStorage: RunStorageLocationSchema.nullish().optional(),
+    workspace: WorkspaceLocationSchema.nullish(),
+    runStorage: RunStorageLocationSchema.nullish(),
   })
   .strict();
+
+// ============================================================================
+// OUTPUT FILE TYPES
+// ============================================================================
+
+/**
+ * Minimal output file reference - just source name + location.
+ * Location contains all path variants (absolute, relative, workspace).
+ */
+export const OutputFileSchema = z
+  .object({
+    source: z.string(),
+    location: FileLocationSchema,
+  })
+  .strict();
+
+export type OutputFile = z.infer<typeof OutputFileSchema>;
+
+/**
+ * File lineage - tracks where files came from.
+ * Uses full FileLocation objects (not split across string + location fields).
+ */
+export const FileLineageSchema = z
+  .object({
+    base: FileLocationSchema.optional(),
+    previous: FileLocationSchema.optional(),
+    original: FileLocationSchema.optional(),
+  })
+  .strict();
+
+export type FileLineage = z.infer<typeof FileLineageSchema>;
+
+/**
+ * Complete output file metadata.
+ * - source: Document name (e.g., "main.tex")
+ * - location: Where the file is (has all path variants)
+ * - lineage: Where it came from (base/previous/original)
+ * - diff: Line changes vs base
+ */
+export const OutputFileInfoSchema = z
+  .object({
+    source: z.string(),
+    location: FileLocationSchema,
+    lineage: FileLineageSchema.optional(),
+    diff: DiffStatsSchema.optional(),
+  })
+  .strict();
+
+export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+
+export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
+
+// ============================================================================
+// XML SUMMARY TYPES
+// ============================================================================
 
 const RawOutputXmlSummarySchema = z
   .object({
@@ -107,40 +115,66 @@ const RawOutputXmlSummarySchema = z
   })
   .strict();
 
-export const OutputXmlSummarySchema: z.ZodType<OutputXmlSummary> =
-  RawOutputXmlSummarySchema.transform(
-    (value): OutputXmlSummary => ({
-      tagContents: value.tagContents ?? {},
-      documents: value.documents ?? [],
-      singleOutputFile: value.singleOutputFile ?? null,
-      sourceLocation: value.sourceLocation ?? null,
-    }),
-  );
+export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
+  (value) => ({
+    tagContents: value.tagContents ?? {},
+    documents: value.documents ?? [],
+    singleOutputFile: value.singleOutputFile ?? null,
+    sourceLocation: value.sourceLocation ?? null,
+  }),
+);
 
-const NullableString = () => z.string().nullable().optional();
-const NullableLocation = () => FileLocationSchema.nullable().optional();
-const NullableSummary = () => OutputXmlSummarySchema.nullable().optional();
+export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
-const OutputFileInfoBaseSchema = DiffStatsSchema.extend({
-  path: z.string(),
-  relativePath: z.string(),
-  displayLabel: z.string(),
-  displayDir: z.string(),
-  workspacePath: NullableString(),
-  base: NullableString(),
-  prev: NullableString(),
-  original: NullableString(),
-  location: FileLocationSchema,
-  baseLocation: NullableLocation(),
-  prevLocation: NullableLocation(),
-  originalLocation: NullableLocation(),
-  source: NullableString(),
-  rawOutputPath: NullableString(),
-  rawLocation: NullableLocation(),
-  xmlSummary: NullableSummary(),
-}).strict();
+// ============================================================================
+// ROUND OUTPUT TYPES
+// ============================================================================
 
-export const OutputFileInfoSchema: z.ZodType<OutputFileInfo> =
-  OutputFileInfoBaseSchema.transform((value) => value as OutputFileInfo);
+/**
+ * Complete artifacts from a conversation round.
+ * - round: Round number
+ * - rawOutput: The XML file the LLM wrote (before extraction)
+ * - outputs: Extracted output files with metadata
+ * - xmlSummary: Parsed XML summary (tags, documents, etc.)
+ */
+export const RoundOutputArtifactsSchema = z
+  .object({
+    round: z.number(),
+    rawOutput: FileLocationSchema.nullable(),
+    outputs: OutputFileInfoSchema.array(),
+    xmlSummary: OutputXmlSummarySchema,
+  })
+  .strict();
 
-export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
+export type RoundOutputArtifacts = z.infer<typeof RoundOutputArtifactsSchema>;
+
+// ============================================================================
+// INTERNAL MAPPING TYPES (used by OutputHandler)
+// ============================================================================
+
+/**
+ * Internal mapping structure for file relationships.
+ * Used for computing diffs and determining file origins.
+ */
+export interface RoundFileMapping {
+  baseToOutput: Map<string, string>;
+  prevToOutput: Map<string, string>;
+  originByOutput: Map<string, string | undefined>;
+  locationByOutput: Map<string, FileLocation>;
+}
+
+// ============================================================================
+// LEGACY TYPES (for migration - will be removed)
+// ============================================================================
+
+/**
+ * @deprecated Use OutputFile instead.
+ * Legacy type with duplicate path fields. Kept temporarily for migration.
+ */
+export interface NamedOutputFile {
+  source: string;
+  path: string; // Duplicate of location.absolutePath
+  relativePath: string; // Duplicate of location.relativePath
+  workspacePath?: string; // Duplicate of location.workspace?.absolutePath
+  location: FileLocation;
+}
