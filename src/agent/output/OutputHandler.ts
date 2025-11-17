@@ -613,76 +613,24 @@ export class OutputHandler implements IOutputHandler {
     raw: FileLocation | null;
     processed: NamedOutputFile[];
   }> {
-    let relocatedRaw = rawOutput;
-    const initialRawPath = rawOutput?.absolutePath ?? null;
-    const runStorageActive = this.fileService.isRunStorageEnabled();
-    const shouldForceRunStorage = runStorageActive;
+    const normalizedRaw = rawOutput
+      ? this.fileService.describePath(rawOutput.absolutePath)
+      : null;
 
-    if (rawOutput) {
-      await this.cleanupLatexBackups(rawOutput);
-      if (runStorageActive) {
-        relocatedRaw = await this.fileService.relocateToRunStorage(
-          rawOutput.absolutePath,
-          shouldForceRunStorage ? { forceRunStorage: true } : undefined,
-        );
-      } else {
-        relocatedRaw = this.fileService.describePath(rawOutput.absolutePath);
-      }
-    }
+    const normalizedProcessed = processed.map((entry) => {
+      const described = this.fileService.describePath(
+        entry.location.absolutePath,
+      );
+      return {
+        ...entry,
+        path: described.absolutePath,
+        relativePath: described.relativePath,
+        workspacePath: entry.workspacePath ?? described.workspace?.absolutePath,
+        location: described,
+      };
+    });
 
-    const relocatedProcessed: NamedOutputFile[] = [];
-    for (const entry of processed) {
-      try {
-        if (initialRawPath && entry.location.absolutePath === initialRawPath) {
-          relocatedProcessed.push({
-            ...entry,
-            path: relocatedRaw?.absolutePath ?? entry.path,
-            relativePath: relocatedRaw?.relativePath ?? entry.relativePath,
-            workspacePath:
-              entry.workspacePath ?? relocatedRaw?.workspace?.absolutePath,
-            location: relocatedRaw ?? entry.location,
-          });
-          continue;
-        }
-
-        await this.cleanupLatexBackups(entry.location);
-        if (!runStorageActive) {
-          const described = this.fileService.describePath(
-            entry.location.absolutePath,
-          );
-          relocatedProcessed.push({
-            ...entry,
-            path: described.absolutePath,
-            relativePath: described.relativePath,
-            workspacePath:
-              entry.workspacePath ?? described.workspace?.absolutePath,
-            location: described,
-          });
-          continue;
-        }
-
-        const relocation = await this.fileService.relocateToRunStorage(
-          entry.location.absolutePath,
-        );
-        relocatedProcessed.push({
-          ...entry,
-          path: relocation.absolutePath,
-          relativePath: relocation.relativePath,
-          workspacePath:
-            entry.workspacePath ?? relocation.workspace?.absolutePath,
-          location: relocation,
-        });
-      } catch (error) {
-        throw Object.assign(
-          new Error(
-            `Failed to relocate processed output ${entry.location.absolutePath}: ${toErrorMessage(error)}`,
-          ),
-          { cause: error },
-        );
-      }
-    }
-
-    return { raw: relocatedRaw ?? null, processed: relocatedProcessed };
+    return { raw: normalizedRaw, processed: normalizedProcessed };
   }
 
   /**
