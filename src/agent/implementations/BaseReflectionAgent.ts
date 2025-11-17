@@ -332,10 +332,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       this.logger.debug(`Completed round ${currRound}`);
 
-      await this.outputHandler.finalizeRound(outputFile, currRound, {
-        endTurn,
-        stage: scope,
-      });
+      await this.outputHandler.finalizeRound(
+        this.fileService.resolveRelativePath(outputFile),
+        currRound,
+        {
+          endTurn,
+          stage: scope,
+        },
+      );
 
       const output = await this.outputHandler.getRoundArtifacts(currRound);
       this.roundOutputs[currRound] = output;
