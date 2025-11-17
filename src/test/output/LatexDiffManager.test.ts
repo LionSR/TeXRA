@@ -74,15 +74,9 @@ describe('LatexDiffManager mapping reuse', () => {
       ? absolutePath.slice(workspacePrefix.length)
       : absolutePath;
     return {
+      kind: 'workspace',
       absolutePath,
-      scope: 'workspace',
       relativePath: relative,
-      relativeScope: 'workspace',
-      workspace: {
-        absolutePath,
-        relativePath: relative,
-      },
-      runStorage: null,
     };
   }
 

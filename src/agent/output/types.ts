@@ -8,19 +8,35 @@ import { DiffStatsSchema } from '@agent/types/DiffTypes';
 // SCHEMAS (Zod v4 - schemas are the source of truth, types derived via z.infer)
 // ============================================================================
 
-const FileLocationScopeSchema = z.union([
-  z.literal('workspace'),
-  z.literal('runStorage'),
-  z.literal('external'),
-]);
-
-export const FileLocationSchema = z
+const WorkspaceFileLocationSchema = z
   .object({
+    kind: z.literal('workspace'),
     absolutePath: z.string(),
-    scope: FileLocationScopeSchema,
-    relativePath: z.string().nullable(),
+    relativePath: z.string(),
   })
   .strict();
+
+const RunStorageFileLocationSchema = z
+  .object({
+    kind: z.literal('runStorage'),
+    absolutePath: z.string(),
+    relativePath: z.string(),
+    executionId: z.string(),
+  })
+  .strict();
+
+const ExternalFileLocationSchema = z
+  .object({
+    kind: z.literal('external'),
+    absolutePath: z.string(),
+  })
+  .strict();
+
+export const FileLocationSchema = z.discriminatedUnion('kind', [
+  WorkspaceFileLocationSchema,
+  RunStorageFileLocationSchema,
+  ExternalFileLocationSchema,
+]);
 
 // ============================================================================
 // OUTPUT FILE SCHEMAS (types derived via z.infer)
