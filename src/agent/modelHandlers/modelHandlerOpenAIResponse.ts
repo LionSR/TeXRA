@@ -37,7 +37,7 @@ import type { ToolFileAttachment } from '@tools/result';
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -1076,7 +1076,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(pathToLocation(outputFile)))) {
       const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage) {
@@ -1096,7 +1096,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    let fileContent = await flexibleFS.read(outputFile);
+    let fileContent = await flexibleFS.read(pathToLocation(outputFile));
     fileContent = cleanFileContent(fileContent);
 
     const scratchpad = await xmlUtils.extractScratchpad(
@@ -1107,7 +1107,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(outputFile, fileContent);
+    await flexibleFS.write(pathToLocation(outputFile), fileContent);
 
     messages.push(this.createAssistantMessage(fileContent));
 
@@ -1125,7 +1125,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
-        outputFile,
+        pathToLocation(outputFile),
         workspaceState.assembly.accumulatedOutput,
       );
     }

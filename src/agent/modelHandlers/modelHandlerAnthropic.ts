@@ -70,7 +70,7 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -1119,16 +1119,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(pathToLocation(outputFile)))) {
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
           workspaceState.assembly.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await flexibleFS.write(outputFile, prefill);
+          await flexibleFS.write(pathToLocation(outputFile), prefill);
         } else if (workflowSetting.outputExt === 'xml') {
-          await flexibleFS.write(outputFile, prefill + '\n');
+          await flexibleFS.write(pathToLocation(outputFile), prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -1154,7 +1154,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputFile);
+    let fileContent = await flexibleFS.read(pathToLocation(outputFile));
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -1166,7 +1166,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(outputFile, fileContent);
+    await flexibleFS.write(pathToLocation(outputFile), fileContent);
 
     // Update the workspaceState with the actual file content
     workspaceState.assembly.updateAccumulatedOutput(fileContent);
