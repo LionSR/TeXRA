@@ -30,10 +30,10 @@ export interface IOutputHandler {
   hasRoundOutputs(round: number): boolean;
 
   /** Indent a single LaTeX file for readability. */
-  indentLatexFile(filePath: string): Promise<void>;
+  indentLatexFile(fileLocation: FileLocation): Promise<void>;
 
   /** Indent multiple LaTeX files for readability. */
-  indentLatexFiles(filePaths: string[]): Promise<void>;
+  indentLatexFiles(fileLocations: FileLocation[]): Promise<void>;
 
   /** Process output files from XML or direct input. */
   processOutputFiles(
@@ -50,7 +50,7 @@ export interface IOutputHandler {
 
   /** Validate expected output files for the given round. */
   validateExpectedOutputs(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void>;
