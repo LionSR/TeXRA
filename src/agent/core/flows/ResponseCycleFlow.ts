@@ -36,7 +36,7 @@ import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -103,7 +103,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
     const interrupted = Boolean(await options.checkInterruption());
     const outputLocation = fileService.resolveRelativePath(state.outputFile);
-    const exists = await AbsoluteFS.exists(outputLocation.absolutePath);
+    const exists = await flexibleFS.exists(outputLocation.absolutePath);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
