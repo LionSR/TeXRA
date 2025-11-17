@@ -414,7 +414,7 @@ export class TaskRunFileService {
    * familiar workspace-relative paths.
    */
   public async prepareRunWorkspace(
-    baseFiles: string[],
+    baseFiles: FileLocation[],
     options: {
       linkFiles?: string[];
       mirrorBaseFiles?: boolean;

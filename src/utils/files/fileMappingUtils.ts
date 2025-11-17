@@ -167,7 +167,7 @@ function buildReplacementLookup(
 }
 
 export async function replaceInputCommands(
-  baseFiles: string[],
+  baseFiles: FileLocation[],
   outputFiles: string[],
   logger?: AgentLogger,
 ): Promise<void> {
