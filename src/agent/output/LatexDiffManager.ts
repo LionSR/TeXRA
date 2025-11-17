@@ -112,23 +112,35 @@ export class LatexDiffManager {
     );
   }
 
+  /**
+   * Get display label (basename) from FileLocation for UI/logging.
+   */
+  private getDisplayLabel(location: FileLocation): string {
+    // For workspace/run-storage locations, use relativePath basename
+    // For external locations, use absolutePath basename
+    const pathToUse =
+      location.kind !== 'external'
+        ? location.relativePath
+        : location.absolutePath;
+    return path.basename(pathToUse);
+  }
+
   private async ensureWorkspaceDependency(
-    target?: string | null,
+    targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!target) {
+    if (!targetLocation) {
       return;
     }
 
-    const targetLocation = this.fileService.describePath(target);
     if (!(await flexibleFS.exists(targetLocation))) {
       return;
     }
 
     try {
-      await this.fileService.mirrorWorkspaceFile(target);
+      await this.fileService.mirrorWorkspaceFile(targetLocation.absolutePath);
     } catch (error) {
       this.logger.warn(
-        `Unable to mirror workspace dependency ${target}: ${toErrorMessage(error)}`,
+        `Unable to mirror workspace dependency ${targetLocation.absolutePath}: ${toErrorMessage(error)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
@@ -223,14 +235,17 @@ export class LatexDiffManager {
           const { actual, workspaceDir } = await this.getDiffPaths(location);
           const baseAbsolute = WorkspaceFS.fullPath(baseFile);
 
+          // Create base FileLocation once
+          const baseLocation = createWorkspaceLocation(baseAbsolute, baseFile);
+
           if (!actual) {
             this.logger.warn(
               `Skipping latexdiff for ${outputFile} - no location info`,
             );
             aggregated.push({
-              baseLabel: this.fileService.getDisplayLabel(baseFile),
+              baseLabel: this.getDisplayLabel(baseLocation),
               basePath: baseAbsolute,
-              revisedLabel: this.fileService.getDisplayLabel(baseFile),
+              revisedLabel: this.getDisplayLabel(baseLocation),
               revisedPath: location?.absolutePath,
               status: 'error',
               message: 'Revised file location missing',
@@ -238,17 +253,13 @@ export class LatexDiffManager {
             continue;
           }
 
-          await this.ensureWorkspaceDependency(baseAbsolute);
-          if (location?.absolutePath) {
-            await this.ensureWorkspaceDependency(location.absolutePath);
+          await this.ensureWorkspaceDependency(baseLocation);
+          if (location) {
+            await this.ensureWorkspaceDependency(location);
           }
           const cwd = workspaceDir ?? path.dirname(baseAbsolute);
 
-          // Compute FileLocations and extract directory info once
-          const baseLocation = createWorkspaceLocation(
-            WorkspaceFS.fullPath(baseFile),
-            baseFile,
-          );
+          // Use location if available, otherwise create from actual path
           const revisedLocation =
             location ??
             createWorkspaceLocation(WorkspaceFS.fullPath(actual), actual);
@@ -296,9 +307,11 @@ export class LatexDiffManager {
           }
 
           aggregated.push({
-            baseLabel: this.fileService.getDisplayLabel(baseFile),
+            baseLabel: this.getDisplayLabel(baseLocation),
             basePath: baseAbsolute,
-            revisedLabel: this.fileService.getDisplayLabel(outputFile),
+            revisedLabel: location
+              ? this.getDisplayLabel(location)
+              : path.basename(outputFile),
             revisedPath: actual,
             diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
@@ -343,9 +356,13 @@ export class LatexDiffManager {
               `Skipping between-round latexdiff - missing location info for ${prevOutputFile} or ${currOutputFile}`,
             );
             aggregated.push({
-              baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
+              baseLabel: prevLocation
+                ? this.getDisplayLabel(prevLocation)
+                : path.basename(prevOutputFile),
               basePath: prevLocation?.absolutePath,
-              revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
+              revisedLabel: currLocation
+                ? this.getDisplayLabel(currLocation)
+                : path.basename(currOutputFile),
               revisedPath: currLocation?.absolutePath,
               status: 'error',
               message: 'One or more round files missing location info',
@@ -359,12 +376,8 @@ export class LatexDiffManager {
             continue;
           }
 
-          if (prevLocation?.absolutePath) {
-            await this.ensureWorkspaceDependency(prevLocation.absolutePath);
-          }
-          if (currLocation?.absolutePath) {
-            await this.ensureWorkspaceDependency(currLocation.absolutePath);
-          }
+          await this.ensureWorkspaceDependency(prevLocation);
+          await this.ensureWorkspaceDependency(currLocation);
 
           const cwd =
             prevPaths.workspaceDir ??
@@ -413,9 +426,13 @@ export class LatexDiffManager {
           }
 
           aggregated.push({
-            baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
+            baseLabel: prevLocation
+              ? this.getDisplayLabel(prevLocation)
+              : path.basename(prevOutputFile),
             basePath: prevLocation?.absolutePath,
-            revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
+            revisedLabel: currLocation
+              ? this.getDisplayLabel(currLocation)
+              : path.basename(currOutputFile),
             revisedPath: currPaths.actual,
             diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
