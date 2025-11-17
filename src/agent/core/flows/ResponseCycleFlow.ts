@@ -167,7 +167,9 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
  * timing information for downstream processing.
  */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(shared: ResponseCycleContext<C>): Promise<ResponseCycleContext<C>> {
+  async prep(
+    shared: ResponseCycleContext<C>,
+  ): Promise<ResponseCycleContext<C>> {
     return shared;
   }
 
@@ -290,7 +292,9 @@ type ContinuationNodeResult = SkippableNodeResult<{
  * and persists incremental tool-state derived from the result.
  */
 class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(shared: ResponseCycleContext<C>): Promise<ResponseCycleContext<C>> {
+  async prep(
+    shared: ResponseCycleContext<C>,
+  ): Promise<ResponseCycleContext<C>> {
     return shared;
   }
 
@@ -548,11 +552,15 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
  * stop entirely, or enqueue a continuation request.
  */
 class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(shared: ResponseCycleContext<C>): Promise<ResponseCycleContext<C>> {
+  async prep(
+    shared: ResponseCycleContext<C>,
+  ): Promise<ResponseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ResponseCycleContext<C>): Promise<ContinuationNodeResult> {
+  async exec(
+    context: ResponseCycleContext<C>,
+  ): Promise<ContinuationNodeResult> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.stopReason || !state.processedResponse) {
       return { skipped: true };
