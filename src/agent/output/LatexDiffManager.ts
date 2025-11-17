@@ -128,13 +128,18 @@ export class LatexDiffManager {
     }
   }
 
-  private async relocateDiffArtifact(diffPath: string): Promise<string> {
+  /**
+   * Relocate diff artifact to run storage, returning its FileLocation.
+   * Avoids round-trip through string by preserving FileLocation.
+   */
+  private async relocateDiffArtifact(diffPath: string): Promise<FileLocation> {
     if (!this.fileService.hasRunDirectory()) {
-      return diffPath;
+      // Describe once - don't convert back and forth
+      return this.fileService.describePath(diffPath);
     }
 
-    const relocation = await this.fileService.relocateToRunStorage(diffPath);
-    return relocation.absolutePath;
+    // relocateToRunStorage already returns FileLocation - use it directly!
+    return await this.fileService.relocateToRunStorage(diffPath);
   }
 
   async handleLatexdiffofOutput(
@@ -239,6 +244,8 @@ export class LatexDiffManager {
           );
           this.logLatexdiffResult(result, 'round-diff');
           let diffPath = '';
+          let diffLocation: FileLocation | undefined;
+
           if (result.success && result.diffFileName) {
             diffPath = path.join(
               path.dirname(baseAbsolute),
@@ -252,19 +259,21 @@ export class LatexDiffManager {
               true,
             );
             if (this.fileService.hasRunDirectory()) {
-              diffPath = await this.relocateDiffArtifact(diffPath);
+              diffLocation = await this.relocateDiffArtifact(diffPath);
+              diffPath = diffLocation.absolutePath;
               // Leave the build directory in place; it mainly caches temporary
               // LaTeX intermediates and can be regenerated on demand.
+            } else {
+              // No run storage - describe the workspace location
+              diffLocation = this.fileService.describePath(diffPath);
             }
           }
+
           const baseLocation = this.fileService.resolveRelativePath(baseFile, {
             preferWorkspace: true,
           });
           const revisedLocation =
             location ?? this.fileService.resolveRelativePath(actual);
-          const diffLocation = diffPath
-            ? this.fileService.describePath(diffPath)
-            : undefined;
 
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(baseFile),
@@ -349,6 +358,8 @@ export class LatexDiffManager {
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
           let diffPath = '';
+          let diffLocation: FileLocation | undefined;
+
           if (result.success && result.diffFileName) {
             diffPath = path.join(
               path.dirname(prevPaths.actual),
@@ -362,14 +373,15 @@ export class LatexDiffManager {
               true,
             );
             if (this.fileService.hasRunDirectory()) {
-              diffPath = await this.relocateDiffArtifact(diffPath);
+              diffLocation = await this.relocateDiffArtifact(diffPath);
+              diffPath = diffLocation.absolutePath;
               // Build folders stay in the workspace to avoid copying the entire
               // compilation output tree into run storage.
+            } else {
+              // No run storage - describe the workspace location
+              diffLocation = this.fileService.describePath(diffPath);
             }
           }
-          const diffLocation = diffPath
-            ? this.fileService.describePath(diffPath)
-            : undefined;
 
           aggregated.push({
             baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
