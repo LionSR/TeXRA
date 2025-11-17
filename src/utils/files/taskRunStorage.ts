@@ -380,55 +380,6 @@ export class TaskRunFileService {
     await ensureRunDir(this.activeExecutionId);
   }
 
-  private resolveWorkspaceRelative(relativePath: string): string | null {
-    const root = this.workspaceRoot;
-    if (!root) return null;
-    return relativePath ? path.normalize(relativePath) : '';
-  }
-
-  private describeWorkspaceAbsolute(absolutePath: string): string | null {
-    const root = this.workspaceRoot;
-    if (!root) return null;
-    const normalized = path.normalize(absolutePath);
-    const relative = path.relative(root, normalized);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      return null;
-    }
-    return relative;
-  }
-
-  private describeRunStorageAbsolute(absolutePath: string): string | null {
-    const executionId = this.activeExecutionId;
-    if (!executionId) {
-      return null;
-    }
-
-    const storageRoot = StorageFS.fullPath('');
-    if (!storageRoot) {
-      return null;
-    }
-
-    const normalized = path.normalize(absolutePath);
-    if (!normalized.startsWith(storageRoot)) {
-      return null;
-    }
-
-    const relativeToStorage = path.relative(storageRoot, normalized);
-    const segments = relativeToStorage.split(path.sep).filter(Boolean);
-    const runIndex = segments.indexOf(TASK_RUNS_DIR);
-    if (runIndex === -1 || segments.length < runIndex + 2) {
-      return null;
-    }
-
-    const runId = segments[runIndex + 1];
-    if (runId !== executionId) {
-      return null;
-    }
-
-    const withinRun = segments.slice(runIndex + 2).join(path.sep);
-    return withinRun ? path.normalize(withinRun) : '';
-  }
-
   public describePath(target: string): FileLocation {
     if (!target) {
       return createExternalLocation(target);
@@ -439,20 +390,32 @@ export class TaskRunFileService {
     }
 
     const normalized = path.normalize(target);
-    const workspaceRelative = this.describeWorkspaceAbsolute(normalized);
-    const runStorageRelative = this.describeRunStorageAbsolute(normalized);
 
-    if (runStorageRelative) {
-      const executionId = this.activeExecutionId!;
-      return createRunStorageLocation(
-        normalized,
-        runStorageRelative,
-        executionId,
-      );
+    // Check if in run storage first
+    const executionId = this.activeExecutionId;
+    const storageRoot = StorageFS.fullPath('');
+    if (executionId && storageRoot && normalized.startsWith(storageRoot)) {
+      const relativeToStorage = path.relative(storageRoot, normalized);
+      const segments = relativeToStorage.split(path.sep).filter(Boolean);
+      const runIndex = segments.indexOf(TASK_RUNS_DIR);
+
+      if (runIndex !== -1 && segments.length >= runIndex + 2) {
+        const runId = segments[runIndex + 1];
+        if (runId === executionId) {
+          const withinRun = segments.slice(runIndex + 2).join(path.sep);
+          const runRelative = withinRun ? path.normalize(withinRun) : '';
+          return createRunStorageLocation(normalized, runRelative, executionId);
+        }
+      }
     }
 
-    if (workspaceRelative) {
-      return createWorkspaceLocation(normalized, workspaceRelative);
+    // Check if in workspace
+    const workspaceRoot = this.workspaceRoot;
+    if (workspaceRoot) {
+      const relative = path.relative(workspaceRoot, normalized);
+      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+        return createWorkspaceLocation(normalized, relative);
+      }
     }
 
     return createExternalLocation(normalized);
@@ -641,22 +604,17 @@ export class TaskRunFileService {
       return this.describePath(relativePath);
     }
 
-    const workspaceRelative = this.describeWorkspaceAbsolute(
-      this.workspaceRoot
-        ? path.join(this.workspaceRoot, relativePath)
-        : relativePath,
-    );
-
-    if (!workspaceRelative) {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
       return createExternalLocation(relativePath);
     }
 
-    const workspaceRoot = this.workspaceRoot!;
-    const workspaceAbsolute = path.join(workspaceRoot, workspaceRelative);
+    const normalized = relativePath ? path.normalize(relativePath) : '';
+    const workspaceAbsolute = path.join(workspaceRoot, normalized);
     const executionId = this.activeExecutionId;
 
     if (executionId && this.useRunStorage && !options?.preferWorkspace) {
-      const runPaths = getRunStoragePaths(executionId, workspaceRelative);
+      const runPaths = getRunStoragePaths(executionId, normalized);
       return createRunStorageLocation(
         runPaths.absolute,
         runPaths.runRelative,
@@ -664,7 +622,7 @@ export class TaskRunFileService {
       );
     }
 
-    return createWorkspaceLocation(workspaceAbsolute, workspaceRelative);
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
   }
 
   public resolveExpectedPath(target: string): string {

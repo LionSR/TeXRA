@@ -253,13 +253,15 @@ export class OutputFilesManager extends PersistentMapManager<
    * Collect all paths from an output file info (absolute paths).
    */
   private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
-    this.addPath(target, info.location.absolutePath);
-    this.addPath(target, info.lineage?.original?.absolutePath);
+    target.add(info.location.absolutePath);
+    if (info.lineage?.original?.absolutePath) {
+      target.add(info.lineage.original.absolutePath);
+    }
   }
 
   /**
    * Collect workspace paths from an output file info.
-   * Trust the location structure - no defensive checks needed.
+   * Trust the discriminated union - the 'kind' field is the source of truth.
    */
   private collectWorkspacePaths(
     target: Set<string>,
@@ -267,92 +269,19 @@ export class OutputFilesManager extends PersistentMapManager<
   ): void {
     // Current file
     if (info.location.kind === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.location.absolutePath);
+      target.add(info.location.absolutePath);
     }
 
     // Lineage files
     if (info.lineage?.base?.kind === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.lineage.base.absolutePath);
+      target.add(info.lineage.base.absolutePath);
     }
     if (info.lineage?.previous?.kind === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.lineage.previous.absolutePath);
+      target.add(info.lineage.previous.absolutePath);
     }
     if (info.lineage?.original?.kind === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.lineage.original.absolutePath);
+      target.add(info.lineage.original.absolutePath);
     }
-  }
-
-  private normalizePathForComparison(candidate: string): string {
-    return process.platform === 'win32' ? candidate.toLowerCase() : candidate;
-  }
-
-  private isWorkspacePath(
-    candidate: string | null | undefined,
-  ): candidate is string {
-    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
-      return false;
-    }
-
-    if (!path.isAbsolute(candidate)) {
-      return false;
-    }
-
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-      return false;
-    }
-
-    const normalizedCandidate = this.normalizePathForComparison(
-      path.resolve(candidate),
-    );
-
-    return folders.some((folder) => {
-      const rootResolved = path.resolve(folder.uri.fsPath);
-      const normalizedRoot = this.normalizePathForComparison(rootResolved);
-      if (normalizedCandidate === normalizedRoot) {
-        return true;
-      }
-      const rootWithSep = normalizedRoot.endsWith(path.sep)
-        ? normalizedRoot
-        : `${normalizedRoot}${path.sep}`;
-      return normalizedCandidate.startsWith(rootWithSep);
-    });
-  }
-
-  private containsRunStorageSegment(candidate: string): boolean {
-    return candidate.split(/[\\/]/).includes('taskRuns');
-  }
-
-  private addWorkspaceAbsolute(
-    target: Set<string>,
-    candidate: string | null | undefined,
-  ): void {
-    if (typeof candidate !== 'string') {
-      return;
-    }
-
-    if (!this.isWorkspacePath(candidate)) {
-      return;
-    }
-
-    if (this.containsRunStorageSegment(candidate)) {
-      return;
-    }
-
-    this.addPath(target, candidate);
-  }
-
-  private addPath(target: Set<string>, candidate: string | null | undefined) {
-    if (typeof candidate !== 'string') {
-      return;
-    }
-
-    const trimmed = candidate.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-
-    target.add(trimmed);
   }
 
   /** Get missing outputs for a stream */
