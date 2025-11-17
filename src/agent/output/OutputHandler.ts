@@ -729,14 +729,14 @@ export class OutputHandler implements IOutputHandler {
         };
 
         const handleSingleOutput = async () => {
-          this.logger.debug(`Processing single output for ${outputFile}`);
+          this.logger.debug(
+            `Processing single output for ${outputLocation.absolutePath}`,
+          );
 
           try {
-            const processedLocation = rawLocation
-              ? { ...rawLocation }
-              : this.fileService.resolveRelativePath(outputFile);
+            const processedLocation = rawLocation ?? outputLocation;
             let processed: OutputFileInfo = {
-              source: outputFile,
+              source: outputLocation.relativePath ?? outputLocation.absolutePath,
               location: processedLocation,
               lineage: null,
               diff: null,
@@ -752,7 +752,7 @@ export class OutputHandler implements IOutputHandler {
 
             if (shouldProcessXml) {
               processed = await this.xmlManager.processSingleXmlOutput(
-                this.fileService.resolveRelativePath(outputFile),
+                outputLocation,
               );
             }
 
@@ -760,8 +760,8 @@ export class OutputHandler implements IOutputHandler {
               processed && processed.location.absolutePath,
             );
 
-            if (hasProcessedPath && processed.location.absolutePath) {
-              await this.indentLatexFile(processed.location.absolutePath);
+            if (hasProcessedPath && processed.location) {
+              await this.indentLatexFile(processed.location);
               this.logger.debug(
                 `Indented single output file: ${processed.location.absolutePath}`,
               );
