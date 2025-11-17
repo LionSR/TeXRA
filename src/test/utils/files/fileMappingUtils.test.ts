@@ -23,23 +23,23 @@ describe('replaceInputCommands', () => {
     const writes: Array<{ target: string; content: string }> = [];
 
     (flexibleFS as unknown as { read: typeof flexibleFS.read }).read = async (
-      target: string,
+      target,
     ) => {
-      const content = files.get(target);
+      const content = files.get(target.absolutePath);
       if (content === undefined) {
-        throw new Error(`Unexpected read: ${target}`);
+        throw new Error(`Unexpected read: ${target.absolutePath}`);
       }
       return content;
     };
 
     (flexibleFS as unknown as { write: typeof flexibleFS.write }).write =
-      async (target: string, content: string | Uint8Array) => {
+      async (target, content) => {
         const resolved =
           typeof content === 'string'
             ? content
             : Buffer.from(content).toString('utf-8');
-        writes.push({ target, content: resolved });
-        files.set(target, resolved);
+        writes.push({ target: target.absolutePath, content: resolved });
+        files.set(target.absolutePath, resolved);
       };
 
     await replaceInputCommands(
@@ -63,23 +63,23 @@ describe('replaceInputCommands', () => {
     const writes: Array<{ target: string; content: string }> = [];
 
     (flexibleFS as unknown as { read: typeof flexibleFS.read }).read = async (
-      target: string,
+      target,
     ) => {
-      const content = files.get(target);
+      const content = files.get(target.absolutePath);
       if (content === undefined) {
-        throw new Error(`Unexpected read: ${target}`);
+        throw new Error(`Unexpected read: ${target.absolutePath}`);
       }
       return content;
     };
 
     (flexibleFS as unknown as { write: typeof flexibleFS.write }).write =
-      async (target: string, content: string | Uint8Array) => {
+      async (target, content) => {
         const resolved =
           typeof content === 'string'
             ? content
             : Buffer.from(content).toString('utf-8');
-        writes.push({ target, content: resolved });
-        files.set(target, resolved);
+        writes.push({ target: target.absolutePath, content: resolved });
+        files.set(target.absolutePath, resolved);
       };
 
     await replaceInputCommands(
