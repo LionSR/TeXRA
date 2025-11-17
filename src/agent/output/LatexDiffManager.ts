@@ -282,7 +282,7 @@ export class LatexDiffManager {
 
             const buildDir = path.join(baseDir, 'build');
             await this.dependencies.compileLatex2Pdf(
-              diffLocation.absolutePath,
+              diffLocation,
               this.channel,
               buildDir,
               true,
@@ -399,7 +399,7 @@ export class LatexDiffManager {
 
             const buildDir = path.join(prevDir, 'build');
             await this.dependencies.compileLatex2Pdf(
-              diffLocation.absolutePath,
+              diffLocation,
               this.channel,
               buildDir,
               true,
