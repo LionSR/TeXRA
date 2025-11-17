@@ -592,16 +592,13 @@ export class OutputFilesManager extends PersistentMapManager<
     const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
 
     if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(
-        record,
-        (v) => {
-          try {
-            return OutputFileInfoListSchema.parse([v])[0] ?? null;
-          } catch {
-            return null;
-          }
-        },
-      );
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(record, (v) => {
+        try {
+          return OutputFileInfoListSchema.parse([v])[0] ?? null;
+        } catch {
+          return null;
+        }
+      });
       if (rounds.size > 0) {
         runMap.set(normalizeRunId(null), rounds);
       }

@@ -740,3 +740,13 @@ export async function ensureRunDir(id: ExecutionId): Promise<void> {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, safeId));
 }
+
+/**
+ * Get a comparable path for file matching and mapping.
+ * Returns relativePath for workspace/runStorage files, absolutePath for external files.
+ */
+export function getComparablePath(location: FileLocation): string {
+  return location.kind === 'external'
+    ? location.absolutePath
+    : location.relativePath;
+}
