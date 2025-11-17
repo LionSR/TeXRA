@@ -326,8 +326,9 @@ export class OutputHandler implements IOutputHandler {
     const mapping = this.getRoundMapping(currRound);
 
     const infos: OutputFileInfo[] = [];
+    const namedOutputs = this.getNamedOutputs(currRound);
     const namedByStorage = new Map(
-      this.getNamedOutputs(currRound).map((entry) => [entry.path, entry]),
+      namedOutputs.map((entry) => [entry.path, entry]),
     );
     const baseByOutput = new Map<string, string>();
     const prevByOutput = new Map<string, string>();
@@ -348,36 +349,35 @@ export class OutputHandler implements IOutputHandler {
       sourceLocation: xmlSummary.sourceLocation ?? rawLocation ?? null,
     };
 
+    const locationFor = (relative: string | null): FileLocation | null => {
+      if (!relative) return null;
+      return mapping.locationByOutput.get(relative) ?? null;
+    };
+
     for (const file of roundOutputs) {
       const named = namedByStorage.get(file);
       const namedLocation = named?.location;
-      const relativeKey = namedLocation
-        ? namedLocation.relativePath
-        : this.fileService.getWorkspaceDisplayPath(file);
+      const fallbackLocation = this.fileService.describePath(file);
+      const location = namedLocation ?? fallbackLocation;
+      const relativePath = location.relativePath;
 
-      const baseFile = baseByOutput.get(relativeKey) ?? null;
-      const prevFile = prevByOutput.get(relativeKey) ?? null;
-      const originalFile = mapping.originByOutput.get(relativeKey) || null;
+      const baseFile = baseByOutput.get(relativePath) ?? null;
+      const prevFile = prevByOutput.get(relativePath) ?? null;
+      const originalFile = mapping.originByOutput.get(relativePath) || null;
 
       const diffBaseRelative = getEffectiveBaseFile(
         baseFile,
         originalFile,
-        relativeKey,
+        relativePath,
       );
-      const diffBaseLocation = diffBaseRelative
-        ? this.fileService.resolveRelativePath(diffBaseRelative, {
-            preferWorkspace: true,
-          })
-        : null;
+      const diffBaseLocation = locationFor(diffBaseRelative);
       const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBaseActual,
         file,
       );
 
-      const workspacePath = namedLocation?.workspace?.absolutePath ?? null;
-
-      const relativePath = relativeKey;
+      const workspacePath = location.workspace?.absolutePath ?? null;
       const displayLabel = this.fileService.getDisplayLabel(
         baseFile ?? relativePath,
       );
@@ -387,10 +387,6 @@ export class OutputHandler implements IOutputHandler {
         : '';
       const displayDir =
         !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
-
-      const location =
-        namedLocation ??
-        this.fileService.resolveRelativePath(file, { preferWorkspace: true });
 
       infos.push({
         path: file,
@@ -403,16 +399,8 @@ export class OutputHandler implements IOutputHandler {
         original: originalFile,
         location,
         baseLocation: diffBaseLocation ?? null,
-        prevLocation: prevFile
-          ? this.fileService.resolveRelativePath(prevFile, {
-              preferWorkspace: true,
-            })
-          : null,
-        originalLocation: originalFile
-          ? this.fileService.resolveRelativePath(originalFile, {
-              preferWorkspace: true,
-            })
-          : null,
+        prevLocation: locationFor(prevFile),
+        originalLocation: locationFor(originalFile),
         source: named?.source ?? relativePath ?? null,
         rawOutputPath: rawLocation?.absolutePath ?? null,
         rawLocation: rawLocation ?? null,

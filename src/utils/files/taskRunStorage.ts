@@ -17,11 +17,6 @@ import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 import { AbsoluteFS } from './absoluteFS';
 import { flexibleFS } from './flexibleFS';
-import {
-  normalizeRunRelative,
-  decodePathComponent,
-  isSafePathSegment,
-} from './pathNormalizer';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
@@ -95,9 +90,7 @@ export function isValidExecutionId(
   id: ExecutionId | undefined,
 ): id is ExecutionId {
   if (!id) return false;
-  if (!isSafePathSegment(id)) return false;
-  const decoded = decodePathComponent(id);
-  return /^[A-Za-z0-9._-]+$/.test(decoded);
+  return /^[A-Za-z0-9._-]+$/.test(id);
 }
 
 /**
@@ -113,38 +106,6 @@ export function getRunDir(id: ExecutionId): string {
   return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
 }
 
-function toWorkspaceRelative(target: string): string {
-  if (!target) {
-    return '';
-  }
-
-  if (!path.isAbsolute(target)) {
-    return target;
-  }
-
-  const workspaceRoot = WorkspaceFS.getPath();
-  if (workspaceRoot) {
-    const relative = path.relative(workspaceRoot, target);
-    if (!relative.startsWith('..') && !path.isAbsolute(relative))
-      return relative;
-  }
-
-  const storageRoot = StorageFS.fullPath('');
-  const normalizedTarget = path.normalize(target);
-  if (storageRoot && normalizedTarget.startsWith(storageRoot)) {
-    const segments = path
-      .relative(storageRoot, normalizedTarget)
-      .split(path.sep)
-      .filter(Boolean);
-    const taskRunIndex = segments.indexOf(TASK_RUNS_DIR);
-    if (taskRunIndex >= 0 && segments.length > taskRunIndex + 2) {
-      return segments.slice(taskRunIndex + 2).join(path.sep);
-    }
-  }
-
-  throw new Error(`Cannot make path workspace-relative: ${target}`);
-}
-
 export function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
@@ -153,7 +114,7 @@ export function getRunStoragePaths(
     throw new Error(`Invalid execution ID: ${id}`);
   }
 
-  const relative = normalizeRunRelative(workspaceRelative);
+  const relative = workspaceRelative ? path.normalize(workspaceRelative) : '';
   const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
@@ -420,7 +381,7 @@ export class TaskRunFileService {
   ): WorkspaceLocationInfo | null {
     const root = this.workspaceRoot;
     if (!root) return null;
-    const normalized = normalizeRunRelative(relativePath);
+    const normalized = relativePath ? path.normalize(relativePath) : '';
     const absolute = normalized ? path.join(root, normalized) : root;
     return { absolutePath: absolute, relativePath: normalized };
   }
@@ -430,14 +391,13 @@ export class TaskRunFileService {
   ): WorkspaceLocationInfo | null {
     const root = this.workspaceRoot;
     if (!root) return null;
-    try {
-      const relative = toWorkspaceRelative(absolutePath);
-      const normalized = normalizeRunRelative(relative);
-      const resolved = normalized ? path.join(root, normalized) : root;
-      return { absolutePath: resolved, relativePath: normalized };
-    } catch {
+    const normalized = path.normalize(absolutePath);
+    const relative = path.relative(root, normalized);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       return null;
     }
+    const resolved = relative ? path.join(root, relative) : root;
+    return { absolutePath: resolved, relativePath: relative };
   }
 
   private describeRunStorageAbsolute(
@@ -471,7 +431,7 @@ export class TaskRunFileService {
     }
 
     const withinRun = segments.slice(runIndex + 2).join(path.sep);
-    const runRelative = normalizeRunRelative(withinRun);
+    const runRelative = withinRun ? path.normalize(withinRun) : '';
     const storageRelative = path.join(TASK_RUNS_DIR, executionId, runRelative);
     return {
       absolutePath: normalized,
@@ -646,7 +606,20 @@ export class TaskRunFileService {
    * @param target Path that may point to run storage or the workspace.
    */
   public getWorkspaceRelativePath(target: string): string {
-    return toWorkspaceRelative(target);
+    if (!target) {
+      return '';
+    }
+
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (workspaceRoot) {
+      const normalized = path.normalize(target);
+      const relative = path.relative(workspaceRoot, normalized);
+      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+        return relative;
+      }
+    }
+
+    return target;
   }
 
   public getWorkspaceDisplayPath(target: string): string {

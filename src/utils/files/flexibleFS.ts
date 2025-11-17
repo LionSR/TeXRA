@@ -54,6 +54,12 @@ export class FlexibleFS {
       : WorkspaceFS.readBytes(target);
   }
 
+  appendFile(target: string, content: string | Uint8Array): Promise<void> {
+    return isAbsolute(target)
+      ? AbsoluteFS.appendFile(target, content)
+      : WorkspaceFS.appendFile(target, content);
+  }
+
   async write(target: string, content: string | Uint8Array): Promise<void> {
     if (isAbsolute(target)) {
       await AbsoluteFS.write(target, content);
