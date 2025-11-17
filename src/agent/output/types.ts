@@ -2,13 +2,10 @@
 import { z } from 'zod';
 
 // Local imports - agent
-import { DiffStatsSchema, type DiffStats } from '@agent/types/DiffTypes';
-
-// Local imports - files
-import type { FileLocation } from '@utils/files/taskRunStorage';
+import { DiffStatsSchema } from '@agent/types/DiffTypes';
 
 // ============================================================================
-// SCHEMAS (Zod v3 - define schemas, then infer types)
+// SCHEMAS (Zod v4 - schemas are the source of truth, types derived via z.infer)
 // ============================================================================
 
 const FileLocationScopeSchema = z.union([
@@ -50,7 +47,7 @@ export const FileLocationSchema = z
   .strict();
 
 // ============================================================================
-// OUTPUT FILE TYPES
+// OUTPUT FILE SCHEMAS (types derived via z.infer)
 // ============================================================================
 
 /**
@@ -64,8 +61,6 @@ export const OutputFileSchema = z
   })
   .strict();
 
-export type OutputFile = z.infer<typeof OutputFileSchema>;
-
 /**
  * File lineage - tracks where files came from.
  * Uses full FileLocation objects (not split across string + location fields).
@@ -77,8 +72,6 @@ export const FileLineageSchema = z
     original: FileLocationSchema.optional(),
   })
   .strict();
-
-export type FileLineage = z.infer<typeof FileLineageSchema>;
 
 /**
  * Complete output file metadata.
@@ -96,12 +89,16 @@ export const OutputFileInfoSchema = z
   })
   .strict();
 
-export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
-
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
+// Derive types from schemas (Zod v4)
+export type OutputFile = z.infer<typeof OutputFileSchema>;
+export type FileLineage = z.infer<typeof FileLineageSchema>;
+export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
+export type FileLocation = z.infer<typeof FileLocationSchema>;
+
 // ============================================================================
-// XML SUMMARY TYPES
+// XML SUMMARY SCHEMAS
 // ============================================================================
 
 const RawOutputXmlSummarySchema = z
@@ -124,10 +121,11 @@ export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
   }),
 );
 
+// Derive type from schema (Zod v4)
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
 // ============================================================================
-// ROUND OUTPUT TYPES
+// ROUND OUTPUT SCHEMAS
 // ============================================================================
 
 /**
@@ -146,15 +144,17 @@ export const RoundOutputArtifactsSchema = z
   })
   .strict();
 
+// Derive type from schema (Zod v4)
 export type RoundOutputArtifacts = z.infer<typeof RoundOutputArtifactsSchema>;
 
 // ============================================================================
-// INTERNAL MAPPING TYPES (used by OutputHandler)
+// INTERNAL MAPPING SCHEMAS (used by OutputHandler)
 // ============================================================================
 
 /**
  * Internal mapping structure for file relationships.
  * Used for computing diffs and determining file origins.
+ * Note: Maps can't be directly represented in Zod, so this remains an interface.
  */
 export interface RoundFileMapping {
   baseToOutput: Map<string, string>;
@@ -164,17 +164,24 @@ export interface RoundFileMapping {
 }
 
 // ============================================================================
-// LEGACY TYPES (for migration - will be removed)
+// LEGACY SCHEMAS (for migration - will be removed)
 // ============================================================================
 
 /**
  * @deprecated Use OutputFile instead.
- * Legacy type with duplicate path fields. Kept temporarily for migration.
+ * Legacy schema with duplicate path fields. Kept temporarily for migration.
  */
-export interface NamedOutputFile {
-  source: string;
-  path: string; // Duplicate of location.absolutePath
-  relativePath: string; // Duplicate of location.relativePath
-  workspacePath?: string; // Duplicate of location.workspace?.absolutePath
-  location: FileLocation;
-}
+export const NamedOutputFileSchema = z
+  .object({
+    source: z.string(),
+    path: z.string(), // Duplicate of location.absolutePath
+    relativePath: z.string(), // Duplicate of location.relativePath
+    workspacePath: z.string().optional(), // Duplicate of location.workspace?.absolutePath
+    location: FileLocationSchema,
+  })
+  .strict();
+
+/**
+ * @deprecated Use OutputFile instead.
+ */
+export type NamedOutputFile = z.infer<typeof NamedOutputFileSchema>;
