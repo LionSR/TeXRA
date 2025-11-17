@@ -1,5 +1,6 @@
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { TaskRunFileService } from '@utils/files';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
@@ -16,6 +17,7 @@ import type { AgentConfig } from './AgentConfig';
 export interface ResponseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
   agentConfig: AgentConfig;
+  fileService: TaskRunFileService;
 }
 
 export interface ResponseCycleInput<C = unknown> {
