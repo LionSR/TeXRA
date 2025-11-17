@@ -767,26 +767,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
     };
 
-    if (this.roundOutputs.length === 0) {
-      return summary;
-    }
+    // Find the most recent round with XML summary data
+    // No need to search through cached roundOutputs - check in reverse order
+    for (let round = this.roundOutputs.length - 1; round >= 0; round--) {
+      const output = this.roundOutputs[round];
+      if (!output) continue;
 
-    const lastWithSummary = [...this.roundOutputs].reverse().find((output) => {
       const xml = output.xmlSummary;
-      return (
+      const hasData =
         Object.keys(xml.tagContents).length > 0 ||
         xml.documents.length > 0 ||
-        xml.singleOutputFile !== null
-      );
-    });
+        xml.singleOutputFile !== null;
 
-    if (!lastWithSummary) {
-      return summary;
+      if (hasData) {
+        summary.tagContents = { ...xml.tagContents };
+        summary.documents = [...xml.documents];
+        summary.singleOutputFile = xml.singleOutputFile;
+        break;
+      }
     }
-
-    summary.tagContents = { ...lastWithSummary.xmlSummary.tagContents };
-    summary.documents = [...lastWithSummary.xmlSummary.documents];
-    summary.singleOutputFile = lastWithSummary.xmlSummary.singleOutputFile;
 
     return summary;
   }
