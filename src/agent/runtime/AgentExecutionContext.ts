@@ -1,5 +1,6 @@
 // Local imports - agent types
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { PipelineContext } from '@agent/core/PipelineTypes';
 
 // Local imports - logger
 import {
@@ -12,6 +13,7 @@ import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 export interface AgentExecutionContextInit {
   streamId: StreamTabId;
   executionId?: ExecutionId;
+  pipelineContext?: PipelineContext;
 }
 
 /**
@@ -32,6 +34,10 @@ export class AgentExecutionContext {
 
   get executionId(): ExecutionId | undefined {
     return this.init.executionId;
+  }
+
+  get pipelineContext(): PipelineContext | undefined {
+    return this.init.pipelineContext;
   }
 
   stage(

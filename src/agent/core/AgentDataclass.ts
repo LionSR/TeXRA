@@ -13,6 +13,7 @@ export enum AgentType {
   CoT = 'CoT',
   Direct = 'direct',
   ToolUse = 'toolUse',
+  Pipeline = 'pipeline',
 }
 
 /**
@@ -132,12 +133,18 @@ export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
     .prefault(AgentCategory.ToolUse),
 });
 
+/** Pipeline agents define multi-step orchestration workflows. */
+// Import placed here to avoid circular dependencies
+import type { PipelineAgentSettingSchema } from './PipelineTypes';
+
 /**
- * Canonical agent settings schema combining workflow and tool-use variants.
+ * Canonical agent settings schema combining workflow, tool-use, and pipeline variants.
  */
 export const AgentSettingSchema = z.union([
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
+  // Pipeline schema imported dynamically to avoid circular dependency
+  z.lazy(() => require('./PipelineTypes').PipelineAgentSettingSchema),
 ]);
 
 export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;

@@ -1,0 +1,30 @@
+name: derive-criticize
+
+settings:
+  agentType: pipeline
+  chainOutputToInput: false  # Criticize needs to see both original and derivation
+  documentTag: latex_document
+  endTag: </latex_document>
+  outputExt: tex
+
+  pipeline:
+    - agent: derive
+      # First derives with full steps and verifies
+
+    - agent: criticize
+      # Then criticizes, seeing both original and derived version
+
+prompts:
+  systemPrompt: |
+    Two-phase scientific workflow: rigorous derivation followed by critical analysis.
+    This pipeline first derives mathematical content explicitly from first principles,
+    then provides detailed technical criticism of the derivation.
+
+  userPrefix: |
+    This is a two-phase pipeline for mathematical research documents:
+
+    Phase 1 (Derive): Show complete derivations from first principles with verification
+    Phase 2 (Criticize): Provide technical criticism with severity ratings
+
+  userRequest: |
+    Execute the two-phase pipeline on this document.

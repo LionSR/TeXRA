@@ -161,6 +161,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
       this.agentPath,
       this.modelHandler,
       this.logger,
+      this.context.pipelineContext,  // Pass pipeline context if available
     );
   }
 

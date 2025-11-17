@@ -4,6 +4,7 @@ import * as path from 'path';
 // Local imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { PipelineContext } from '@agent/core/PipelineTypes';
 // Internal imports
 import {
   AgentSetting,
@@ -38,6 +39,7 @@ export async function buildUserVars(
   agentPath: string,
   modelHandler: IModelHandler,
   logger: AgentLogger,
+  pipelineContext?: PipelineContext,  // NEW optional parameter
 ): Promise<Record<string, any>> {
   const userVars: Record<string, any> = {};
   const allLoadedFiles: LoadedFileEntry[] = [];
@@ -57,6 +59,11 @@ export async function buildUserVars(
 
   Object.assign(userVars, getOutputFilesOrder(agentConfig, agentSetting));
   Object.assign(userVars, getToolFlags(agentConfig, agentSetting, agentPrompt));
+
+  // NEW: Add pipeline-specific variables if in pipeline context
+  if (pipelineContext) {
+    Object.assign(userVars, await getPipelineVars(pipelineContext, agentConfig));
+  }
 
   // Emit aggregated file list if any files were loaded
   if (allLoadedFiles.length > 0) {
@@ -312,4 +319,30 @@ export function getToolFlags(
   }
 
   return flags;
+}
+
+/**
+ * Build pipeline-specific variables for agents running within a pipeline.
+ */
+async function getPipelineVars(
+  context: PipelineContext,
+  agentConfig: AgentConfig,
+): Promise<Record<string, any>> {
+  const vars: Record<string, any> = {
+    PIPELINE_STEP: context.currentStep,
+    PIPELINE_TOTAL_STEPS: context.totalSteps,
+    PIPELINE_CURRENT_AGENT: context.currentAgent,
+  };
+
+  if (context.previousAgent) {
+    vars.PIPELINE_PREVIOUS_AGENT = context.previousAgent;
+  }
+
+  // In chain mode, provide ORIGINAL_INPUT_* variables
+  if (context.chainMode && context.currentStep > 1) {
+    vars.ORIGINAL_INPUT_FILE = context.originalInput;
+    vars.ORIGINAL_INPUT_CONTENT = await WorkspaceFS.read(context.originalInput);
+  }
+
+  return vars;
 }

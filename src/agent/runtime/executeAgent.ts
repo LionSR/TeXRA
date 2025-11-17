@@ -11,6 +11,7 @@ import {
   MergeAgent,
   BaseToolUseAgent,
   BaseReflectionAgent,
+  PipelineAgent,
 } from '@agent/implementations';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
@@ -143,6 +144,7 @@ function getAgentClass(settings: AgentSetting): AgentConstructor {
     direct: DirectAgent,
     CoT: CoTAgent,
     toolUse: BaseToolUseAgent,
+    pipeline: PipelineAgent,
   };
   return agentTypeMapping[settings.agentType] || DirectAgent;
 }
@@ -177,6 +179,8 @@ interface PrepareAgentInstanceParams {
   agentClassOverride?: AgentConstructor;
   /** Optional factory for constructing the execution context */
   contextFactory?: (init: AgentExecutionContextInit) => AgentExecutionContext;
+  /** Optional pipeline context for agents running within a pipeline */
+  pipelineContext?: import('@agent/core/PipelineTypes').PipelineContext;
 }
 
 /**
@@ -225,6 +229,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     executionId,
     agentClassOverride,
     contextFactory,
+    pipelineContext,
   } = params;
 
   const configInput: Partial<AgentConfig> = {
@@ -300,8 +305,8 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   );
 
   const context = contextFactory
-    ? contextFactory({ streamId, executionId })
-    : new AgentExecutionContext({ streamId, executionId });
+    ? contextFactory({ streamId, executionId, pipelineContext })
+    : new AgentExecutionContext({ streamId, executionId, pipelineContext });
 
   const agent = new AgentClass(
     modelHandler,
