@@ -749,8 +749,8 @@ export class OutputHandler implements IOutputHandler {
             let processed: OutputFileInfo = {
               source: outputFile,
               location: processedLocation,
-              lineage: undefined,
-              diff: undefined,
+              lineage: null,
+              diff: null,
             };
             const hasScratchpadPrefill =
               this.agentSetting.prefills?.some((prefill) =>

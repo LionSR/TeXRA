@@ -41,8 +41,8 @@ export const FileLocationSchema = z
     scope: FileLocationScopeSchema,
     relativePath: z.string(),
     relativeScope: FileRelativeScopeSchema,
-    workspace: WorkspaceLocationSchema.nullish(),
-    runStorage: RunStorageLocationSchema.nullish(),
+    workspace: WorkspaceLocationSchema.nullable(),
+    runStorage: RunStorageLocationSchema.nullable(),
   })
   .strict();
 
@@ -68,9 +68,9 @@ export const OutputFileSchema = z
  */
 export const FileLineageSchema = z
   .object({
-    base: FileLocationSchema.nullish(),
-    previous: FileLocationSchema.nullish(),
-    original: FileLocationSchema.nullish(),
+    base: FileLocationSchema.nullable(),
+    previous: FileLocationSchema.nullable(),
+    original: FileLocationSchema.nullable(),
   })
   .strict();
 
@@ -85,8 +85,8 @@ export const OutputFileInfoSchema = z
   .object({
     source: z.string(),
     location: FileLocationSchema,
-    lineage: FileLineageSchema.nullish(),
-    diff: DiffStatsSchema.nullish(),
+    lineage: FileLineageSchema.nullable(),
+    diff: DiffStatsSchema.nullable(),
   })
   .strict();
 
@@ -108,8 +108,8 @@ const RawOutputXmlSummarySchema = z
       .record(z.string(), z.union([z.string(), z.array(z.string())]))
       .optional(),
     documents: z.array(z.string()).optional(),
-    singleOutputFile: z.string().nullable().optional(),
-    sourceLocation: FileLocationSchema.nullable().optional(),
+    singleOutputFile: z.string().nullable(),
+    sourceLocation: FileLocationSchema.nullable(),
   })
   .strict();
 
