@@ -343,23 +343,26 @@ export class XmlOutputManager {
   ): Promise<void> {
     this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
     const xmlLocation = this.fileService.resolveRelativePath(filePath);
-    let content = await AbsoluteFS.read(xmlLocation.absolutePath);
+    const originalContent = await AbsoluteFS.read(xmlLocation.absolutePath);
+    let content = await this.processXmlContent(originalContent);
 
-    content = await this.processXmlContent(content);
-
+    let fixed = false;
     if (!content.endsWith(`</${documentTag}>`)) {
       if (
         !content.includes(`</${documentTag}>`) &&
         content.includes(`<${documentTag}>`)
       ) {
+        fixed = true;
         content += `\n</${documentTag}>`;
-      } else {
+      } else if (content.includes(`<${documentTag}>`)) {
+        fixed = true;
         content = content.replace(new RegExp(`</${documentTag}>.*$`, 's'), '');
-        if (content.includes(`<${documentTag}>`)) {
-          content += `\n</${documentTag}>`;
-        }
+        content += `\n</${documentTag}>`;
       }
     }
-    await AbsoluteFS.write(xmlLocation.absolutePath, content);
+
+    if (fixed || content !== originalContent) {
+      await AbsoluteFS.write(xmlLocation.absolutePath, content);
+    }
   }
 }

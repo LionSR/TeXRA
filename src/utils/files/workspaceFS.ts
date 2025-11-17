@@ -26,14 +26,6 @@ export class WorkspaceFS extends RelativeFS {
     return base ? path.relative(base, filePath) : filePath;
   }
 
-  public static async appendFile(
-    target: string,
-    content: string,
-  ): Promise<void> {
-    const existing = (await this.exists(target)) ? await this.read(target) : '';
-    await this.write(target, `${existing}${content}`);
-  }
-
   public static async existsAndNonTrivial(target: string): Promise<boolean> {
     return (await this.exists(target)) && (await this.read(target)).length > 15;
   }
