@@ -395,13 +395,11 @@ export class OutputHandler implements IOutputHandler {
   public getRoundMapping(currRound: number): RoundFileMapping {
     const currentData = this.rounds.get(currRound);
     const currentOutputs = currentData?.outputs ?? [];
-    const currentRelatives = currentOutputs.map((entry) =>
-      getComparablePath(entry.location),
-    );
+    const currentLocations = currentOutputs.map((entry) => entry.location);
 
     const baseToOutput = createFileMapping(
       this.baseFiles,
-      currentRelatives,
+      currentLocations,
       'contains',
     );
 
@@ -411,7 +409,7 @@ export class OutputHandler implements IOutputHandler {
 
     const prevToOutput =
       currRound > 0
-        ? createFileMapping(prevLocations, currentRelatives, 'basename', true)
+        ? createFileMapping(prevLocations, currentLocations, 'basename', true)
         : new Map<string, string>();
 
     const originByOutput = new Map(
@@ -658,7 +656,7 @@ export class OutputHandler implements IOutputHandler {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  processedPairs.map((p) => p.location.absolutePath),
+                  processedPairs.map((p) => p.location),
                   this.logger,
                 );
               }
@@ -737,7 +735,7 @@ export class OutputHandler implements IOutputHandler {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  processedFiles.map((entry) => entry.location.absolutePath),
+                  processedFiles.map((entry) => entry.location),
                   this.logger,
                 );
               }
@@ -775,12 +773,7 @@ export class OutputHandler implements IOutputHandler {
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);
-            await this.captureXmlSummary(
-              currRound,
-              data.rawOutput ?? rawLocation ?? null,
-              [],
-              scope,
-            );
+            await this.captureXmlSummary(currRound, rawLocation, [], scope);
           }
         };
 
