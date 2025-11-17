@@ -37,7 +37,7 @@ export interface IOutputHandler {
 
   /** Process output files from XML or direct input. */
   processOutputFiles(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void>;
