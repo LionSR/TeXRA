@@ -14,31 +14,11 @@ const FileLocationScopeSchema = z.union([
   z.literal('external'),
 ]);
 
-const FileRelativeScopeSchema = z.union([
-  z.literal('workspace'),
-  z.literal('runStorage'),
-  z.literal('absolute'),
-]);
-
-const WorkspaceLocationSchema = z
-  .object({
-    relativePath: z.string(),  // Only the relative part
-  })
-  .strict();
-
-const RunStorageLocationSchema = z
-  .object({
-    relativePath: z.string(),         // Run-relative
-    storageRelativePath: z.string(),  // Storage-relative
-  })
-  .strict();
-
 export const FileLocationSchema = z
   .object({
-    absolutePath: z.string(),  // The ONE absolute path
+    absolutePath: z.string(),
     scope: FileLocationScopeSchema,
-    workspace: WorkspaceLocationSchema.nullable(),
-    runStorage: RunStorageLocationSchema.nullable(),
+    relativePath: z.string().nullable(),
   })
   .strict();
 
