@@ -292,15 +292,14 @@ export class OutputHandler implements IOutputHandler {
       return;
     }
 
-    const workspaceLocation = this.fileService.getWorkspaceLocation(original);
-    if (!workspaceLocation) {
+    const originalLocation =
+      typeof original === 'string'
+        ? this.fileService.describePath(original)
+        : original;
+    if (originalLocation.kind !== 'workspace') {
       return;
     }
-
-    if (!workspaceLocation) {
-      return;
-    }
-    const workspaceAbsolute = path.join(workspaceRoot, workspaceLocation);
+    const workspaceAbsolute = originalLocation.absolutePath;
 
     if (!workspaceAbsolute) {
       return;
@@ -536,7 +535,7 @@ export class OutputHandler implements IOutputHandler {
         const checks = expected.map(async (file) => ({
           file,
           exists: await AbsoluteFS.exists(
-            this.fileService.resolveExpectedPath(file),
+            this.fileService.resolveRelativePath(file).absolutePath,
           ),
         }));
         const results = await Promise.all(checks);
@@ -553,8 +552,8 @@ export class OutputHandler implements IOutputHandler {
                 currRound,
               );
 
-          const resolvedXmlPath = this.fileService.resolveExpectedPath(xmlPath);
-          const xmlExists = await AbsoluteFS.exists(resolvedXmlPath);
+          const xmlLocation = this.fileService.resolveRelativePath(xmlPath);
+          const xmlExists = await AbsoluteFS.exists(xmlLocation.absolutePath);
 
           const missingOutputsData = {
             missing,
