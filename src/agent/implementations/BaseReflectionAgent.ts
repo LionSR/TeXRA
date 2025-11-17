@@ -83,6 +83,16 @@ export interface AgentRuntimeXmlExports {
   singleOutputFile: string | null;
 }
 
+/**
+ * Single source of truth for round data.
+ * Consolidates state, workspace, and artifacts that were previously in parallel arrays.
+ */
+interface RoundData {
+  state: ConversationRoundState;
+  workspace: AgentWorkspaceState;
+  artifacts: RoundOutputArtifacts | null;
+}
+
 interface RoundPipelineContext {
   roundIndex: number;
   roundState: ConversationRoundState;
@@ -99,9 +109,6 @@ interface RoundPipelineContext {
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
-  /** File paths for each round's raw model output. */
-  protected outputFile: string[];
-  protected outputFiles: { [key: number]: string[] };
   protected baseFiles: string[];
   protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
@@ -110,9 +117,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected outputHandler: IOutputHandler;
   protected latexMediaManager: LatexMediaManager;
   protected promptBuilder?: PromptBuilder;
-  public roundStates: ConversationRoundState[] = [];
-  public workspaceStates: AgentWorkspaceState[] = [];
-  public roundOutputArtifacts: RoundOutputArtifacts[] = [];
+  /** Single source of truth for all round data */
+  private rounds: RoundData[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
     documents: [],
@@ -142,12 +148,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.agentSetting = workflowSetting;
 
     // Initialize basic attributes
-    const numRounds = this.getTotalRounds();
-    this.outputFile = new Array(numRounds);
-    this.outputFiles = {};
-    for (let i = 0; i < numRounds; i++) {
-      this.outputFiles[i] = [];
-    }
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
         ? [...this.agentConfig.outputFiles]
@@ -157,11 +157,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // this is not so neat
     this.useScratchpad =
       this.agentSetting.prefills?.includes('<scratchpad>') || false;
-
-    // Set output files for all rounds
-    for (let i = 0; i < numRounds; i++) {
-      this.outputFile[i] = this.getOutputFile(i);
-    }
 
     // Initialize logging
     this.logId = 0;
@@ -189,7 +184,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
-      this.roundOutputArtifacts = [];
+      this.clearRounds();
       this.fileService.updateRunContext(params.executionId);
       this.outputHandler.hydrateFromArtifacts(
         params.runId ?? null,
@@ -205,7 +200,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       try {
         for (const round of sortedRounds) {
           const artifacts = await this.outputHandler.getRoundArtifacts(round);
-          this.roundOutputArtifacts[round] = artifacts;
+          this.setRoundArtifacts(round, artifacts);
         }
 
         hydratedCount = sortedRounds.length;
@@ -333,7 +328,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       });
 
       const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
-      this.roundOutputArtifacts[currRound] = artifacts;
+      this.setRoundArtifacts(currRound, artifacts);
       return artifacts;
     };
 
@@ -681,12 +676,47 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Called by ReflectionRunFlow after each round completes.
    */
   public recordRoundResult(result: ReflectionRoundResult): void {
-    this.roundStates.push(result.roundState);
-    this.workspaceStates.push(result.workspaceState);
-    if (result.outputArtifacts) {
-      this.roundOutputArtifacts[result.outputArtifacts.round] =
-        result.outputArtifacts;
+    this.rounds.push({
+      state: result.roundState,
+      workspace: result.workspaceState,
+      artifacts: result.outputArtifacts,
+    });
+  }
+
+  /**
+   * Accessor methods for round data - single source of truth.
+   * These provide controlled access to the consolidated round data.
+   */
+
+  protected getRoundData(index: number): RoundData | undefined {
+    return this.rounds[index];
+  }
+
+  protected getRoundArtifacts(index: number): RoundOutputArtifacts | null {
+    return this.rounds[index]?.artifacts ?? null;
+  }
+
+  protected setRoundArtifacts(
+    index: number,
+    artifacts: RoundOutputArtifacts,
+  ): void {
+    // Ensure the rounds array is large enough
+    while (this.rounds.length <= index) {
+      this.rounds.push({
+        state: new ConversationRoundState(this.rounds.length),
+        workspace: new AgentWorkspaceState(),
+        artifacts: null,
+      });
     }
+    this.rounds[index].artifacts = artifacts;
+  }
+
+  protected getAllRoundArtifacts(): (RoundOutputArtifacts | null)[] {
+    return this.rounds.map((r) => r.artifacts);
+  }
+
+  protected clearRounds(): void {
+    this.rounds = [];
   }
 
   /**
@@ -698,7 +728,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const previousHydratedRounds = this.hydratedRoundCount;
     const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {
-      this.roundOutputArtifacts = [];
+      this.clearRounds();
     }
     this.runtimeXmlExports = {
       tagContents: {},
@@ -741,7 +771,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      const currentArtifacts = this.roundOutputArtifacts.filter(Boolean).length;
+      const currentArtifacts = this.getAllRoundArtifacts().filter(
+        (a) => a !== null,
+      ).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
         currentArtifacts,
@@ -758,11 +790,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
     };
 
-    if (this.roundOutputArtifacts.length === 0) {
+    if (this.rounds.length === 0) {
       return summary;
     }
 
-    const lastWithSummary = [...this.roundOutputArtifacts]
+    const lastWithSummary = [...this.getAllRoundArtifacts()]
       .reverse()
       .find((artifact) => {
         const xml = artifact.xmlSummary;

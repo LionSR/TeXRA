@@ -150,8 +150,8 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     // Let agent record its own state - don't mutate agent internals
     shared.agent.recordRoundResult(result);
 
-    // Update flow state with results
-    shared.state.runState = result.runState;
+    // Update flow state with round results
+    // Note: runState is shared by reference, already updated during round execution
     shared.state.conversation = [...result.messages];
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
