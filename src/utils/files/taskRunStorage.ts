@@ -17,11 +17,6 @@ import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';
 import { AbsoluteFS } from './absoluteFS';
 import { flexibleFS } from './flexibleFS';
-import {
-  normalizeRunRelative,
-  decodePathComponent,
-  isSafePathSegment,
-} from './pathNormalizer';
 
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
@@ -91,13 +86,12 @@ function createFileLocation(params: {
  * @param id - The execution ID to validate
  * @returns True if the ID is valid, false otherwise
  */
-export function isValidExecutionId(
-  id: ExecutionId | undefined,
-): id is ExecutionId {
-  if (!id) return false;
-  if (!isSafePathSegment(id)) return false;
-  const decoded = decodePathComponent(id);
-  return /^[A-Za-z0-9._-]+$/.test(decoded);
+export function normalizeExecutionId(
+  id: ExecutionId | undefined | null,
+): ExecutionId | undefined {
+  if (!id) return undefined;
+  const normalized = id.trim().replace(/[^A-Za-z0-9_-]/g, '');
+  return normalized || undefined;
 }
 
 /**
@@ -107,54 +101,24 @@ export function isValidExecutionId(
  * @throws Error if the execution ID is invalid
  */
 export function getRunDir(id: ExecutionId): string {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
-}
-
-function toWorkspaceRelative(target: string): string {
-  if (!target) {
-    return '';
-  }
-
-  if (!path.isAbsolute(target)) {
-    return target;
-  }
-
-  const workspaceRoot = WorkspaceFS.getPath();
-  if (workspaceRoot) {
-    const relative = path.relative(workspaceRoot, target);
-    if (!relative.startsWith('..') && !path.isAbsolute(relative))
-      return relative;
-  }
-
-  const storageRoot = StorageFS.fullPath('');
-  const normalizedTarget = path.normalize(target);
-  if (storageRoot && normalizedTarget.startsWith(storageRoot)) {
-    const segments = path
-      .relative(storageRoot, normalizedTarget)
-      .split(path.sep)
-      .filter(Boolean);
-    const taskRunIndex = segments.indexOf(TASK_RUNS_DIR);
-    if (taskRunIndex >= 0 && segments.length > taskRunIndex + 2) {
-      return segments.slice(taskRunIndex + 2).join(path.sep);
-    }
-  }
-
-  throw new Error(`Cannot make path workspace-relative: ${target}`);
+  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, safeId));
 }
 
 export function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
 
-  const relative = normalizeRunRelative(workspaceRelative);
-  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
+  const relative = workspaceRelative ? path.normalize(workspaceRelative) : '';
+  const storageRelative = path.join(TASK_RUNS_DIR, safeId, relative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
     storageRelative,
@@ -307,29 +271,23 @@ export class TaskRunFileService {
       'texra.agentOutputs.storageMode',
       'workspace',
     );
-    const normalizedId = executionId ?? undefined;
-    const validExecutionId =
-      normalizedId && isValidExecutionId(normalizedId)
-        ? normalizedId
-        : undefined;
+    const normalizedId = normalizeExecutionId(executionId ?? undefined);
     const shouldUseRunStorage =
-      storageMode === 'taskRunStorage' && Boolean(validExecutionId);
+      storageMode === 'taskRunStorage' && Boolean(normalizedId);
 
     const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
       ? 'taskRunStorage'
       : 'workspace';
     const nextRunDirectory =
-      shouldUseRunStorage && validExecutionId
-        ? getRunDir(validExecutionId)
-        : null;
+      shouldUseRunStorage && normalizedId ? getRunDir(normalizedId) : null;
 
     const contextChanged =
       this.metadata.mode !== nextMode ||
-      this.metadata.executionId !== validExecutionId ||
+      this.metadata.executionId !== normalizedId ||
       this.metadata.runDirectory !== nextRunDirectory;
 
     this.metadata.mode = nextMode;
-    this.metadata.executionId = validExecutionId;
+    this.metadata.executionId = normalizedId;
     this.metadata.runDirectory = nextRunDirectory;
     this.useRunStorage = shouldUseRunStorage;
 
@@ -420,7 +378,7 @@ export class TaskRunFileService {
   ): WorkspaceLocationInfo | null {
     const root = this.workspaceRoot;
     if (!root) return null;
-    const normalized = normalizeRunRelative(relativePath);
+    const normalized = relativePath ? path.normalize(relativePath) : '';
     const absolute = normalized ? path.join(root, normalized) : root;
     return { absolutePath: absolute, relativePath: normalized };
   }
@@ -430,14 +388,13 @@ export class TaskRunFileService {
   ): WorkspaceLocationInfo | null {
     const root = this.workspaceRoot;
     if (!root) return null;
-    try {
-      const relative = toWorkspaceRelative(absolutePath);
-      const normalized = normalizeRunRelative(relative);
-      const resolved = normalized ? path.join(root, normalized) : root;
-      return { absolutePath: resolved, relativePath: normalized };
-    } catch {
+    const normalized = path.normalize(absolutePath);
+    const relative = path.relative(root, normalized);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       return null;
     }
+    const resolved = relative ? path.join(root, relative) : root;
+    return { absolutePath: resolved, relativePath: relative };
   }
 
   private describeRunStorageAbsolute(
@@ -471,7 +428,7 @@ export class TaskRunFileService {
     }
 
     const withinRun = segments.slice(runIndex + 2).join(path.sep);
-    const runRelative = normalizeRunRelative(withinRun);
+    const runRelative = withinRun ? path.normalize(withinRun) : '';
     const storageRelative = path.join(TASK_RUNS_DIR, executionId, runRelative);
     return {
       absolutePath: normalized,
@@ -646,7 +603,20 @@ export class TaskRunFileService {
    * @param target Path that may point to run storage or the workspace.
    */
   public getWorkspaceRelativePath(target: string): string {
-    return toWorkspaceRelative(target);
+    if (!target) {
+      return '';
+    }
+
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (workspaceRoot) {
+      const normalized = path.normalize(target);
+      const relative = path.relative(workspaceRoot, normalized);
+      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+        return relative;
+      }
+    }
+
+    return target;
   }
 
   public getWorkspaceDisplayPath(target: string): string {
@@ -854,9 +824,10 @@ export class TaskRunFileService {
  * @throws Error if the execution ID is invalid
  */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
-  if (!isValidExecutionId(id)) {
-    throw new Error(`Invalid execution ID: ${id}`);
+  const safeId = normalizeExecutionId(id);
+  if (!safeId) {
+    throw new Error('Execution ID is required for run storage');
   }
   await StorageFS.ensureDir(TASK_RUNS_DIR);
-  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, id));
+  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, safeId));
 }
