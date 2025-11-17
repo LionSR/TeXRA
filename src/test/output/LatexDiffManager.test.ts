@@ -93,8 +93,8 @@ describe('LatexDiffManager mapping reuse', () => {
     return {
       source,
       location: makeLocation(filePath),
-      lineage: undefined,
-      diff: undefined,
+      lineage: null,
+      diff: null,
     };
   }
 
