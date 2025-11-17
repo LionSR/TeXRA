@@ -242,17 +242,18 @@ export class XmlOutputManager {
   }
 
   /**
-   * Build output file info from source and path.
-   * @deprecated This method creates a minimal OutputFileInfo - lineage and diff are added later.
+   * Build minimal output file info from source and path.
+   * Lineage and diff stats are added later by OutputHandler.
    */
-  private buildNamedOutput(source: string, outputPath: string): OutputFileInfo {
-    const location = this.fileService.resolveRelativePath(outputPath);
-
+  private buildOutputFileInfo(
+    source: string,
+    outputPath: string,
+  ): OutputFileInfo {
     return {
       source,
-      location,
-      lineage: undefined,
-      diff: undefined,
+      location: this.fileService.resolveRelativePath(outputPath),
+      lineage: null,
+      diff: null,
     };
   }
 
@@ -304,7 +305,7 @@ export class XmlOutputManager {
       );
       const outputLocation = this.fileService.resolveRelativePath(texFile);
       await AbsoluteFS.write(outputLocation.absolutePath, doc.content.trim());
-      outputFiles.push(this.buildNamedOutput(source, texFile));
+      outputFiles.push(this.buildOutputFileInfo(source, texFile));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -329,7 +330,7 @@ export class XmlOutputManager {
       original = nameMatch[1].trim();
     }
 
-    return this.buildNamedOutput(
+    return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
       processedOutputFile,
     );
