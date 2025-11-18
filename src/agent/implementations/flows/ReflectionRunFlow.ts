@@ -78,14 +78,15 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     }
 
     try {
-      prepRes.agent.setCurrentRound(prepRes.roundIndex);
-
-      // Call agent's single entry point for round execution
-      const result = await prepRes.agent.executeRound(
+      // Initialize agent's round context
+      prepRes.agent.beginRound(
         prepRes.roundIndex,
         prepRes.state.runState,
         prepRes.state.conversation,
       );
+
+      // Execute the round using agent's internal context
+      const result = await prepRes.agent.executeCurrentRound();
 
       return {
         ...prepRes,
