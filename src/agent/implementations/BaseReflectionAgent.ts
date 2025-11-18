@@ -494,7 +494,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         roundState: store.round,
         runState: store.run,
         messages: updatedMessages,
-        shouldContinue: cycleResult.endTurn,
+        shouldContinue: !cycleResult.endTurn,
         workspaceState: store.workspace,
         output: artifacts,
       };
@@ -518,7 +518,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       roundState: store.round,
       runState: store.run,
       messages: updatedMessages,
-      shouldContinue: endTurn,
+      shouldContinue: !endTurn,
       workspaceState: store.workspace,
       output: artifacts,
     };
