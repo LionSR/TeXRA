@@ -73,12 +73,6 @@ export interface RoundOutputOptions {
   runGroupId?: string | null;
 }
 
-export interface ReflectionRoundContext {
-  roundIndex: number;
-  runState: AgentRunState;
-  messages: any[];
-}
-
 export interface ReflectionRoundResult {
   roundState: ConversationRoundState;
   runState: AgentRunState;
@@ -92,17 +86,6 @@ export interface AgentRuntimeXmlExports {
   tagContents: Record<string, string | string[]>;
   documents: string[];
   singleOutputFile: string | null;
-}
-
-interface RoundPipelineContext {
-  roundIndex: number;
-  roundState: ConversationRoundState;
-  runState: AgentRunState;
-  workspaceState: AgentWorkspaceState;
-  preparedMessages: any[];
-  prefill: string;
-  /** Agent output location - always workspace or runStorage (never external) */
-  outputLocation: AgentFileLocation;
 }
 
 /**
@@ -135,6 +118,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected readonly fileService: TaskRunFileService;
   private hydrationPromise: Promise<void> | null = null;
   private hydratedRoundCount = 0;
+  
+  // Current round execution context - set when round begins
+  private currentRoundIndex: number = 0;
+  private currentMessages: any[] = [];
+  private currentRunState: AgentRunState | null = null;
+  private currentWorkspaceState: AgentWorkspaceState | null = null;
 
   constructor(
     modelHandler: IModelHandler<any, any, any, any, C>,
@@ -281,7 +270,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.promptBuilder = undefined;
   }
 
-  public setCurrentRound(roundIndex: number): void {
+  /**
+   * Initialize the agent's round execution context.
+   * Call this before executing a round to set up the execution environment.
+   * 
+   * @param roundIndex - Zero-based round index
+   * @param runState - Current run state
+   * @param messages - Conversation messages
+   */
+  public beginRound(
+    roundIndex: number,
+    runState: AgentRunState,
+    messages: any[],
+  ): void {
+    this.currentRoundIndex = roundIndex;
+    this.currentMessages = messages;
+    this.currentRunState = runState;
+    this.currentWorkspaceState = new AgentWorkspaceState();
     this.resetTransientUserVars({ CURRENT_ROUND: roundIndex });
   }
 
@@ -414,28 +419,27 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Executes the shared round lifecycle pipeline used by both processing and reflection flows.
-   * Handles output initialization, response generation, and round finalization to keep
-   * lifecycle responsibilities centralized.
+   * Executes the round pipeline using the current round context.
+   * Must be called after beginRound() to ensure context is initialized.
    *
-   * @param currRound - Zero-based index of the round being executed.
-   * @param stateRound - Mutable state scoped to the current round of execution.
-   * @param runState - Shared agent state that spans all rounds.
-   * @param workspaceState - Current tool invocation state passed between rounds.
-   * @param preparedMessages - Messages prepared for the model before execution.
-   * @param prefill - Initial text inserted into the model response buffer.
-   * @param outputLocation - File location where model output for this round is stored.
+   * @param roundState - Round state prepared for execution
+   * @param preparedMessages - Messages prepared for the model
+   * @param prefill - Initial text for the model response buffer
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
-  public async runRoundPipeline({
-    roundIndex,
-    roundState,
-    runState,
-    workspaceState,
-    preparedMessages,
-    prefill,
-    outputLocation,
-  }: RoundPipelineContext): Promise<ReflectionRoundResult> {
+  public async runRoundPipeline(
+    roundState: ConversationRoundState,
+    preparedMessages: any[],
+    prefill: string,
+  ): Promise<ReflectionRoundResult> {
+    if (!this.currentRunState || !this.currentWorkspaceState) {
+      throw new Error('Round context not initialized. Call beginRound() first.');
+    }
+    
+    const roundIndex = this.currentRoundIndex;
+    const runState = this.currentRunState;
+    const workspaceState = this.currentWorkspaceState;
+    const outputLocation = this.outputFile[roundIndex];
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
         this.agentConfig,
@@ -524,17 +528,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async prepareRoundContext(
-    currRound: number,
-    _runState: AgentRunState,
-    messages: any[],
-    workspaceState: AgentWorkspaceState,
-  ): Promise<{
+  public async prepareRoundContext(): Promise<{
     stateRound: ConversationRoundState;
     preparedMessages: any[];
     prefill?: string;
     skip: boolean;
   }> {
+    if (!this.currentWorkspaceState) {
+      throw new Error('Round context not initialized. Call beginRound() first.');
+    }
+    
+    const currRound = this.currentRoundIndex;
+    const messages = this.currentMessages;
+    const workspaceState = this.currentWorkspaceState;
     const stateRound = new ConversationRoundState(currRound);
     const promptBuilder = this.getPromptBuilder();
 
@@ -612,10 +618,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async prepareAgentWorkspaceState(
-    currRound: number,
-    workspaceState: AgentWorkspaceState,
-  ): Promise<void> {
+  public async prepareAgentWorkspaceState(): Promise<void> {
+    if (!this.currentWorkspaceState) {
+      throw new Error('Round context not initialized. Call beginRound() first.');
+    }
+    
+    const currRound = this.currentRoundIndex;
+    const workspaceState = this.currentWorkspaceState;
     if (currRound === 0) {
       const inputFiles = [
         this.fileService.createLocation(this.agentConfig.inputFile),
@@ -685,35 +694,29 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Executes a complete reflection round including preparation, execution, and result recording.
-   * This is the single entry point for running a round - flows should call this instead of
-   * orchestrating individual steps.
-   *
-   * @param roundIndex - The zero-based index of the round to execute
-   * @param runState - The current run state
-   * @param messages - The conversation messages
+   * Executes the current round that was initialized with beginRound().
+   * Flows should call beginRound() first to set up the context, then call this method.
+   * 
    * @returns The result of the round execution
    */
-  public async executeRound(
-    roundIndex: number,
-    runState: AgentRunState,
-    messages: any[],
-  ): Promise<ReflectionRoundResult> {
+  public async executeCurrentRound(): Promise<ReflectionRoundResult> {
+    if (!this.currentRunState || !this.currentWorkspaceState) {
+      throw new Error('Round context not initialized. Call beginRound() first.');
+    }
+    
+    const roundIndex = this.currentRoundIndex;
+    const runState = this.currentRunState;
+    const messages = this.currentMessages;
+    const workspaceState = this.currentWorkspaceState;
+    
     this.logger.debug(`Processing round ${roundIndex}`);
     
     return this.withRoundStage(`r${roundIndex}`, async () => {
-      const workspaceState = new AgentWorkspaceState();
-
       // Prepare workspace state
-      await this.prepareAgentWorkspaceState(roundIndex, workspaceState);
+      await this.prepareAgentWorkspaceState();
 
       // Prepare round context
-      const preparation = await this.prepareRoundContext(
-        roundIndex,
-        runState,
-        messages,
-        workspaceState,
-      );
+      const preparation = await this.prepareRoundContext();
 
       // Handle skip case
       if (preparation.skip) {
@@ -728,15 +731,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       }
 
       // Execute round pipeline
-      return await this.runRoundPipeline({
-        roundIndex,
-        roundState: preparation.stateRound,
-        runState,
-        workspaceState,
-        preparedMessages: preparation.preparedMessages,
-        prefill: preparation.prefill ?? '',
-        outputLocation: this.outputFile[roundIndex],
-      });
+      return await this.runRoundPipeline(
+        preparation.stateRound,
+        preparation.preparedMessages,
+        preparation.prefill ?? '',
+      );
     });
   }
 
