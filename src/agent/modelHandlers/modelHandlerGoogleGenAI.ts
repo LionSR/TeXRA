@@ -187,14 +187,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
     const requestedLevel = this.capabilities.reasoningEffort;
+    const isGemini3 = this.config.fullName.includes('gemini-3-pro');
 
     if (requestedLevel === ReasoningEffort.NONE) {
+      if (isGemini3) {
+        this.logger.warn(
+          "Gemini 3 Pro can't disable thinking. Using thinking_level 'high'.",
+        );
+        return 'high';
+      }
       return undefined;
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
       this.logger.warn(
-        "Gemini 3 doesn't support thinking_level 'medium'. Falling back to 'high'.",
+        "Google models don't support thinking_level 'medium'. Falling back to 'high'.",
       );
       return 'high';
     }
@@ -368,12 +375,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     };
 
     const thinkingLevel = this.getThinkingLevel();
-    if (thinkingLevel) {
+    if (thinkingLevel && this.config.fullName.includes('gemini-3-pro')) {
       generationConfig.thinkingLevel = thinkingLevel;
     }
 
     if (
-      this.config.fullName.includes('3-pro-preview') ||
+      this.config.fullName.includes('gemini-3-pro-preview') ||
       this.config.fullName.includes('2.5-pro') ||
       this.config.fullName.includes('2.5-flash') ||
       this.config.fullName.includes('flash-latest')
