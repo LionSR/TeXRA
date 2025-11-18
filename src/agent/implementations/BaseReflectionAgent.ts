@@ -282,7 +282,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     return this.promptBuilder;
   }
 
-  protected resetPromptBuilder(): void {
+  public resetPromptBuilder(): void {
     this.promptBuilder = undefined;
   }
 
@@ -310,7 +310,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Override for specialized naming logic (e.g., MergeAgent).
    * @returns AgentFileLocation - always workspace or runStorage (never external)
    */
-  protected getOutputFileLocation(currRound: number): AgentFileLocation {
+  public getOutputFileLocation(currRound: number): AgentFileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
@@ -432,7 +432,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param outputLocation - File location where model output for this round is stored.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
-  private async runRoundPipeline({
+  public async runRoundPipeline({
     roundIndex,
     roundState,
     runState,
@@ -529,7 +529,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareRoundContext(
+  public async prepareRoundContext(
     currRound: number,
     _runState: AgentRunState,
     messages: any[],
@@ -617,7 +617,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async prepareAgentWorkspaceState(
+  public async prepareAgentWorkspaceState(
     currRound: number,
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
@@ -674,59 +674,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     );
   }
 
-  public async runReflectionRound({
-    roundIndex,
-    runState,
-    messages,
-  }: ReflectionRoundContext): Promise<ReflectionRoundResult> {
-    this.logger.debug(`Processing round ${roundIndex}`);
-    const workspaceState = new AgentWorkspaceState();
-
-    return this.withRoundStage(`r${roundIndex}`, async () => {
-      const shared: ReflectionRoundShared = {
-        runtime: {
-          workspaceState,
-        },
-        hooks: {
-          prepareAgentWorkspaceState: () =>
-            this.prepareAgentWorkspaceState(roundIndex, workspaceState),
-          prepareRoundContext: () =>
-            this.prepareRoundContext(
-              roundIndex,
-              runState,
-              messages,
-              workspaceState,
-            ),
-          runRoundPipeline: ({ stateRound, preparedMessages, prefill }) =>
-            this.runRoundPipeline({
-              roundIndex,
-              roundState: stateRound,
-              runState,
-              workspaceState,
-              preparedMessages,
-              prefill,
-              outputLocation: this.outputFile[roundIndex],
-            }),
-          createSkipResult: (stateRound) => ({
-            roundState: stateRound,
-            runState,
-            messages,
-            shouldContinue: true,
-            workspaceState,
-            output: null,
-          }),
-        },
-      };
-
-      const flow = createReflectionRoundFlow();
-      await flow.run(shared);
-
-      if (!shared.runtime.result) {
-        throw new Error('Reflection round did not produce a result.');
-      }
-
-      return shared.runtime.result;
-    });
+  /**
+   * Records the results of a reflection round into the agent's internal state.
+   * Flows should call this method after executing a round instead of mutating
+   * agent internals directly.
+   *
+   * @param result - The result returned by the reflection round flow
+   */
+  public recordRoundResult(result: ReflectionRoundResult): void {
+    this.roundStates.push(result.roundState);
+    this.workspaceStates.push(result.workspaceState);
+    if (result.output) {
+      this.roundOutputs[result.output.round] = result.output;
+    }
   }
 
   /**

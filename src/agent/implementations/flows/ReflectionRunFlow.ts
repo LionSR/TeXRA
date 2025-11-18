@@ -3,9 +3,9 @@ import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
 import type { AgentRunState } from '@agent/core/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type {
   BaseReflectionAgent,
-  ReflectionRoundContext,
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
 // Internal imports
@@ -19,6 +19,11 @@ import {
   type AgentRunHooks,
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
+import {
+  createReflectionRoundFlow,
+  type ReflectionRoundShared,
+  type ReflectionRoundContext,
+} from '@agent/implementations/flows/ReflectionRoundFlow';
 
 export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 
@@ -84,11 +89,36 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
     try {
       prepRes.agent.setCurrentRound(prepRes.roundIndex);
-      const result = await prepRes.agent.runReflectionRound({
-        roundIndex: prepRes.roundIndex,
-        runState: prepRes.state.runState,
-        messages: prepRes.state.conversation,
-      } satisfies ReflectionRoundContext);
+
+      // Create and run reflection round flow directly
+      const result = await prepRes.agent.withRoundStage(
+        `r${prepRes.roundIndex}`,
+        async () => {
+          const workspaceState = new AgentWorkspaceState();
+          const context: ReflectionRoundContext = {
+            agent: prepRes.agent,
+            roundIndex: prepRes.roundIndex,
+            runState: prepRes.state.runState,
+            messages: prepRes.state.conversation,
+            workspaceState,
+          };
+
+          const shared: ReflectionRoundShared = {
+            agent: prepRes.agent,
+            context,
+            runtime: {},
+          };
+
+          const flow = createReflectionRoundFlow();
+          await flow.run(shared);
+
+          if (!shared.runtime.result) {
+            throw new Error('Reflection round did not produce a result.');
+          }
+
+          return shared.runtime.result;
+        },
+      );
 
       return {
         ...prepRes,
@@ -131,11 +161,10 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    shared.agent.roundStates.push(result.roundState);
-    shared.agent.workspaceStates.push(result.workspaceState);
-    if (result.output) {
-      shared.agent.roundOutputs[result.output.round] = result.output;
-    }
+    // Record round result through agent API instead of direct mutation
+    shared.agent.recordRoundResult(result);
+
+    // Update flow state
     shared.state.runState = result.runState;
     shared.state.conversation = [...result.messages];
     shared.state.continueRounds = result.shouldContinue;
