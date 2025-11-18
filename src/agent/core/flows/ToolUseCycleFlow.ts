@@ -416,7 +416,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     const toolInfo = options.modelHandler.extractToolUse(state.response);
-    const [text, usage, stopReason] = options.modelHandler.extractResponse(
+    const { response: text, usage, stopReason } = options.modelHandler.extractResponse(
       state.response,
       '',
     );

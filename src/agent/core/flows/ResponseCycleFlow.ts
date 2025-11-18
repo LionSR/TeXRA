@@ -323,7 +323,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
     });
 
     return stage.run(async () => {
-      const [newResponse, responseUsage, stopReason] =
+      const { response: newResponse, usage: responseUsage, stopReason } =
         options.modelHandler.extractResponse(
           state.responseObject,
           options.agentSetting.endTag,

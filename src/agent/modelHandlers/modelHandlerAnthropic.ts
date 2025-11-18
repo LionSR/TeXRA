@@ -86,7 +86,10 @@ import { toAnthropicTools } from './toolConversion';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
-import type { CreateResponseOptions } from './types/IModelHandler';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaBase64ImageSource,
@@ -1016,11 +1019,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     });
   }
 
-  /** Processes Anthropic API response, handling errors, and formatting while returning [response, usage, stopReason]. */
+  /** Processes Anthropic API response, handling errors, and formatting while returning response object. */
   extractResponse(
     responseObject: BetaMessage,
     endTag: string,
-  ): [string, AnthropicUsage, ProviderStopReason] {
+  ): ExtractResponseResult {
     // Check for empty response
     if (responseObject.usage.output_tokens === 3) {
       // Anthropic specific empty response check
@@ -1067,7 +1070,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     newResponse = replacementEngine.applyAll(newResponse);
 
-    return [newResponse, responseObject.usage, stopReason || 'stop'];
+    return {
+      response: newResponse,
+      usage: responseObject.usage,
+      stopReason: stopReason || 'stop',
+    };
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
