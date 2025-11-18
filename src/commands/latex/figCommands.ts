@@ -109,7 +109,9 @@ async function handleExtractTikzFigures(): Promise<void> {
     );
 
     // Extract TikZ pictures with labels
-    const labeledTikzPictures = await tikzPictureManager.extract(filePath);
+    const labeledTikzPictures = await tikzPictureManager.extract(
+      pathToLocation(filePath),
+    );
 
     if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels

@@ -36,7 +36,9 @@ export class ExtractTikzFiguresTool extends defineTool({
   protected async execute({ texPath, compile = true }: ExtractTikzInput) {
     const { resolved, display } = await resolveLatexFileOrThrow(texPath);
 
-    const tikzFigures = await tikzPictureManager.extract(resolved.relative);
+    const tikzFigures = await tikzPictureManager.extract(
+      pathToLocation(resolved.absolute),
+    );
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
       return toolResult({
