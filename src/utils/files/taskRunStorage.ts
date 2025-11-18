@@ -103,31 +103,12 @@ export function createExternalLocation(
 }
 
 /**
- * Validate an execution ID to ensure it's safe for use in file paths.
- * Acts as a type guard to ensure the ID is defined and non-empty.
- * @param id - The execution ID to validate
- * @returns True if the ID is valid, false otherwise
- */
-export function normalizeExecutionId(
-  id: ExecutionId | undefined | null,
-): ExecutionId | undefined {
-  if (!id) return undefined;
-  const normalized = id.trim().replace(/[^A-Za-z0-9_-]/g, '');
-  return normalized || undefined;
-}
-
-/**
  * Get the full path to a specific task run directory.
  * @param id - The execution ID for the task run
  * @returns The full path to the task run directory
- * @throws Error if the execution ID is invalid
  */
 export function getRunDir(id: ExecutionId): string {
-  const safeId = normalizeExecutionId(id);
-  if (!safeId) {
-    throw new Error('Execution ID is required for run storage');
-  }
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, safeId));
+  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
 }
 
 /**
@@ -217,8 +198,8 @@ export class TaskRunFileService {
   private useRunStorage: boolean;
   public metadata: {
     mode: 'workspace' | 'taskRunStorage';
-    executionId?: ExecutionId;
-    runDirectory?: string | null;
+    executionId: ExecutionId | undefined;
+    runDirectory: string | undefined;
   };
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
@@ -227,7 +208,7 @@ export class TaskRunFileService {
     this.metadata = {
       mode: 'workspace',
       executionId: undefined,
-      runDirectory: null,
+      runDirectory: undefined,
     };
     this.useRunStorage = false;
     this.updateRunContext(executionId);
@@ -245,7 +226,7 @@ export class TaskRunFileService {
       ? 'taskRunStorage'
       : 'workspace';
     const nextRunDirectory =
-      shouldUseRunStorage && executionId ? getRunDir(executionId) : null;
+      shouldUseRunStorage && executionId ? getRunDir(executionId) : undefined;
 
     const contextChanged =
       this.metadata.mode !== nextMode ||
@@ -253,7 +234,7 @@ export class TaskRunFileService {
       this.metadata.runDirectory !== nextRunDirectory;
 
     this.metadata.mode = nextMode;
-    this.metadata.executionId = normalizedId;
+    this.metadata.executionId = executionId ?? undefined;
     this.metadata.runDirectory = nextRunDirectory;
     this.useRunStorage = shouldUseRunStorage;
 
@@ -271,49 +252,24 @@ export class TaskRunFileService {
     return WorkspaceFS.getPath();
   }
 
-  public isRunStorageEnabled(): boolean {
-    return this.useRunStorage;
-  }
-
-  // REMOVED: isWithinWorkspace was never used
-
+  // Direct access to activeExecutionId for internal use
   private get activeExecutionId(): ExecutionId | undefined {
     return this.metadata.executionId;
   }
 
   public getExecutionId(): ExecutionId | undefined {
-    return this.activeExecutionId;
+    return this.metadata.executionId;
   }
 
   public hasRunDirectory(): boolean {
     return Boolean(this.metadata.runDirectory);
   }
 
-  public getRunDirectory(): string | undefined {
-    return this.metadata.runDirectory ?? undefined;
-  }
-
-  public async ensureRunDirectory(): Promise<void> {
+  private async ensureRunDirectory(): Promise<void> {
     if (!this.activeExecutionId) {
       return;
     }
     await ensureRunDir(this.activeExecutionId);
-  }
-
-  /**
-   * @deprecated INTERNAL USE ONLY - DO NOT USE THIS METHOD
-   * This method is being kept temporarily for internal compatibility only.
-   * Use `createLocation()` for creating file locations from relative paths.
-   * Use `pathToLocation()` for converting external absolute paths at boundaries.
-   *
-   * @internal
-   */
-  private describePath(target: string): FileLocation {
-    // This method is deprecated and should not be used
-    // Kept only to avoid breaking internal code during refactoring
-    throw new Error(
-      'describePath is deprecated. Use createLocation() or pathToLocation() instead.',
-    );
   }
 
   /**
