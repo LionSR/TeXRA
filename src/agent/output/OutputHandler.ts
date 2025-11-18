@@ -115,6 +115,7 @@ export class OutputHandler implements IOutputHandler {
       this.agentSetting,
       this.agentConfig,
       this.logger,
+      this.fileService,
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,

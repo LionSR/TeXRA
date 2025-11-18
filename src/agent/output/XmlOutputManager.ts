@@ -18,7 +18,7 @@ import {
 } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { AbsoluteFS, pathToLocation } from '@utils/files';
+import { AbsoluteFS, TaskRunFileService } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -30,6 +30,7 @@ export class XmlOutputManager {
     private readonly agentSetting: AgentSetting,
     private readonly agentConfig: AgentConfig,
     private readonly logger: AgentLogger,
+    private readonly fileService: TaskRunFileService,
   ) {}
 
   async processXmlContent(content: string): Promise<string> {
@@ -290,7 +291,7 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      const texLocation = pathToLocation(texFile);
+      const texLocation = this.fileService.describePath(texFile);
       await AbsoluteFS.write(texLocation.absolutePath, doc.content.trim());
       outputFiles.push(this.buildOutputFileInfo(source, texLocation));
       this.logger.debug(
@@ -322,7 +323,7 @@ export class XmlOutputManager {
 
     return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
-      pathToLocation(processedOutputFile),
+      this.fileService.describePath(processedOutputFile),
     );
   }
 

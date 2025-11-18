@@ -12,7 +12,6 @@ import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { WorkspaceFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
@@ -72,10 +71,8 @@ export class MergeAgent extends DirectAgent {
     // Construct output filename
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
-    return createWorkspaceLocation(
-      WorkspaceFS.fullPath(outputPath),
-      outputPath,
-    );
+
+    return this.fileService.createLocation(outputPath);
   }
 
   /**
