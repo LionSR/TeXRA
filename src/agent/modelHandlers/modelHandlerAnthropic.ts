@@ -1581,13 +1581,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
-    id: string,
-    name: string,
-    call: ToolUseBlock,
+    callArg: ToolUseBlock | any,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<MessageParam[]> {
+    // Handle both native ToolUseBlock and legacy parsed payload
+    const call = callArg as ToolUseBlock;
+    const id = call?.id ?? (callArg as any)?.tool_use_id ?? 'unknown-id';
+    const name = call?.name ?? (callArg as any)?.name ?? 'unknown';
+    
     const content: ContentBlockParam[] = [];
     if (
       this.capabilities.supportsReasoning &&
@@ -1605,13 +1608,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (text) {
       content.push({ type: 'text', text });
     }
-    const toolInput = call?.input ?? {};
-    content.push({
-      type: 'tool_use',
-      id,
-      name,
-      input: toolInput,
-    });
+    
+    // Use the original ToolUseBlock if it's complete, otherwise reconstruct
+    if (call && call.type === 'tool_use' && call.id && call.name) {
+      content.push(call);  // ✅ Use ORIGINAL block - preserves ALL SDK metadata!
+    } else {
+      // Fallback: reconstruct for backward compatibility
+      const toolInput = call?.input ?? {};
+      content.push({
+        type: 'tool_use',
+        id,
+        name,
+        input: toolInput,
+      });
+    }
     const callMsg: MessageParam = {
       role: 'assistant',
       content,

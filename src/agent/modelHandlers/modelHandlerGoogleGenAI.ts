@@ -1073,13 +1073,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): string | null {
+  extractToolUse(responseObject: GenerateContentResponse): {
+    toolCall: string;
+    originalPart: Part;
+  } | null {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
-      const funcPart = parts.find((part) => part.functionCall);
-      if (funcPart?.functionCall) {
-        const call = funcPart.functionCall;
+      const originalPart = parts.find((part) => part.functionCall);
+      if (originalPart?.functionCall) {
+        const call = originalPart.functionCall;
         // Ensure the call has an ID
         const callId = ensureCallId(call);
         const callWithId = { ...call, id: callId };
@@ -1089,7 +1092,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
           );
         }
-        return JSON.stringify(callWithId, null, 2);
+        
+        // Return both the original Part (with thoughtSignature!) and JSON for compatibility
+        return {
+          toolCall: JSON.stringify(callWithId, null, 2),
+          originalPart,  // Preserve the COMPLETE Part with all SDK metadata
+        };
       }
     }
     return null;
@@ -1128,34 +1136,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
-    _id: string,
-    name: string,
-    call: FunctionCall,
+    originalPart: Part,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    // Handle both args and input fields for backward compatibility
-    const args =
-      call?.args && typeof call.args === 'object'
-        ? (call.args as Record<string, unknown>)
-        : ((call as any)?.input ?? {});
-
-    // Use call.name if available, fall back to provided name
-    const functionName = call?.name ?? name;
-
-    // Create the call part with the function name and arguments
-    const callPart = createPartFromFunctionCall(functionName, args);
-
-    // Ensure the function call has an ID for correlation with result
-    const callId = ensureCallId(call);
-    if (callPart.functionCall) {
-      callPart.functionCall.id = callId;
+    // Use the ORIGINAL Part from the model response
+    // This preserves thoughtSignature and any other SDK metadata
+    
+    // Ensure the function call has an ID if missing
+    const functionCall = originalPart.functionCall;
+    if (functionCall && !functionCall.id) {
+      const callId = ensureCallId(functionCall);
+      originalPart.functionCall = { ...functionCall, id: callId };
+      this.logger.debug(
+        `Added ID to function call '${functionCall.name ?? 'unknown'}': ${callId}`,
+      );
     }
 
-    // Use the same ID for the result to maintain correlation
+    // Extract attachments and prepare result
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     let attachmentParts: Part[] = [];
+    const functionName = functionCall?.name ?? 'unknown';
+    const callId = functionCall?.id ?? 'unknown-id';
+    
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
         `Attachments included in this response:\n${describeAttachments(
@@ -1176,22 +1180,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
       }
     }
+    
+    // Create result part
     const resultPart = createPartFromFunctionResponse(
       callId,
       functionName,
       sanitizedResult,
     );
+    
+    // Build call message using the ORIGINAL Part
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));
     }
-    callParts.push(callPart);
+    callParts.push(originalPart);  // ✅ Use ORIGINAL Part - preserves thoughtSignature!
+    
     const callMsg: Content = {
       role: 'model',
       parts: callParts,
     };
+    
+    // Build result message
     const resultParts: Part[] = [resultPart, ...attachmentParts];
     const resultMsg: Content = { role: 'user', parts: resultParts };
+    
     return [callMsg, resultMsg];
   }
 

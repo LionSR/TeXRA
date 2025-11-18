@@ -215,23 +215,27 @@ export interface IModelHandler<
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
-  /** Extract tool-use details from a provider response. */
-  extractToolUse(responseObject: any): string | null;
+  /** 
+   * Extract tool-use details from a provider response.
+   * Returns either:
+   * - A JSON string (legacy format)
+   * - An object with toolCall (JSON string) and originalBlock (native SDK object)
+   */
+  extractToolUse(responseObject: any): 
+    | string 
+    | { toolCall: string; originalBlock?: any; originalPart?: any }
+    | null;
 
   /**
    * Create provider-specific messages capturing the tool call and result.
    *
-   * @param id - Tool call identifier from the model response
-   * @param name - Tool name
-   * @param call - Parsed tool call object or input payload
+   * @param callArg - Either a native SDK object (Part, ToolUseBlock, etc.) or parsed payload
    * @param result - Object with output/error fields
    * @returns Tuple of [call message, result message]
    */
   createToolUseFollowUpMessages(
     client: C | undefined,
-    id: string,
-    name: string,
-    call: T,
+    callArg: T | any,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
     text?: string,

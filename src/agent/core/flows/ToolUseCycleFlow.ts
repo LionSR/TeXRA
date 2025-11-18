@@ -211,12 +211,13 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
-  toolInfo?: string;
+  toolInfo?: string | { toolCall: string; originalBlock: unknown };
   text?: string;
+  originalToolBlock?: unknown;  // Store the native SDK tool block (Part, ToolUseBlock, etc.)
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, ['response', 'toolInfo', 'text']);
+  resetCycleState(state, ['response', 'toolInfo', 'text', 'originalToolBlock']);
 }
 
 export interface ToolUseCycleContext<C = unknown> {
@@ -415,7 +416,19 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
     }
 
-    const toolInfo = options.modelHandler.extractToolUse(state.response);
+    const toolExtraction = options.modelHandler.extractToolUse(state.response);
+    
+    // Handle both old (string) and new (object) return types
+    let toolInfoString: string | undefined;
+    let originalBlock: unknown | undefined;
+    
+    if (typeof toolExtraction === 'string') {
+      toolInfoString = toolExtraction;
+    } else if (toolExtraction && typeof toolExtraction === 'object') {
+      toolInfoString = (toolExtraction as any).toolCall;
+      originalBlock = (toolExtraction as any).originalBlock || (toolExtraction as any).originalPart;
+    }
+    
     const {
       response: text,
       usage,
@@ -451,7 +464,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
-    if (!toolInfo || endTurn) {
+    if (!toolInfoString || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
@@ -463,13 +476,14 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       };
     }
 
-    state.toolInfo = toolInfo;
+    state.toolInfo = toolInfoString;
+    state.originalToolBlock = originalBlock;  // Store the native block
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
     return {
       skipped: false,
-      value: { toolInfo, stopReason, text: text ?? undefined, endTurn: false },
+      value: { toolInfo: toolInfoString, stopReason, text: text ?? undefined, endTurn: false },
     };
   }
 
@@ -538,7 +552,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     let parsedJson: unknown;
     try {
-      parsedJson = JSON.parse(state.toolInfo);
+      // state.toolInfo should be string at this point
+      const toolInfoStr = state.toolInfo as string;
+      parsedJson = JSON.parse(toolInfoStr);
     } catch (error) {
       const errorMsg = `Malformed tool JSON: ${toErrorMessage(error)}`;
       const errorResult = toolResult({ error: errorMsg, isError: true });
@@ -548,6 +564,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         output: sanitizeToolResultForLog(errorResult),
       };
       options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      state.originalToolBlock = undefined;  // Clear invalid block
       return {
         skipped: false,
         value: {
@@ -627,12 +644,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       const workspace = store.workspace;
 
       if (toolCallId) {
+        // Use native tool block if available, otherwise fall back to raw parsed payload
+        const toolBlockArg = state.originalToolBlock ?? raw;
+        
         const followUpMessages =
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
-            toolCallId,
-            toolName,
-            raw,
+            toolBlockArg,
             buildToolResultPayload(result),
             workspace,
             state.text ?? '',
@@ -726,12 +744,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
     }
 
+    // Use native tool block if available, otherwise fall back to raw parsed payload
+    const toolBlockArg = state.originalToolBlock ?? normalResult.raw;
+    
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,
-        normalResult.toolCallId,
-        normalResult.name,
-        normalResult.raw,
+        toolBlockArg,
         buildToolResultPayload(result),
         store.workspace,
         state.text ?? '',

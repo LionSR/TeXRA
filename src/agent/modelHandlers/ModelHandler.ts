@@ -579,7 +579,10 @@ export abstract class ModelHandler<
    * @param responseObject The raw response object from the model
    * @returns JSON string with tool call details or null if not present
    */
-  extractToolUse(_responseObject: any): string | null {
+  extractToolUse(_responseObject: any): 
+    | string 
+    | { toolCall: string; originalBlock?: any; originalPart?: any }
+    | null {
     return null;
   }
 
@@ -588,9 +591,7 @@ export abstract class ModelHandler<
    */
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
-    id: string,
-    name: string,
-    call: T,
+    callArg: T | any,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
     text?: string,

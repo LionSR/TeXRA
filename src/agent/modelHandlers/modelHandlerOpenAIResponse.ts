@@ -1287,13 +1287,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ResponseFunctionToolCallItem,
+    callArg: ResponseFunctionToolCallItem | any,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
+    // Handle both native and legacy formats
+    const call = callArg as ResponseFunctionToolCallItem;
+    const id = call?.call_id ?? (callArg as any)?.id ?? 'unknown-id';
+    const name = call?.name ?? (callArg as any)?.name ?? 'unknown';
+    
     const messages: ResponseInputItem[] = [];
     if (text) {
       messages.push(this.createAssistantMessage(text));
