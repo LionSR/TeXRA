@@ -13,6 +13,29 @@ import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 /**
+ * Options for creating a model response.
+ * @template M - Provider-specific message type
+ */
+export interface CreateResponseOptions<
+  M extends ProviderMessage = ProviderMessage,
+> {
+  /** Provider client instance */
+  client: any;
+  /** Conversation messages */
+  messages: M[];
+  /** Sampling temperature (0-1) */
+  temperature: number;
+  /** Optional system prompt */
+  systemPrompt?: string;
+  /** Optional stop sequence */
+  endTag?: string;
+  /** Optional abort signal for cancellation */
+  signal?: AbortSignal;
+  /** Optional tool definitions for function calling */
+  tools?: ToolDefinition[];
+}
+
+/**
  * Common interface implemented by all model handlers.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
@@ -70,22 +93,9 @@ export interface IModelHandler<
 
   /**
    * Generate a response from the model.
-   * @param client Provider client instance
-   * @param messages Conversation messages
-   * @param temperature Sampling temperature
-   * @param systemPrompt Optional system prompt
-   * @param endTag Optional stop sequence
-   * @param signal Optional abort signal
+   * @param options Options for creating the response
    */
-  createResponse(
-    client: C,
-    messages: M[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
-  ): Promise<any>;
+  createResponse(options: CreateResponseOptions<M>): Promise<any>;
 
   /** Initialize the conversation for the first round. */
   initializeMessages(

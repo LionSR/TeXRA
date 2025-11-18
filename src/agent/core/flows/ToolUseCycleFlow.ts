@@ -325,15 +325,13 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const start = Date.now();
     try {
       options.modelHandler.setOutputStreaming(true);
-      response = await options.modelHandler.createResponse(
-        options.client,
-        state.messages,
-        options.agentSetting.temperature ?? 0,
-        undefined,
-        undefined,
-        abortController.signal,
-        options.agentSetting.tools as ToolDefinition[] | undefined,
-      );
+      response = await options.modelHandler.createResponse({
+        client: options.client,
+        messages: state.messages,
+        temperature: options.agentSetting.temperature ?? 0,
+        signal: abortController.signal,
+        tools: options.agentSetting.tools as ToolDefinition[] | undefined,
+      });
     } finally {
       options.setAbortController(null);
     }
