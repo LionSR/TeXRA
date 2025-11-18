@@ -46,8 +46,9 @@ export function createFileMapping(
         continue;
       }
 
+      // Both workspace and runStorage have relativePath; external uses absolutePath
       const sourcePath =
-        sourceFile.kind === 'workspace'
+        sourceFile.kind !== 'external'
           ? sourceFile.relativePath
           : sourceFile.absolutePath;
       const sourceBaseName = path.basename(sourcePath);
@@ -179,8 +180,9 @@ export async function replaceInputCommands(
     return;
   }
 
+  // Both workspace and runStorage have relativePath; external uses absolutePath
   const baseFilePaths = baseFiles.map((f) =>
-    f.kind === 'workspace' ? f.relativePath : f.absolutePath,
+    f.kind !== 'external' ? f.relativePath : f.absolutePath,
   );
 
   const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
