@@ -617,8 +617,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
-        pathToLocation(this.agentConfig.inputFile),
-        ...this.agentConfig.inputFiles.map((f) => pathToLocation(f)),
+        this.fileService.createLocation(this.agentConfig.inputFile),
+        ...this.agentConfig.inputFiles.map((f) =>
+          this.fileService.createLocation(f),
+        ),
       ];
       const extraMedia: string[] = [];
 
@@ -644,8 +646,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       return;
     }
 
-    let outputFiles = this.agentConfig.outputFiles.map((f) =>
-      pathToLocation(f),
+    let outputFiles: FileLocation[] = this.agentConfig.outputFiles.map((f) =>
+      this.fileService.createLocation(f),
     );
     if (outputFiles.length === 0) {
       const previousRoundFiles = this.outputHandler.ensureRound(currRound - 1);

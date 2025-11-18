@@ -28,9 +28,9 @@ import {
   getComparablePath,
   WorkspaceFS,
   AbsoluteFS,
+  createWorkspaceLocation,
+  type FileLocation,
 } from '@utils/files';
-import type { FileLocation } from '@utils/files';
-import { createWorkspaceLocation } from '@utils/files/taskRunStorage';
 // Type imports
 
 // Internal imports
