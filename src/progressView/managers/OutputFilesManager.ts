@@ -269,9 +269,12 @@ export class OutputFilesManager extends PersistentMapManager<
       target.add(info.location.absolutePath);
     }
 
-    // Lineage files (NEW STRUCTURE: only original and diffFile)
+    // Lineage files (NEW STRUCTURE: original, diffBase, diffFile)
     if (info.lineage?.original?.kind === 'workspace') {
       target.add(info.lineage.original.absolutePath);
+    }
+    if (info.lineage?.diffBase?.kind === 'workspace') {
+      target.add(info.lineage.diffBase.absolutePath);
     }
     if (info.lineage?.diffFile?.kind === 'workspace') {
       target.add(info.lineage.diffFile.absolutePath);
