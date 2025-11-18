@@ -291,7 +291,7 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      const texLocation = this.fileService.describePath(texFile);
+      const texLocation = this.fileService.createLocation(texFile);
       await AbsoluteFS.write(texLocation.absolutePath, doc.content.trim());
       outputFiles.push(this.buildOutputFileInfo(source, texLocation));
       this.logger.debug(
@@ -323,7 +323,7 @@ export class XmlOutputManager {
 
     return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
-      this.fileService.describePath(processedOutputFile),
+      this.fileService.createLocation(processedOutputFile),
     );
   }
 
