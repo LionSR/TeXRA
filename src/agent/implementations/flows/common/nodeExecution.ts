@@ -33,7 +33,9 @@ export async function runNodeEffect(
 export interface FinalizeNodeContext<
   Lifecycle extends AgentLifecycleState<string>,
   Hooks extends AgentRunHooks,
+  Agent extends object = object,
 > {
   lifecycle: Lifecycle;
   hooks: Hooks;
+  agent: Agent;
 }

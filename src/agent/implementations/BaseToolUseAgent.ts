@@ -122,10 +122,27 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     this.resumeSnapshot = snapshot;
   }
 
-  private async waitForFollowUp(): Promise<string | null> {
+  public async waitForFollowUp(): Promise<string | null> {
     return this.sessionLifecycle.waitForFollowUp(() =>
       this.checkInterruption(),
     );
+  }
+
+  public hasQueuedFollowUp(): boolean {
+    return this.sessionLifecycle.hasQueuedFollowUp();
+  }
+
+  public async applyFollowUpMessage(
+    followUp: string,
+    messages: ProviderMessage[],
+  ): Promise<ProviderMessage[]> {
+    this.logger.userMessage(followUp);
+    const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
+      messages,
+      followUp,
+    );
+    this.getActiveState().conversation = [...updatedMessages];
+    return this.getActiveState().conversation;
   }
 
   public override interrupt(): void {
@@ -159,33 +176,20 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         extendHooks: (baseHooks: AgentRunHooks) => ({
           ...baseHooks,
           init: (runStage) => this.init(runStage, { createStage: false }),
-          prepareState: () => this.prepareInitialSessionState(),
-          buildCycleOptions: (store) => this.buildToolUseCycleOptions(store),
+          prepareState: () => this.prepareInitialState(),
+          buildCycleOptions: (store) => this.createCycleOptions(store),
           runCycle: (options, messages, store) =>
-            runToolUseCycle({
-              options,
-              messages,
-              store,
-            }),
+            runToolUseCycle({ options, messages, store }),
           checkInterruption: () => this.checkInterruption(),
-          hasQueuedFollowUp: () => this.sessionLifecycle.hasQueuedFollowUp(),
+          hasQueuedFollowUp: () => this.hasQueuedFollowUp(),
           enterWaitingState: () => this.enterWaitingState(),
           clearPersistedSnapshot: () => this.clearPersistedSnapshot(),
           waitForFollowUp: () => this.waitForFollowUp(),
           markRunning: () => this.markRunning(),
-          applyFollowUp: async (followUp, messages) => {
-            this.logger.userMessage(followUp);
-            const updatedMessages =
-              await this.modelHandler.createUserFollowUpMessages(
-                messages,
-                followUp,
-              );
-            this.getActiveState().conversation = [...updatedMessages];
-            return this.getActiveState().conversation;
-          },
-          logFinalizeWarning: (message, error) => {
-            this.logger.warn(message, undefined, undefined, error);
-          },
+          applyFollowUp: (followUp, messages) =>
+            this.applyFollowUpMessage(followUp, messages),
+          logFinalizeWarning: (message, error) =>
+            this.logger.warn(message, undefined, undefined, error),
           cleanup: async () => {
             await baseHooks.cleanup();
             this.sessionLifecycle.dispose();
@@ -197,7 +201,12 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     }
   }
 
-  private async prepareInitialSessionState(): Promise<{
+  /**
+   * Prepares the initial state for the tool-use session.
+   * Handles both new sessions and resumed sessions from snapshots.
+   * Parallel to beginRound() + prepare methods in BaseReflectionAgent.
+   */
+  public async prepareInitialState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
@@ -257,9 +266,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return { messages, store, shouldSkipCycle: false };
   }
 
-  private buildToolUseCycleOptions(
-    store: AgentSharedStore,
-  ): ToolUseCycleOptions<C> {
+  /**
+   * Creates cycle options for tool-use execution.
+   * Parallel to createResponseCycleOptions() in BaseReflectionAgent.
+   */
+  public createCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
     const resolvedSetting = {
       ...this.agentSetting,
@@ -280,17 +291,17 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  private async enterWaitingState(): Promise<void> {
+  public async enterWaitingState(): Promise<void> {
     await this.sessionLifecycle.enterWaitingState(
       this.getActiveState().conversation,
     );
   }
 
-  private async markRunning(): Promise<void> {
+  public async markRunning(): Promise<void> {
     await this.sessionLifecycle.markRunning();
   }
 
-  private async clearPersistedSnapshot(): Promise<void> {
+  public async clearPersistedSnapshot(): Promise<void> {
     await this.sessionLifecycle.clearPersistedSnapshot();
   }
 
