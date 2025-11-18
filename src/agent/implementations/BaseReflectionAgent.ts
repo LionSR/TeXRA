@@ -277,9 +277,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Initialize the agent's round execution context.
    * Call this before executing a round to set up the execution environment.
    *
+   * **Threading Model**: This class assumes single-threaded execution. The `isRoundActive`
+   * flag provides a guard against programming errors but is not designed for concurrent access.
+   * The check-then-set pattern (lines 290-296) is not atomic and would fail under true concurrent
+   * execution. In the current architecture, all agent execution happens sequentially on the
+   * main event loop, making this safe.
+   *
+   * **Workspace State**: Creates a fresh `AgentWorkspaceState` for each round. This is intentional -
+   * workspace state is round-specific and gets populated during round execution (input files,
+   * prompt files, etc.). Historical workspace states are preserved in `this.workspaceStates[]`
+   * by `recordRoundResult()`.
+   *
    * @param roundIndex - Zero-based round index
-   * @param runState - Current run state
-   * @param messages - Conversation messages
+   * @param runState - Current run state (carries accumulated state across rounds)
+   * @param messages - Conversation messages for this round
    * @throws {Error} If another round is already active
    */
   public beginRound(
@@ -297,6 +308,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.currentRoundIndex = roundIndex;
     this.currentMessages = messages;
     this.currentRunState = runState;
+    // Fresh workspace state per round - populated during execution
     this.currentWorkspaceState = new AgentWorkspaceState();
     this.resetTransientUserVars({ CURRENT_ROUND: roundIndex });
   }
@@ -697,11 +709,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Records the results of a reflection round into the agent's internal state
    * and clears the active round flag.
    *
-   * Flows should call this method after successful round execution.
-   * Note: The active round flag is also cleared automatically in error paths
-   * by executeCurrentRound() to prevent blocking future rounds.
+   * **Execution Flow**:
+   * 1. Flow calls `beginRound(roundIndex, runState, messages)` to initialize context
+   * 2. Flow calls `executeCurrentRound()` to execute the round pipeline
+   * 3. Flow calls `recordRoundResult(result)` to store results and complete the round
    *
-   * @param result - The result returned by the reflection round flow
+   * **Success Path**: This method clears `isRoundActive` after storing results.
+   * **Error Path**: `executeCurrentRound()` automatically clears `isRoundActive` in its catch block.
+   *
+   * **Important**: Always call this method after successful round execution. If not called,
+   * the round context (currentMessages, currentRunState, etc.) will persist in memory
+   * until the next successful round or error, though the isRoundActive flag prevents
+   * starting new rounds, so this is primarily a memory concern rather than a correctness issue.
+   *
+   * @param result - The result returned by the reflection round execution
    */
   public recordRoundResult(result: ReflectionRoundResult): void {
     this.roundStates.push(result.roundState);
@@ -710,7 +731,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.roundOutputs[result.output.round] = result.output;
     }
 
-    // Clear the active round flag (also cleared in executeCurrentRound's catch block)
+    // Clear the active round flag to allow next round to begin
     this.isRoundActive = false;
   }
 
@@ -762,8 +783,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         );
       });
     } catch (error) {
-      // Clear active flag and reset context to prevent blocking future rounds
+      // Clear active flag and reset all context to prevent blocking future rounds
       this.isRoundActive = false;
+      this.currentRoundIndex = 0;
+      this.currentMessages = [];
       this.currentRunState = null;
       this.currentWorkspaceState = null;
       throw error;
