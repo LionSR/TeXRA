@@ -112,14 +112,10 @@
               ]
             },
             "default": [
-              "gemini25p",
-              "gemini25f",
               "gemini3p",
-              "opus41T",
               "sonnet45T",
               "gpt51",
               "gpt41",
-              "deepseek",
               "deepseekT",
               "kimi2T",
               "kimi2",
