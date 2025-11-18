@@ -403,12 +403,13 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     const groupId = options.logger.withCurrentGroup((id) => id);
 
+    const hadThinking = Boolean(store.workspace?.reasoning.thinkingAdded);
     const thinking = options.modelHandler.processThinkingBlock(
       state.response,
       store.workspace,
     );
     const useStreaming = options.modelHandler.getStreamingConfig();
-    if (thinking && !useStreaming) {
+    if (thinking && !useStreaming && !hadThinking) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
         options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
