@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com; img-src https: vscode-resource:; font-src ${cspSource} vscode-resource:;"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}' https://cdnjs.cloudflare.com https://unpkg.com; img-src https: vscode-resource:; font-src ${cspSource} vscode-resource:;"
     />
     <link rel="stylesheet" href="${commonStyleUri}" />
     <link rel="stylesheet" href="${styleUri}" />
@@ -48,8 +48,8 @@
           "@common/stringUtils.js": "${stringUtilsUri}",
           "@common/iconConstants.js": "${iconConstantsUri}",
           "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
-          "sortablejs": "https://cdn.skypack.dev/sortablejs",
-          "nanoid": "https://cdn.skypack.dev/nanoid"
+          "sortablejs": "https://unpkg.com/sortablejs@1.15.6/modular/sortable.esm.js",
+          "nanoid": "https://unpkg.com/nanoid@5.1.6/index.browser.js"
         }
       }
     </script>
