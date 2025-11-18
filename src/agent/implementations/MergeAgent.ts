@@ -50,9 +50,7 @@ export class MergeAgent extends DirectAgent {
    * @returns Path to output file for merged content - always workspace or runStorage
    * @throws Error if editedFile is not specified
    */
-  protected override getOutputFileLocation(
-    currRound: number,
-  ): AgentFileLocation {
+  public override getOutputFileLocation(currRound: number): AgentFileLocation {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 

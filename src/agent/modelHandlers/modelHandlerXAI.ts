@@ -9,6 +9,10 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
@@ -77,14 +81,8 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, ProviderStopReason] {
-    const [responseText, usage, stopReason] = super.extractResponse(
-      responseObject,
-      endTag,
-    );
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
+    const result = super.extractResponse(responseObject, endTag);
 
     // Extract and add reasoning tokens for usage calculation
     if (responseObject.usage?.completion_tokens_details?.reasoning_tokens) {
@@ -93,6 +91,6 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
       );
     }
 
-    return [responseText, usage, stopReason];
+    return result;
   }
 }
