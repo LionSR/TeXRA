@@ -53,6 +53,10 @@ import { ModelHandler } from './ModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {
@@ -487,14 +491,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * request and relies on `previous_response_id` for conversation context.
    */
   async createResponse(
-    client: OpenAI,
-    messages: ResponseInputItem[],
-    temperature: number,
-    systemPrompt?: string,
-    _endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ResponseInputItem>,
   ): Promise<Response> {
+    const { client, messages, temperature, systemPrompt, signal, tools } =
+      options;
+    const _endTag = options.endTag; // Unused but kept for compatibility
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',
@@ -598,7 +599,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const response = await stream.finalResponse();
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
-      const [finalText] = this.extractResponse(response, '');
+      const { response: finalText } = this.extractResponse(response, '');
       if (output) output.finalize(finalText);
 
       this.previousResponseId = response.id;
@@ -667,7 +668,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   extractResponse(
     responseObject: Response,
     endTag: string,
-  ): [string, ResponseUsage, ProviderStopReason] {
+  ): ExtractResponseResult {
     if (!responseObject.usage) {
       throw new Error('Response object missing required usage information');
     }
@@ -713,10 +714,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       endTag &&
       !newResponse.includes(endTag)
     ) {
-      return [`${newResponse}\n${endTag}`, usage, stopReason];
+      return { response: `${newResponse}\n${endTag}`, usage, stopReason };
     }
 
-    return [newResponse, usage, stopReason];
+    return { response: newResponse, usage, stopReason };
   }
 
   /** Price computation adapted for Responses API token fields. */

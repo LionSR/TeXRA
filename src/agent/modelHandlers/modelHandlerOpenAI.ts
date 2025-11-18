@@ -61,6 +61,10 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -151,14 +155,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
-    client: OpenAI,
-    messages: ChatCompletionMessageParam[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ChatCompletionMessageParam>,
   ): Promise<any> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 
@@ -622,10 +629,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, ProviderStopReason] {
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
@@ -660,7 +664,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           newResponse = `${newResponse}\n${endTag}`;
         }
 
-        return [newResponse, usage, stopReason];
+        return { response: newResponse, usage, stopReason };
       }
 
       if (responseObject.error) {
@@ -714,7 +718,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, stopReason];
+    return { response: newResponse, usage: responseObject.usage, stopReason };
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */

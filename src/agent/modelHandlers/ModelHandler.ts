@@ -37,7 +37,12 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
-import type { IModelHandler } from './types/IModelHandler';
+import type {
+  IModelHandler,
+  CreateResponseOptions,
+  ExtractResponseResult,
+  StopConditionsResult,
+} from './types/IModelHandler';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -388,7 +393,7 @@ export abstract class ModelHandler<
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
-  ): [boolean, boolean] {
+  ): StopConditionsResult {
     const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
     const markerFlags = this.detectStopMarkers(
       stopReason,
@@ -417,7 +422,7 @@ export abstract class ModelHandler<
       );
     }
 
-    return [markerFlags.endTurn, shouldStop];
+    return { endTurn: markerFlags.endTurn, shouldStop };
   }
 
   public containCutOffMessage(
@@ -434,17 +439,10 @@ export abstract class ModelHandler<
 
   /**
    * Generates a model response using the provider's API.
+   * @param options Options for creating the response
    * @returns Promise resolving to provider-specific response object
    */
-  abstract createResponse(
-    client: C,
-    messages: M[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
-  ): Promise<any>;
+  abstract createResponse(options: CreateResponseOptions<M>): Promise<any>;
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.
@@ -477,12 +475,12 @@ export abstract class ModelHandler<
    * Extracts the response text and metadata from the model's response object
    * @param responseObject The raw response object from the model
    * @param endTag The end tag to append if needed
-   * @returns A tuple containing [responseText, usageInfo, stopReason]
+   * @returns Object containing response text, usage info, and stop reason
    */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, ProviderStopReason];
+  ): ExtractResponseResult;
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations with prefill support.

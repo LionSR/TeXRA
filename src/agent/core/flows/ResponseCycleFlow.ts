@@ -203,23 +203,23 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
 
     try {
       const { response, responseTime } = await stage.run(async () => {
-        const invocation = await options.modelHandler.createResponse(
-          options.client,
-          state.messages,
-          options.agentSetting.temperature || 0.0,
-          state.systemPrompt,
-          options.agentSetting.endTag,
-          abortController.signal,
-          options.modelHandler.capabilities.supportsFunctionCalling
+        const modelResponse = await options.modelHandler.createResponse({
+          client: options.client,
+          messages: state.messages,
+          temperature: options.agentSetting.temperature || 0.0,
+          systemPrompt: state.systemPrompt,
+          endTag: options.agentSetting.endTag,
+          signal: abortController.signal,
+          tools: options.modelHandler.capabilities.supportsFunctionCalling
             ? options.agentSetting.tools
             : undefined,
-        );
+        });
 
         const elapsed = state.startTime
           ? (Date.now() - state.startTime) / 1000
           : undefined;
 
-        return { response: invocation, responseTime: elapsed };
+        return { response: modelResponse, responseTime: elapsed };
       });
 
       return { skipped: false, value: { response, responseTime } };
@@ -323,11 +323,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
     });
 
     return stage.run(async () => {
-      const [newResponse, responseUsage, stopReason] =
-        options.modelHandler.extractResponse(
-          state.responseObject,
-          options.agentSetting.endTag,
-        );
+      const {
+        response: newResponse,
+        usage: responseUsage,
+        stopReason,
+      } = options.modelHandler.extractResponse(
+        state.responseObject,
+        options.agentSetting.endTag,
+      );
 
       if (newResponse) {
         options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
@@ -606,7 +609,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
         };
       }
 
-      const [shouldEndTurn, shouldStop] =
+      const { endTurn: shouldEndTurn, shouldStop } =
         options.modelHandler.checkStopConditions(
           stopReason,
           processedResponse,
