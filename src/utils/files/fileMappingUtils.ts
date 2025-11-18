@@ -9,44 +9,50 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import { flexibleFS } from './flexibleFS';
+import { pathToLocation } from './taskRunStorage';
+import type { FileLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
+ * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
+ * This ensures lookups work even when FileLocation objects are reconstructed.
  *
- * @param sourceFiles The source file paths
- * @param targetFiles The target file paths
+ * @param sourceFiles The source file locations
+ * @param targetFiles The target file locations
  * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
  * @param roundAware Ignore round numbers in filenames when true
- * @returns Map of source files to their best matching target files
+ * @returns Map from source path to target FileLocation
  */
 export function createFileMapping(
-  sourceFiles: string[],
-  targetFiles: string[],
+  sourceFiles: FileLocation[],
+  targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
   roundAware: boolean = false,
-): Map<string, string> {
-  const fileMapping = new Map<string, string>();
+): Map<string, FileLocation> {
+  const fileMapping = new Map<string, FileLocation>();
 
-  if (!sourceFiles?.length || !targetFiles?.length) {
+  if (sourceFiles.length === 0 || targetFiles.length === 0) {
     return fileMapping;
   }
 
-  for (const targetFile of targetFiles) {
-    if (!targetFile || typeof targetFile !== 'string') {
-      continue;
-    }
+  // Use getComparablePath helper consistently for path extraction
+  const getPath = (loc: FileLocation): string =>
+    loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
 
-    const targetBaseName = path.basename(targetFile);
+  for (const target of targetFiles) {
+    const targetPath = getPath(target);
+    const targetBaseName = path.basename(targetPath);
 
-    let bestMatch: string | null = null;
+    let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
-      if (!sourceFile || typeof sourceFile !== 'string') {
+      if (!sourceFile) {
         continue;
       }
 
-      const sourceBaseName = path.basename(sourceFile);
+      const sourcePath = getPath(sourceFile);
+      const sourceBaseName = path.basename(sourcePath);
 
       const sourceName = path.parse(sourceBaseName).name;
       const targetName = path.parse(targetBaseName).name;
@@ -71,12 +77,12 @@ export function createFileMapping(
 
       if (isMatch && matchScore > bestMatchScore) {
         bestMatchScore = matchScore;
-        bestMatch = sourceFile;
+        bestMatchSourcePath = sourcePath;
       }
     }
 
-    if (bestMatch) {
-      fileMapping.set(bestMatch, targetFile);
+    if (bestMatchSourcePath) {
+      fileMapping.set(bestMatchSourcePath, target);
     }
   }
 
@@ -122,8 +128,12 @@ function getPathSegments(filePath: string): string[] {
     .filter((segment) => segment !== '');
 }
 
+/**
+ * Build a string → string lookup for LaTeX \input command replacement.
+ * @param baseToOutputMap Map from base file path to output FileLocation
+ */
 function buildReplacementLookup(
-  baseToOutputMap: Map<string, string>,
+  baseToOutputMap: Map<string, FileLocation>,
 ): Map<string, string> {
   const replacements = new Map<string, string>();
 
@@ -138,10 +148,15 @@ function buildReplacementLookup(
     replacements.set(normalizedSource, normalizedTarget);
   };
 
-  for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-    if (!baseFile || !outputFile) {
+  for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
+    if (!baseFile || !outputLoc) {
       continue;
     }
+
+    const outputFile =
+      outputLoc.kind !== 'external'
+        ? outputLoc.relativePath
+        : outputLoc.absolutePath;
 
     const baseSegments = getPathSegments(baseFile);
     const outputSegments = getPathSegments(outputFile);
@@ -166,14 +181,19 @@ function buildReplacementLookup(
 }
 
 export async function replaceInputCommands(
-  baseFiles: string[],
-  outputFiles: string[],
+  baseFiles: FileLocation[],
+  outputFiles: FileLocation[],
   logger?: AgentLogger,
 ): Promise<void> {
-  if (!baseFiles?.length || !outputFiles?.length) {
+  if (baseFiles.length === 0 || outputFiles.length === 0) {
     logger?.debug('No files to process for input command replacement');
     return;
   }
+
+  // Both workspace and runStorage have relativePath; external uses absolutePath
+  const baseFilePaths = baseFiles.map((f) =>
+    f.kind !== 'external' ? f.relativePath : f.absolutePath,
+  );
 
   const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
 
@@ -186,7 +206,10 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${Array.from(
       baseToOutputMap.entries(),
     )
-      .map(([base, output]) => `${base} -> ${output}`)
+      .map(
+        ([basePath, outputLoc]) =>
+          `${path.basename(basePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
+      )
       .join(', ')}`,
   );
 
@@ -197,13 +220,14 @@ export async function replaceInputCommands(
     return;
   }
 
-  for (const outputFile of outputFiles) {
-    if (!outputFile) {
-      continue;
-    }
+  for (const outputLocation of outputFiles) {
+    const outputPath =
+      outputLocation.kind !== 'external'
+        ? outputLocation.relativePath
+        : outputLocation.absolutePath;
 
     try {
-      const content = await flexibleFS.read(outputFile);
+      const content = await flexibleFS.read(outputLocation);
       const newContent = content.replace(
         /\\input{([^}]+)}/g,
         (match, rawPath) => {
@@ -224,12 +248,12 @@ export async function replaceInputCommands(
       );
 
       if (newContent !== content) {
-        await flexibleFS.write(outputFile, newContent);
-        logger?.debug(`Updated input commands in ${outputFile}`);
+        await flexibleFS.write(outputLocation, newContent);
+        logger?.debug(`Updated input commands in ${outputPath}`);
       }
     } catch (err) {
       logger?.warn(
-        `Error processing input commands in ${outputFile}: ${toErrorMessage(err)}`,
+        `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
       );
     }
   }

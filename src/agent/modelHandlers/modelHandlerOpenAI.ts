@@ -43,8 +43,9 @@ import type { ModelConfig, ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
+import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -763,12 +764,12 @@ export class ModelHandlerOpenAI extends ModelHandler<
     agentSetting: AgentSetting,
     messages: any[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, any[]]> {
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       const PseudoPrefillMsgContentString = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage && Array.isArray(lastMessage.content)) {
@@ -789,7 +790,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputFile);
+    let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -802,7 +803,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     // Write file content to output file
-    await flexibleFS.write(outputFile, fileContent);
+    await flexibleFS.write(outputLocation, fileContent);
 
     messages.push({
       role: 'assistant',
@@ -843,7 +844,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
-        outputFile,
+        outputLocation,
         workspaceState.assembly.accumulatedOutput,
       );
     }

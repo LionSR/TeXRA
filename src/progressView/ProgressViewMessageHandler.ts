@@ -28,11 +28,8 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
-import {
-  ensureRunDir,
-  getRunDir,
-  normalizeExecutionId,
-} from '@utils/files/taskRunStorage';
+import { pathToLocation } from '@utils/files';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import {
   buildFileContextFromTaskState,
@@ -404,26 +401,35 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
       persist: false,
     });
-    const normalizedRunId = normalizeExecutionId(resolvedRunId);
     const runOutputs = this.provider.state.getRunOutputFiles(stream, {
       runId: resolvedRunId ?? undefined,
-      executionId: normalizedRunId,
+      executionId: resolvedRunId ?? undefined,
     });
 
-    const executionIdFromRun =
-      normalizedRunId ?? this.extractExecutionIdFromOutputs(runOutputs);
+    // Trust stored executionId, don't extract from paths
     const executionId =
-      executionIdFromRun ?? this.provider.state.getExecutionId(stream);
+      resolvedRunId ?? this.provider.state.getExecutionId(stream);
 
     try {
       let directoryToReveal: string | undefined;
 
-      const safeExecutionId = normalizeExecutionId(executionId);
-      if (safeExecutionId) {
-        await ensureRunDir(safeExecutionId);
-        directoryToReveal = getRunDir(safeExecutionId);
+      if (executionId) {
+        await ensureRunDir(executionId);
+        directoryToReveal = getRunDir(executionId);
       } else if (runOutputs) {
-        directoryToReveal = this.findPreferredOutputDirectory(runOutputs);
+        // Fallback: find any output directory
+        for (const infos of runOutputs.values()) {
+          for (const info of infos) {
+            if (
+              info.location.kind === 'runStorage' ||
+              info.location.kind === 'workspace'
+            ) {
+              directoryToReveal = path.dirname(info.location.absolutePath);
+              break;
+            }
+          }
+          if (directoryToReveal) break;
+        }
       }
 
       if (!directoryToReveal) {
@@ -482,9 +488,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.compare',
-      undefined,
-      message.base,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(message.base),
+      pathToLocation(message.file),
     );
   }
 
@@ -502,9 +508,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.compare',
-      undefined,
-      previousFile,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(previousFile || ''),
+      pathToLocation(message.file),
     );
   }
 
@@ -525,9 +531,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.acceptEdited',
-      undefined,
-      message.base,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(message.base),
+      pathToLocation(message.file),
     );
   }
 
@@ -627,105 +633,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       useMultipleOutputs,
       skipProgressViewClear: true,
     });
-  }
-
-  private extractExecutionIdFromOutputs(
-    outputs: Map<number, OutputFileInfo[]> | undefined,
-  ): ExecutionId | undefined {
-    if (!outputs) {
-      return undefined;
-    }
-
-    for (const infos of outputs.values()) {
-      for (const info of infos) {
-        const candidate = this.resolveExecutionIdFromInfo(info);
-        if (candidate) {
-          return candidate;
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  private resolveExecutionIdFromInfo(
-    info: OutputFileInfo,
-  ): ExecutionId | undefined {
-    const relativeCandidates = [
-      info.rawLocation?.runStorage?.storageRelativePath,
-      info.location.runStorage?.storageRelativePath,
-      info.originalLocation?.runStorage?.storageRelativePath,
-      info.baseLocation?.runStorage?.storageRelativePath,
-      info.prevLocation?.runStorage?.storageRelativePath,
-    ];
-
-    for (const relative of relativeCandidates) {
-      const candidate = this.extractExecutionIdFromRelative(relative);
-      if (candidate) {
-        return candidate;
-      }
-    }
-
-    return undefined;
-  }
-
-  private extractExecutionIdFromRelative(
-    relative: string | null | undefined,
-  ): ExecutionId | undefined {
-    if (!relative) {
-      return undefined;
-    }
-
-    const segments = relative.split(path.sep).filter(Boolean);
-    const runsIndex = segments.indexOf('taskRuns');
-    if (runsIndex === -1) {
-      return undefined;
-    }
-
-    if (runsIndex + 1 >= segments.length) {
-      return undefined;
-    }
-
-    const candidate = segments[runsIndex + 1];
-    const normalizedCandidate = normalizeExecutionId(candidate);
-
-    if (normalizedCandidate) {
-      return normalizedCandidate;
-    }
-
-    return undefined;
-  }
-
-  private findPreferredOutputDirectory(
-    outputs: Map<number, OutputFileInfo[]>,
-  ): string | undefined {
-    for (const infos of outputs.values()) {
-      for (const info of infos) {
-        const runStoragePath =
-          info.rawLocation?.runStorage?.absolutePath ??
-          info.location.runStorage?.absolutePath ??
-          info.originalLocation?.runStorage?.absolutePath ??
-          info.baseLocation?.runStorage?.absolutePath ??
-          info.prevLocation?.runStorage?.absolutePath;
-
-        if (runStoragePath) {
-          return path.dirname(runStoragePath);
-        }
-
-        const workspacePath =
-          info.rawLocation?.workspace?.absolutePath ??
-          info.workspacePath ??
-          info.location.workspace?.absolutePath ??
-          info.original ??
-          (path.isAbsolute(info.path) ? info.path : undefined);
-
-        if (workspacePath) {
-          return path.dirname(workspacePath);
-        }
-      }
-    }
-
-    return undefined;
   }
 
   /**

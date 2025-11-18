@@ -35,8 +35,10 @@ import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUti
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
+import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -44,7 +46,8 @@ import { bestConnectionMethod } from '@latex';
 import { FlowTransition } from './FlowTransitions';
 
 export interface ResponseCycleInputState {
-  outputFile: string;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation: AgentFileLocation;
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
@@ -56,7 +59,8 @@ export interface ResponseCycleRuntimeState extends BaseCycleState {
   startTime?: number;
   responseObject?: unknown;
   processedResponse?: string;
-  outputLocation?: ReturnType<TaskRunFileService['resolveRelativePath']>;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation?: AgentFileLocation;
   roundFinalized: boolean;
 }
 
@@ -97,13 +101,13 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     systemPrompt?: string;
     debugContext?: CycleDebugContext;
     debugFileOptions?: CycleDebugFileOptions;
-    outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
+    outputLocation: AgentFileLocation;
   }> {
     const { options, state, store } = shared;
-    const { agentPrompt, userVars, logger, agentConfig, fileService } = options;
+    const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
-    const outputLocation = fileService.resolveRelativePath(state.outputFile);
-    const exists = await flexibleFS.exists(outputLocation.absolutePath);
+    const outputLocation = state.outputLocation;
+    const exists = await flexibleFS.exists(outputLocation);
     const systemPrompt = interrupted
       ? undefined
       : await getSystemPromptWithRules(agentPrompt.systemPrompt, userVars);
@@ -120,7 +124,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       ? undefined
       : {
           continuationCount: store.round.continuationCount,
-          outputFile: state.outputFile,
+          // outputLocation is always AgentFileLocation (workspace or runStorage, never external)
+          outputFile: state.outputLocation.relativePath,
         };
 
     return {
@@ -141,7 +146,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       systemPrompt?: string;
       debugContext?: CycleDebugContext;
       debugFileOptions?: CycleDebugFileOptions;
-      outputLocation: ReturnType<TaskRunFileService['resolveRelativePath']>;
+      outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
@@ -476,10 +481,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    const outputLocation =
-      state.outputLocation ??
-      options.fileService.resolveRelativePath(state.outputFile);
-    state.outputLocation = outputLocation;
+    const outputLocation = state.outputLocation;
 
     await AbsoluteFS.ensureDir(path.dirname(outputLocation.absolutePath));
 
@@ -492,7 +494,7 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
         `Appending to existing file: ${outputLocation.absolutePath}`,
       );
       await flexibleFS.appendFile(
-        outputLocation.absolutePath,
+        outputLocation,
         (result.bestConnector ?? '') + processedResponse,
       );
     }
