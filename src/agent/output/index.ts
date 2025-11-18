@@ -10,3 +10,10 @@ export {
   FileLocation,
 } from './types';
 export { getOutputFileName } from '@agent/utils/outputFileUtils';
+export {
+  getFileBasename,
+  getFileDirectory,
+  getDisplayLabel,
+  getDisplayDir,
+  getDisplayPath,
+} from './displayUtils';

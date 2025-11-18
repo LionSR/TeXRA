@@ -122,8 +122,12 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       ? undefined
       : {
           continuationCount: store.round.continuationCount,
-          // Agent outputs are always workspace or runStorage, never external
-          outputFile: (state.outputLocation as AgentFileLocation).relativePath,
+          // Get relative path safely for all FileLocation types
+          outputFile:
+            state.outputLocation.kind === 'workspace' ||
+            state.outputLocation.kind === 'runStorage'
+              ? state.outputLocation.relativePath
+              : state.outputLocation.absolutePath,
         };
 
     return {
