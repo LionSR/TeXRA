@@ -11,6 +11,7 @@ import * as logger from '@logger/logUtils';
 import {
   flexibleFS,
   TaskRunFileService,
+  pathToLocation,
   type FileLocation,
 } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -130,7 +131,7 @@ export class TikzPictureManager {
       // Use fileService if available (run-storage aware), otherwise create workspace location
       const texLocation = this.fileService
         ? this.fileService.createLocation(fileRelativePath)
-        : buildDirLocation; // Fallback: assume buildDir-relative
+        : pathToLocation(path.join(buildDirLocation.absolutePath, filename)); // Fallback: create proper file location
 
       await flexibleFS.write(texLocation, standaloneContent);
       logger.debug(
@@ -216,7 +217,9 @@ export class TikzPictureManager {
 
           const pdfLocation = this.fileService
             ? this.fileService.createLocation(pdfRelativePath)
-            : texLocation; // Fallback
+            : pathToLocation(
+                path.join(path.dirname(texLocation.absolutePath), pdfFilename),
+              ); // Fallback: create proper PDF location
 
           if (await flexibleFS.exists(pdfLocation)) {
             compiledFiles.push(pdfLocation);
