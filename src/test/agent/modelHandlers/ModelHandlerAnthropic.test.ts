@@ -449,7 +449,11 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const response = await handler.createResponse(client, messages, 0);
+    const response = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
 
     assert.equal(uploadArgs.length, 1, 'should upload the PDF document');
     assert.deepEqual(uploadArgs[0].betas, ['files-api-2025-04-14']);
@@ -533,7 +537,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    await handler.createResponse(client, messages, 0);
+    await handler.createResponse({ client, messages, temperature: 0 });
 
     assert.equal(uploadArgs.length, 1, 'should upload the PDF document once');
     const uploadedFile = uploadArgs[0].file;
@@ -605,7 +609,11 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const response = await handler.createResponse(client, messages, 0);
+    const response = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
 
     const documentBlock = (messages[0].content as any[]).find(
       (block) => block.type === 'document',
@@ -689,7 +697,11 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const response = await handler.createResponse(client, messages, 0);
+    const response = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
 
     assert.equal(
       countTokenCalls.length,
@@ -767,7 +779,11 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const response = await handler.createResponse(client, messages, 0);
+    const response = await handler.createResponse({
+      client,
+      messages,
+      temperature: 0,
+    });
 
     assert.deepEqual(callOrder, ['countTokens', 'upload', 'create']);
     assert.equal(response.stop_reason, 'end_turn');
@@ -837,7 +853,11 @@ describe('ModelHandlerAnthropic message guards', () => {
         return defaultValue as unknown;
       };
 
-      const response = await handler.createResponse(client, messages, 0);
+      const response = await handler.createResponse({
+        client,
+        messages,
+        temperature: 0,
+      });
       assert.equal(response.stop_reason, 'end_turn');
     } finally {
       (configModule as any).getConfig = originalGetConfig;

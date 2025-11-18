@@ -21,6 +21,7 @@ import {
 import type { StreamingAggregator } from './modelHandlerOpenAI';
 
 // Type imports
+import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
@@ -183,14 +184,9 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for Deepseek models
    */
   async createResponse(
-    client: OpenAI,
-    messages: any[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ChatCompletionMessageParam>,
   ): Promise<any> {
+    const { messages } = options;
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.prepareNormalizedMessages(
       messages,
@@ -202,15 +198,10 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     );
 
     // Call the parent implementation with the processed messages
-    return super.createResponse(
-      client,
-      processedMessages,
-      temperature,
-      systemPrompt,
-      endTag,
-      signal,
-      tools,
-    );
+    return super.createResponse({
+      ...options,
+      messages: processedMessages,
+    });
   }
 }
 
