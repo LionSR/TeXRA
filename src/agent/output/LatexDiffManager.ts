@@ -188,8 +188,8 @@ export class LatexDiffManager {
         this.logger.debug(
           `Matched base files to output files: ${basePairs
             .map(
-              ([basePath, output]) =>
-                `${path.basename(basePath)} -> ${this.getDisplayLabel(output)}`,
+              ([outputPath, base]) =>
+                `${this.getDisplayLabel(base)} -> ${path.basename(outputPath)}`,
             )
             .join(', ')}`,
         );
@@ -201,14 +201,14 @@ export class LatexDiffManager {
 
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
-        for (const [basePath, revisedLocation] of basePairs) {
-          // Find the base FileLocation from baseFiles using path matching
-          const baseLocation = this.baseFiles.find(
-            (f) => getComparablePath(f) === basePath,
-          );
-          if (!baseLocation) {
+        for (const [outputPath, baseLocation] of basePairs) {
+          // Find the revised/output FileLocation from current round outputs
+          const revisedLocation = outputFiles.find(
+            (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
+          )?.location;
+          if (!revisedLocation) {
             this.logger.debug(
-              `Skipping diff: base file not found for path ${basePath}`,
+              `Skipping diff: output file not found for path ${outputPath}`,
             );
             continue;
           }
@@ -270,8 +270,8 @@ export class LatexDiffManager {
           this.logger.debug(
             `Matched previous round files to current round files: ${prevPairs
               .map(
-                ([prevPath, curr]) =>
-                  `${path.basename(prevPath)} -> ${this.getDisplayLabel(curr)}`,
+                ([outputPath, prev]) =>
+                  `${this.getDisplayLabel(prev)} -> ${path.basename(outputPath)}`,
               )
               .join(', ')}`,
           );
@@ -281,18 +281,15 @@ export class LatexDiffManager {
           );
         }
 
-        for (const [prevPath, currLocation] of prevPairs) {
-          // Find the previous round FileLocation from the previous round outputs
-          const prevRound = currRound - 1;
-          const allOutputFiles = this.getOutputFiles();
-          const prevOutputs = allOutputFiles[prevRound] ?? [];
-          const prevLocation = prevOutputs
-            .map((o: OutputFileInfo) => o.location)
-            .find((loc: FileLocation) => getComparablePath(loc) === prevPath);
+        for (const [outputPath, prevLocation] of prevPairs) {
+          // Find the current round FileLocation from current round outputs
+          const currLocation = outputFiles.find(
+            (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
+          )?.location;
 
-          if (!prevLocation) {
+          if (!currLocation) {
             this.logger.debug(
-              `Skipping diff: previous round file not found for path ${prevPath}`,
+              `Skipping diff: current round file not found for path ${outputPath}`,
             );
             continue;
           }
