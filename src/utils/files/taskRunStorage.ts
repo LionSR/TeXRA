@@ -725,7 +725,7 @@ export function getComparablePath(location: FileLocation): string {
  * Convert a string path to a FileLocation (standalone version).
  * Use this for utilities that don't have access to TaskRunFileService.
  * This function is NOT run-storage aware - it can only create workspace or external locations.
- * For run-storage awareness, use TaskRunFileService.describePath() instead.
+ * For run-storage awareness, use TaskRunFileService.createLocation() instead.
  *
  * @param target - Absolute or workspace-relative path
  * @returns FileLocation (workspace or external, never runStorage)
