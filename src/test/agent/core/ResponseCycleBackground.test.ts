@@ -38,8 +38,11 @@ import {
   DEFAULT_MODEL_CAPABILITIES,
 } from '@model/ModelConfig';
 import replacementEngine from '@replacement/engine';
-import { TaskRunFileService, pathToLocation } from '@utils/files';
-import { WorkspaceFS } from '@utils/files';
+import {
+  TaskRunFileService,
+  WorkspaceFS,
+  createWorkspaceLocation,
+} from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import * as latex from '@latex';
 
@@ -364,7 +367,10 @@ describe('ResponseCycle background reasoning logs', () => {
         fileService: new TaskRunFileService(),
       },
       messages,
-      outputLocation: pathToLocation('output.txt'),
+      outputLocation: createWorkspaceLocation(
+        WorkspaceFS.fullPath('output.txt'),
+        'output.txt',
+      ),
       store,
     });
 
