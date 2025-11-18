@@ -13,7 +13,6 @@ import {
   TaskRunFileService,
   flexibleFS,
   WorkspaceFS,
-  getComparablePath,
   type FileLocation,
   type AgentFileLocation,
 } from '@utils/files';
