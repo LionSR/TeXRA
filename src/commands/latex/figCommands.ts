@@ -188,10 +188,10 @@ async function handleCompileTikzFigures(): Promise<void> {
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files
-          const items = compiledFiles.map((filePath: string) => ({
-            label: path.basename(filePath),
-            description: filePath,
-            file: filePath,
+          const items = compiledFiles.map((fileLocation) => ({
+            label: path.basename(fileLocation.absolutePath),
+            description: fileLocation.absolutePath,
+            file: fileLocation.absolutePath,
           }));
 
           // Show results in QuickPick
@@ -202,9 +202,7 @@ async function handleCompileTikzFigures(): Promise<void> {
 
           if (selected) {
             // Open the selected PDF
-            const uri = vscode.Uri.file(
-              path.join(WorkspaceFS.getPath() ?? '', selected.file),
-            );
+            const uri = vscode.Uri.file(selected.file);
             await vscode.commands.executeCommand('vscode.open', uri);
           }
 
