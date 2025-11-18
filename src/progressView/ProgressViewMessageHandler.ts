@@ -29,11 +29,7 @@ import {
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
 import { pathToLocation } from '@utils/files';
-import {
-  ensureRunDir,
-  getRunDir,
-  normalizeExecutionId,
-} from '@utils/files/taskRunStorage';
+import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
 import {
   buildFileContextFromTaskState,
@@ -405,23 +401,21 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
       persist: false,
     });
-    const normalizedRunId = normalizeExecutionId(resolvedRunId);
     const runOutputs = this.provider.state.getRunOutputFiles(stream, {
       runId: resolvedRunId ?? undefined,
-      executionId: normalizedRunId,
+      executionId: resolvedRunId ?? undefined,
     });
 
     // Trust stored executionId, don't extract from paths
     const executionId =
-      normalizedRunId ?? this.provider.state.getExecutionId(stream);
+      resolvedRunId ?? this.provider.state.getExecutionId(stream);
 
     try {
       let directoryToReveal: string | undefined;
 
-      const safeExecutionId = normalizeExecutionId(executionId);
-      if (safeExecutionId) {
-        await ensureRunDir(safeExecutionId);
-        directoryToReveal = getRunDir(safeExecutionId);
+      if (executionId) {
+        await ensureRunDir(executionId);
+        directoryToReveal = getRunDir(executionId);
       } else if (runOutputs) {
         // Fallback: find any output directory
         for (const infos of runOutputs.values()) {

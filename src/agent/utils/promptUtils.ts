@@ -10,12 +10,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 // Local imports - log
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-import {
-  StorageFS,
-  TASK_RUNS_DIR,
-  WorkspaceFS,
-  normalizeExecutionId,
-} from '@utils/files';
+import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
 import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 const CHANNEL = 'promptUtils';
@@ -153,9 +148,8 @@ export async function writePromptToXml(
     const agentName = getAgentFirstNameChunk(agent);
     const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
 
-    const normalizedExecutionId = normalizeExecutionId(executionId);
-    if (normalizedExecutionId) {
-      const runDir = path.join(TASK_RUNS_DIR, normalizedExecutionId);
+    if (executionId) {
+      const runDir = path.join(TASK_RUNS_DIR, executionId);
       const relativeOutputFile = path.join(
         runDir,
         `${name}_${agentName}_input.xml`,
