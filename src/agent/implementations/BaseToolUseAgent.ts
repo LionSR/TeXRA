@@ -176,8 +176,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
         extendHooks: (baseHooks: AgentRunHooks) => ({
           ...baseHooks,
           init: (runStage) => this.init(runStage, { createStage: false }),
-          prepareState: () => this.prepareInitialSessionState(),
-          buildCycleOptions: (store) => this.buildToolUseCycleOptions(store),
+          prepareState: () => this.prepareInitialState(),
+          buildCycleOptions: (store) => this.createCycleOptions(store),
           runCycle: (options, messages, store) =>
             runToolUseCycle({ options, messages, store }),
           checkInterruption: () => this.checkInterruption(),
@@ -201,7 +201,12 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     }
   }
 
-  public async prepareInitialSessionState(): Promise<{
+  /**
+   * Prepares the initial state for the tool-use session.
+   * Handles both new sessions and resumed sessions from snapshots.
+   * Parallel to beginRound() + prepare methods in BaseReflectionAgent.
+   */
+  public async prepareInitialState(): Promise<{
     messages: ProviderMessage[];
     store: AgentSharedStore;
     shouldSkipCycle: boolean;
@@ -261,9 +266,11 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return { messages, store, shouldSkipCycle: false };
   }
 
-  public buildToolUseCycleOptions(
-    store: AgentSharedStore,
-  ): ToolUseCycleOptions<C> {
+  /**
+   * Creates cycle options for tool-use execution.
+   * Parallel to createResponseCycleOptions() in BaseReflectionAgent.
+   */
+  public createCycleOptions(store: AgentSharedStore): ToolUseCycleOptions<C> {
     const client = this.getClientInstance();
     const resolvedSetting = {
       ...this.agentSetting,
