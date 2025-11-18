@@ -12,13 +12,29 @@ export function getDisplayLabel(info: OutputFileInfo): string {
   if (info.source) {
     return info.source;
   }
-  if (
-    info.location.kind === 'workspace' ||
-    info.location.kind === 'runStorage'
-  ) {
-    return path.basename(info.location.relativePath);
+  return getFileBasename(info.location);
+}
+
+/**
+ * Get basename from a FileLocation, handling all location types.
+ * Safe helper that works with workspace, runStorage, and external locations.
+ */
+export function getFileBasename(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return path.basename(location.relativePath);
   }
-  return path.basename(info.location.absolutePath);
+  return path.basename(location.absolutePath);
+}
+
+/**
+ * Get directory path from a FileLocation, handling all location types.
+ * Returns the directory portion without the filename.
+ */
+export function getFileDirectory(location: FileLocation): string {
+  if (location.kind === 'workspace' || location.kind === 'runStorage') {
+    return path.dirname(location.relativePath);
+  }
+  return path.dirname(location.absolutePath);
 }
 
 /**

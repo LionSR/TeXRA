@@ -24,6 +24,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import type { OutputFile, OutputFileInfo } from './types';
+import { getFileDirectory } from './displayUtils';
 
 export class XmlOutputManager {
   constructor(
@@ -136,10 +137,7 @@ export class XmlOutputManager {
     const texFilename = `${name}.tex`;
 
     // Derive relative path for the tex file (same directory as output)
-    // Agent outputs are always workspace or runStorage, never external
-    const outputDir = path.dirname(
-      (outputLocation as AgentFileLocation).relativePath,
-    );
+    const outputDir = getFileDirectory(outputLocation);
     const texRelativePath = outputDir
       ? path.join(outputDir, texFilename)
       : texFilename;
