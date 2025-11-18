@@ -289,7 +289,7 @@ ${text}`;
 
       let extractedText: string;
       try {
-        const [modelText] = handler.extractResponse(response, '');
+        const { response: modelText } = handler.extractResponse(response, '');
         extractedText = modelText;
       } catch (error) {
         logger.error(
