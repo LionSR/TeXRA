@@ -275,14 +275,12 @@ export class LatexDiffManager {
 
           aggregated.push({
             baseLabel: this.getDisplayLabel(baseLocation),
-            revisedLabel: location
-              ? this.getDisplayLabel(location)
-              : path.basename(outputFile),
+            revisedLabel: this.getDisplayLabel(revisedLocation),
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
             locations: {
               base: baseLocation,
-              revised: revisedLocation ?? null,
+              revised: revisedLocation,
               diff: diffLocation ?? null,
             },
           });
