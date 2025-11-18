@@ -27,6 +27,7 @@ import {
   flexibleFS,
   WorkspaceFS,
   AbsoluteFS,
+  getComparablePath,
 } from '@utils/files';
 // Type imports
 
@@ -346,7 +347,12 @@ export class OutputHandler implements IOutputHandler {
         const originalLocation = mapping.originByOutput.get(location) ?? null;
 
         // Determine effective diff base: prefer explicit base, fallback to original if different from current
-        const diffBaseLocation = baseLocation ?? (originalLocation !== location ? originalLocation : null);
+        // Use path comparison since FileLocation objects are compared by reference in Maps
+        const isSameFile =
+          originalLocation &&
+          getComparablePath(originalLocation) === getComparablePath(location);
+        const diffBaseLocation =
+          baseLocation ?? (originalLocation && !isSameFile ? originalLocation : null);
 
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
