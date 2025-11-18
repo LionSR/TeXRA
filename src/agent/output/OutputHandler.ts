@@ -118,7 +118,7 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffManager = new LatexDiffManager(
       this.agentSetting,
-      this.outputFiles,
+      () => this.outputFiles, // Pass function reference instead of snapshot
       this.baseFiles,
       this.logger,
       this.channel,
