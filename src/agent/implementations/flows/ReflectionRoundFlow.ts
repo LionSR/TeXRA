@@ -2,43 +2,37 @@
 import { BaseNode, Flow } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 // Local imports - agent components
-import type { ConversationRoundState } from '@agent/core/AgentState';
+import type { AgentRunState } from '@agent/core/AgentState';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { ReflectionRoundResult } from '@agent/implementations/BaseReflectionAgent';
+import type {
+  BaseReflectionAgent,
+  ReflectionRoundResult,
+} from '@agent/implementations/BaseReflectionAgent';
 
 interface RoundPreparationResult {
-  stateRound: ConversationRoundState;
+  stateRound: any;
   preparedMessages: any[];
   prefill?: string;
   skip: boolean;
 }
 
-interface ReflectionRoundPipelineInput {
-  stateRound: ConversationRoundState;
-  preparedMessages: any[];
-  prefill: string;
-}
-
-export interface ReflectionRoundHooks {
-  prepareAgentWorkspaceState(): Promise<void>;
-  prepareRoundContext(): Promise<RoundPreparationResult>;
-  runRoundPipeline(
-    input: ReflectionRoundPipelineInput,
-  ): Promise<ReflectionRoundResult>;
-  createSkipResult(stateRound: ConversationRoundState): ReflectionRoundResult;
-}
-
-export interface ReflectionRoundRuntime {
+export interface ReflectionRoundContext {
+  agent: BaseReflectionAgent;
+  roundIndex: number;
+  runState: AgentRunState;
+  messages: any[];
   workspaceState: AgentWorkspaceState;
-  roundState?: ConversationRoundState;
-  preparedMessages?: any[];
-  prefill?: string;
-  result?: ReflectionRoundResult;
 }
 
 export interface ReflectionRoundShared {
-  runtime: ReflectionRoundRuntime;
-  hooks: ReflectionRoundHooks;
+  agent: BaseReflectionAgent;
+  context: ReflectionRoundContext;
+  runtime: {
+    roundState?: any;
+    preparedMessages?: any[];
+    prefill?: string;
+    result?: ReflectionRoundResult;
+  };
 }
 
 function storeRoundResult(
@@ -50,35 +44,38 @@ function storeRoundResult(
 }
 
 class ToolPreparationNode extends BaseNode<ReflectionRoundShared> {
-  async prep(shared: ReflectionRoundShared): Promise<ReflectionRoundHooks> {
-    return shared.hooks;
+  async prep(shared: ReflectionRoundShared): Promise<ReflectionRoundContext> {
+    return shared.context;
   }
 
-  async exec(hooks: ReflectionRoundHooks): Promise<void> {
-    await hooks.prepareAgentWorkspaceState();
+  async exec(context: ReflectionRoundContext): Promise<void> {
+    await context.agent.prepareAgentWorkspaceState(
+      context.roundIndex,
+      context.workspaceState,
+    );
   }
-}
-
-interface RoundPreparationExec {
-  stateRound: ConversationRoundState;
-  preparedMessages: any[];
-  prefill?: string;
-  skip: boolean;
 }
 
 class RoundPreparationNode extends BaseNode<ReflectionRoundShared> {
-  async prep(shared: ReflectionRoundShared): Promise<ReflectionRoundHooks> {
-    return shared.hooks;
+  async prep(shared: ReflectionRoundShared): Promise<ReflectionRoundContext> {
+    return shared.context;
   }
 
-  async exec(hooks: ReflectionRoundHooks): Promise<RoundPreparationExec> {
-    return await hooks.prepareRoundContext();
+  async exec(
+    context: ReflectionRoundContext,
+  ): Promise<RoundPreparationResult> {
+    return await context.agent.prepareRoundContext(
+      context.roundIndex,
+      context.runState,
+      context.messages,
+      context.workspaceState,
+    );
   }
 
   async post(
     shared: ReflectionRoundShared,
-    _prepRes: ReflectionRoundHooks,
-    execRes: RoundPreparationExec,
+    _prepRes: ReflectionRoundContext,
+    execRes: RoundPreparationResult,
   ): Promise<string | undefined> {
     shared.runtime.roundState = execRes.stateRound;
     shared.runtime.preparedMessages = execRes.preparedMessages;
@@ -94,15 +91,19 @@ class RoundExecutionNode extends BaseNode<ReflectionRoundShared> {
   }
 
   async exec(shared: ReflectionRoundShared): Promise<ReflectionRoundResult> {
-    const { runtime, hooks } = shared;
+    const { agent, context, runtime } = shared;
     if (!runtime.roundState || !runtime.preparedMessages) {
       throw new Error('Round execution requires prepared round data.');
     }
 
-    return await hooks.runRoundPipeline({
-      stateRound: runtime.roundState,
+    return await agent.runRoundPipeline({
+      roundIndex: context.roundIndex,
+      roundState: runtime.roundState,
+      runState: context.runState,
+      workspaceState: context.workspaceState,
       preparedMessages: runtime.preparedMessages,
       prefill: runtime.prefill ?? '',
+      outputLocation: agent.outputFile[context.roundIndex],
     });
   }
 
@@ -121,12 +122,19 @@ class RoundSkipNode extends BaseNode<ReflectionRoundShared> {
   }
 
   async exec(shared: ReflectionRoundShared): Promise<ReflectionRoundResult> {
-    const { runtime, hooks } = shared;
+    const { context, runtime } = shared;
     if (!runtime.roundState) {
       throw new Error('Skip handling requires the current round state.');
     }
 
-    return hooks.createSkipResult(runtime.roundState);
+    return {
+      roundState: runtime.roundState,
+      runState: context.runState,
+      messages: context.messages,
+      shouldContinue: true,
+      workspaceState: context.workspaceState,
+      output: null,
+    };
   }
 
   async post(
