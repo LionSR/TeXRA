@@ -28,7 +28,6 @@ import {
   getComparablePath,
   WorkspaceFS,
   AbsoluteFS,
-  createWorkspaceLocation,
 } from '@utils/files';
 // Type imports
 
