@@ -46,7 +46,8 @@ import { bestConnectionMethod } from '@latex';
 import { FlowTransition } from './FlowTransitions';
 
 export interface ResponseCycleInputState {
-  outputLocation: FileLocation;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation: AgentFileLocation;
 }
 
 export interface ResponseCycleRuntimeState extends BaseCycleState {
@@ -58,7 +59,8 @@ export interface ResponseCycleRuntimeState extends BaseCycleState {
   startTime?: number;
   responseObject?: unknown;
   processedResponse?: string;
-  outputLocation?: FileLocation;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation?: AgentFileLocation;
   roundFinalized: boolean;
 }
 
@@ -99,7 +101,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     systemPrompt?: string;
     debugContext?: CycleDebugContext;
     debugFileOptions?: CycleDebugFileOptions;
-    outputLocation: FileLocation;
+    outputLocation: AgentFileLocation;
   }> {
     const { options, state, store } = shared;
     const { agentPrompt, userVars, logger, agentConfig } = options;
@@ -122,12 +124,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       ? undefined
       : {
           continuationCount: store.round.continuationCount,
-          // Get relative path safely for all FileLocation types
-          outputFile:
-            state.outputLocation.kind === 'workspace' ||
-            state.outputLocation.kind === 'runStorage'
-              ? state.outputLocation.relativePath
-              : state.outputLocation.absolutePath,
+          // outputLocation is always AgentFileLocation (workspace or runStorage, never external)
+          outputFile: state.outputLocation.relativePath,
         };
 
     return {
@@ -148,7 +146,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       systemPrompt?: string;
       debugContext?: CycleDebugContext;
       debugFileOptions?: CycleDebugFileOptions;
-      outputLocation: FileLocation;
+      outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {

@@ -11,7 +11,7 @@ import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { WorkspaceFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation, AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
@@ -47,10 +47,12 @@ export class MergeAgent extends DirectAgent {
   /**
    * Generates output filename for merged content based on input and edited files.
    * @param currRound Current round number (unused in merge operations)
-   * @returns Path to output file for merged content
+   * @returns Path to output file for merged content - always workspace or runStorage
    * @throws Error if editedFile is not specified
    */
-  protected getOutputFileLocation(currRound: number): FileLocation {
+  protected override getOutputFileLocation(
+    currRound: number,
+  ): AgentFileLocation {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 
@@ -72,7 +74,8 @@ export class MergeAgent extends DirectAgent {
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
 
-    return this.fileService.createLocation(outputPath);
+    // fileService.createLocation always returns workspace or runStorage for agent outputs
+    return this.fileService.createLocation(outputPath) as AgentFileLocation;
   }
 
   /**
