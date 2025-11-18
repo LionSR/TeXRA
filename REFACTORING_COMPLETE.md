@@ -7,17 +7,20 @@ Successfully refactored the agent/flow system to eliminate round-trip anti-patte
 ## Key Achievements
 
 ### 🎯 Boundary Crossing Reduction
+
 - **Before**: ~30 crossings per round
-- **After**: ~3 crossings per round  
+- **After**: ~3 crossings per round
 - **Result**: **90% reduction**
 
 ### 🏗️ Architecture Simplification
+
 - **Deleted**: ReflectionRoundFlow.ts (entire abstraction layer)
 - **Removed**: ReflectionRoundHooks interface (pass-through wrapper)
 - **Removed**: Pass-through wrapper methods
 - **Added**: Single entry point methods (`executeRound()`, `recordRoundResult()`)
 
 ### 📊 Code Quality Improvements
+
 1. **Single Source of Truth**: Agent owns round execution logic
 2. **DRY**: No duplication across layers
 3. **Balanced Abstractions**: No pass-through wrappers
@@ -26,9 +29,11 @@ Successfully refactored the agent/flow system to eliminate round-trip anti-patte
 ## What Changed
 
 ### Agent Methods Now Public
+
 These methods are now part of the agent's public API for flow orchestration:
 
 **BaseReflectionAgent:**
+
 - `executeRound()` - **NEW** single entry point for round execution
 - `recordRoundResult()` - **NEW** for recording results without mutation
 - `prepareAgentWorkspaceState()` - Workspace preparation (overridable)
@@ -39,6 +44,7 @@ These methods are now part of the agent's public API for flow orchestration:
 - `withRoundStage()` - Execute with logging stage
 
 **BaseToolUseAgent:**
+
 - `prepareInitialSessionState()` - Initialize session
 - `buildToolUseCycleOptions()` - Build options
 - `waitForFollowUp()` - Wait for user input
@@ -51,6 +57,7 @@ These methods are now part of the agent's public API for flow orchestration:
 ### Flow Simplification
 
 **Before:**
+
 ```typescript
 // ReflectionRunFlow spawns ReflectionRoundFlow
 const flow = createReflectionRoundFlow();
@@ -67,6 +74,7 @@ shared.agent.roundStates.push(result.roundState);
 ```
 
 **After:**
+
 ```typescript
 // ReflectionRunFlow calls agent directly
 const result = await agent.executeRound(roundIndex, runState, messages);
@@ -76,6 +84,7 @@ agent.recordRoundResult(result);
 ### Data Flow Architecture
 
 **Clean One-Way Flow:**
+
 ```
 ┌─────────────────┐
 │ ReflectionRunFlow│
@@ -97,14 +106,16 @@ agent.recordRoundResult(result);
 ```
 
 **No More Bidirectional Coupling:**
+
 - ❌ Flow → Agent → Flow → Agent
 - ✓ Flow → Agent → Result → Agent
 
 ## Files Modified
 
 ### Core Agent Files (7 files)
+
 1. `src/agent/implementations/BaseAgent.ts`
-2. `src/agent/implementations/BaseReflectionAgent.ts` 
+2. `src/agent/implementations/BaseReflectionAgent.ts`
 3. `src/agent/implementations/BaseToolUseAgent.ts`
 4. `src/agent/implementations/MergeAgent.ts`
 5. `src/agent/implementations/flows/ReflectionRunFlow.ts`
@@ -112,9 +123,11 @@ agent.recordRoundResult(result);
 7. `src/agent/implementations/flows/common/createFinalizeNode.ts`
 
 ### Files Deleted (1 file)
+
 - ✓ `src/agent/implementations/flows/ReflectionRoundFlow.ts`
 
 ### Files Unchanged (Compatible)
+
 - `src/agent/implementations/CoTAgent.ts`
 - `src/agent/implementations/DirectAgent.ts`
 - `src/agent/implementations/flows/ToolUseRunFlow.ts`
@@ -122,6 +135,7 @@ agent.recordRoundResult(result);
 ## Breaking Changes: NONE
 
 All changes are internal refactoring:
+
 - ✓ Public API preserved (run(), interrupt(), config)
 - ✓ Serialization format unchanged
 - ✓ Method overrides still work
@@ -132,20 +146,24 @@ All changes are internal refactoring:
 ## Design Principles Validated
 
 ### 1. Single Source of Truth ✓
+
 - Agent owns round execution: `executeRound()`
 - Agent owns state recording: `recordRoundResult()`
 - No duplication of logic
 
 ### 2. DRY (Don't Repeat Yourself) ✓
+
 - Round orchestration logic exists once in `executeRound()`
 - No duplicate prep/exec/skip logic across files
 
 ### 3. Balanced Abstractions ✓
+
 - **Kept**: Methods that add value (compose steps, manage state, add logging)
 - **Removed**: Pass-through wrappers (just call other modules)
 - **Result**: Every layer adds clear value
 
 ### 4. No Cognitive Overhead ✓
+
 - Direct method calls, not callbacks
 - Clear naming (`executeRound` not `runReflectionRound`)
 - Obvious data flow (returns result, records result)
@@ -153,17 +171,20 @@ All changes are internal refactoring:
 ## Benefits
 
 ### For Developers
+
 - **Easier to understand**: Fewer layers to trace
 - **Easier to debug**: Clear call stack
 - **Easier to extend**: Public APIs for customization
 - **Easier to test**: Direct method calls
 
 ### For Performance
+
 - **Less overhead**: 90% fewer boundary crossings
 - **Less memory**: No intermediate hook objects
 - **Faster execution**: Direct calls vs callbacks
 
 ### For Maintenance
+
 - **Single source of truth**: Agent owns logic
 - **Clear separation**: Flows orchestrate, agents execute
 - **No hidden coupling**: One-way data flow
@@ -184,6 +205,7 @@ Run the following test suites to verify:
 ## Conclusion
 
 The refactoring successfully:
+
 - ✅ Eliminated ~90% of boundary crossings
 - ✅ Established single source of truth
 - ✅ Removed pass-through layers
@@ -197,17 +219,15 @@ The refactoring successfully:
 ## Quick Reference
 
 ### How to Run a Round (New Pattern)
+
 ```typescript
 // In your flow
-const result = await agent.executeRound(
-  roundIndex,
-  runState,
-  messages
-);
+const result = await agent.executeRound(roundIndex, runState, messages);
 agent.recordRoundResult(result);
 ```
 
 ### How to Customize Round Execution
+
 ```typescript
 // Override in your agent subclass
 public async executeRound(
@@ -221,6 +241,7 @@ public async executeRound(
 ```
 
 ### Key Methods to Know
+
 - **`executeRound()`**: Run a complete round (prep + exec + skip)
 - **`recordRoundResult()`**: Record results to agent state
 - **`prepareAgentWorkspaceState()`**: Override for custom workspace prep
