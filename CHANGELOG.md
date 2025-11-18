@@ -10,8 +10,6 @@ All notable changes to this project will be documented in this file.
 
 - Added **Gemini 3 Pro Preview** (`gemini3p`) with full tool support and up-to-date
   pricing so you can try Google's latest high-reasoning model in TeXRA.
-- Gemini 3 now sends Google's `thinking_level` control instead of the legacy
-  reasoning effort knob to match the new API semantics.
 
 ## [0.34.4] - 2025-11-14
 
