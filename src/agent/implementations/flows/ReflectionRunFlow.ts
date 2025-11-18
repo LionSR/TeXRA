@@ -5,7 +5,6 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { AgentRunState } from '@agent/core/AgentState';
 import type {
   BaseReflectionAgent,
-  ReflectionRoundContext,
   ReflectionRoundResult,
 } from '@agent/implementations/BaseReflectionAgent';
 // Internal imports
@@ -48,8 +47,6 @@ interface ReflectionRoundPrep<C> {
   state: ReflectionRunState;
   shouldFinalize: boolean;
   roundIndex: number;
-  messages: any[];
-  runState: AgentRunState;
 }
 
 interface ReflectionRoundExec<C> extends ReflectionRoundPrep<C> {
@@ -70,8 +67,6 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       state,
       shouldFinalize,
       roundIndex: state.currentRound,
-      messages: state.conversation,
-      runState: state.runState,
     };
   }
 
@@ -83,12 +78,15 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
     }
 
     try {
-      prepRes.agent.setCurrentRound(prepRes.roundIndex);
-      const result = await prepRes.agent.runReflectionRound({
-        roundIndex: prepRes.roundIndex,
-        runState: prepRes.state.runState,
-        messages: prepRes.state.conversation,
-      } satisfies ReflectionRoundContext);
+      // Initialize agent's round context
+      prepRes.agent.beginRound(
+        prepRes.roundIndex,
+        prepRes.state.runState,
+        prepRes.state.conversation,
+      );
+
+      // Execute the round using agent's internal context
+      const result = await prepRes.agent.executeCurrentRound();
 
       return {
         ...prepRes,
@@ -131,13 +129,13 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
       return FlowTransition.FINALIZE;
     }
 
-    shared.agent.roundStates.push(result.roundState);
-    shared.agent.workspaceStates.push(result.workspaceState);
-    if (result.output) {
-      shared.agent.roundOutputs[result.output.round] = result.output;
-    }
+    // Record round result through agent API instead of direct mutation
+    shared.agent.recordRoundResult(result);
+
+    // Update flow state
     shared.state.runState = result.runState;
-    shared.state.conversation = [...result.messages];
+    // Direct reference - messages aren't mutated by subsequent operations
+    shared.state.conversation = result.messages;
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
     shared.state.runState.incrementRounds();

@@ -79,6 +79,10 @@ import { toGoogleTools } from './toolConversion';
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
 
@@ -336,14 +340,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
-    client: GoogleGenAI,
-    messages: Content[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<Content>,
   ): Promise<GenerateContentResponse> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = options;
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
       throw new Error('Messages array cannot be empty.');
@@ -718,14 +725,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   extractResponse(
     responseObject: GenerateContentResponse,
     endTag: string,
-  ): [
-    string,
-    GenerateContentResponseUsageMetadata | undefined,
-    ProviderStopReason,
-  ] {
+  ): ExtractResponseResult {
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
-      return ['', undefined, 'UNKNOWN_EMPTY_RESPONSE'];
+      return {
+        response: '',
+        usage: undefined,
+        stopReason: 'UNKNOWN_EMPTY_RESPONSE',
+      };
     }
 
     if (!responseObject.candidates || responseObject.candidates.length === 0) {
@@ -736,16 +743,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         const errorMsg = `Request blocked due to ${blockReason}. Safety ratings: ${safetyRatings}`;
         this.logger.error(errorMsg);
-        return [
-          '',
-          responseObject.usageMetadata || undefined,
-          `Blocked: ${blockReason}`,
-        ];
+        return {
+          response: '',
+          usage: responseObject.usageMetadata || undefined,
+          stopReason: `Blocked: ${blockReason}`,
+        };
       }
       this.logger.error(
         `Invalid or empty response structure from Google GenAI: ${JSON.stringify(responseObject)}`,
       );
-      return ['', undefined, 'UNKNOWN_EMPTY_RESPONSE'];
+      return {
+        response: '',
+        usage: undefined,
+        stopReason: 'UNKNOWN_EMPTY_RESPONSE',
+      };
     }
 
     const candidate = responseObject.candidates[0];
@@ -777,7 +788,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       responseText += `\n${endTag}`;
     }
 
-    return [responseText, usage, stopReason];
+    return { response: responseText, usage, stopReason };
   }
 
   computePrice(

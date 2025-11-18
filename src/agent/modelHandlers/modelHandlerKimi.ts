@@ -14,12 +14,14 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import { K_SLICE } from '@utils/config';
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import type { CreateResponseOptions } from './types/IModelHandler';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Internal imports
-import { K_SLICE } from '@utils/config';
 
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
@@ -94,14 +96,9 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for Kimi models
    */
   async createResponse(
-    client: OpenAI,
-    messages: any[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ChatCompletionMessageParam>,
   ): Promise<any> {
+    const { client, messages, temperature, endTag, signal } = options;
     // Preprocess messages for Kimi compatibility
     const processedMessages = this.prepareNormalizedMessages(
       messages,
@@ -151,15 +148,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     }
 
     // For regular Kimi models, call the parent implementation
-    return super.createResponse(
-      client,
-      processedMessages,
-      temperature,
-      systemPrompt,
-      endTag,
-      signal,
-      tools,
-    );
+    return super.createResponse({
+      ...options,
+      messages: processedMessages,
+    });
   }
 
   /**
