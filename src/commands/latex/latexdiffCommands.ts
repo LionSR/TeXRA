@@ -590,26 +590,29 @@ function describeInfo(info: OutputFileInfo): string {
   if (info.displayLabel) {
     return info.displayLabel;
   }
+  if (info.location?.relativePath) {
+    return info.location.relativePath;
+  }
   if (info.relativePath) {
     return info.relativePath;
   }
-  return info.path;
+  return info.location?.absolutePath ?? info.path;
 }
 
 function describeRevisedInfo(
   info: OutputFileInfo,
   fallbackPath?: string | null,
 ): string {
-  if (info.relativePath) {
-    return info.relativePath;
-  }
   if (info.location?.relativePath) {
     return info.location.relativePath;
+  }
+  if (info.relativePath) {
+    return info.relativePath;
   }
   if (fallbackPath) {
     return path.basename(fallbackPath);
   }
-  return info.path;
+  return info.location?.absolutePath ?? info.path;
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -660,9 +663,11 @@ async function runLatexdiffFromMetadata(params: {
       });
 
       const key =
+        info.location?.relativePath ||
         info.relativePath ||
         info.location?.workspace?.relativePath ||
         info.location?.runStorage?.relativePath ||
+        info.location?.absolutePath ||
         info.path;
       let group = groupedByRelative.get(key);
       if (!group) {

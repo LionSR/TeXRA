@@ -56,7 +56,8 @@ export class FileList {
 
       files.forEach((file) => {
         // Skip invalid file entries
-        if (!file || !file.path) {
+        const filePath = file?.location?.absolutePath || file?.path;
+        if (!file || !filePath) {
           console.warn('FileList.update: Invalid file entry:', file);
           return;
         }
@@ -70,27 +71,28 @@ export class FileList {
         const statsSpan = clone.querySelector('.file-stats');
 
         // Use original name if available, otherwise use generated path
-        const displayLabel = file.displayLabel || getBasename(file.path);
+        const displayLabel = file.displayLabel || getBasename(filePath);
         const dirPath = file.displayDir || '';
 
         // Set file data attributes
         if (fileItem) {
-          fileItem.dataset.file = file.path;
+          fileItem.dataset.file = filePath;
           fileItem.dataset.original = file.original || '';
           fileItem.dataset.base = file.base || '';
           fileItem.dataset.round = round;
           if (file.workspacePath) {
             fileItem.dataset.workspace = file.workspacePath;
           }
-          if (file.relativePath) {
-            fileItem.dataset.relative = file.relativePath;
+          const relPath = file.location?.relativePath || file.relativePath;
+          if (relPath) {
+            fileItem.dataset.relative = relPath;
           }
         }
 
         // Set the file path display
         if (dirSpan) dirSpan.textContent = dirPath ? `${dirPath}/` : '';
         if (basenameSpan) basenameSpan.textContent = displayLabel;
-        if (filePathSpan) filePathSpan.title = file.relativePath || file.path;
+        if (filePathSpan) filePathSpan.title = file.location?.relativePath || file.relativePath || filePath;
 
         // Handle file stats
         if (statsSpan) {
@@ -107,11 +109,11 @@ export class FileList {
         const effectiveBase = getEffectiveBaseFile(
           file.base,
           file.original,
-          file.path,
+          filePath,
         );
 
         // Update buttons with click handlers
-        this.updateFileButtons(clone, file, effectiveBase);
+        this.updateFileButtons(clone, file, effectiveBase, filePath);
 
         roundGroup.appendChild(clone);
       });
@@ -125,7 +127,7 @@ export class FileList {
    * Update action buttons for a file item based on file state
    * @private
    */
-  updateFileButtons(clone, file, effectiveBase) {
+  updateFileButtons(clone, file, effectiveBase, filePath) {
     const buttonConfigs = [
       {
         selector: '.compare-btn',
@@ -167,7 +169,7 @@ export class FileList {
       }
       if (condition) {
         button.dataset.command = command;
-        button.dataset.file = file.path;
+        button.dataset.file = filePath;
         if (configure) {
           configure(button, effectiveBase);
         } else {
@@ -180,10 +182,18 @@ export class FileList {
 
     // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
-    if (filePathSpan && file.path) {
+    if (filePathSpan && filePath) {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
-      filePathSpan.dataset.file = file.path;
+      filePathSpan.dataset.file = filePath;
     }
+  }
+
+  /**
+   * Get the file path from file object, preferring location.absolutePath
+   * @private
+   */
+  getFilePath(file) {
+    return file?.location?.absolutePath || file?.path || '';
   }
 }

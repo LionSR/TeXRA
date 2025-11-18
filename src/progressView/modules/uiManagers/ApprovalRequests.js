@@ -143,7 +143,7 @@ export class ApprovalRequests {
     const bypassButton = element.querySelector('[data-action="approveAll"]');
     element.dataset.streamId = request.streamId || '';
     if (pathElem) {
-      pathElem.textContent = request.relativePath || request.path || '';
+      pathElem.textContent = request.location?.relativePath || request.relativePath || request.location?.absolutePath || request.path || '';
     }
     if (metaElem) {
       const toolSummary = request.sourceTool

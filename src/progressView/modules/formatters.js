@@ -948,7 +948,7 @@ export class LogEntryFormatter {
     Object.entries(filesBySource).forEach(([source, files]) => {
       files.forEach((f) => {
         const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-        const filePath = String(f.path ?? '');
+        const filePath = String(f.location?.absolutePath || f.path || '');
         const escaped = encodeHtml(filePath);
 
         // Extract just the filename for display
