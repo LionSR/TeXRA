@@ -59,6 +59,7 @@ import {
   TaskRunFileService,
   pathToLocation,
   createWorkspaceLocation,
+  flexibleFS,
   type FileLocation,
 } from '@utils/files';
 import { LatexMediaManager } from '@latex';
@@ -390,9 +391,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(
-          async (f) => await WorkspaceFS.exists(f.absolutePath),
-        ),
+        this.baseFiles.map(async (f) => await flexibleFS.exists(f)),
       );
 
       if (existingBase.some((e) => e)) {
