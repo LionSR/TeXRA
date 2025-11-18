@@ -153,59 +153,6 @@ async function removeIfExists(target: string): Promise<void> {
   }
 }
 
-export async function moveToTarget(
-  source: FileLocation,
-  destination: string,
-): Promise<void> {
-  const resolvedSource = source.absolutePath;
-  const resolvedDestination = path.resolve(destination);
-  if (resolvedSource === resolvedDestination) {
-    return;
-  }
-
-  await ensureParentDir(destination);
-
-  try {
-    await fs.rename(resolvedSource, resolvedDestination);
-    return;
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException;
-
-    if (
-      err.code === 'EEXIST' ||
-      err.code === 'EISDIR' ||
-      err.code === 'ENOTEMPTY' ||
-      err.code === 'ENOTDIR'
-    ) {
-      logger.warn(
-        CHANNEL,
-        `Replacing existing path while moving into run storage: ${resolvedDestination}`,
-      );
-      await fs.rm(resolvedDestination, { recursive: true, force: true });
-      await fs.rename(resolvedSource, resolvedDestination);
-      return;
-    }
-
-    if (err.code && err.code !== 'EXDEV') {
-      throw Object.assign(
-        new Error(
-          `Failed to move ${resolvedSource} to ${resolvedDestination}: ${err.message}`,
-        ),
-        { cause: err },
-      );
-    }
-
-    const stats = await fs.lstat(resolvedSource);
-    if (stats.isDirectory()) {
-      await fs.cp(resolvedSource, resolvedDestination, { recursive: true });
-      await fs.rm(resolvedSource, { recursive: true, force: true });
-      return;
-    }
-
-    await fs.copyFile(resolvedSource, resolvedDestination);
-    await fs.rm(resolvedSource, { force: true });
-  }
-}
 
 async function createSymlink(
   source: FileLocation,
@@ -599,71 +546,6 @@ export class TaskRunFileService {
     return createWorkspaceLocation(workspaceAbsolute, normalized);
   }
 
-  /**
-   * Move or mirror a workspace artifact into run storage.
-   * Takes a FileLocation and returns the relocated version in run storage.
-   */
-  public async relocateToRunStorage(
-    source: FileLocation,
-    options: {
-      forceRunStorage?: boolean;
-      keepWorkspaceCopy?: boolean;
-    } = {},
-  ): Promise<FileLocation> {
-    if (source.kind !== 'workspace') {
-      return source;
-    }
-
-    if (shouldSkipRelocation(source.relativePath)) {
-      return source;
-    }
-
-    const executionId = this.activeExecutionId;
-    if (!executionId) {
-      return source;
-    }
-
-    const runPaths = getRunStoragePaths(executionId, source.relativePath);
-    const preferRunStorage =
-      options.forceRunStorage === true || this.useRunStorage;
-
-    if (!preferRunStorage) {
-      return source;
-    }
-
-    await this.ensureRunDirectory();
-
-    try {
-      if (options.keepWorkspaceCopy) {
-        await ensureParentDir(runPaths.absolute);
-        await fs.copyFile(source.absolutePath, runPaths.absolute);
-      } else {
-        await moveToTarget(source, runPaths.absolute);
-      }
-    } catch (error) {
-      await removeIfExists(runPaths.absolute);
-      throw error;
-    }
-
-    const runLocation = createRunStorageLocation(
-      runPaths.absolute,
-      runPaths.runRelative,
-      executionId,
-    );
-    const persisted = await flexibleFS.exists(runLocation);
-    if (!persisted) {
-      await removeIfExists(runPaths.absolute);
-      throw new Error(
-        `Failed to relocate ${source.absolutePath} into run storage at ${runPaths.absolute}`,
-      );
-    }
-
-    return createRunStorageLocation(
-      runPaths.absolute,
-      runPaths.runRelative,
-      executionId,
-    );
-  }
 
   /**
    * Ensure a workspace dependency is reachable from run storage via symlink.

@@ -14,8 +14,6 @@ import {
   flexibleFS,
   WorkspaceFS,
   createWorkspaceLocation,
-  createRunStorageLocation,
-  createExternalLocation,
   getComparablePath,
   type FileLocation,
 } from '@utils/files';
@@ -163,21 +161,6 @@ export class LatexDiffManager {
     }
   }
 
-  /**
-   * Relocate diff artifact to run storage, returning its FileLocation.
-   * Takes a FileLocation and returns the relocated version.
-   */
-  private async relocateDiffArtifact(
-    diffLocation: FileLocation,
-  ): Promise<FileLocation> {
-    if (!this.fileService.hasRunDirectory()) {
-      // No run storage - return as-is
-      return diffLocation;
-    }
-
-    // relocateToRunStorage takes FileLocation and returns the relocated version
-    return await this.fileService.relocateToRunStorage(diffLocation);
-  }
 
   async handleLatexdiffofOutput(
     currRound: number,
@@ -288,42 +271,28 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Extract directory once, use for both diff and build
-            const baseDir = path.dirname(baseLocation.absolutePath);
+            // Create diff location using fileService - it knows whether to use workspace or run storage
+            const baseRelDir =
+              baseLocation.kind !== 'external'
+                ? path.dirname(baseLocation.relativePath)
+                : '';
+            const diffRelativePath = baseRelDir
+              ? path.join(baseRelDir, result.diffFileName)
+              : result.diffFileName;
 
-            // Create diff location matching the base file's kind
-            if (baseLocation.kind === 'runStorage') {
-              const baseRelDir = path.dirname(baseLocation.relativePath);
-              diffLocation = createRunStorageLocation(
-                path.join(baseDir, result.diffFileName),
-                path.join(baseRelDir, result.diffFileName),
-                baseLocation.executionId,
-              );
-            } else if (baseLocation.kind === 'workspace') {
-              const baseRelDir = path.dirname(baseLocation.relativePath);
-              diffLocation = createWorkspaceLocation(
-                path.join(baseDir, result.diffFileName),
-                path.join(baseRelDir, result.diffFileName),
-              );
-            } else {
-              diffLocation = createExternalLocation(
-                path.join(baseDir, result.diffFileName),
-              );
-            }
+            // This automatically uses run storage if enabled, workspace otherwise
+            diffLocation = this.fileService.createLocation(diffRelativePath);
 
-            const buildDir = path.join(baseDir, 'build');
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
+            );
             await this.dependencies.compileLatex2Pdf(
               diffLocation,
               this.channel,
               buildDir,
               true,
             );
-
-            if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(diffLocation);
-              // Leave the build directory in place; it mainly caches temporary
-              // LaTeX intermediates and can be regenerated on demand.
-            }
           }
 
           aggregated.push({
@@ -406,43 +375,29 @@ export class LatexDiffManager {
           let diffLocation: FileLocation | undefined;
 
           if (result.success && result.diffFileName) {
-            // Extract directory once, use for both diff and build
+            // Create diff location using fileService - it knows whether to use workspace or run storage
             const refLocation = prevLocation ?? currLocation!;
-            const prevDir = path.dirname(refLocation.absolutePath);
+            const refRelDir =
+              refLocation.kind !== 'external'
+                ? path.dirname(refLocation.relativePath)
+                : '';
+            const diffRelativePath = refRelDir
+              ? path.join(refRelDir, result.diffFileName)
+              : result.diffFileName;
 
-            // Create diff location matching the reference file's kind
-            if (refLocation.kind === 'runStorage') {
-              const prevRelDir = path.dirname(refLocation.relativePath);
-              diffLocation = createRunStorageLocation(
-                path.join(prevDir, result.diffFileName),
-                path.join(prevRelDir, result.diffFileName),
-                refLocation.executionId,
-              );
-            } else if (refLocation.kind === 'workspace') {
-              const prevRelDir = path.dirname(refLocation.relativePath);
-              diffLocation = createWorkspaceLocation(
-                path.join(prevDir, result.diffFileName),
-                path.join(prevRelDir, result.diffFileName),
-              );
-            } else {
-              diffLocation = createExternalLocation(
-                path.join(prevDir, result.diffFileName),
-              );
-            }
+            // This automatically uses run storage if enabled, workspace otherwise
+            diffLocation = this.fileService.createLocation(diffRelativePath);
 
-            const buildDir = path.join(prevDir, 'build');
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
+            );
             await this.dependencies.compileLatex2Pdf(
               diffLocation,
               this.channel,
               buildDir,
               true,
             );
-
-            if (this.fileService.hasRunDirectory()) {
-              diffLocation = await this.relocateDiffArtifact(diffLocation);
-              // Build folders stay in the workspace to avoid copying the entire
-              // compilation output tree into run storage.
-            }
           }
 
           aggregated.push({
