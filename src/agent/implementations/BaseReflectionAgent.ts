@@ -510,7 +510,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       runState: store.run,
       messages: updatedMessages,
       shouldContinue: endTurn,
-      workspaceState,
+      workspaceState: store.workspace,
       output: artifacts,
     };
   }
