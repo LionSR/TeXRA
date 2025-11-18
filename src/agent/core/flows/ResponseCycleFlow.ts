@@ -346,13 +346,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       options.logger.debug(`Stop reason: ${stopReason}`);
       options.logger.debug(`Token usage: ${JSON.stringify(responseUsage)}`);
 
+      const hadThinking = Boolean(store.workspace?.reasoning.thinkingAdded);
       const thinkingContent = options.modelHandler.processThinkingBlock(
         state.responseObject,
         store.workspace,
       );
       const useStreaming = options.modelHandler.getStreamingConfig();
 
-      if (thinkingContent && !useStreaming) {
+      if (thinkingContent && !useStreaming && !hadThinking) {
         const formatted = await xmlUtils.formatContent(thinkingContent);
         if (formatted.trim().length > 0) {
           options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
@@ -507,9 +508,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ');
     options.logger.debug(`Usage summary: ${usageSummary}`);
-
-    // Thinking content already logged in exec() method above
-    // Removing duplicate log to fix duplicate streaming blocks in workflow agents
 
     options.logger.info(
       `Stop reason: ${result.stopReason}`,
