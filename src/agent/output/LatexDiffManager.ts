@@ -81,9 +81,7 @@ export class LatexDiffManager {
   /**
    * Get working directory for latexdiff - use file's directory so relative includes work.
    */
-  private async getWorkingDirectory(
-    location: FileLocation,
-  ): Promise<string> {
+  private async getWorkingDirectory(location: FileLocation): Promise<string> {
     const resolved = await this.resolveSymlinks(location.absolutePath);
     return path.dirname(resolved);
   }

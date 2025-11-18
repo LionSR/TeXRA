@@ -352,7 +352,8 @@ export class OutputHandler implements IOutputHandler {
           originalLocation &&
           getComparablePath(originalLocation) === getComparablePath(location);
         const diffBaseLocation =
-          baseLocation ?? (originalLocation && !isSameFile ? originalLocation : null);
+          baseLocation ??
+          (originalLocation && !isSameFile ? originalLocation : null);
 
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
@@ -414,7 +415,7 @@ export class OutputHandler implements IOutputHandler {
         );
         const baseNameNoExt = path.parse(baseName).name;
         const sourceNoExt = path.parse(entry.source).name;
-        
+
         return (
           baseName === entry.source ||
           baseNameNoExt === sourceNoExt ||
@@ -422,7 +423,7 @@ export class OutputHandler implements IOutputHandler {
           baseName === sourceNoExt
         );
       });
-      
+
       originByOutput.set(entry.location, matchingBase);
     }
 
