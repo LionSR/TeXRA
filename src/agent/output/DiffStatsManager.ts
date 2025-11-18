@@ -6,6 +6,7 @@ import type { DiffStats } from '@agent/types/DiffTypes';
 
 // Local imports
 import { flexibleFS } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 
 export class DiffStatsManager {
   private countLines(text: string): number {
@@ -16,19 +17,19 @@ export class DiffStatsManager {
   }
 
   public async computeDiffStats(
-    baseFile: string | null,
-    outputFile: string,
+    baseLocation: FileLocation | null,
+    outputLocation: FileLocation,
   ): Promise<DiffStats> {
     try {
-      if (!baseFile) {
-        const outContent = await flexibleFS.read(outputFile);
+      if (!baseLocation) {
+        const outContent = await flexibleFS.read(outputLocation);
         const added = this.countLines(outContent);
         return { added };
       }
 
       const [baseContent, outContent] = await Promise.all([
-        flexibleFS.read(baseFile),
-        flexibleFS.read(outputFile),
+        flexibleFS.read(baseLocation),
+        flexibleFS.read(outputLocation),
       ]);
 
       const dmp = new diff_match_patch();

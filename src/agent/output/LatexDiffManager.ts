@@ -9,16 +9,37 @@ import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { checkToolInstalled } from '@utils/system';
-import { TaskRunFileService, flexibleFS } from '@utils/files';
-// Type imports
-import type { FileLocation } from '@utils/files';
+import {
+  TaskRunFileService,
+  flexibleFS,
+  WorkspaceFS,
+  type FileLocation,
+  type AgentFileLocation,
+} from '@utils/files';
 
 // Internal imports
+import { getComparablePath } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import type { NamedOutputFile, RoundFileMapping } from './types';
+import { getFileDirectory } from './displayUtils';
+import type { OutputFileInfo, RoundFileMapping } from './types';
+
+/**
+ * Result of a latexdiff operation with file locations.
+ */
+interface DiffOperationResult {
+  baseLabel: string;
+  revisedLabel: string;
+  status: 'success' | 'error';
+  message?: string;
+  locations: {
+    base: FileLocation | null;
+    revised: FileLocation | null;
+    diff: FileLocation | null;
+  };
+}
 
 interface LatexDiffDependencies {
   checkToolInstalled: typeof checkToolInstalled;
@@ -37,8 +58,8 @@ export class LatexDiffManager {
 
   constructor(
     private readonly agentSetting: AgentWorkflowSetting,
-    private readonly outputFiles: { [key: number]: NamedOutputFile[] },
-    private readonly baseFiles: string[],
+    private readonly getOutputFiles: () => { [key: number]: OutputFileInfo[] },
+    private readonly baseFiles: FileLocation[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
     private readonly fileService: TaskRunFileService,
@@ -47,7 +68,11 @@ export class LatexDiffManager {
     this.latexdiffService = new LaTeXdiffService(channel);
   }
 
-  private async resolveActualPath(target: string): Promise<string> {
+  /**
+   * Resolve symlinks for latexdiff compatibility.
+   * (latexdiff may have issues with symlinks in some configurations)
+   */
+  private async resolveSymlinks(target: string): Promise<string> {
     try {
       return await fs.realpath(target);
     } catch {
@@ -55,47 +80,12 @@ export class LatexDiffManager {
     }
   }
 
-  private async resolveDiffTarget(
-    relativePath: string,
-    location?: FileLocation,
-  ): Promise<{
-    actual: string | null;
-    workspaceDir?: string;
-    workspaceReference?: string;
-  }> {
-    const workspaceReference = location?.workspace?.absolutePath
-      ? location.workspace.absolutePath
-      : relativePath
-        ? this.fileService.resolveRelativePath(relativePath, {
-            preferWorkspace: true,
-          }).workspace?.absolutePath
-        : undefined;
-
-    const workspaceDir = workspaceReference
-      ? path.dirname(workspaceReference)
-      : undefined;
-
-    const actualCandidate = location?.absolutePath;
-
-    if (actualCandidate && (await flexibleFS.exists(actualCandidate))) {
-      const resolvedActual = await this.resolveActualPath(actualCandidate);
-      return {
-        actual: resolvedActual,
-        workspaceDir,
-        workspaceReference,
-      };
-    }
-
-    if (workspaceReference && (await flexibleFS.exists(workspaceReference))) {
-      const resolvedActual = await this.resolveActualPath(workspaceReference);
-      return {
-        actual: resolvedActual,
-        workspaceDir,
-        workspaceReference,
-      };
-    }
-
-    return { actual: null, workspaceDir, workspaceReference };
+  /**
+   * Get working directory for latexdiff - use file's directory so relative includes work.
+   */
+  private async getWorkingDirectory(location: FileLocation): Promise<string> {
+    const resolved = await this.resolveSymlinks(location.absolutePath);
+    return path.dirname(resolved);
   }
 
   private logLatexdiffResult(
@@ -125,35 +115,37 @@ export class LatexDiffManager {
     );
   }
 
+  /**
+   * Get display label (basename) from FileLocation for UI/logging.
+   */
+  private getDisplayLabel(location: FileLocation): string {
+    return path.basename(
+      location.kind === 'workspace' || location.kind === 'runStorage'
+        ? location.relativePath
+        : location.absolutePath,
+    );
+  }
+
   private async ensureWorkspaceDependency(
-    target?: string | null,
+    targetLocation: FileLocation | null | undefined,
   ): Promise<void> {
-    if (!target) {
+    if (!targetLocation) {
       return;
     }
 
-    if (!(await flexibleFS.exists(target))) {
+    if (!(await flexibleFS.exists(targetLocation))) {
       return;
     }
 
     try {
-      await this.fileService.mirrorWorkspaceFile(target);
+      await this.fileService.mirrorWorkspaceFile(targetLocation);
     } catch (error) {
       this.logger.warn(
-        `Unable to mirror workspace dependency ${target}: ${toErrorMessage(error)}`,
+        `Unable to mirror workspace dependency ${targetLocation.absolutePath}: ${toErrorMessage(error)}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
     }
-  }
-
-  private async relocateDiffArtifact(diffPath: string): Promise<string> {
-    if (!this.fileService.hasRunDirectory()) {
-      return diffPath;
-    }
-
-    const relocation = await this.fileService.relocateToRunStorage(diffPath);
-    return relocation.absolutePath;
   }
 
   async handleLatexdiffofOutput(
@@ -165,21 +157,7 @@ export class LatexDiffManager {
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
-    const aggregated: Array<{
-      baseLabel: string;
-      basePath?: string;
-      revisedLabel: string;
-      revisedPath?: string;
-      diffPath?: string;
-      status: 'success' | 'error';
-      message?: string;
-      runId?: string | null;
-      locations?: {
-        base: FileLocation | null;
-        revised: FileLocation | null;
-        diff: FileLocation | null;
-      };
-    }> = [];
+    const aggregated: DiffOperationResult[] = [];
 
     const execute = async () => {
       if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
@@ -189,8 +167,10 @@ export class LatexDiffManager {
         return;
       }
 
-      const outputFiles = this.outputFiles[currRound] || [];
-      const outputPaths = outputFiles.map((entry) => entry.path);
+      const outputFiles = this.getOutputFiles()[currRound] || [];
+      const outputPaths = outputFiles.map(
+        (entry) => entry.location.absolutePath,
+      );
       if (outputPaths.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
@@ -198,7 +178,9 @@ export class LatexDiffManager {
         return;
       }
 
-      this.logger.debug(`Base files: ${this.baseFiles}`);
+      this.logger.debug(
+        `Base files: ${this.baseFiles.map((f) => f.absolutePath).join(', ')}`,
+      );
       this.logger.debug(`r${currRound} output files: ${outputPaths}`);
 
       const basePairs = Array.from(mapping.baseToOutput.entries());
@@ -206,8 +188,8 @@ export class LatexDiffManager {
         this.logger.debug(
           `Matched base files to output files: ${basePairs
             .map(
-              ([base, output]) =>
-                `${path.basename(base)} -> ${path.basename(output)}`,
+              ([outputPath, base]) =>
+                `${this.getDisplayLabel(base)} -> ${path.basename(outputPath)}`,
             )
             .join(', ')}`,
         );
@@ -219,82 +201,61 @@ export class LatexDiffManager {
 
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
-        for (const [baseFile, outputFile] of basePairs) {
-          const location = mapping.locationByOutput.get(outputFile);
-          const resolved = await this.resolveDiffTarget(outputFile, location);
-          const baseAbsolute = this.fileService.resolveRelativePath(baseFile, {
-            preferWorkspace: true,
-          }).absolutePath;
-          await this.ensureWorkspaceDependency(baseAbsolute);
-          await this.ensureWorkspaceDependency(resolved.workspaceReference);
-          const cwd = resolved.workspaceDir ?? path.dirname(baseAbsolute);
-
-          if (!resolved.actual) {
-            this.logger.warn(
-              `Skipping latexdiff for ${outputFile} - file not found after relocation`,
+        for (const [outputPath, baseLocation] of basePairs) {
+          // Find the revised/output FileLocation from current round outputs
+          const revisedLocation = outputFiles.find(
+            (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
+          )?.location;
+          if (!revisedLocation) {
+            this.logger.debug(
+              `Skipping diff: output file not found for path ${outputPath}`,
             );
-            aggregated.push({
-              baseLabel: this.fileService.getDisplayLabel(baseFile),
-              basePath: baseAbsolute,
-              revisedLabel: this.fileService.getDisplayLabel(baseFile),
-              revisedPath: location?.absolutePath,
-              status: 'error',
-              message: 'Revised file missing for latexdiff',
-            });
             continue;
           }
+          await this.ensureWorkspaceDependency(baseLocation);
+          await this.ensureWorkspaceDependency(revisedLocation);
+
+          // Use revised file's directory as cwd so latexdiff can resolve relative includes
+          const cwd = await this.getWorkingDirectory(revisedLocation);
 
           const result = await this.latexdiffService.runDiffForRound(
-            baseAbsolute,
-            resolved.actual,
+            baseLocation,
+            revisedLocation,
             currRound,
             undefined,
             { cwd },
           );
           this.logLatexdiffResult(result, 'round-diff');
-          let diffPath = '';
+          let diffLocation: FileLocation | undefined;
+
           if (result.success && result.diffFileName) {
-            diffPath = path.join(
-              path.dirname(baseAbsolute),
-              result.diffFileName,
+            // Create diff location using fileService - it knows whether to use workspace or run storage
+            const baseRelDir = getFileDirectory(baseLocation);
+            const diffRelativePath = path.join(baseRelDir, result.diffFileName);
+
+            // This automatically uses run storage if enabled, workspace otherwise
+            diffLocation = this.fileService.createLocation(diffRelativePath);
+
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
             );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
             await this.dependencies.compileLatex2Pdf(
-              diffPath,
+              diffLocation,
               this.channel,
               buildDir,
               true,
             );
-            if (this.fileService.hasRunDirectory()) {
-              diffPath = await this.relocateDiffArtifact(diffPath);
-              // Leave the build directory in place; it mainly caches temporary
-              // LaTeX intermediates and can be regenerated on demand.
-            }
           }
-          const baseLocation = this.fileService.resolveRelativePath(baseFile, {
-            preferWorkspace: true,
-          });
-          const revisedLocation =
-            location ??
-            (resolved.actual
-              ? this.fileService.describePath(resolved.actual)
-              : undefined);
-          const diffLocation = diffPath
-            ? this.fileService.describePath(diffPath)
-            : undefined;
 
           aggregated.push({
-            baseLabel: this.fileService.getDisplayLabel(baseFile),
-            basePath: baseAbsolute,
-            revisedLabel: this.fileService.getDisplayLabel(outputFile),
-            revisedPath: resolved.actual ?? location?.absolutePath,
-            diffPath: diffPath || undefined,
+            baseLabel: this.getDisplayLabel(baseLocation),
+            revisedLabel: this.getDisplayLabel(revisedLocation),
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
-            runId: this.fileService.metadata.executionId ?? null,
             locations: {
               base: baseLocation,
-              revised: revisedLocation ?? null,
+              revised: revisedLocation,
               diff: diffLocation ?? null,
             },
           });
@@ -309,8 +270,8 @@ export class LatexDiffManager {
           this.logger.debug(
             `Matched previous round files to current round files: ${prevPairs
               .map(
-                ([prev, curr]) =>
-                  `${path.basename(prev)} -> ${path.basename(curr)}`,
+                ([outputPath, prev]) =>
+                  `${this.getDisplayLabel(prev)} -> ${path.basename(outputPath)}`,
               )
               .join(', ')}`,
           );
@@ -320,86 +281,58 @@ export class LatexDiffManager {
           );
         }
 
-        for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const prevLocation = mapping.locationByOutput.get(prevOutputFile);
-          const currLocation = mapping.locationByOutput.get(currOutputFile);
-          const prevResolved = await this.resolveDiffTarget(
-            prevOutputFile,
-            prevLocation,
-          );
-          const currResolved = await this.resolveDiffTarget(
-            currOutputFile,
-            currLocation,
-          );
-          await this.ensureWorkspaceDependency(prevResolved.workspaceReference);
-          await this.ensureWorkspaceDependency(currResolved.workspaceReference);
+        for (const [outputPath, prevLocation] of prevPairs) {
+          // Find the current round FileLocation from current round outputs
+          const currLocation = outputFiles.find(
+            (o: OutputFileInfo) => getComparablePath(o.location) === outputPath,
+          )?.location;
 
-          if (!prevResolved.actual || !currResolved.actual) {
-            this.logger.warn(
-              `Skipping between-round latexdiff - missing files for ${prevOutputFile} or ${currOutputFile}`,
+          if (!currLocation) {
+            this.logger.debug(
+              `Skipping diff: current round file not found for path ${outputPath}`,
             );
-            aggregated.push({
-              baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
-              basePath: prevLocation?.absolutePath,
-              revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
-              revisedPath: currLocation?.absolutePath,
-              status: 'error',
-              message: 'One or more round files missing for latexdiff',
-              runId: this.fileService.metadata.executionId ?? null,
-              locations: {
-                base: prevLocation ?? null,
-                revised: currLocation ?? null,
-                diff: null,
-              },
-            });
             continue;
           }
+          await this.ensureWorkspaceDependency(prevLocation);
+          await this.ensureWorkspaceDependency(currLocation);
 
-          const workspaceCwd =
-            prevResolved.workspaceDir ?? currResolved.workspaceDir;
-          const previousActualAbsolute = flexibleFS.toAbsolutePath(
-            prevResolved.actual,
-          );
-          const cwd = workspaceCwd ?? path.dirname(previousActualAbsolute);
+          // Use current file's directory as cwd so latexdiff can resolve relative includes
+          const cwd = await this.getWorkingDirectory(currLocation);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevResolved.actual,
-            currResolved.actual,
+            prevLocation,
+            currLocation,
             undefined,
             { cwd },
           );
           this.logLatexdiffResult(result, 'between-rounds-diff');
-          let diffPath = '';
+          let diffLocation: FileLocation | undefined;
+
           if (result.success && result.diffFileName) {
-            diffPath = path.join(
-              path.dirname(previousActualAbsolute),
-              result.diffFileName,
+            // Create diff location using fileService - it knows whether to use workspace or run storage
+            const refLocation = prevLocation ?? currLocation;
+            const refRelDir = getFileDirectory(refLocation);
+            const diffRelativePath = path.join(refRelDir, result.diffFileName);
+
+            // This automatically uses run storage if enabled, workspace otherwise
+            diffLocation = this.fileService.createLocation(diffRelativePath);
+
+            const buildDir = path.join(
+              path.dirname(diffLocation.absolutePath),
+              'build',
             );
-            const buildDir = path.join(path.dirname(diffPath), 'build');
             await this.dependencies.compileLatex2Pdf(
-              diffPath,
+              diffLocation,
               this.channel,
               buildDir,
               true,
             );
-            if (this.fileService.hasRunDirectory()) {
-              diffPath = await this.relocateDiffArtifact(diffPath);
-              // Build folders stay in the workspace to avoid copying the entire
-              // compilation output tree into run storage.
-            }
           }
-          const diffLocation = diffPath
-            ? this.fileService.describePath(diffPath)
-            : undefined;
 
           aggregated.push({
-            baseLabel: this.fileService.getDisplayLabel(prevOutputFile),
-            basePath: prevLocation?.absolutePath,
-            revisedLabel: this.fileService.getDisplayLabel(currOutputFile),
-            revisedPath: currResolved.actual ?? currLocation?.absolutePath,
-            diffPath: diffPath || undefined,
+            baseLabel: this.getDisplayLabel(prevLocation),
+            revisedLabel: this.getDisplayLabel(currLocation),
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
-            runId: this.fileService.metadata.executionId ?? null,
             locations: {
               base: prevLocation ?? null,
               revised: currLocation ?? null,

@@ -7,19 +7,18 @@ import * as logger from '@logger/logUtils';
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
+import type { FileLocation } from './taskRunStorage';
 
 const CHANNEL = 'flexibleFS';
 logger.initialize(CHANNEL);
 
-function isAbsolute(target: string): boolean {
-  return path.isAbsolute(target);
-}
-
+/**
+ * Filesystem operations for FileLocation objects.
+ * All paths must be FileLocation - use pathToLocation() to convert strings.
+ */
 export class FlexibleFS {
-  exists(target: string): Promise<boolean> {
-    return isAbsolute(target)
-      ? AbsoluteFS.exists(target)
-      : WorkspaceFS.exists(target);
+  exists(target: FileLocation): Promise<boolean> {
+    return AbsoluteFS.exists(target.absolutePath);
   }
 
   /**
@@ -31,7 +30,7 @@ export class FlexibleFS {
    * outputs without scanning their contents.
    */
   async existsAndNonTrivial(
-    target: string,
+    target: FileLocation,
     threshold: number = 15,
   ): Promise<boolean> {
     if (!(await this.exists(target))) {
@@ -42,97 +41,64 @@ export class FlexibleFS {
     return content.length > threshold;
   }
 
-  read(target: string): Promise<string> {
-    return isAbsolute(target)
-      ? AbsoluteFS.read(target)
-      : WorkspaceFS.read(target);
+  read(target: FileLocation): Promise<string> {
+    return AbsoluteFS.read(target.absolutePath);
   }
 
-  readBytes(target: string): Promise<Buffer> {
-    return isAbsolute(target)
-      ? AbsoluteFS.readBytes(target)
-      : WorkspaceFS.readBytes(target);
+  readBytes(target: FileLocation): Promise<Buffer> {
+    return AbsoluteFS.readBytes(target.absolutePath);
   }
 
-  appendFile(target: string, content: string | Uint8Array): Promise<void> {
-    return isAbsolute(target)
-      ? AbsoluteFS.appendFile(target, content)
-      : WorkspaceFS.appendFile(target, content);
+  appendFile(
+    target: FileLocation,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    return AbsoluteFS.appendFile(target.absolutePath, content);
   }
 
-  async write(target: string, content: string | Uint8Array): Promise<void> {
-    if (isAbsolute(target)) {
-      await AbsoluteFS.write(target, content);
-      return;
-    }
+  async write(
+    target: FileLocation,
+    content: string | Uint8Array,
+  ): Promise<void> {
+    const absolutePath = target.absolutePath;
 
     try {
-      await WorkspaceFS.write(target, content);
+      await AbsoluteFS.write(absolutePath, content);
     } catch (error) {
       const err = error as NodeJS.ErrnoException;
       if (err.code !== 'ELOOP') {
         throw error;
       }
 
-      const absoluteTarget = WorkspaceFS.fullPath(target);
       const replacementSize =
         typeof content === 'string'
           ? Buffer.byteLength(content, 'utf-8')
           : content.byteLength;
       logger.warn(
         CHANNEL,
-        `Detected circular symlink while writing ${absoluteTarget}, replaced with file (${replacementSize} bytes)`,
+        `Detected circular symlink while writing ${absolutePath}, replaced with file (${replacementSize} bytes)`,
       );
-      await AbsoluteFS.delete(absoluteTarget, {
+      await AbsoluteFS.delete(absolutePath, {
         recursive: true,
         useTrash: false,
       });
-      await WorkspaceFS.write(target, content);
+      await AbsoluteFS.write(absolutePath, content);
     }
   }
 
-  async ensureDir(target: string): Promise<void> {
-    if (isAbsolute(target)) {
-      await AbsoluteFS.ensureDir(target);
-      return;
-    }
-
-    await WorkspaceFS.ensureDir(target);
+  async ensureDir(target: FileLocation): Promise<void> {
+    await AbsoluteFS.ensureDir(target.absolutePath);
   }
 
   async delete(
-    target: string,
+    target: FileLocation,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    if (isAbsolute(target)) {
-      await AbsoluteFS.delete(target, options);
-      return;
-    }
-
-    await WorkspaceFS.delete(target, options);
+    await AbsoluteFS.delete(target.absolutePath, options);
   }
 
-  stat(target: string) {
-    return isAbsolute(target)
-      ? AbsoluteFS.stat(target)
-      : WorkspaceFS.stat(target);
-  }
-
-  toAbsolutePath(target: string): string {
-    return isAbsolute(target) ? target : WorkspaceFS.fullPath(target);
-  }
-
-  toWorkspaceRelative(target: string): string {
-    if (!isAbsolute(target)) {
-      return target;
-    }
-
-    const base = WorkspaceFS.getPath();
-    if (!base) {
-      return target;
-    }
-
-    return path.relative(base, target);
+  stat(target: FileLocation) {
+    return AbsoluteFS.stat(target.absolutePath);
   }
 }
 

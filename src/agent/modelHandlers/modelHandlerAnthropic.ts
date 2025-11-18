@@ -67,10 +67,11 @@ import replacementEngine from '@replacement/engine';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
+import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -1113,22 +1114,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
     agentSetting: AgentSetting,
     messages: MessageParam[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, MessageParam[]]> {
     const workflowSetting = requireWorkflowSetting(agentSetting);
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       if (this.capabilities.supportsAssistantPrefill) {
         this.logger.debug(`Adding prefill message:\n${prefill}`);
         if (
           workspaceState.assembly.accumulatedOutput.includes('<scratchpad>') &&
           prefill === '<scratchpad>' // this is not so neat
         ) {
-          await flexibleFS.write(outputFile, prefill);
+          await flexibleFS.write(outputLocation, prefill);
         } else if (workflowSetting.outputExt === 'xml') {
-          await flexibleFS.write(outputFile, prefill + '\n');
+          await flexibleFS.write(outputLocation, prefill + '\n');
         }
         messages.push({
           role: 'assistant',
@@ -1154,7 +1155,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Get prefill from existing and non-trivial file
-    let fileContent = await flexibleFS.read(outputFile);
+    let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
     // Extract any existing scratchpad content
@@ -1166,7 +1167,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(outputFile, fileContent);
+    await flexibleFS.write(outputLocation, fileContent);
 
     // Update the workspaceState with the actual file content
     workspaceState.assembly.updateAccumulatedOutput(fileContent);
@@ -1209,7 +1210,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         text: fileContent,
       },
     ];
-    this.logger.debug(`Using existing content as prefill: ${outputFile}`);
+    this.logger.debug(
+      `Using existing content as prefill: ${outputLocation.absolutePath}`,
+    );
     messages.push({ role: 'assistant', content });
 
     this.assignCacheControlToLatest(content);

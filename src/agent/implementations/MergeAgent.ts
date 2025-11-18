@@ -8,8 +8,10 @@ import { parseFilenameParts } from '@agent/utils';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import type { NamedOutputFile } from '@agent/output/types';
+import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import { WorkspaceFS } from '@utils/files';
+import type { FileLocation, AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
@@ -36,16 +38,21 @@ export class MergeAgent extends DirectAgent {
       agentPath,
       context,
     );
-    this.outputFile = [this.getOutputFile(0), this.getOutputFile(1)];
+    this.outputFile = [
+      this.getOutputFileLocation(0),
+      this.getOutputFileLocation(1),
+    ];
   }
 
   /**
    * Generates output filename for merged content based on input and edited files.
    * @param currRound Current round number (unused in merge operations)
-   * @returns Path to output file for merged content
+   * @returns Path to output file for merged content - always workspace or runStorage
    * @throws Error if editedFile is not specified
    */
-  protected getOutputFile(currRound: number): string {
+  protected override getOutputFileLocation(
+    currRound: number,
+  ): AgentFileLocation {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 
@@ -66,7 +73,9 @@ export class MergeAgent extends DirectAgent {
     // Construct output filename
     const outputFile = `${finalBase}_${agent}_r${roundNum}_full_${model}.tex`;
     const outputPath = path.join(inputDir, outputFile);
-    return outputPath;
+
+    // fileService.createLocation always returns workspace or runStorage for agent outputs
+    return this.fileService.createLocation(outputPath) as AgentFileLocation;
   }
 
   /**
@@ -82,7 +91,7 @@ export class MergeAgent extends DirectAgent {
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<NamedOutputFile[]> {
+  ): Promise<OutputFileInfo[]> {
     const { outputFile, endTurn } = options;
     if (endTurn) {
       this.logger.debug(`Processing merge output for round ${currRound}`);

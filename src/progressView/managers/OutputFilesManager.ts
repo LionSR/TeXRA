@@ -44,9 +44,6 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  private readonly parseStringValue = (value: unknown): string | null =>
-    typeof value === 'string' ? value : null;
-
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
@@ -197,9 +194,8 @@ export class OutputFilesManager extends PersistentMapManager<
         if (
           infos.some(
             (info) =>
-              info.rawLocation?.runStorage?.storageRelativePath?.includes(
-                executionId,
-              ) || info.rawOutputPath?.includes(executionId),
+              info.location.kind === 'runStorage' &&
+              info.location.executionId === executionId,
           )
         ) {
           return this.getRun(stream, runKey);
@@ -250,119 +246,39 @@ export class OutputFilesManager extends PersistentMapManager<
     return paths;
   }
 
+  /**
+   * Collect all paths from an output file info (absolute paths).
+   */
   private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
-    this.addPath(target, info.path);
-    this.addPath(target, info.original);
+    target.add(info.location.absolutePath);
+    if (info.lineage?.original?.absolutePath) {
+      target.add(info.lineage.original.absolutePath);
+    }
   }
 
+  /**
+   * Collect workspace paths from an output file info.
+   * Trust the discriminated union - the 'kind' field is the source of truth.
+   */
   private collectWorkspacePaths(
     target: Set<string>,
     info: OutputFileInfo,
   ): void {
-    this.addPath(target, info.workspacePath ?? undefined);
-    this.addWorkspaceAbsolute(target, info.location.workspace?.absolutePath);
-    this.addPath(target, info.original ?? undefined);
-    this.addWorkspaceAbsolute(
-      target,
-      info.originalLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.baseLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.prevLocation?.workspace?.absolutePath,
-    );
-    this.addWorkspaceAbsolute(
-      target,
-      info.rawLocation?.workspace?.absolutePath,
-    );
-
-    if (info.location.scope === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.location.absolutePath);
+    // Current file
+    if (info.location.kind === 'workspace') {
+      target.add(info.location.absolutePath);
     }
 
-    if (info.rawLocation?.scope === 'workspace') {
-      this.addWorkspaceAbsolute(target, info.rawLocation.absolutePath);
+    // Lineage files (NEW STRUCTURE: original, diffBase, diffFile)
+    if (info.lineage?.original?.kind === 'workspace') {
+      target.add(info.lineage.original.absolutePath);
     }
-
-    if (this.isWorkspacePath(info.rawOutputPath)) {
-      this.addWorkspaceAbsolute(target, info.rawOutputPath);
+    if (info.lineage?.diffBase?.kind === 'workspace') {
+      target.add(info.lineage.diffBase.absolutePath);
     }
-  }
-
-  private normalizePathForComparison(candidate: string): string {
-    return process.platform === 'win32' ? candidate.toLowerCase() : candidate;
-  }
-
-  private isWorkspacePath(
-    candidate: string | null | undefined,
-  ): candidate is string {
-    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
-      return false;
+    if (info.lineage?.diffFile?.kind === 'workspace') {
+      target.add(info.lineage.diffFile.absolutePath);
     }
-
-    if (!path.isAbsolute(candidate)) {
-      return false;
-    }
-
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-      return false;
-    }
-
-    const normalizedCandidate = this.normalizePathForComparison(
-      path.resolve(candidate),
-    );
-
-    return folders.some((folder) => {
-      const rootResolved = path.resolve(folder.uri.fsPath);
-      const normalizedRoot = this.normalizePathForComparison(rootResolved);
-      if (normalizedCandidate === normalizedRoot) {
-        return true;
-      }
-      const rootWithSep = normalizedRoot.endsWith(path.sep)
-        ? normalizedRoot
-        : `${normalizedRoot}${path.sep}`;
-      return normalizedCandidate.startsWith(rootWithSep);
-    });
-  }
-
-  private containsRunStorageSegment(candidate: string): boolean {
-    return candidate.split(/[\\/]/).includes('taskRuns');
-  }
-
-  private addWorkspaceAbsolute(
-    target: Set<string>,
-    candidate: string | null | undefined,
-  ): void {
-    if (typeof candidate !== 'string') {
-      return;
-    }
-
-    if (!this.isWorkspacePath(candidate)) {
-      return;
-    }
-
-    if (this.containsRunStorageSegment(candidate)) {
-      return;
-    }
-
-    this.addPath(target, candidate);
-  }
-
-  private addPath(target: Set<string>, candidate: string | null | undefined) {
-    if (typeof candidate !== 'string') {
-      return;
-    }
-
-    const trimmed = candidate.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-
-    target.add(trimmed);
   }
 
   /** Get missing outputs for a stream */
@@ -557,7 +473,7 @@ export class OutputFilesManager extends PersistentMapManager<
       if (looksLegacy) {
         const rounds = this.deserializeRoundMap<string>(
           raw as Record<string, unknown>,
-          this.parseStringValue,
+          (v) => (typeof v === 'string' ? v : null),
         );
         if (rounds.size > 0) {
           runMap.set(normalizeRunId(null), rounds);
@@ -569,7 +485,7 @@ export class OutputFilesManager extends PersistentMapManager<
           }
           const rounds = this.deserializeRoundMap<string>(
             value as Record<string, unknown>,
-            this.parseStringValue,
+            (v) => (typeof v === 'string' ? v : null),
           );
           if (rounds.size > 0) {
             runMap.set(runId, rounds);
@@ -676,7 +592,13 @@ export class OutputFilesManager extends PersistentMapManager<
     const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
 
     if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(record);
+      const rounds = this.deserializeRoundMap<OutputFileInfo>(record, (v) => {
+        try {
+          return OutputFileInfoListSchema.parse([v])[0] ?? null;
+        } catch {
+          return null;
+        }
+      });
       if (rounds.size > 0) {
         runMap.set(normalizeRunId(null), rounds);
       }
@@ -690,6 +612,13 @@ export class OutputFilesManager extends PersistentMapManager<
 
       const rounds = this.deserializeRoundMap<OutputFileInfo>(
         value as Record<string, unknown>,
+        (v) => {
+          try {
+            return OutputFileInfoListSchema.parse([v])[0] ?? null;
+          } catch {
+            return null;
+          }
+        },
       );
       if (rounds.size > 0) {
         runMap.set(runId, rounds);

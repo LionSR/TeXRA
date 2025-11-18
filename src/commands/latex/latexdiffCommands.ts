@@ -16,7 +16,13 @@ import {
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, TaskRunFileService, flexibleFS } from '@utils/files';
+import {
+  WorkspaceFS,
+  TaskRunFileService,
+  flexibleFS,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import {
@@ -94,20 +100,22 @@ async function promptForLatexdiffMathMarkup(): Promise<
 
 /**
  * Opens a generated latexdiff result in the LaTeX build preview after verifying it exists.
- * @param basePath The base file (or directory) used when generating the diff.
+ * @param base The base file location used when generating the diff.
  * @param diffFileName The generated diff file name returned by the service.
- * @returns True when the diff file exists and is opened successfully.
+ * @returns The diff file path when successfully opened.
  */
 async function openLatexdiffResult(
-  basePath: string,
+  base: FileLocation,
   diffFileName: string,
 ): Promise<string | undefined> {
-  const baseDirectory = path.extname(basePath)
-    ? path.dirname(basePath)
-    : basePath;
+  const baseDirectory = path.extname(base.absolutePath)
+    ? path.dirname(base.absolutePath)
+    : base.absolutePath;
   const diffFilePath = path.join(baseDirectory, diffFileName);
 
-  if (!(await flexibleFS.exists(diffFilePath))) {
+  const diffLocation = pathToLocation(diffFilePath);
+
+  if (!(await flexibleFS.exists(diffLocation))) {
     await showLoggedMessage(
       CHANNEL,
       `Diff file could not be found. Expected path: ${diffFilePath}`,
@@ -115,7 +123,7 @@ async function openLatexdiffResult(
     return undefined;
   }
 
-  await openBuildDisplayIfTex(diffFilePath, { preserveFocus: true });
+  await openBuildDisplayIfTex(diffLocation, { preserveFocus: true });
   return diffFilePath;
 }
 
@@ -186,9 +194,10 @@ async function handleLatexdiff(
     );
 
     // Get the result from LaTeXdiffService
+    const fileToUseLocation = pathToLocation(fileToUse);
     const result = await service.runDiff(
-      fileToUse,
-      editedFile,
+      fileToUseLocation,
+      pathToLocation(editedFile),
       '_diff',
       false,
       mathMarkup,
@@ -198,7 +207,7 @@ async function handleLatexdiff(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    await openLatexdiffResult(fileToUse, result.diffFileName);
+    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -226,13 +235,18 @@ async function handleLatexdiffvc(
     );
 
     // Get the result from LaTeXdiffService
-    const result = await service.runDiffVc(fileToUse, commitHash, mathMarkup);
+    const fileToUseLocation = pathToLocation(fileToUse);
+    const result = await service.runDiffVc(
+      fileToUseLocation,
+      commitHash,
+      mathMarkup,
+    );
 
     if (!result.success || !result.diffFileName) {
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    await openLatexdiffResult(fileToUse, result.diffFileName);
+    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -351,8 +365,8 @@ type DiffOperationType = 'round' | 'between-rounds';
 
 interface DiffOperation {
   type: DiffOperationType;
-  basePath: string;
-  revisedPath: string;
+  base: FileLocation;
+  revised: FileLocation;
   description: string;
   cwd?: string;
   round?: number;
@@ -477,7 +491,7 @@ async function handleRunLatexdiff(
     for (const result of results) {
       if (result.success && result.basePath && result.diffFileName) {
         const diffFilePath = await openLatexdiffResult(
-          result.basePath,
+          pathToLocation(result.basePath),
           result.diffFileName,
         );
         if (diffFilePath) {
@@ -525,91 +539,20 @@ function normalizeOutputsByRound(
   return new Map([...roundMap.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-function resolveInfoPath(
-  info: OutputFileInfo,
-  fileService: TaskRunFileService,
-): string | null {
-  if (info.location?.absolutePath) {
-    return info.location.absolutePath;
+/**
+ * Get file description for display - trust source field.
+ */
+function describeFile(info: OutputFileInfo): string {
+  if (info.source) {
+    return info.source;
   }
-
-  if (info.path) {
-    try {
-      return fileService.resolveRelativePath(info.path).absolutePath;
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Unable to resolve output path ${info.path}: ${String(error)}`,
-      );
-    }
+  if (
+    info.location.kind === 'workspace' ||
+    info.location.kind === 'runStorage'
+  ) {
+    return path.basename(info.location.relativePath);
   }
-
-  return null;
-}
-
-function resolveBasePath(
-  info: OutputFileInfo,
-  fileService: TaskRunFileService,
-): string | null {
-  const candidateLocation = info.baseLocation ?? info.originalLocation ?? null;
-  if (candidateLocation?.absolutePath) {
-    return candidateLocation.absolutePath;
-  }
-
-  const candidatePath = info.base ?? info.original ?? null;
-  if (candidatePath) {
-    try {
-      return fileService.resolveRelativePath(candidatePath, {
-        preferWorkspace: true,
-      }).absolutePath;
-    } catch (error) {
-      logger.warn(
-        CHANNEL,
-        `Unable to resolve base path ${candidatePath}: ${String(error)}`,
-      );
-    }
-  }
-
-  if (info.location?.workspace?.absolutePath) {
-    return info.location.workspace.absolutePath;
-  }
-
-  return null;
-}
-
-function workspaceDirFromInfo(info: OutputFileInfo): string | undefined {
-  const workspaceSource =
-    info.baseLocation?.workspace?.absolutePath ??
-    info.location?.workspace?.absolutePath ??
-    null;
-
-  return workspaceSource ? path.dirname(workspaceSource) : undefined;
-}
-
-function describeInfo(info: OutputFileInfo): string {
-  if (info.displayLabel) {
-    return info.displayLabel;
-  }
-  if (info.relativePath) {
-    return info.relativePath;
-  }
-  return info.path;
-}
-
-function describeRevisedInfo(
-  info: OutputFileInfo,
-  fallbackPath?: string | null,
-): string {
-  if (info.relativePath) {
-    return info.relativePath;
-  }
-  if (info.location?.relativePath) {
-    return info.location.relativePath;
-  }
-  if (fallbackPath) {
-    return path.basename(fallbackPath);
-  }
-  return info.path;
+  return path.basename(info.location.absolutePath);
 }
 
 async function runLatexdiffFromMetadata(params: {
@@ -636,14 +579,15 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      const revisedPath = resolveInfoPath(info, fileService);
-      const basePath = resolveBasePath(info, fileService);
-      const description = `${describeInfo(info)} (r${round})`;
+      const revised = info.location;
+      // lineage.original is already a FileLocation | null - use directly
+      const base = info.lineage?.original ?? null;
+      const description = `${describeFile(info)} (r${round})`;
 
-      if (!revisedPath || !basePath) {
+      if (!base) {
         immediateResults.push({
           success: false,
-          message: 'Missing base or revised file path',
+          message: 'Missing base file path',
           description,
         });
         continue;
@@ -651,19 +595,19 @@ async function runLatexdiffFromMetadata(params: {
 
       operations.push({
         type: 'round',
-        basePath,
-        revisedPath,
+        base,
+        revised,
         description,
-        cwd: workspaceDirFromInfo(info) ?? path.dirname(basePath),
+        cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
         round,
         info,
       });
 
       const key =
-        info.relativePath ||
-        info.location?.workspace?.relativePath ||
-        info.location?.runStorage?.relativePath ||
-        info.path;
+        info.location.kind === 'workspace' ||
+        info.location.kind === 'runStorage'
+          ? info.location.relativePath
+          : info.location.absolutePath;
       let group = groupedByRelative.get(key);
       if (!group) {
         group = [];
@@ -679,31 +623,16 @@ async function runLatexdiffFromMetadata(params: {
       for (let index = 1; index < group.length; index += 1) {
         const previous = group[index - 1];
         const current = group[index];
-        const prevPath = resolveInfoPath(previous.info, fileService);
-        const currPath = resolveInfoPath(current.info, fileService);
-        const description = `${describeRevisedInfo(
-          current.info,
-          currPath,
-        )} (r${previous.round}→r${current.round})`;
-
-        if (!prevPath || !currPath) {
-          immediateResults.push({
-            success: false,
-            message: 'Missing files for between-round diff',
-            description,
-          });
-          continue;
-        }
+        const base = previous.info.location;
+        const revised = current.info.location;
+        const description = `${describeFile(current.info)} (r${previous.round}→r${current.round})`;
 
         operations.push({
           type: 'between-rounds',
-          basePath: prevPath,
-          revisedPath: currPath,
+          base,
+          revised,
           description,
-          cwd:
-            workspaceDirFromInfo(previous.info) ??
-            workspaceDirFromInfo(current.info) ??
-            path.dirname(prevPath),
+          cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
           fromRound: previous.round,
           toRound: current.round,
           info: current.info,
@@ -723,8 +652,8 @@ async function runLatexdiffFromMetadata(params: {
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await flexibleFS.exists(operation.basePath);
-    const revisedExists = await flexibleFS.exists(operation.revisedPath);
+    const baseExists = await flexibleFS.exists(operation.base);
+    const revisedExists = await flexibleFS.exists(operation.revised);
 
     if (!baseExists || !revisedExists) {
       results.push({
@@ -744,16 +673,16 @@ async function runLatexdiffFromMetadata(params: {
 
     if (operation.type === 'round') {
       diffResult = await service.runDiffForRound(
-        operation.basePath,
-        operation.revisedPath,
+        operation.base,
+        operation.revised,
         operation.round ?? 0,
         mathMarkup,
         { cwd: operation.cwd },
       );
     } else {
       diffResult = await service.runDiffBetweenRounds(
-        operation.basePath,
-        operation.revisedPath,
+        operation.base,
+        operation.revised,
         mathMarkup,
         { cwd: operation.cwd },
       );
@@ -762,7 +691,7 @@ async function runLatexdiffFromMetadata(params: {
     results.push({
       success: diffResult.success,
       message: diffResult.message,
-      basePath: operation.basePath,
+      basePath: operation.base.absolutePath,
       diffFileName: diffResult.diffFileName,
       description: operation.description,
     });
@@ -905,8 +834,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
       const cwd = path.dirname(resolvedOutput);
 
       const result = await service.runDiffForRound(
-        resolvedBase,
-        resolvedOutput,
+        pathToLocation(resolvedBase),
+        pathToLocation(resolvedOutput),
         round,
         mathMarkup,
         { cwd },
@@ -948,8 +877,8 @@ async function runLatexdiffViaWorkspaceScan(params: {
         const cwd = path.dirname(resolvedCurrent);
 
         const result = await service.runDiffBetweenRounds(
-          resolvedCurrent,
-          resolvedNext,
+          pathToLocation(resolvedCurrent),
+          pathToLocation(resolvedNext),
           mathMarkup,
           { cwd },
         );
