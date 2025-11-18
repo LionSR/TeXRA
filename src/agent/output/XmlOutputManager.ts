@@ -303,6 +303,7 @@ export class XmlOutputManager {
       );
       const texLocation = this.fileService.createLocation(texFile);
       await AbsoluteFS.write(texLocation.absolutePath, doc.content.trim());
+      await this.removeTrailingEndDocument(texLocation);
       outputFiles.push(this.buildOutputFileInfo(source, texLocation));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
@@ -377,6 +378,28 @@ export class XmlOutputManager {
 
     if (fixed || content !== originalContent) {
       await AbsoluteFS.write(fileLocation.absolutePath, content);
+    }
+  }
+
+  private async removeTrailingEndDocument(
+    texLocation: FileLocation,
+  ): Promise<void> {
+    const fileContent = await AbsoluteFS.read(texLocation.absolutePath);
+    const trimmedContent = fileContent.trimEnd();
+
+    if (
+      !trimmedContent.includes('\\begin{document}') &&
+      trimmedContent.endsWith('\\end{document}')
+    ) {
+      const cleanedContent = trimmedContent.replace(
+        /\\end{document}\s*$/,
+        '',
+      );
+
+      await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
+      this.logger.debug(
+        `Removed trailing \\end{document} from ${path.basename(texLocation.absolutePath)}`,
+      );
     }
   }
 }
