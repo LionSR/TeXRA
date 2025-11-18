@@ -251,7 +251,7 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   private collectAllPaths(target: Set<string>, info: OutputFileInfo): void {
-    this.addPath(target, info.path);
+    this.addPath(target, info.location.absolutePath);
     this.addPath(target, info.original);
   }
 

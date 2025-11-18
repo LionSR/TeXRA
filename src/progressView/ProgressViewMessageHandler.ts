@@ -717,7 +717,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
           info.workspacePath ??
           info.location.workspace?.absolutePath ??
           info.original ??
-          (path.isAbsolute(info.path) ? info.path : undefined);
+          (path.isAbsolute(info.location.absolutePath) ? info.location.absolutePath : undefined);
 
         if (workspacePath) {
           return path.dirname(workspacePath);

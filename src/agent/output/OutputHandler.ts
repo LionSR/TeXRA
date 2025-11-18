@@ -367,7 +367,7 @@ export class OutputHandler implements IOutputHandler {
       const diffBaseActual = diffBaseLocation?.absolutePath ?? null;
       const stats = await this.diffStatsManager.computeDiffStats(
         diffBaseActual,
-        output.path,
+        location.absolutePath,
       );
 
       const workspacePath = location.workspace?.absolutePath ?? null;
@@ -382,7 +382,7 @@ export class OutputHandler implements IOutputHandler {
         !displayDirRaw || displayDirRaw === '.' ? '' : displayDirRaw;
 
       infos.push({
-        path: output.path,
+        path: location.absolutePath,
         relativePath,
         displayLabel,
         displayDir,
@@ -469,8 +469,8 @@ export class OutputHandler implements IOutputHandler {
   ): NamedOutputFile[] {
     return infos.map((info) => ({
       source: info.source ?? info.relativePath,
-      path: info.path,
-      relativePath: info.relativePath,
+      path: info.location.absolutePath,
+      relativePath: info.location.relativePath,
       workspacePath: info.workspacePath ?? undefined,
       location: info.location,
     }));
@@ -729,7 +729,7 @@ export class OutputHandler implements IOutputHandler {
               await this.xmlManager.processMultipleXmlOutputs(outputFile);
 
             if (processedPairs && processedPairs.length > 0) {
-              const processedFiles = processedPairs.map((p) => p.path);
+              const processedFiles = processedPairs.map((p) => p.location.absolutePath);
               await this.indentLatexFiles(processedFiles);
               this.logger.debug(
                 `Indented multiple output files: ${processedFiles.join(',')}`,
@@ -812,12 +812,12 @@ export class OutputHandler implements IOutputHandler {
                 await this.xmlManager.processSingleXmlOutput(outputFile);
             }
 
-            const hasProcessedPath = Boolean(processed && processed.path);
+            const hasProcessedPath = Boolean(processed && processed.location);
 
-            if (hasProcessedPath && processed.path) {
-              await this.indentLatexFile(processed.path);
+            if (hasProcessedPath && processed.location) {
+              await this.indentLatexFile(processed.location.absolutePath);
               this.logger.debug(
-                `Indented single output file: ${processed.path}`,
+                `Indented single output file: ${processed.location.absolutePath}`,
               );
             }
 
@@ -829,7 +829,7 @@ export class OutputHandler implements IOutputHandler {
               if (this.baseFiles && this.baseFiles.length > 0) {
                 await replaceInputCommands(
                   this.baseFiles,
-                  processedFiles.map((entry) => entry.path),
+                  processedFiles.map((entry) => entry.location.absolutePath),
                   this.logger,
                 );
               }
@@ -931,7 +931,7 @@ export class OutputHandler implements IOutputHandler {
     stage?: AgentLogStage,
   ): Promise<void> {
     const run = async () => {
-      const singleFile = processed.length === 1 ? processed[0].path : null;
+      const singleFile = processed.length === 1 ? processed[0].location.absolutePath : null;
       const sourceLocation = rawOutput ?? this.rawOutputs[round] ?? null;
 
       if (!rawOutput?.absolutePath) {
