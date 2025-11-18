@@ -84,14 +84,14 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
     };
   }
 
-  override extractResponse(resp: any): [string, any, any] {
+  override extractResponse(resp: any) {
     if (resp.id === 'bash-call') {
-      return ['running bash', resp.usage, 'stop'];
+      return { response: 'running bash', usage: resp.usage, stopReason: 'stop' };
     }
     if (resp.id === 'bash-complete') {
-      return ['done', resp.usage, 'stop'];
+      return { response: 'done', usage: resp.usage, stopReason: 'stop' };
     }
-    return ['', resp.usage, 'stop'];
+    return { response: '', usage: resp.usage, stopReason: 'stop' };
   }
 }
 

@@ -40,6 +40,7 @@ import type { ProviderMessage } from './types/ProviderMessage';
 import type {
   IModelHandler,
   CreateResponseOptions,
+  ExtractResponseResult,
 } from './types/IModelHandler';
 
 // Default continuation limits
@@ -473,12 +474,12 @@ export abstract class ModelHandler<
    * Extracts the response text and metadata from the model's response object
    * @param responseObject The raw response object from the model
    * @param endTag The end tag to append if needed
-   * @returns A tuple containing [responseText, usageInfo, stopReason]
+   * @returns Object containing response text, usage info, and stop reason
    */
   abstract extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, ProviderStopReason];
+  ): ExtractResponseResult;
 
   /**
    * Manages continuation for truncated responses in multi-turn conversations with prefill support.
