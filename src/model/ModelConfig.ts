@@ -29,6 +29,8 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsReasoning: false,
   supportsInterleavedThinking: false,
   reasoningEffort: ReasoningEffort.NONE,
+  supportsThinkingLevel: false,
+  thinkingLevel: ReasoningEffort.NONE,
   supportsVision: true,
   supportsNativePdf: false,
   supportsAssistantPrefill: false,
@@ -65,6 +67,8 @@ export interface ModelCapabilities {
   supportsReasoning: boolean;
   supportsInterleavedThinking: boolean;
   reasoningEffort: ReasoningEffort;
+  supportsThinkingLevel: boolean;
+  thinkingLevel: ReasoningEffort;
   supportsVision: boolean;
   supportsNativePdf: boolean;
   supportsAssistantPrefill: boolean;
