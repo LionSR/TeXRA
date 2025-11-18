@@ -697,8 +697,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Records the results of a reflection round into the agent's internal state
    * and clears the active round flag.
    *
-   * Flows should call this method after executing a round instead of mutating
-   * agent internals directly.
+   * Flows should call this method after successful round execution.
+   * Note: The active round flag is also cleared automatically in error paths
+   * by executeCurrentRound() to prevent blocking future rounds.
    *
    * @param result - The result returned by the reflection round flow
    */
@@ -709,7 +710,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.roundOutputs[result.output.round] = result.output;
     }
 
-    // Clear the active round flag
+    // Clear the active round flag (also cleared in executeCurrentRound's catch block)
     this.isRoundActive = false;
   }
 
