@@ -66,11 +66,13 @@ export class ExtractTikzFiguresTool extends defineTool({
         pathToLocation(resolved.absolute),
       );
       if (compiledPaths.length > 0) {
+        // Convert FileLocation[] to string[] for legacy attachment API
+        const compiledPathStrings = compiledPaths.map((loc) => loc.absolutePath);
         const {
           attachments: compiledAttachments,
           limitedPaths,
           limitReached,
-        } = await buildLimitedAttachments(compiledPaths, {
+        } = await buildLimitedAttachments(compiledPathStrings, {
           limit: DEFAULT_TIKZ_MAX_FILES,
           describe: () => `Standalone TikZ figure derived from ${display}`,
           mimeType: 'application/pdf',
