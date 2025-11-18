@@ -14,10 +14,10 @@ import {
   flexibleFS,
   WorkspaceFS,
   createWorkspaceLocation,
+  createRunStorageLocation,
   createExternalLocation,
+  type FileLocation,
 } from '@utils/files';
-// Type imports
-import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -282,12 +282,19 @@ export class LatexDiffManager {
             // Extract directory once, use for both diff and build
             const baseDir = path.dirname(baseLocation.absolutePath);
 
-            // Create diff location directly - no helper needed
+            // Create diff location matching the base file's kind
             if (baseLocation.kind === 'workspace') {
               const baseRelDir = path.dirname(baseLocation.relativePath);
               diffLocation = createWorkspaceLocation(
                 path.join(baseDir, result.diffFileName),
                 path.join(baseRelDir, result.diffFileName),
+              );
+            } else if (baseLocation.kind === 'runStorage') {
+              const baseRelDir = path.dirname(baseLocation.relativePath);
+              diffLocation = createRunStorageLocation(
+                path.join(baseDir, result.diffFileName),
+                path.join(baseRelDir, result.diffFileName),
+                baseLocation.executionId,
               );
             } else {
               diffLocation = createExternalLocation(
@@ -394,12 +401,19 @@ export class LatexDiffManager {
             const refLocation = prevLocation ?? currLocation!;
             const prevDir = path.dirname(refLocation.absolutePath);
 
-            // Create diff location directly - no helper needed
+            // Create diff location matching the reference file's kind
             if (refLocation.kind === 'workspace') {
               const prevRelDir = path.dirname(refLocation.relativePath);
               diffLocation = createWorkspaceLocation(
                 path.join(prevDir, result.diffFileName),
                 path.join(prevRelDir, result.diffFileName),
+              );
+            } else if (refLocation.kind === 'runStorage') {
+              const prevRelDir = path.dirname(refLocation.relativePath);
+              diffLocation = createRunStorageLocation(
+                path.join(prevDir, result.diffFileName),
+                path.join(prevRelDir, result.diffFileName),
+                refLocation.executionId,
               );
             } else {
               diffLocation = createExternalLocation(
