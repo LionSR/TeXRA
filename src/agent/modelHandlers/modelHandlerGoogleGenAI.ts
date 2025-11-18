@@ -187,6 +187,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
     const requestedLevel = this.capabilities.reasoningEffort;
+
     if (requestedLevel === ReasoningEffort.NONE) {
       return undefined;
     }
@@ -195,10 +196,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.warn(
         "Gemini 3 doesn't support thinking_level 'medium'. Falling back to 'high'.",
       );
-      return ReasoningEffort.HIGH;
+      return 'high';
     }
 
-    return requestedLevel;
+    return requestedLevel as 'low' | 'high';
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -372,6 +373,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (
+      this.config.fullName.includes('3-pro-preview') ||
       this.config.fullName.includes('2.5-pro') ||
       this.config.fullName.includes('2.5-flash') ||
       this.config.fullName.includes('flash-latest')
