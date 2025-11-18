@@ -8,6 +8,7 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
@@ -134,7 +135,7 @@ export interface IModelHandler<
     agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]>;
 

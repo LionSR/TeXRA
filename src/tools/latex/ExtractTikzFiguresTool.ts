@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { toolResult, type ToolFileAttachment } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { pathToLocation } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import {
   buildLimitedAttachments,
@@ -35,7 +36,9 @@ export class ExtractTikzFiguresTool extends defineTool({
   protected async execute({ texPath, compile = true }: ExtractTikzInput) {
     const { resolved, display } = await resolveLatexFileOrThrow(texPath);
 
-    const tikzFigures = await tikzPictureManager.extract(resolved.relative);
+    const tikzFigures = await tikzPictureManager.extract(
+      pathToLocation(resolved.absolute),
+    );
     if (tikzFigures.length === 0) {
       const summary = `No TikZ figures found in ${display}.`;
       return toolResult({
@@ -61,13 +64,19 @@ export class ExtractTikzFiguresTool extends defineTool({
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = await tikzPictureManager.compile(resolved.relative);
+      const compiledPaths = await tikzPictureManager.compile(
+        pathToLocation(resolved.absolute),
+      );
       if (compiledPaths.length > 0) {
+        // Convert FileLocation[] to string[] for legacy attachment API
+        const compiledPathStrings = compiledPaths.map(
+          (loc) => loc.absolutePath,
+        );
         const {
           attachments: compiledAttachments,
           limitedPaths,
           limitReached,
-        } = await buildLimitedAttachments(compiledPaths, {
+        } = await buildLimitedAttachments(compiledPathStrings, {
           limit: DEFAULT_TIKZ_MAX_FILES,
           describe: () => `Standalone TikZ figure derived from ${display}`,
           mimeType: 'application/pdf',

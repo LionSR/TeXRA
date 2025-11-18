@@ -33,11 +33,12 @@ import { cleanFileContent } from '@replacement/engine';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
+import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleep } from '@utils/helpers';
-import { WorkspaceFS, flexibleFS } from '@utils/files';
+import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -1071,12 +1072,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     agentSetting: AgentSetting,
     messages: ResponseInputItem[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, ResponseInputItem[]]> {
     let endTurn = false;
 
-    if (!(await flexibleFS.existsAndNonTrivial(outputFile))) {
+    if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
       const pseudoPrefill = `Organize your response with xml tags. Start your response with:\n${prefill}`;
       const lastMessage = messages.at(-1);
       if (lastMessage) {
@@ -1096,7 +1097,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return [endTurn, messages];
     }
 
-    let fileContent = await flexibleFS.read(outputFile);
+    let fileContent = await flexibleFS.read(outputLocation);
     fileContent = cleanFileContent(fileContent);
 
     const scratchpad = await xmlUtils.extractScratchpad(
@@ -1107,7 +1108,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
     }
 
-    await flexibleFS.write(outputFile, fileContent);
+    await flexibleFS.write(outputLocation, fileContent);
 
     messages.push(this.createAssistantMessage(fileContent));
 
@@ -1125,7 +1126,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } else {
       workspaceState.assembly.updateAccumulatedOutput(prefill + fileContent);
       await flexibleFS.write(
-        outputFile,
+        outputLocation,
         workspaceState.assembly.accumulatedOutput,
       );
     }

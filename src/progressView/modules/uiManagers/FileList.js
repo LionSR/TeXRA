@@ -4,10 +4,10 @@ import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
-import { getEffectiveBaseFile } from '@common/modules/files/baseFileUtils.js';
 
 /**
  * Manages file list rendering.
+ * Updated to use new OutputFileInfo structure (no duplicate path fields).
  */
 export class FileList {
   /**
@@ -55,8 +55,8 @@ export class FileList {
       if (roundHeader) roundHeader.textContent = `r${round}`;
 
       files.forEach((file) => {
-        // Skip invalid file entries
-        if (!file || !file.path) {
+        // Skip invalid file entries - trust the data structure
+        if (!file || !file.location) {
           console.warn('FileList.update: Invalid file entry:', file);
           return;
         }
@@ -69,46 +69,65 @@ export class FileList {
         const fileActions = clone.querySelector('.file-actions');
         const statsSpan = clone.querySelector('.file-stats');
 
-        // Use original name if available, otherwise use generated path
-        const displayLabel = file.displayLabel || getBasename(file.path);
-        const dirPath = file.displayDir || '';
+        // Always use just the basename for display (no directory doubling)
+        const displayLabel = file.source
+          ? getBasename(file.source)
+          : getBasename(file.location.relativePath);
+        const relativePath = file.location.relativePath;
+        const dirPath =
+          relativePath && relativePath.includes('/')
+            ? relativePath.substring(0, relativePath.lastIndexOf('/'))
+            : '';
 
-        // Set file data attributes
+        // Set file data attributes using new structure
         if (fileItem) {
-          fileItem.dataset.file = file.path;
-          fileItem.dataset.original = file.original || '';
-          fileItem.dataset.base = file.base || '';
+          fileItem.dataset.file = file.location.absolutePath;
+          fileItem.dataset.original =
+            file.lineage?.original?.absolutePath || '';
+          fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
           fileItem.dataset.round = round;
-          if (file.workspacePath) {
-            fileItem.dataset.workspace = file.workspacePath;
+          if (file.location.kind === 'workspace') {
+            fileItem.dataset.workspace = file.location.absolutePath;
           }
-          if (file.relativePath) {
-            fileItem.dataset.relative = file.relativePath;
+          if (
+            file.location.kind === 'workspace' ||
+            file.location.kind === 'runStorage'
+          ) {
+            fileItem.dataset.relative = file.location.relativePath;
           }
         }
 
-        // Set the file path display
-        if (dirSpan) dirSpan.textContent = dirPath ? `${dirPath}/` : '';
-        if (basenameSpan) basenameSpan.textContent = displayLabel;
-        if (filePathSpan) filePathSpan.title = file.relativePath || file.path;
+        // Set the file path display - simplified, no color coding for directory
+        if (basenameSpan) basenameSpan.textContent = relativePath;
+        if (dirSpan) dirSpan.textContent = '';
+        if (filePathSpan) {
+          const displayPath =
+            file.location.kind === 'workspace' ||
+            file.location.kind === 'runStorage'
+              ? file.location.relativePath
+              : file.location.absolutePath;
+          filePathSpan.title = displayPath;
+        }
 
-        // Handle file stats
+        // Handle diff stats (use schema field names: added/removed)
         if (statsSpan) {
-          if (file.added !== undefined && file.removed !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.added}</span><span class="removed">-${file.removed}</span>`;
-          } else if (file.added !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.added}</span>`;
+          if (
+            file.diff?.added !== undefined &&
+            file.diff?.removed !== undefined
+          ) {
+            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
+          } else if (file.diff?.added !== undefined) {
+            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
           } else {
             statsSpan.remove();
           }
         }
 
         // Get effective base file for comparisons
-        const effectiveBase = getEffectiveBaseFile(
-          file.base,
-          file.original,
-          file.path,
-        );
+        // NEW STRUCTURE: diffBase is already computed, use it directly
+        const effectiveBase =
+          file.lineage?.diffBase?.absolutePath ||
+          file.lineage?.original?.absolutePath;
 
         // Update buttons with click handlers
         this.updateFileButtons(clone, file, effectiveBase);
@@ -150,9 +169,9 @@ export class FileList {
       {
         selector: '.prev-btn',
         command: COMMANDS.COMPARE_PREVIOUS,
-        condition: file.prev,
+        condition: file.lineage?.diffBase?.absolutePath,
         configure: (btn, basePath) => {
-          btn.dataset.prev = file.prev;
+          btn.dataset.prev = file.lineage?.diffBase?.absolutePath;
           if (basePath) {
             btn.dataset.base = basePath;
           }
@@ -167,7 +186,7 @@ export class FileList {
       }
       if (condition) {
         button.dataset.command = command;
-        button.dataset.file = file.path;
+        button.dataset.file = file.location.absolutePath;
         if (configure) {
           configure(button, effectiveBase);
         } else {
@@ -180,10 +199,10 @@ export class FileList {
 
     // Add dataset for the file path link
     const filePathSpan = clone.querySelector('.file-path');
-    if (filePathSpan && file.path) {
+    if (filePathSpan) {
       filePathSpan.classList.add('clickable-link');
       filePathSpan.dataset.command = COMMANDS.OPEN_FILE;
-      filePathSpan.dataset.file = file.path;
+      filePathSpan.dataset.file = file.location.absolutePath;
     }
   }
 }

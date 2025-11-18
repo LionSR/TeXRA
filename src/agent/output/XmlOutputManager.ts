@@ -19,10 +19,12 @@ import {
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
+import type { FileLocation, AgentFileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
-import { NamedOutputFile } from './types';
+import { getFileDirectory } from './displayUtils';
+import type { OutputFile, OutputFileInfo } from './types';
 
 export class XmlOutputManager {
   constructor(
@@ -127,13 +129,21 @@ export class XmlOutputManager {
   }
 
   async splitScratchpadOutputXml(
-    outputFile: string,
+    outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<string> {
-    const outputLocation = this.fileService.resolveRelativePath(outputFile);
-    const { dir, name } = path.parse(outputLocation.absolutePath);
-    const texFile = path.join(dir, `${name}.tex`);
+  ): Promise<FileLocation> {
+    const { name } = path.parse(outputLocation.absolutePath);
+    const texFilename = `${name}.tex`;
+
+    // Derive relative path for the tex file (same directory as output)
+    const outputDir = getFileDirectory(outputLocation);
+    const texRelativePath = outputDir
+      ? path.join(outputDir, texFilename)
+      : texFilename;
+
+    // Create FileLocation for tex file (run-storage aware)
+    const texLocation = this.fileService.createLocation(texRelativePath);
 
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const tagsToWrap = [documentTag, thinkingTag];
@@ -145,8 +155,8 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await AbsoluteFS.write(texFile, namedDocumentContent);
-      return texFile;
+      await AbsoluteFS.write(texLocation.absolutePath, namedDocumentContent);
+      return texLocation;
     }
 
     try {
@@ -165,11 +175,11 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await AbsoluteFS.write(texFile, latexDocument);
-        return texFile;
+        await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
+        return texLocation;
       }
       throw new Error(
-        `Failed to extract <${documentTag}> from ${path.basename(outputFile)}`,
+        `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
       );
     } catch (err) {
       throw err;
@@ -177,11 +187,10 @@ export class XmlOutputManager {
   }
 
   async splitScratchpadMultipleOutputXml(
-    outputFile: string,
+    outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<NamedOutputFile[]> {
-    const outputLocation = this.fileService.resolveRelativePath(outputFile);
+  ): Promise<OutputFileInfo[]> {
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
 
     const tagsToWrap = [thinkingTag, 'document'];
@@ -203,7 +212,7 @@ export class XmlOutputManager {
         documentTag,
       );
       if (documents) {
-        return this.processMultipleLatexDocuments(documents, outputFile);
+        return this.processMultipleLatexDocuments(documents, outputLocation);
       }
       this.logger.debug(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
@@ -217,7 +226,7 @@ export class XmlOutputManager {
       if (fallbackDocuments) {
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
-          outputFile,
+          outputLocation,
         );
       }
       return [];
@@ -234,38 +243,39 @@ export class XmlOutputManager {
       if (fallbackDocuments) {
         return this.processMultipleLatexDocuments(
           fallbackDocuments,
-          outputFile,
+          outputLocation,
         );
       }
       throw err;
     }
   }
 
-  private buildNamedOutput(
+  /**
+   * Build minimal output file info from source and path.
+   * Lineage and diff stats are added later by OutputHandler.
+   */
+  private buildOutputFileInfo(
     source: string,
-    outputPath: string,
-  ): NamedOutputFile {
-    const location = this.fileService.resolveRelativePath(outputPath);
-
+    outputLocation: FileLocation,
+  ): OutputFileInfo {
     return {
       source,
-      path: location.absolutePath,
-      relativePath: location.relativePath,
-      workspacePath: location.workspace?.absolutePath ?? undefined,
-      location,
+      location: outputLocation,
+      lineage: null,
+      diff: null,
     };
   }
 
   async processMultipleLatexDocuments(
     latexDocuments: Array<{ content: string; name: string }>,
-    outputFile: string,
-  ): Promise<NamedOutputFile[]> {
-    const outputFiles: NamedOutputFile[] = [];
-    const outputParts = path.basename(outputFile).split('_');
+    outputLocation: FileLocation,
+  ): Promise<OutputFileInfo[]> {
+    const outputFiles: OutputFileInfo[] = [];
+    const outputParts = path.basename(outputLocation.absolutePath).split('_');
     const agent = outputParts.at(-3) ?? '';
     const model = outputParts.at(-1)?.split('.')[0] ?? '';
 
-    const roundMatch = outputFile.match(/_r(\d+)_/);
+    const roundMatch = outputLocation.absolutePath.match(/_r(\d+)_/);
     const currRound = roundMatch ? parseInt(roundMatch[1]) : 0;
 
     for (const doc of latexDocuments) {
@@ -291,9 +301,9 @@ export class XmlOutputManager {
         extension,
         currRound,
       );
-      const outputLocation = this.fileService.resolveRelativePath(texFile);
-      await AbsoluteFS.write(outputLocation.absolutePath, doc.content.trim());
-      outputFiles.push(this.buildNamedOutput(source, texFile));
+      const texLocation = this.fileService.createLocation(texFile);
+      await AbsoluteFS.write(texLocation.absolutePath, doc.content.trim());
+      outputFiles.push(this.buildOutputFileInfo(source, texLocation));
       this.logger.debug(
         `XML Source: ${source} -> TeX file written: ${texFile}`,
       );
@@ -302,48 +312,52 @@ export class XmlOutputManager {
     return outputFiles;
   }
 
-  async processSingleXmlOutput(outputFile: string): Promise<NamedOutputFile> {
-    this.logger.debug(`Splitting scratchpad output XML: ${outputFile}`);
+  async processSingleXmlOutput(
+    outputLocation: FileLocation,
+  ): Promise<OutputFileInfo> {
+    this.logger.debug(
+      `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
+    );
 
-    const processedOutputFile = await this.splitScratchpadOutputXml(
-      outputFile,
+    const processedTexLocation = await this.splitScratchpadOutputXml(
+      outputLocation,
       this.agentSetting.documentTag,
     );
 
-    const xmlLocation = this.fileService.resolveRelativePath(outputFile);
-    const xmlContent = await AbsoluteFS.read(xmlLocation.absolutePath);
+    const xmlContent = await AbsoluteFS.read(outputLocation.absolutePath);
     let original = '';
     const nameMatch = xmlContent.match(/<document[^>]*name="(.*?)"[^>]*>/);
     if (nameMatch && nameMatch[1]) {
       original = nameMatch[1].trim();
     }
 
-    return this.buildNamedOutput(
+    return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
-      processedOutputFile,
+      processedTexLocation,
     );
   }
 
   async processMultipleXmlOutputs(
-    outputFile: string,
-  ): Promise<NamedOutputFile[]> {
+    outputLocation: FileLocation,
+  ): Promise<OutputFileInfo[]> {
     this.logger.debug(
-      `Splitting multiple scratchpad output XML: ${outputFile}`,
+      `Splitting multiple scratchpad output XML: ${outputLocation.absolutePath}`,
     );
     const processedOutputFiles = await this.splitScratchpadMultipleOutputXml(
-      outputFile,
+      outputLocation,
       this.agentSetting.documentTag,
     );
     return processedOutputFiles;
   }
 
   async ensureCorrectXmlStructure(
-    filePath: string,
+    fileLocation: FileLocation,
     documentTag: string,
   ): Promise<void> {
-    this.logger.debug(`Ensuring correct XML structure: ${filePath}`);
-    const xmlLocation = this.fileService.resolveRelativePath(filePath);
-    const originalContent = await AbsoluteFS.read(xmlLocation.absolutePath);
+    this.logger.debug(
+      `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
+    );
+    const originalContent = await AbsoluteFS.read(fileLocation.absolutePath);
     let content = await this.processXmlContent(originalContent);
 
     let fixed = false;
@@ -362,7 +376,7 @@ export class XmlOutputManager {
     }
 
     if (fixed || content !== originalContent) {
-      await AbsoluteFS.write(xmlLocation.absolutePath, content);
+      await AbsoluteFS.write(fileLocation.absolutePath, content);
     }
   }
 }

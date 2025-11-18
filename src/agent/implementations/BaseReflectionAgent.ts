@@ -1,3 +1,6 @@
+// Standard library imports
+import * as path from 'path';
+
 // Local imports - agent components
 import type { IModelHandler } from '@agent/modelHandlers';
 // Internal imports
@@ -5,9 +8,9 @@ import {
   OutputHandler,
   IOutputHandler,
   getOutputFileName,
-  type RoundOutputArtifacts,
+  type RoundOutput,
+  type OutputFileInfo,
 } from '@agent/output';
-import type { NamedOutputFile } from '@agent/output/types';
 
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -41,8 +44,6 @@ import {
   createReflectionRoundFlow,
   type ReflectionRoundShared,
 } from '@agent/implementations/flows/ReflectionRoundFlow';
-// Type imports
-import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
@@ -53,7 +54,15 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, TaskRunFileService } from '@utils/files';
+import {
+  WorkspaceFS,
+  TaskRunFileService,
+  pathToLocation,
+  createWorkspaceLocation,
+  flexibleFS,
+  type FileLocation,
+  type AgentFileLocation,
+} from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -63,7 +72,7 @@ import { LatexMediaManager } from '@latex';
  * @property endTurn - A flag indicating whether the current turn should be ended after processing.
  */
 export interface RoundOutputOptions {
-  outputFile: string;
+  outputFile: FileLocation;
   endTurn: boolean;
   stage?: AgentLogStage;
   runGroupId?: string | null;
@@ -81,7 +90,7 @@ export interface ReflectionRoundResult {
   messages: any[];
   shouldContinue: boolean;
   workspaceState: AgentWorkspaceState;
-  outputArtifacts: RoundOutputArtifacts | null;
+  output: RoundOutput | null;
 }
 
 export interface AgentRuntimeXmlExports {
@@ -97,7 +106,8 @@ interface RoundPipelineContext {
   workspaceState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
-  outputPath: string;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation: AgentFileLocation;
 }
 
 /**
@@ -106,10 +116,12 @@ interface RoundPipelineContext {
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
-  /** File paths for each round's raw model output. */
-  protected outputFile: string[];
-  protected outputFiles: { [key: number]: string[] };
-  protected baseFiles: string[];
+  /** File paths for each round's raw model output - always workspace or runStorage */
+  protected outputFile: AgentFileLocation[];
+  /** Multi-file output locations per round - always workspace or runStorage */
+  protected outputFiles: { [key: number]: AgentFileLocation[] };
+  /** Base input files - always workspace or runStorage */
+  protected baseFiles: AgentFileLocation[];
   protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
@@ -119,7 +131,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected promptBuilder?: PromptBuilder;
   public roundStates: ConversationRoundState[] = [];
   public workspaceStates: AgentWorkspaceState[] = [];
-  public roundOutputArtifacts: RoundOutputArtifacts[] = [];
+  public roundOutputs: RoundOutput[] = [];
   public runtimeXmlExports: AgentRuntimeXmlExports = {
     tagContents: {},
     documents: [],
@@ -150,15 +162,27 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Initialize basic attributes
     const numRounds = this.getTotalRounds();
-    this.outputFile = new Array(numRounds);
+    // Initialize fileService first so we can use it below
+    this.fileService = new TaskRunFileService(context.executionId);
+
+    this.outputFile = new Array<AgentFileLocation>(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
       this.outputFiles[i] = [];
     }
+    // Base files are ALWAYS workspace locations (inputs from workspace)
+    // Even in run-storage mode, we snapshot FROM workspace TO run storage
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
-        ? [...this.agentConfig.outputFiles]
-        : [this.agentConfig.inputFile];
+        ? this.agentConfig.outputFiles.map((f) =>
+            createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
+          )
+        : [
+            createWorkspaceLocation(
+              WorkspaceFS.fullPath(this.agentConfig.inputFile),
+              this.agentConfig.inputFile,
+            ),
+          ];
 
     // Check scratchpad usage
     // this is not so neat
@@ -167,13 +191,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     // Set output files for all rounds
     for (let i = 0; i < numRounds; i++) {
-      this.outputFile[i] = this.getOutputFile(i);
+      this.outputFile[i] = this.getOutputFileLocation(i);
     }
 
     // Initialize logging
     this.logId = 0;
-
-    this.fileService = new TaskRunFileService(context.executionId);
 
     this.outputHandler = new OutputHandler(
       this.agentSetting,
@@ -196,7 +218,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
-      this.roundOutputArtifacts = [];
+      this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
       this.outputHandler.hydrateFromArtifacts(
         params.runId ?? null,
@@ -211,8 +233,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
       try {
         for (const round of sortedRounds) {
-          const artifacts = await this.outputHandler.getRoundArtifacts(round);
-          this.roundOutputArtifacts[round] = artifacts;
+          const output = await this.outputHandler.getRoundArtifacts(round);
+          this.roundOutputs[round] = output;
         }
 
         hydratedCount = sortedRounds.length;
@@ -286,14 +308,15 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Generates output file path for specified conversation round.
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
+   * @returns AgentFileLocation - always workspace or runStorage (never external)
    */
-  protected getOutputFile(currRound: number): string {
+  protected getOutputFileLocation(currRound: number): AgentFileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
       : this.agentSetting.outputExt;
 
-    return getOutputFileName(
+    const fileName = getOutputFileName(
       baseOutputFile,
       this.agentConfig.agent,
       this.modelHandler.config.name,
@@ -301,6 +324,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       currRound,
       this.agentConfig.editedFile || undefined,
     );
+
+    // fileService.createLocation always returns workspace or runStorage for agent outputs
+    return this.fileService.createLocation(fileName) as AgentFileLocation;
   }
 
   /**
@@ -311,7 +337,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: ConversationRoundState,
     runState: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<RoundOutputArtifacts> {
+  ): Promise<RoundOutput> {
     const runGroupId =
       options.runGroupId ??
       this.runStage?.id ??
@@ -339,9 +365,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         stage: scope,
       });
 
-      const artifacts = await this.outputHandler.getRoundArtifacts(currRound);
-      this.roundOutputArtifacts[currRound] = artifacts;
-      return artifacts;
+      const output = await this.outputHandler.getRoundArtifacts(currRound);
+      this.roundOutputs[currRound] = output;
+      return output;
     };
 
     if (stage) {
@@ -365,13 +391,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     stateRound: ConversationRoundState,
     _runState: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<NamedOutputFile[]> {
+  ): Promise<OutputFileInfo[]> {
     const { outputFile, endTurn, stage } = options;
     this.outputHandler.setActiveRun(options.runGroupId);
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
-        this.baseFiles.map(async (f) => await WorkspaceFS.exists(f)),
+        this.baseFiles.map(async (f) => await flexibleFS.exists(f)),
       );
 
       if (existingBase.some((e) => e)) {
@@ -403,7 +429,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param workspaceState - Current tool invocation state passed between rounds.
    * @param preparedMessages - Messages prepared for the model before execution.
    * @param prefill - Initial text inserted into the model response buffer.
-   * @param outputPath - Filesystem path where model output for this round is stored.
+   * @param outputLocation - File location where model output for this round is stored.
    * @returns Updated round/global state, messages, completion flag, and tool state after execution.
    */
   private async runRoundPipeline({
@@ -413,7 +439,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     workspaceState,
     preparedMessages,
     prefill,
-    outputPath,
+    outputLocation,
   }: RoundPipelineContext): Promise<ReflectionRoundResult> {
     const [endTurn, updatedMessages] =
       await this.modelHandler.initializeOutputAndPrefill(
@@ -421,7 +447,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.agentSetting,
         preparedMessages,
         workspaceState,
-        outputPath,
+        outputLocation,
         prefill,
       );
 
@@ -439,7 +465,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
-        outputFile: outputPath,
+        outputLocation: outputLocation,
         store,
       });
 
@@ -448,7 +474,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store.round,
         store.run,
         {
-          outputFile: outputPath,
+          outputFile: outputLocation,
           endTurn: cycleResult.endTurn,
           runGroupId,
         },
@@ -460,7 +486,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         messages: updatedMessages,
         shouldContinue: cycleResult.endTurn,
         workspaceState: store.workspace,
-        outputArtifacts: artifacts,
+        output: artifacts,
       };
     }
 
@@ -472,7 +498,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.round,
       store.run,
       {
-        outputFile: outputPath,
+        outputFile: outputLocation,
         endTurn,
         runGroupId,
       },
@@ -484,7 +510,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       messages: updatedMessages,
       shouldContinue: endTurn,
       workspaceState,
-      outputArtifacts: artifacts,
+      output: artifacts,
     };
   }
 
@@ -597,8 +623,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
-        this.agentConfig.inputFile,
-        ...this.agentConfig.inputFiles,
+        this.fileService.createLocation(this.agentConfig.inputFile),
+        ...this.agentConfig.inputFiles.map((f) =>
+          this.fileService.createLocation(f),
+        ),
       ];
       const extraMedia: string[] = [];
 
@@ -624,11 +652,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       return;
     }
 
-    let outputFiles = [...this.agentConfig.outputFiles];
+    let outputFiles: FileLocation[] = this.agentConfig.outputFiles.map((f) =>
+      this.fileService.createLocation(f),
+    );
     if (outputFiles.length === 0) {
       const previousRoundFiles = this.outputHandler.ensureRound(currRound - 1);
       if (previousRoundFiles.length > 0) {
-        outputFiles = [previousRoundFiles[0].path];
+        outputFiles = [previousRoundFiles[0].location];
       }
     }
 
@@ -675,7 +705,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               workspaceState,
               preparedMessages,
               prefill,
-              outputPath: this.outputFile[roundIndex],
+              outputLocation: this.outputFile[roundIndex],
             }),
           createSkipResult: (stateRound) => ({
             roundState: stateRound,
@@ -683,7 +713,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             messages,
             shouldContinue: true,
             workspaceState,
-            outputArtifacts: null,
+            output: null,
           }),
         },
       };
@@ -708,7 +738,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const previousHydratedRounds = this.hydratedRoundCount;
     const hadHydratedRounds = previousHydratedRounds > 0;
     if (!hadHydratedRounds) {
-      this.roundOutputArtifacts = [];
+      this.roundOutputs = [];
     }
     this.runtimeXmlExports = {
       tagContents: {},
@@ -752,10 +782,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         },
       });
     } finally {
-      const currentArtifacts = this.roundOutputArtifacts.filter(Boolean).length;
+      const currentOutputs = this.roundOutputs.filter(Boolean).length;
       this.hydratedRoundCount = Math.max(
         previousHydratedRounds,
-        currentArtifacts,
+        currentOutputs,
       );
     }
 
@@ -769,28 +799,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       singleOutputFile: null,
     };
 
-    if (this.roundOutputArtifacts.length === 0) {
-      return summary;
+    // Find the most recent round with XML summary data
+    // No need to search through cached roundOutputs - check in reverse order
+    for (let round = this.roundOutputs.length - 1; round >= 0; round--) {
+      const output = this.roundOutputs[round];
+      if (!output) continue;
+
+      const xml = output.xmlSummary;
+      const hasData =
+        Object.keys(xml.tagContents).length > 0 ||
+        xml.documents.length > 0 ||
+        xml.singleOutputFile !== null;
+
+      if (hasData) {
+        summary.tagContents = { ...xml.tagContents };
+        summary.documents = [...xml.documents];
+        summary.singleOutputFile = xml.singleOutputFile;
+        break;
+      }
     }
-
-    const lastWithSummary = [...this.roundOutputArtifacts]
-      .reverse()
-      .find((artifact) => {
-        const xml = artifact.xmlSummary;
-        return (
-          Object.keys(xml.tagContents).length > 0 ||
-          xml.documents.length > 0 ||
-          xml.singleOutputFile !== null
-        );
-      });
-
-    if (!lastWithSummary) {
-      return summary;
-    }
-
-    summary.tagContents = { ...lastWithSummary.xmlSummary.tagContents };
-    summary.documents = [...lastWithSummary.xmlSummary.documents];
-    summary.singleOutputFile = lastWithSummary.xmlSummary.singleOutputFile;
 
     return summary;
   }

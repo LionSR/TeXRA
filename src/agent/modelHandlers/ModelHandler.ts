@@ -25,6 +25,7 @@ import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
 
 // Local file imports
+import type { FileLocation } from '@utils/files';
 import { MediaAttachmentProcessor } from './support/MediaAttachmentProcessor';
 import { resolveBaseUrl } from './support/ProxyConfigResolver';
 import {
@@ -516,7 +517,7 @@ export abstract class ModelHandler<
     agentSetting: AgentSetting,
     messages: M[],
     workspaceState: AgentWorkspaceState,
-    outputFile: string,
+    outputLocation: FileLocation,
     prefill: string,
   ): Promise<[boolean, M[]]>;
 
