@@ -429,13 +429,22 @@ export class OutputHandler implements IOutputHandler {
       const outputPath = getComparablePath(entry.location);
       
       // Find the base file that matches this output's source name
+      // Use exact basename matching (with or without extension for LaTeX compatibility)
       const matchingBase = this.baseFiles.find((baseLoc) => {
         const baseName = path.basename(
           baseLoc.kind !== 'external'
             ? baseLoc.relativePath
             : baseLoc.absolutePath,
         );
-        return baseName === entry.source || baseName.includes(entry.source);
+        const baseNameNoExt = path.parse(baseName).name;
+        const sourceNoExt = path.parse(entry.source).name;
+        
+        return (
+          baseName === entry.source ||
+          baseNameNoExt === sourceNoExt ||
+          baseNameNoExt === entry.source ||
+          baseName === sourceNoExt
+        );
       });
       
       originByOutput.set(
