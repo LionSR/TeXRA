@@ -41,6 +41,7 @@ import type {
   IModelHandler,
   CreateResponseOptions,
   ExtractResponseResult,
+  StopConditionsResult,
 } from './types/IModelHandler';
 
 // Default continuation limits
@@ -392,7 +393,7 @@ export abstract class ModelHandler<
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
-  ): [boolean, boolean] {
+  ): StopConditionsResult {
     const tokenFlags = this.computeTokenFlags(stateRound, stateGlobal);
     const markerFlags = this.detectStopMarkers(
       stopReason,
@@ -421,7 +422,7 @@ export abstract class ModelHandler<
       );
     }
 
-    return [markerFlags.endTurn, shouldStop];
+    return { endTurn: markerFlags.endTurn, shouldStop };
   }
 
   public containCutOffMessage(

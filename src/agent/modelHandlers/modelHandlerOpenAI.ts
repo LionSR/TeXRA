@@ -629,10 +629,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): ExtractResponseResult {
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
