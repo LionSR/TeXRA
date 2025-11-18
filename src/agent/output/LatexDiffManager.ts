@@ -151,7 +151,7 @@ export class LatexDiffManager {
     }
 
     try {
-      await this.fileService.mirrorWorkspaceFile(targetLocation.absolutePath);
+      await this.fileService.mirrorWorkspaceFile(targetLocation);
     } catch (error) {
       this.logger.warn(
         `Unable to mirror workspace dependency ${targetLocation.absolutePath}: ${toErrorMessage(error)}`,
