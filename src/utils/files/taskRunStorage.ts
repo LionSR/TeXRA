@@ -361,18 +361,33 @@ export class TaskRunFileService {
     await ensureRunDir(this.activeExecutionId);
   }
 
+  /**
+   * Describe a file path as a FileLocation, with run-storage awareness.
+   * Unlike standalone pathToLocation, this method can detect if an absolute path
+   * is within the current run storage directory.
+   *
+   * @param target - Absolute or workspace-relative path
+   * @returns FileLocation with appropriate kind (workspace/runStorage/external)
+   */
   public describePath(target: string): FileLocation {
     if (!target) {
       return createExternalLocation(target);
     }
 
+    // Handle relative paths: resolve to workspace
     if (!path.isAbsolute(target)) {
-      return this.resolveRelativePath(target, { preferWorkspace: true });
+      const workspaceRoot = this.workspaceRoot;
+      if (!workspaceRoot) {
+        return createExternalLocation(target);
+      }
+      const normalized = path.normalize(target);
+      const workspaceAbsolute = path.join(workspaceRoot, normalized);
+      return createWorkspaceLocation(workspaceAbsolute, normalized);
     }
 
     const normalized = path.normalize(target);
 
-    // Check if in run storage first
+    // Check if in run storage first (only relevant for this service)
     const executionId = this.activeExecutionId;
     const storageRoot = StorageFS.fullPath('');
     if (executionId && storageRoot && normalized.startsWith(storageRoot)) {
@@ -535,6 +550,11 @@ export class TaskRunFileService {
     this.hasPreparedSnapshot = true;
   }
 
+  /**
+   * Get the display label (filename) from a relative path.
+   * @param relativePath - Workspace-relative path
+   * @returns The basename of the path
+   */
   public getDisplayLabel(relativePath: string): string {
     if (!relativePath) {
       return '';
@@ -542,35 +562,6 @@ export class TaskRunFileService {
     const normalized = relativePath.replace(/\\/g, '/');
     const segments = normalized.split('/').filter(Boolean);
     return segments.length === 0 ? normalized : segments.at(-1)!;
-  }
-
-  public resolveRelativePath(
-    relativePath: string,
-    options?: { preferWorkspace?: boolean },
-  ): FileLocation {
-    if (path.isAbsolute(relativePath)) {
-      return this.describePath(relativePath);
-    }
-
-    const workspaceRoot = this.workspaceRoot;
-    if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
-    }
-
-    const normalized = relativePath ? path.normalize(relativePath) : '';
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
-    const executionId = this.activeExecutionId;
-
-    if (executionId && this.useRunStorage && !options?.preferWorkspace) {
-      const runPaths = getRunStoragePaths(executionId, normalized);
-      return createRunStorageLocation(
-        runPaths.absolute,
-        runPaths.runRelative,
-        executionId,
-      );
-    }
-
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
   }
 
   /**
@@ -701,11 +692,13 @@ export function getComparablePath(location: FileLocation): string {
 }
 
 /**
- * Convert a string path to a FileLocation.
- * Standalone version for use in utilities without TaskRunFileService.
+ * Convert a string path to a FileLocation (standalone version).
+ * Use this for utilities that don't have access to TaskRunFileService.
+ * This function is NOT run-storage aware - it can only create workspace or external locations.
+ * For run-storage awareness, use TaskRunFileService.describePath() instead.
  *
  * @param target - Absolute or workspace-relative path
- * @returns FileLocation representing the path
+ * @returns FileLocation (workspace or external, never runStorage)
  */
 export function pathToLocation(target: string): FileLocation {
   if (!target) {
