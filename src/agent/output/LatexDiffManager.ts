@@ -80,23 +80,13 @@ export class LatexDiffManager {
   }
 
   /**
-   * Get paths for diff operation - trust FileLocation.
-   * Returns the file's directory as cwd so latexdiff can resolve relative includes.
+   * Get working directory for latexdiff - use file's directory so relative includes work.
    */
-  private async getDiffPaths(location: FileLocation | undefined): Promise<{
-    actual: string | null;
-    workspaceDir: string | null;
-  }> {
-    if (!location) {
-      return { actual: null, workspaceDir: null };
-    }
-
-    // Trust FileLocation - no defensive existence checks or fallbacks
-    const actual = await this.resolveSymlinks(location.absolutePath);
-    // Use the file's directory as cwd, not workspace root, so relative includes work
-    const workspaceDir = path.dirname(actual);
-
-    return { actual, workspaceDir };
+  private async getWorkingDirectory(
+    location: FileLocation,
+  ): Promise<string> {
+    const resolved = await this.resolveSymlinks(location.absolutePath);
+    return path.dirname(resolved);
   }
 
   private logLatexdiffResult(
@@ -215,8 +205,7 @@ export class LatexDiffManager {
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
         for (const [baseFile, outputFile] of basePairs) {
-          const location = mapping.locationByOutput.get(outputFile);
-          const { actual, workspaceDir } = await this.getDiffPaths(location);
+          const revisedLocation = mapping.locationByOutput.get(outputFile);
 
           // Look up base FileLocation from baseFiles array
           const baseLocation = baseLocationByPath.get(baseFile);
@@ -227,7 +216,7 @@ export class LatexDiffManager {
             continue;
           }
 
-          if (!actual) {
+          if (!revisedLocation) {
             this.logger.warn(
               `Skipping latexdiff for ${outputFile} - no location info`,
             );
@@ -238,7 +227,7 @@ export class LatexDiffManager {
               message: 'Revised file location missing',
               locations: {
                 base: baseLocation,
-                revised: location ?? null,
+                revised: null,
                 diff: null,
               },
             });
@@ -246,14 +235,10 @@ export class LatexDiffManager {
           }
 
           await this.ensureWorkspaceDependency(baseLocation);
-          if (location) {
-            await this.ensureWorkspaceDependency(location);
-          }
-          const cwd = workspaceDir ?? path.dirname(baseLocation.absolutePath);
+          await this.ensureWorkspaceDependency(revisedLocation);
 
-          // Use location if available, otherwise create run-storage aware location
-          const revisedLocation =
-            location ?? this.fileService.createLocation(actual);
+          // Use revised file's directory as cwd so latexdiff can resolve relative includes
+          const cwd = await this.getWorkingDirectory(revisedLocation);
 
           const result = await this.latexdiffService.runDiffForRound(
             baseLocation,
