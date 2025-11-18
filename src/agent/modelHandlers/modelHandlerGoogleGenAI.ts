@@ -50,6 +50,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import { ReasoningEffort } from '@model/ModelConfig';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
@@ -96,6 +97,10 @@ function findLastTextPart(
   }
   return undefined;
 }
+
+type GoogleGenerationConfig = GenerateContentConfig & {
+  thinkingLevel?: 'low' | 'medium' | 'high';
+};
 
 /**
  * Ensures a function call has an ID. Google's SDK may return function calls
@@ -178,6 +183,29 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.config.capabilities.supportsVision ||
       this.config.capabilities.supportsNativeAudio
     );
+  }
+
+  private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
+    if (!this.capabilities.supportsThinkingLevel) {
+      return undefined;
+    }
+
+    const requestedLevel = this.capabilities.thinkingLevel;
+    if (
+      requestedLevel === ReasoningEffort.NONE ||
+      requestedLevel === ReasoningEffort.MEDIUM
+    ) {
+      if (requestedLevel === ReasoningEffort.MEDIUM) {
+        this.logger.warn(
+          "Gemini 3 doesn't support thinking_level 'medium'. Falling back to 'high'.",
+        );
+      }
+      return requestedLevel === ReasoningEffort.NONE
+        ? undefined
+        : ReasoningEffort.HIGH;
+    }
+
+    return requestedLevel;
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -339,11 +367,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GenerateContentConfig = {
+    const generationConfig: GoogleGenerationConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
     };
+
+    const thinkingLevel = this.getThinkingLevel();
+    if (thinkingLevel) {
+      generationConfig.thinkingLevel = thinkingLevel;
+    }
 
     if (
       this.config.fullName.includes('2.5-pro') ||
