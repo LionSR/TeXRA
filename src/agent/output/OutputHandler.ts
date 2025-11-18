@@ -320,6 +320,7 @@ export class OutputHandler implements IOutputHandler {
 
   /**
    * Gather mapping and diff statistics for output files of a round.
+   * Computes diff stats in parallel for better performance.
    */
   public async gatherOutputFileInfo(
     currRound: number,
@@ -327,7 +328,6 @@ export class OutputHandler implements IOutputHandler {
     const roundOutputs = this.ensureRound(currRound);
     const mapping = this.getRoundMapping(currRound);
 
-    const infos: OutputFileInfo[] = [];
     const baseByOutput = new Map<string, string>();
     const prevByOutput = new Map<string, string>();
 
@@ -338,46 +338,45 @@ export class OutputHandler implements IOutputHandler {
       prevByOutput.set(output, prev);
     });
 
-    const roundData = this.rounds.get(currRound);
-    const rawLocation = roundData?.rawOutput ?? null;
-    const xmlSummary =
-      roundData?.xmlSummary ?? this.getRoundXmlSummary(currRound);
-
     const locationFor = (relative: string | null): FileLocation | null => {
       if (!relative) return null;
       return mapping.locationByOutput.get(relative) ?? null;
     };
 
-    for (const output of roundOutputs) {
-      const location = output.location;
-      const relativePath = getComparablePath(location);
+    // Parallelize diff computation for better performance
+    const infos = await Promise.all(
+      roundOutputs.map(async (output) => {
+        const location = output.location;
+        const relativePath = getComparablePath(location);
 
-      const baseFile = baseByOutput.get(relativePath) ?? null;
-      const prevFile = prevByOutput.get(relativePath) ?? null;
-      const originalFile = mapping.originByOutput.get(relativePath) || null;
+        const baseFile = baseByOutput.get(relativePath) ?? null;
+        const prevFile = prevByOutput.get(relativePath) ?? null;
+        const originalFile = mapping.originByOutput.get(relativePath) || null;
 
-      const diffBaseRelative = getEffectiveBaseFile(
-        baseFile,
-        originalFile,
-        relativePath,
-      );
-      const diffBaseLocation = locationFor(diffBaseRelative);
-      const stats = await this.diffStatsManager.computeDiffStats(
-        diffBaseLocation,
-        location,
-      );
+        const diffBaseRelative = getEffectiveBaseFile(
+          baseFile,
+          originalFile,
+          relativePath,
+        );
+        const diffBaseLocation = locationFor(diffBaseRelative);
+        const stats = await this.diffStatsManager.computeDiffStats(
+          diffBaseLocation,
+          location,
+        );
 
-      infos.push({
-        source: output.source,
-        location,
-        lineage: {
-          base: diffBaseLocation,
-          previous: locationFor(prevFile),
-          original: locationFor(originalFile),
-        },
-        diff: stats,
-      });
-    }
+        return {
+          source: output.source,
+          location,
+          lineage: {
+            base: diffBaseLocation,
+            previous: locationFor(prevFile),
+            original: locationFor(originalFile),
+          },
+          diff: stats,
+        };
+      }),
+    );
+
     return infos;
   }
 
