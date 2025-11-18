@@ -131,9 +131,21 @@ export class XmlOutputManager {
     outputLocation: FileLocation,
     documentTag: string,
     thinkingTag: string = 'scratchpad',
-  ): Promise<string> {
-    const { dir, name } = path.parse(outputLocation.absolutePath);
-    const texFile = path.join(dir, `${name}.tex`);
+  ): Promise<FileLocation> {
+    const { name } = path.parse(outputLocation.absolutePath);
+    const texFilename = `${name}.tex`;
+
+    // Derive relative path for the tex file (same directory as output)
+    const outputDir =
+      outputLocation.kind !== 'external'
+        ? path.dirname(outputLocation.relativePath)
+        : path.dirname(outputLocation.absolutePath);
+    const texRelativePath = outputDir
+      ? path.join(outputDir, texFilename)
+      : texFilename;
+
+    // Create FileLocation for tex file (run-storage aware)
+    const texLocation = this.fileService.createLocation(texRelativePath);
 
     let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
     const tagsToWrap = [documentTag, thinkingTag];
@@ -145,8 +157,8 @@ export class XmlOutputManager {
       documentTag,
     );
     if (namedDocumentContent) {
-      await AbsoluteFS.write(texFile, namedDocumentContent);
-      return texFile;
+      await AbsoluteFS.write(texLocation.absolutePath, namedDocumentContent);
+      return texLocation;
     }
 
     try {
@@ -165,8 +177,8 @@ export class XmlOutputManager {
         documentTag,
       );
       if (latexDocument) {
-        await AbsoluteFS.write(texFile, latexDocument);
-        return texFile;
+        await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
+        return texLocation;
       }
       throw new Error(
         `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
@@ -309,7 +321,7 @@ export class XmlOutputManager {
       `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
     );
 
-    const processedOutputFile = await this.splitScratchpadOutputXml(
+    const processedTexLocation = await this.splitScratchpadOutputXml(
       outputLocation,
       this.agentSetting.documentTag,
     );
@@ -323,7 +335,7 @@ export class XmlOutputManager {
 
     return this.buildOutputFileInfo(
       original || this.agentConfig.inputFile,
-      this.fileService.createLocation(processedOutputFile),
+      processedTexLocation,
     );
   }
 
