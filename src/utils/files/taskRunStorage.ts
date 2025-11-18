@@ -409,7 +409,6 @@ export class TaskRunFileService {
     this.hasPreparedSnapshot = true;
   }
 
-
   /**
    * Create a FileLocation from a workspace-relative path, with run-storage awareness.
    * This is the preferred method for creating output file locations.
