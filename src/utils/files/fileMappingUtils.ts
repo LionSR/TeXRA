@@ -14,32 +14,36 @@ import type { FileLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
- * Returns FileLocation → FileLocation map (no string conversions).
+ * Uses string keys (comparable paths) for robust lookups, FileLocation values for data.
+ * This ensures lookups work even when FileLocation objects are reconstructed.
  *
  * @param sourceFiles The source file locations
  * @param targetFiles The target file locations
  * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
  * @param roundAware Ignore round numbers in filenames when true
- * @returns Map of source FileLocations to their best matching target FileLocations
+ * @returns Map from source path to target FileLocation
  */
 export function createFileMapping(
   sourceFiles: FileLocation[],
   targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
   roundAware: boolean = false,
-): Map<FileLocation, FileLocation> {
-  const fileMapping = new Map<FileLocation, FileLocation>();
+): Map<string, FileLocation> {
+  const fileMapping = new Map<string, FileLocation>();
 
   if (sourceFiles.length === 0 || targetFiles.length === 0) {
     return fileMapping;
   }
 
+  // Use getComparablePath helper consistently for path extraction
+  const getPath = (loc: FileLocation): string =>
+    loc.kind !== 'external' ? loc.relativePath : loc.absolutePath;
+
   for (const target of targetFiles) {
-    const targetPath =
-      target.kind !== 'external' ? target.relativePath : target.absolutePath;
+    const targetPath = getPath(target);
     const targetBaseName = path.basename(targetPath);
 
-    let bestMatchSource: FileLocation | null = null;
+    let bestMatchSourcePath: string | null = null;
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
@@ -47,11 +51,7 @@ export function createFileMapping(
         continue;
       }
 
-      // Both workspace and runStorage have relativePath; external uses absolutePath
-      const sourcePath =
-        sourceFile.kind !== 'external'
-          ? sourceFile.relativePath
-          : sourceFile.absolutePath;
+      const sourcePath = getPath(sourceFile);
       const sourceBaseName = path.basename(sourcePath);
 
       const sourceName = path.parse(sourceBaseName).name;
@@ -77,12 +77,12 @@ export function createFileMapping(
 
       if (isMatch && matchScore > bestMatchScore) {
         bestMatchScore = matchScore;
-        bestMatchSource = sourceFile;
+        bestMatchSourcePath = sourcePath;
       }
     }
 
-    if (bestMatchSource) {
-      fileMapping.set(bestMatchSource, target);
+    if (bestMatchSourcePath) {
+      fileMapping.set(bestMatchSourcePath, target);
     }
   }
 
@@ -128,8 +128,12 @@ function getPathSegments(filePath: string): string[] {
     .filter((segment) => segment !== '');
 }
 
+/**
+ * Build a string → string lookup for LaTeX \input command replacement.
+ * @param baseToOutputMap Map from base file path to output FileLocation
+ */
 function buildReplacementLookup(
-  baseToOutputMap: Map<FileLocation, FileLocation>,
+  baseToOutputMap: Map<string, FileLocation>,
 ): Map<string, string> {
   const replacements = new Map<string, string>();
 
@@ -144,13 +148,11 @@ function buildReplacementLookup(
     replacements.set(normalizedSource, normalizedTarget);
   };
 
-  for (const [baseLoc, outputLoc] of baseToOutputMap.entries()) {
-    if (!baseLoc || !outputLoc) {
+  for (const [baseFile, outputLoc] of baseToOutputMap.entries()) {
+    if (!baseFile || !outputLoc) {
       continue;
     }
 
-    const baseFile =
-      baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath;
     const outputFile =
       outputLoc.kind !== 'external'
         ? outputLoc.relativePath
@@ -205,8 +207,8 @@ export async function replaceInputCommands(
       baseToOutputMap.entries(),
     )
       .map(
-        ([baseLoc, outputLoc]) =>
-          `${path.basename(baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
+        ([basePath, outputLoc]) =>
+          `${path.basename(basePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
       )
       .join(', ')}`,
   );
