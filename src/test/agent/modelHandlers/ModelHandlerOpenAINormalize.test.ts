@@ -134,11 +134,11 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
-    await handler.createResponse(
-      client as any,
-      cloneMessages(BASE_MESSAGES),
-      0.1,
-    );
+    await handler.createResponse({
+      client: client as any,
+      messages: cloneMessages(BASE_MESSAGES),
+      temperature: 0.1,
+    });
 
     const previews = extractPreviewLogs(loggerStub.debugMessages);
     assert.equal(previews.length, 2, 'DeepSeek should merge two user messages');
@@ -171,11 +171,11 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
-    await handler.createResponse(
-      client as any,
-      cloneMessages(BASE_MESSAGES),
-      0.1,
-    );
+    await handler.createResponse({
+      client: client as any,
+      messages: cloneMessages(BASE_MESSAGES),
+      temperature: 0.1,
+    });
 
     const previews = extractPreviewLogs(loggerStub.debugMessages);
     assert.deepEqual(previews, [
@@ -197,11 +197,11 @@ describe('ModelHandlerOpenAI.normalizeMessages hook', () => {
     (handler as any).getStreamingConfig = () => false;
 
     const client = createClientStub();
-    await handler.createResponse(
-      client as any,
-      cloneMessages(BASE_MESSAGES),
-      0.1,
-    );
+    await handler.createResponse({
+      client: client as any,
+      messages: cloneMessages(BASE_MESSAGES),
+      temperature: 0.1,
+    });
 
     const previews = extractPreviewLogs(loggerStub.debugMessages);
     assert.deepEqual(previews, [

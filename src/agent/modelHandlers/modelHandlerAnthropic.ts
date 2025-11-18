@@ -86,6 +86,7 @@ import { toAnthropicTools } from './toolConversion';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { CreateResponseOptions } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaBase64ImageSource,
@@ -245,14 +246,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
-    client: Anthropic,
-    messages: MessageParam[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    requestOptions: CreateResponseOptions<MessageParam>,
   ): Promise<BetaMessage> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = requestOptions;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
     const useAnthropic1MBeta = getConfig<boolean>(
