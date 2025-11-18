@@ -311,10 +311,8 @@ export class LatexDiffManager {
         for (const [prevOutputFile, currOutputFile] of prevPairs) {
           const prevLocation = mapping.locationByOutput.get(prevOutputFile);
           const currLocation = mapping.locationByOutput.get(currOutputFile);
-          const prevPaths = await this.getDiffPaths(prevLocation);
-          const currPaths = await this.getDiffPaths(currLocation);
 
-          if (!prevPaths.actual || !currPaths.actual) {
+          if (!prevLocation || !currLocation) {
             this.logger.warn(
               `Skipping between-round latexdiff - missing location info for ${prevOutputFile} or ${currOutputFile}`,
             );
@@ -339,13 +337,11 @@ export class LatexDiffManager {
           await this.ensureWorkspaceDependency(prevLocation);
           await this.ensureWorkspaceDependency(currLocation);
 
-          const cwd =
-            prevPaths.workspaceDir ??
-            currPaths.workspaceDir ??
-            path.dirname(prevPaths.actual);
+          // Use current file's directory as cwd so latexdiff can resolve relative includes
+          const cwd = await this.getWorkingDirectory(currLocation);
           const result = await this.latexdiffService.runDiffBetweenRounds(
-            prevLocation!,
-            currLocation!,
+            prevLocation,
+            currLocation,
             undefined,
             { cwd },
           );
