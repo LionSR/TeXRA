@@ -568,7 +568,11 @@ export class TaskRunFileService {
    * Create a FileLocation from a workspace-relative path, with run-storage awareness.
    * This is the preferred method for creating output file locations.
    *
-   * @param relativePath - Workspace-relative path (e.g., "paper.tex")
+   * Path normalization is handled internally - you can pass paths with either
+   * forward slashes or backslashes, and the function will normalize them for
+   * the current platform. It's safe to pass already-normalized paths.
+   *
+   * @param relativePath - Workspace-relative path (e.g., "paper.tex" or "sub/paper.tex")
    * @returns FileLocation (workspace or runStorage based on current mode)
    */
   public createLocation(relativePath: string): FileLocation {
@@ -577,6 +581,7 @@ export class TaskRunFileService {
       return createExternalLocation(relativePath);
     }
 
+    // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
     const normalized = relativePath ? path.normalize(relativePath) : '';
     const workspaceAbsolute = path.join(workspaceRoot, normalized);
 
@@ -727,6 +732,10 @@ export function getComparablePath(location: FileLocation): string {
  * This function is NOT run-storage aware - it can only create workspace or external locations.
  * For run-storage awareness, use TaskRunFileService.createLocation() instead.
  *
+ * Path normalization is handled internally - you can pass paths with either
+ * forward slashes or backslashes. It's safe to pass already-normalized paths
+ * (path.normalize() is idempotent).
+ *
  * @param target - Absolute or workspace-relative path
  * @returns FileLocation (workspace or external, never runStorage)
  */
@@ -740,11 +749,13 @@ export function pathToLocation(target: string): FileLocation {
     if (!workspaceRoot) {
       return createExternalLocation(target);
     }
+    // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
     const normalized = path.normalize(target);
     const absolutePath = path.join(workspaceRoot, normalized);
     return createWorkspaceLocation(absolutePath, normalized);
   }
 
+  // Normalize absolute path (idempotent - safe to call on normalized paths)
   const normalized = path.normalize(target);
 
   // Check if in workspace

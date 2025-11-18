@@ -28,6 +28,7 @@ import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
 } from '@tools/approval/toolEditApproval';
+import { pathToLocation } from '@utils/files';
 import {
   ensureRunDir,
   getRunDir,
@@ -493,9 +494,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.compare',
-      undefined,
-      message.base,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(message.base),
+      pathToLocation(message.file),
     );
   }
 
@@ -513,9 +514,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.compare',
-      undefined,
-      previousFile,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(previousFile || ''),
+      pathToLocation(message.file),
     );
   }
 
@@ -536,9 +537,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
     await vscode.commands.executeCommand(
       'texra.acceptEdited',
-      undefined,
-      message.base,
-      message.file,
+      pathToLocation(''), // inputFile unused
+      pathToLocation(message.base),
+      pathToLocation(message.file),
     );
   }
 
