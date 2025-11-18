@@ -21,6 +21,7 @@ import {
   TaskRunFileService,
   flexibleFS,
   pathToLocation,
+  type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
@@ -99,17 +100,17 @@ async function promptForLatexdiffMathMarkup(): Promise<
 
 /**
  * Opens a generated latexdiff result in the LaTeX build preview after verifying it exists.
- * @param basePath The base file (or directory) used when generating the diff.
+ * @param base The base file location used when generating the diff.
  * @param diffFileName The generated diff file name returned by the service.
- * @returns True when the diff file exists and is opened successfully.
+ * @returns The diff file path when successfully opened.
  */
 async function openLatexdiffResult(
-  basePath: string,
+  base: FileLocation,
   diffFileName: string,
 ): Promise<string | undefined> {
-  const baseDirectory = path.extname(basePath)
-    ? path.dirname(basePath)
-    : basePath;
+  const baseDirectory = path.extname(base.absolutePath)
+    ? path.dirname(base.absolutePath)
+    : base.absolutePath;
   const diffFilePath = path.join(baseDirectory, diffFileName);
 
   const diffLocation = pathToLocation(diffFilePath);
@@ -193,8 +194,9 @@ async function handleLatexdiff(
     );
 
     // Get the result from LaTeXdiffService
+    const fileToUseLocation = pathToLocation(fileToUse);
     const result = await service.runDiff(
-      pathToLocation(fileToUse),
+      fileToUseLocation,
       pathToLocation(editedFile),
       '_diff',
       false,
@@ -205,7 +207,7 @@ async function handleLatexdiff(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    await openLatexdiffResult(fileToUse, result.diffFileName);
+    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -233,8 +235,9 @@ async function handleLatexdiffvc(
     );
 
     // Get the result from LaTeXdiffService
+    const fileToUseLocation = pathToLocation(fileToUse);
     const result = await service.runDiffVc(
-      pathToLocation(fileToUse),
+      fileToUseLocation,
       commitHash,
       mathMarkup,
     );
@@ -243,7 +246,7 @@ async function handleLatexdiffvc(
       throw new Error(result.message || 'Failed to generate diff file');
     }
 
-    await openLatexdiffResult(fileToUse, result.diffFileName);
+    await openLatexdiffResult(fileToUseLocation, result.diffFileName);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error creating LaTeX diff', err);
   }
@@ -488,7 +491,7 @@ async function handleRunLatexdiff(
     for (const result of results) {
       if (result.success && result.basePath && result.diffFileName) {
         const diffFilePath = await openLatexdiffResult(
-          result.basePath,
+          pathToLocation(result.basePath),
           result.diffFileName,
         );
         if (diffFilePath) {
@@ -536,20 +539,6 @@ function normalizeOutputsByRound(
   return new Map([...roundMap.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-/**
- * Get output file path - trust the data structure.
- */
-function getOutputPath(info: OutputFileInfo): string {
-  return info.location.absolutePath;
-}
-
-/**
- * Get base file path for comparison - trust lineage structure.
- */
-function getBasePath(info: OutputFileInfo): string | null {
-  const base = info.lineage?.base ?? info.lineage?.original;
-  return base?.absolutePath ?? null;
-}
 
 /**
  * Get file description for display - trust source field.
