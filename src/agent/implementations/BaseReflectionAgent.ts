@@ -94,6 +94,8 @@ export interface AgentRuntimeXmlExports {
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
+  private static readonly ERR_ROUND_NOT_INITIALIZED =
+    'Round context not initialized. Call beginRound() first.';
   /** File paths for each round's raw model output - always workspace or runStorage */
   protected outputFile: AgentFileLocation[];
   /** Multi-file output locations per round - always workspace or runStorage */
@@ -433,9 +435,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill: string,
   ): Promise<ReflectionRoundResult> {
     if (!this.currentRunState || !this.currentWorkspaceState) {
-      throw new Error(
-        'Round context not initialized. Call beginRound() first.',
-      );
+      throw new Error(BaseReflectionAgent.ERR_ROUND_NOT_INITIALIZED);
     }
 
     const roundIndex = this.currentRoundIndex;
@@ -537,9 +537,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     skip: boolean;
   }> {
     if (!this.currentWorkspaceState) {
-      throw new Error(
-        'Round context not initialized. Call beginRound() first.',
-      );
+      throw new Error(BaseReflectionAgent.ERR_ROUND_NOT_INITIALIZED);
     }
 
     const currRound = this.currentRoundIndex;
@@ -628,9 +626,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   public async prepareWorkspaceState(): Promise<void> {
     if (!this.currentWorkspaceState) {
-      throw new Error(
-        'Round context not initialized. Call beginRound() first.',
-      );
+      throw new Error(BaseReflectionAgent.ERR_ROUND_NOT_INITIALIZED);
     }
 
     const currRound = this.currentRoundIndex;
@@ -711,9 +707,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   public async executeCurrentRound(): Promise<ReflectionRoundResult> {
     if (!this.currentRunState || !this.currentWorkspaceState) {
-      throw new Error(
-        'Round context not initialized. Call beginRound() first.',
-      );
+      throw new Error(BaseReflectionAgent.ERR_ROUND_NOT_INITIALIZED);
     }
 
     const roundIndex = this.currentRoundIndex;
