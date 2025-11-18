@@ -18,12 +18,13 @@ import {
 } from '@utils/files';
 
 // Internal imports
+import { getComparablePath } from '@utils/files/taskRunStorage';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
-import type { OutputFileInfo, RoundFileMapping } from './types';
 import { getFileDirectory } from './displayUtils';
+import type { OutputFileInfo, RoundFileMapping } from './types';
 
 /**
  * Result of a latexdiff operation with file locations.
@@ -187,8 +188,8 @@ export class LatexDiffManager {
         this.logger.debug(
           `Matched base files to output files: ${basePairs
             .map(
-              ([base, output]) =>
-                `${this.getDisplayLabel(base)} -> ${this.getDisplayLabel(output)}`,
+              ([basePath, output]) =>
+                `${path.basename(basePath)} -> ${this.getDisplayLabel(output)}`,
             )
             .join(', ')}`,
         );
@@ -200,7 +201,17 @@ export class LatexDiffManager {
 
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
-        for (const [baseLocation, revisedLocation] of basePairs) {
+        for (const [basePath, revisedLocation] of basePairs) {
+          // Find the base FileLocation from baseFiles using path matching
+          const baseLocation = this.baseFiles.find(
+            (f) => getComparablePath(f) === basePath,
+          );
+          if (!baseLocation) {
+            this.logger.debug(
+              `Skipping diff: base file not found for path ${basePath}`,
+            );
+            continue;
+          }
           await this.ensureWorkspaceDependency(baseLocation);
           await this.ensureWorkspaceDependency(revisedLocation);
 
@@ -259,8 +270,8 @@ export class LatexDiffManager {
           this.logger.debug(
             `Matched previous round files to current round files: ${prevPairs
               .map(
-                ([prev, curr]) =>
-                  `${this.getDisplayLabel(prev)} -> ${this.getDisplayLabel(curr)}`,
+                ([prevPath, curr]) =>
+                  `${path.basename(prevPath)} -> ${this.getDisplayLabel(curr)}`,
               )
               .join(', ')}`,
           );
@@ -270,7 +281,21 @@ export class LatexDiffManager {
           );
         }
 
-        for (const [prevLocation, currLocation] of prevPairs) {
+        for (const [prevPath, currLocation] of prevPairs) {
+          // Find the previous round FileLocation from the previous round outputs
+          const prevRound = currRound - 1;
+          const allOutputFiles = this.getOutputFiles();
+          const prevOutputs = allOutputFiles[prevRound] ?? [];
+          const prevLocation = prevOutputs
+            .map((o: OutputFileInfo) => o.location)
+            .find((loc: FileLocation) => getComparablePath(loc) === prevPath);
+
+          if (!prevLocation) {
+            this.logger.debug(
+              `Skipping diff: previous round file not found for path ${prevPath}`,
+            );
+            continue;
+          }
           await this.ensureWorkspaceDependency(prevLocation);
           await this.ensureWorkspaceDependency(currLocation);
 
