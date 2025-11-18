@@ -29,7 +29,6 @@ import {
   WorkspaceFS,
   AbsoluteFS,
   createWorkspaceLocation,
-  type FileLocation,
 } from '@utils/files';
 // Type imports
 
@@ -45,6 +44,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 // Local file imports
 import { XmlOutputManager } from './XmlOutputManager';
 import {
+  type FileLocation,
   type OutputFileInfo,
   type OutputXmlSummary,
   type RoundFileMapping,
@@ -387,9 +387,9 @@ export class OutputHandler implements IOutputHandler {
           source: output.source,
           location,
           lineage: {
-            base: diffBaseLocation,
-            previous: locationFor(prevFile),
+            // NEW STRUCTURE: only track original source and diff file
             original: locationFor(originalFile),
+            diffFile: null, // Set later when latexdiff is generated
           },
           diff: stats,
         };
@@ -518,7 +518,9 @@ export class OutputHandler implements IOutputHandler {
         // Use run-storage aware location resolution
         const checks = expected.map(async (file) => ({
           file,
-          exists: await flexibleFS.exists(this.fileService.createLocation(file)),
+          exists: await flexibleFS.exists(
+            this.fileService.createLocation(file),
+          ),
         }));
         const results = await Promise.all(checks);
         const missing = results.filter((r) => !r.exists).map((r) => r.file);

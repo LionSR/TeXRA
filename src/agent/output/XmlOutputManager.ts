@@ -19,7 +19,7 @@ import {
 import replacementEngine from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { AbsoluteFS, TaskRunFileService } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation, AgentFileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -136,10 +136,10 @@ export class XmlOutputManager {
     const texFilename = `${name}.tex`;
 
     // Derive relative path for the tex file (same directory as output)
-    const outputDir =
-      outputLocation.kind !== 'external'
-        ? path.dirname(outputLocation.relativePath)
-        : path.dirname(outputLocation.absolutePath);
+    // Agent outputs are always workspace or runStorage, never external
+    const outputDir = path.dirname(
+      (outputLocation as AgentFileLocation).relativePath,
+    );
     const texRelativePath = outputDir
       ? path.join(outputDir, texFilename)
       : texFilename;

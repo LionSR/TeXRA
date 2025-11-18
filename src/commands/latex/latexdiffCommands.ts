@@ -539,7 +539,6 @@ function normalizeOutputsByRound(
   return new Map([...roundMap.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-
 /**
  * Get file description for display - trust source field.
  */
@@ -690,9 +689,9 @@ async function runLatexdiffFromMetadata(params: {
     }
 
     results.push({
-        success: diffResult.success,
-        message: diffResult.message,
-        basePath: operation.base.absolutePath,
+      success: diffResult.success,
+      message: diffResult.message,
+      basePath: operation.base.absolutePath,
       diffFileName: diffResult.diffFileName,
       description: operation.description,
     });
