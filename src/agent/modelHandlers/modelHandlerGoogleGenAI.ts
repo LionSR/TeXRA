@@ -78,6 +78,7 @@ import { toGoogleTools } from './toolConversion';
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { CreateResponseOptions } from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
 
@@ -307,14 +308,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
-    client: GoogleGenAI,
-    messages: Content[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<Content>,
   ): Promise<GenerateContentResponse> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = options;
     if (messages.length === 0) {
       this.logger.error('Cannot create response from empty messages array.');
       throw new Error('Messages array cannot be empty.');
