@@ -61,11 +61,7 @@ export function createAgentFinalizeNode<
     async prep(
       shared: Shared,
     ): Promise<
-      FinalizeNodeContext<
-        Shared['lifecycle'],
-        Shared['hooks'],
-        Shared['agent']
-      >
+      FinalizeNodeContext<Shared['lifecycle'], Shared['hooks'], Shared['agent']>
     > {
       setLifecyclePhase(shared.lifecycle, options.finalizePhase);
       return {
