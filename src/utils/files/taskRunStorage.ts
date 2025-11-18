@@ -409,19 +409,6 @@ export class TaskRunFileService {
     this.hasPreparedSnapshot = true;
   }
 
-  /**
-   * Get the display label (filename) from a relative path.
-   * @param relativePath - Workspace-relative path
-   * @returns The basename of the path
-   */
-  public getDisplayLabel(relativePath: string): string {
-    if (!relativePath) {
-      return '';
-    }
-    const normalized = relativePath.replace(/\\/g, '/');
-    const segments = normalized.split('/').filter(Boolean);
-    return segments.length === 0 ? normalized : segments.at(-1)!;
-  }
 
   /**
    * Create a FileLocation from a workspace-relative path, with run-storage awareness.
