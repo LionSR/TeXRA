@@ -145,8 +145,8 @@ class StubOpenAIResponsesHandler extends ModelHandlerOpenAIResponse {
     return false;
   }
 
-  override checkStopConditions(): [boolean, boolean] {
-    return [true, true];
+  override checkStopConditions() {
+    return { endTurn: true, shouldStop: true };
   }
 }
 

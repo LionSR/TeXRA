@@ -323,11 +323,14 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
     });
 
     return stage.run(async () => {
-      const { response: newResponse, usage: responseUsage, stopReason } =
-        options.modelHandler.extractResponse(
-          state.responseObject,
-          options.agentSetting.endTag,
-        );
+      const {
+        response: newResponse,
+        usage: responseUsage,
+        stopReason,
+      } = options.modelHandler.extractResponse(
+        state.responseObject,
+        options.agentSetting.endTag,
+      );
 
       if (newResponse) {
         options.logger.debug(`Model response: ${newResponse.slice(0, 100)}`);
@@ -606,7 +609,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
         };
       }
 
-      const [shouldEndTurn, shouldStop] =
+      const { endTurn: shouldEndTurn, shouldStop } =
         options.modelHandler.checkStopConditions(
           stopReason,
           processedResponse,

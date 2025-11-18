@@ -81,10 +81,7 @@ export class ModelHandlerXAI extends ModelHandlerOpenAI {
   }
 
   /** Extracts response text and usage statistics from API response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): ExtractResponseResult {
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     const result = super.extractResponse(responseObject, endTag);
 
     // Extract and add reasoning tokens for usage calculation
