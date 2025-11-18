@@ -202,7 +202,10 @@ export class LatexMediaManager {
         result.value &&
         result.value.length > 0
       ) {
-        workspaceState.media.addMediaFiles(result.value);
+        // Convert FileLocation[] to string[] for legacy media attachment API
+        workspaceState.media.addMediaFiles(
+          result.value.map((loc) => loc.absolutePath),
+        );
       }
     });
     if (logSummary) {
