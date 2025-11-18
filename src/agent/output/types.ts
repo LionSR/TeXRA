@@ -128,14 +128,16 @@ export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
 /**
  * Internal mapping structure for file relationships.
- * Used for computing diffs and determining file origins.
- * Note: z.map() exists in Zod v3+ but validation isn't needed for this internal structure.
+ * Uses FileLocation directly as keys/values - no string conversions.
+ * Map keys use FileLocation objects (compared by reference in Map).
  */
 export interface RoundFileMapping {
-  baseToOutput: Map<string, string>;
-  prevToOutput: Map<string, string>;
-  originByOutput: Map<string, string | undefined>;
-  locationByOutput: Map<string, FileLocation>;
+  /** Maps base files to their corresponding output files */
+  baseToOutput: Map<FileLocation, FileLocation>;
+  /** Maps previous round outputs to current round outputs */
+  prevToOutput: Map<FileLocation, FileLocation>;
+  /** Maps each output to its original base file (for tracking lineage) */
+  originByOutput: Map<FileLocation, FileLocation | undefined>;
 }
 
 // ============================================================================
