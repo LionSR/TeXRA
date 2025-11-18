@@ -61,6 +61,7 @@ import {
   createWorkspaceLocation,
   flexibleFS,
   type FileLocation,
+  type AgentFileLocation,
 } from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
@@ -105,7 +106,8 @@ interface RoundPipelineContext {
   workspaceState: AgentWorkspaceState;
   preparedMessages: any[];
   prefill: string;
-  outputLocation: FileLocation;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation: AgentFileLocation;
 }
 
 /**
@@ -114,10 +116,12 @@ interface RoundPipelineContext {
  * across multiple conversation rounds.
  */
 export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
-  /** File paths for each round's raw model output. */
-  protected outputFile: FileLocation[];
-  protected outputFiles: { [key: number]: FileLocation[] };
-  protected baseFiles: FileLocation[];
+  /** File paths for each round's raw model output - always workspace or runStorage */
+  protected outputFile: AgentFileLocation[];
+  /** Multi-file output locations per round - always workspace or runStorage */
+  protected outputFiles: { [key: number]: AgentFileLocation[] };
+  /** Base input files - always workspace or runStorage */
+  protected baseFiles: AgentFileLocation[];
   protected override agentSetting: AgentWorkflowSetting;
   protected useScratchpad: boolean = false;
   protected logId: number = 0;
@@ -161,7 +165,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Initialize fileService first so we can use it below
     this.fileService = new TaskRunFileService(context.executionId);
 
-    this.outputFile = new Array<FileLocation>(numRounds);
+    this.outputFile = new Array<AgentFileLocation>(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
       this.outputFiles[i] = [];
@@ -304,8 +308,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Generates output file path for specified conversation round.
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
+   * @returns AgentFileLocation - always workspace or runStorage (never external)
    */
-  protected getOutputFileLocation(currRound: number): FileLocation {
+  protected getOutputFileLocation(currRound: number): AgentFileLocation {
     const baseOutputFile = this.agentConfig.inputFile;
     const fileExtension = this.useScratchpad
       ? 'xml'
@@ -320,7 +325,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.agentConfig.editedFile || undefined,
     );
 
-    return this.fileService.createLocation(fileName);
+    // fileService.createLocation always returns workspace or runStorage for agent outputs
+    return this.fileService.createLocation(fileName) as AgentFileLocation;
   }
 
   /**

@@ -170,7 +170,9 @@ export class TikzPictureManager {
       // Create build directory location (run-storage aware if fileService available)
       const buildDirLocation = this.fileService
         ? this.fileService.createLocation(buildRelativePath)
-        : latexFile; // Fallback
+        : pathToLocation(
+            path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
+          ); // Fallback: construct proper build directory path
 
       await flexibleFS.ensureDir(buildDirLocation);
 

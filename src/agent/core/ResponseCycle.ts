@@ -1,6 +1,6 @@
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { TaskRunFileService, FileLocation } from '@utils/files';
+import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
@@ -23,7 +23,8 @@ export interface ResponseCycleOptions<C = unknown>
 export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
   messages: ProviderMessage[];
-  outputLocation: FileLocation;
+  /** Agent output location - always workspace or runStorage (never external) */
+  outputLocation: AgentFileLocation;
   store: AgentSharedStore;
 }
 
