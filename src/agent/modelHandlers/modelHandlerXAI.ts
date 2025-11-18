@@ -9,6 +9,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { CreateResponseOptions } from './types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.

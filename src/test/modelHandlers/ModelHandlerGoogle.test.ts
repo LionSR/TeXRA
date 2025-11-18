@@ -212,7 +212,11 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       { role: 'user', parts: [createPartFromText('Continue?')] },
     ];
 
-    await handler.createResponse(fakeClient, messages, 0);
+    await handler.createResponse({
+      client: fakeClient,
+      messages,
+      temperature: 0,
+    });
 
     assert.equal(
       capturedHistory.length,
@@ -318,7 +322,11 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
-    const response = await handler.createResponse(fakeClient, messages, 0);
+    const response = await handler.createResponse({
+      client: fakeClient,
+      messages,
+      temperature: 0,
+    });
 
     assert.ok(response, 'expected a response to be returned');
     const candidate = response.candidates?.[0];
@@ -408,7 +416,11 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       { role: 'user', parts: [createPartFromText('Hi there')] },
     ];
 
-    const response = await handler.createResponse(fakeClient, messages, 0);
+    const response = await handler.createResponse({
+      client: fakeClient,
+      messages,
+      temperature: 0,
+    });
 
     assert.ok(response.automaticFunctionCallingHistory);
     assert.equal(response.automaticFunctionCallingHistory?.length, 2);

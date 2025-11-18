@@ -61,6 +61,7 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
+import type { CreateResponseOptions } from './types/IModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -151,14 +152,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
-    client: OpenAI,
-    messages: ChatCompletionMessageParam[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ChatCompletionMessageParam>,
   ): Promise<any> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
 

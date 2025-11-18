@@ -53,6 +53,7 @@ import { ModelHandler } from './ModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { CreateResponseOptions } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {
@@ -487,14 +488,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * request and relies on `previous_response_id` for conversation context.
    */
   async createResponse(
-    client: OpenAI,
-    messages: ResponseInputItem[],
-    temperature: number,
-    systemPrompt?: string,
-    _endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
+    options: CreateResponseOptions<ResponseInputItem>,
   ): Promise<Response> {
+    const { client, messages, temperature, systemPrompt, signal, tools } =
+      options;
+    const _endTag = options.endTag; // Unused but kept for compatibility
     const streamingToggleEnabled = this.getStreamingConfig();
     const backgroundToggleEnabled = getConfig<boolean>(
       'texra.model.useBackgroundResponses',

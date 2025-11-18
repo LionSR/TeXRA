@@ -37,7 +37,10 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
-import type { IModelHandler } from './types/IModelHandler';
+import type {
+  IModelHandler,
+  CreateResponseOptions,
+} from './types/IModelHandler';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -434,17 +437,10 @@ export abstract class ModelHandler<
 
   /**
    * Generates a model response using the provider's API.
+   * @param options Options for creating the response
    * @returns Promise resolving to provider-specific response object
    */
-  abstract createResponse(
-    client: C,
-    messages: M[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
-  ): Promise<any>;
+  abstract createResponse(options: CreateResponseOptions<M>): Promise<any>;
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.

@@ -203,17 +203,17 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
 
     try {
       const { response, responseTime } = await stage.run(async () => {
-        const invocation = await options.modelHandler.createResponse(
-          options.client,
-          state.messages,
-          options.agentSetting.temperature || 0.0,
-          state.systemPrompt,
-          options.agentSetting.endTag,
-          abortController.signal,
-          options.modelHandler.capabilities.supportsFunctionCalling
+        const invocation = await options.modelHandler.createResponse({
+          client: options.client,
+          messages: state.messages,
+          temperature: options.agentSetting.temperature || 0.0,
+          systemPrompt: state.systemPrompt,
+          endTag: options.agentSetting.endTag,
+          signal: abortController.signal,
+          tools: options.modelHandler.capabilities.supportsFunctionCalling
             ? options.agentSetting.tools
             : undefined,
-        );
+        });
 
         const elapsed = state.startTime
           ? (Date.now() - state.startTime) / 1000
