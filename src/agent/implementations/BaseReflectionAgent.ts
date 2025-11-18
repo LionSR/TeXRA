@@ -461,38 +461,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       onRoundFinalized: this.getUsageRecorder('workflow'),
     });
 
+    // Determine the actual endTurn value based on whether we run response cycle
+    let finalEndTurn: boolean;
+
     if (!endTurn) {
-      const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
         outputFile: outputPath,
         store,
       });
-
-      const artifacts = await this.handleRoundCompletion(
-        roundIndex,
-        store.round,
-        store.run,
-        {
-          outputFile: outputPath,
-          endTurn: cycleResult.endTurn,
-          runGroupId,
-        },
-      );
-
-      return {
-        roundState: store.round,
-        runState: store.run,
-        messages: updatedMessages,
-        shouldContinue: cycleResult.endTurn,
-        workspaceState: store.workspace,
-        outputArtifacts: artifacts,
-      };
+      finalEndTurn = cycleResult.endTurn;
+    } else {
+      await store.finalizeRound();
+      finalEndTurn = endTurn;
     }
 
-    await store.finalizeRound();
-
+    // Single point for completion and return - no duplication
     const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
     const artifacts = await this.handleRoundCompletion(
       roundIndex,
@@ -500,7 +485,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       store.run,
       {
         outputFile: outputPath,
-        endTurn,
+        endTurn: finalEndTurn,
         runGroupId,
       },
     );
@@ -509,8 +494,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       roundState: store.round,
       runState: store.run,
       messages: updatedMessages,
-      shouldContinue: endTurn,
-      workspaceState,
+      shouldContinue: finalEndTurn,
+      workspaceState: store.workspace,  // Always use store.workspace (single source)
       outputArtifacts: artifacts,
     };
   }
@@ -544,6 +529,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const stateRound = new ConversationRoundState(currRound);
     const promptBuilder = this.getPromptBuilder();
 
+    let preparedMessages: any[];
+
     if (currRound === 0) {
       const { systemPrompt, userRequest, userPrefix } =
         await promptBuilder.buildInitialPrompts();
@@ -569,50 +556,41 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         this.logger.info(`Saved input prompt to ${promptPath}`);
       }
 
-      const initialMessages = await this.modelHandler.initializeMessages(
+      preparedMessages = await this.modelHandler.initializeMessages(
         prefixWithStats,
         userRequest,
         workspaceState.media.files,
         systemPrompt,
       );
+    } else {
+      const userRequest = await promptBuilder.buildUserRequest(currRound);
+      let userMessage = userRequest ? `${userRequest}\n` : '';
+      if (workspaceState.document.texcountStats) {
+        userMessage = `${workspaceState.document.texcountStats}${userMessage}`;
+      }
 
-      const prefill = await promptBuilder.buildPrefill(currRound);
-      workspaceState.assembly.updateAccumulatedOutput(prefill);
+      if (!userMessage.trim()) {
+        return {
+          stateRound,
+          preparedMessages: messages,
+          skip: true,
+        };
+      }
 
-      return {
-        stateRound,
-        preparedMessages: initialMessages,
-        prefill,
-        skip: false,
-      };
+      preparedMessages = await this.modelHandler.createRoundMessages(
+        messages,
+        userMessage,
+        workspaceState.media.files,
+      );
     }
 
-    const userRequest = await promptBuilder.buildUserRequest(currRound);
-    let userMessage = userRequest ? `${userRequest}\n` : '';
-    if (workspaceState.document.texcountStats) {
-      userMessage = `${workspaceState.document.texcountStats}${userMessage}`;
-    }
-
-    if (!userMessage.trim()) {
-      return {
-        stateRound,
-        preparedMessages: messages,
-        skip: true,
-      };
-    }
-
-    const roundMessages = await this.modelHandler.createRoundMessages(
-      messages,
-      userMessage,
-      workspaceState.media.files,
-    );
-
+    // Single point for prefill logic - no duplication
     const prefill = await promptBuilder.buildPrefill(currRound);
     workspaceState.assembly.updateAccumulatedOutput(prefill);
 
     return {
       stateRound,
-      preparedMessages: roundMessages,
+      preparedMessages,
       prefill,
       skip: false,
     };
