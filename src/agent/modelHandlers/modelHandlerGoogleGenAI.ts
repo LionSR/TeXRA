@@ -50,6 +50,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import { ReasoningEffort } from '@model/ModelConfig';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
@@ -96,6 +97,10 @@ function findLastTextPart(
   }
   return undefined;
 }
+
+type GoogleGenerationConfig = GenerateContentConfig & {
+  thinkingLevel?: 'low' | 'medium' | 'high';
+};
 
 /**
  * Ensures a function call has an ID. Google's SDK may return function calls
@@ -178,6 +183,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.config.capabilities.supportsVision ||
       this.config.capabilities.supportsNativeAudio
     );
+  }
+
+  private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
+    const requestedLevel = this.capabilities.reasoningEffort;
+    const isGemini3 = this.config.fullName.includes('gemini-3-pro');
+
+    if (requestedLevel === ReasoningEffort.NONE) {
+      if (isGemini3) {
+        this.logger.warn(
+          "Gemini 3 Pro can't disable thinking. Using thinking_level 'high'.",
+        );
+        return 'high';
+      }
+      return undefined;
+    }
+
+    if (requestedLevel === ReasoningEffort.MEDIUM) {
+      this.logger.warn(
+        "Google models don't support thinking_level 'medium'. Falling back to 'high'.",
+      );
+      return 'high';
+    }
+
+    return requestedLevel as 'low' | 'high';
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -339,13 +368,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GenerateContentConfig = {
+    const generationConfig: GoogleGenerationConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
     };
 
+    const thinkingLevel = this.getThinkingLevel();
+    if (thinkingLevel && this.config.fullName.includes('gemini-3-pro')) {
+      generationConfig.thinkingLevel = thinkingLevel;
+    }
+
     if (
+      this.config.fullName.includes('gemini-3-pro-preview') ||
       this.config.fullName.includes('2.5-pro') ||
       this.config.fullName.includes('2.5-flash') ||
       this.config.fullName.includes('flash-latest')
