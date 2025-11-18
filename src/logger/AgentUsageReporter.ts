@@ -22,7 +22,7 @@ export class AgentUsageReporter {
    */
   public report(stats: ExtendedTokenUsageStats, runId?: string): void {
     const usage = {
-      inputTokens: stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
+      inputTokens: stats.inputTokens,
       outputTokens: stats.outputTokens,
       cost: stats.cost,
     };

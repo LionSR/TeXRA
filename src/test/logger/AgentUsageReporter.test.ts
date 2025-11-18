@@ -46,7 +46,7 @@ describe('AgentUsageReporter', () => {
         stream: streamId,
         runId,
         usage: {
-          inputTokens: 14,
+          inputTokens: 10,
           outputTokens: 5,
           cost: 0.25,
         },
