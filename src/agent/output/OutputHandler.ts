@@ -372,8 +372,12 @@ export class OutputHandler implements IOutputHandler {
           originalFile,
           relativePath,
         );
-        // Use baseLocationFor for base files (not in output map!)
-        const diffBaseLocation = baseLocationFor(diffBaseRelative);
+        // getEffectiveBaseFile can return originalFile (an output path) or baseFile (a base path)
+        // Use the correct lookup based on which was returned
+        const diffBaseLocation =
+          diffBaseRelative === originalFile
+            ? locationFor(diffBaseRelative) // originalFile is in output map
+            : baseLocationFor(diffBaseRelative); // baseFile is in base map
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
           location,
