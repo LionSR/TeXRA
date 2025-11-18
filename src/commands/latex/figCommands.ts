@@ -182,7 +182,9 @@ async function handleCompileTikzFigures(): Promise<void> {
         });
 
         // Extract and compile TikZ pictures
-        const compiledFiles = await tikzPictureManager.compile(filePath);
+        const compiledFiles = await tikzPictureManager.compile(
+          pathToLocation(filePath),
+        );
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files
