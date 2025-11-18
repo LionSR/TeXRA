@@ -749,13 +749,12 @@ export function pathToLocation(target: string): FileLocation {
     if (!workspaceRoot) {
       return createExternalLocation(target);
     }
-    // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
-    const normalized = path.normalize(target);
-    const absolutePath = path.join(workspaceRoot, normalized);
-    return createWorkspaceLocation(absolutePath, normalized);
+    // path.join() normalizes automatically
+    const absolutePath = path.join(workspaceRoot, target);
+    return createWorkspaceLocation(absolutePath, target);
   }
 
-  // Normalize absolute path (idempotent - safe to call on normalized paths)
+  // Normalize only at entry point from external strings
   const normalized = path.normalize(target);
 
   // Check if in workspace
