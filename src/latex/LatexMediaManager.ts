@@ -29,7 +29,7 @@ export class LatexMediaManager {
   ) {}
 
   private async mirrorFigureDependencies(
-    latexFile: string,
+    latexFile: FileLocation,
     figures: string[],
     groupId: string | null | undefined,
   ): Promise<void> {
@@ -41,7 +41,7 @@ export class LatexMediaManager {
       return;
     }
 
-    const baseDir = path.dirname(latexFile);
+    const baseDir = path.dirname(latexFile.absolutePath);
     const targetLocations = new Set<FileLocation>();
     for (const relative of figures) {
       if (!relative) {
@@ -174,11 +174,7 @@ export class LatexMediaManager {
         );
         workspaceState.media.addMediaFiles(result.value);
         mirrorTasks.push(
-          this.mirrorFigureDependencies(
-            file.absolutePath,
-            result.value,
-            activeGroupId,
-          ),
+          this.mirrorFigureDependencies(file, result.value, activeGroupId),
         );
       }
     });
