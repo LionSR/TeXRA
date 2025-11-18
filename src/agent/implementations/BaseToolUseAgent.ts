@@ -132,14 +132,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     return this.sessionLifecycle.hasQueuedFollowUp();
   }
 
-  public async runToolUseCycle(
-    options: ToolUseCycleOptions<C>,
-    messages: ProviderMessage[],
-    store: AgentSharedStore,
-  ): Promise<void> {
-    await runToolUseCycle({ options, messages, store });
-  }
-
   public async applyFollowUpMessage(
     followUp: string,
     messages: ProviderMessage[],
@@ -149,10 +141,6 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       await this.modelHandler.createUserFollowUpMessages(messages, followUp);
     this.getActiveState().conversation = [...updatedMessages];
     return this.getActiveState().conversation;
-  }
-
-  public logFinalizeWarning(message: string, error: unknown): void {
-    this.logger.warn(message, undefined, undefined, error);
   }
 
   public override interrupt(): void {
@@ -189,7 +177,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           prepareState: () => this.prepareInitialSessionState(),
           buildCycleOptions: (store) => this.buildToolUseCycleOptions(store),
           runCycle: (options, messages, store) =>
-            this.runToolUseCycle(options, messages, store),
+            runToolUseCycle({ options, messages, store }),
           checkInterruption: () => this.checkInterruption(),
           hasQueuedFollowUp: () => this.hasQueuedFollowUp(),
           enterWaitingState: () => this.enterWaitingState(),
@@ -199,7 +187,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           applyFollowUp: (followUp, messages) =>
             this.applyFollowUpMessage(followUp, messages),
           logFinalizeWarning: (message, error) =>
-            this.logFinalizeWarning(message, error),
+            this.logger.warn(message, undefined, undefined, error),
           cleanup: async () => {
             await baseHooks.cleanup();
             this.sessionLifecycle.dispose();
