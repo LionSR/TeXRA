@@ -21,6 +21,27 @@ const GOOGLE_DEFAULT_CAPABILITIES: ModelCapabilities = {
 };
 
 export const GOOGLE_MODELS: Record<string, ModelConfig> = {
+  gemini3p: {
+    name: 'gemini3p',
+    fullName: 'gemini-3-pro-preview',
+    openrouterFullName: 'google/gemini-3-pro-preview',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 65536,
+    contextWindow: 1048576,
+    inputPrice: 2.0, // 4 for >200K
+    outputPrice: 12.0, // 18 for >200K
+    capabilities: {
+      ...GOOGLE_DEFAULT_CAPABILITIES,
+      supportsPromptCaching: true,
+      supportsAutoPromptCaching: true,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      supportsNativeCodeExecution: true,
+      supportsNativeWebSearch: true,
+      supportsNativeMCPServer: true,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+  },
   gemini25p: {
     name: 'gemini25p',
     fullName: 'gemini-2.5-pro',
