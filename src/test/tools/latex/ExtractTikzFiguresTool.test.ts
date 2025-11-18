@@ -3,7 +3,7 @@ import * as assert from 'assert';
 
 // Local imports - tools
 import { ExtractTikzFiguresTool } from '@tools/latex';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, pathToLocation } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 
 describe('ExtractTikzFiguresTool', () => {
@@ -40,7 +40,7 @@ describe('ExtractTikzFiguresTool', () => {
     ];
     (
       tikzPictureManager as unknown as { compile: typeof originalCompile }
-    ).compile = async () => ['build/slides/fig_a.pdf'];
+    ).compile = async () => [pathToLocation('build/slides/fig_a.pdf')];
 
     const tool = new ExtractTikzFiguresTool();
     const result = await tool.call({

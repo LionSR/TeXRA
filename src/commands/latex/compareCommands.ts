@@ -8,7 +8,8 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, WorkspaceFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 
 const CHANNEL = 'CompareCommands';
@@ -28,37 +29,41 @@ export function registerCompareCommands(context: vscode.ExtensionContext) {
  * Handles the compare command to show two files in VS Code's built-in diff editor
  */
 async function handleCompare(
-  inputFile: string,
-  baseFile: string,
-  editedFile: string,
+  inputLocation: FileLocation,
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
 ) {
   try {
-    const fileToUse = baseFile || inputFile;
-    if (!fileToUse || !editedFile) {
+    const fileToUseLocation = baseLocation || inputLocation;
+    if (!fileToUseLocation || !editedLocation) {
       vscode.window.showErrorMessage(
         'Both base file and edited file must be selected for comparison',
       );
       return;
     }
 
-    // Create URIs for both files
-    const baseUri = vscode.Uri.file(flexibleFS.toAbsolutePath(fileToUse));
-    const editedUri = vscode.Uri.file(flexibleFS.toAbsolutePath(editedFile));
-
     // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUse))) {
-      vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
+    if (!(await flexibleFS.exists(fileToUseLocation))) {
+      vscode.window.showErrorMessage(
+        `Base file not found: ${fileToUseLocation.absolutePath}`,
+      );
       return;
     }
 
-    if (!(await flexibleFS.exists(editedFile))) {
-      vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
+    if (!(await flexibleFS.exists(editedLocation))) {
+      vscode.window.showErrorMessage(
+        `Edited file not found: ${editedLocation.absolutePath}`,
+      );
       return;
     }
+
+    // Create URIs for diff editor
+    const baseUri = vscode.Uri.file(fileToUseLocation.absolutePath);
+    const editedUri = vscode.Uri.file(editedLocation.absolutePath);
 
     // Create title for the diff editor
-    const baseFileName = path.basename(fileToUse);
-    const editedFileName = path.basename(editedFile);
+    const baseFileName = path.basename(fileToUseLocation.absolutePath);
+    const editedFileName = path.basename(editedLocation.absolutePath);
     const title = `Compare: ${editedFileName} ↔ ${baseFileName}`;
     // const title = `Compare: ${baseFileName} ↔ ${editedFileName}`;
 
@@ -116,13 +121,13 @@ async function handleCompare(
  * Handles accepting the content of the edited file and overwriting the base file
  */
 async function handleAcceptEdited(
-  inputFile: string,
-  baseFile: string,
-  editedFile: string,
+  inputLocation: FileLocation,
+  baseLocation: FileLocation,
+  editedLocation: FileLocation,
 ) {
   try {
-    const fileToUse = baseFile || inputFile;
-    if (!fileToUse || !editedFile) {
+    const fileToUseLocation = baseLocation || inputLocation;
+    if (!fileToUseLocation || !editedLocation) {
       vscode.window.showErrorMessage(
         'Both base file and edited file must be selected to accept changes',
       );
@@ -130,22 +135,26 @@ async function handleAcceptEdited(
     }
 
     // Verify both files exist
-    if (!(await flexibleFS.exists(fileToUse))) {
-      vscode.window.showErrorMessage(`Base file not found: ${fileToUse}`);
+    if (!(await flexibleFS.exists(fileToUseLocation))) {
+      vscode.window.showErrorMessage(
+        `Base file not found: ${fileToUseLocation.absolutePath}`,
+      );
       return;
     }
 
-    if (!(await flexibleFS.exists(editedFile))) {
-      vscode.window.showErrorMessage(`Edited file not found: ${editedFile}`);
+    if (!(await flexibleFS.exists(editedLocation))) {
+      vscode.window.showErrorMessage(
+        `Edited file not found: ${editedLocation.absolutePath}`,
+      );
       return;
     }
 
-    // Read content from edited file using workspace utilities
-    const editedContent = await flexibleFS.read(editedFile);
+    // Read content from edited file
+    const editedContent = await flexibleFS.read(editedLocation);
 
     // Confirm with user
-    const baseFileName = path.basename(fileToUse);
-    const editedFileName = path.basename(editedFile);
+    const baseFileName = path.basename(fileToUseLocation.absolutePath);
+    const editedFileName = path.basename(editedLocation.absolutePath);
 
     const answer = await vscode.window.showWarningMessage(
       `This will overwrite '${baseFileName}' with content from '${editedFileName}'. Are you sure?`,
@@ -158,9 +167,8 @@ async function handleAcceptEdited(
       return;
     }
 
-    // Write content to base file using workspace utilities
-    const targetPath = flexibleFS.toAbsolutePath(fileToUse);
-    await flexibleFS.write(targetPath, editedContent);
+    // Write content to base file
+    await flexibleFS.write(fileToUseLocation, editedContent);
 
     vscode.window.showInformationMessage(
       `Successfully replaced '${baseFileName}' with content from '${editedFileName}'`,

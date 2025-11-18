@@ -5,20 +5,17 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 import { LatexDiffManager } from './LatexDiffManager';
 import { XmlOutputManager } from './XmlOutputManager';
 import {
-  NamedOutputFile,
+  type FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
   RoundFileMapping,
-  RoundOutputArtifacts,
+  RoundOutput,
 } from './types';
 
 /** Interface describing OutputHandler behavior used by agents. */
 export interface IOutputHandler {
   /** Map of generated output files by round. */
-  outputFiles: { [key: number]: NamedOutputFile[] };
-
-  /** Mapping of source to processed output files by round. */
-  outputMappings: { [key: number]: NamedOutputFile[] };
+  outputFiles: { [key: number]: OutputFileInfo[] };
 
   /** XML manager for parsing and splitting outputs. */
   xmlManager: XmlOutputManager;
@@ -27,20 +24,20 @@ export interface IOutputHandler {
   readonly diffManager: LatexDiffManager;
 
   /** Ensure storage for a round and return its outputs. */
-  ensureRound(round: number): NamedOutputFile[];
+  ensureRound(round: number): OutputFileInfo[];
 
   /** Determine whether a round has generated outputs. */
   hasRoundOutputs(round: number): boolean;
 
   /** Indent a single LaTeX file for readability. */
-  indentLatexFile(filePath: string): Promise<void>;
+  indentLatexFile(fileLocation: FileLocation): Promise<void>;
 
   /** Indent multiple LaTeX files for readability. */
-  indentLatexFiles(filePaths: string[]): Promise<void>;
+  indentLatexFiles(fileLocations: FileLocation[]): Promise<void>;
 
   /** Process output files from XML or direct input. */
   processOutputFiles(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void>;
@@ -53,14 +50,14 @@ export interface IOutputHandler {
 
   /** Validate expected output files for the given round. */
   validateExpectedOutputs(
-    outputFile: string,
+    outputLocation: FileLocation,
     currRound: number,
     stage?: AgentLogStage,
   ): Promise<void>;
 
   /** Finalize processing for a round. */
   finalizeRound(
-    outputFile: string,
+    outputFile: FileLocation,
     currRound: number,
     options: {
       endTurn: boolean;
@@ -73,7 +70,7 @@ export interface IOutputHandler {
     rounds: Map<number, OutputFileInfo[]>,
   ): void;
 
-  getRoundArtifacts(round: number): Promise<RoundOutputArtifacts>;
+  getRoundArtifacts(round: number): Promise<RoundOutput>;
   getRoundXmlSummary(round: number): OutputXmlSummary;
   setActiveRun(runId?: string | null): void;
 }

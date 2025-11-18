@@ -10,7 +10,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { AgentLogger } from '@logger/AgentLogger';
-import { StorageFS, normalizeExecutionId } from '@utils/files';
+import { StorageFS } from '@utils/files';
 import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
@@ -94,14 +94,9 @@ export const ToolUseSnapshotStore = {
     if (!(await ensureInitialized())) {
       return null;
     }
-    const executionId = normalizeExecutionId(payload.executionId);
-    if (!executionId) {
-      throw new Error('Execution id is required to store tool use snapshots');
-    }
-
     const snapshot = {
       version: TOOL_USE_SNAPSHOT_VERSION,
-      executionId,
+      executionId: payload.executionId,
       streamId: payload.streamId,
       agentConfig: payload.agentConfig,
       messages: structuredClone(payload.messages),
@@ -110,7 +105,7 @@ export const ToolUseSnapshotStore = {
     } as const;
 
     const validated = ToolUseSessionSnapshotSchema.parse(snapshot);
-    await StorageFS.writeJson(getSnapshotPath(executionId), validated);
+    await StorageFS.writeJson(getSnapshotPath(payload.executionId), validated);
     return validated;
   },
 
@@ -121,12 +116,11 @@ export const ToolUseSnapshotStore = {
    * @returns Normalized snapshot or null.
    */
   async load(executionId: ExecutionId): Promise<ToolUseSessionSnapshot | null> {
-    const normalizedExecutionId = normalizeExecutionId(executionId);
-    if (!(await ensureInitialized()) || !normalizedExecutionId) {
+    if (!(await ensureInitialized())) {
       return null;
     }
 
-    const snapshotPath = getSnapshotPath(normalizedExecutionId);
+    const snapshotPath = getSnapshotPath(executionId);
 
     try {
       const stored =
@@ -166,12 +160,7 @@ export const ToolUseSnapshotStore = {
       if (type !== vscode.FileType.File || !name.endsWith('.json')) {
         continue;
       }
-      const executionId = normalizeExecutionId(
-        name.replace(/\.json$/, '') as ExecutionId,
-      );
-      if (!executionId) {
-        continue;
-      }
+      const executionId = name.replace(/\.json$/, '') as ExecutionId;
       const snapshot = await this.load(executionId);
       if (snapshot) {
         snapshots.push(snapshot);
@@ -190,13 +179,8 @@ export const ToolUseSnapshotStore = {
       return;
     }
 
-    const normalizedExecutionId = normalizeExecutionId(executionId);
-    if (!normalizedExecutionId) {
-      throw new Error('Execution id is required to delete tool use snapshots');
-    }
-
     try {
-      await StorageFS.delete(getSnapshotPath(normalizedExecutionId));
+      await StorageFS.delete(getSnapshotPath(executionId));
     } catch (error) {
       if (
         error instanceof vscode.FileSystemError &&
