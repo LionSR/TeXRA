@@ -400,7 +400,8 @@ export class TaskRunFileService {
 
     await this.ensureRunDirectory();
 
-    const linkTargets = new Set<string>();
+    const linkTargets = new Set<FileLocation>();
+    const workspaceRoot = WorkspaceFS.getPath()!;
     const registerLink = (candidate?: string | null) => {
       if (!candidate) {
         return;
@@ -409,7 +410,9 @@ export class TaskRunFileService {
       if (trimmed.length === 0) {
         return;
       }
-      linkTargets.add(trimmed);
+      // Convert absolute path to FileLocation
+      const relativePath = path.relative(workspaceRoot, trimmed);
+      linkTargets.add(createWorkspaceLocation(trimmed, relativePath));
     };
 
     if (options.mirrorBaseFiles !== false) {
