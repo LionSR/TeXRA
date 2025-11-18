@@ -134,7 +134,8 @@ class ReflectionRoundNode<C> extends BaseNode<ReflectionRunShared<C>> {
 
     // Update flow state
     shared.state.runState = result.runState;
-    shared.state.conversation = [...result.messages];
+    // Direct reference - messages aren't mutated by subsequent operations
+    shared.state.conversation = result.messages;
     shared.state.continueRounds = result.shouldContinue;
     shared.state.currentRound += 1;
     shared.state.runState.incrementRounds();
