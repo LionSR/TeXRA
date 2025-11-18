@@ -338,9 +338,23 @@ export class OutputHandler implements IOutputHandler {
       prevByOutput.set(output, prev);
     });
 
+    // Create lookup maps for FileLocations
+    // Base files: from this.baseFiles
+    const baseLocationByPath = new Map<string, FileLocation>();
+    this.baseFiles.forEach((loc) => {
+      baseLocationByPath.set(getComparablePath(loc), loc);
+    });
+
+    // Output files: from mapping.locationByOutput (includes current + previous outputs)
     const locationFor = (relative: string | null): FileLocation | null => {
       if (!relative) return null;
       return mapping.locationByOutput.get(relative) ?? null;
+    };
+
+    // Base file locations (not in output map!)
+    const baseLocationFor = (relative: string | null): FileLocation | null => {
+      if (!relative) return null;
+      return baseLocationByPath.get(relative) ?? null;
     };
 
     // Parallelize diff computation for better performance
@@ -358,7 +372,8 @@ export class OutputHandler implements IOutputHandler {
           originalFile,
           relativePath,
         );
-        const diffBaseLocation = locationFor(diffBaseRelative);
+        // Use baseLocationFor for base files (not in output map!)
+        const diffBaseLocation = baseLocationFor(diffBaseRelative);
         const stats = await this.diffStatsManager.computeDiffStats(
           diffBaseLocation,
           location,
