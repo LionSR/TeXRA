@@ -372,27 +372,53 @@ export class OutputHandler implements IOutputHandler {
   /**
    * Compute mapping metadata for a round on-demand.
    * Uses string keys (comparable paths) with FileLocation values for robust lookups.
+   * All maps are indexed by OUTPUT path for efficient lineage tracking.
    */
   public getRoundMapping(currRound: number): RoundFileMapping {
     const currentData = this.rounds.get(currRound);
     const currentOutputs = currentData?.outputs ?? [];
     const currentLocations = currentOutputs.map((entry) => entry.location);
 
-    // Create string → FileLocation mappings
-    const baseToOutput = createFileMapping(
+    // Create forward mapping: base → output
+    const forwardBaseToOutput = createFileMapping(
       this.baseFiles,
       currentLocations,
       'contains',
     );
 
+    // Reverse to: output path → base FileLocation (for efficient lookup in gatherOutputFileInfo)
+    const baseToOutput = new Map<string, FileLocation>();
+    for (const [basePath, outputLoc] of forwardBaseToOutput) {
+      const baseLoc = this.baseFiles.find(
+        (f) => getComparablePath(f) === basePath,
+      );
+      if (baseLoc) {
+        baseToOutput.set(getComparablePath(outputLoc), baseLoc);
+      }
+    }
+
     const prevData = currRound > 0 ? this.rounds.get(currRound - 1) : undefined;
     const prevOutputs = prevData?.outputs ?? [];
     const prevLocations = prevOutputs.map((entry) => entry.location);
 
-    const prevToOutput =
+    // Create forward mapping: prev → current output
+    const forwardPrevToOutput =
       currRound > 0
         ? createFileMapping(prevLocations, currentLocations, 'basename', true)
         : new Map<string, FileLocation>();
+
+    // Reverse to: output path → prev FileLocation (for efficient lookup)
+    const prevToOutput = new Map<string, FileLocation>();
+    if (currRound > 0) {
+      for (const [prevPath, outputLoc] of forwardPrevToOutput) {
+        const prevLoc = prevLocations.find(
+          (f) => getComparablePath(f) === prevPath,
+        );
+        if (prevLoc) {
+          prevToOutput.set(getComparablePath(outputLoc), prevLoc);
+        }
+      }
+    }
 
     // Map each output to its original base file by matching source name
     const originByOutput = new Map<string, FileLocation | undefined>();
