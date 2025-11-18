@@ -407,7 +407,9 @@ export class OutputHandler implements IOutputHandler {
     const originByOutput = new Map(
       currentOutputs.map((entry) => [
         getComparablePath(entry.location),
-        entry.source,
+        entry.lineage?.original
+          ? getComparablePath(entry.lineage.original)
+          : undefined,
       ]),
     );
 
@@ -678,10 +680,7 @@ export class OutputHandler implements IOutputHandler {
           try {
             const processedLocation = rawLocation ?? outputLocation;
             let processed: OutputFileInfo = {
-              source:
-                outputLocation.kind !== 'external'
-                  ? outputLocation.relativePath
-                  : outputLocation.absolutePath,
+              source: path.basename(outputLocation.absolutePath),
               location: processedLocation,
               lineage: null,
               diff: null,
