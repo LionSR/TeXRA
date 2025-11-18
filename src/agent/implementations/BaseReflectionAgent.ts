@@ -316,25 +316,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.agentConfig.editedFile || undefined,
     );
 
-    // Create FileLocation directly based on storage mode
-    const normalized = fileName ? path.normalize(fileName) : '';
-    const workspaceAbsolute = WorkspaceFS.fullPath(normalized);
-
-    // Check if run storage is enabled
-    if (
-      this.fileService.isRunStorageEnabled() &&
-      this.fileService.metadata.executionId
-    ) {
-      const executionId = this.fileService.metadata.executionId;
-      const runDir = this.fileService.getRunDirectory();
-      if (runDir) {
-        const runAbsolute = path.join(runDir, normalized);
-        return createRunStorageLocation(runAbsolute, normalized, executionId);
-      }
-    }
-
-    // Default to workspace location
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+    return this.fileService.createLocation(fileName);
   }
 
   /**

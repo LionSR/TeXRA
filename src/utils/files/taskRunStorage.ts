@@ -565,6 +565,36 @@ export class TaskRunFileService {
   }
 
   /**
+   * Create a FileLocation from a workspace-relative path, with run-storage awareness.
+   * This is the preferred method for creating output file locations.
+   *
+   * @param relativePath - Workspace-relative path (e.g., "paper.tex")
+   * @returns FileLocation (workspace or runStorage based on current mode)
+   */
+  public createLocation(relativePath: string): FileLocation {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
+      return createExternalLocation(relativePath);
+    }
+
+    const normalized = relativePath ? path.normalize(relativePath) : '';
+    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+
+    // Check if run storage is enabled
+    const executionId = this.activeExecutionId;
+    if (executionId && this.useRunStorage) {
+      const runDir = this.metadata.runDirectory;
+      if (runDir) {
+        const runAbsolute = path.join(runDir, normalized);
+        return createRunStorageLocation(runAbsolute, normalized, executionId);
+      }
+    }
+
+    // Default to workspace location
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
+  }
+
+  /**
    * Move or mirror a workspace artifact into run storage.
    */
   public async relocateToRunStorage(
