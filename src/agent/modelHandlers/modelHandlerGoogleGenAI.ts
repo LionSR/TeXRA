@@ -693,7 +693,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): ExtractResponseResult {
     if (!responseObject) {
       this.logger.error(`Invalid (null) response object received.`);
-      return { response: '', usage: undefined, stopReason: 'UNKNOWN_EMPTY_RESPONSE' };
+      return {
+        response: '',
+        usage: undefined,
+        stopReason: 'UNKNOWN_EMPTY_RESPONSE',
+      };
     }
 
     if (!responseObject.candidates || responseObject.candidates.length === 0) {
@@ -713,7 +717,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.logger.error(
         `Invalid or empty response structure from Google GenAI: ${JSON.stringify(responseObject)}`,
       );
-      return { response: '', usage: undefined, stopReason: 'UNKNOWN_EMPTY_RESPONSE' };
+      return {
+        response: '',
+        usage: undefined,
+        stopReason: 'UNKNOWN_EMPTY_RESPONSE',
+      };
     }
 
     const candidate = responseObject.candidates[0];

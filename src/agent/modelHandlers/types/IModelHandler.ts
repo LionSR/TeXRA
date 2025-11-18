@@ -48,6 +48,16 @@ export interface ExtractResponseResult {
 }
 
 /**
+ * Result from checking stop conditions.
+ */
+export interface StopConditionsResult {
+  /** Whether the turn should end */
+  endTurn: boolean;
+  /** Whether generation should stop */
+  shouldStop: boolean;
+}
+
+/**
  * Common interface implemented by all model handlers.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
@@ -128,10 +138,7 @@ export interface IModelHandler<
   createMediaContent(mediaMessage: MediaEntry[]): any[];
 
   /** Extract the response text and usage from the provider response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): ExtractResponseResult;
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult;
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
@@ -192,7 +199,7 @@ export interface IModelHandler<
 
   /**
    * Evaluate whether to end the turn and/or stop generation.
-   * @returns Tuple of [endTurn, shouldStop]
+   * @returns Object with endTurn and shouldStop flags
    */
   checkStopConditions(
     stopReason: ProviderStopReason,
@@ -200,7 +207,7 @@ export interface IModelHandler<
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
-  ): [boolean, boolean];
+  ): StopConditionsResult;
 
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(

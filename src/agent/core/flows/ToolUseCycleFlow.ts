@@ -416,10 +416,11 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     const toolInfo = options.modelHandler.extractToolUse(state.response);
-    const { response: text, usage, stopReason } = options.modelHandler.extractResponse(
-      state.response,
-      '',
-    );
+    const {
+      response: text,
+      usage,
+      stopReason,
+    } = options.modelHandler.extractResponse(state.response, '');
 
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
