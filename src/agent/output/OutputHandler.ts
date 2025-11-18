@@ -327,30 +327,22 @@ export class OutputHandler implements IOutputHandler {
     const roundOutputs = this.ensureRound(currRound);
     const mapping = this.getRoundMapping(currRound);
 
-    // Reverse maps for lookup: output → base/prev
-    const outputToBase = new Map<FileLocation, FileLocation>();
-    const outputToPrev = new Map<FileLocation, FileLocation>();
-
-    mapping.baseToOutput.forEach((output, base) => {
-      outputToBase.set(output, base);
-    });
-    mapping.prevToOutput.forEach((output, prev) => {
-      outputToPrev.set(output, prev);
-    });
-
     // Parallelize diff computation for better performance
     const infos = await Promise.all(
       roundOutputs.map(async (output) => {
         const location = output.location;
-        const baseLocation = outputToBase.get(location) ?? null;
-        const prevLocation = outputToPrev.get(location) ?? null;
-        const originalLocation = mapping.originByOutput.get(location) ?? null;
+        const locationPath = getComparablePath(location);
+
+        // Look up relationships using string keys (robust to FileLocation reconstruction)
+        const baseLocation = mapping.baseToOutput.get(locationPath) ?? null;
+        const prevLocation = mapping.prevToOutput.get(locationPath) ?? null;
+        const originalLocation =
+          mapping.originByOutput.get(locationPath) ?? null;
 
         // Determine effective diff base: prefer explicit base, fallback to original if different from current
-        // Use path comparison since FileLocation objects are compared by reference in Maps
         const isSameFile =
           originalLocation &&
-          getComparablePath(originalLocation) === getComparablePath(location);
+          getComparablePath(originalLocation) === locationPath;
         const diffBaseLocation =
           baseLocation ??
           (originalLocation && !isSameFile ? originalLocation : null);
@@ -379,14 +371,14 @@ export class OutputHandler implements IOutputHandler {
 
   /**
    * Compute mapping metadata for a round on-demand.
-   * Uses FileLocation objects directly - no string conversions.
+   * Uses string keys (comparable paths) with FileLocation values for robust lookups.
    */
   public getRoundMapping(currRound: number): RoundFileMapping {
     const currentData = this.rounds.get(currRound);
     const currentOutputs = currentData?.outputs ?? [];
     const currentLocations = currentOutputs.map((entry) => entry.location);
 
-    // Create FileLocation → FileLocation mappings
+    // Create string → FileLocation mappings
     const baseToOutput = createFileMapping(
       this.baseFiles,
       currentLocations,
@@ -400,10 +392,10 @@ export class OutputHandler implements IOutputHandler {
     const prevToOutput =
       currRound > 0
         ? createFileMapping(prevLocations, currentLocations, 'basename', true)
-        : new Map<FileLocation, FileLocation>();
+        : new Map<string, FileLocation>();
 
     // Map each output to its original base file by matching source name
-    const originByOutput = new Map<FileLocation, FileLocation | undefined>();
+    const originByOutput = new Map<string, FileLocation | undefined>();
     for (const entry of currentOutputs) {
       // Find the base file that matches this output's source name
       // Use exact basename matching (with or without extension for LaTeX compatibility)
@@ -424,7 +416,8 @@ export class OutputHandler implements IOutputHandler {
         );
       });
 
-      originByOutput.set(entry.location, matchingBase);
+      const outputPath = getComparablePath(entry.location);
+      originByOutput.set(outputPath, matchingBase);
     }
 
     return {
