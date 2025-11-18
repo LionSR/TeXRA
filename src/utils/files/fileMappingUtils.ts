@@ -14,20 +14,21 @@ import type { FileLocation } from './taskRunStorage';
 
 /**
  * Create a mapping between two file lists based on name similarity.
+ * Returns FileLocation → FileLocation map (no string conversions).
  *
- * @param sourceFiles The source file paths
- * @param targetFiles The target file paths
+ * @param sourceFiles The source file locations
+ * @param targetFiles The target file locations
  * @param matchStrategy 'basename' for exact basename matching or 'contains' for substring matching
  * @param roundAware Ignore round numbers in filenames when true
- * @returns Map of source files to their best matching target files
+ * @returns Map of source FileLocations to their best matching target FileLocations
  */
 export function createFileMapping(
   sourceFiles: FileLocation[],
   targetFiles: FileLocation[],
   matchStrategy: 'basename' | 'contains' = 'basename',
   roundAware: boolean = false,
-): Map<string, string> {
-  const fileMapping = new Map<string, string>();
+): Map<FileLocation, FileLocation> {
+  const fileMapping = new Map<FileLocation, FileLocation>();
 
   if (sourceFiles.length === 0 || targetFiles.length === 0) {
     return fileMapping;
@@ -38,7 +39,7 @@ export function createFileMapping(
       target.kind !== 'external' ? target.relativePath : target.absolutePath;
     const targetBaseName = path.basename(targetPath);
 
-    let bestMatch: string | null = null;
+    let bestMatchSource: FileLocation | null = null;
     let bestMatchScore = 0;
 
     for (const sourceFile of sourceFiles) {
@@ -76,12 +77,12 @@ export function createFileMapping(
 
       if (isMatch && matchScore > bestMatchScore) {
         bestMatchScore = matchScore;
-        bestMatch = sourcePath;
+        bestMatchSource = sourceFile;
       }
     }
 
-    if (bestMatch) {
-      fileMapping.set(bestMatch, targetPath);
+    if (bestMatchSource) {
+      fileMapping.set(bestMatchSource, target);
     }
   }
 
@@ -128,7 +129,7 @@ function getPathSegments(filePath: string): string[] {
 }
 
 function buildReplacementLookup(
-  baseToOutputMap: Map<string, string>,
+  baseToOutputMap: Map<FileLocation, FileLocation>,
 ): Map<string, string> {
   const replacements = new Map<string, string>();
 
@@ -143,10 +144,19 @@ function buildReplacementLookup(
     replacements.set(normalizedSource, normalizedTarget);
   };
 
-  for (const [baseFile, outputFile] of baseToOutputMap.entries()) {
-    if (!baseFile || !outputFile) {
+  for (const [baseLoc, outputLoc] of baseToOutputMap.entries()) {
+    if (!baseLoc || !outputLoc) {
       continue;
     }
+
+    const baseFile =
+      baseLoc.kind !== 'external'
+        ? baseLoc.relativePath
+        : baseLoc.absolutePath;
+    const outputFile =
+      outputLoc.kind !== 'external'
+        ? outputLoc.relativePath
+        : outputLoc.absolutePath;
 
     const baseSegments = getPathSegments(baseFile);
     const outputSegments = getPathSegments(outputFile);
@@ -196,7 +206,10 @@ export async function replaceInputCommands(
     `File mappings for input replacement: ${Array.from(
       baseToOutputMap.entries(),
     )
-      .map(([base, output]) => `${base} -> ${output}`)
+      .map(
+        ([baseLoc, outputLoc]) =>
+          `${path.basename((baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath))} -> ${path.basename((outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath))}`,
+      )
       .join(', ')}`,
   );
 
