@@ -515,11 +515,10 @@ export class OutputHandler implements IOutputHandler {
           return;
         }
 
+        // Use run-storage aware location resolution
         const checks = expected.map(async (file) => ({
           file,
-          exists: await flexibleFS.exists(
-            createWorkspaceLocation(WorkspaceFS.fullPath(file), file),
-          ),
+          exists: await flexibleFS.exists(this.fileService.createLocation(file)),
         }));
         const results = await Promise.all(checks);
         const missing = results.filter((r) => !r.exists).map((r) => r.file);
