@@ -122,6 +122,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   private hydratedRoundCount = 0;
 
   // Current round execution context - set when round begins
+  private isRoundActive = false;
   private currentRoundIndex: number = 0;
   private currentMessages: any[] = [];
   private currentRunState: AgentRunState | null = null;
@@ -279,12 +280,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * @param roundIndex - Zero-based round index
    * @param runState - Current run state
    * @param messages - Conversation messages
+   * @throws {Error} If another round is already active
    */
   public beginRound(
     roundIndex: number,
     runState: AgentRunState,
     messages: any[],
   ): void {
+    if (this.isRoundActive) {
+      throw new Error(
+        'Cannot begin new round while another is active. Call recordRoundResult() to complete the current round.',
+      );
+    }
+
+    this.isRoundActive = true;
     this.currentRoundIndex = roundIndex;
     this.currentMessages = messages;
     this.currentRunState = runState;
@@ -685,7 +694,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
-   * Records the results of a reflection round into the agent's internal state.
+   * Records the results of a reflection round into the agent's internal state
+   * and clears the active round flag.
+   *
    * Flows should call this method after executing a round instead of mutating
    * agent internals directly.
    *
@@ -697,6 +708,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     if (result.output) {
       this.roundOutputs[result.output.round] = result.output;
     }
+
+    // Clear the active round flag
+    this.isRoundActive = false;
   }
 
   /**
