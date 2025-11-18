@@ -718,6 +718,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Executes the current round that was initialized with beginRound().
    * Flows should call beginRound() first to set up the context, then call this method.
    *
+   * The isRoundActive flag is automatically cleared on error to prevent blocking future rounds.
+   *
    * @returns The result of the round execution
    */
   public async executeCurrentRound(): Promise<ReflectionRoundResult> {
@@ -725,39 +727,47 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       throw new Error(BaseReflectionAgent.ERR_ROUND_NOT_INITIALIZED);
     }
 
-    const roundIndex = this.currentRoundIndex;
-    const runState = this.currentRunState;
-    const messages = this.currentMessages;
-    const workspaceState = this.currentWorkspaceState;
+    try {
+      const roundIndex = this.currentRoundIndex;
+      const runState = this.currentRunState;
+      const messages = this.currentMessages;
+      const workspaceState = this.currentWorkspaceState;
 
-    this.logger.debug(`Processing round ${roundIndex}`);
+      this.logger.debug(`Processing round ${roundIndex}`);
 
-    return this.withRoundStage(`r${roundIndex}`, async () => {
-      // Prepare workspace state
-      await this.prepareWorkspaceState();
+      return await this.withRoundStage(`r${roundIndex}`, async () => {
+        // Prepare workspace state
+        await this.prepareWorkspaceState();
 
-      // Prepare round context
-      const preparation = await this.prepareRoundContext();
+        // Prepare round context
+        const preparation = await this.prepareRoundContext();
 
-      // Handle skip case
-      if (preparation.skip) {
-        return {
-          roundState: preparation.stateRound,
-          runState,
-          messages,
-          shouldContinue: true,
-          workspaceState,
-          output: null,
-        };
-      }
+        // Handle skip case
+        if (preparation.skip) {
+          return {
+            roundState: preparation.stateRound,
+            runState,
+            messages,
+            shouldContinue: true,
+            workspaceState,
+            output: null,
+          };
+        }
 
-      // Execute round pipeline
-      return await this.runRoundPipeline(
-        preparation.stateRound,
-        preparation.preparedMessages,
-        preparation.prefill ?? '',
-      );
-    });
+        // Execute round pipeline
+        return await this.runRoundPipeline(
+          preparation.stateRound,
+          preparation.preparedMessages,
+          preparation.prefill ?? '',
+        );
+      });
+    } catch (error) {
+      // Clear active flag and reset context to prevent blocking future rounds
+      this.isRoundActive = false;
+      this.currentRunState = null;
+      this.currentWorkspaceState = null;
+      throw error;
+    }
   }
 
   /**
