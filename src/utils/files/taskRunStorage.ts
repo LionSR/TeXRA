@@ -601,15 +601,15 @@ export class TaskRunFileService {
 
   /**
    * Move or mirror a workspace artifact into run storage.
+   * Takes a FileLocation and returns the relocated version in run storage.
    */
   public async relocateToRunStorage(
-    target: string,
+    source: FileLocation,
     options: {
       forceRunStorage?: boolean;
       keepWorkspaceCopy?: boolean;
     } = {},
   ): Promise<FileLocation> {
-    const source = this.describePath(target);
     if (source.kind !== 'workspace') {
       return source;
     }
