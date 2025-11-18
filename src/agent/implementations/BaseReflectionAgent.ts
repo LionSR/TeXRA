@@ -622,7 +622,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     };
   }
 
-  public async prepareAgentWorkspaceState(): Promise<void> {
+  /**
+   * Prepares the workspace state for the current round.
+   * Uses the round context initialized by beginRound().
+   */
+  public async prepareWorkspaceState(): Promise<void> {
     if (!this.currentWorkspaceState) {
       throw new Error(
         'Round context not initialized. Call beginRound() first.',
@@ -721,7 +725,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     return this.withRoundStage(`r${roundIndex}`, async () => {
       // Prepare workspace state
-      await this.prepareAgentWorkspaceState();
+      await this.prepareWorkspaceState();
 
       // Prepare round context
       const preparation = await this.prepareRoundContext();
