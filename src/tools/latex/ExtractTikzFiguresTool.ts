@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { toolResult, type ToolFileAttachment } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { pathToLocation } from '@utils/files';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import {
   buildLimitedAttachments,
@@ -61,7 +62,9 @@ export class ExtractTikzFiguresTool extends defineTool({
 
     let attachments: ToolFileAttachment[] | undefined;
     if (compile) {
-      const compiledPaths = await tikzPictureManager.compile(resolved.relative);
+      const compiledPaths = await tikzPictureManager.compile(
+        pathToLocation(resolved.absolute),
+      );
       if (compiledPaths.length > 0) {
         const {
           attachments: compiledAttachments,
