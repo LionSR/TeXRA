@@ -128,16 +128,16 @@ export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
 /**
  * Internal mapping structure for file relationships.
- * Uses FileLocation directly as keys/values - no string conversions.
- * Map keys use FileLocation objects (compared by reference in Map).
+ * Uses string keys (comparable paths) for robust lookups and FileLocation values for data.
+ * This ensures lookups work even when FileLocation objects are reconstructed.
  */
 export interface RoundFileMapping {
-  /** Maps base files to their corresponding output files */
-  baseToOutput: Map<FileLocation, FileLocation>;
-  /** Maps previous round outputs to current round outputs */
-  prevToOutput: Map<FileLocation, FileLocation>;
-  /** Maps each output to its original base file (for tracking lineage) */
-  originByOutput: Map<FileLocation, FileLocation | undefined>;
+  /** Maps base file paths to their corresponding output FileLocations */
+  baseToOutput: Map<string, FileLocation>;
+  /** Maps previous round output paths to current round output FileLocations */
+  prevToOutput: Map<string, FileLocation>;
+  /** Maps each output path to its original base FileLocation (for tracking lineage) */
+  originByOutput: Map<string, FileLocation | undefined>;
 }
 
 // ============================================================================

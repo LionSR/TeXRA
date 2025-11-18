@@ -23,8 +23,8 @@ import type { FileLocation, AgentFileLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
-import type { OutputFile, OutputFileInfo } from './types';
 import { getFileDirectory } from './displayUtils';
+import type { OutputFile, OutputFileInfo } from './types';
 
 export class XmlOutputManager {
   constructor(
