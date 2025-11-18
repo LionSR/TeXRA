@@ -25,7 +25,6 @@ import {
   createFileMapping,
   TaskRunFileService,
   flexibleFS,
-  getComparablePath,
   WorkspaceFS,
   AbsoluteFS,
 } from '@utils/files';
