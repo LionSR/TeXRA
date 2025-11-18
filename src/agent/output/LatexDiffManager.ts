@@ -26,6 +26,21 @@ import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 // Local imports - types
 import type { OutputFileInfo, RoundFileMapping } from './types';
 
+/**
+ * Result of a latexdiff operation with file locations.
+ */
+interface DiffOperationResult {
+  baseLabel: string;
+  revisedLabel: string;
+  status: 'success' | 'error';
+  message?: string;
+  locations: {
+    base: FileLocation | null;
+    revised: FileLocation | null;
+    diff: FileLocation | null;
+  };
+}
+
 interface LatexDiffDependencies {
   checkToolInstalled: typeof checkToolInstalled;
   compileLatex2Pdf: typeof compileLatex2Pdf;
@@ -174,21 +189,7 @@ export class LatexDiffManager {
       'texra.latexdiff.generateBetweenRoundDiffs',
       false,
     );
-    const aggregated: Array<{
-      baseLabel: string;
-      basePath?: string;
-      revisedLabel: string;
-      revisedPath?: string;
-      diffPath?: string;
-      status: 'success' | 'error';
-      message?: string;
-      runId?: string | null;
-      locations?: {
-        base: FileLocation | null;
-        revised: FileLocation | null;
-        diff: FileLocation | null;
-      };
-    }> = [];
+    const aggregated: DiffOperationResult[] = [];
 
     const execute = async () => {
       if (!(await this.dependencies.checkToolInstalled('latexdiff'))) {
@@ -244,11 +245,14 @@ export class LatexDiffManager {
             );
             aggregated.push({
               baseLabel: this.getDisplayLabel(baseLocation),
-              basePath: baseAbsolute,
               revisedLabel: this.getDisplayLabel(baseLocation),
-              revisedPath: location?.absolutePath,
               status: 'error',
               message: 'Revised file location missing',
+              locations: {
+                base: baseLocation,
+                revised: location ?? null,
+                diff: null,
+              },
             });
             continue;
           }
@@ -308,15 +312,11 @@ export class LatexDiffManager {
 
           aggregated.push({
             baseLabel: this.getDisplayLabel(baseLocation),
-            basePath: baseAbsolute,
             revisedLabel: location
               ? this.getDisplayLabel(location)
               : path.basename(outputFile),
-            revisedPath: actual,
-            diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
-            runId: this.fileService.metadata.executionId ?? null,
             locations: {
               base: baseLocation,
               revised: revisedLocation ?? null,
@@ -359,14 +359,11 @@ export class LatexDiffManager {
               baseLabel: prevLocation
                 ? this.getDisplayLabel(prevLocation)
                 : path.basename(prevOutputFile),
-              basePath: prevLocation?.absolutePath,
               revisedLabel: currLocation
                 ? this.getDisplayLabel(currLocation)
                 : path.basename(currOutputFile),
-              revisedPath: currLocation?.absolutePath,
               status: 'error',
               message: 'One or more round files missing location info',
-              runId: this.fileService.metadata.executionId ?? null,
               locations: {
                 base: prevLocation ?? null,
                 revised: currLocation ?? null,
@@ -429,15 +426,11 @@ export class LatexDiffManager {
             baseLabel: prevLocation
               ? this.getDisplayLabel(prevLocation)
               : path.basename(prevOutputFile),
-            basePath: prevLocation?.absolutePath,
             revisedLabel: currLocation
               ? this.getDisplayLabel(currLocation)
               : path.basename(currOutputFile),
-            revisedPath: currPaths.actual,
-            diffPath: diffLocation?.absolutePath,
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
-            runId: this.fileService.metadata.executionId ?? null,
             locations: {
               base: prevLocation ?? null,
               revised: currLocation ?? null,
