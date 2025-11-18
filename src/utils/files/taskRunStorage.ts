@@ -63,6 +63,12 @@ export type FileLocation =
   | RunStorageFileLocation
   | ExternalFileLocation;
 
+/**
+ * Agent outputs are always workspace or runStorage, never external.
+ * Use this type for agent-created file locations.
+ */
+export type AgentFileLocation = WorkspaceFileLocation | RunStorageFileLocation;
+
 export function createWorkspaceLocation(
   absolutePath: string,
   relativePath: string,
@@ -152,7 +158,6 @@ async function removeIfExists(target: string): Promise<void> {
     await AbsoluteFS.delete(target, { recursive: true, useTrash: false });
   }
 }
-
 
 async function createSymlink(
   source: FileLocation,
@@ -340,18 +345,22 @@ export class TaskRunFileService {
     if (executionId) {
       const storageRoot = StorageFS.fullPath('');
       if (storageRoot && normalized.startsWith(storageRoot)) {
-      const relativeToStorage = path.relative(storageRoot, normalized);
-      const segments = relativeToStorage.split(path.sep).filter(Boolean);
-      const runIndex = segments.indexOf(TASK_RUNS_DIR);
+        const relativeToStorage = path.relative(storageRoot, normalized);
+        const segments = relativeToStorage.split(path.sep).filter(Boolean);
+        const runIndex = segments.indexOf(TASK_RUNS_DIR);
 
-      if (runIndex !== -1 && segments.length >= runIndex + 2) {
-        const runId = segments[runIndex + 1];
-        if (runId === executionId) {
+        if (runIndex !== -1 && segments.length >= runIndex + 2) {
+          const runId = segments[runIndex + 1];
+          if (runId === executionId) {
             const withinRun = segments.slice(runIndex + 2).join(path.sep);
-          const runRelative = withinRun ? path.normalize(withinRun) : '';
-          return createRunStorageLocation(normalized, runRelative, executionId);
+            const runRelative = withinRun ? path.normalize(withinRun) : '';
+            return createRunStorageLocation(
+              normalized,
+              runRelative,
+              executionId,
+            );
+          }
         }
-      }
       }
     }
 
@@ -551,7 +560,6 @@ export class TaskRunFileService {
     // Default to workspace location
     return createWorkspaceLocation(workspaceAbsolute, normalized);
   }
-
 
   /**
    * Ensure a workspace dependency is reachable from run storage via symlink.

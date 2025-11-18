@@ -35,6 +35,7 @@ import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUti
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
+import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
@@ -121,10 +122,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       ? undefined
       : {
           continuationCount: store.round.continuationCount,
-          outputFile:
-            state.outputLocation.kind !== 'external'
-              ? state.outputLocation.relativePath
-              : state.outputLocation.absolutePath,
+          // Agent outputs are always workspace or runStorage, never external
+          outputFile: (state.outputLocation as AgentFileLocation).relativePath,
         };
 
     return {
