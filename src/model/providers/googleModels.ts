@@ -36,6 +36,8 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsAutoPromptCaching: true,
       supportsReasoning: true,
       supportsReasoningEffort: false,
+      supportsThinkingLevel: true,
+      thinkingLevel: ReasoningEffort.HIGH,
       supportsNativeCodeExecution: true,
       supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
