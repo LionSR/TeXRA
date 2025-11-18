@@ -54,12 +54,14 @@ import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
-import { WorkspaceFS, TaskRunFileService } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import {
+  WorkspaceFS,
+  TaskRunFileService,
+  pathToLocation,
   createWorkspaceLocation,
   createRunStorageLocation,
-} from '@utils/files/taskRunStorage';
+  type FileLocation,
+} from '@utils/files';
 import { LatexMediaManager } from '@latex';
 
 /**
@@ -615,8 +617,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   ): Promise<void> {
     if (currRound === 0) {
       const inputFiles = [
-        this.agentConfig.inputFile,
-        ...this.agentConfig.inputFiles,
+        pathToLocation(this.agentConfig.inputFile),
+        ...this.agentConfig.inputFiles.map((f) => pathToLocation(f)),
       ];
       const extraMedia: string[] = [];
 
@@ -642,11 +644,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       return;
     }
 
-    let outputFiles = [...this.agentConfig.outputFiles];
+    let outputFiles = this.agentConfig.outputFiles.map((f) =>
+      pathToLocation(f),
+    );
     if (outputFiles.length === 0) {
       const previousRoundFiles = this.outputHandler.ensureRound(currRound - 1);
       if (previousRoundFiles.length > 0) {
-        outputFiles = [previousRoundFiles[0].location.absolutePath];
+        outputFiles = [previousRoundFiles[0].location];
       }
     }
 

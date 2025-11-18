@@ -8,7 +8,7 @@ import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '@agent/utils/promptUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS, pathToLocation, type FileLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -131,22 +131,28 @@ export class TikzPictureManager {
 
   /**
    * Extract and compile TikZ pictures from a LaTeX file
-   * @param latexFile Path to the LaTeX file
+   * @param latexFile Location of the LaTeX file
    * @param channel Optional channel for logging
    * @returns Array of paths to compiled PDF files
    */
   async compile(
-    latexFile: string,
+    latexFile: FileLocation,
     channel: string = this.channel,
   ): Promise<string[]> {
     try {
-      const inputDir = path.dirname(latexFile);
-      const inputName = path.parse(path.basename(latexFile)).name;
+      const inputDir = path.dirname(latexFile.absolutePath);
+      const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
       const buildDir = path.join(inputDir, 'build', inputName);
       await flexibleFS.ensureDir(pathToLocation(buildDir));
 
-      logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
-      const labeledTikzPictures = await this.extract(latexFile, channel);
+      logger.debug(
+        channel,
+        `Extracting TikZ pictures from ${latexFile.absolutePath}`,
+      );
+      const labeledTikzPictures = await this.extract(
+        latexFile.absolutePath,
+        channel,
+      );
       logger.debug(
         channel,
         `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
