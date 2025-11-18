@@ -187,7 +187,7 @@ export class LatexDiffManager {
           `Matched base files to output files: ${basePairs
             .map(
               ([base, output]) =>
-                `${path.basename(base)} -> ${path.basename(output)}`,
+                `${this.getDisplayLabel(base)} -> ${this.getDisplayLabel(output)}`,
             )
             .join(', ')}`,
         );
@@ -197,43 +197,9 @@ export class LatexDiffManager {
         );
       }
 
-      // Create map from comparable path to FileLocation for base files
-      const baseLocationByPath = new Map(
-        this.baseFiles.map((loc) => [getComparablePath(loc), loc]),
-      );
-
       if (this.agentSetting.isRewrite) {
         this.logger.debug('Running round-based latexdiff operations');
-        for (const [baseFile, outputFile] of basePairs) {
-          const revisedLocation = mapping.locationByOutput.get(outputFile);
-
-          // Look up base FileLocation from baseFiles array
-          const baseLocation = baseLocationByPath.get(baseFile);
-          if (!baseLocation) {
-            this.logger.warn(
-              `Base file location not found for ${baseFile}, skipping`,
-            );
-            continue;
-          }
-
-          if (!revisedLocation) {
-            this.logger.warn(
-              `Skipping latexdiff for ${outputFile} - no location info`,
-            );
-            aggregated.push({
-              baseLabel: this.getDisplayLabel(baseLocation),
-              revisedLabel: this.getDisplayLabel(baseLocation),
-              status: 'error',
-              message: 'Revised file location missing',
-              locations: {
-                base: baseLocation,
-                revised: null,
-                diff: null,
-              },
-            });
-            continue;
-          }
-
+        for (const [baseLocation, revisedLocation] of basePairs) {
           await this.ensureWorkspaceDependency(baseLocation);
           await this.ensureWorkspaceDependency(revisedLocation);
 
@@ -296,7 +262,7 @@ export class LatexDiffManager {
             `Matched previous round files to current round files: ${prevPairs
               .map(
                 ([prev, curr]) =>
-                  `${path.basename(prev)} -> ${path.basename(curr)}`,
+                  `${this.getDisplayLabel(prev)} -> ${this.getDisplayLabel(curr)}`,
               )
               .join(', ')}`,
           );
@@ -306,32 +272,7 @@ export class LatexDiffManager {
           );
         }
 
-        for (const [prevOutputFile, currOutputFile] of prevPairs) {
-          const prevLocation = mapping.locationByOutput.get(prevOutputFile);
-          const currLocation = mapping.locationByOutput.get(currOutputFile);
-
-          if (!prevLocation || !currLocation) {
-            this.logger.warn(
-              `Skipping between-round latexdiff - missing location info for ${prevOutputFile} or ${currOutputFile}`,
-            );
-            aggregated.push({
-              baseLabel: prevLocation
-                ? this.getDisplayLabel(prevLocation)
-                : path.basename(prevOutputFile),
-              revisedLabel: currLocation
-                ? this.getDisplayLabel(currLocation)
-                : path.basename(currOutputFile),
-              status: 'error',
-              message: 'One or more round files missing location info',
-              locations: {
-                base: prevLocation ?? null,
-                revised: currLocation ?? null,
-                diff: null,
-              },
-            });
-            continue;
-          }
-
+        for (const [prevLocation, currLocation] of prevPairs) {
           await this.ensureWorkspaceDependency(prevLocation);
           await this.ensureWorkspaceDependency(currLocation);
 
@@ -371,12 +312,8 @@ export class LatexDiffManager {
           }
 
           aggregated.push({
-            baseLabel: prevLocation
-              ? this.getDisplayLabel(prevLocation)
-              : path.basename(prevOutputFile),
-            revisedLabel: currLocation
-              ? this.getDisplayLabel(currLocation)
-              : path.basename(currOutputFile),
+            baseLabel: this.getDisplayLabel(prevLocation),
+            revisedLabel: this.getDisplayLabel(currLocation),
             status: result.success ? 'success' : 'error',
             message: result.success ? undefined : result.message,
             locations: {
