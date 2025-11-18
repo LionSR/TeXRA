@@ -42,7 +42,7 @@ export class LatexMediaManager {
     }
 
     const baseDir = path.dirname(latexFile);
-    const targets = new Set<string>();
+    const targetLocations = new Set<FileLocation>();
     for (const relative of figures) {
       if (!relative) {
         continue;
@@ -51,21 +51,22 @@ export class LatexMediaManager {
       if (trimmed.length === 0) {
         continue;
       }
-      const absolute = path.normalize(path.join(baseDir, trimmed));
-      targets.add(absolute);
+      const absolutePath = path.normalize(path.join(baseDir, trimmed));
+      // Convert to FileLocation using pathToLocation (boundary conversion)
+      targetLocations.add(pathToLocation(absolutePath));
     }
 
-    if (targets.size === 0) {
+    if (targetLocations.size === 0) {
       return;
     }
 
-    const tasks = Array.from(targets).map(async (target) => {
+    const tasks = Array.from(targetLocations).map(async (targetLocation) => {
       try {
-        await this.fileService!.mirrorWorkspaceFile(target);
+        await this.fileService!.mirrorWorkspaceFile(targetLocation);
       } catch (error) {
         const message = toErrorMessage(error);
         this.logger.debug(
-          `Unable to mirror figure dependency ${target}: ${message}`,
+          `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
           groupId ?? undefined,
         );
       }
