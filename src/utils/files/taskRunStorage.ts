@@ -281,17 +281,7 @@ export class TaskRunFileService {
     return this.useRunStorage;
   }
 
-  private isWithinWorkspace(candidate: string): boolean {
-    const root = this.workspaceRoot;
-    if (!root) return false;
-    const normalizedRoot = path.resolve(root);
-    const normalizedCandidate = path.resolve(candidate);
-    if (normalizedCandidate === normalizedRoot) return true;
-    const rootWithSep = normalizedRoot.endsWith(path.sep)
-      ? normalizedRoot
-      : `${normalizedRoot}${path.sep}`;
-    return normalizedCandidate.startsWith(rootWithSep);
-  }
+  // REMOVED: isWithinWorkspace was never used
 
   private get activeExecutionId(): ExecutionId | undefined {
     return this.metadata.executionId;
