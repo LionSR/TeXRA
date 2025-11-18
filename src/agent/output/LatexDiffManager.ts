@@ -16,6 +16,7 @@ import {
   createWorkspaceLocation,
   getComparablePath,
   type FileLocation,
+  type AgentFileLocation,
 } from '@utils/files';
 
 // Internal imports
@@ -130,13 +131,8 @@ export class LatexDiffManager {
    * Get display label (basename) from FileLocation for UI/logging.
    */
   private getDisplayLabel(location: FileLocation): string {
-    // For workspace/run-storage locations, use relativePath basename
-    // For external locations, use absolutePath basename
-    const pathToUse =
-      location.kind !== 'external'
-        ? location.relativePath
-        : location.absolutePath;
-    return path.basename(pathToUse);
+    // Agent outputs are always workspace or runStorage, never external
+    return path.basename((location as AgentFileLocation).relativePath);
   }
 
   private async ensureWorkspaceDependency(
@@ -160,7 +156,6 @@ export class LatexDiffManager {
       );
     }
   }
-
 
   async handleLatexdiffofOutput(
     currRound: number,
@@ -271,13 +266,11 @@ export class LatexDiffManager {
 
           if (result.success && result.diffFileName) {
             // Create diff location using fileService - it knows whether to use workspace or run storage
-            const baseRelDir =
-              baseLocation.kind !== 'external'
-                ? path.dirname(baseLocation.relativePath)
-                : '';
-            const diffRelativePath = baseRelDir
-              ? path.join(baseRelDir, result.diffFileName)
-              : result.diffFileName;
+            // Agent outputs are always workspace or runStorage, never external
+            const baseRelDir = path.dirname(
+              (baseLocation as AgentFileLocation).relativePath,
+            );
+            const diffRelativePath = path.join(baseRelDir, result.diffFileName);
 
             // This automatically uses run storage if enabled, workspace otherwise
             diffLocation = this.fileService.createLocation(diffRelativePath);
@@ -375,14 +368,12 @@ export class LatexDiffManager {
 
           if (result.success && result.diffFileName) {
             // Create diff location using fileService - it knows whether to use workspace or run storage
+            // Agent outputs are always workspace or runStorage, never external
             const refLocation = prevLocation ?? currLocation!;
-            const refRelDir =
-              refLocation.kind !== 'external'
-                ? path.dirname(refLocation.relativePath)
-                : '';
-            const diffRelativePath = refRelDir
-              ? path.join(refRelDir, result.diffFileName)
-              : result.diffFileName;
+            const refRelDir = path.dirname(
+              (refLocation as AgentFileLocation).relativePath,
+            );
+            const diffRelativePath = path.join(refRelDir, result.diffFileName);
 
             // This automatically uses run storage if enabled, workspace otherwise
             diffLocation = this.fileService.createLocation(diffRelativePath);

@@ -166,17 +166,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     for (let i = 0; i < numRounds; i++) {
       this.outputFiles[i] = [];
     }
+    // Use fileService.createLocation for run-storage awareness
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
         ? this.agentConfig.outputFiles.map((f) =>
-            createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
+            this.fileService.createLocation(f),
           )
-        : [
-            createWorkspaceLocation(
-              WorkspaceFS.fullPath(this.agentConfig.inputFile),
-              this.agentConfig.inputFile,
-            ),
-          ];
+        : [this.fileService.createLocation(this.agentConfig.inputFile)];
 
     // Check scratchpad usage
     // this is not so neat

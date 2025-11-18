@@ -69,7 +69,9 @@ export class ExtractTikzFiguresTool extends defineTool({
       );
       if (compiledPaths.length > 0) {
         // Convert FileLocation[] to string[] for legacy attachment API
-        const compiledPathStrings = compiledPaths.map((loc) => loc.absolutePath);
+        const compiledPathStrings = compiledPaths.map(
+          (loc) => loc.absolutePath,
+        );
         const {
           attachments: compiledAttachments,
           limitedPaths,
