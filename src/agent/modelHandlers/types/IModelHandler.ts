@@ -13,6 +13,51 @@ import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 
 /**
+ * Options for creating a model response.
+ * @template M - Provider-specific message type
+ */
+export interface CreateResponseOptions<
+  M extends ProviderMessage = ProviderMessage,
+> {
+  /** Provider client instance */
+  client: any;
+  /** Conversation messages */
+  messages: M[];
+  /** Sampling temperature (0-1) */
+  temperature: number;
+  /** Optional system prompt */
+  systemPrompt?: string;
+  /** Optional stop sequence */
+  endTag?: string;
+  /** Optional abort signal for cancellation */
+  signal?: AbortSignal;
+  /** Optional tool definitions for function calling */
+  tools?: ToolDefinition[];
+}
+
+/**
+ * Result from extracting response data from a provider response.
+ */
+export interface ExtractResponseResult {
+  /** Extracted response text */
+  response: string;
+  /** Usage/token statistics from the provider */
+  usage: any;
+  /** Reason why the model stopped generating */
+  stopReason: ProviderStopReason;
+}
+
+/**
+ * Result from checking stop conditions.
+ */
+export interface StopConditionsResult {
+  /** Whether the turn should end */
+  endTurn: boolean;
+  /** Whether generation should stop */
+  shouldStop: boolean;
+}
+
+/**
  * Common interface implemented by all model handlers.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
@@ -70,22 +115,9 @@ export interface IModelHandler<
 
   /**
    * Generate a response from the model.
-   * @param client Provider client instance
-   * @param messages Conversation messages
-   * @param temperature Sampling temperature
-   * @param systemPrompt Optional system prompt
-   * @param endTag Optional stop sequence
-   * @param signal Optional abort signal
+   * @param options Options for creating the response
    */
-  createResponse(
-    client: C,
-    messages: M[],
-    temperature: number,
-    systemPrompt?: string,
-    endTag?: string,
-    signal?: AbortSignal,
-    tools?: ToolDefinition[],
-  ): Promise<any>;
+  createResponse(options: CreateResponseOptions<M>): Promise<any>;
 
   /** Initialize the conversation for the first round. */
   initializeMessages(
@@ -106,10 +138,7 @@ export interface IModelHandler<
   createMediaContent(mediaMessage: MediaEntry[]): any[];
 
   /** Extract the response text and usage from the provider response. */
-  extractResponse(
-    responseObject: any,
-    endTag: string,
-  ): [string, any, ProviderStopReason];
+  extractResponse(responseObject: any, endTag: string): ExtractResponseResult;
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
@@ -170,7 +199,7 @@ export interface IModelHandler<
 
   /**
    * Evaluate whether to end the turn and/or stop generation.
-   * @returns Tuple of [endTurn, shouldStop]
+   * @returns Object with endTurn and shouldStop flags
    */
   checkStopConditions(
     stopReason: ProviderStopReason,
@@ -178,7 +207,7 @@ export interface IModelHandler<
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     agentSetting: AgentSetting,
-  ): [boolean, boolean];
+  ): StopConditionsResult;
 
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(

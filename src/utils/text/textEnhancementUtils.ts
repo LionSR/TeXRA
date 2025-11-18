@@ -270,7 +270,11 @@ ${text}`;
 
       let response;
       try {
-        response = await handler.createResponse(client, messages, 0);
+        response = await handler.createResponse({
+          client,
+          messages,
+          temperature: 0,
+        });
       } catch (error) {
         logger.error(
           CHANNEL,
@@ -285,7 +289,7 @@ ${text}`;
 
       let extractedText: string;
       try {
-        const [modelText] = handler.extractResponse(response, '');
+        const { response: modelText } = handler.extractResponse(response, '');
         extractedText = modelText;
       } catch (error) {
         logger.error(
