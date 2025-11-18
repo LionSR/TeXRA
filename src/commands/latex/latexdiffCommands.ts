@@ -362,8 +362,8 @@ type DiffOperationType = 'round' | 'between-rounds';
 
 interface DiffOperation {
   type: DiffOperationType;
-  basePath: string;
-  revisedPath: string;
+  base: FileLocation;
+  revised: FileLocation;
   description: string;
   cwd?: string;
   round?: number;
@@ -591,14 +591,16 @@ async function runLatexdiffFromMetadata(params: {
 
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
-      const revisedPath = getOutputPath(info);
-      const basePath = getBasePath(info);
+      const revised = info.location;
+      const base = info.lineage?.original
+        ? pathToLocation(info.lineage.original)
+        : null;
       const description = `${describeFile(info)} (r${round})`;
 
-      if (!revisedPath || !basePath) {
+      if (!base) {
         immediateResults.push({
           success: false,
-          message: 'Missing base or revised file path',
+          message: 'Missing base file path',
           description,
         });
         continue;
@@ -606,10 +608,10 @@ async function runLatexdiffFromMetadata(params: {
 
       operations.push({
         type: 'round',
-        basePath,
-        revisedPath,
+        base,
+        revised,
         description,
-        cwd: WorkspaceFS.getPath() ?? path.dirname(basePath),
+        cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
         round,
         info,
       });
@@ -634,25 +636,16 @@ async function runLatexdiffFromMetadata(params: {
       for (let index = 1; index < group.length; index += 1) {
         const previous = group[index - 1];
         const current = group[index];
-        const prevPath = getOutputPath(previous.info);
-        const currPath = getOutputPath(current.info);
+        const base = previous.info.location;
+        const revised = current.info.location;
         const description = `${describeFile(current.info)} (r${previous.round}→r${current.round})`;
-
-        if (!prevPath || !currPath) {
-          immediateResults.push({
-            success: false,
-            message: 'Missing files for between-round diff',
-            description,
-          });
-          continue;
-        }
 
         operations.push({
           type: 'between-rounds',
-          basePath: prevPath,
-          revisedPath: currPath,
+          base,
+          revised,
           description,
-          cwd: WorkspaceFS.getPath() ?? path.dirname(prevPath),
+          cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
           fromRound: previous.round,
           toRound: current.round,
           info: current.info,
@@ -672,12 +665,8 @@ async function runLatexdiffFromMetadata(params: {
       message: `Running ${operation.type} diff for ${operation.description}`,
     });
 
-    const baseExists = await flexibleFS.exists(
-      pathToLocation(operation.basePath),
-    );
-    const revisedExists = await flexibleFS.exists(
-      pathToLocation(operation.revisedPath),
-    );
+    const baseExists = await flexibleFS.exists(operation.base);
+    const revisedExists = await flexibleFS.exists(operation.revised);
 
     if (!baseExists || !revisedExists) {
       results.push({
@@ -697,25 +686,25 @@ async function runLatexdiffFromMetadata(params: {
 
     if (operation.type === 'round') {
       diffResult = await service.runDiffForRound(
-        pathToLocation(operation.basePath),
-        pathToLocation(operation.revisedPath),
+        operation.base,
+        operation.revised,
         operation.round ?? 0,
         mathMarkup,
         { cwd: operation.cwd },
       );
     } else {
       diffResult = await service.runDiffBetweenRounds(
-        pathToLocation(operation.basePath),
-        pathToLocation(operation.revisedPath),
+        operation.base,
+        operation.revised,
         mathMarkup,
         { cwd: operation.cwd },
       );
     }
 
     results.push({
-      success: diffResult.success,
-      message: diffResult.message,
-      basePath: operation.basePath,
+        success: diffResult.success,
+        message: diffResult.message,
+        basePath: operation.base.absolutePath,
       diffFileName: diffResult.diffFileName,
       description: operation.description,
     });
