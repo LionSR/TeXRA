@@ -5,6 +5,7 @@
 ✅ **NO BREAKING CHANGES** - The refactoring is fully backward compatible.
 
 ### Issue Found and Fixed
+
 - ❌ **Stale Import**: `BaseReflectionAgent.ts` imported from deleted `ReflectionRoundFlow.ts`
 - ✅ **Fixed**: Removed unused import statement (lines 43-46)
 
@@ -15,12 +16,14 @@
 **Deleted**: `src/agent/implementations/flows/ReflectionRoundFlow.ts`
 
 **Impact Analysis**:
+
 ```bash
 # Search for imports of deleted file
 grep -r "ReflectionRoundFlow" src/
 ```
 
-**Result**: 
+**Result**:
+
 - ✅ Only found in `BaseReflectionAgent.ts` (now fixed)
 - ✅ No test files reference it
 - ✅ No external code imports it
@@ -31,16 +34,19 @@ grep -r "ReflectionRoundFlow" src/
 #### Methods Changed to Public
 
 **BaseAgent**:
+
 - `withRoundStage()`: protected → public
 
 **BaseReflectionAgent**:
+
 - `prepareAgentWorkspaceState()`: private → public
-- `prepareRoundContext()`: private → public  
+- `prepareRoundContext()`: private → public
 - `runRoundPipeline()`: private → public
 - `getOutputFileLocation()`: protected → public
 - `resetPromptBuilder()`: protected → public
 
 **BaseToolUseAgent**:
+
 - `waitForFollowUp()`: private → public
 - `prepareInitialSessionState()`: private → public
 - `buildToolUseCycleOptions()`: private → public
@@ -49,6 +55,7 @@ grep -r "ReflectionRoundFlow" src/
 - `clearPersistedSnapshot()`: private → public
 
 **Impact**: ✅ SAFE
+
 - Making methods public is **non-breaking**
 - Existing code continues to work
 - New capabilities enabled for customization
@@ -56,6 +63,7 @@ grep -r "ReflectionRoundFlow" src/
 ### 3. Public Properties ✅ SAFE
 
 **BaseReflectionAgent** has always had public arrays:
+
 ```typescript
 public roundStates: ConversationRoundState[] = [];
 public workspaceStates: AgentWorkspaceState[] = [];
@@ -63,12 +71,14 @@ public roundOutputs: RoundOutput[] = [];
 ```
 
 **External Access Analysis**:
+
 ```bash
 # Check if any external code accesses these
 grep -r "\.roundStates\|\.workspaceStates\|\.roundOutputs" src/commands src/webview
 ```
 
 **Result**: ✅ ZERO external access
+
 - Only accessed internally within `BaseReflectionAgent`
 - No commands access them
 - No webview code accesses them
@@ -77,6 +87,7 @@ grep -r "\.roundStates\|\.workspaceStates\|\.roundOutputs" src/commands src/webv
 ### 4. Agent External API ✅ UNCHANGED
 
 **Public Interface (IAgent)**:
+
 ```typescript
 interface IAgent {
   readonly config: AgentConfig;
@@ -94,6 +105,7 @@ interface IAgent {
 **Status**: ✅ All methods unchanged
 
 **External Usage**:
+
 ```typescript
 // src/agent/runtime/executeAgent.ts
 await agent.run();  // ✓ Works
@@ -106,11 +118,13 @@ await agent.hydrateOutputState({...});  // ✓ Works
 ### 5. Serialization ✅ UNCHANGED
 
 **What Gets Serialized**:
+
 - `AgentConfig` - unchanged
-- `ToolUseSessionSnapshot` - unchanged  
+- `ToolUseSessionSnapshot` - unchanged
 - `AgentRunStateSnapshot` - unchanged
 
 **Internal State NOT Serialized**:
+
 - `roundStates[]` - internal only
 - `workspaceStates[]` - internal only
 - `roundOutputs[]` - internal only
@@ -122,23 +136,30 @@ await agent.hydrateOutputState({...});  // ✓ Works
 **Subclasses That Override Methods**:
 
 **DirectAgent**:
+
 ```typescript
 protected override getTotalRounds(): number
 protected async handleOutput(...)
 ```
+
 ✅ Both still work - visibility not changed
 
 **CoTAgent**:
+
 ```typescript
 protected async handleOutput(...)
 ```
+
 ✅ Still works - visibility not changed
 
 **MergeAgent**:
+
 ```typescript
 protected override getOutputFileLocation(currRound)  // Was protected
 ```
+
 ❌ **Changed to public** - but this is **non-breaking**
+
 - Public methods can be overridden
 - No call sites broken
 - More flexible for future use
@@ -146,10 +167,12 @@ protected override getOutputFileLocation(currRound)  // Was protected
 ### 7. Flow Changes ✅ INTERNAL ONLY
 
 **ReflectionRunFlow**:
+
 - **Before**: Created sub-flow via hooks
 - **After**: Calls `agent.executeRound()` directly
 
 **Impact**: ✅ INTERNAL ONLY
+
 - No external code creates flows directly
 - Flows are created and executed internally
 - External code only calls `agent.run()`
@@ -159,6 +182,7 @@ protected override getOutputFileLocation(currRound)  // Was protected
 **Deleted**: `ReflectionRoundHooks` interface
 
 **Impact**: ✅ No external usage
+
 - Only used internally by old flow pattern
 - No external code implemented these hooks
 - No tests reference them
@@ -166,6 +190,7 @@ protected override getOutputFileLocation(currRound)  // Was protected
 ### 9. Constructor Signatures ✅ UNCHANGED
 
 All agent constructors remain identical:
+
 ```typescript
 constructor(
   modelHandler: IModelHandler,
@@ -182,34 +207,41 @@ constructor(
 ### 10. Event Bus & Logging ✅ UNCHANGED
 
 **Event Bus Usage**:
+
 ```typescript
 bus.emit('setTaskState', {...});
 bus.emit('updateProgress', {...});
 ```
+
 ✅ All events unchanged
 
 **Logging**:
+
 ```typescript
 agent.logger.info(...);
 agent.logger.debug(...);
 ```
+
 ✅ All logging unchanged
 
 ## Test Compatibility ✅ SAFE
 
 **Test File Analysis**:
+
 ```bash
 grep -r "ReflectionRound" test/
 # Result: No matches
 ```
 
 **No tests directly**:
+
 - Import deleted files
 - Access internal arrays
 - Depend on hook interfaces
 - Create flows manually
 
 **Tests only use**:
+
 - `agent.run()` ✅
 - `agent.interrupt()` ✅
 - Public configuration ✅
@@ -217,6 +249,7 @@ grep -r "ReflectionRound" test/
 ## Command Integration ✅ SAFE
 
 **Commands use agents via**:
+
 ```typescript
 // src/commands/agent/agentCommands.ts
 await executeAgentWithLogging({...});
@@ -230,22 +263,27 @@ await agent.run();
 ## Migration Path
 
 ### For Internal Code: ✅ DONE
+
 - Fixed stale import in `BaseReflectionAgent.ts`
 - No other changes needed
 
 ### For External Code: ✅ NONE NEEDED
+
 - No external code affected
 - All public APIs unchanged
 - All call sites continue to work
 
 ### For Tests: ✅ NONE NEEDED
+
 - Tests use public APIs only
 - No test changes required
 
 ### For Custom Agents: ✅ ENHANCED
+
 If users have custom agents:
 
 **Before**:
+
 ```typescript
 class CustomAgent extends BaseReflectionAgent {
   // Could only override protected methods
@@ -253,6 +291,7 @@ class CustomAgent extends BaseReflectionAgent {
 ```
 
 **After**:
+
 ```typescript
 class CustomAgent extends BaseReflectionAgent {
   // Can now override executeRound() for full control
@@ -260,7 +299,7 @@ class CustomAgent extends BaseReflectionAgent {
     // Custom logic
     return super.executeRound(...);
   }
-  
+
   // Or override individual steps
   public async prepareRoundContext(...) {
     // Custom preparation
@@ -296,6 +335,7 @@ class CustomAgent extends BaseReflectionAgent {
 ### What Was Fixed (Non-Defensively)
 
 ✅ **Removed stale import** - Clean, direct fix
+
 - Found import of deleted file
 - Removed unused import statement
 - No wrapper needed, just deleted
@@ -337,6 +377,7 @@ class CustomAgent extends BaseReflectionAgent {
 ✅ **PROCEED WITH CONFIDENCE**
 
 The refactoring is:
+
 - Architecturally sound
 - Fully backward compatible
 - Non-breaking to external code

@@ -3,6 +3,7 @@
 ## ✓ Completed Changes
 
 ### Phase 1: Remove Hook Indirection
+
 - [x] Made `prepareAgentWorkspaceState()` public in BaseReflectionAgent
 - [x] Made `prepareRoundContext()` public in BaseReflectionAgent
 - [x] Made `runRoundPipeline()` public in BaseReflectionAgent
@@ -12,17 +13,20 @@
 - [x] Updated MergeAgent `getOutputFileLocation()` to public
 
 ### Phase 2: Consolidate Round Execution
+
 - [x] Added `executeRound()` method to BaseReflectionAgent
 - [x] Deleted `ReflectionRoundFlow.ts` file
 - [x] Updated ReflectionRunFlow to call `agent.executeRound()` directly
 - [x] Removed intermediate flow orchestration layer
 
 ### Phase 3: Respect Boundaries
+
 - [x] Added `recordRoundResult()` method to BaseReflectionAgent
 - [x] Updated ReflectionRunFlow to use `agent.recordRoundResult()`
 - [x] Removed direct agent internal mutations from flows
 
 ### Phase 4: Tool-Use Consistency
+
 - [x] Made tool-use session methods public in BaseToolUseAgent:
   - `waitForFollowUp()`
   - `hasQueuedFollowUp()`
@@ -37,6 +41,7 @@
 - [x] Updated flow hooks to call appropriate APIs directly
 
 ### Phase 5: Finalize Node Enhancement
+
 - [x] Added `agent` parameter to FinalizeNodeContext
 - [x] Updated createFinalizeNode to pass agent in context
 - [x] Updated nodeExecution.ts FinalizeNodeContext interface
@@ -44,11 +49,13 @@
 ## Architecture Verification
 
 ### Single Source of Truth ✓
+
 - **Agent** owns round execution logic (`executeRound()`)
 - **Agent** owns state recording logic (`recordRoundResult()`)
 - **No duplication** of orchestration logic across layers
 
 ### Balanced Abstractions ✓
+
 - **Kept**: Methods that manage agent state or add business logic
   - `executeRound()` - Composes preparation + execution + skip handling
   - `applyFollowUpMessage()` - Adds logging + state management
@@ -59,11 +66,13 @@
   - `ReflectionRoundFlow` - Entire abstraction layer removed
 
 ### No Pass-Through Layers ✓
+
 - Flows call agent methods that add value
 - Flows call core modules directly when no agent logic needed
 - No "wrapper just to wrap" pattern
 
 ### Clear Data Flow ✓
+
 ```
 ReflectionRunFlow:
   → agent.executeRound()
@@ -83,6 +92,7 @@ ToolUseRunFlow:
 ## File Structure
 
 ### Modified Files
+
 1. `src/agent/implementations/BaseAgent.ts`
    - Made `withRoundStage()` public
 
@@ -112,9 +122,11 @@ ToolUseRunFlow:
    - Pass agent in prep() method
 
 ### Deleted Files
+
 - `src/agent/implementations/flows/ReflectionRoundFlow.ts` ✓
 
 ### Unchanged (Verified Compatible)
+
 - `src/agent/implementations/CoTAgent.ts` - Overrides still work
 - `src/agent/implementations/DirectAgent.ts` - Overrides still work
 - `src/agent/implementations/flows/ToolUseRunFlow.ts` - Flow pattern preserved
@@ -122,6 +134,7 @@ ToolUseRunFlow:
 ## Boundary Crossing Analysis
 
 ### Before Refactoring (~30 crossings per round)
+
 ```
 ReflectionRunFlow
   → agent.runReflectionRound()
@@ -142,6 +155,7 @@ ReflectionRunFlow
 ```
 
 ### After Refactoring (~3 crossings per round)
+
 ```
 ReflectionRunFlow
   → agent.executeRound()                      [CROSS 1]
@@ -156,6 +170,7 @@ ReflectionRunFlow
 ## Encapsulation Verification
 
 ### Before
+
 - ❌ Flows directly mutated `agent.roundStates`
 - ❌ Flows directly mutated `agent.workspaceStates`
 - ❌ Flows directly mutated `agent.roundOutputs`
@@ -163,6 +178,7 @@ ReflectionRunFlow
 - ❌ Agent spawned sub-flows (callback hell)
 
 ### After
+
 - ✓ Agent exposes `recordRoundResult()` for state updates
 - ✓ Flows call single entry point `executeRound()`
 - ✓ Agent owns all internal state management
@@ -172,6 +188,7 @@ ReflectionRunFlow
 ## Method Override Compatibility
 
 All public methods can be overridden by subclasses:
+
 - ✓ `prepareAgentWorkspaceState()` - Can customize workspace prep
 - ✓ `prepareRoundContext()` - Can customize context prep
 - ✓ `runRoundPipeline()` - Can customize pipeline execution
@@ -190,18 +207,21 @@ All public methods can be overridden by subclasses:
 ## Code Quality Metrics
 
 ### Abstraction Quality
+
 - **Before**: 4 layers (Flow → Agent → SubFlow → Hooks → Agent)
 - **After**: 2 layers (Flow → Agent)
 - **Improvement**: 50% reduction in nesting depth
 
 ### Cognitive Load
+
 - **Before**: Must understand hooks, sub-flows, mutations, callbacks
 - **After**: Flow calls agent method, agent returns result
 - **Improvement**: Direct function calls, no callbacks
 
 ### Single Responsibility
+
 - **Agent**: Owns execution and state
-- **Flow**: Owns lifecycle and orchestration  
+- **Flow**: Owns lifecycle and orchestration
 - **Clear separation**: No bidirectional coupling
 
 ## Next Steps for Testing

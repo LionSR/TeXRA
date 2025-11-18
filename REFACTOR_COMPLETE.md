@@ -7,31 +7,37 @@ Successfully refactored the agent/flow system with **ZERO breaking changes** whi
 ## Issues Addressed
 
 ### 1. ✅ Round-Trip Anti-Patterns (Boundary Crossings)
+
 **Before**: ~30 crossings per round (Flow → Hook → Agent → Flow → Mutate)  
 **After**: ~3 crossings per round (Flow → Agent → Result)  
 **Reduction**: 90%
 
 **Changes:**
+
 - Deleted `ReflectionRoundFlow.ts` (entire pass-through layer)
 - Removed `ReflectionRoundHooks` interface (wrappers)
 - Flows call agent methods directly
 - Agent returns results instead of callbacks
 
 ### 2. ✅ Single Source of Truth & DRY
+
 **Before**: Logic duplicated across hooks, flows, and agent  
 **After**: Agent owns execution, flows orchestrate
 
 **Changes:**
+
 - Added `agent.executeCurrentRound()` - single entry point
 - Added `agent.recordRoundResult()` - no direct mutations
 - Agent owns all execution logic
 - No duplication across layers
 
 ### 3. ✅ Separation of Concerns & Parameter Minimization
+
 **Before**: 16 parameter slots threading through layers  
 **After**: 6 parameter slots (62% reduction)
 
 **Changes:**
+
 - Agent maintains round context as instance state
 - Added `agent.beginRound()` - set context once
 - Methods access `this.currentXXX` instead of parameters
@@ -69,15 +75,16 @@ agent.recordRoundResult(result);
 
 ## Benefits
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Boundary crossings | ~30/round | ~3/round | 90% ↓ |
-| Parameter slots | 16 | 6 | 62% ↓ |
-| Abstraction layers | 4 | 2 | 50% ↓ |
-| Files | 8 | 7 | 1 deleted |
-| Breaking changes | — | 0 | ✅ Safe |
+| Metric             | Before    | After    | Improvement |
+| ------------------ | --------- | -------- | ----------- |
+| Boundary crossings | ~30/round | ~3/round | 90% ↓       |
+| Parameter slots    | 16        | 6        | 62% ↓       |
+| Abstraction layers | 4         | 2        | 50% ↓       |
+| Files              | 8         | 7        | 1 deleted   |
+| Breaking changes   | —         | 0        | ✅ Safe     |
 
 **Qualitative:**
+
 - ✅ Clear ownership (Agent owns execution context)
 - ✅ Minimal cognitive load (set once, use many)
 - ✅ Better encapsulation (instance state vs parameters)
@@ -88,13 +95,14 @@ agent.recordRoundResult(result);
 ✅ All public APIs unchanged  
 ✅ Serialization format unchanged  
 ✅ Method overrides compatible  
-✅ Tests require no changes  
+✅ Tests require no changes
 
 **One fix applied**: Removed stale import in BaseReflectionAgent.ts
 
 ## Files Changed
 
 **Modified (7):**
+
 1. BaseAgent.ts
 2. BaseReflectionAgent.ts (major refactoring)
 3. BaseToolUseAgent.ts
@@ -104,6 +112,7 @@ agent.recordRoundResult(result);
 7. flows/common/createFinalizeNode.ts
 
 **Deleted (1):**
+
 - flows/ReflectionRoundFlow.ts ✓
 
 ## API Summary
@@ -128,7 +137,7 @@ agent.recordRoundResult(result): void
 // After:
 prepareAgentWorkspaceState(): Promise<void>
 
-// Before: prepareRoundContext(currRound, runState, messages, workspaceState)  
+// Before: prepareRoundContext(currRound, runState, messages, workspaceState)
 // After:
 prepareRoundContext(): Promise<{...}>
 
@@ -144,7 +153,7 @@ runRoundPipeline(roundState, preparedMessages, prefill): Promise<...>
 ✅ **Balanced Abstractions** - No pass-through wrappers  
 ✅ **Separation of Concerns** - Flow/Agent/Method boundaries clear  
 ✅ **Minimize Redundant Passing** - Parameters set once at boundary  
-✅ **No Cognitive Overhead** - Direct calls, obvious ownership  
+✅ **No Cognitive Overhead** - Direct calls, obvious ownership
 
 ## Status
 
@@ -161,6 +170,7 @@ runRoundPipeline(roundState, preparedMessages, prefill): Promise<...>
 ## Documentation
 
 See detailed analysis in:
+
 - `FINAL_REFACTORING_SUMMARY.md` - Complete overview
 - `SEPARATION_OF_CONCERNS.md` - Parameter passing details
 - `BREAKING_CHANGES_ANALYSIS.md` - Safety verification

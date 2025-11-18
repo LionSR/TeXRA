@@ -137,8 +137,10 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]> {
     this.logger.userMessage(followUp);
-    const updatedMessages =
-      await this.modelHandler.createUserFollowUpMessages(messages, followUp);
+    const updatedMessages = await this.modelHandler.createUserFollowUpMessages(
+      messages,
+      followUp,
+    );
     this.getActiveState().conversation = [...updatedMessages];
     return this.getActiveState().conversation;
   }
