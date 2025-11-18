@@ -423,14 +423,26 @@ export class OutputHandler implements IOutputHandler {
         ? createFileMapping(prevLocations, currentLocations, 'basename', true)
         : new Map<string, string>();
 
-    const originByOutput = new Map(
-      currentOutputs.map((entry) => [
-        getComparablePath(entry.location),
-        entry.lineage?.original
-          ? getComparablePath(entry.lineage.original)
-          : undefined,
-      ]),
-    );
+    // Map each output to its original base file by matching source name
+    const originByOutput = new Map<string, string | undefined>();
+    for (const entry of currentOutputs) {
+      const outputPath = getComparablePath(entry.location);
+      
+      // Find the base file that matches this output's source name
+      const matchingBase = this.baseFiles.find((baseLoc) => {
+        const baseName = path.basename(
+          baseLoc.kind !== 'external'
+            ? baseLoc.relativePath
+            : baseLoc.absolutePath,
+        );
+        return baseName === entry.source || baseName.includes(entry.source);
+      });
+      
+      originByOutput.set(
+        outputPath,
+        matchingBase ? getComparablePath(matchingBase) : undefined,
+      );
+    }
 
     const locationByOutput = new Map<string, FileLocation>();
 
