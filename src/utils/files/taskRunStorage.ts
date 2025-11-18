@@ -490,7 +490,7 @@ export class TaskRunFileService {
           } catch (error) {
             logger.warn(
               CHANNEL,
-              `Failed to mirror workspace dependency ${candidate}: ${toErrorMessage(error)}`,
+              `Failed to mirror workspace dependency ${candidate.absolutePath}: ${toErrorMessage(error)}`,
             );
           }
         }),
@@ -552,11 +552,11 @@ export class TaskRunFileService {
 
   /**
    * Ensure a workspace dependency is reachable from run storage via symlink.
+   * Takes a FileLocation and creates a symlink in run storage if needed.
    */
   public async mirrorWorkspaceFile(
-    workspaceFile: string,
+    location: FileLocation,
   ): Promise<FileLocation> {
-    const location = this.describePath(workspaceFile);
     if (location.kind !== 'workspace') {
       return location;
     }
