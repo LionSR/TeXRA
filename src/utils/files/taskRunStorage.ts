@@ -321,8 +321,9 @@ export class TaskRunFileService {
     };
 
     if (options.mirrorBaseFiles !== false) {
+      // Use baseFiles directly - they're already FileLocations
       for (const base of baseFiles) {
-        registerLink(base.absolutePath);
+        linkTargets.add(base);
       }
     }
 
@@ -529,13 +530,20 @@ export function getComparablePath(location: FileLocation): string {
  */
 export function pathToLocation(target: string): FileLocation {
   if (!target) {
-    return createExternalLocation(target);
+    // Empty strings should resolve to workspace root or error
+    const workspaceRoot = WorkspaceFS.getPath();
+    if (!workspaceRoot) {
+      throw new Error('Cannot resolve empty path without workspace');
+    }
+    return createWorkspaceLocation(workspaceRoot, '');
   }
 
   if (!path.isAbsolute(target)) {
     const workspaceRoot = WorkspaceFS.getPath();
     if (!workspaceRoot) {
-      return createExternalLocation(target);
+      // Relative path without workspace: resolve to absolute using process.cwd()
+      const absolutePath = path.resolve(target);
+      return createExternalLocation(absolutePath);
     }
     // path.join() normalizes automatically
     const absolutePath = path.join(workspaceRoot, target);
