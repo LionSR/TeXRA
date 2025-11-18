@@ -137,13 +137,8 @@ function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
-  const safeId = normalizeExecutionId(id);
-  if (!safeId) {
-    throw new Error('Execution ID is required for run storage');
-  }
-
   const relative = workspaceRelative ? path.normalize(workspaceRelative) : '';
-  const storageRelative = path.join(TASK_RUNS_DIR, safeId, relative);
+  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
   return {
     absolute: StorageFS.fullPath(storageRelative),
     storageRelative,
@@ -243,19 +238,18 @@ export class TaskRunFileService {
       'texra.agentOutputs.storageMode',
       'workspace',
     );
-    const normalizedId = normalizeExecutionId(executionId ?? undefined);
     const shouldUseRunStorage =
-      storageMode === 'taskRunStorage' && Boolean(normalizedId);
+      storageMode === 'taskRunStorage' && Boolean(executionId);
 
     const nextMode: 'workspace' | 'taskRunStorage' = shouldUseRunStorage
       ? 'taskRunStorage'
       : 'workspace';
     const nextRunDirectory =
-      shouldUseRunStorage && normalizedId ? getRunDir(normalizedId) : null;
+      shouldUseRunStorage && executionId ? getRunDir(executionId) : null;
 
     const contextChanged =
       this.metadata.mode !== nextMode ||
-      this.metadata.executionId !== normalizedId ||
+      this.metadata.executionId !== executionId ||
       this.metadata.runDirectory !== nextRunDirectory;
 
     this.metadata.mode = nextMode;
@@ -550,12 +544,8 @@ export class TaskRunFileService {
  * @throws Error if the execution ID is invalid
  */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
-  const safeId = normalizeExecutionId(id);
-  if (!safeId) {
-    throw new Error('Execution ID is required for run storage');
-  }
   await StorageFS.ensureDir(TASK_RUNS_DIR);
-  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, safeId));
+  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, id));
 }
 
 /**
