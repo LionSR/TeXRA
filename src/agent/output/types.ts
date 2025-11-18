@@ -3,40 +3,9 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { DiffStatsSchema } from '@agent/types/DiffTypes';
-
-// ============================================================================
-// SCHEMAS (Zod v4 - schemas are the source of truth, types derived via z.infer)
-// ============================================================================
-
-const WorkspaceFileLocationSchema = z
-  .object({
-    kind: z.literal('workspace'),
-    absolutePath: z.string(),
-    relativePath: z.string(),
-  })
-  .strict();
-
-const RunStorageFileLocationSchema = z
-  .object({
-    kind: z.literal('runStorage'),
-    absolutePath: z.string(),
-    relativePath: z.string(),
-    executionId: z.string(),
-  })
-  .strict();
-
-const ExternalFileLocationSchema = z
-  .object({
-    kind: z.literal('external'),
-    absolutePath: z.string(),
-  })
-  .strict();
-
-export const FileLocationSchema = z.discriminatedUnion('kind', [
-  WorkspaceFileLocationSchema,
-  RunStorageFileLocationSchema,
-  ExternalFileLocationSchema,
-]);
+// Re-export FileLocation from its source of truth
+import type { FileLocation, AgentFileLocation } from '@utils/files';
+export type { FileLocation, AgentFileLocation };
 
 // ============================================================================
 // OUTPUT FILE SCHEMAS (types derived via z.infer)
@@ -45,11 +14,12 @@ export const FileLocationSchema = z.discriminatedUnion('kind', [
 /**
  * Minimal output file reference - just source name + location.
  * Location contains all path variants (absolute, relative, workspace).
+ * Note: FileLocation type is imported from @utils/files (not defined here)
  */
 export const OutputFileSchema = z
   .object({
     source: z.string(),
-    location: FileLocationSchema,
+    location: z.custom<FileLocation>(),
   })
   .strict();
 
@@ -60,9 +30,19 @@ export const OutputFileSchema = z
  */
 export const FileLineageSchema = z
   .object({
-    base: FileLocationSchema.nullable(),
-    previous: FileLocationSchema.nullable(),
-    original: FileLocationSchema.nullable(),
+    /** Original location before agent processing (if any) */
+    original: z.custom<FileLocation>().nullable(),
+    /** Diff file location (if generated) */
+    diffFile: z.custom<FileLocation>().nullable(),
+  })
+  .strict();
+
+/** @deprecated Old structure, use FileLineageSchema */
+const LegacyFileLineageSchema = z
+  .object({
+    base: z.custom<FileLocation>().nullable(),
+    previous: z.custom<FileLocation>().nullable(),
+    original: z.custom<FileLocation>().nullable(),
   })
   .strict();
 
@@ -76,7 +56,7 @@ export const FileLineageSchema = z
 export const OutputFileInfoSchema = z
   .object({
     source: z.string(),
-    location: FileLocationSchema,
+    location: z.custom<FileLocation>(),
     lineage: FileLineageSchema.nullable(),
     diff: DiffStatsSchema.nullable(),
   })
@@ -85,10 +65,10 @@ export const OutputFileInfoSchema = z
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
 // Derive types from schemas (Zod v4)
+// Note: FileLocation is imported from @utils/files, not derived here
 export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
-export type FileLocation = z.infer<typeof FileLocationSchema>;
 
 // ============================================================================
 // XML SUMMARY SCHEMAS
@@ -101,7 +81,7 @@ const RawOutputXmlSummarySchema = z
       .optional(),
     documents: z.array(z.string()).optional(),
     singleOutputFile: z.string().nullable(),
-    sourceLocation: FileLocationSchema.nullable(),
+    sourceLocation: z.custom<FileLocation>().nullable(),
   })
   .strict();
 
@@ -131,7 +111,7 @@ export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 export const RoundOutputSchema = z
   .object({
     round: z.number(),
-    rawOutput: FileLocationSchema.nullable(),
+    rawOutput: z.custom<FileLocation>().nullable(),
     outputs: OutputFileInfoSchema.array(),
     xmlSummary: OutputXmlSummarySchema,
   })
