@@ -277,7 +277,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
    * @param groupLabel Label to use for the new log group
    * @param callback Callback to execute with the created group ID
    */
-  protected async withRoundStage<T>(
+  public async withRoundStage<T>(
     groupLabel: string,
     callback: (stage: AgentLogStage) => Promise<T>,
   ): Promise<T> {
