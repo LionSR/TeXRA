@@ -508,13 +508,8 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       .join(', ');
     options.logger.debug(`Usage summary: ${usageSummary}`);
 
-    if (result.thinkingContent && !result.useStreaming) {
-      options.logger.info(
-        result.thinkingContent,
-        undefined,
-        MESSAGE_TYPES.THINKING,
-      );
-    }
+    // Thinking content already logged in exec() method above
+    // Removing duplicate log to fix duplicate streaming blocks in workflow agents
 
     options.logger.info(
       `Stop reason: ${result.stopReason}`,
