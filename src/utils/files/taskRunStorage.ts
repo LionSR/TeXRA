@@ -335,9 +335,11 @@ export class TaskRunFileService {
     const normalized = path.normalize(target);
 
     // Check if in run storage first (only relevant for this service)
+    // IMPORTANT: Only access StorageFS if executionId exists to avoid crashes when storage isn't initialized
     const executionId = this.activeExecutionId;
-    const storageRoot = StorageFS.fullPath('');
-    if (executionId && storageRoot && normalized.startsWith(storageRoot)) {
+    if (executionId) {
+      const storageRoot = StorageFS.fullPath('');
+      if (storageRoot && normalized.startsWith(storageRoot)) {
       const relativeToStorage = path.relative(storageRoot, normalized);
       const segments = relativeToStorage.split(path.sep).filter(Boolean);
       const runIndex = segments.indexOf(TASK_RUNS_DIR);
@@ -345,10 +347,11 @@ export class TaskRunFileService {
       if (runIndex !== -1 && segments.length >= runIndex + 2) {
         const runId = segments[runIndex + 1];
         if (runId === executionId) {
-          const withinRun = segments.slice(runIndex + 2).join(path.sep);
+            const withinRun = segments.slice(runIndex + 2).join(path.sep);
           const runRelative = withinRun ? path.normalize(withinRun) : '';
           return createRunStorageLocation(normalized, runRelative, executionId);
         }
+      }
       }
     }
 
