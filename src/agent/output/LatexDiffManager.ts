@@ -23,6 +23,7 @@ import { LaTeXdiffService, LaTeXdiffResult } from '@latex/latexdiff';
 
 // Local imports - types
 import type { OutputFileInfo, RoundFileMapping } from './types';
+import { getFileDirectory } from './displayUtils';
 
 /**
  * Result of a latexdiff operation with file locations.
@@ -117,8 +118,11 @@ export class LatexDiffManager {
    * Get display label (basename) from FileLocation for UI/logging.
    */
   private getDisplayLabel(location: FileLocation): string {
-    // Agent outputs are always workspace or runStorage, never external
-    return path.basename((location as AgentFileLocation).relativePath);
+    return path.basename(
+      location.kind === 'workspace' || location.kind === 'runStorage'
+        ? location.relativePath
+        : location.absolutePath,
+    );
   }
 
   private async ensureWorkspaceDependency(
@@ -215,10 +219,7 @@ export class LatexDiffManager {
 
           if (result.success && result.diffFileName) {
             // Create diff location using fileService - it knows whether to use workspace or run storage
-            // Agent outputs are always workspace or runStorage, never external
-            const baseRelDir = path.dirname(
-              (baseLocation as AgentFileLocation).relativePath,
-            );
+            const baseRelDir = getFileDirectory(baseLocation);
             const diffRelativePath = path.join(baseRelDir, result.diffFileName);
 
             // This automatically uses run storage if enabled, workspace otherwise
@@ -286,11 +287,8 @@ export class LatexDiffManager {
 
           if (result.success && result.diffFileName) {
             // Create diff location using fileService - it knows whether to use workspace or run storage
-            // Agent outputs are always workspace or runStorage, never external
-            const refLocation = prevLocation ?? currLocation!;
-            const refRelDir = path.dirname(
-              (refLocation as AgentFileLocation).relativePath,
-            );
+            const refLocation = prevLocation ?? currLocation;
+            const refRelDir = getFileDirectory(refLocation);
             const diffRelativePath = path.join(refRelDir, result.diffFileName);
 
             // This automatically uses run storage if enabled, workspace otherwise
