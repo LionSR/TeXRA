@@ -690,6 +690,62 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   /**
+   * Executes a complete reflection round including preparation, execution, and result recording.
+   * This is the single entry point for running a round - flows should call this instead of
+   * orchestrating individual steps.
+   *
+   * @param roundIndex - The zero-based index of the round to execute
+   * @param runState - The current run state
+   * @param messages - The conversation messages
+   * @returns The result of the round execution
+   */
+  public async executeRound(
+    roundIndex: number,
+    runState: AgentRunState,
+    messages: any[],
+  ): Promise<ReflectionRoundResult> {
+    this.logger.debug(`Processing round ${roundIndex}`);
+    
+    return this.withRoundStage(`r${roundIndex}`, async () => {
+      const workspaceState = new AgentWorkspaceState();
+
+      // Prepare workspace state
+      await this.prepareAgentWorkspaceState(roundIndex, workspaceState);
+
+      // Prepare round context
+      const preparation = await this.prepareRoundContext(
+        roundIndex,
+        runState,
+        messages,
+        workspaceState,
+      );
+
+      // Handle skip case
+      if (preparation.skip) {
+        return {
+          roundState: preparation.stateRound,
+          runState,
+          messages,
+          shouldContinue: true,
+          workspaceState,
+          output: null,
+        };
+      }
+
+      // Execute round pipeline
+      return await this.runRoundPipeline({
+        roundIndex,
+        roundState: preparation.stateRound,
+        runState,
+        workspaceState,
+        preparedMessages: preparation.preparedMessages,
+        prefill: preparation.prefill ?? '',
+        outputLocation: this.outputFile[roundIndex],
+      });
+    });
+  }
+
+  /**
    * Main execution method that processes inputs and generates outputs.
    */
   public async run(): Promise<void> {
