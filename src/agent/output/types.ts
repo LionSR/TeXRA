@@ -24,15 +24,17 @@ export const OutputFileSchema = z
   .strict();
 
 /**
- * File lineage - tracks where files came from.
+ * File lineage - tracks where files came from and what to compare against.
  * Uses full FileLocation objects (not split across string + location fields).
  * Fields are nullable to support cases where lineage doesn't exist.
  */
 export const FileLineageSchema = z
   .object({
-    /** Original location before agent processing (if any) */
+    /** Original location before any agent processing */
     original: z.custom<FileLocation>().nullable(),
-    /** Diff file location (if generated) */
+    /** What file to diff against (base/previous round, computed by getEffectiveBaseFile) */
+    diffBase: z.custom<FileLocation>().nullable(),
+    /** Generated diff file location (if latexdiff was run) */
     diffFile: z.custom<FileLocation>().nullable(),
   })
   .strict();

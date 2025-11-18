@@ -4,7 +4,6 @@ import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 import { getBasename } from '@common/pathUtils.js';
-import { getEffectiveBaseFile } from '@common/modules/files/baseFileUtils.js';
 
 /**
  * Manages file list rendering.
@@ -84,7 +83,7 @@ export class FileList {
           fileItem.dataset.file = file.location.absolutePath;
           fileItem.dataset.original =
             file.lineage?.original?.absolutePath || '';
-          fileItem.dataset.base = file.lineage?.base?.absolutePath || '';
+          fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
           fileItem.dataset.round = round;
           if (file.location.kind === 'workspace') {
             fileItem.dataset.workspace = file.location.absolutePath;
@@ -124,11 +123,10 @@ export class FileList {
         }
 
         // Get effective base file for comparisons
-        const effectiveBase = getEffectiveBaseFile(
-          file.lineage?.base?.absolutePath,
-          file.lineage?.original?.absolutePath,
-          file.location.absolutePath,
-        );
+        // NEW STRUCTURE: diffBase is already computed, use it directly
+        const effectiveBase =
+          file.lineage?.diffBase?.absolutePath ||
+          file.lineage?.original?.absolutePath;
 
         // Update buttons with click handlers
         this.updateFileButtons(clone, file, effectiveBase);
@@ -170,9 +168,9 @@ export class FileList {
       {
         selector: '.prev-btn',
         command: COMMANDS.COMPARE_PREVIOUS,
-        condition: file.lineage?.previous?.absolutePath,
+        condition: file.lineage?.diffBase?.absolutePath,
         configure: (btn, basePath) => {
-          btn.dataset.prev = file.lineage?.previous?.absolutePath;
+          btn.dataset.prev = file.lineage?.diffBase?.absolutePath;
           if (basePath) {
             btn.dataset.base = basePath;
           }
