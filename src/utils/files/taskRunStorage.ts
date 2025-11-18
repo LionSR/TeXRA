@@ -130,7 +130,10 @@ export function getRunDir(id: ExecutionId): string {
   return StorageFS.fullPath(path.join(TASK_RUNS_DIR, safeId));
 }
 
-export function getRunStoragePaths(
+/**
+ * @internal Used internally by TaskRunFileService
+ */
+function getRunStoragePaths(
   id: ExecutionId,
   workspaceRelative: string,
 ): { absolute: string; storageRelative: string; runRelative: string } {
