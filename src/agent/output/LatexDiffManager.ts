@@ -57,7 +57,7 @@ export class LatexDiffManager {
 
   constructor(
     private readonly agentSetting: AgentWorkflowSetting,
-    private readonly outputFiles: { [key: number]: OutputFileInfo[] },
+    private readonly getOutputFiles: () => { [key: number]: OutputFileInfo[] },
     private readonly baseFiles: FileLocation[],
     private readonly logger: AgentLogger,
     private readonly channel: string,
@@ -175,7 +175,7 @@ export class LatexDiffManager {
         return;
       }
 
-      const outputFiles = this.outputFiles[currRound] || [];
+      const outputFiles = this.getOutputFiles()[currRound] || [];
       const outputPaths = outputFiles.map(
         (entry) => entry.location.absolutePath,
       );
@@ -186,7 +186,9 @@ export class LatexDiffManager {
         return;
       }
 
-      this.logger.debug(`Base files: ${this.baseFiles}`);
+      this.logger.debug(
+        `Base files: ${this.baseFiles.map((f) => f.absolutePath).join(', ')}`,
+      );
       this.logger.debug(`r${currRound} output files: ${outputPaths}`);
 
       const basePairs = Array.from(mapping.baseToOutput.entries());
