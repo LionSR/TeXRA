@@ -581,9 +581,7 @@ async function runLatexdiffFromMetadata(params: {
   for (const [round, infos] of rounds.entries()) {
     for (const info of infos) {
       const revised = info.location;
-      const base = info.lineage?.original
-        ? pathToLocation(info.lineage.original)
-        : null;
+      const base = info.lineage?.original ?? null;
       const description = `${describeFile(info)} (r${round})`;
 
       if (!base) {
