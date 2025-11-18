@@ -69,9 +69,10 @@ export class FileList {
         const fileActions = clone.querySelector('.file-actions');
         const statsSpan = clone.querySelector('.file-stats');
 
-        // Use source name if available, otherwise use basename of relative path
-        const displayLabel =
-          file.source || getBasename(file.location.relativePath);
+        // Always use just the basename for display (no directory doubling)
+        const displayLabel = file.source
+          ? getBasename(file.source)
+          : getBasename(file.location.relativePath);
         const relativePath = file.location.relativePath;
         const dirPath =
           relativePath && relativePath.includes('/')
@@ -96,9 +97,9 @@ export class FileList {
           }
         }
 
-        // Set the file path display
-        if (dirSpan) dirSpan.textContent = dirPath ? `${dirPath}/` : '';
-        if (basenameSpan) basenameSpan.textContent = displayLabel;
+        // Set the file path display - simplified, no color coding for directory
+        if (basenameSpan) basenameSpan.textContent = relativePath;
+        if (dirSpan) dirSpan.textContent = '';
         if (filePathSpan) {
           const displayPath =
             file.location.kind === 'workspace' ||
