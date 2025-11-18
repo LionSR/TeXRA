@@ -36,6 +36,18 @@ export interface CreateResponseOptions<
 }
 
 /**
+ * Result from extracting response data from a provider response.
+ */
+export interface ExtractResponseResult {
+  /** Extracted response text */
+  response: string;
+  /** Usage/token statistics from the provider */
+  usage: any;
+  /** Reason why the model stopped generating */
+  stopReason: ProviderStopReason;
+}
+
+/**
  * Common interface implemented by all model handlers.
  *
  * @template M - Message type specific to the provider (e.g., MessageParam for Anthropic,
@@ -119,7 +131,7 @@ export interface IModelHandler<
   extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, ProviderStopReason];
+  ): ExtractResponseResult;
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(

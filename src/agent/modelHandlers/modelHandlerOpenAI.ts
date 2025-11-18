@@ -61,7 +61,10 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 import { ModelHandler } from './ModelHandler';
-import type { CreateResponseOptions } from './types/IModelHandler';
+import type {
+  CreateResponseOptions,
+  ExtractResponseResult,
+} from './types/IModelHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -629,7 +632,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   extractResponse(
     responseObject: any,
     endTag: string,
-  ): [string, any, ProviderStopReason] {
+  ): ExtractResponseResult {
     if (!responseObject.choices?.length) {
       this.logger.debug(
         `Response object: ${objectToLogString(responseObject)}`,
@@ -664,7 +667,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
           newResponse = `${newResponse}\n${endTag}`;
         }
 
-        return [newResponse, usage, stopReason];
+        return { response: newResponse, usage, stopReason };
       }
 
       if (responseObject.error) {
@@ -718,7 +721,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       newResponse = `${newResponse}\n${endTag}`;
     }
 
-    return [newResponse, responseObject.usage, stopReason];
+    return { response: newResponse, usage: responseObject.usage, stopReason };
   }
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
