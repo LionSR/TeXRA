@@ -314,66 +314,19 @@ export class TaskRunFileService {
   }
 
   /**
-   * Describe a file path as a FileLocation, with run-storage awareness.
-   * Unlike standalone pathToLocation, this method can detect if an absolute path
-   * is within the current run storage directory.
+   * @deprecated INTERNAL USE ONLY - DO NOT USE THIS METHOD
+   * This method is being kept temporarily for internal compatibility only.
+   * Use `createLocation()` for creating file locations from relative paths.
+   * Use `pathToLocation()` for converting external absolute paths at boundaries.
    *
-   * @param target - Absolute or workspace-relative path
-   * @returns FileLocation with appropriate kind (workspace/runStorage/external)
+   * @internal
    */
-  public describePath(target: string): FileLocation {
-    if (!target) {
-      return createExternalLocation(target);
-    }
-
-    // Handle relative paths: resolve to workspace
-    if (!path.isAbsolute(target)) {
-      const workspaceRoot = this.workspaceRoot;
-      if (!workspaceRoot) {
-        return createExternalLocation(target);
-      }
-      const normalized = path.normalize(target);
-      const workspaceAbsolute = path.join(workspaceRoot, normalized);
-      return createWorkspaceLocation(workspaceAbsolute, normalized);
-    }
-
-    const normalized = path.normalize(target);
-
-    // Check if in run storage first (only relevant for this service)
-    // IMPORTANT: Only access StorageFS if executionId exists to avoid crashes when storage isn't initialized
-    const executionId = this.activeExecutionId;
-    if (executionId) {
-      const storageRoot = StorageFS.fullPath('');
-      if (storageRoot && normalized.startsWith(storageRoot)) {
-        const relativeToStorage = path.relative(storageRoot, normalized);
-        const segments = relativeToStorage.split(path.sep).filter(Boolean);
-        const runIndex = segments.indexOf(TASK_RUNS_DIR);
-
-        if (runIndex !== -1 && segments.length >= runIndex + 2) {
-          const runId = segments[runIndex + 1];
-          if (runId === executionId) {
-            const withinRun = segments.slice(runIndex + 2).join(path.sep);
-            const runRelative = withinRun ? path.normalize(withinRun) : '';
-            return createRunStorageLocation(
-              normalized,
-              runRelative,
-              executionId,
-            );
-          }
-        }
-      }
-    }
-
-    // Check if in workspace
-    const workspaceRoot = this.workspaceRoot;
-    if (workspaceRoot) {
-      const relative = path.relative(workspaceRoot, normalized);
-      if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-        return createWorkspaceLocation(normalized, relative);
-      }
-    }
-
-    return createExternalLocation(normalized);
+  private describePath(target: string): FileLocation {
+    // This method is deprecated and should not be used
+    // Kept only to avoid breaking internal code during refactoring
+    throw new Error(
+      'describePath is deprecated. Use createLocation() or pathToLocation() instead.',
+    );
   }
 
   /**

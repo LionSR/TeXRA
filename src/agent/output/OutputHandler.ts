@@ -387,8 +387,9 @@ export class OutputHandler implements IOutputHandler {
           source: output.source,
           location,
           lineage: {
-            // NEW STRUCTURE: only track original source and diff file
+            // Track original file, what to compare against, and where diff is
             original: locationFor(originalFile),
+            diffBase: diffBaseLocation, // What getEffectiveBaseFile computed
             diffFile: null, // Set later when latexdiff is generated
           },
           diff: stats,
