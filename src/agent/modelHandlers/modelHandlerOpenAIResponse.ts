@@ -1296,7 +1296,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const call = callArg as ResponseFunctionToolCallItem;
     const id = call?.call_id ?? (callArg as any)?.id ?? 'unknown-id';
     const name = call?.name ?? (callArg as any)?.name ?? 'unknown';
-    
+
     const messages: ResponseInputItem[] = [];
     if (text) {
       messages.push(this.createAssistantMessage(text));

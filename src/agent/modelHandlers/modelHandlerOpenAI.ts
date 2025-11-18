@@ -1179,25 +1179,32 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    callArg: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall | any,
+    callArg:
+      | ChatCompletionMessageToolCall
+      | ChatCompletionMessage.FunctionCall
+      | any,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     // Handle both native tool call and legacy parsed payload
-    const call = callArg as ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+    const call = callArg as
+      | ChatCompletionMessageToolCall
+      | ChatCompletionMessage.FunctionCall;
     const id = (call as any)?.id ?? (call as any)?.tool_call_id ?? 'unknown-id';
-    const name = (call as any)?.name ?? (call as any)?.function?.name ?? 'unknown';
-    
+    const name =
+      (call as any)?.name ?? (call as any)?.function?.name ?? 'unknown';
+
     // Use original if it's a complete ChatCompletionMessageToolCall, otherwise normalize
     let toolCall: ChatCompletionMessageToolCall;
-    const isCompleteToolCall = (call as ChatCompletionMessageToolCall)?.type === 'function' && 
-                                (call as ChatCompletionMessageToolCall)?.id &&
-                                (call as any)?.function;
+    const isCompleteToolCall =
+      (call as ChatCompletionMessageToolCall)?.type === 'function' &&
+      (call as ChatCompletionMessageToolCall)?.id &&
+      (call as any)?.function;
     if (isCompleteToolCall) {
-      toolCall = call as ChatCompletionMessageToolCall;  // ✅ Use ORIGINAL
+      toolCall = call as ChatCompletionMessageToolCall; // ✅ Use ORIGINAL
     } else {
-      toolCall = this.normalizeToolCall(id, name, call);  // Fallback
+      toolCall = this.normalizeToolCall(id, name, call); // Fallback
     }
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',

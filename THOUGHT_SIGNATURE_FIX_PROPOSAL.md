@@ -38,10 +38,10 @@ According to Google's API requirements and the `@google/genai` SDK documentation
 ```typescript
 // From @google/genai SDK type definitions
 export declare interface Part {
-    // ... other fields
-    functionCall?: FunctionCall;
-    thought?: boolean;
-    thoughtSignature?: string;  // <-- This field exists on Part, not FunctionCall
+  // ... other fields
+  functionCall?: FunctionCall;
+  thought?: boolean;
+  thoughtSignature?: string; // <-- This field exists on Part, not FunctionCall
 }
 ```
 
@@ -69,7 +69,7 @@ interface ToolUseInfo {
 extractToolUse(responseObject: GenerateContentResponse): ToolUseInfo | null {
   const candidate = responseObject?.candidates?.[0];
   const parts = candidate?.content?.parts;
-  
+
   if (!Array.isArray(parts)) {
     return null;
   }
@@ -101,7 +101,7 @@ extractToolUse(responseObject: GenerateContentResponse): ToolUseInfo | null {
       thoughtSignature,
     };
   }
-  
+
   return null;
 }
 ```
@@ -166,9 +166,9 @@ Or, more simply, keep backward compatibility:
 
 ```typescript
 // Return type can be string for backward compatibility, or object with metadata
-extractToolUse(responseObject: TResponseType): string | { 
-  toolCall: string; 
-  thoughtSignature?: string; 
+extractToolUse(responseObject: TResponseType): string | {
+  toolCall: string;
+  thoughtSignature?: string;
 } | null;
 ```
 
@@ -202,7 +202,7 @@ const followUpMsgs = await options.modelHandler.createToolUseFollowUpMessages(
   buildToolResultPayload(result),
   store.workspace,
   state.text ?? '',
-  thoughtSignature,  // <-- Pass the thoughtSignature
+  thoughtSignature, // <-- Pass the thoughtSignature
 );
 ```
 
@@ -218,10 +218,12 @@ Instead of threading through the signature via return values, we could:
 2. Retrieve it from workspace state when creating function call messages
 
 **Pros:**
+
 - Less parameter threading
 - Already have access to workspaceState in `createToolUseFollowUpMessages()`
 
 **Cons:**
+
 - More implicit state management
 - Need to clear the signature after use to avoid stale data
 
@@ -271,6 +273,7 @@ Instead of threading through the signature via return values, we could:
 ## Risk Assessment
 
 **Low Risk** because:
+
 - The change is additive (new optional parameter)
 - Only affects Google GenAI handler
 - Other providers return undefined for the new field

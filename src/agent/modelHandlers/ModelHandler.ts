@@ -579,8 +579,10 @@ export abstract class ModelHandler<
    * @param responseObject The raw response object from the model
    * @returns JSON string with tool call details or null if not present
    */
-  extractToolUse(_responseObject: any): 
-    | string 
+  extractToolUse(
+    _responseObject: any,
+  ):
+    | string
     | { toolCall: string; originalBlock?: any; originalPart?: any }
     | null {
     return null;

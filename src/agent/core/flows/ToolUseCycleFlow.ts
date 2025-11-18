@@ -213,7 +213,7 @@ export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
   toolInfo?: string | { toolCall: string; originalBlock: unknown };
   text?: string;
-  originalToolBlock?: unknown;  // Store the native SDK tool block (Part, ToolUseBlock, etc.)
+  originalToolBlock?: unknown; // Store the native SDK tool block (Part, ToolUseBlock, etc.)
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
@@ -417,18 +417,20 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     const toolExtraction = options.modelHandler.extractToolUse(state.response);
-    
+
     // Handle both old (string) and new (object) return types
     let toolInfoString: string | undefined;
     let originalBlock: unknown | undefined;
-    
+
     if (typeof toolExtraction === 'string') {
       toolInfoString = toolExtraction;
     } else if (toolExtraction && typeof toolExtraction === 'object') {
       toolInfoString = (toolExtraction as any).toolCall;
-      originalBlock = (toolExtraction as any).originalBlock || (toolExtraction as any).originalPart;
+      originalBlock =
+        (toolExtraction as any).originalBlock ||
+        (toolExtraction as any).originalPart;
     }
-    
+
     const {
       response: text,
       usage,
@@ -477,13 +479,18 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     state.toolInfo = toolInfoString;
-    state.originalToolBlock = originalBlock;  // Store the native block
+    state.originalToolBlock = originalBlock; // Store the native block
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
     return {
       skipped: false,
-      value: { toolInfo: toolInfoString, stopReason, text: text ?? undefined, endTurn: false },
+      value: {
+        toolInfo: toolInfoString,
+        stopReason,
+        text: text ?? undefined,
+        endTurn: false,
+      },
     };
   }
 
@@ -564,7 +571,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         output: sanitizeToolResultForLog(errorResult),
       };
       options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-      state.originalToolBlock = undefined;  // Clear invalid block
+      state.originalToolBlock = undefined; // Clear invalid block
       return {
         skipped: false,
         value: {
@@ -646,7 +653,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       if (toolCallId) {
         // Use native tool block if available, otherwise fall back to raw parsed payload
         const toolBlockArg = state.originalToolBlock ?? raw;
-        
+
         const followUpMessages =
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
@@ -746,7 +753,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     // Use native tool block if available, otherwise fall back to raw parsed payload
     const toolBlockArg = state.originalToolBlock ?? normalResult.raw;
-    
+
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,

@@ -215,14 +215,16 @@ export interface IModelHandler<
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
-  /** 
+  /**
    * Extract tool-use details from a provider response.
    * Returns either:
    * - A JSON string (legacy format)
    * - An object with toolCall (JSON string) and originalBlock (native SDK object)
    */
-  extractToolUse(responseObject: any): 
-    | string 
+  extractToolUse(
+    responseObject: any,
+  ):
+    | string
     | { toolCall: string; originalBlock?: any; originalPart?: any }
     | null;
 

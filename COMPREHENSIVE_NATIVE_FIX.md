@@ -9,6 +9,7 @@ This loses SDK-managed metadata and fights against the design of every SDK.
 ## Evidence Across All Handlers
 
 ### 1. Google GenAI Handler ❌
+
 ```typescript
 // Line 1148 - Reconstruct (WRONG)
 const callPart = createPartFromFunctionCall(functionName, args);
@@ -16,6 +17,7 @@ const callPart = createPartFromFunctionCall(functionName, args);
 ```
 
 **Original Part has**:
+
 ```typescript
 {
   functionCall: {...},
@@ -24,19 +26,21 @@ const callPart = createPartFromFunctionCall(functionName, args);
 ```
 
 ### 2. Anthropic Handler ❌
+
 ```typescript
 // Line 1608-1614 - Reconstruct (WRONG)
 content.push({
   type: 'tool_use',
   id,
   name,
-  input: toolInput,  // Manually reconstructed
+  input: toolInput, // Manually reconstructed
 });
 ```
 
 **We receive** `call: ToolUseBlock` on line 1586 but don't use it!
 
 ### 3. OpenAI Handler ❌
+
 ```typescript
 // Line 1189 - Normalize/Reconstruct (WRONG)
 const toolCall = this.normalizeToolCall(id, name, call);
@@ -103,6 +107,7 @@ extractToolUse(responseObject: TResponseType): ToolUseExtraction<TNativeToolType
 #### B. Update Each Handler
 
 ##### Google GenAI
+
 ```typescript
 interface GoogleToolUseExtraction {
   originalPart: Part;           // The COMPLETE Part with thoughtSignature
@@ -112,9 +117,9 @@ interface GoogleToolUseExtraction {
 extractToolUse(responseObject: GenerateContentResponse): GoogleToolUseExtraction | null {
   const parts = responseObject.candidates?.[0]?.content?.parts;
   const originalPart = parts?.find(p => p.functionCall);
-  
+
   if (!originalPart?.functionCall) return null;
-  
+
   return {
     originalPart,  // Keep the ENTIRE Part
     toolCallJson: JSON.stringify(originalPart.functionCall, null, 2),
@@ -123,6 +128,7 @@ extractToolUse(responseObject: GenerateContentResponse): GoogleToolUseExtraction
 ```
 
 ##### Anthropic
+
 ```typescript
 interface AnthropicToolUseExtraction {
   originalBlock: ToolUseBlock;  // The COMPLETE ToolUseBlock
@@ -132,9 +138,9 @@ interface AnthropicToolUseExtraction {
 extractToolUse(responseObject: BetaMessage): AnthropicToolUseExtraction | null {
   const content = responseObject?.content;
   const originalBlock = content?.find((c: any) => c.type === 'tool_use') as ToolUseBlock;
-  
+
   if (!originalBlock) return null;
-  
+
   return {
     originalBlock,  // Keep the ENTIRE block
     toolCallJson: JSON.stringify(originalBlock, null, 2),
@@ -143,6 +149,7 @@ extractToolUse(responseObject: BetaMessage): AnthropicToolUseExtraction | null {
 ```
 
 ##### OpenAI
+
 ```typescript
 interface OpenAIToolUseExtraction {
   originalToolCall: ChatCompletionMessageToolCall;  // The COMPLETE tool call
@@ -152,9 +159,9 @@ interface OpenAIToolUseExtraction {
 extractToolUse(responseObject: any): OpenAIToolUseExtraction | null {
   const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
   const originalToolCall = toolCalls?.[0];
-  
+
   if (!originalToolCall) return null;
-  
+
   return {
     originalToolCall,  // Keep the ENTIRE object
     toolCallJson: JSON.stringify(originalToolCall, null, 2),
@@ -167,6 +174,7 @@ extractToolUse(responseObject: any): OpenAIToolUseExtraction | null {
 #### A. Change Method Signatures
 
 **Before**:
+
 ```typescript
 createToolUseFollowUpMessages(
   client: C,
@@ -180,6 +188,7 @@ createToolUseFollowUpMessages(
 ```
 
 **After**:
+
 ```typescript
 createToolUseFollowUpMessages(
   client: C,
@@ -193,6 +202,7 @@ createToolUseFollowUpMessages(
 #### B. Use Original Objects
 
 ##### Google GenAI
+
 ```typescript
 async createToolUseFollowUpMessages(
   _client: GoogleGenAI | undefined,
@@ -206,18 +216,19 @@ async createToolUseFollowUpMessages(
     callParts.push(createPartFromText(text));
   }
   callParts.push(originalPart);  // ✅ Use ORIGINAL Part - has thoughtSignature!
-  
+
   const callMsg: Content = {
     role: 'model',
     parts: callParts,
   };
-  
+
   // ... rest of logic for result message
   return [callMsg, resultMsg];
 }
 ```
 
 ##### Anthropic
+
 ```typescript
 async createToolUseFollowUpMessages(
   client: Anthropic | undefined,
@@ -227,29 +238,30 @@ async createToolUseFollowUpMessages(
   text?: string,
 ): Promise<MessageParam[]> {
   const content: ContentBlockParam[] = [];
-  
+
   // Add thinking blocks if present
   if (workspaceState?.reasoning.thinkingBlocks) {
     content.push(...workspaceState.reasoning.thinkingBlocks);
   }
-  
+
   if (text) {
     content.push({ type: 'text', text });
   }
-  
+
   content.push(originalBlock);  // ✅ Use ORIGINAL block - preserves ALL fields!
-  
+
   const callMsg: MessageParam = {
     role: 'assistant',
     content,
   };
-  
+
   // ... rest of logic
   return [callMsg, resultMsg];
 }
 ```
 
 ##### OpenAI
+
 ```typescript
 async createToolUseFollowUpMessages(
   _client: OpenAI | undefined,
@@ -262,17 +274,17 @@ async createToolUseFollowUpMessages(
     role: 'assistant',
     tool_calls: [originalToolCall],  // ✅ Use ORIGINAL - no normalization!
   };
-  
+
   if (text) {
     callMsg.content = [{ type: 'text', text }];
   }
-  
+
   const resultMsg: ChatCompletionToolMessageParam = {
     role: 'tool',
     tool_call_id: originalToolCall.id,
     content: JSON.stringify(sanitizedResult),
   };
-  
+
   return [callMsg, resultMsg];
 }
 ```
@@ -287,16 +299,16 @@ const toolInfo = options.modelHandler.extractToolUse(state.response);
 
 if (toolInfo) {
   // ... tool execution logic ...
-  
+
   // Create follow-up messages using the ORIGINAL block
   const followUpMsgs = await options.modelHandler.createToolUseFollowUpMessages(
     options.client,
-    toolInfo.originalBlock,  // ← Pass the complete native object
+    toolInfo.originalBlock, // ← Pass the complete native object
     buildToolResultPayload(result),
     store.workspace,
     state.text ?? '',
   );
-  
+
   state.messages.push(...followUpMsgs);
 }
 ```
@@ -304,24 +316,28 @@ if (toolInfo) {
 ## Benefits of This Approach
 
 ### 1. Preserves SDK Metadata
+
 - ✅ Google: `thoughtSignature` on `Part`
 - ✅ Anthropic: Any future fields on `ToolUseBlock`
 - ✅ OpenAI: Complete `ChatCompletionMessageToolCall` structure
 - ✅ Future-proof for new SDK fields
 
 ### 2. Aligns with SDK Design
+
 - Uses objects as the SDK designed them
 - No manual reconstruction
 - No field-by-field copying
 - Respects SDK contracts
 
 ### 3. Simplifies Code
+
 - Fewer parameters to thread through
 - Less extraction logic
 - Clearer intent: "use what the model gave us"
 - Easier to maintain
 
 ### 4. Prevents Future Issues
+
 - New SDK fields automatically preserved
 - No risk of missing important metadata
 - Works with SDK updates without code changes
@@ -329,26 +345,32 @@ if (toolInfo) {
 ## Migration Strategy
 
 ### Step 1: Update Interfaces (Breaking Change Prep)
+
 - Create new interface types
 - Mark old signatures as deprecated
 - Add backward compatibility
 
 ### Step 2: Implement Google (High Priority)
+
 - Fixes immediate `thoughtSignature` issue
 - Tests the pattern on the most affected handler
 
 ### Step 3: Implement Anthropic
+
 - Validates pattern works for different SDK
 
 ### Step 4: Implement OpenAI
+
 - Completes the pattern across major providers
 
 ### Step 5: Update Remaining Handlers
+
 - DeepSeek (uses OpenAI pattern)
 - XAI (uses OpenAI pattern)
 - Other OpenAI-compatible handlers
 
 ### Step 6: Remove Deprecated Code
+
 - Clean up old signatures
 - Remove reconstruction logic
 - Update tests

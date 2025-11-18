@@ -31,10 +31,10 @@ const newChat = client.chats.create({ history: reconstructedMessages });
 export class ModelHandlerGoogleGenAI {
   private googleClient: GoogleGenAI | null = null;
   private activeChatSessions = new Map<string, Chat>();  // keyed by executionId
-  
+
   async createResponse(options) {
     const executionId = options.executionId;  // Need to pass this
-    
+
     let chat = this.activeChatSessions.get(executionId);
     if (!chat) {
       // First call - create chat with initial history
@@ -46,15 +46,15 @@ export class ModelHandlerGoogleGenAI {
       });
       this.activeChatSessions.set(executionId, chat);
     }
-    
+
     // Just send the new message
     const lastMessage = options.messages.at(-1);
     return await chat.sendMessage({ message: lastMessage.parts });
   }
-  
+
   // No need for createToolUseFollowUpMessages!
   // The Chat instance already has the function call in its history with thoughtSignature
-  
+
   cleanupExecution(executionId: string) {
     this.activeChatSessions.delete(executionId);
   }
@@ -62,12 +62,14 @@ export class ModelHandlerGoogleGenAI {
 ```
 
 **Pros:**
+
 - ✅ Truly native - uses SDK as designed
 - ✅ ThoughtSignature preserved automatically
 - ✅ No manual reconstruction needed
 - ✅ Can use `chat.getHistory()` to get real history
 
 **Cons:**
+
 - ❌ Architecture change required
 - ❌ Need to pass executionId through createResponse
 - ❌ Need cleanup mechanism
@@ -81,16 +83,16 @@ export class ModelHandlerGoogleGenAI {
 
 ```typescript
 // In extractToolUse - return the FULL part, not just the call
-extractToolUse(responseObject): { 
+extractToolUse(responseObject): {
   toolCallPart: Part;  // The ORIGINAL part with thoughtSignature if present
   toolCall: string;     // JSON for compatibility
 } | null {
   const parts = responseObject.candidates?.[0]?.content?.parts;
-  
+
   // Find the part containing the function call
   const toolCallPart = parts?.find(p => p.functionCall);
   if (!toolCallPart?.functionCall) return null;
-  
+
   return {
     toolCallPart,  // Keep the ORIGINAL part (has thoughtSignature if it exists)
     toolCall: JSON.stringify(toolCallPart.functionCall),
@@ -109,30 +111,32 @@ async createToolUseFollowUpMessages(
     callParts.push(createPartFromText(text));
   }
   callParts.push(originalToolCallPart);  // Use ORIGINAL - has thoughtSignature!
-  
+
   const callMsg: Content = {
     role: 'model',
     parts: callParts,
   };
-  
+
   // Create result message as before
   const resultPart = createPartFromFunctionResponse(...);
-  const resultMsg: Content = { 
-    role: 'user', 
-    parts: [resultPart, ...attachmentParts] 
+  const resultMsg: Content = {
+    role: 'user',
+    parts: [resultPart, ...attachmentParts]
   };
-  
+
   return [callMsg, resultMsg];
 }
 ```
 
 **Pros:**
+
 - ✅ Preserves thoughtSignature (it's on the Part, not the FunctionCall!)
 - ✅ Minimal architecture change
 - ✅ Compatible with stateless pattern
 - ✅ Works with current flow
 
 **Cons:**
+
 - ❌ Still creating new Chat sessions each time (wasteful)
 - ❌ Still reconstructing history
 - ❌ Not truly "native"
@@ -147,7 +151,7 @@ async createToolUseFollowUpMessages(
 // In processThinkingBlock or extractToolUse
 processToolCallResponse(responseObject, workspaceState) {
   const parts = responseObject.candidates?.[0]?.content?.parts;
-  
+
   // Store ALL parts for later reuse
   workspaceState.lastModelResponseParts = parts;
 }
@@ -160,24 +164,26 @@ async createToolUseFollowUpMessages(
 ): Promise<Content[]> {
   // Retrieve the original parts from state
   const originalParts = workspaceState.lastModelResponseParts || [];
-  
+
   // Use the original parts - they have thoughtSignature!
   const callMsg: Content = {
     role: 'model',
     parts: originalParts,  // Use ALL original parts (thoughts + function call)
   };
-  
+
   const resultMsg: Content = { ... };
   return [callMsg, resultMsg];
 }
 ```
 
 **Pros:**
+
 - ✅ Preserves thoughtSignature
 - ✅ Minimal changes to interface
 - ✅ Uses workspace state (already passing it around)
 
 **Cons:**
+
 - ❌ Implicit state management
 - ❌ Need to clear after use
 - ❌ Still wasteful Chat recreation
@@ -187,6 +193,7 @@ async createToolUseFollowUpMessages(
 ## Recommended Solution: Option 2 (Preserve Original Parts)
 
 **Why:**
+
 1. **Minimal disruption** - doesn't change architecture significantly
 2. **Solves the immediate problem** - thoughtSignature preserved
 3. **Compatible with all models** - other providers don't have this field
@@ -225,7 +232,7 @@ const toolInfo = options.modelHandler.extractToolUse(state.response);
 if (toolInfo) {
   const followUpMsgs = await options.modelHandler.createToolUseFollowUpMessages(
     options.client,
-    toolInfo.toolCallPart,  // Pass the original Part
+    toolInfo.toolCallPart, // Pass the original Part
     buildToolResultPayload(result),
     store.workspace,
     state.text ?? '',
@@ -255,7 +262,7 @@ This would be a **performance optimization** but not required for correctness.
 ```typescript
 interface Part {
   functionCall?: FunctionCall;
-  thoughtSignature?: string;  // <-- HERE!
+  thoughtSignature?: string; // <-- HERE!
   thought?: boolean;
   text?: string;
 }
