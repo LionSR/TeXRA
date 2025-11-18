@@ -8,7 +8,7 @@ The previous implementation had redundant parameter passing through multiple lev
 // Flow level
 executeRound(roundIndex, runState, messages)
   ↓
-// Agent level  
+// Agent level
 prepareRoundContext(roundIndex, runState, messages, workspaceState)
   ↓
 // Pipeline level
@@ -16,6 +16,7 @@ runRoundPipeline({roundIndex, runState, workspaceState, preparedMessages, prefil
 ```
 
 **Issues:**
+
 1. `roundIndex` passed 3 times
 2. `runState` passed 3 times
 3. `messages` passed 2-3 times
@@ -27,11 +28,13 @@ runRoundPipeline({roundIndex, runState, workspaceState, preparedMessages, prefil
 ### Proper Separation of Concerns
 
 **Flow's Responsibility:**
+
 - Lifecycle management (init, rounds loop, finalize)
 - State transitions between rounds
 - Error handling and interruption
 
 **Agent's Responsibility:**
+
 - Round execution context (owns the data during execution)
 - Internal orchestration of round steps
 - State recording and management
@@ -63,7 +66,7 @@ class BaseReflectionAgent {
   private currentMessages: any[] = [];
   private currentRunState: AgentRunState | null = null;
   private currentWorkspaceState: AgentWorkspaceState | null = null;
-  
+
   /**
    * Initialize round execution context.
    * Sets up all state needed for the round execution.
@@ -79,7 +82,7 @@ class BaseReflectionAgent {
     this.currentWorkspaceState = new AgentWorkspaceState();
     this.resetTransientUserVars({ CURRENT_ROUND: roundIndex });
   }
-  
+
   /**
    * Execute the round using internal context.
    * No parameters needed - uses instance state.
@@ -100,6 +103,7 @@ class BaseReflectionAgent {
 ### Method Signatures
 
 **Before:**
+
 ```typescript
 prepareAgentWorkspaceState(
   currRound: number,
@@ -125,6 +129,7 @@ runRoundPipeline({
 ```
 
 **After:**
+
 ```typescript
 prepareAgentWorkspaceState(): Promise<void>
 // Uses: this.currentRoundIndex, this.currentWorkspaceState
@@ -143,25 +148,30 @@ runRoundPipeline(
 ## Benefits
 
 ### 1. Clear Ownership ✅
+
 - **Agent owns round execution context** during execution
 - Flow doesn't need to track execution details
 - Clear lifecycle: `beginRound() → execute → done`
 
 ### 2. Reduced Cognitive Load ✅
+
 - **Before**: Track 7+ parameters through 3 layers
 - **After**: Set context once, methods access instance state
 - Obvious what data is available at each level
 
 ### 3. Cleaner Method Signatures ✅
+
 - **Before**: `prepareRoundContext(currRound, runState, messages, workspaceState)`
 - **After**: `prepareRoundContext()` - all data available internally
 
 ### 4. Single Source of Truth ✅
+
 - Context set in one place (`beginRound`)
 - All methods read from same source (`this.currentXXX`)
 - No parameter threading/transformation between layers
 
 ### 5. Better Encapsulation ✅
+
 - Internal methods access internal state
 - External API is minimal and clear
 - Agent manages its own execution lifecycle
@@ -171,6 +181,7 @@ runRoundPipeline(
 ### Parameter Count Reduction
 
 **Before:**
+
 ```typescript
 executeRound(3 params)
   → prepareAgentWorkspaceState(2 params)
@@ -180,6 +191,7 @@ Total: 16 parameter slots
 ```
 
 **After:**
+
 ```typescript
 beginRound(3 params) - ONE TIME
 executeCurrentRound(0 params)
@@ -192,6 +204,7 @@ Total: 6 parameter slots (62% reduction)
 ### Flow Code
 
 **Before:**
+
 ```typescript
 // Flow has to pass everything through
 prepRes.agent.setCurrentRound(prepRes.roundIndex);
@@ -203,6 +216,7 @@ const result = await prepRes.agent.executeRound(
 ```
 
 **After:**
+
 ```typescript
 // Flow sets context once, then executes
 prepRes.agent.beginRound(
@@ -216,21 +230,25 @@ const result = await prepRes.agent.executeCurrentRound();
 ## Design Principles Validated
 
 ### ✅ Separation of Concerns
+
 - **Flow**: Manages round loop and lifecycle
 - **Agent**: Owns execution context and orchestration
 - **Clear boundary**: Set context → Execute → Return result
 
 ### ✅ Minimize Redundant Passing
+
 - Parameters set once at agent boundary
 - Internal methods access instance state
 - No threading of same data through layers
 
 ### ✅ Solve at Right Abstraction Level
+
 - **Flow level**: Round sequencing, lifecycle
 - **Agent level**: Execution context, orchestration
 - **Method level**: Specific transformations
 
 ### ✅ Single Source of Truth
+
 - Round context lives in agent during execution
 - All methods read from same source
 - No duplicate tracking across layers
@@ -238,6 +256,7 @@ const result = await prepRes.agent.executeCurrentRound();
 ## Edge Cases Handled
 
 ### Guard Rails
+
 ```typescript
 public async executeCurrentRound(): Promise<ReflectionRoundResult> {
   if (!this.currentRunState || !this.currentWorkspaceState) {
@@ -250,6 +269,7 @@ public async executeCurrentRound(): Promise<ReflectionRoundResult> {
 All methods check context initialization and provide clear error messages.
 
 ### State Lifecycle
+
 ```typescript
 // Context is only valid during round execution
 beginRound(...)      // Initialize context
@@ -260,14 +280,17 @@ executeCurrentRound() // Use context
 ## Migration Path
 
 ### External Code: ✅ NO CHANGES
+
 The flow calls the updated API, but external code using `agent.run()` sees no changes.
 
 ### Internal Code: ✅ SIMPLIFIED
+
 - Removed redundant parameters
 - Methods more focused and clear
 - Better testability (can mock instance state)
 
 ### Backward Compatibility: ✅ MAINTAINED
+
 - No changes to `IAgent` interface
 - No changes to serialization
 - No changes to external APIs
@@ -275,6 +298,7 @@ The flow calls the updated API, but external code using `agent.run()` sees no ch
 ## Result
 
 **Parameter passing reduced by 62%** while improving:
+
 - Code clarity
 - Separation of concerns
 - Maintainability

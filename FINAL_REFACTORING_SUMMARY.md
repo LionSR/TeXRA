@@ -5,18 +5,21 @@
 Successfully refactored the agent/flow system addressing **THREE critical issues**:
 
 ### 1. ✅ Round-Trip Anti-Patterns (90% reduction)
+
 - **Before**: ~30 boundary crossings per round
 - **After**: ~3 boundary crossings per round
 - **Deleted**: ReflectionRoundFlow.ts (entire abstraction layer)
 - **Removed**: Hook indirection, nested flow creation, direct mutations
 
 ### 2. ✅ Single Source of Truth & DRY
+
 - **Agent owns execution logic** (`executeCurrentRound`)
 - **Agent owns state recording** (`recordRoundResult`)
 - **No duplication** across layers
 - **Clear boundaries**: Flows orchestrate, agents execute
 
 ### 3. ✅ Separation of Concerns & Parameter Minimization
+
 - **Before**: 16 parameter slots threading through layers
 - **After**: 6 parameter slots (62% reduction)
 - **Agent maintains round context** as instance state
@@ -57,6 +60,7 @@ Successfully refactored the agent/flow system addressing **THREE critical issues
 ### Parameter Flow
 
 **Before (Redundant):**
+
 ```typescript
 Flow state → executeRound(roundIndex, runState, messages)
              ↓
@@ -66,6 +70,7 @@ Pipeline → runRoundPipeline({roundIndex, runState, workspace, messages, ...})
 ```
 
 **After (Clean):**
+
 ```typescript
 Flow state → beginRound(roundIndex, runState, messages) // SET ONCE
              ↓
@@ -78,6 +83,7 @@ Agent context → executeCurrentRound()                   // USE MANY
 ## Code Changes
 
 ### Files Modified (7)
+
 1. `src/agent/implementations/BaseAgent.ts` - Made `withRoundStage()` public
 2. `src/agent/implementations/BaseReflectionAgent.ts` - **Major refactoring**:
    - Added instance state for round context
@@ -92,9 +98,11 @@ Agent context → executeCurrentRound()                   // USE MANY
 7. `src/agent/implementations/flows/common/createFinalizeNode.ts` - Updated context types
 
 ### Files Deleted (1)
+
 - `src/agent/implementations/flows/ReflectionRoundFlow.ts` ✓
 
 ### Types Cleaned Up
+
 - Removed `ReflectionRoundContext` (replaced by instance state)
 - Removed `RoundPipelineContext` (replaced by method parameters)
 - Kept only essential types
@@ -104,6 +112,7 @@ Agent context → executeCurrentRound()                   // USE MANY
 ### New Public Methods
 
 **Round Lifecycle:**
+
 ```typescript
 // Initialize round execution context
 agent.beginRound(roundIndex: number, runState: AgentRunState, messages: any[]): void
@@ -116,6 +125,7 @@ agent.recordRoundResult(result: ReflectionRoundResult): void
 ```
 
 **Now Parameter-Free:**
+
 ```typescript
 // Before: prepareAgentWorkspaceState(roundIndex, workspaceState)
 agent.prepareAgentWorkspaceState(): Promise<void>
@@ -130,6 +140,7 @@ agent.runRoundPipeline(roundState, preparedMessages, prefill): Promise<...>
 ### Usage Pattern
 
 **Flow Implementation:**
+
 ```typescript
 // Set round context once
 agent.beginRound(roundIndex, runState, messages);
@@ -147,21 +158,25 @@ flowState.update(result);
 ## Benefits Summary
 
 ### 1. Reduced Complexity
+
 - **90% fewer boundary crossings** (30 → 3)
 - **62% fewer parameter slots** (16 → 6)
 - **1 less abstraction layer** (deleted ReflectionRoundFlow)
 
 ### 2. Improved Clarity
+
 - **Clear ownership**: Agent owns execution context
 - **Obvious data flow**: Set context → Execute → Return
 - **No parameter threading**: Methods access instance state
 
 ### 3. Better Maintainability
+
 - **Single source of truth**: Agent manages execution
 - **DRY code**: No duplication of orchestration logic
 - **Clean separation**: Flow/Agent/Method concerns isolated
 
 ### 4. Enhanced Flexibility
+
 - **More public methods** for customization
 - **Balanced abstractions** (no pass-through layers)
 - **Composable operations** at right level
@@ -169,19 +184,22 @@ flowState.update(result);
 ## Breaking Changes: NONE ✅
 
 ### External API: Unchanged
+
 ```typescript
-agent.run()             // ✓
-agent.interrupt()       // ✓
-agent.config            // ✓
-agent.hydrateOutputState() // ✓
+agent.run(); // ✓
+agent.interrupt(); // ✓
+agent.config; // ✓
+agent.hydrateOutputState(); // ✓
 ```
 
 ### Internal Changes: Non-Breaking
+
 - Making methods public: ✅ Non-breaking (adds capability)
 - Adding instance state: ✅ Internal only
 - Changing method signatures: ✅ Internal methods only
 
 ### Compatibility Verified
+
 - ✅ DirectAgent works
 - ✅ CoTAgent works
 - ✅ MergeAgent works
@@ -192,31 +210,37 @@ agent.hydrateOutputState() // ✓
 ## Design Principles Achieved
 
 ### ✅ Single Source of Truth
+
 - Agent owns round execution logic
 - No duplication across layers
 - Clear ownership boundaries
 
 ### ✅ DRY (Don't Repeat Yourself)
+
 - Round orchestration in one place
 - State recording centralized
 - No repeated parameter passing
 
 ### ✅ Balanced Abstractions
+
 - Each layer adds clear value
 - No pass-through wrappers
 - Methods at right level of abstraction
 
 ### ✅ Separation of Concerns
+
 - **Flow**: Lifecycle & sequencing
 - **Agent**: Execution context & orchestration
 - **Methods**: Specific transformations
 
 ### ✅ Minimize Redundant Passing
+
 - Parameters set once at boundary
 - Internal methods use instance state
 - Data lives at right abstraction level
 
 ### ✅ No Cognitive Overhead
+
 - Direct method calls
 - Clear data flow
 - Obvious ownership
@@ -224,11 +248,13 @@ agent.hydrateOutputState() // ✓
 ## Testing Recommendations
 
 ### Existing Tests: ✅ Should Pass Unchanged
+
 - Tests use public API (`agent.run()`)
 - No internal dependencies
 - Backward compatible
 
 ### Manual Testing:
+
 1. DirectAgent execution
 2. CoTAgent with XML validation
 3. MergeAgent with merging
@@ -237,6 +263,7 @@ agent.hydrateOutputState() // ✓
 6. Session hydration
 
 ### New Test Opportunities:
+
 - Test `beginRound()` initialization
 - Test guard rails (executeCurrentRound without beginRound)
 - Test instance state isolation
@@ -252,6 +279,7 @@ agent.hydrateOutputState() // ✓
 ## Metrics
 
 ### Quantitative Improvements
+
 - **90%** reduction in boundary crossings (30 → 3)
 - **62%** reduction in parameter slots (16 → 6)
 - **1** abstraction layer removed
@@ -259,6 +287,7 @@ agent.hydrateOutputState() // ✓
 - **0** breaking changes
 
 ### Qualitative Improvements
+
 - ✅ Clearer separation of concerns
 - ✅ Reduced cognitive load
 - ✅ Better encapsulation
@@ -274,6 +303,7 @@ The refactoring successfully addresses all three major issues:
 3. **Separation of concerns**: Achieved through proper abstraction levels
 
 **The codebase now has:**
+
 - Clear boundaries between layers
 - Minimal parameter passing
 - Single source of truth for execution
@@ -311,7 +341,7 @@ class CustomAgent extends BaseReflectionAgent {
     // Custom logic using this.currentXXX
     return super.executeCurrentRound();
   }
-  
+
   // Override preparation
   public async prepareRoundContext() {
     // Custom preparation using this.currentXXX

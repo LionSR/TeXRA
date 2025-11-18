@@ -118,7 +118,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   protected readonly fileService: TaskRunFileService;
   private hydrationPromise: Promise<void> | null = null;
   private hydratedRoundCount = 0;
-  
+
   // Current round execution context - set when round begins
   private currentRoundIndex: number = 0;
   private currentMessages: any[] = [];
@@ -273,7 +273,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Initialize the agent's round execution context.
    * Call this before executing a round to set up the execution environment.
-   * 
+   *
    * @param roundIndex - Zero-based round index
    * @param runState - Current run state
    * @param messages - Conversation messages
@@ -433,9 +433,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     prefill: string,
   ): Promise<ReflectionRoundResult> {
     if (!this.currentRunState || !this.currentWorkspaceState) {
-      throw new Error('Round context not initialized. Call beginRound() first.');
+      throw new Error(
+        'Round context not initialized. Call beginRound() first.',
+      );
     }
-    
+
     const roundIndex = this.currentRoundIndex;
     const runState = this.currentRunState;
     const workspaceState = this.currentWorkspaceState;
@@ -535,9 +537,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     skip: boolean;
   }> {
     if (!this.currentWorkspaceState) {
-      throw new Error('Round context not initialized. Call beginRound() first.');
+      throw new Error(
+        'Round context not initialized. Call beginRound() first.',
+      );
     }
-    
+
     const currRound = this.currentRoundIndex;
     const messages = this.currentMessages;
     const workspaceState = this.currentWorkspaceState;
@@ -620,9 +624,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   public async prepareAgentWorkspaceState(): Promise<void> {
     if (!this.currentWorkspaceState) {
-      throw new Error('Round context not initialized. Call beginRound() first.');
+      throw new Error(
+        'Round context not initialized. Call beginRound() first.',
+      );
     }
-    
+
     const currRound = this.currentRoundIndex;
     const workspaceState = this.currentWorkspaceState;
     if (currRound === 0) {
@@ -696,21 +702,23 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   /**
    * Executes the current round that was initialized with beginRound().
    * Flows should call beginRound() first to set up the context, then call this method.
-   * 
+   *
    * @returns The result of the round execution
    */
   public async executeCurrentRound(): Promise<ReflectionRoundResult> {
     if (!this.currentRunState || !this.currentWorkspaceState) {
-      throw new Error('Round context not initialized. Call beginRound() first.');
+      throw new Error(
+        'Round context not initialized. Call beginRound() first.',
+      );
     }
-    
+
     const roundIndex = this.currentRoundIndex;
     const runState = this.currentRunState;
     const messages = this.currentMessages;
     const workspaceState = this.currentWorkspaceState;
-    
+
     this.logger.debug(`Processing round ${roundIndex}`);
-    
+
     return this.withRoundStage(`r${roundIndex}`, async () => {
       // Prepare workspace state
       await this.prepareAgentWorkspaceState();
