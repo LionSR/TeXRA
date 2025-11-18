@@ -150,9 +150,7 @@ function buildReplacementLookup(
     }
 
     const baseFile =
-      baseLoc.kind !== 'external'
-        ? baseLoc.relativePath
-        : baseLoc.absolutePath;
+      baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath;
     const outputFile =
       outputLoc.kind !== 'external'
         ? outputLoc.relativePath
@@ -208,7 +206,7 @@ export async function replaceInputCommands(
     )
       .map(
         ([baseLoc, outputLoc]) =>
-          `${path.basename((baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath))} -> ${path.basename((outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath))}`,
+          `${path.basename(baseLoc.kind !== 'external' ? baseLoc.relativePath : baseLoc.absolutePath)} -> ${path.basename(outputLoc.kind !== 'external' ? outputLoc.relativePath : outputLoc.absolutePath)}`,
       )
       .join(', ')}`,
   );
