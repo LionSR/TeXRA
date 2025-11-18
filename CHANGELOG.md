@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ## [0.34.5] - Unreleased
 
+### Features
+
+- Added **Gemini 3 Pro Preview** (`gemini3p`) with full tool support and up-to-date
+  pricing so you can try Google's latest high-reasoning model in TeXRA.
+
 ## [0.34.4] - 2025-11-14
 
 ### Features

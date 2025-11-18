@@ -209,6 +209,7 @@ The specific models available by default and their identifiers (`sonnet45`, `gpt
 
 ```json
 "texra.models": [
+  "gemini3p",
   "gemini25p",
   "gemini25f",
   "opus41T",
