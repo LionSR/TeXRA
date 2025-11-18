@@ -1256,7 +1256,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const thoughtContent = summaryParts.map((part) => part.text).join('\n\n'); // to make the thinking markdown rendering more readable
 
-    if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
+    if (workspaceState) {
       workspaceState.reasoning.thinkingBlocks = summaryParts.map((part) => ({
         type: 'thinking',
         thinking: part.text,
