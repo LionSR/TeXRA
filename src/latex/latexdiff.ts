@@ -4,11 +4,14 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - type
+import type { FileLocation } from '@agent/output/types';
+
 // Local imports - log
 import { logErrorMessage, formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -62,8 +65,8 @@ export class LaTeXdiffService {
   }
 
   async runDiff(
-    inputFile: string,
-    editedFile: string,
+    inputLocation: FileLocation,
+    editedLocation: FileLocation,
     suffix = '_diff',
     runIndent = true,
     mathMarkup?: MathMarkupOption,
@@ -72,14 +75,18 @@ export class LaTeXdiffService {
     let diffFileName = '';
     let outputPath = '';
     try {
+      // Extract absolute paths for file operations
+      const inputFile = inputLocation.absolutePath;
+      const editedFile = editedLocation.absolutePath;
+
       // Validate inputs
       if (!inputFile) {
         logger.warn(this.channel, 'Input file is empty or undefined');
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const inputExists = await flexibleFS.exists(inputFile);
-      const editedExists = await flexibleFS.exists(editedFile);
+      const inputExists = await flexibleFS.exists(inputLocation);
+      const editedExists = await flexibleFS.exists(editedLocation);
       if (!inputExists || !editedExists) {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
@@ -87,7 +94,9 @@ export class LaTeXdiffService {
       }
 
       // Validate document structure
-      if (!(await this.validateDocumentStructure(inputFile, editedFile))) {
+      if (
+        !(await this.validateDocumentStructure(inputLocation, editedLocation))
+      ) {
         return {
           success: false,
           message: 'Files missing document environment',
@@ -103,12 +112,12 @@ export class LaTeXdiffService {
 
       logger.debug(
         this.channel,
-        `Running latexdiff for ${inputFile} and ${editedFile}`,
+        `Running latexdiff for ${inputLocation.absolutePath} and ${editedLocation.absolutePath}`,
       );
 
       // Format files if requested
       if (runIndent) {
-        await this.formatFiles([inputFile, editedFile]);
+        await this.formatFiles([inputLocation, editedLocation]);
       }
 
       // Execute latexdiff command
@@ -122,12 +131,13 @@ export class LaTeXdiffService {
       }
 
       // Write and process output
-      await flexibleFS.write(outputPath, result.stdout);
-      await this.fileProcessor.processDiffFile(outputPath);
+      const outputLocation = pathToLocation(outputPath);
+      await flexibleFS.write(outputLocation, result.stdout);
+      await this.fileProcessor.processDiffFile(outputLocation);
 
       logger.debug(
         this.channel,
-        `Latexdiff succeeded: ${inputFile} -> ${editedFile}`,
+        `Latexdiff succeeded: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
       );
 
       return {
@@ -140,7 +150,7 @@ export class LaTeXdiffService {
       logger.error(this.channel, message, undefined, MESSAGE_TYPES.INTERNAL);
       logger.debug(
         this.channel,
-        `Latexdiff failed: ${inputFile} -> ${editedFile}`,
+        `Latexdiff failed: ${inputLocation.absolutePath} -> ${editedLocation.absolutePath}`,
         undefined,
         MESSAGE_TYPES.INTERNAL,
       );
@@ -149,12 +159,13 @@ export class LaTeXdiffService {
   }
 
   async runDiffVc(
-    inputFile: string,
+    inputLocation: FileLocation,
     commitHash: string,
     mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffResult> {
     try {
-      if (!(await this.validateDocumentStructure(inputFile))) {
+      const inputFile = inputLocation.absolutePath;
+      if (!(await this.validateDocumentStructure(inputLocation))) {
         const message = 'File missing document environment';
         logger.error(this.channel, message);
         vscode.window.showWarningMessage(
@@ -172,7 +183,7 @@ export class LaTeXdiffService {
       await this.commandExecutor.executeDiffVc(inputFile, commitHash, {
         mathMarkup,
       });
-      await this.fileProcessor.processDiffFile(outputPath);
+      await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
 
       return {
         success: true,
@@ -187,12 +198,12 @@ export class LaTeXdiffService {
   }
 
   async runDiffVcMultiple(
-    inputFiles: string[],
+    inputLocations: FileLocation[],
     commitHash: string,
     mathMarkup?: MathMarkupOption,
   ): Promise<LaTeXdiffMultipleResult> {
     try {
-      if (!inputFiles || inputFiles.length === 0) {
+      if (!inputLocations || inputLocations.length === 0) {
         const message = 'No input files provided';
         logger.warn(this.channel, message);
         return {
@@ -204,19 +215,21 @@ export class LaTeXdiffService {
 
       const results = { success: [] as string[], failed: [] as string[] };
 
-      for (const inputFile of inputFiles) {
+      for (const inputLocation of inputLocations) {
         try {
           const result = await this.runDiffVc(
-            inputFile,
+            inputLocation,
             commitHash,
             mathMarkup,
           );
+          const inputFile = inputLocation.absolutePath;
           if (result.success) {
             results.success.push(inputFile);
           } else {
             results.failed.push(inputFile);
           }
         } catch (err) {
+          const inputFile = inputLocation.absolutePath;
           results.failed.push(inputFile);
           logger.error(
             this.channel,
@@ -254,19 +267,21 @@ export class LaTeXdiffService {
   }
 
   async runDiffForRound(
-    baseFile: string,
-    outputFile: string,
+    baseLocation: FileLocation,
+    outputLocation: FileLocation,
     _round: number,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const baseExists = await flexibleFS.exists(baseFile);
-      const outputExists = await flexibleFS.exists(outputFile);
+      const baseFile = baseLocation.absolutePath;
+      const outputFile = outputLocation.absolutePath;
+      const baseExists = await flexibleFS.exists(baseLocation);
+      const outputExists = await flexibleFS.exists(outputLocation);
       if (baseExists && outputExists) {
         return await this.runDiff(
-          baseFile,
-          outputFile,
+          baseLocation,
+          outputLocation,
           '_diff',
           false,
           mathMarkup,
@@ -285,14 +300,16 @@ export class LaTeXdiffService {
   }
 
   async runDiffBetweenRounds(
-    outputFile1: string,
-    outputFile2: string,
+    firstLocation: FileLocation,
+    secondLocation: FileLocation,
     mathMarkup?: MathMarkupOption,
     options?: { cwd?: string },
   ): Promise<LaTeXdiffResult> {
     try {
-      const firstExists = await flexibleFS.exists(outputFile1);
-      const secondExists = await flexibleFS.exists(outputFile2);
+      const outputFile1 = firstLocation.absolutePath;
+      const outputFile2 = secondLocation.absolutePath;
+      const firstExists = await flexibleFS.exists(firstLocation);
+      const secondExists = await flexibleFS.exists(secondLocation);
       if (firstExists && secondExists) {
         const firstRoundMatch = outputFile1.match(/_r(\d+)_/);
         const secondRoundMatch = outputFile2.match(/_r(\d+)_/);
@@ -307,8 +324,8 @@ export class LaTeXdiffService {
         const secondRound = secondRoundMatch[1];
         const diffSuffix = `_diffr${secondRound}r${firstRound}`;
         return await this.runDiff(
-          outputFile1,
-          outputFile2,
+          firstLocation,
+          secondLocation,
           diffSuffix,
           false,
           mathMarkup,
@@ -327,7 +344,7 @@ export class LaTeXdiffService {
   }
 
   private async validateDocumentStructure(
-    ...files: string[]
+    ...files: FileLocation[]
   ): Promise<boolean> {
     for (const file of files) {
       const content = await flexibleFS.read(file);
@@ -341,9 +358,10 @@ export class LaTeXdiffService {
     return true;
   }
 
-  private async formatFiles(files: string[]): Promise<void> {
+  private async formatFiles(fileLocations: FileLocation[]): Promise<void> {
     const failedFiles: string[] = [];
-    for (const file of files) {
+    for (const location of fileLocations) {
+      const file = location.absolutePath;
       if (!(await runLatexFormatter(file))) {
         failedFiles.push(file);
       }

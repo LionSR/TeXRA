@@ -1,6 +1,6 @@
 // Local imports - agent
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
-import type { NamedOutputFile } from '@agent/output/types';
+import type { OutputFileInfo } from '@agent/output/types';
 
 // Local imports - agent components
 import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
@@ -23,7 +23,7 @@ export class DirectAgent extends BaseReflectionAgent {
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
     options: RoundOutputOptions,
-  ): Promise<NamedOutputFile[]> {
+  ): Promise<OutputFileInfo[]> {
     const { outputFile, endTurn, stage } = options;
     try {
       this.outputHandler.ensureRound(currRound);

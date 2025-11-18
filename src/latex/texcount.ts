@@ -1,7 +1,8 @@
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { flexibleFS, pathToLocation } from '@utils/files';
+import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
@@ -12,9 +13,11 @@ logger.initialize(CHANNEL);
  * @param filePath Path to the LaTeX file
  * @returns Promise<boolean> True if the file contains Chinese packages
  */
-async function hasChinesePackages(filePath: string): Promise<boolean> {
+async function hasChinesePackages(
+  fileLocation: FileLocation,
+): Promise<boolean> {
   try {
-    const content = await flexibleFS.read(filePath);
+    const content = await flexibleFS.read(fileLocation);
     const chinesePackages = [
       'xeCJK',
       'ctexart',
@@ -67,10 +70,11 @@ export interface TexcountResult {
 }
 
 async function validateTexFile(
-  filePath: string,
+  fileLocation: FileLocation,
   channel: string,
 ): Promise<ValidationResult> {
-  if (!(await flexibleFS.exists(filePath))) {
+  const filePath = fileLocation.absolutePath;
+  if (!(await flexibleFS.exists(fileLocation))) {
     const reason = `File ${filePath} does not exist.`;
     logger.warn(channel, reason);
     return { valid: false, reason };
@@ -86,10 +90,11 @@ async function validateTexFile(
 }
 
 async function detectChineseMode(
-  filePath: string,
+  fileLocation: FileLocation,
   channel: string,
 ): Promise<boolean> {
-  if (await hasChinesePackages(filePath)) {
+  const filePath = fileLocation.absolutePath;
+  if (await hasChinesePackages(fileLocation)) {
     logger.debug(
       channel,
       `Chinese packages detected in ${filePath}, enabling Chinese character counting`,
@@ -146,8 +151,9 @@ async function getIndividualCounts(
 ): Promise<{ outputs: string[]; errors: string[] }> {
   const results = await Promise.all(
     paths.map(async (filePath) => {
+      const fileLocation = pathToLocation(filePath);
       const localErrors: string[] = [];
-      const validation = await validateTexFile(filePath, channel);
+      const validation = await validateTexFile(fileLocation, channel);
       if (!validation.valid) {
         localErrors.push(validation.reason);
         return { output: null, errors: localErrors };
@@ -157,7 +163,7 @@ async function getIndividualCounts(
       if (includeReferenced) {
         args.push('-inc');
       }
-      if (await detectChineseMode(filePath, channel)) {
+      if (await detectChineseMode(fileLocation, channel)) {
         args.push('-ch-only');
       }
       args.push(filePath);
@@ -193,7 +199,8 @@ async function getSummedCount(
   let enableChineseMode = false;
 
   for (const filePath of paths) {
-    const validation = await validateTexFile(filePath, channel);
+    const fileLocation = pathToLocation(filePath);
+    const validation = await validateTexFile(fileLocation, channel);
     if (!validation.valid) {
       errors.push(validation.reason);
       continue;
@@ -202,7 +209,7 @@ async function getSummedCount(
     validPaths.push(filePath);
 
     if (!enableChineseMode) {
-      const hasChinese = await hasChinesePackages(filePath);
+      const hasChinese = await hasChinesePackages(fileLocation);
       if (hasChinese) {
         enableChineseMode = true;
         logger.debug(

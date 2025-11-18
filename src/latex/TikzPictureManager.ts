@@ -8,7 +8,12 @@ import * as nunjucks from 'nunjucks';
 import { renderPrompt } from '@agent/utils/promptUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import {
+  flexibleFS,
+  TaskRunFileService,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 import { getConfig } from '@utils/config';
 
 // Local imports - latex utils
@@ -21,7 +26,10 @@ logger.initialize(CHANNEL);
 nunjucks.configure({ autoescape: false });
 
 export class TikzPictureManager {
-  constructor(private readonly channel: string = CHANNEL) {}
+  constructor(
+    private readonly channel: string = CHANNEL,
+    private readonly fileService?: TaskRunFileService,
+  ) {}
 
   /**
    * Get the TikZ template from configuration or use default
@@ -48,12 +56,12 @@ export class TikzPictureManager {
 
   /**
    * Extract TikZ pictures with their labels from a LaTeX file
-   * @param latexFile Path to the LaTeX file
+   * @param latexFile FileLocation of the LaTeX file
    * @param channel Optional channel for logging
    * @returns Array of [label, tikzpictures] tuples
    */
   async extract(
-    latexFile: string,
+    latexFile: FileLocation,
     channel: string = this.channel,
   ): Promise<[string, string[]][]> {
     try {
@@ -96,30 +104,42 @@ export class TikzPictureManager {
    * Create a standalone LaTeX file for a TikZ picture
    * @param tikzpictures TikZ picture content
    * @param label Label for the figure
-   * @param buildDir Build directory path
+   * @param buildDirLocation Build directory FileLocation
    * @param suffix Optional suffix for multiple pictures with same label
    * @param channel Optional channel for logging
-   * @returns Path to created LaTeX file
+   * @returns FileLocation of created LaTeX file
    */
   async createStandalone(
     tikzpictures: string,
     label: string,
-    buildDir: string,
+    buildDirLocation: FileLocation,
     suffix?: string,
     channel: string = this.channel,
-  ): Promise<string> {
+  ): Promise<FileLocation> {
     try {
       const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
         tikzpicture: tikzpictures,
       });
 
       const filename = suffix ? `${label}_${suffix}.tex` : `${label}.tex`;
-      const filePath = path.join(buildDir, filename);
+      const buildDir =
+        buildDirLocation.kind !== 'external'
+          ? buildDirLocation.relativePath
+          : buildDirLocation.absolutePath;
+      const fileRelativePath = path.join(buildDir, filename);
 
-      await flexibleFS.write(filePath, standaloneContent);
-      logger.debug(channel, `Created standalone LaTeX file: ${filePath}`);
+      // Use fileService if available (run-storage aware), otherwise create workspace location
+      const texLocation = this.fileService
+        ? this.fileService.createLocation(fileRelativePath)
+        : pathToLocation(path.join(buildDirLocation.absolutePath, filename)); // Fallback: create proper file location
 
-      return filePath;
+      await flexibleFS.write(texLocation, standaloneContent);
+      logger.debug(
+        channel,
+        `Created standalone LaTeX file: ${texLocation.absolutePath}`,
+      );
+
+      return texLocation;
     } catch (err) {
       logger.error(
         channel,
@@ -131,28 +151,42 @@ export class TikzPictureManager {
 
   /**
    * Extract and compile TikZ pictures from a LaTeX file
-   * @param latexFile Path to the LaTeX file
+   * @param latexFile Location of the LaTeX file
    * @param channel Optional channel for logging
-   * @returns Array of paths to compiled PDF files
+   * @returns Array of FileLocations for compiled PDF files
    */
   async compile(
-    latexFile: string,
+    latexFile: FileLocation,
     channel: string = this.channel,
-  ): Promise<string[]> {
+  ): Promise<FileLocation[]> {
     try {
-      const inputDir = path.dirname(latexFile);
-      const inputName = path.parse(path.basename(latexFile)).name;
-      const buildDir = path.join(inputDir, 'build', inputName);
-      await flexibleFS.ensureDir(buildDir);
+      const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
+      const inputDir =
+        latexFile.kind !== 'external'
+          ? path.dirname(latexFile.relativePath)
+          : path.dirname(latexFile.absolutePath);
+      const buildRelativePath = path.join(inputDir, 'build', inputName);
 
-      logger.debug(channel, `Extracting TikZ pictures from ${latexFile}`);
+      // Create build directory location (run-storage aware if fileService available)
+      const buildDirLocation = this.fileService
+        ? this.fileService.createLocation(buildRelativePath)
+        : pathToLocation(
+            path.join(path.dirname(latexFile.absolutePath), 'build', inputName),
+          ); // Fallback: construct proper build directory path
+
+      await flexibleFS.ensureDir(buildDirLocation);
+
+      logger.debug(
+        channel,
+        `Extracting TikZ pictures from ${latexFile.absolutePath}`,
+      );
       const labeledTikzPictures = await this.extract(latexFile, channel);
       logger.debug(
         channel,
         `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
       );
 
-      const compiledFiles: string[] = [];
+      const compiledFiles: FileLocation[] = [];
 
       for (const [label, tikzpicturess] of labeledTikzPictures) {
         const suffixes =
@@ -164,19 +198,37 @@ export class TikzPictureManager {
           const tikzpictures = tikzpicturess[i];
           const suffix = suffixes[i];
 
-          const texFile = await this.createStandalone(
+          const texLocation = await this.createStandalone(
             tikzpictures,
             label,
-            buildDir,
+            buildDirLocation,
             suffix,
             channel,
           );
-          await compileLatex2Pdf(texFile, channel);
+          await compileLatex2Pdf(texLocation, channel);
 
-          const pdfFile = texFile.replace(/\.tex$/, '.pdf');
-          if (await flexibleFS.exists(pdfFile)) {
-            compiledFiles.push(pdfFile);
-            logger.debug(channel, `Successfully compiled: ${pdfFile}`);
+          // Derive PDF location from tex location
+          const pdfFilename = path
+            .basename(texLocation.absolutePath)
+            .replace(/\.tex$/, '.pdf');
+          const texDir =
+            texLocation.kind !== 'external'
+              ? path.dirname(texLocation.relativePath)
+              : path.dirname(texLocation.absolutePath);
+          const pdfRelativePath = path.join(texDir, pdfFilename);
+
+          const pdfLocation = this.fileService
+            ? this.fileService.createLocation(pdfRelativePath)
+            : pathToLocation(
+                path.join(path.dirname(texLocation.absolutePath), pdfFilename),
+              ); // Fallback: create proper PDF location
+
+          if (await flexibleFS.exists(pdfLocation)) {
+            compiledFiles.push(pdfLocation);
+            logger.debug(
+              channel,
+              `Successfully compiled: ${pdfLocation.absolutePath}`,
+            );
           }
         }
       }

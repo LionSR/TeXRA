@@ -6,7 +6,12 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ToolConfig } from '@agent/core/ToolConfig';
 import { toErrorMessage } from '@common/errors';
 import { AgentLogger } from '@logger/AgentLogger';
-import { TaskRunFileService, flexibleFS } from '@utils/files';
+import {
+  TaskRunFileService,
+  flexibleFS,
+  pathToLocation,
+  type FileLocation,
+} from '@utils/files';
 
 // Local file imports
 import { extractFigurePathsFromLatex } from './extractFigure';
@@ -24,7 +29,7 @@ export class LatexMediaManager {
   ) {}
 
   private async mirrorFigureDependencies(
-    latexFile: string,
+    latexFile: FileLocation,
     figures: string[],
     groupId: string | null | undefined,
   ): Promise<void> {
@@ -36,8 +41,8 @@ export class LatexMediaManager {
       return;
     }
 
-    const baseDir = path.dirname(latexFile);
-    const targets = new Set<string>();
+    const baseDir = path.dirname(latexFile.absolutePath);
+    const targetLocations = new Set<FileLocation>();
     for (const relative of figures) {
       if (!relative) {
         continue;
@@ -46,21 +51,22 @@ export class LatexMediaManager {
       if (trimmed.length === 0) {
         continue;
       }
-      const absolute = path.normalize(path.join(baseDir, trimmed));
-      targets.add(absolute);
+      const absolutePath = path.normalize(path.join(baseDir, trimmed));
+      // Convert to FileLocation using pathToLocation (boundary conversion)
+      targetLocations.add(pathToLocation(absolutePath));
     }
 
-    if (targets.size === 0) {
+    if (targetLocations.size === 0) {
       return;
     }
 
-    const tasks = Array.from(targets).map(async (target) => {
+    const tasks = Array.from(targetLocations).map(async (targetLocation) => {
       try {
-        await this.fileService!.mirrorWorkspaceFile(target);
+        await this.fileService!.mirrorWorkspaceFile(targetLocation);
       } catch (error) {
         const message = toErrorMessage(error);
         this.logger.debug(
-          `Unable to mirror figure dependency ${target}: ${message}`,
+          `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
           groupId ?? undefined,
         );
       }
@@ -70,12 +76,14 @@ export class LatexMediaManager {
   }
 
   private async attachTeXCount(
-    files: string[],
+    files: FileLocation[],
     workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
   ): Promise<void> {
     if (cfg.attachTeXCount && files.length > 0) {
-      workspaceState.document.texcountStats = await getTeXCountStats(files);
+      workspaceState.document.texcountStats = await getTeXCountStats(
+        files.map((f) => f.absolutePath),
+      );
     }
   }
 
@@ -83,17 +91,17 @@ export class LatexMediaManager {
    * Compile LaTeX files to PDF and add them to the tool state.
    */
   private async compilePdfs(
-    files: string[],
+    files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
     const texFiles = files.filter((file) =>
-      file.toLowerCase().endsWith('.tex'),
+      file.absolutePath.toLowerCase().endsWith('.tex'),
     );
     const compileResults = await Promise.allSettled(
       texFiles.map(async (file) => {
-        const buildDir = path.join(path.dirname(file), 'build');
-        await flexibleFS.ensureDir(buildDir);
+        const buildDir = path.join(path.dirname(file.absolutePath), 'build');
+        await flexibleFS.ensureDir(pathToLocation(buildDir));
         const compiled = await compileLatex2Pdf(
           file,
           undefined,
@@ -103,14 +111,15 @@ export class LatexMediaManager {
         if (compiled) {
           const pdfFile = path.join(
             buildDir,
-            path.basename(file).replace(/\.tex$/, '.pdf'),
+            path.basename(file.absolutePath).replace(/\.tex$/, '.pdf'),
           );
-          if (await flexibleFS.exists(pdfFile)) {
+          const pdfLocation = pathToLocation(pdfFile);
+          if (await flexibleFS.exists(pdfLocation)) {
             try {
-              const stats = await flexibleFS.stat(pdfFile);
+              const stats = await flexibleFS.stat(pdfLocation);
               if (stats.size === 0) {
                 this.logger.warn(
-                  `Compiled PDF is empty for ${file}: ${pdfFile}`,
+                  `Compiled PDF is empty for ${file.absolutePath}: ${pdfFile}`,
                   activeGroupId,
                 );
                 return undefined;
@@ -125,7 +134,7 @@ export class LatexMediaManager {
             }
 
             this.logger.info(
-              `Compiled PDF for ${file}: ${pdfFile}`,
+              `Compiled PDF for ${file.absolutePath}: ${pdfFile}`,
               activeGroupId,
             );
             return pdfFile;
@@ -142,7 +151,7 @@ export class LatexMediaManager {
   }
 
   private async extractFiguresFromFiles(
-    files: string[],
+    files: FileLocation[],
     workspaceState: AgentWorkspaceState,
   ): Promise<void> {
     const activeGroupId = this.logger.withCurrentGroup((id) => id);
@@ -160,7 +169,7 @@ export class LatexMediaManager {
       ) {
         const file = files[idx];
         this.logger.debug(
-          `Extracted ${result.value.length} figures from ${file}`,
+          `Extracted ${result.value.length} figures from ${file.absolutePath}`,
           activeGroupId,
         );
         workspaceState.media.addMediaFiles(result.value);
@@ -176,7 +185,7 @@ export class LatexMediaManager {
   }
 
   private async compileTikzFigures(
-    files: string[],
+    files: FileLocation[],
     workspaceState: AgentWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
@@ -190,7 +199,10 @@ export class LatexMediaManager {
         result.value &&
         result.value.length > 0
       ) {
-        workspaceState.media.addMediaFiles(result.value);
+        // Convert FileLocation[] to string[] for legacy media attachment API
+        workspaceState.media.addMediaFiles(
+          result.value.map((loc) => loc.absolutePath),
+        );
       }
     });
     if (logSummary) {
@@ -202,7 +214,7 @@ export class LatexMediaManager {
   }
 
   private async processFiles(
-    files: string[],
+    files: FileLocation[],
     workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
@@ -270,7 +282,7 @@ export class LatexMediaManager {
    * Adds resulting media paths to the provided AgentWorkspaceState.
    */
   async processInputFiles(
-    inputFiles: string[],
+    inputFiles: FileLocation[],
     workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
@@ -289,7 +301,7 @@ export class LatexMediaManager {
    * Process output files to compile TikZ pictures and PDFs, attach texcount.
    */
   async processOutputFiles(
-    outputFiles: string[],
+    outputFiles: FileLocation[],
     workspaceState: AgentWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,

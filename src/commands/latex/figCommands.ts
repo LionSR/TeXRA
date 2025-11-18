@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 // Local imports - errors
 import { showLoggedErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { WorkspaceFS, pathToLocation } from '@utils/files';
 import {
   getActiveEditorWithGuards,
   logGuardFailure,
@@ -56,7 +56,9 @@ async function handleExtractFigurePaths(): Promise<void> {
     logger.debug(CHANNEL, `Processing LaTeX file: ${filePath}`);
 
     // Extract figure paths
-    const figurePaths = await extractFigurePathsFromLatex(filePath);
+    const figurePaths = await extractFigurePathsFromLatex(
+      pathToLocation(filePath),
+    );
 
     if (figurePaths.length > 0) {
       // Show results in QuickPick
@@ -107,7 +109,9 @@ async function handleExtractTikzFigures(): Promise<void> {
     );
 
     // Extract TikZ pictures with labels
-    const labeledTikzPictures = await tikzPictureManager.extract(filePath);
+    const labeledTikzPictures = await tikzPictureManager.extract(
+      pathToLocation(filePath),
+    );
 
     if (labeledTikzPictures.length > 0) {
       // Create QuickPick items from the labels
@@ -180,14 +184,16 @@ async function handleCompileTikzFigures(): Promise<void> {
         });
 
         // Extract and compile TikZ pictures
-        const compiledFiles = await tikzPictureManager.compile(filePath);
+        const compiledFiles = await tikzPictureManager.compile(
+          pathToLocation(filePath),
+        );
 
         if (compiledFiles.length > 0) {
           // Create QuickPick items from the compiled files
-          const items = compiledFiles.map((filePath: string) => ({
-            label: path.basename(filePath),
-            description: filePath,
-            file: filePath,
+          const items = compiledFiles.map((fileLocation) => ({
+            label: path.basename(fileLocation.absolutePath),
+            description: fileLocation.absolutePath,
+            file: fileLocation.absolutePath,
           }));
 
           // Show results in QuickPick
@@ -198,9 +204,7 @@ async function handleCompileTikzFigures(): Promise<void> {
 
           if (selected) {
             // Open the selected PDF
-            const uri = vscode.Uri.file(
-              path.join(WorkspaceFS.getPath() ?? '', selected.file),
-            );
+            const uri = vscode.Uri.file(selected.file);
             await vscode.commands.executeCommand('vscode.open', uri);
           }
 

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { toolResult } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { pathToLocation } from '@utils/files';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   buildLimitedAttachments,
@@ -31,7 +32,9 @@ export class ExtractLatexFiguresTool extends defineTool({
   protected async execute({ texPath }: ExtractFiguresInput) {
     const { resolved, display } = await resolveLatexFileOrThrow(texPath);
 
-    const figurePaths = await extractFigurePathsFromLatex(resolved.relative);
+    const figurePaths = await extractFigurePathsFromLatex(
+      pathToLocation(resolved.absolute),
+    );
     const uniqueFigures = Array.from(new Set(figurePaths));
 
     if (uniqueFigures.length === 0) {
