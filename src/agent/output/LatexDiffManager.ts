@@ -255,10 +255,9 @@ export class LatexDiffManager {
           }
           const cwd = workspaceDir ?? path.dirname(baseLocation.absolutePath);
 
-          // Use location if available, otherwise create from actual path
+          // Use location if available, otherwise create run-storage aware location
           const revisedLocation =
-            location ??
-            createWorkspaceLocation(WorkspaceFS.fullPath(actual), actual);
+            location ?? this.fileService.createLocation(actual);
 
           const result = await this.latexdiffService.runDiffForRound(
             baseLocation,
