@@ -175,7 +175,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  FunctionCall,
+  Part,
   GoogleGenAI
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -1137,53 +1137,28 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _client: GoogleGenAI | undefined,
     _id: string,
     name: string,
-    call: FunctionCall | Part,
+    call: Part,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    let callPart: Part;
-    let functionName: string;
-    let callId: string;
+    // call is now always a Part (preserves thoughtSignature)
+    const callPart = call;
+    const functionName = call.functionCall?.name ?? name;
+    const callId = ensureCallId(call.functionCall ?? ({} as FunctionCall));
 
-    // Check if call is a Part (from extractToolUse) or legacy FunctionCall
-    if ('functionCall' in call && call.functionCall) {
-      // This is a Part - use it directly to preserve thoughtSignature!
-      callPart = call as Part;
-      functionName = call.functionCall.name ?? name;
-      callId = ensureCallId(call.functionCall);
+    // Update the ID if needed
+    const finalCallPart: Part =
+      callPart.functionCall && callPart.functionCall.id !== callId
+        ? {
+            ...callPart,
+            functionCall: { ...callPart.functionCall, id: callId },
+          }
+        : callPart;
 
-      // Update the ID if needed
-      if (callPart.functionCall && callPart.functionCall.id !== callId) {
-        callPart = {
-          ...callPart,
-          functionCall: { ...callPart.functionCall, id: callId },
-        };
-      }
-
-      this.logger.debug(
-        `Using original Part for function '${functionName}'${callPart.thoughtSignature ? ' (preserving thought signature)' : ''}`,
-      );
-    } else {
-      // Legacy path: call is just a FunctionCall - reconstruct Part
-      const functionCall = call as FunctionCall;
-      const args =
-        functionCall?.args && typeof functionCall.args === 'object'
-          ? (functionCall.args as Record<string, unknown>)
-          : ((functionCall as any)?.input ?? {});
-
-      functionName = functionCall?.name ?? name;
-      callId = ensureCallId(functionCall);
-
-      callPart = createPartFromFunctionCall(functionName, args);
-      if (callPart.functionCall) {
-        callPart.functionCall.id = callId;
-      }
-
-      this.logger.debug(
-        `Reconstructed Part for function '${functionName}' (legacy path)`,
-      );
-    }
+    this.logger.debug(
+      `Using Part for function '${functionName}'${finalCallPart.thoughtSignature ? ' (preserving thought signature)' : ''}`,
+    );
 
     // Use the same ID for the result to maintain correlation
     const { attachments, sanitizedResult } = extractToolAttachments(result);
@@ -1217,7 +1192,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (text) {
       callParts.push(createPartFromText(text));
     }
-    callParts.push(callPart);
+    callParts.push(finalCallPart);
     const callMsg: Content = {
       role: 'model',
       parts: callParts,

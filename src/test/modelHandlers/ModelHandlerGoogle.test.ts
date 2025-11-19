@@ -123,13 +123,17 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
   });
 
   it('omits unsupported identifier fields on follow-up function call parts', async () => {
+    // Wrap in a Part as extractToolUse now returns the entire Part
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
       'call-123',
       'read_file',
       {
-        name: 'read_file',
-        args: { path: 'syk_v5.tex' },
+        functionCall: {
+          name: 'read_file',
+          args: { path: 'syk_v5.tex' },
+          id: 'call-123',
+        },
       } as any,
       {},
       undefined,
