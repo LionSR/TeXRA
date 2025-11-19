@@ -11,7 +11,6 @@ export const OPENAI_CHAT_FINISH = {
   TOOL_CALLS: 'tool_calls',
   TOOL_USE: 'tool_use',
   CONTENT_FILTER: 'content_filter',
-  FUNCTION_CALL: 'function_call',
 } as const;
 export const OPENAI_CHAT_FINISH_REASONS = Object.values(OPENAI_CHAT_FINISH);
 export type OpenAIChatFinishReason =

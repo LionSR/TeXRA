@@ -123,7 +123,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
-  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ChatCompletionMessageToolCall,
   OpenAI
 > {
   /**
@@ -691,9 +691,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     } else if (
       stopReason === OPENAI_CHAT_FINISH.TOOL_CALLS ||
       stopReason === OPENAI_CHAT_FINISH.TOOL_USE ||
-      stopReason === OPENAI_CHAT_FINISH.FUNCTION_CALL ||
-      Array.isArray(choice.message.tool_calls) ||
-      choice.message.function_call
+      Array.isArray(choice.message.tool_calls)
     ) {
       // Other provider SDKs (Anthropic, Google, etc.) keep a placeholder
       // message when a tool is invoked. OpenAI omits `content` entirely,
@@ -1172,9 +1170,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
   private preserveToolCall(
     id: string,
     fallbackName: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ChatCompletionMessageToolCall,
   ): ChatCompletionMessageToolCall {
-    // If it's already a proper ChatCompletionMessageToolCall, preserve it
+    // Preserve the original ChatCompletionMessageToolCall
     if (this.isFunctionToolCall(call)) {
       return {
         ...call,
@@ -1187,25 +1185,14 @@ export class ModelHandlerOpenAI extends ModelHandler<
       };
     }
 
-    if (this.isCustomToolCall(call)) {
-      return {
-        ...call,
-        id: call.id ?? id,
-        custom: {
-          ...call.custom,
-          name: call.custom?.name ?? fallbackName,
-          input: this.ensureStringifiedArguments(call.custom?.input),
-        },
-      };
-    }
-
-    // Legacy FunctionCall format - must reconstruct
+    // Custom tool call
     return {
-      id,
-      type: 'function',
-      function: {
-        name: call.name ?? fallbackName,
-        arguments: this.ensureStringifiedArguments(call.arguments),
+      ...call,
+      id: call.id ?? id,
+      custom: {
+        ...call.custom,
+        name: call.custom?.name ?? fallbackName,
+        input: this.ensureStringifiedArguments(call.custom?.input),
       },
     };
   }
@@ -1215,10 +1202,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
       return JSON.stringify(toolCalls[0], null, 2);
     }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
-    }
     return null;
   }
 
@@ -1226,7 +1209,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
     _client: OpenAI | undefined,
     id: string,
     name: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ChatCompletionMessageToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
