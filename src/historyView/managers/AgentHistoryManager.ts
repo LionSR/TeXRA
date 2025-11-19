@@ -12,9 +12,6 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
 import { workspaceSM } from '@common/state/stateManager';
-import * as logger from '@logger/logUtils';
-
-const CHANNEL = 'AgentHistoryManager';
 
 /**
  * Represents a historical agent execution
@@ -32,6 +29,14 @@ export interface AgentHistoryItem {
 export class AgentHistoryManager {
   private static readonly HISTORY_STORAGE_KEY = 'texra.agentHistory';
   private static readonly MAX_HISTORY_ITEMS = 100;
+
+  private static isValidHistoryItem(
+    entry: AgentHistoryItem | undefined,
+  ): entry is AgentHistoryItem {
+    return Boolean(
+      entry?.id && entry.timestamp && entry.config?.session && entry.session,
+    );
+  }
 
   /**
    * Add a new agent execution to history
@@ -74,14 +79,8 @@ export class AgentHistoryManager {
    */
   public static async getHistory(): Promise<AgentHistoryItem[]> {
     const storageKey = this.getWorkspaceStorageKey();
-    const history = workspaceSM.get<unknown[]>(storageKey, []);
-    const { normalized, mutated } = this.sanitizeHistoryEntries(history);
-
-    if (mutated) {
-      await this.saveHistory(normalized);
-    }
-
-    return normalized;
+    const history = workspaceSM.get<AgentHistoryItem[]>(storageKey, []);
+    return history.filter((item) => this.isValidHistoryItem(item));
   }
 
   /**
@@ -90,65 +89,6 @@ export class AgentHistoryManager {
   private static async saveHistory(history: AgentHistoryItem[]): Promise<void> {
     const storageKey = this.getWorkspaceStorageKey();
     await workspaceSM.update(storageKey, history);
-  }
-
-  private static sanitizeHistoryEntries(entries: unknown[]): {
-    normalized: AgentHistoryItem[];
-    mutated: boolean;
-  } {
-    let mutated = false;
-    const normalized: AgentHistoryItem[] = [];
-
-    for (const rawEntry of entries) {
-      if (!rawEntry || typeof rawEntry !== 'object') {
-        mutated = true;
-        continue;
-      }
-
-      const candidate = rawEntry as Partial<AgentHistoryItem> & {
-        config?: AgentConfig;
-      };
-
-      if (!candidate.id || !candidate.timestamp || !candidate.config) {
-        mutated = true;
-        continue;
-      }
-
-      let normalizedConfig: AgentConfig;
-      try {
-        normalizedConfig = parseAgentConfig(candidate.config);
-      } catch (error) {
-        mutated = true;
-        logger.warn(
-          CHANNEL,
-          'Discarding malformed agent history entry',
-          undefined,
-          undefined,
-          false,
-          error,
-        );
-        continue;
-      }
-
-      const session = normalizedConfig.session;
-      if (!session) {
-        mutated = true;
-        continue;
-      }
-
-      normalized.push({
-        id: candidate.id,
-        timestamp: candidate.timestamp,
-        config: normalizedConfig,
-        session,
-      });
-    }
-
-    if (normalized.length !== entries.length) {
-      mutated = true;
-    }
-
-    return { normalized, mutated };
   }
 
   /**
