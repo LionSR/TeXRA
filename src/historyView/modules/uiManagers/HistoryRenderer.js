@@ -247,13 +247,13 @@ export class HistoryRenderer {
           typeof detail?.open === 'boolean'
             ? detail.open
             : element.hasAttribute('open');
-        historyViewState.toggleStates.set(id, isOpen);
+        historyViewState.setToggleState(id, isOpen);
       });
     });
   }
 
   applyToggleStates() {
-    const entries = historyViewState.toggleStates.entries();
+    const entries = Object.entries(historyViewState.toggleStates);
     for (const [id, expanded] of entries) {
       const collapsible = document.querySelector(
         `.${CLASS_NAMES.HISTORY_COLLAPSIBLE}[data-id="${id}"]`,

@@ -16,7 +16,6 @@ import markdownItKatex from '@vscode/markdown-it-katex';
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
-import { stringify as yamlStringify } from 'yaml';
 
 // Local imports - progress view
 import { STATUS, GROUP_DOM_IDS } from './constants.js';
@@ -68,21 +67,6 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
 
 let markdownRenderer;
 
-const toYamlString = (value) => {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    const yamlValue = yamlStringify(value);
-    return typeof yamlValue === 'string'
-      ? yamlValue.replace(/\n$/, '')
-      : String(yamlValue);
-  } catch (error) {
-    return String(value);
-  }
-};
-
 const getMarkdownRenderer = () => {
   if (!markdownRenderer) {
     markdownRenderer = new MarkdownIt({
@@ -115,67 +99,27 @@ const tryParseJson = (text) => {
 
 const normalizeStructuredContent = (text, data) => {
   if (data !== undefined) {
-    return {
-      decodedText: typeof text === 'string' ? text : '',
-      structured: data,
-    };
+    return { structured: data };
   }
 
   const decodedText = typeof text === 'string' ? decodeHtml(text) : '';
   return { decodedText, structured: tryParseJson(decodedText) };
 };
 
-const normalizeFileListEntries = (structured) => {
-  if (!Array.isArray(structured)) {
-    return null;
-  }
+const normalizeFileListEntries = (structured) =>
+  Array.isArray(structured) ? structured : null;
 
-  return structured.map((file) => {
-    const rawPath = String(file?.path ?? '');
-    const source = file?.source || 'unknown';
-    const sourceDisplay = source
-      .replace('requiredFiles', 'required')
-      .replace('Pattern ', '')
-      .replace(/'/g, '');
+const normalizeMissingOutputsPayload = (structured) =>
+  structured && typeof structured === 'object' && !Array.isArray(structured)
+    ? {
+        missing: Array.isArray(structured.missing) ? structured.missing : [],
+        xmlFile: structured.xmlFile ?? null,
+        documentTag: structured.documentTag ?? null,
+      }
+    : null;
 
-    return {
-      filePath: rawPath,
-      fileName: getBasename(rawPath),
-      ok: Boolean(file?.ok),
-      source,
-      sourceDisplay,
-      internal: Boolean(file?.internal),
-      varName: typeof file?.varName === 'string' ? file.varName : '',
-    };
-  });
-};
-
-const normalizeMissingOutputsPayload = (structured) => {
-  if (
-    !structured ||
-    typeof structured !== 'object' ||
-    Array.isArray(structured)
-  ) {
-    return null;
-  }
-
-  return {
-    missing: Array.isArray(structured.missing) ? structured.missing : [],
-    xmlFile:
-      typeof structured.xmlFile === 'string' && structured.xmlFile
-        ? structured.xmlFile
-        : null,
-    documentTag:
-      typeof structured.documentTag === 'string' && structured.documentTag
-        ? structured.documentTag
-        : null,
-  };
-};
-
-const normalizeLatexdiffEntries = (structured) => {
-  if (!Array.isArray(structured)) return [];
-  return structured;
-};
+const normalizeLatexdiffEntries = (structured) =>
+  Array.isArray(structured) ? structured : null;
 
 const makePreview = (value, maxLength = 240) => {
   if (!value) return '';
@@ -187,69 +131,39 @@ const makePreview = (value, maxLength = 240) => {
 };
 
 const normalizeToolUseLog = (structured) => {
-  const parsed =
-    structured && typeof structured === 'object' && !Array.isArray(structured)
-      ? structured
-      : null;
-
-  if (!parsed) {
+  if (
+    !structured ||
+    typeof structured !== 'object' ||
+    Array.isArray(structured)
+  ) {
     return null;
   }
 
-  const outputCandidate =
-    parsed.output &&
-    typeof parsed.output === 'object' &&
-    !Array.isArray(parsed.output)
-      ? parsed.output
-      : parsed.result &&
-          typeof parsed.result === 'object' &&
-          !Array.isArray(parsed.result)
-        ? parsed.result
-        : {};
-
-  const summaryText =
-    typeof outputCandidate.summary === 'string' &&
-    outputCandidate.summary.trim()
-      ? outputCandidate.summary.trim()
-      : typeof parsed.summary === 'string' && parsed.summary.trim()
-        ? parsed.summary.trim()
-        : '';
-
-  const errorText =
-    typeof outputCandidate.error === 'string'
-      ? outputCandidate.error
-      : typeof parsed.error === 'string'
-        ? parsed.error
-        : '';
-
-  let outputText = '';
-  if (typeof outputCandidate.output === 'string') {
-    outputText = outputCandidate.output;
-  } else if (typeof parsed.output === 'string') {
-    outputText = parsed.output;
-  }
-
   const toolName =
-    typeof parsed.tool === 'string'
-      ? parsed.tool.trim()
-      : typeof parsed.name === 'string'
-        ? parsed.name.trim()
-        : '';
-
-  const isError = Boolean(
-    (typeof outputCandidate.isError === 'boolean' && outputCandidate.isError) ||
-      (typeof parsed.isError === 'boolean' && parsed.isError) ||
-      (typeof errorText === 'string' && errorText.trim().length > 0),
-  );
+    typeof structured.toolName === 'string'
+      ? structured.toolName
+      : typeof structured.tool === 'string'
+        ? structured.tool
+        : typeof structured.name === 'string'
+          ? structured.name
+          : '';
+  const summaryText =
+    typeof structured.summary === 'string' ? structured.summary : '';
+  const errorText =
+    typeof structured.error === 'string' ? structured.error : '';
+  const outputText =
+    typeof structured.output === 'string' ? structured.output : '';
+  const diagnostics = structured.diagnostics;
+  const isError = Boolean(structured.isError || errorText);
 
   return {
     kind: 'structured',
-    parsed,
+    parsed: structured,
     toolName,
-    outputCandidate,
     summaryText,
     errorText,
     outputText,
+    diagnostics,
     isError,
     headerSummary: summaryText || makePreview(errorText || outputText || ''),
   };
@@ -687,10 +601,10 @@ export class LogEntryFormatter {
     const {
       parsed,
       toolName,
-      outputCandidate,
       summaryText,
       errorText,
       outputText,
+      diagnostics,
     } = normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
@@ -708,9 +622,18 @@ export class LogEntryFormatter {
     element.classList.toggle('tool-use-error', normalizedToolLog.isError);
 
     const sections = [];
+    const formatValue = (value) => {
+      if (typeof value === 'string') return value;
+      if (value === undefined) return '';
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (error) {
+        return String(value);
+      }
+    };
 
     if (parsed.input !== undefined) {
-      const inputValue = toYamlString(parsed.input);
+      const inputValue = formatValue(parsed.input);
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -763,8 +686,8 @@ export class LogEntryFormatter {
       }
     }
 
-    if (outputCandidate && outputCandidate.diagnostics !== undefined) {
-      const diagnosticsText = toYamlString(outputCandidate.diagnostics).trim();
+    if (diagnostics !== undefined) {
+      const diagnosticsText = formatValue(diagnostics).trim();
       const MAX_DIAGNOSTICS_LENGTH = 600;
 
       if (diagnosticsText && diagnosticsText.length <= MAX_DIAGNOSTICS_LENGTH) {
@@ -788,32 +711,10 @@ export class LogEntryFormatter {
       }
     }
 
-    if (outputCandidate && typeof outputCandidate.system === 'string') {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">System:</span>
-            <pre>${encodeHtml(outputCandidate.system)}</pre>
-          </div>
-        </div>
-      `);
-    }
-
-    if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Image:</span>
-            <pre>(base64 image omitted)</pre>
-          </div>
-        </div>
-      `);
-    }
-
-    const fallbackYaml = toYamlString(parsed);
+    const fallbackText = formatValue(parsed);
     contentElem.innerHTML =
       sections.length === 0
-        ? `<pre>${encodeHtml(fallbackYaml || '')}</pre>`
+        ? `<pre>${encodeHtml(fallbackText || '')}</pre>`
         : sections.join('<hr class="tool-use-separator">');
 
     return element;
@@ -967,9 +868,12 @@ export class LogEntryFormatter {
     let items = '';
     Object.entries(filesBySource).forEach(([source, files]) => {
       files.forEach((f) => {
+        const filePath = f.filePath || f.path || '';
+        const fileName = f.fileName || getBasename(filePath);
+        const sourceDisplay = f.sourceDisplay || source;
         const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-        const escaped = encodeHtml(f.filePath);
-        const fileNameEscaped = encodeHtml(f.fileName);
+        const escaped = encodeHtml(filePath);
+        const fileNameEscaped = encodeHtml(fileName);
 
         let metadata = '';
         if (f.varName) {
@@ -977,9 +881,9 @@ export class LogEntryFormatter {
         }
         if (source && source !== 'unknown') {
           if (f.internal) {
-            metadata += ` <span class="file-source">(${f.sourceDisplay}, internal)</span>`;
+            metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
           } else {
-            metadata += ` <span class="file-source">(${f.sourceDisplay})</span>`;
+            metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
           }
         }
 
@@ -1093,7 +997,7 @@ export class LogEntryFormatter {
 
     const entries = normalizeLatexdiffEntries(normalizedPayload?.structured);
 
-    if (entries.length === 0) {
+    if (!entries || entries.length === 0) {
       return null;
     }
 

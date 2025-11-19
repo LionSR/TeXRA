@@ -120,7 +120,7 @@ export class SearchManager {
           return;
         }
         const id = section.dataset.id;
-        const expanded = this.state.toggleStates.get(id);
+        const expanded = this.state.getToggleState(id);
         if ('open' in section) {
           section.open = Boolean(expanded);
         }

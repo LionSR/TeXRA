@@ -1,6 +1,3 @@
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -57,65 +54,16 @@ interface NormalizedToolCall {
   raw: RawToolCallPayload;
 }
 
-const RawToolCallPayloadSchema = z.object({
-  call_id: z.string().optional(),
-  tool_call_id: z.string().optional(),
-  tool_use_id: z.string().optional(),
-  id: z.string().optional(),
-  name: z.string().optional(),
-  function: z
-    .object({
-      name: z.string().optional(),
-      arguments: z
-        .union([z.string(), z.record(z.string(), z.unknown())])
-        .optional(),
-    })
-    .optional(),
-  input: z.unknown().optional(),
-  args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-  arguments: z
-    .union([z.string(), z.record(z.string(), z.unknown())])
-    .optional(),
-});
+type RawToolCallPayload = Record<string, unknown>;
 
-type RawToolCallPayload = z.infer<typeof RawToolCallPayloadSchema>;
-
-function buildNormalizedToolCall(
-  payload: RawToolCallPayload,
-): NormalizedToolCall {
-  const callId =
-    payload.call_id ||
-    payload.tool_call_id ||
-    payload.tool_use_id ||
-    payload.id;
-
-  if (!callId) {
-    throw new Error('Tool call is missing an identifier.');
-  }
-
-  const name = payload.name || payload.function?.name;
-
-  if (!name) {
-    throw new Error('Tool call is missing a name.');
-  }
-
-  const argumentSources: Array<unknown> = [
-    payload.input,
-    payload.args,
-    payload.arguments,
-    payload.function?.arguments,
-  ];
-
-  const input = argumentSources.find(
-    (candidate) => candidate !== undefined && candidate !== null,
+function isNormalizedToolCall(value: unknown): value is NormalizedToolCall {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'callId' in value &&
+    'name' in value &&
+    'raw' in value
   );
-
-  return {
-    callId,
-    name,
-    input,
-    raw: payload,
-  };
 }
 
 function normalizeToolCallError(
@@ -152,21 +100,38 @@ function normalizeToolCallError(
 function normalizeToolCallPayload(
   rawPayload: string | RawToolCallPayload | NormalizedToolCall,
 ): { normalized: NormalizedToolCall; raw: RawToolCallPayload } {
-  if (typeof rawPayload === 'object') {
-    if ('callId' in rawPayload && 'name' in rawPayload) {
-      const normalized = rawPayload as NormalizedToolCall;
-      return { normalized, raw: normalized.raw };
-    }
+  const payload: RawToolCallPayload =
+    typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
 
-    const parsed = RawToolCallPayloadSchema.parse(rawPayload);
-    const normalized = buildNormalizedToolCall(parsed);
-    return { normalized, raw: parsed };
+  if (isNormalizedToolCall(payload)) {
+    const normalized = payload;
+    return { normalized, raw: normalized.raw ?? (payload as RawToolCallPayload) };
   }
 
-  const parsedJson = JSON.parse(rawPayload);
-  const parsed = RawToolCallPayloadSchema.parse(parsedJson);
-  const normalized = buildNormalizedToolCall(parsed);
-  return { normalized, raw: parsed };
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Tool call payload is not an object.');
+  }
+
+  const callId =
+    (payload as any).callId ||
+    (payload as any).call_id ||
+    (payload as any).tool_call_id ||
+    (payload as any).id;
+  const name = (payload as any).name || (payload as any).function?.name;
+  const input = (payload as any).input ?? (payload as any).function?.arguments;
+
+  if (!callId || !name) {
+    throw new Error('Tool call is missing a callId or name.');
+  }
+
+  const normalized: NormalizedToolCall = {
+    callId: String(callId),
+    name: String(name),
+    input,
+    raw: payload,
+  };
+
+  return { normalized, raw: payload };
 }
 
 type ToolDispatchErrorResult = {
