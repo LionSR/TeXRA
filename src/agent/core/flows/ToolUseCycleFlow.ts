@@ -26,7 +26,6 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -58,116 +57,66 @@ interface NormalizedToolCall {
   raw: RawToolCallPayload;
 }
 
-const RawToolCallPayloadSchema = z
-  .object({
-    call_id: z.string().optional(),
-    tool_call_id: z.string().optional(),
-    tool_use_id: z.string().optional(),
-    id: z.string().optional(),
-    name: z.string().optional(),
-    function: z
-      .object({
-        name: z.string().optional(),
-        arguments: z
-          .union([z.string(), z.record(z.string(), z.unknown())])
-          .optional(),
-      })
-      .optional(),
-    input: z.unknown().optional(),
-    args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-    arguments: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional(),
-  })
-  .superRefine((value, ctx) => {
-    const trimmed = (val?: string | null) =>
-      typeof val === 'string' ? val.trim() : '';
-
-    if (
-      !trimmed(value.call_id) &&
-      !trimmed(value.tool_call_id) &&
-      !trimmed(value.tool_use_id) &&
-      !trimmed(value.id)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['call_id'],
-        message: 'Tool call is missing an identifier.',
-      });
-    }
-
-    if (!trimmed(value.name) && !trimmed(value.function?.name ?? '')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['name'],
-        message: 'Tool call is missing a name.',
-      });
-    }
-  });
+const RawToolCallPayloadSchema = z.object({
+  call_id: z.string().optional(),
+  tool_call_id: z.string().optional(),
+  tool_use_id: z.string().optional(),
+  id: z.string().optional(),
+  name: z.string().optional(),
+  function: z
+    .object({
+      name: z.string().optional(),
+      arguments: z
+        .union([z.string(), z.record(z.string(), z.unknown())])
+        .optional(),
+    })
+    .optional(),
+  input: z.unknown().optional(),
+  args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+  arguments: z
+    .union([z.string(), z.record(z.string(), z.unknown())])
+    .optional(),
+});
 
 type RawToolCallPayload = z.infer<typeof RawToolCallPayloadSchema>;
 
-const ToolCallPayloadSchema =
-  RawToolCallPayloadSchema.transform<NormalizedToolCall>((payload) => {
-    const trim = (value?: string | null) =>
-      typeof value === 'string' ? value.trim() : '';
+function buildNormalizedToolCall(
+  payload: RawToolCallPayload,
+): NormalizedToolCall {
+  const callId =
+    payload.call_id ||
+    payload.tool_call_id ||
+    payload.tool_use_id ||
+    payload.id;
 
-    const callId = [
-      payload.call_id,
-      payload.tool_call_id,
-      payload.tool_use_id,
-      payload.id,
-    ]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
+  if (!callId) {
+    throw new Error('Tool call is missing an identifier.');
+  }
 
-    if (!callId) {
-      throw new Error('Tool call is missing an identifier.');
-    }
+  const name = payload.name || payload.function?.name;
 
-    const name = [payload.name, payload.function?.name]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
+  if (!name) {
+    throw new Error('Tool call is missing a name.');
+  }
 
-    if (!name) {
-      throw new Error('Tool call is missing a name.');
-    }
+  const argumentSources: Array<unknown> = [
+    payload.input,
+    payload.args,
+    payload.arguments,
+    payload.function?.arguments,
+  ];
 
-    const argumentSources: Array<unknown> = [
-      payload.input,
-      payload.args,
-      payload.arguments,
-      payload.function?.arguments,
-    ];
+  const input = argumentSources.find(
+    (candidate) => candidate !== undefined && candidate !== null,
+  );
 
-    let input: unknown = {};
-    for (const candidate of argumentSources) {
-      if (candidate === undefined || candidate === null) {
-        continue;
-      }
-      if (typeof candidate === 'string') {
-        const trimmed = candidate.trim();
-        if (!trimmed) {
-          continue;
-        }
-        try {
-          input = JSON.parse(trimmed);
-        } catch {
-          input = trimmed;
-        }
-        break;
-      }
-      input = candidate;
-      break;
-    }
-
-    return {
-      callId,
-      name,
-      input,
-      raw: payload,
-    };
-  });
+  return {
+    callId,
+    name,
+    input,
+    raw: payload,
+  };
+}
 
 function normalizeToolCallError(
   toolName: string,
@@ -200,6 +149,26 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
+function normalizeToolCallPayload(
+  rawPayload: string | RawToolCallPayload | NormalizedToolCall,
+): { normalized: NormalizedToolCall; raw: RawToolCallPayload } {
+  if (typeof rawPayload === 'object') {
+    if ('callId' in rawPayload && 'name' in rawPayload) {
+      const normalized = rawPayload as NormalizedToolCall;
+      return { normalized, raw: normalized.raw };
+    }
+
+    const parsed = RawToolCallPayloadSchema.parse(rawPayload);
+    const normalized = buildNormalizedToolCall(parsed);
+    return { normalized, raw: parsed };
+  }
+
+  const parsedJson = JSON.parse(rawPayload);
+  const parsed = RawToolCallPayloadSchema.parse(parsedJson);
+  const normalized = buildNormalizedToolCall(parsed);
+  return { normalized, raw: parsed };
+}
+
 type ToolDispatchErrorResult = {
   handledError: true;
   toolCallId?: string;
@@ -213,10 +182,24 @@ export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
   toolInfo?: string;
   text?: string;
+  toolCall?: NormalizedToolCall;
+  toolCallPayload?: RawToolCallPayload | unknown;
+  toolNormalizationError?: {
+    message: string;
+    diagnostics?: ToolValidationDiagnostics;
+    raw?: unknown;
+  };
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, ['response', 'toolInfo', 'text']);
+  resetCycleState(state, [
+    'response',
+    'toolInfo',
+    'text',
+    'toolCall',
+    'toolCallPayload',
+    'toolNormalizationError',
+  ]);
 }
 
 export interface ToolUseCycleContext<C = unknown> {
@@ -463,6 +446,22 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       };
     }
 
+    try {
+      const normalizedToolCall = normalizeToolCallPayload(toolInfo);
+      state.toolCall = normalizedToolCall.normalized;
+      state.toolCallPayload = normalizedToolCall.raw;
+      state.toolNormalizationError = undefined;
+    } catch (error) {
+      const { message, diagnostics } = normalizeToolCallError('unknown', error);
+      state.toolCall = undefined;
+      state.toolCallPayload = toolInfo;
+      state.toolNormalizationError = {
+        message,
+        diagnostics,
+        raw: toolInfo,
+      };
+    }
+
     state.toolInfo = toolInfo;
     state.text = text ?? undefined;
     state.stopReason = stopReason;
@@ -536,44 +535,16 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return { skipped: true };
     }
 
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(state.toolInfo);
-    } catch (error) {
-      const errorMsg = `Malformed tool JSON: ${toErrorMessage(error)}`;
-      const errorResult = toolResult({ error: errorMsg, isError: true });
-      const toolUseLog = {
-        tool: 'unknown',
-        input: state.toolInfo,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
-      return {
-        skipped: false,
-        value: {
-          handledError: true,
-          toolName: 'unknown',
-          result: errorResult,
-          fallbackMessage:
-            'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
-        },
-      };
-    }
-
-    const parsed = ToolCallPayloadSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      const { message, diagnostics } = normalizeToolCallError(
-        'unknown',
-        parsed.error,
-      );
+    const normalizationError = state.toolNormalizationError;
+    if (normalizationError) {
       const errorResult = toolResult({
-        error: message,
+        error: normalizationError.message,
         isError: true,
-        diagnostics,
+        diagnostics: normalizationError.diagnostics,
       });
       const toolUseLog = {
         tool: 'unknown',
-        input: parsedJson,
+        input: normalizationError.raw ?? state.toolInfo,
         output: sanitizeToolResultForLog(errorResult),
       };
       options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
@@ -583,17 +554,22 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
           handledError: true,
           toolName: 'unknown',
           result: errorResult,
-          raw: parsedJson,
-          fallbackMessage: message,
+          raw: normalizationError.raw ?? state.toolInfo,
+          fallbackMessage: normalizationError.message,
         },
       };
     }
 
-    const payload = parsed.data;
+    if (!state.toolCall || !state.toolCallPayload) {
+      state.shouldStop = true;
+      return { skipped: true };
+    }
+
+    const payload = state.toolCall;
     return {
       skipped: false,
       value: {
-        raw: payload.raw,
+        raw: state.toolCallPayload as RawToolCallPayload,
         name: payload.name,
         input: payload.input,
         toolCallId: payload.callId,

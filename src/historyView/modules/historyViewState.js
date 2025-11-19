@@ -1,6 +1,9 @@
 // Local imports - history view
 import { WebviewStateManager } from '@common/webviewState.js';
 
+const restoreToggleStates = (savedState) =>
+  Array.isArray(savedState.toggleStates) ? savedState.toggleStates : [];
+
 class ToggleStates {
   constructor(saveCallback) {
     this.states = new Map();
@@ -44,36 +47,18 @@ export class HistoryViewState {
     const saved = typeof state === 'object' && state !== null ? state : {};
     this.searchIndex = saved.searchIndex || 0;
     this.totalMatches = saved.totalMatches || 0;
-    const { toggleStates } = saved;
-    if (Array.isArray(toggleStates)) {
-      this.toggleStates.load(toggleStates);
-    } else if (typeof toggleStates === 'string') {
-      try {
-        const parsed = JSON.parse(toggleStates);
-        if (Array.isArray(parsed)) {
-          this.toggleStates.load(parsed);
-          this.save();
-        } else {
-          console.error('Failed to restore toggle states: expected an array.');
-        }
-      } catch (e) {
-        console.error('Failed to migrate toggle states from string.', e);
-      }
-    } else if (toggleStates !== undefined) {
-      console.error('Failed to restore toggle states: expected an array.');
+    const restoredToggleStates = restoreToggleStates(saved);
+    if (restoredToggleStates.length > 0) {
+      this.toggleStates.load(restoredToggleStates);
     }
   }
 
   save() {
-    try {
-      this.stateManager.update({
-        searchIndex: this.searchIndex,
-        totalMatches: this.totalMatches,
-        toggleStates: this.toggleStates.entries(),
-      });
-    } catch (e) {
-      console.error('Failed to save state', e);
-    }
+    this.stateManager.update({
+      searchIndex: this.searchIndex,
+      totalMatches: this.totalMatches,
+      toggleStates: this.toggleStates.entries(),
+    });
   }
 
   setSearchIndex(index) {
