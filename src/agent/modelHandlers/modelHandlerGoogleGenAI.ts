@@ -1082,14 +1082,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const call = funcPart.functionCall;
         // Ensure the call has an ID
         const callId = ensureCallId(call);
-        const callWithId = { ...call, id: callId };
 
         if (!call.id?.trim()) {
           this.logger.debug(
             `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
           );
         }
-        return JSON.stringify(callWithId, null, 2);
+
+        // Return the entire Part (preserves thoughtSignature and other metadata)
+        // instead of just the FunctionCall
+        const partWithId: Part = {
+          ...funcPart,
+          functionCall: { ...call, id: callId },
+        };
+
+        return JSON.stringify(partWithId, null, 2);
       }
     }
     return null;
@@ -1130,27 +1137,52 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _client: GoogleGenAI | undefined,
     _id: string,
     name: string,
-    call: FunctionCall,
+    call: FunctionCall | Part,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    // Handle both args and input fields for backward compatibility
-    const args =
-      call?.args && typeof call.args === 'object'
-        ? (call.args as Record<string, unknown>)
-        : ((call as any)?.input ?? {});
+    let callPart: Part;
+    let functionName: string;
+    let callId: string;
 
-    // Use call.name if available, fall back to provided name
-    const functionName = call?.name ?? name;
+    // Check if call is a Part (from extractToolUse) or legacy FunctionCall
+    if ('functionCall' in call && call.functionCall) {
+      // This is a Part - use it directly to preserve thoughtSignature!
+      callPart = call as Part;
+      functionName = call.functionCall.name ?? name;
+      callId = ensureCallId(call.functionCall);
 
-    // Create the call part with the function name and arguments
-    const callPart = createPartFromFunctionCall(functionName, args);
+      // Update the ID if needed
+      if (callPart.functionCall && callPart.functionCall.id !== callId) {
+        callPart = {
+          ...callPart,
+          functionCall: { ...callPart.functionCall, id: callId },
+        };
+      }
 
-    // Ensure the function call has an ID for correlation with result
-    const callId = ensureCallId(call);
-    if (callPart.functionCall) {
-      callPart.functionCall.id = callId;
+      this.logger.debug(
+        `Using original Part for function '${functionName}'${callPart.thoughtSignature ? ' (preserving thought signature)' : ''}`,
+      );
+    } else {
+      // Legacy path: call is just a FunctionCall - reconstruct Part
+      const functionCall = call as FunctionCall;
+      const args =
+        functionCall?.args && typeof functionCall.args === 'object'
+          ? (functionCall.args as Record<string, unknown>)
+          : ((functionCall as any)?.input ?? {});
+
+      functionName = functionCall?.name ?? name;
+      callId = ensureCallId(functionCall);
+
+      callPart = createPartFromFunctionCall(functionName, args);
+      if (callPart.functionCall) {
+        callPart.functionCall.id = callId;
+      }
+
+      this.logger.debug(
+        `Reconstructed Part for function '${functionName}' (legacy path)`,
+      );
     }
 
     // Use the same ID for the result to maintain correlation
