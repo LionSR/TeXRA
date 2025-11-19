@@ -60,6 +60,7 @@ export class MediaAttachmentState {
 export class ReasoningCacheState {
   public thinkingBlocks: ThinkingBlock[] = [];
   public thinkingAdded = false;
+  public toolCallThoughtSignatures: Map<string, string> = new Map();
 
   get primaryBlock(): ThinkingBlock | null {
     return this.thinkingBlocks.length > 0 ? this.thinkingBlocks[0] : null;
@@ -68,6 +69,7 @@ export class ReasoningCacheState {
   reset(): void {
     this.thinkingBlocks = [];
     this.thinkingAdded = false;
+    this.toolCallThoughtSignatures.clear();
   }
 }
 
@@ -95,6 +97,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   reasoning: z.strictObject({
     thinkingBlocks: z.array(ThinkingBlockSchema),
     thinkingAdded: z.boolean(),
+    toolCallThoughtSignatures: z.record(z.string(), z.string()),
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
 });
@@ -125,6 +128,9 @@ export class AgentWorkspaceState {
       reasoning: {
         thinkingBlocks: [...this.reasoning.thinkingBlocks],
         thinkingAdded: this.reasoning.thinkingAdded,
+        toolCallThoughtSignatures: Object.fromEntries(
+          this.reasoning.toolCallThoughtSignatures,
+        ),
       },
       document: {
         texcountStats: this.document.texcountStats,
@@ -145,6 +151,9 @@ export class AgentWorkspaceState {
     state.media.files.push(...snapshot.media.files);
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
+    state.reasoning.toolCallThoughtSignatures = new Map(
+      Object.entries(snapshot.reasoning.toolCallThoughtSignatures),
+    );
     state.document.texcountStats = snapshot.document.texcountStats;
     return state;
   }

@@ -175,7 +175,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  Part,
+  FunctionCall,
   GoogleGenAI
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -1064,6 +1064,29 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       workspaceState.reasoning.thinkingAdded = true;
     }
 
+    // Also check for ALL function call parts with thoughtSignature (for Gemini 3 Pro)
+    // Supports parallel function calling where multiple calls may each have signatures
+    if (workspaceState) {
+      const funcParts = parts.filter((part) => part.functionCall);
+      let signatureCount = 0;
+      for (const funcPart of funcParts) {
+        if (funcPart.thoughtSignature && funcPart.functionCall) {
+          // Store thoughtSignature keyed by call ID for later reconstruction
+          const callId = ensureCallId(funcPart.functionCall);
+          workspaceState.reasoning.toolCallThoughtSignatures.set(
+            callId,
+            funcPart.thoughtSignature,
+          );
+          signatureCount++;
+        }
+      }
+      if (signatureCount > 0) {
+        this.logger.debug(
+          `Stored ${signatureCount} thoughtSignature(s) from function call part(s) for later reconstruction`,
+        );
+      }
+    }
+
     if (thoughtContent) {
       this.logger.debug(
         `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
@@ -1089,14 +1112,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           );
         }
 
-        // Return the entire Part (preserves thoughtSignature and other metadata)
-        // instead of just the FunctionCall
-        const partWithId: Part = {
-          ...funcPart,
-          functionCall: { ...call, id: callId },
+        // Serialize flat structure for schema compatibility
+        // thoughtSignature is stored separately in processThinkingBlock
+        const flatCall = {
+          id: callId,
+          name: call.name ?? '',
+          args: call.args ?? {},
         };
 
-        return JSON.stringify(partWithId, null, 2);
+        return JSON.stringify(flatCall, null, 2);
       }
     }
     return null;
@@ -1137,27 +1161,31 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _client: GoogleGenAI | undefined,
     _id: string,
     name: string,
-    call: Part,
+    call: FunctionCall,
     result: Record<string, unknown>,
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    // call is now always a Part (preserves thoughtSignature)
-    const callPart = call;
-    const functionName = call.functionCall?.name ?? name;
-    const callId = ensureCallId(call.functionCall ?? ({} as FunctionCall));
+    // call is now a flat FunctionCall (from schema parsing)
+    const functionName = call.name ?? name;
+    const callId = ensureCallId(call);
 
-    // Update the ID if needed
-    const finalCallPart: Part =
-      callPart.functionCall && callPart.functionCall.id !== callId
-        ? {
-            ...callPart,
-            functionCall: { ...callPart.functionCall, id: callId },
-          }
-        : callPart;
+    // Reconstruct Part with thoughtSignature if available (for Gemini 3 Pro)
+    // Look up signature by call ID (supports parallel function calling)
+    const thoughtSig =
+      workspaceState?.reasoning.toolCallThoughtSignatures.get(callId);
+    const finalCallPart: Part = {
+      functionCall: { ...call, id: callId },
+      ...(thoughtSig && { thoughtSignature: thoughtSig }),
+    };
+
+    // Remove the used signature from the map
+    if (workspaceState?.reasoning && thoughtSig) {
+      workspaceState.reasoning.toolCallThoughtSignatures.delete(callId);
+    }
 
     this.logger.debug(
-      `Using Part for function '${functionName}'${finalCallPart.thoughtSignature ? ' (preserving thought signature)' : ''}`,
+      `Reconstructed Part for function '${functionName}'${thoughtSig ? ' (with thought signature)' : ''}`,
     );
 
     // Use the same ID for the result to maintain correlation

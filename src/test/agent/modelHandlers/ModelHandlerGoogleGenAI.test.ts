@@ -358,16 +358,12 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       id: 'call-123',
     };
 
-    // Wrap FunctionCall in a Part (as extractToolUse now does)
-    const partWithFunctionCall: Part = {
-      functionCall,
-    };
-
+    // Pass FunctionCall directly (Part reconstruction happens internally)
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
       'call-123',
       'extract_figures',
-      partWithFunctionCall,
+      functionCall,
       toolResult,
     );
 
