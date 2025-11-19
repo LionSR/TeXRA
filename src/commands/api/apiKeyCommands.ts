@@ -28,19 +28,20 @@ async function setApiKeyForProvider(
   skipDialog = false,
 ): Promise<void> {
   if (!skipDialog) {
-    const enterKey = 'Enter Key';
-    const getApiKey = 'Get API Key';
+    const actions: Array<vscode.MessageItem & { id: 'enter' | 'getApiKey' }> = [
+      { title: 'Enter Key', id: 'enter' },
+      { title: 'Get API Key', id: 'getApiKey' },
+    ];
     const action = await vscode.window.showInformationMessage(
       `Set your ${provider} API key`,
-      enterKey,
-      getApiKey,
+      ...actions,
     );
 
     if (!action) {
       return;
     }
 
-    if (action === getApiKey) {
+    if (action.id === 'getApiKey') {
       await vscode.env.openExternal(vscode.Uri.parse(PROVIDER_URLS[provider]));
       return;
     }
