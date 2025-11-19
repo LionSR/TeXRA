@@ -1165,6 +1165,51 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
+  /**
+   * Preserves the original tool call object while ensuring required fields.
+   * This prevents loss of metadata that might be present in the original object.
+   */
+  private preserveToolCall(
+    id: string,
+    fallbackName: string,
+    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ): ChatCompletionMessageToolCall {
+    // If it's already a proper ChatCompletionMessageToolCall, preserve it
+    if (this.isFunctionToolCall(call)) {
+      return {
+        ...call,
+        id: call.id ?? id,
+        function: {
+          ...call.function,
+          name: call.function?.name ?? fallbackName,
+          arguments: this.ensureStringifiedArguments(call.function?.arguments),
+        },
+      };
+    }
+
+    if (this.isCustomToolCall(call)) {
+      return {
+        ...call,
+        id: call.id ?? id,
+        custom: {
+          ...call.custom,
+          name: call.custom?.name ?? fallbackName,
+          input: this.ensureStringifiedArguments(call.custom?.input),
+        },
+      };
+    }
+
+    // Legacy FunctionCall format - must reconstruct
+    return {
+      id,
+      type: 'function',
+      function: {
+        name: call.name ?? fallbackName,
+        arguments: this.ensureStringifiedArguments(call.arguments),
+      },
+    };
+  }
+
   extractToolUse(responseObject: any): string | null {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
@@ -1186,7 +1231,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(id, name, call);
+    // Preserve the original call object with minimal normalization
+    const toolCall = this.preserveToolCall(id, name, call);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -1194,6 +1240,17 @@ export class ModelHandlerOpenAI extends ModelHandler<
     if (text) {
       callMsg.content = [{ type: 'text', text }];
     }
+
+    const toolName =
+      this.isFunctionToolCall(toolCall)
+        ? toolCall.function?.name
+        : this.isCustomToolCall(toolCall)
+          ? toolCall.custom?.name
+          : name;
+
+    this.logger.debug(
+      `Using original ChatCompletionMessageToolCall for function '${toolName}'`,
+    );
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =

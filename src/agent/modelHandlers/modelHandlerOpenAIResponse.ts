@@ -1299,21 +1299,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
+    // Use the original call object (preserves all metadata)
+    // Only ensure call_id is set correctly
     const callMsg: ResponseFunctionToolCall = {
+      ...call,
       type: 'function_call',
-      call_id: id,
-      name,
-      arguments:
-        typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(
-              (call as unknown as { input?: unknown; arguments?: unknown })
-                ?.input ??
-                (call as unknown as { input?: unknown; arguments?: unknown })
-                  ?.arguments ??
-                {},
-            ),
+      call_id: call.call_id ?? id,
     };
+
+    this.logger.debug(
+      `Using original ResponseFunctionToolCallItem for function '${call.name ?? name}'`,
+    );
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const supportsAttachments = this.supportsToolFileOutputs;
