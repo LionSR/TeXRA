@@ -149,9 +149,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     } catch (error) {
       this.logger.warn(
         'DeepSeek tool call arguments could not be parsed as JSON; using raw string.',
-        undefined,
-        undefined,
-        error,
+        { data: error },
       );
       return raw;
     }

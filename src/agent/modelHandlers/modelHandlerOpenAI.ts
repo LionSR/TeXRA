@@ -264,9 +264,7 @@ export class ModelHandlerOpenAI<
     } catch (err) {
       this.logger.error(
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-        undefined,
-        undefined,
-        err,
+        { data: err },
       );
       // Decide if you want to throw here or let the API call potentially fail
     }
@@ -332,9 +330,10 @@ export class ModelHandlerOpenAI<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error in createResponse(streaming): ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         throw err;
       }
@@ -355,9 +354,10 @@ export class ModelHandlerOpenAI<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error in createResponse: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         throw err;
       }
@@ -527,9 +527,7 @@ export class ModelHandlerOpenAI<
       } catch (err) {
         this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          undefined,
-          undefined,
-          err,
+          { data: err },
         );
       }
     }
@@ -810,7 +808,7 @@ export class ModelHandlerOpenAI<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     // Write file content to output file
@@ -1182,9 +1180,7 @@ export class ModelHandlerOpenAI<
     } catch (error) {
       this.logger.warn(
         'OpenAI tool call arguments could not be parsed as JSON; using raw string.',
-        undefined,
-        undefined,
-        error,
+        { data: error },
       );
       return raw;
     }
@@ -1297,12 +1293,9 @@ export class ModelHandlerOpenAI<
       return countTokens(textToCount); // Assuming cl100k_base default
     } catch (err) {
       // Log the error and re-throw to indicate failure
-      this.logger.error(
-        `Error counting tokens: ${getSdkErrorMessage(err)}`,
-        undefined,
-        undefined,
-        err,
-      );
+      this.logger.error(`Error counting tokens: ${getSdkErrorMessage(err)}`, {
+        data: err,
+      });
       throw err;
     }
   }

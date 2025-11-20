@@ -66,7 +66,7 @@ export class PromptBuilder {
         currRound === 0
           ? 'No initial user request configured. Returning empty prompt.'
           : `No prompt configured for round ${currRound}. Returning empty prompt.`;
-      this.logger?.warn(message, groupId);
+      this.logger?.warn(message, { groupId });
       return '';
     }
 
@@ -93,7 +93,7 @@ export class PromptBuilder {
     const groupId = this.logger?.withCurrentGroup((id) => id);
     this.logger?.debug(
       `No prefill configured for round ${currRound}. Reusing first prefill.`,
-      groupId,
+      { groupId },
     );
 
     return prefills[0] ?? '';
@@ -117,7 +117,7 @@ export class PromptBuilder {
       const groupId = this.logger?.withCurrentGroup((id) => id);
       this.logger?.debug(
         `No prompt configured for round ${currRound}. Falling back to second template (index 1).`,
-        groupId,
+        { groupId },
       );
       return requestArray[1];
     }

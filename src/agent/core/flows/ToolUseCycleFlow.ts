@@ -73,9 +73,7 @@ function parseToolInput(
   } catch (error) {
     logger.warn(
       `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
-      undefined,
-      undefined,
-      error,
+      { data: error },
     );
     return raw;
   }
@@ -326,7 +324,10 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     if (thinking && !useStreaming) {
       const formatted = await xmlUtils.formatContent(thinking);
       if (formatted.trim().length > 0) {
-        options.logger.info(formatted, groupId, MESSAGE_TYPES.THINKING);
+        options.logger.info(formatted, {
+          groupId,
+          messageType: MESSAGE_TYPES.THINKING,
+        });
       }
     }
 
@@ -338,10 +339,15 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     } = options.modelHandler.extractResponse(state.response, '');
 
     if (text) {
-      options.logger.debug(`Model response: ${text.slice(0, 100)}`, groupId);
+      options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
+        groupId,
+      });
       if (!useStreaming) {
         const formatted = await xmlUtils.formatContent(text);
-        options.logger.info(formatted, groupId, MESSAGE_TYPES.MODEL_RESPONSE);
+        options.logger.info(formatted, {
+          groupId,
+          messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+        });
       }
     }
 
@@ -513,7 +519,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         output: sanitizeToolResultForLog(result),
         isError: Boolean(result.isError),
       };
-      options.logger.info('', groupId, MESSAGE_TYPES.TOOL_USE, toolUseLog);
+      options.logger.info('', {
+        groupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: toolUseLog,
+      });
 
       if (result.files && result.files.length > 0) {
         const existing = store.workspace.media.files;
