@@ -9,9 +9,10 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { K_SLICE } from '@utils/config';
+import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { CreateResponseOptions } from './types/IModelHandler';
 import { toOpenAITools } from './toolConversion';
+import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -22,7 +23,6 @@ import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 // Internal imports
 
 // Local file imports
-import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
