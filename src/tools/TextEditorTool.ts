@@ -194,7 +194,7 @@ export class TextEditorTool extends defineTool({
       }
     } catch (error) {
       if (!(error instanceof ToolError)) {
-        throw new ToolError(`Error validating path: ${String(error)}`);
+        throw new ToolError(`Error validating path: ${error}`);
       }
       throw error;
     }
@@ -299,7 +299,7 @@ export class TextEditorTool extends defineTool({
       if (error instanceof ToolError) {
         throw error;
       }
-      throw new ToolError(`Error viewing ${filePath}: ${String(error)}`);
+      throw new ToolError(`Error viewing ${filePath}: ${error}`);
     }
   }
 
@@ -357,7 +357,7 @@ export class TextEditorTool extends defineTool({
         userPatch: approval.userPatch,
       });
     } catch (error) {
-      throw new ToolError(`Error creating file ${filePath}: ${String(error)}`);
+      throw new ToolError(`Error creating file ${filePath}: ${error}`);
     }
   }
 
@@ -441,10 +441,10 @@ export class TextEditorTool extends defineTool({
       const textBeforeReplacement =
         expandedFileContent.split(expandedOldStr)[0];
       const replacementLine =
-        (textBeforeReplacement.match(/\n/g) || []).length + 1;
+        (textBeforeReplacement.match(/\n/g) ?? []).length + 1;
       const startLine = Math.max(1, replacementLine - SNIPPET_LINES);
       const endLine =
-        replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) || []).length;
+        replacementLine + SNIPPET_LINES + (newStr.match(/\n/g) ?? []).length;
 
       const newFileLines = finalContent.split('\n');
       const snippet = newFileLines.slice(startLine - 1, endLine).join('\n');
@@ -477,7 +477,7 @@ export class TextEditorTool extends defineTool({
         throw error;
       }
       throw new ToolError(
-        `Error replacing text in ${filePath}: ${String(error)}`,
+        `Error replacing text in ${filePath}: ${error}`,
       );
     }
   }
@@ -592,7 +592,7 @@ export class TextEditorTool extends defineTool({
         throw error;
       }
       throw new ToolError(
-        `Error inserting text in ${filePath}: ${String(error)}`,
+        `Error inserting text in ${filePath}: ${error}`,
       );
     }
   }
@@ -663,7 +663,7 @@ export class TextEditorTool extends defineTool({
         throw error;
       }
       throw new ToolError(
-        `Error undoing edit to ${filePath}: ${String(error)}`,
+        `Error undoing edit to ${filePath}: ${error}`,
       );
     }
   }

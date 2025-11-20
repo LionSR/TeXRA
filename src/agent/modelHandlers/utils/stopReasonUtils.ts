@@ -28,7 +28,7 @@ const TOKEN_LIMIT_KEYWORDS = [
 export function isTokenLimitStopReason(
   reason: ProviderStopReason | undefined,
 ): boolean {
-  if (reason === undefined || reason === null) {
+  if (reason == null) {
     return false;
   }
 
