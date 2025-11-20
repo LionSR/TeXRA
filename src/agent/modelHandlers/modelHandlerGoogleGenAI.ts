@@ -222,8 +222,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const inlineLimit = this.getInlineUploadLimitBytes();
 
     for (const entry of entries) {
-      const fileName = entry.file_name || 'unnamed-file';
-      const mimeType = entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+      const fileName = entry.file_name ?? 'unnamed-file';
+      const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
       const inlinePayload =
         typeof entry.data === 'string' && entry.data.length > 0
           ? entry.data
