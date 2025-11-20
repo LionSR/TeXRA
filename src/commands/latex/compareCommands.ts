@@ -34,7 +34,7 @@ async function handleCompare(
   editedLocation: FileLocation,
 ) {
   try {
-    const fileToUseLocation = baseLocation || inputLocation;
+    const fileToUseLocation = baseLocation ?? inputLocation;
     if (!fileToUseLocation || !editedLocation) {
       vscode.window.showErrorMessage(
         'Both base file and edited file must be selected for comparison',
@@ -126,7 +126,7 @@ async function handleAcceptEdited(
   editedLocation: FileLocation,
 ) {
   try {
-    const fileToUseLocation = baseLocation || inputLocation;
+    const fileToUseLocation = baseLocation ?? inputLocation;
     if (!fileToUseLocation || !editedLocation) {
       vscode.window.showErrorMessage(
         'Both base file and edited file must be selected to accept changes',

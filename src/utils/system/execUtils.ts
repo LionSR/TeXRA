@@ -32,7 +32,7 @@ function truncateOutput(
 }
 
 function normalizeOutput(text: string | null | undefined): string | null {
-  if (text === null || text === undefined) {
+  if (text == null) {
     return null;
   }
   const trimmed = text.trim();
@@ -139,7 +139,7 @@ export async function executeCommand(
     // Handle stderr from ExecaError
     let stderr = null;
     if (err instanceof ExecaError) {
-      stderr = err.stderr ? String(err.stderr).trim() : null;
+      stderr = err.stderr ? `${err.stderr}`.trim() : null;
     }
 
     // With reject: false, this catch block only handles actual execution errors
