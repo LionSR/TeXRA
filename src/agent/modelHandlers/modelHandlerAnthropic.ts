@@ -89,6 +89,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  AnthropicToolCall,
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
@@ -151,8 +152,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
   AnthropicAPIResponseUsage,
-  ToolUseBlock,
-  Anthropic
+  AnthropicToolCall,
+  Anthropic,
+  BetaMessage
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
 
@@ -249,7 +251,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
-    requestOptions: CreateResponseOptions<MessageParam>,
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<BetaMessage> {
     const {
       client,
@@ -518,12 +520,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
-      this.logger.error(
-        `Error creating response: ${formattedError.message}`,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
-      );
+      this.logger.error(`Error creating response: ${formattedError.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: formattedError,
+      });
       throw err;
     }
 
@@ -644,9 +644,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
           const formattedError = formatProviderHttpError(err);
           this.logger.error(
             `Failed to upload document ${filename}: ${formattedError.message}`,
-            undefined,
-            MESSAGE_TYPES.PROGRESS_STATUS,
-            formattedError,
+            {
+              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+              data: formattedError,
+            },
           );
           throw err;
         } finally {
@@ -765,9 +766,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         unsupported.push(attachment);
       } finally {
@@ -874,9 +876,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error processing media files for follow-up round: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
       }
     }
@@ -1175,7 +1178,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     await flexibleFS.write(outputLocation, fileContent);
@@ -1530,9 +1533,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } catch (e) {
       this.logger.error(
         `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        undefined,
-        undefined,
-        e,
+        { data: e },
       );
       return null;
     }
@@ -1568,22 +1569,38 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return regularThinkingContent;
   }
 
-  extractToolUse(responseObject: BetaMessage): string | null {
-    const content = responseObject?.content;
-    if (Array.isArray(content)) {
-      const tu = content.find((c: any) => c.type === 'tool_use');
-      if (tu) {
-        return JSON.stringify(tu, null, 2);
-      }
+  extractToolUse(responseObject: BetaMessage): AnthropicToolCall[] {
+    if (!Array.isArray(responseObject?.content)) {
+      return [];
     }
-    return null;
+
+    const toolUseBlocks = responseObject.content.filter(
+      (block): block is ToolUseBlock => block?.type === 'tool_use',
+    );
+
+    if (toolUseBlocks.length === 0) {
+      return [];
+    }
+
+    return toolUseBlocks
+      .map((toolUseBlock) => {
+        if (!toolUseBlock.id || !toolUseBlock.name) {
+          return null;
+        }
+        return {
+          provider: 'anthropic',
+          callId: toolUseBlock.id,
+          name: toolUseBlock.name,
+          input: toolUseBlock.input,
+          raw: toolUseBlock,
+        } satisfies AnthropicToolCall;
+      })
+      .filter((call): call is AnthropicToolCall => call !== null);
   }
 
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
-    id: string,
-    name: string,
-    call: ToolUseBlock,
+    call: AnthropicToolCall,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1605,11 +1622,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (text) {
       content.push({ type: 'text', text });
     }
-    const toolInput = call?.input ?? {};
+    const toolInput = call.raw.input ?? {};
     content.push({
       type: 'tool_use',
-      id,
-      name,
+      id: call.callId,
+      name: call.name,
       input: toolInput,
     });
     const callMsg: MessageParam = {
@@ -1734,7 +1751,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       content: [
         {
           type: 'tool_result',
-          tool_use_id: id,
+          tool_use_id: call.callId,
           content: toolResultContent,
           is_error: isError || undefined,
         },

@@ -70,7 +70,6 @@ export interface RoundOutputOptions {
   outputFile: FileLocation;
   endTurn: boolean;
   stage?: AgentLogStage;
-  runGroupId?: string | null;
 }
 
 export interface ReflectionRoundResult {
@@ -196,7 +195,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.baseFiles,
       this.logger,
       this.fileService,
+      this.executionId,
     );
+    this.outputHandler.setActiveRun(this.executionId ?? null);
 
     this.latexMediaManager = new LatexMediaManager(
       this.logger,
@@ -366,23 +367,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<RoundOutput> {
-    const runGroupId =
-      options.runGroupId ??
-      this.runStage?.id ??
-      this.getLastRunGroupId() ??
-      null;
-    this.outputHandler.setActiveRun(runGroupId);
-
-    const baseOptions: RoundOutputOptions = {
-      ...options,
-      runGroupId,
-    };
-
-    const { outputFile, endTurn, stage } = baseOptions;
+    const { outputFile, endTurn, stage } = options;
 
     const execute = async (scope: AgentLogStage | undefined) => {
       await this.handleOutput(currRound, stateRound, runState, {
-        ...baseOptions,
+        ...options,
         stage: scope,
       });
 
@@ -421,7 +410,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     options: RoundOutputOptions,
   ): Promise<OutputFileInfo[]> {
     const { outputFile, endTurn, stage } = options;
-    this.outputHandler.setActiveRun(options.runGroupId);
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(
@@ -488,7 +476,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     });
 
     if (!endTurn) {
-      const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
       const cycleResult = await runResponseCycle({
         options: this.createResponseCycleOptions(),
         messages: updatedMessages,
@@ -503,7 +490,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         {
           outputFile: outputLocation,
           endTurn: cycleResult.endTurn,
-          runGroupId,
         },
       );
 
@@ -511,7 +497,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         roundState: store.round,
         runState: store.run,
         messages: updatedMessages,
-        shouldContinue: !cycleResult.endTurn,
+        shouldContinue: this.shouldRunAnotherRound(cycleResult.endTurn),
         workspaceState: store.workspace,
         output: artifacts,
       };
@@ -519,7 +505,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
     await store.finalizeRound();
 
-    const runGroupId = this.runStage?.id ?? this.getLastRunGroupId() ?? null;
     const artifacts = await this.handleRoundCompletion(
       roundIndex,
       store.round,
@@ -527,7 +512,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       {
         outputFile: outputLocation,
         endTurn,
-        runGroupId,
       },
     );
 
@@ -535,10 +519,20 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       roundState: store.round,
       runState: store.run,
       messages: updatedMessages,
-      shouldContinue: !endTurn,
+      shouldContinue: this.shouldRunAnotherRound(endTurn),
       workspaceState: store.workspace,
       output: artifacts,
     };
+  }
+
+  private shouldRunAnotherRound(endTurn: boolean): boolean {
+    const nextRound = this.currentRoundIndex + 1;
+    const hasRemainingRounds = nextRound < this.getTotalRounds();
+    if (endTurn) {
+      return true;
+    }
+
+    return hasRemainingRounds && !this.isInterruptionRequested();
   }
 
   private createResponseCycleOptions(): ResponseCycleOptions<C> {

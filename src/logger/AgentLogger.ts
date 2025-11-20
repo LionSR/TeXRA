@@ -16,6 +16,7 @@ import { MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
 import type { MessageType } from './messageTypes';
+import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
@@ -165,68 +166,52 @@ export class AgentLogger {
     logger.initialize(this.channelId, this.isAgentLogger);
   }
 
-  debug(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    logger.debug(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+  /**
+   * Log a debug message with options object.
+   */
+  debug(message: string, options: LogOptions = {}): void {
+    logger.debug(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
-  info(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    logger.info(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+  /**
+   * Log an info message with options object.
+   */
+  info(message: string, options: LogOptions = {}): void {
+    logger.info(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
-  warn(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    logger.warn(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+  /**
+   * Log a warning message with options object.
+   */
+  warn(message: string, options: LogOptions = {}): void {
+    logger.warn(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
-  error(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    logger.error(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+  /**
+   * Log an error message with options object.
+   */
+  error(message: string, options: LogOptions = {}): void {
+    logger.error(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
   /**
@@ -234,7 +219,11 @@ export class AgentLogger {
    */
   fileList(files: unknown[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.info(summary, groupId, MESSAGE_TYPES.FILE_LIST, files);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: files,
+    });
   }
 
   /**
@@ -244,7 +233,11 @@ export class AgentLogger {
     const missing = (info as any).missing as unknown[] | undefined;
     const count = missing ? missing.length : 0;
     const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
-    this.info(summary, groupId, MESSAGE_TYPES.MISSING_OUTPUTS, info);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
+      data: info,
+    });
   }
 
   /**
@@ -252,7 +245,11 @@ export class AgentLogger {
    */
   latexDiff(results: unknown[], groupId?: string): void {
     const summary = `Latexdiff results: ${results.length}`;
-    this.info(summary, groupId, MESSAGE_TYPES.LATEXDIFF, results);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.LATEXDIFF,
+      data: results,
+    });
   }
 
   /**
@@ -260,14 +257,21 @@ export class AgentLogger {
    */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.debug(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
+    this.debug(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.STATISTICS,
+      data: stats,
+    });
   }
 
   /**
    * Log a user follow-up message.
    */
   userMessage(message: string, groupId?: string): void {
-    this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
@@ -421,7 +425,7 @@ export class AgentLogger {
         }
 
         if (!progressEnabled) {
-          this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+          this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
           return buffer;
         }
 
@@ -449,7 +453,7 @@ export class AgentLogger {
           });
         }
 
-        this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+        this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
     };
