@@ -221,7 +221,7 @@ const normalizeToolUseLog = (structured) => {
     diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
     input: parsed.input,
     isError: Boolean(parsed.isError || errorText),
-    headerSummary: summaryText || errorText || outputText,
+    headerSummary: summaryText || errorText,
   };
 };
 
