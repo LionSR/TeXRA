@@ -77,7 +77,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
     );
 
-    if (!state.activeStream && !hasContent) {
+    if (!hasContent) {
       dom.placeholder.show();
     } else {
       dom.placeholder.hide();
