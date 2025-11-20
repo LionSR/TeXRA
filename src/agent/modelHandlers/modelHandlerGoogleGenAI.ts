@@ -295,9 +295,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const formattedError = formatProviderHttpError(error);
         this.logger.error(
           `Failed to upload media entry ${fileName}: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         uploadSummaries.push({ path: fileName, ok: false });
       }
@@ -453,9 +454,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       } catch (err) {
         this.logger.error(
           `Token counting failed, proceeding without token adjustment: ${getSdkErrorMessage(err)}`,
-          undefined,
-          undefined,
-          err,
+          { data: err },
         );
       }
     }
@@ -604,9 +603,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const formattedError = formatProviderHttpError(error);
       this.logger.error(
         `Error during Google GenAI Chat API call: ${formattedError.message}`,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: formattedError,
+        },
       );
       if (
         error instanceof Error &&
@@ -963,7 +963,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     await flexibleFS.write(outputLocation, fileContent);
