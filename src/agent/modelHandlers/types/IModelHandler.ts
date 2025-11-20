@@ -98,6 +98,7 @@ export type GoogleToolCall = {
   name: string;
   input: FunctionCall['args'];
   raw: FunctionCall;
+  thoughtSignature?: string;
 };
 
 export type AnthropicToolCall = {
