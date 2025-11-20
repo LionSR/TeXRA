@@ -521,7 +521,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private shouldRunAnotherRound(endTurn: boolean): boolean {
-    return !endTurn;
+    return endTurn;
   }
 
   private createResponseCycleOptions(): ResponseCycleOptions<C> {
