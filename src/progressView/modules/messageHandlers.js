@@ -495,28 +495,26 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateMissingOutputs(message) {
-    if (message.stream === state.activeStream) {
-      const targetStream = message.stream || state.activeStream || null;
-      if (!targetStream) {
-        return;
-      }
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
 
-      if (message.reset) {
-        state.clearRunMissingOutputs(targetStream);
-        return;
-      }
+    if (message.reset) {
+      state.clearRunMissingOutputs(targetStream);
+      return;
+    }
 
-      const runId = message.runId;
-      if (!runId) {
-        return;
-      }
+    const runId = message.runId;
+    if (!runId) {
+      return;
+    }
 
-      const rounds = message.rounds;
-      if (!rounds || Object.keys(rounds).length === 0) {
-        state.deleteRunMissingOutputs(targetStream, runId);
-      } else {
-        state.setRunMissingOutputs(targetStream, runId, rounds);
-      }
+    const rounds = message.rounds;
+    if (!rounds || Object.keys(rounds).length === 0) {
+      state.deleteRunMissingOutputs(targetStream, runId);
+    } else {
+      state.setRunMissingOutputs(targetStream, runId, rounds);
     }
   }
 
