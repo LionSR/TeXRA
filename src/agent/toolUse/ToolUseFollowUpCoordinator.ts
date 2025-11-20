@@ -29,12 +29,9 @@ export async function sendFollowUp(
     try {
       agent.appendFollowUp(text);
     } catch (error) {
-      logger.error(
-        'Failed to send follow-up to active agent.',
-        undefined,
-        undefined,
-        error,
-      );
+      logger.error('Failed to send follow-up to active agent.', {
+        data: error,
+      });
       await vscode.window.showErrorMessage(
         `Failed to send follow-up: ${(error as Error).message}`,
       );

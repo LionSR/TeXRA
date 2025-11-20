@@ -142,9 +142,10 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error in createResponse for Kimi thinking model: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         throw err;
       }

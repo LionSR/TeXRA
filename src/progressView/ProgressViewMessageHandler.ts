@@ -352,7 +352,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
           this.logger.error(
             this.channel,
             `Error polishing follow-up: ${messageText}`,
-            error instanceof Error ? error : undefined,
+            { data: error instanceof Error ? error : undefined },
           );
         }
       },
@@ -447,12 +447,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       this.logger.error(
         this.channel,
         `Failed to open task storage for stream ${stream}, executionId ${executionId ?? 'unknown'}: ${errorMessage}`,
-        error instanceof Error ? error : undefined,
-        undefined,
-        undefined,
         {
-          stream,
-          executionId,
+          data: {
+            error: error instanceof Error ? error : undefined,
+            stream,
+            executionId,
+          },
         },
       );
       await vscode.window.showErrorMessage(
@@ -478,10 +478,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       this.logger.warn(
         this.channel,
         'Compare original requested without a base path.',
-        undefined,
-        undefined,
-        undefined,
-        { file: message.file },
+        { data: { file: message.file } },
       );
       return;
     }
@@ -518,14 +515,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: BaseFileCommandMessage,
   ): Promise<void> {
     if (!message.base) {
-      this.logger.warn(
-        this.channel,
-        'Accept requested without a base path.',
-        undefined,
-        undefined,
-        undefined,
-        { file: message.file },
-      );
+      this.logger.warn(this.channel, 'Accept requested without a base path.', {
+        data: { file: message.file },
+      });
       return;
     }
 
@@ -541,14 +533,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     message: BaseFileCommandMessage,
   ): Promise<void> {
     if (!message.base) {
-      this.logger.warn(
-        this.channel,
-        'Merge requested without a base path.',
-        undefined,
-        undefined,
-        undefined,
-        { file: message.file },
-      );
+      this.logger.warn(this.channel, 'Merge requested without a base path.', {
+        data: { file: message.file },
+      });
       return;
     }
 
@@ -567,10 +554,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       this.logger.warn(
         this.channel,
         'Latexdiff requested without a base path.',
-        undefined,
-        undefined,
-        undefined,
-        { file: message.file },
+        { data: { file: message.file } },
       );
       return;
     }
