@@ -50,7 +50,7 @@ export class ExtractTikzFiguresTool extends defineTool({
     const formattedEntries = tikzFigures.map(([label, pictures]) => {
       const pictureCount = pictures.length;
       const suffix = pictureCount === 1 ? '' : 's';
-      return `- ${label || '(unlabeled)'}: ${pictureCount} picture${suffix}`;
+      return `- ${label ?? '(unlabeled)'}: ${pictureCount} picture${suffix}`;
     });
     const outputs: string[] = [
       formatToolOutput(`TikZ figures in ${display}`, formattedEntries),
