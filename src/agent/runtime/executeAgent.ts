@@ -574,12 +574,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withExistingGroup(
           fallbackGroupId,
           async () => {
-            agentLoggerFallback.error(
-              errorMsg,
-              undefined,
-              MESSAGE_TYPES.PROGRESS_STATUS,
-              errorData,
-            );
+            agentLoggerFallback.error(errorMsg, {
+              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+              data: errorData,
+            });
           },
           { label: `Error: ${agentName}` },
         );
@@ -587,12 +585,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
         await agentLoggerFallback.withScope(
           `Error: ${agentName}`,
           async () => {
-            agentLoggerFallback.error(
-              errorMsg,
-              undefined,
-              MESSAGE_TYPES.PROGRESS_STATUS,
-              errorData,
-            );
+            agentLoggerFallback.error(errorMsg, {
+              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+              data: errorData,
+            });
           },
           { errorStatus: 'error' },
         );
@@ -602,12 +598,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
     await logger.withScope(
       `Error: ${agentName}`,
       async () => {
-        logger.error(
-          errorMsg,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          errorData,
-        );
+        logger.error(errorMsg, {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: errorData,
+        });
       },
       { errorStatus: 'error' },
     );

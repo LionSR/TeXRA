@@ -67,7 +67,7 @@ export class LatexMediaManager {
         const message = toErrorMessage(error);
         this.logger.debug(
           `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
-          groupId ?? undefined,
+          { groupId: groupId ?? undefined },
         );
       }
     });
@@ -120,7 +120,7 @@ export class LatexMediaManager {
               if (stats.size === 0) {
                 this.logger.warn(
                   `Compiled PDF is empty for ${file.absolutePath}: ${pdfFile}`,
-                  activeGroupId,
+                  { groupId: activeGroupId },
                 );
                 return undefined;
               }
@@ -128,14 +128,14 @@ export class LatexMediaManager {
               const message = toErrorMessage(err);
               this.logger.error(
                 `Failed to stat compiled PDF ${pdfFile}: ${message}`,
-                activeGroupId,
+                { groupId: activeGroupId },
               );
               return undefined;
             }
 
             this.logger.info(
               `Compiled PDF for ${file.absolutePath}: ${pdfFile}`,
-              activeGroupId,
+              { groupId: activeGroupId },
             );
             return pdfFile;
           }
@@ -170,7 +170,7 @@ export class LatexMediaManager {
         const file = files[idx];
         this.logger.debug(
           `Extracted ${result.value.length} figures from ${file.absolutePath}`,
-          activeGroupId,
+          { groupId: activeGroupId },
         );
         workspaceState.media.addMediaFiles(result.value);
         mirrorTasks.push(
@@ -206,10 +206,9 @@ export class LatexMediaManager {
       }
     });
     if (logSummary) {
-      this.logger.debug(
-        `Extracted ${tikzResults.length} TikZ figures`,
-        activeGroupId,
-      );
+      this.logger.debug(`Extracted ${tikzResults.length} TikZ figures`, {
+        groupId: activeGroupId,
+      });
     }
   }
 
