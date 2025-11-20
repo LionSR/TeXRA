@@ -234,9 +234,9 @@ export function debug(
 export function debug(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
+  groupId: string | undefined,
+  messageType: MessageType | undefined,
+  isAgent: boolean,
   data?: unknown,
 ): void;
 
@@ -296,9 +296,9 @@ export function info(
 export function info(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
+  groupId: string | undefined,
+  messageType: MessageType | undefined,
+  isAgent: boolean,
   data?: unknown,
 ): void;
 
@@ -358,9 +358,9 @@ export function warn(
 export function warn(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
+  groupId: string | undefined,
+  messageType: MessageType | undefined,
+  isAgent: boolean,
   data?: unknown,
 ): void;
 
@@ -420,9 +420,9 @@ export function error(
 export function error(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
+  groupId: string | undefined,
+  messageType: MessageType | undefined,
+  isAgent: boolean,
   data?: unknown,
 ): void;
 
