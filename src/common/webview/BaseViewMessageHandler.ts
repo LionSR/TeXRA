@@ -108,7 +108,7 @@ export abstract class BaseViewMessageHandler<
     message: any,
     webviewView: T,
   ): Promise<void> {
-    this.logger.debug('Webview ready signal received');
+    this.logger.debug(this.channel, 'Webview ready signal received');
     // Subclasses can override for custom ready handling
   }
 }
