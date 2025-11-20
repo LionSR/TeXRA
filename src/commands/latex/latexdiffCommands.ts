@@ -204,7 +204,7 @@ async function handleLatexdiff(
     );
 
     if (!result.success || !result.diffFileName) {
-      throw new Error(result.message || 'Failed to generate diff file');
+      throw new Error(result.message ?? 'Failed to generate diff file');
     }
 
     await openLatexdiffResult(fileToUseLocation, result.diffFileName);
@@ -243,7 +243,7 @@ async function handleLatexdiffvc(
     );
 
     if (!result.success || !result.diffFileName) {
-      throw new Error(result.message || 'Failed to generate diff file');
+      throw new Error(result.message ?? 'Failed to generate diff file');
     }
 
     await openLatexdiffResult(fileToUseLocation, result.diffFileName);
