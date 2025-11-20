@@ -6,30 +6,34 @@ import OpenAI from 'openai';
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-
-// Type imports
-import type { ToolDefinition } from '@model';
 import { K_SLICE } from '@utils/config';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
+  ChatCompletionChunk,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
+import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 // Internal imports
 
 // Local file imports
+import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 
 /**
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
+  protected createStreamingAggregator(): BaseReasoningStreamAggregator | null {
+    // Use aggregator for thinking models to properly reconstruct the response
+    const isThinkingModel =
+      this.config.capabilities.supportsReasoning ||
+      this.capabilities.supportsReasoning;
+    return isThinkingModel ? new BaseReasoningStreamAggregator() : null;
+  }
   /**
    * Get the base URL for the Moonshot API.
    * The Moonshot API has a different base URL than OpenAI.
@@ -101,7 +105,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<ChatCompletion> {
-    const { client, messages, temperature, endTag, signal } = options;
+    const { client, messages, temperature, endTag, signal, tools } = options;
     // Preprocess messages for Kimi compatibility
     const processedMessages = this.prepareNormalizedMessages(
       messages,
@@ -121,6 +125,9 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         'Using Kimi thinking model - adding thinking parameter',
       );
 
+      // Check if streaming is enabled
+      const useStreaming = this.getStreamingConfig();
+
       const kwargs: any = {
         model: this.config.fullName,
         messages: processedMessages,
@@ -133,11 +140,92 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         kwargs.stop = [endTag];
       }
 
+      if (tools && tools.length > 0) {
+        kwargs.tools = tools;
+        kwargs.tool_choice = 'auto';
+      }
+
       try {
-        const response = await client.chat.completions.create(kwargs, {
-          signal,
-        });
-        return response;
+        if (useStreaming) {
+          // Use streaming with aggregator for thinking model
+          kwargs.stream = true;
+          kwargs.stream_options = { include_usage: true };
+
+          const stream = client.chat.completions.stream(kwargs, {
+            signal,
+          });
+          const thinking = this.createThinkingStream();
+          const output = this.isOutputStreamingEnabled()
+            ? this.createOutputStream()
+            : undefined;
+
+          // Create aggregator to properly reconstruct the final response
+          const streamingAggregator = new BaseReasoningStreamAggregator();
+
+          const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
+            if (!delta) {
+              return;
+            }
+            output?.append(delta);
+            streamingAggregator.appendContent(delta);
+          };
+
+          const onChunk = (chunk: ChatCompletionChunk): void => {
+            streamingAggregator.consumeChunk(chunk);
+
+            // Extract reasoning_content from the chunk delta
+            const choice = chunk.choices?.[0];
+            if (!choice) {
+              return;
+            }
+            const delta = choice.delta as unknown;
+            if (
+              delta &&
+              typeof delta === 'object' &&
+              'reasoning_content' in delta
+            ) {
+              const reasoningContent = (
+                delta as { reasoning_content?: unknown }
+              ).reasoning_content;
+              const reasoningDelta =
+                typeof reasoningContent === 'string' ? reasoningContent : '';
+              if (reasoningDelta) {
+                thinking.append(reasoningDelta);
+                streamingAggregator.appendReasoning(reasoningDelta);
+              }
+            }
+          };
+
+          stream.on('content.delta', onContentDelta);
+          stream.on('chunk', onChunk);
+
+          try {
+            const sdkFinalResponse = await stream.finalChatCompletion();
+
+            // Use aggregator to build the final response with all content
+            const finalResponse =
+              streamingAggregator.finalize(sdkFinalResponse);
+
+            const finalReasoning = this.processThinkingBlock(finalResponse);
+            if (finalReasoning === null) {
+              thinking.finalize();
+            } else {
+              thinking.finalize(finalReasoning);
+            }
+            const finalOutput =
+              finalResponse.choices?.[0]?.message?.content ?? '';
+            output?.finalize(finalOutput);
+            return finalResponse;
+          } finally {
+            stream.off('content.delta', onContentDelta);
+            stream.off('chunk', onChunk);
+          }
+        } else {
+          // Non-streaming request
+          return client.chat.completions.create(kwargs, {
+            signal,
+          });
+        }
       } catch (err) {
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
