@@ -71,7 +71,7 @@ export function getListOfFiles(files: string[] | null | undefined): string {
     }
     return files
       .filter(
-        (f): f is string => f !== null && f !== undefined && f.trim() !== '',
+        (f): f is string => f != null && f.trim() !== '',
       )
       .join(', ');
   } catch (err) {
