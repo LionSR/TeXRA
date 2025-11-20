@@ -1256,24 +1256,18 @@ export class LogEntryFormatter {
     const emoji = EMOJI_BY_LEVEL[severity] || '•';
 
     const container = document.createElement('div');
+    container.dataset.fullTimestamp = fullTimestamp;
+    if (message.id) container.dataset.logId = message.id;
+    if (message.groupId) container.dataset.groupId = message.groupId;
 
     const summaryLine = document.createElement('div');
     summaryLine.className = 'log-line';
-    summaryLine.dataset.fullTimestamp = fullTimestamp;
-    if (message.id) summaryLine.dataset.logId = message.id;
-    if (message.groupId) summaryLine.dataset.groupId = message.groupId;
-    summaryLine.innerHTML = `
-      <span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> 
-      <span class="message-${severity}">${encodeHtml(summaryText)}</span>
-    `;
+    summaryLine.innerHTML = `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> <span class="message-${severity}">${encodeHtml(summaryText)}</span>`;
     container.appendChild(summaryLine);
 
     if (detailText) {
       const detailLine = document.createElement('pre');
       detailLine.className = `log-line message-${severity}`;
-      detailLine.dataset.fullTimestamp = fullTimestamp;
-      if (message.id) detailLine.dataset.logId = message.id;
-      if (message.groupId) detailLine.dataset.groupId = message.groupId;
       detailLine.textContent = detailText;
       container.appendChild(detailLine);
     }
