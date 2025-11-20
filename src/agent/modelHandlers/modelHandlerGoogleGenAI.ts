@@ -1,7 +1,6 @@
 // Standard library imports
 import * as path from 'path';
 import { Buffer } from 'buffer';
-import { randomUUID } from 'crypto';
 
 // Third-party imports
 import {
@@ -82,6 +81,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  NormalizedToolCall,
 } from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
@@ -105,14 +105,6 @@ function findLastTextPart(
 type GoogleGenerationConfig = GenerateContentConfig & {
   thinkingLevel?: 'low' | 'medium' | 'high';
 };
-
-/**
- * Ensures a function call has an ID. Google's SDK may return function calls
- * without IDs in some cases, so we generate one if needed.
- */
-function ensureCallId(call: FunctionCall): string {
-  return call.id?.trim() || randomUUID();
-}
 
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
@@ -176,7 +168,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
   FunctionCall,
-  GoogleGenAI
+  GoogleGenAI,
+  GenerateContentResponse
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
@@ -340,7 +333,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
-    options: CreateResponseOptions<Content>,
+    options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<GenerateContentResponse> {
     const {
       client,
@@ -1073,23 +1066,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): string | null {
+  extractToolUse(
+    responseObject: GenerateContentResponse,
+  ): NormalizedToolCall | null {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
       const funcPart = parts.find((part) => part.functionCall);
       if (funcPart?.functionCall) {
         const call = funcPart.functionCall;
-        // Ensure the call has an ID
-        const callId = ensureCallId(call);
-        const callWithId = { ...call, id: callId };
-
-        if (!call.id?.trim()) {
-          this.logger.debug(
-            `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
-          );
+        if (!call.id || !call.name) {
+          return null;
         }
-        return JSON.stringify(callWithId, null, 2);
+
+        return {
+          provider: 'google',
+          callId: call.id,
+          name: call.name,
+          input: call.args,
+          raw: call,
+        };
       }
     }
     return null;
@@ -1135,22 +1131,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    // Handle both args and input fields for backward compatibility
-    const args =
-      call?.args && typeof call.args === 'object'
-        ? (call.args as Record<string, unknown>)
-        : ((call as any)?.input ?? {});
+    if (!call.id) {
+      throw new Error('Function call id is required for follow-up messages');
+    }
 
-    // Use call.name if available, fall back to provided name
-    const functionName = call?.name ?? name;
+    const args = call.args ?? {};
+
+    const functionName = call.name ?? name;
 
     // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
 
-    // Ensure the function call has an ID for correlation with result
-    const callId = ensureCallId(call);
     if (callPart.functionCall) {
-      callPart.functionCall.id = callId;
+      callPart.functionCall.id = call.id;
     }
 
     // Use the same ID for the result to maintain correlation
@@ -1177,7 +1170,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
     const resultPart = createPartFromFunctionResponse(
-      callId,
+      call.id,
       functionName,
       sanitizedResult,
     );

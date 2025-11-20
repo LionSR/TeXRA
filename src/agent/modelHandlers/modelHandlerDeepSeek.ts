@@ -21,7 +21,10 @@ import {
 import type { StreamingAggregator } from './modelHandlerOpenAI';
 
 // Type imports
-import type { CreateResponseOptions } from './types/IModelHandler';
+import type {
+  CreateResponseOptions,
+  NormalizedToolCall,
+} from './types/IModelHandler';
 import type {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
@@ -136,14 +139,31 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(responseObject: any): string | null {
+  extractToolUse(responseObject: ChatCompletion): NormalizedToolCall | null {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
+      const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
+      if (!call.id || !call.function?.name) {
+        return null;
+      }
+      return {
+        provider: 'deepseek',
+        callId: call.id,
+        name: call.function.name,
+        input: call.function.arguments,
+        raw: call,
+      };
     }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
+    const func = responseObject?.choices?.[0]?.message
+      ?.function_call as ChatCompletionMessage.FunctionCall | undefined;
+    if (func && func.name) {
+      return {
+        provider: 'deepseek',
+        callId: func.name,
+        name: func.name,
+        input: func.arguments,
+        raw: func,
+      };
     }
     return null;
   }
@@ -184,8 +204,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for Deepseek models
    */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const { messages } = options;
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.prepareNormalizedMessages(
