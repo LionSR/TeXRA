@@ -29,7 +29,7 @@ export async function compileLatex2Pdf(
 ): Promise<boolean> {
   try {
     const latexFile = latexLocation.absolutePath;
-    const outDir = outputDirectory || path.dirname(latexFile);
+    const outDir = outputDirectory ?? path.dirname(latexFile);
     await flexibleFS.ensureDir(pathToLocation(outDir));
 
     // Get TikZ input directory from configuration

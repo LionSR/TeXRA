@@ -126,7 +126,7 @@ class Flow<
   }
   protected async _orchestrate(shared: S, params?: P): Promise<void> {
     let current: BaseNode | undefined = this.start.clone();
-    const p = params || this._params;
+    const p = params ?? this._params;
     while (current) {
       current.setParams(p);
       const action = await current._run(shared);
