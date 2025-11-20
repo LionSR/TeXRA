@@ -20,6 +20,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { normalizeRunId } from '@progressView/constants/runIds';
 import {
   replaceInputCommands,
   createFileMapping,
@@ -91,7 +92,7 @@ export class OutputHandler implements IOutputHandler {
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private readonly executionId?: string;
-  private currentRunId: string | null;
+  private currentRunId: string | null | undefined;
   private runPreparation: Promise<void> | null;
 
   constructor(
@@ -129,10 +130,17 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
-    this.currentRunId = null;
+    this.currentRunId = undefined;
     this.runPreparation = null;
 
-    this.setActiveRun(this.executionId ?? null);
+    const initialRunId = this.logger.withCurrentGroup((id) => id);
+    this.setActiveRun(initialRunId ?? null);
+    this.logger.debug(
+      `OutputHandler initialized with runId=${normalizeRunId(this.currentRunId)} (loggerGroup=${normalizeRunId(initialRunId)} executionId=${
+        this.executionId ?? 'none'
+      })`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -170,7 +178,14 @@ export class OutputHandler implements IOutputHandler {
       this.executionId ?? this.fileService.getExecutionId();
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
-    const nextRunId = runId ?? targetExecutionId ?? null;
+    const nextRunId = runId ?? null;
+    const previousRunId = this.currentRunId;
+    this.logger.debug(
+      `setActiveRun(runId=${normalizeRunId(runId)} prev=${normalizeRunId(previousRunId)} next=${normalizeRunId(
+        nextRunId,
+      )} executionId=${targetExecutionId ?? 'none'})`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
     if (nextRunId === this.currentRunId) {
       return;
     }
@@ -188,6 +203,10 @@ export class OutputHandler implements IOutputHandler {
     } else {
       this.runPreparation = null;
     }
+  }
+
+  private getActiveRunId(): string {
+    return normalizeRunId(this.currentRunId);
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
@@ -464,9 +483,16 @@ export class OutputHandler implements IOutputHandler {
     runId: string | null | undefined,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    const normalizedRunId = runId ?? this.currentRunId ?? null;
-    if (normalizedRunId !== this.currentRunId) {
-      this.setActiveRun(normalizedRunId);
+    const loggerRunId = this.logger.withCurrentGroup((id) => id);
+    const effectiveRunId = runId ?? loggerRunId ?? null;
+    const normalizedCurrent = normalizeRunId(this.currentRunId);
+    const normalizedTarget = normalizeRunId(effectiveRunId);
+    this.logger.debug(
+      `Hydrate outputs for runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} current=${normalizedCurrent} target=${normalizedTarget}`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
+    if (normalizedTarget !== normalizedCurrent) {
+      this.setActiveRun(effectiveRunId);
     }
 
     for (const [round, infos] of rounds.entries()) {
@@ -504,14 +530,20 @@ export class OutputHandler implements IOutputHandler {
       `Validate expected r${currRound}`,
       stage,
       async () => {
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
-            groupId: this.currentRunId ?? undefined,
-            executionId: this.fileService.getExecutionId(),
+            runId,
+            executionId,
             filesByRound: { [currRound]: [] },
           });
+          this.logger.debug(
+            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+            { messageType: MESSAGE_TYPES.INTERNAL },
+          );
           return;
         }
 
@@ -551,10 +583,14 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          groupId: this.currentRunId ?? undefined,
-          executionId: this.fileService.getExecutionId(),
+          runId,
+          executionId,
           filesByRound: { [currRound]: missing },
         });
+        this.logger.debug(
+          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
       },
     );
   }
@@ -580,6 +616,8 @@ export class OutputHandler implements IOutputHandler {
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
 
         if (endTurn) {
           try {
@@ -596,10 +634,14 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
-          groupId: this.currentRunId ?? undefined,
-          executionId: this.fileService.getExecutionId(),
+          runId,
+          executionId,
           filesByRound: { [currRound]: fileInfos },
         });
+        this.logger.debug(
+          `addOutputFiles emitted for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'} files=${fileInfos.length}`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
 
         for (const info of fileInfos) {
           const filePath = info.location.absolutePath;
@@ -639,6 +681,8 @@ export class OutputHandler implements IOutputHandler {
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
         const rawPath = rawLocation.absolutePath;
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -767,8 +811,8 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
-              groupId: this.currentRunId ?? undefined,
-              executionId: this.fileService.getExecutionId(),
+              runId,
+              executionId,
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);
