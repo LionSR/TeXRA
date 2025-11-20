@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import path from 'path';
 
 // Local imports - filesystem
 import { BaseFS, type PathInput } from './baseFS';
@@ -15,8 +16,14 @@ export abstract class RelativeFS extends BaseFS {
       return target;
     }
 
-    const value = target.toString();
-    return vscode.Uri.joinPath(base, value);
+    const normalized = path.normalize(target.toString());
+    const segments = normalized.split(/\\|\//).filter(Boolean);
+
+    if (path.isAbsolute(normalized)) {
+      return vscode.Uri.file(normalized);
+    }
+
+    return vscode.Uri.joinPath(base, ...segments);
   }
 
   public static async writeJson<T>(target: PathInput, value: T): Promise<void> {

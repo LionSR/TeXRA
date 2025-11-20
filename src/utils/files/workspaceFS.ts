@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import path from 'path';
 
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
@@ -37,7 +38,9 @@ export class WorkspaceFS extends RelativeFS {
   }
 
   public static relativePath(filePath: vscode.Uri): string {
-    return vscode.workspace.asRelativePath(filePath, false);
+    const base = this.getBaseUri().fsPath;
+    const relative = path.relative(base, filePath.fsPath);
+    return relative ? path.normalize(relative) : '';
   }
 
   public static async existsAndNonTrivial(target: string): Promise<boolean> {
