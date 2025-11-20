@@ -523,17 +523,17 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     for (const call of calls) {
       const tool = options.toolRegistry[call.name];
       let result: ToolResult;
+      const parsedInput = parseToolInput(
+        call.input,
+        call.callId,
+        options.logger,
+      );
       if (!tool) {
         result = toolResult({
           error: `Unknown tool ${call.name}`,
           isError: true,
         });
       } else {
-        const parsedInput = parseToolInput(
-          call.input,
-          call.callId,
-          options.logger,
-        );
         try {
           result = await withToolEditApprovalContext(
             {
@@ -556,11 +556,6 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         }
       }
 
-      const parsedInput = parseToolInput(
-        call.input,
-        call.callId,
-        options.logger,
-      );
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,
@@ -600,7 +595,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
           call,
           buildToolResultPayload(result),
           store.workspace,
-          hasSentAssistantText ? undefined : assistantText,
+          !hasSentAssistantText && assistantText.length > 0
+            ? assistantText
+            : undefined,
         );
 
       hasSentAssistantText = hasSentAssistantText || assistantText.length > 0;
