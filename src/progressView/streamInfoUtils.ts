@@ -13,9 +13,9 @@ const sortComparators = {
     (b.lastTimestamp ?? b.creationTimestamp ?? 0) -
     (a.lastTimestamp ?? a.creationTimestamp ?? 0),
   inputFile: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.inputFile || '').localeCompare(b.inputFile || ''),
+    (a.inputFile ?? '').localeCompare(b.inputFile ?? ''),
   agent: (a: StreamTabInfo, b: StreamTabInfo) =>
-    (a.agent || '').localeCompare(b.agent || ''),
+    (a.agent ?? '').localeCompare(b.agent ?? ''),
 } as const;
 
 function matchesAgentFilter(
@@ -64,8 +64,8 @@ export function buildStreamInfos(
     const lastTimestamp = logs.length > 0 ? logs.at(-1)?.timestamp : undefined;
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
     const outputs = taskState?.agentConfig.outputFiles ?? [];
-    const inputFile = taskState?.agentConfig.inputFile || '';
-    const agentName = taskState?.agentConfig.agent || id.split('@')[0];
+    const inputFile = taskState?.agentConfig.inputFile ?? '';
+    const agentName = taskState?.agentConfig.agent ?? id.split('@')[0];
     let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
 
     // Filter logic: streams without category only show when filter is "all"
