@@ -139,7 +139,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return reasoningContent;
   }
 
-  private parseArguments(raw: unknown): unknown {
+  protected override parseArguments(raw: unknown): unknown {
     if (typeof raw !== 'string') {
       return raw;
     }

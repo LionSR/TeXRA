@@ -80,9 +80,7 @@ export type DeepSeekToolCall = {
   provider: 'deepseek';
   callId: string;
   name: string;
-  input:
-    | ChatCompletionMessageFunctionToolCall['function']['arguments']
-    | ChatCompletionMessage.FunctionCall['arguments'];
+  input: unknown;
   raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
 };
 
@@ -90,7 +88,7 @@ export type OpenAIResponseToolCall = {
   provider: 'openai-response';
   callId: string;
   name: string;
-  input: ResponseFunctionToolCallItem['arguments'];
+  input: unknown;
   raw: ResponseFunctionToolCallItem;
 };
 

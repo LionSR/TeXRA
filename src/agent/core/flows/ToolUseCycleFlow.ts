@@ -55,7 +55,14 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (typeof raw !== 'string') return raw;
+  if (raw === null || typeof raw === 'boolean' || typeof raw === 'number') {
+    logger.warn(
+      `Tool call ${callId}: Expected object-like input, received ${String(raw)}`,
+    );
+    return {};
+  }
+
+  if (typeof raw !== 'string') return raw ?? {};
   try {
     return JSON.parse(raw);
   } catch (error) {
@@ -352,6 +359,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
+      state.toolCalls = undefined;
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
