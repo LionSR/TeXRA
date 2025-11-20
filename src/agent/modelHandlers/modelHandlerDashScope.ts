@@ -12,7 +12,10 @@ import type { ToolDefinition } from '@model';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -23,8 +26,8 @@ export class ModelHandlerDashScope extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for DashScope models
    */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const { messages } = options;
     // Preprocess messages for DashScope compatibility
     const processedMessages = this.prepareNormalizedMessages(

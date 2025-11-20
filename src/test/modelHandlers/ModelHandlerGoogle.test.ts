@@ -79,7 +79,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
     openRouterOnly: false,
   });
 
-  it('synthesizes tool call identifiers when missing', () => {
+  it('returns the SDK-provided tool call identifier', () => {
     const response: any = {
       candidates: [
         {
@@ -87,6 +87,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
             parts: [
               {
                 functionCall: {
+                  id: 'google-call-1',
                   name: 'read_file',
                   args: { path: 'syk_v5.tex' },
                 },
@@ -100,12 +101,9 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
     const toolInfo = handler.extractToolUse(response);
     assert.ok(toolInfo, 'expected tool info to be returned');
 
-    const parsed = JSON.parse(toolInfo as string);
-    assert.equal(typeof parsed.id, 'string');
-    assert.notEqual(parsed.id.trim(), '');
-    assert.equal(parsed.call_id, parsed.id);
-    assert.equal(parsed.tool_call_id, parsed.id);
-    assert.equal(parsed.tool_use_id, parsed.id);
+    assert.equal(toolInfo?.callId, 'google-call-1');
+    assert.equal(toolInfo?.name, 'read_file');
+    assert.deepEqual(toolInfo?.input, { path: 'syk_v5.tex' });
   });
 });
 
@@ -128,6 +126,7 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
       'call-123',
       'read_file',
       {
+        id: 'call-123',
         name: 'read_file',
         args: { path: 'syk_v5.tex' },
       } as any,

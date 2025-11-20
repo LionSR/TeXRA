@@ -41,6 +41,7 @@ import type {
   IModelHandler,
   CreateResponseOptions,
   ExtractResponseResult,
+  NormalizedToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
 
@@ -78,7 +79,8 @@ export abstract class ModelHandler<
   R = unknown,
   T = unknown,
   C = unknown,
-> implements IModelHandler<M, U, R, T, C>
+  Resp = unknown,
+> implements IModelHandler<M, U, R, T, C, Resp>
 {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
@@ -442,7 +444,7 @@ export abstract class ModelHandler<
    * @param options Options for creating the response
    * @returns Promise resolving to provider-specific response object
    */
-  abstract createResponse(options: CreateResponseOptions<M>): Promise<any>;
+  abstract createResponse(options: CreateResponseOptions<M, C>): Promise<Resp>;
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.
@@ -577,11 +579,9 @@ export abstract class ModelHandler<
   /**
    * Extracts tool-use information from provider responses.
    * @param responseObject The raw response object from the model
-   * @returns JSON string with tool call details or null if not present
+   * @returns A normalized tool call or null if not present
    */
-  extractToolUse(_responseObject: any): string | null {
-    return null;
-  }
+  abstract extractToolUse(responseObject: Resp): NormalizedToolCall | null;
 
   /**
    * Build a provider-specific follow-up message containing a tool result.

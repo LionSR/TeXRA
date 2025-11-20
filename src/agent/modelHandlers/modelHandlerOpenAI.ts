@@ -64,6 +64,7 @@ import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  NormalizedToolCall,
 } from './types/IModelHandler';
 
 // Type imports
@@ -124,7 +125,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
   ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  OpenAI
+  OpenAI,
+  ChatCompletion
 > {
   /**
    * Creates a new OpenAI client using the stored credentials.
@@ -155,8 +157,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const {
       client,
       messages,
@@ -1165,15 +1167,35 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
-  extractToolUse(responseObject: any): string | null {
+  extractToolUse(responseObject: ChatCompletion): NormalizedToolCall | null {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
+      const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
+      if (!call.id || !call.function?.name) {
+        return null;
+      }
+      return {
+        provider: 'openai',
+        callId: call.id,
+        name: call.function.name,
+        input: call.function.arguments,
+        raw: call,
+      };
     }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
+
+    const func = responseObject?.choices?.[0]?.message
+      ?.function_call as ChatCompletionMessage.FunctionCall | undefined;
+    if (func && func.name) {
+      const callId = func.name;
+      return {
+        provider: 'openai',
+        callId,
+        name: func.name,
+        input: func.arguments,
+        raw: func,
+      };
     }
+
     return null;
   }
 
