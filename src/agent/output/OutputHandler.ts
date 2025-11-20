@@ -135,12 +135,6 @@ export class OutputHandler implements IOutputHandler {
 
     const initialRunId = this.logger.withCurrentGroup((id) => id);
     this.setActiveRun(initialRunId ?? null);
-    this.logger.debug(
-      `OutputHandler initialized with runId=${normalizeRunId(this.currentRunId)} (loggerGroup=${normalizeRunId(initialRunId)} executionId=${
-        this.executionId ?? 'none'
-      })`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -180,12 +174,6 @@ export class OutputHandler implements IOutputHandler {
 
     const nextRunId = runId ?? null;
     const previousRunId = this.currentRunId;
-    this.logger.debug(
-      `setActiveRun(runId=${normalizeRunId(runId)} prev=${normalizeRunId(previousRunId)} next=${normalizeRunId(
-        nextRunId,
-      )} executionId=${targetExecutionId ?? 'none'})`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
     if (nextRunId === this.currentRunId) {
       return;
     }
