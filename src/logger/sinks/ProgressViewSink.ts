@@ -25,10 +25,6 @@ function isValidMessageType(type: unknown): type is MessageType {
 
 export class ProgressViewSink implements LogEventSink {
   handleLogMessage(event: LogMessageEvent): void {
-    if (event.messageType === MESSAGE_TYPES.INTERNAL) {
-      return;
-    }
-
     const debugMode = getConfig<boolean>('texra.logger.debugMode', false);
     if (event.level === 'debug' && !debugMode) {
       return;

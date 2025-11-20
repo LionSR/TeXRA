@@ -9,7 +9,7 @@ export const MESSAGE_TYPES = {
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
-  /** Messages that should be hidden from the progress view */
+  /** Internal/system messages used by the extension */
   INTERNAL: 'internal',
   DEFAULT: 'default',
 } as const;
