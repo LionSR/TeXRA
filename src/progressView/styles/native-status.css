@@ -26,6 +26,14 @@
   );
 }
 
+.native-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--spacing-medium) + var(--spacing-small));
+  font-size: var(--font-size-md);
+}
+
 .native-status-time {
   color: var(--vscode-descriptionForeground);
   font-variant-numeric: tabular-nums;
@@ -35,4 +43,57 @@
 .native-status-text {
   flex: 1;
   white-space: pre-wrap;
+}
+
+.native-status-line--error {
+  border-color: var(
+    --vscode-testing-iconErrored,
+    var(--vscode-errorForeground, var(--vscode-panel-border))
+  );
+}
+
+.native-status-line--error .native-status-indicator {
+  color: var(
+    --vscode-testing-iconErrored,
+    var(--vscode-errorForeground, var(--vscode-foreground))
+  );
+}
+
+.native-status-line--warn {
+  border-color: var(
+    --vscode-inputValidation-warningBorder,
+    var(
+      --vscode-notificationsWarningIcon-foreground,
+      var(--vscode-panel-border)
+    )
+  );
+}
+
+.native-status-line--warn .native-status-indicator {
+  color: var(
+    --vscode-notificationsWarningIcon-foreground,
+    var(--vscode-inputValidation-warningBorder, var(--vscode-foreground))
+  );
+}
+
+.native-status-line--info {
+  border-color: var(
+    --vscode-notificationsInfoIcon-foreground,
+    var(--vscode-panel-border)
+  );
+}
+
+.native-status-line--info .native-status-indicator {
+  color: var(
+    --vscode-notificationsInfoIcon-foreground,
+    var(--vscode-foreground)
+  );
+}
+
+.native-status-line--debug {
+  border-color: var(--vscode-descriptionForeground, var(--vscode-panel-border));
+}
+
+.native-status-line--debug .native-status-indicator {
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
 }

@@ -116,15 +116,12 @@ const tryParseJson = (text) => {
 };
 
 const normalizeStructuredContent = (text, data) => {
-  if (data !== undefined) {
-    return {
-      decodedText: '',
-      structured: data,
-    };
-  }
-
   const decodedText = typeof text === 'string' ? decodeHtml(text) : '';
-  return { decodedText, structured: tryParseJson(decodedText) };
+
+  return {
+    decodedText,
+    structured: data !== undefined ? data : tryParseJson(decodedText),
+  };
 };
 
 const normalizeFileListEntries = (structured) => {
@@ -388,6 +385,7 @@ export class LogEntryFormatter {
               message.normalizedPayload,
               message.id,
               message.timestamp,
+              message.level,
             ),
           'progress status',
         ),
@@ -1247,7 +1245,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatProgressStatus(normalizedPayload, logId, timestamp) {
+  _formatProgressStatus(normalizedPayload, logId, timestamp, level) {
     const element = createFromTemplate('nativeStatusTemplate');
     if (!element) return null;
 
@@ -1255,9 +1253,19 @@ export class LogEntryFormatter {
     const { fullTimestamp, timeDisplay, tooltipTimestamp } =
       this._formatTimestamp(date);
 
+    const severity = (level || 'info').toLowerCase();
+    const indicator = EMOJI_BY_LEVEL[severity] || EMOJI_BY_LEVEL.info;
+    element.classList.add(`native-status-line--${severity}`);
+
     element.dataset.fullTimestamp = fullTimestamp;
     if (logId) {
       element.dataset.logId = logId;
+    }
+
+    const indicatorElem = element.querySelector('.native-status-indicator');
+    if (indicatorElem) {
+      indicatorElem.textContent = indicator;
+      indicatorElem.title = severity;
     }
 
     const timeElem = element.querySelector('.native-status-time');
