@@ -624,7 +624,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         const filename =
-          block.title?.trim() ?? 'document.pdf';
+          (block.title ?? 'document.pdf').trim() || 'document.pdf';
         const sanitizedFilename = this.sanitizeFilename(filename);
         let buffer: Buffer | undefined;
         let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
@@ -790,7 +790,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       char.charCodeAt(0) < 32 ? '_' : char,
     ).join('');
     const withoutForbidden = withoutControlChars.replace(/[:<>"|?*\\/]/g, '_');
-    const sanitized = withoutForbidden ?? 'document.pdf';
+    // Use || here (not ??) because we need to catch empty strings, not just null/undefined
+    const sanitized = withoutForbidden || 'document.pdf';
     // Removing directory information avoids Anthropic rejecting names that contain
     // slashes, but it also means the model loses subdirectory context when
     // generating citations for assets or pictures that originally lived in nested
