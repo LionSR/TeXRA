@@ -492,7 +492,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         roundState: store.round,
         runState: store.run,
         messages: updatedMessages,
-        shouldContinue: this.shouldRunAnotherRound(),
+        shouldContinue: this.shouldRunAnotherRound(cycleResult.endTurn),
         workspaceState: store.workspace,
         output: artifacts,
       };
@@ -514,15 +514,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       roundState: store.round,
       runState: store.run,
       messages: updatedMessages,
-      shouldContinue: this.shouldRunAnotherRound(),
+      shouldContinue: this.shouldRunAnotherRound(endTurn),
       workspaceState: store.workspace,
       output: artifacts,
     };
   }
 
-  private shouldRunAnotherRound(): boolean {
+  private shouldRunAnotherRound(endTurn: boolean): boolean {
     const nextRound = this.currentRoundIndex + 1;
     const hasRemainingRounds = nextRound < this.getTotalRounds();
+    if (endTurn) {
+      return false;
+    }
+
     return hasRemainingRounds && !this.isInterruptionRequested();
   }
 
