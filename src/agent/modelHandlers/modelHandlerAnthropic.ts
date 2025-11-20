@@ -624,7 +624,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         }
 
         const filename =
-          (block.title ?? 'document.pdf').trim() || 'document.pdf';
+          block.title?.trim() ?? 'document.pdf';
         const sanitizedFilename = this.sanitizeFilename(filename);
         let buffer: Buffer | undefined;
         let uploadedSource: BetaRequestDocumentBlock['source'] | undefined;
@@ -790,7 +790,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       char.charCodeAt(0) < 32 ? '_' : char,
     ).join('');
     const withoutForbidden = withoutControlChars.replace(/[:<>"|?*\\/]/g, '_');
-    const sanitized = withoutForbidden || 'document.pdf';
+    const sanitized = withoutForbidden ?? 'document.pdf';
     // Removing directory information avoids Anthropic rejecting names that contain
     // slashes, but it also means the model loses subdirectory context when
     // generating citations for assets or pictures that originally lived in nested
@@ -1076,7 +1076,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return {
       response: newResponse,
       usage: responseObject.usage,
-      stopReason: stopReason || 'stop',
+      stopReason: stopReason ?? 'stop',
     };
   }
 
