@@ -16,6 +16,7 @@ import { MESSAGE_TYPES } from './messageTypes';
 
 // Type imports
 import type { MessageType } from './messageTypes';
+import type { LogOptions } from './logOptions';
 
 export interface LoggerScopeOptions {
   parentGroupId?: string;
@@ -165,68 +166,184 @@ export class AgentLogger {
     logger.initialize(this.channelId, this.isAgentLogger);
   }
 
+  /**
+   * Log a debug message. Supports both legacy positional parameters and modern options object.
+   *
+   * @example
+   * // Modern approach (recommended):
+   * this.logger.debug('Processing file', { groupId: '123', data: fileInfo });
+   *
+   * @example
+   * // Legacy approach (still supported):
+   * this.logger.debug('Processing file', '123', undefined, fileInfo);
+   */
   debug(
     message: string,
-    groupId?: string,
+    optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    logger.debug(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+    // Detect if using modern options object or legacy positional parameters
+    if (
+      typeof optionsOrGroupId === 'object' &&
+      optionsOrGroupId !== null &&
+      !Array.isArray(optionsOrGroupId)
+    ) {
+      const options = optionsOrGroupId;
+      logger.debug(
+        this.channelId,
+        message,
+        options.groupId,
+        options.messageType,
+        this.isAgentLogger,
+        options.data,
+      );
+    } else {
+      // Legacy positional parameters
+      logger.debug(
+        this.channelId,
+        message,
+        optionsOrGroupId as string | undefined,
+        messageType,
+        this.isAgentLogger,
+        data,
+      );
+    }
   }
 
+  /**
+   * Log an info message. Supports both legacy positional parameters and modern options object.
+   *
+   * @example
+   * // Modern approach (recommended):
+   * this.logger.info('Operation completed', { messageType: MESSAGE_TYPES.FILE_LIST });
+   *
+   * @example
+   * // Legacy approach (still supported):
+   * this.logger.info('Operation completed', undefined, MESSAGE_TYPES.FILE_LIST);
+   */
   info(
     message: string,
-    groupId?: string,
+    optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    logger.info(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+    // Detect if using modern options object or legacy positional parameters
+    if (
+      typeof optionsOrGroupId === 'object' &&
+      optionsOrGroupId !== null &&
+      !Array.isArray(optionsOrGroupId)
+    ) {
+      const options = optionsOrGroupId;
+      logger.info(
+        this.channelId,
+        message,
+        options.groupId,
+        options.messageType,
+        this.isAgentLogger,
+        options.data,
+      );
+    } else {
+      // Legacy positional parameters
+      logger.info(
+        this.channelId,
+        message,
+        optionsOrGroupId as string | undefined,
+        messageType,
+        this.isAgentLogger,
+        data,
+      );
+    }
   }
 
+  /**
+   * Log a warning message. Supports both legacy positional parameters and modern options object.
+   *
+   * @example
+   * // Modern approach (recommended):
+   * this.logger.warn('Invalid configuration', { data: errorDetails });
+   *
+   * @example
+   * // Legacy approach (still supported):
+   * this.logger.warn('Invalid configuration', undefined, undefined, errorDetails);
+   */
   warn(
     message: string,
-    groupId?: string,
+    optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    logger.warn(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+    // Detect if using modern options object or legacy positional parameters
+    if (
+      typeof optionsOrGroupId === 'object' &&
+      optionsOrGroupId !== null &&
+      !Array.isArray(optionsOrGroupId)
+    ) {
+      const options = optionsOrGroupId;
+      logger.warn(
+        this.channelId,
+        message,
+        options.groupId,
+        options.messageType,
+        this.isAgentLogger,
+        options.data,
+      );
+    } else {
+      // Legacy positional parameters
+      logger.warn(
+        this.channelId,
+        message,
+        optionsOrGroupId as string | undefined,
+        messageType,
+        this.isAgentLogger,
+        data,
+      );
+    }
   }
 
+  /**
+   * Log an error message. Supports both legacy positional parameters and modern options object.
+   *
+   * @example
+   * // Modern approach (recommended):
+   * this.logger.error('Operation failed', { groupId: '123', data: exception });
+   *
+   * @example
+   * // Legacy approach (still supported):
+   * this.logger.error('Operation failed', '123', undefined, exception);
+   */
   error(
     message: string,
-    groupId?: string,
+    optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    logger.error(
-      this.channelId,
-      message,
-      groupId,
-      messageType,
-      this.isAgentLogger,
-      data,
-    );
+    // Detect if using modern options object or legacy positional parameters
+    if (
+      typeof optionsOrGroupId === 'object' &&
+      optionsOrGroupId !== null &&
+      !Array.isArray(optionsOrGroupId)
+    ) {
+      const options = optionsOrGroupId;
+      logger.error(
+        this.channelId,
+        message,
+        options.groupId,
+        options.messageType,
+        this.isAgentLogger,
+        options.data,
+      );
+    } else {
+      // Legacy positional parameters
+      logger.error(
+        this.channelId,
+        message,
+        optionsOrGroupId as string | undefined,
+        messageType,
+        this.isAgentLogger,
+        data,
+      );
+    }
   }
 
   /**
