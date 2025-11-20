@@ -100,19 +100,15 @@ export class LatexDiffManager {
     }
 
     if (result.message && result.message.includes('document environment')) {
-      this.logger.debug(
-        `Skipping ${operation}: ${result.message}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
-      );
+      this.logger.debug(`Skipping ${operation}: ${result.message}`, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
       return;
     }
 
-    this.logger.warn(
-      `Failed to generate ${operation}: ${result.message}`,
-      undefined,
-      MESSAGE_TYPES.INTERNAL,
-    );
+    this.logger.warn(`Failed to generate ${operation}: ${result.message}`, {
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
   }
 
   /**
@@ -142,8 +138,7 @@ export class LatexDiffManager {
     } catch (error) {
       this.logger.warn(
         `Unable to mirror workspace dependency ${targetLocation.absolutePath}: ${toErrorMessage(error)}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
   }
@@ -362,8 +357,7 @@ export class LatexDiffManager {
     } catch (err) {
       this.logger.error(
         `Error during latexdiff processing: ${toErrorMessage(err)}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
     }
   }

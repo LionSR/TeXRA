@@ -66,31 +66,26 @@ export class XmlOutputManager {
     if (result.content) {
       switch (result.method) {
         case 'named':
-          this.logger.info(
-            `Recovered ${documentTag} from named document tag`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
-          );
+          this.logger.info(`Recovered ${documentTag} from named document tag`, {
+            messageType: MESSAGE_TYPES.INTERNAL,
+          });
           break;
         case 'simple':
           this.logger.info(
             `Successfully extracted ${documentTag} using fallback method`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
+            { messageType: MESSAGE_TYPES.INTERNAL },
           );
           break;
         case 'markdown':
           this.logger.info(
             `Recovered ${documentTag} from markdown code block`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
+            { messageType: MESSAGE_TYPES.INTERNAL },
           );
           break;
         case 'latex':
           this.logger.info(
             `Recovered ${documentTag} from \\documentclass block`,
-            undefined,
-            MESSAGE_TYPES.INTERNAL,
+            { messageType: MESSAGE_TYPES.INTERNAL },
           );
           break;
       }
@@ -99,8 +94,7 @@ export class XmlOutputManager {
 
     this.logger.debug(
       `No ${documentTag} found in output file using fallback method`,
-      undefined,
-      MESSAGE_TYPES.INTERNAL,
+      { messageType: MESSAGE_TYPES.INTERNAL },
     );
     return null;
   }
@@ -114,16 +108,14 @@ export class XmlOutputManager {
     if (result.documents) {
       this.logger.info(
         `Successfully extracted multiple ${documentTag} using fallback method`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       return result.documents;
     }
 
     this.logger.debug(
       `No ${documentTag} found in output file using fallback method`,
-      undefined,
-      MESSAGE_TYPES.INTERNAL,
+      { messageType: MESSAGE_TYPES.INTERNAL },
     );
     return null;
   }
@@ -216,8 +208,7 @@ export class XmlOutputManager {
       }
       this.logger.debug(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,
@@ -233,8 +224,7 @@ export class XmlOutputManager {
     } catch (err) {
       this.logger.debug(
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,

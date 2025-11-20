@@ -8,6 +8,10 @@ import { registry } from './LogChannelRegistry';
 // Type imports
 import type { MessageType } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
+import type { LogOptions, LogUtilsOptions } from './logOptions';
+
+// Re-export for convenience
+export type { LogOptions } from './logOptions';
 
 type ChannelKey = string;
 
@@ -138,16 +142,18 @@ function logWithGroup(
   channel: string,
   level: 'debug' | 'info' | 'warn' | 'error',
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
+  const isAgent = options.isAgent ?? false;
   const entry = registry.ensure(channel, { isAgent });
   const { logger } = entry;
-  const activeGroupId = resolveActiveGroup(channel, groupId, isAgent);
+  const activeGroupId = resolveActiveGroup(channel, options.groupId, isAgent);
 
-  logger.log(level, message, { groupId: activeGroupId, messageType, data });
+  logger.log(level, message, {
+    groupId: activeGroupId,
+    messageType: options.messageType,
+    data: options.data,
+  });
 }
 
 export function initialize(channel: string, isAgent = false): void {
@@ -213,48 +219,48 @@ export async function runWithGroupContext<T>(
   }
 }
 
+/**
+ * Log a debug message with options object.
+ */
 export function debug(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent, data);
+  logWithGroup(channel, 'debug', message, options);
 }
 
+/**
+ * Log an info message with options object.
+ */
 export function info(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'info', message, groupId, messageType, isAgent, data);
+  logWithGroup(channel, 'info', message, options);
 }
 
+/**
+ * Log a warning message with options object.
+ */
 export function warn(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent, data);
+  logWithGroup(channel, 'warn', message, options);
 }
 
+/**
+ * Log an error message with options object.
+ */
 export function error(
   channel: string,
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  logWithGroup(channel, 'error', message, groupId, messageType, isAgent, data);
+  logWithGroup(channel, 'error', message, options);
 }
 
 export function getTimestamp(): string {

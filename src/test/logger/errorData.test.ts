@@ -15,7 +15,7 @@ describe('AgentLogger error data', () => {
         captured = payload.logMessage;
       }
     });
-    logger.error(`Error occurred: ${err.message}`, undefined, undefined, err);
+    logger.error(`Error occurred: ${err.message}`, { data: err });
     off();
     assert.ok(captured);
     assert.strictEqual(captured.data.message, 'test failure');
