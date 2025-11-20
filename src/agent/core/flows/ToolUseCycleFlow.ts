@@ -673,7 +673,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       state.shouldStop = false;
 
       if (fallbackMessage) {
-        options.logger.warn(fallbackMessage, groupId);
+        options.logger.warn(fallbackMessage, { groupId });
       }
 
       return FlowTransition.CONTINUE;
