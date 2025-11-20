@@ -139,23 +139,49 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return reasoningContent;
   }
 
+  private parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'DeepSeek tool call arguments could not be parsed as JSON; using raw string.',
+        undefined,
+        undefined,
+        error,
+      );
+      return raw;
+    }
+  }
+
   extractToolUse(responseObject: ChatCompletion): DeepSeekToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
-      if (!call.id || !call.function?.name) {
-        return [];
-      }
-      return [
-        {
+      return toolCalls
+        .filter(
+          (
+            call,
+          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
+            Boolean(
+              call &&
+                typeof call === 'object' &&
+                (call as ChatCompletionMessageFunctionToolCall).function
+                  ?.name &&
+                call.id,
+            ),
+        )
+        .map((call) => ({
           provider: 'deepseek',
           callId: call.id,
-          name: call.function.name,
-          input: call.function.arguments,
+          name: call.function!.name,
+          input: this.parseArguments(call.function!.arguments),
           raw: call,
-        },
-      ];
+        }));
     }
+
     const func = responseObject?.choices?.[0]?.message?.function_call as
       | ChatCompletionMessage.FunctionCall
       | undefined;
@@ -165,7 +191,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
           provider: 'deepseek',
           callId: func.name,
           name: func.name,
-          input: func.arguments,
+          input: this.parseArguments(func.arguments),
           raw: func,
         },
       ];

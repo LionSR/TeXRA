@@ -1278,25 +1278,44 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
+  private parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'OpenAI Responses tool call arguments could not be parsed as JSON; using raw string.',
+        undefined,
+        undefined,
+        error,
+      );
+      return raw;
+    }
+  }
+
   extractToolUse(response: Response): OpenAIResponseToolCall[] {
     const items = response?.output;
     if (!Array.isArray(items)) return [];
 
-    const call = items.find(
+    const calls = items.filter(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
-    if (!call || !call.id || !call.name) {
+    if (calls.length === 0) {
       return [];
     }
-    return [
-      {
+
+    return calls
+      .filter((call) => Boolean(call.id && call.name))
+      .map((call) => ({
         provider: 'openai-response',
-        callId: call.id,
-        name: call.name,
-        input: call.arguments,
+        callId: call.id!,
+        name: call.name!,
+        input: this.parseArguments(call.arguments),
         raw: call,
-      },
-    ];
+      }));
   }
 
   async createToolUseFollowUpMessages(

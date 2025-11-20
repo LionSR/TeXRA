@@ -1,6 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import { Buffer } from 'buffer';
+import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import {
@@ -1077,7 +1078,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (functionCalls.length > 0) {
         return functionCalls.map((call) => ({
           provider: 'google',
-          callId: call.id ?? call.name ?? 'function_call',
+          callId: call.id ?? randomUUID(),
           name: call.name!,
           input: call.args,
           raw: call,
