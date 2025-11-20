@@ -216,9 +216,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error processing media files: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
       }
     }
@@ -273,9 +274,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error processing media files for follow-up round: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
       }
     }
@@ -472,9 +474,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       this.logger.error(
         `Failed to upload file ${filename}: ${formattedError.message}`,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: formattedError,
+        },
       );
       throw err;
     } finally {
@@ -529,11 +532,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (useBackgroundResponses) {
       this.logger.debug(
         'Submitting OpenAI Responses request in background mode.',
-        undefined,
-        undefined,
         {
-          model: this.config.fullName,
-          previousResponseId: this.previousResponseId ?? undefined,
+          data: {
+            model: this.config.fullName,
+            previousResponseId: this.previousResponseId ?? undefined,
+          },
         },
       );
       params.background = true;
@@ -652,12 +655,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return response;
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
-      this.logger.error(
-        `Error in createResponse: ${formattedError.message}`,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
-      );
+      this.logger.error(`Error in createResponse: ${formattedError.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: formattedError,
+      });
       throw err;
     }
   }
@@ -820,11 +821,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     this.logger.debug(
       `Background polling started for response ${responseId} (status: ${initialStatus})`,
-      undefined,
-      undefined,
       {
-        responseId,
-        status: current.status,
+        data: {
+          responseId,
+          status: current.status,
+        },
       },
     );
 
@@ -832,12 +833,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       pollCount += 1;
       this.logger.debug(
         `Waiting ${pollInterval}ms before poll ${pollCount} for response ${responseId}`,
-        undefined,
-        undefined,
         {
-          responseId,
-          pollCount,
-          waitMs: pollInterval,
+          data: {
+            responseId,
+            pollCount,
+            waitMs: pollInterval,
+          },
         },
       );
       try {
@@ -846,12 +847,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
             `Background polling aborted for response ${responseId} while waiting to poll.`,
-            undefined,
-            undefined,
             {
-              responseId,
-              pollCount,
-              elapsedMs: Date.now() - startTime,
+              data: {
+                responseId,
+                pollCount,
+                elapsedMs: Date.now() - startTime,
+              },
             },
           );
           // Background jobs keep running on the OpenAI side when polling stops.
@@ -864,13 +865,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       if (elapsedMs > ModelHandlerOpenAIResponse.BACKGROUND_MAX_DURATION_MS) {
         this.logger.error(
           `Background response ${responseId} exceeded maximum polling duration while pending`,
-          undefined,
-          undefined,
           {
-            responseId,
-            status: current.status,
-            pollCount,
-            elapsedMs,
+            data: {
+              responseId,
+              status: current.status,
+              pollCount,
+              elapsedMs,
+            },
           },
         );
         throw new Error(
@@ -890,12 +891,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `Background poll ${pollCount} for response ${responseId}: status=${
             current.status ?? 'unknown'
           }`,
-          undefined,
-          undefined,
           {
-            responseId,
-            status: current.status,
-            pollCount,
+            data: {
+              responseId,
+              status: current.status,
+              pollCount,
+            },
           },
         );
       } catch (err) {
@@ -903,24 +904,24 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const message = getSdkErrorMessage(err);
         this.logger.warn(
           `Background poll ${pollCount} for response ${responseId} failed (${consecutiveErrors}/${maxRetries}): ${message}. Will retry...`,
-          undefined,
-          undefined,
           {
-            responseId,
-            pollCount,
-            error: message,
+            data: {
+              responseId,
+              pollCount,
+              error: message,
+            },
           },
         );
 
         if (consecutiveErrors >= maxRetries) {
           this.logger.error(
             `Giving up after ${consecutiveErrors} errors retrieving background response ${responseId}`,
-            undefined,
-            undefined,
             {
-              responseId,
-              pollCount,
-              error: message,
+              data: {
+                responseId,
+                pollCount,
+                error: message,
+              },
             },
           );
           throw err;
@@ -935,14 +936,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       `Background polling finished for response ${responseId} with status=${
         current.status ?? 'unknown'
       } after ${pollCount} polls (${elapsedMs} ms)`,
-      undefined,
-      undefined,
       {
-        responseId,
-        status: current.status,
-        pollCount,
-        elapsedMs,
-        usage: current.usage ?? undefined,
+        data: {
+          responseId,
+          status: current.status,
+          pollCount,
+          elapsedMs,
+          usage: current.usage ?? undefined,
+        },
       },
     );
 
@@ -957,13 +958,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (!isTerminal) {
       this.logger.warn(
         `Background response ${responseId} returned non-terminal status ${finalStatus ?? 'unknown'} after polling loop`,
-        undefined,
-        undefined,
         {
-          responseId,
-          status: finalStatus,
-          pollCount,
-          elapsedMs,
+          data: {
+            responseId,
+            status: finalStatus,
+            pollCount,
+            elapsedMs,
+          },
         },
       );
     }
@@ -976,13 +977,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Background response did not complete successfully.';
       this.logger.error(
         `Background response ${responseId} ended with status ${fallbackStatus}`,
-        undefined,
-        undefined,
         {
-          responseId,
-          status: current.status,
-          error: current.error ?? undefined,
-          incomplete: current.incomplete_details ?? undefined,
+          data: {
+            responseId,
+            status: current.status,
+            error: current.error ?? undefined,
+            incomplete: current.incomplete_details ?? undefined,
+          },
         },
       );
       throw new Error(
@@ -1106,7 +1107,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     await flexibleFS.write(outputLocation, fileContent);
@@ -1439,9 +1440,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
       } finally {
         if (buffer) {
