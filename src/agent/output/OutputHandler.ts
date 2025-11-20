@@ -178,13 +178,12 @@ export class OutputHandler implements IOutputHandler {
       this.executionId ?? this.fileService.getExecutionId();
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
-    const loggerRunId = this.logger.withCurrentGroup((id) => id);
-    const nextRunId = runId ?? loggerRunId ?? null;
+    const nextRunId = runId ?? null;
     const previousRunId = this.currentRunId;
     this.logger.debug(
-      `setActiveRun(runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} prev=${normalizeRunId(
-        previousRunId,
-      )} next=${normalizeRunId(nextRunId)} executionId=${targetExecutionId ?? 'none'})`,
+      `setActiveRun(runId=${normalizeRunId(runId)} prev=${normalizeRunId(previousRunId)} next=${normalizeRunId(
+        nextRunId,
+      )} executionId=${targetExecutionId ?? 'none'})`,
       { messageType: MESSAGE_TYPES.INTERNAL },
     );
     if (nextRunId === this.currentRunId) {
@@ -207,15 +206,6 @@ export class OutputHandler implements IOutputHandler {
   }
 
   private getActiveRunId(): string {
-    const loggerRunId = this.logger.withCurrentGroup((id) => id);
-    if (loggerRunId && loggerRunId !== this.currentRunId) {
-      this.logger.debug(
-        `Logger group changed: current=${normalizeRunId(this.currentRunId)} logger=${normalizeRunId(loggerRunId)}`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
-      this.setActiveRun(loggerRunId);
-    }
-
     return normalizeRunId(this.currentRunId);
   }
 
