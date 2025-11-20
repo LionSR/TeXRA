@@ -231,7 +231,7 @@ export class AgentLogger {
    */
   missingOutputs(info: unknown, groupId?: string): void {
     const missing = (info as any).missing as unknown[] | undefined;
-    const count = missing ? missing.length : 0;
+    const count = missing?.length ?? 0;
     const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
     this.info(summary, {
       groupId,
