@@ -47,11 +47,11 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Add output files for a stream and round */
   async addFiles(
     stream: StreamTabId,
-    groupId: string | null | undefined,
+    runId: string,
     filesByRound: { [key: number]: OutputFileInfo[] },
     options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const runId = normalizeRunId(options.executionId ?? groupId);
+    const normalizedRunId = normalizeRunId(runId);
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -59,10 +59,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this.items.set(stream, streamRuns);
     }
 
-    let runRounds = streamRuns.get(runId);
+    let runRounds = streamRuns.get(normalizedRunId);
     if (!runRounds) {
       runRounds = new Map();
-      streamRuns.set(runId, runRounds);
+      streamRuns.set(normalizedRunId, runRounds);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -90,12 +90,12 @@ export class OutputFilesManager extends PersistentMapManager<
   /** Update missing outputs for a stream */
   async updateMissingOutputs(
     stream: StreamTabId,
-    groupId: string | null | undefined,
+    runId: string,
     filesByRound: { [key: number]: string[] },
     options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const runId = normalizeRunId(options.executionId ?? groupId);
+    const normalizedRunId = normalizeRunId(runId);
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -103,10 +103,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this._missingOutputs.set(stream, streamMissing);
     }
 
-    let runMissing = streamMissing.get(runId);
+    let runMissing = streamMissing.get(normalizedRunId);
     if (!runMissing) {
       runMissing = new Map();
-      streamMissing.set(runId, runMissing);
+      streamMissing.set(normalizedRunId, runMissing);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -295,17 +295,14 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.delete(stream);
   }
 
-  async clearRunFiles(
-    stream: StreamTabId,
-    groupId: string | null | undefined,
-  ): Promise<void> {
-    const runId = normalizeRunId(groupId);
+  async clearRunFiles(stream: StreamTabId, runId: string): Promise<void> {
+    const normalizedRunId = normalizeRunId(runId);
     const runs = this.items.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(runId);
+    const removed = runs.delete(normalizedRunId);
     if (runs.size === 0) {
       this.items.delete(stream);
     }
@@ -326,16 +323,16 @@ export class OutputFilesManager extends PersistentMapManager<
 
   async clearRunMissingOutputs(
     stream: StreamTabId,
-    groupId: string | null | undefined,
+    runId: string,
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const runId = normalizeRunId(groupId);
+    const normalizedRunId = normalizeRunId(runId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(runId);
+    const removed = runs.delete(normalizedRunId);
     if (runs.size === 0) {
       this._missingOutputs.delete(stream);
     }
