@@ -371,6 +371,11 @@ export class LogEntryFormatter {
           () => this._formatStatistics(message.normalizedPayload, message.id),
           'statistics',
         ),
+      internal: (message) =>
+        this._safeFormat(
+          () => this._formatInternal(message),
+          'internal message',
+        ),
       userMessage: (message) =>
         this._safeFormat(
           () =>
@@ -587,6 +592,46 @@ export class LogEntryFormatter {
       `</div>`;
 
     // Convert HTML string to DOM element
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = htmlMessage;
+    return wrapper.firstElementChild;
+  }
+
+  _formatInternal(message) {
+    const { id, level, timestamp, groupId, verbose, normalizedPayload, text } =
+      message;
+
+    const decoded = (normalizedPayload?.decodedText || '').trim();
+    const structuredText = stringifyForDisplay(
+      normalizedPayload?.structured,
+    ).trim();
+    const content = decoded || structuredText || text || '';
+
+    if (!content) {
+      return null;
+    }
+
+    const emoji = EMOJI_BY_LEVEL[level] || '•';
+    const date = new Date(timestamp);
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
+
+    const prefix = `<div class="log-line" data-log-id="${id}" ${
+      groupId ? `data-group-id="${groupId}"` : ''
+    } data-full-timestamp="${fullTimestamp}">`;
+    const levelMarkup = verbose
+      ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
+      : '';
+
+    const htmlMessage =
+      prefix +
+      `<span class="timestamp" title="${tooltipTimestamp}">${emoji}${
+        verbose ? ` [${timeDisplay}]` : ''
+      }</span> ` +
+      levelMarkup +
+      `<span class="message-${level}">${encodeHtml(content)}</span>` +
+      `</div>`;
+
     const wrapper = document.createElement('div');
     wrapper.innerHTML = htmlMessage;
     return wrapper.firstElementChild;
