@@ -11,7 +11,7 @@ import type { MessageType } from './messageTypes';
  * logger.warn(CHANNEL, 'Error occurred', undefined, undefined, false, errorData);
  *
  * // New way (clean):
- * logger.warnShared(CHANNEL, 'Error occurred', { data: errorData });
+ * logger.warn(CHANNEL, 'Error occurred', { data: errorData });
  * ```
  */
 export interface LogOptions {
@@ -24,10 +24,10 @@ export interface LogOptions {
 }
 
 /**
- * Extended options for logUtils unified functions (deprecated).
- * @deprecated Use separate agent/shared functions instead
+ * Internal options for logUtils functions.
+ * @internal - Most code should not use this directly
  */
 export interface LogUtilsOptions extends LogOptions {
-  /** Whether this is an agent channel vs shared channel */
+  /** Internal: Whether this is an agent channel vs shared channel */
   isAgent?: boolean;
 }
