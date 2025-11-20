@@ -1253,31 +1253,23 @@ export class LogEntryFormatter {
       (normalizedPayload.decodedText || message.text || '').trim() ||
       'Status update';
     const detailText = stringifyForDisplay(normalizedPayload.structured);
+    const emoji = EMOJI_BY_LEVEL[severity] || '•';
 
     const container = document.createElement('div');
-    container.className = 'progress-status-entry';
     container.dataset.fullTimestamp = fullTimestamp;
-    if (message.id) {
-      container.dataset.logId = message.id;
-    }
-    if (message.groupId) {
-      container.dataset.groupId = message.groupId;
-    }
+    if (message.id) container.dataset.logId = message.id;
+    if (message.groupId) container.dataset.groupId = message.groupId;
 
-    const header = document.createElement('div');
-    header.className = `log-line progress-status-line level-${severity}`;
-    const emoji = EMOJI_BY_LEVEL[severity] || '•';
-    header.innerHTML = `
-      <span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span>
-      <span class="progress-status-summary">${encodeHtml(summaryText)}</span>
-    `;
-    container.appendChild(header);
+    const summaryLine = document.createElement('div');
+    summaryLine.className = 'log-line';
+    summaryLine.innerHTML = `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> <span class="message-${severity}">${encodeHtml(summaryText)}</span>`;
+    container.appendChild(summaryLine);
 
     if (detailText) {
-      const detailElem = document.createElement('pre');
-      detailElem.className = `progress-status-detail progress-status-${severity}`;
-      detailElem.textContent = detailText;
-      container.appendChild(detailElem);
+      const detailLine = document.createElement('pre');
+      detailLine.className = `log-line message-${severity}`;
+      detailLine.textContent = detailText;
+      container.appendChild(detailLine);
     }
 
     return container;
