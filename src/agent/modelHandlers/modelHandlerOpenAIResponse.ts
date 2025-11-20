@@ -1308,10 +1308,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return calls
-      .filter((call) => Boolean(call.id && call.name))
+      .filter((call) => Boolean(call.call_id && call.name))
       .map((call) => ({
         provider: 'openai-response',
-        callId: call.id!,
+        callId: call.call_id!,
         name: call.name!,
         input: this.parseArguments(call.arguments),
         raw: call,
