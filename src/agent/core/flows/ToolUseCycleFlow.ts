@@ -518,9 +518,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const { calls } = execRes.value;
 
     const assistantText = state.text ?? '';
-    let hasSentAssistantText = false;
 
-    for (const call of calls) {
+    for (const [index, call] of calls.entries()) {
       const tool = options.toolRegistry[call.name];
       let result: ToolResult;
       const parsedInput = parseToolInput(
@@ -595,12 +594,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
           call,
           buildToolResultPayload(result),
           store.workspace,
-          !hasSentAssistantText && assistantText.length > 0
-            ? assistantText
-            : undefined,
+          index === 0 && assistantText.length > 0 ? assistantText : undefined,
         );
-
-      hasSentAssistantText = hasSentAssistantText || assistantText.length > 0;
 
       state.messages.push(...followUpMsgs);
       if (

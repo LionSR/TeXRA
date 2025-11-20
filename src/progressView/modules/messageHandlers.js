@@ -470,29 +470,32 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateFiles(message) {
-    if (message.stream === state.activeStream) {
-      const targetStream = message.stream || state.activeStream || null;
-      if (!targetStream) {
-        return;
-      }
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
 
-      if (message.reset) {
-        state.clearRunFiles(targetStream);
+    if (message.reset) {
+      state.clearRunFiles(targetStream);
+      if (targetStream === state.activeStream) {
         this._refreshOutputsForActiveRun();
-        return;
       }
+      return;
+    }
 
-      const runId = message.runId;
-      if (!runId) {
-        return;
-      }
+    const runId = message.runId;
+    if (!runId) {
+      return;
+    }
 
-      const rounds = message.rounds;
-      if (!rounds || Object.keys(rounds).length === 0) {
-        state.deleteRunFiles(targetStream, runId);
-      } else {
-        state.setRunFiles(targetStream, runId, rounds);
-      }
+    const rounds = message.rounds;
+    if (!rounds || Object.keys(rounds).length === 0) {
+      state.deleteRunFiles(targetStream, runId);
+    } else {
+      state.setRunFiles(targetStream, runId, rounds);
+    }
+
+    if (targetStream === state.activeStream) {
       this._refreshOutputsForActiveRun();
     }
   }
