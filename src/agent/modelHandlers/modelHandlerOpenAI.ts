@@ -1195,21 +1195,6 @@ export class ModelHandlerOpenAI extends ModelHandler<
         );
     }
 
-    const func = responseObject?.choices?.[0]?.message?.function_call as
-      | ChatCompletionMessage.FunctionCall
-      | undefined;
-    if (func && func.name) {
-      return [
-        {
-          provider: 'openai',
-          callId: func.name,
-          name: func.name,
-          input: func.arguments,
-          raw: func,
-        },
-      ];
-    }
-
     return [];
   }
 
