@@ -171,9 +171,7 @@ export class MediaAttachmentProcessor {
         const mediaFile = mediaFiles[index];
         this.logger.error(
           `Failed to load media entry for ${mediaFile}: ${getSdkErrorMessage(reason)}`,
-          undefined,
-          undefined,
-          reason,
+          { data: reason },
         );
         results.push({ path: mediaFile, ok: false });
       }
@@ -244,9 +242,7 @@ export class MediaAttachmentProcessor {
     } catch (err) {
       this.logger.error(
         `Failed to process media ${mediaFile}: ${getSdkErrorMessage(err)}`,
-        undefined,
-        undefined,
-        err,
+        { data: err },
       );
       return { result: { path: mediaFile, ok: false } };
     }
