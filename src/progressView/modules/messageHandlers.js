@@ -65,23 +65,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Toggle the placeholder based on active stream and log content
+   * Toggle the placeholder based on active stream presence
    */
   _updatePlaceholderVisibility() {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!logContent) {
+    const shouldShowPlaceholder = !state.hasActiveStream();
+
+    if (shouldShowPlaceholder) {
+      dom.placeholder.show();
       return;
     }
 
-    const hasContent = Array.from(logContent.children).some(
-      (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
-    );
-
-    if (!hasContent) {
-      dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
-    }
+    dom.placeholder.hide();
   }
 
   _handleRunSelectionChange(runId) {
@@ -164,7 +158,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleUpdateStreams(message) {
     try {
-      state.activeStream = message.activeStream;
+      state.setActiveStream(message.activeStream);
       if (
         !state.pendingFilterUpdate &&
         message.agentFilter !== undefined &&
@@ -189,6 +183,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
     });
+
+    state.setStreams(streams);
 
     dom.streamTabs.update(streams, message.activeStream);
 
@@ -666,13 +662,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunFiles(message.stream);
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
+      state.removeStream(message.stream);
       if (message.stream === state.activeStream) {
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
         dom.runSelector.clear();
+        state.setActiveStream(null);
       }
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleDeleteAll() {
@@ -680,11 +680,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
     dom.instructionPanel.hide();
+    state.clearStreams();
     state.clearRunInstructions();
     state.clearRunFiles();
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     dom.runSelector.clear();
+
+    state.setActiveStream(null);
+    this._updatePlaceholderVisibility();
   }
 
   handleFollowUpTextPolished(message) {

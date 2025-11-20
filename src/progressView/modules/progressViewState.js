@@ -320,6 +320,7 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
+    this.streams = [];
     this.agentTypeFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
@@ -367,6 +368,41 @@ export class ProgressViewState {
 
   resetExecutionIdAvailability() {
     this.executionIdAvailability.clear();
+  }
+
+  setStreams(streams) {
+    if (!Array.isArray(streams)) {
+      this.streams = [];
+      return;
+    }
+
+    this.streams = streams
+      .map((stream) => stream?.name)
+      .filter((name) => typeof name === 'string' && name);
+  }
+
+  removeStream(streamId) {
+    if (!streamId) {
+      return;
+    }
+
+    this.streams = this.streams.filter((stream) => stream !== streamId);
+  }
+
+  clearStreams() {
+    this.streams = [];
+  }
+
+  setActiveStream(streamId) {
+    this.activeStream = streamId || '';
+  }
+
+  hasActiveStream() {
+    return Boolean(this.activeStream);
+  }
+
+  hasStreams() {
+    return this.streams.length > 0;
   }
 
   /** Load saved state from VS Code storage. */
