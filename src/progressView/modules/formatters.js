@@ -383,12 +383,7 @@ export class LogEntryFormatter {
         ),
       progressStatus: (message) =>
         this._safeFormat(
-          () =>
-            this._formatProgressStatus(
-              message.normalizedPayload,
-              message.id,
-              message.timestamp,
-            ),
+          () => this._formatProgressStatus(message),
           'progress status',
         ),
     };
@@ -1247,32 +1242,45 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatProgressStatus(normalizedPayload, logId, timestamp) {
-    const element = createFromTemplate('nativeStatusTemplate');
-    if (!element) return null;
-
-    const date = new Date(timestamp ?? Date.now());
+  _formatProgressStatus(message) {
+    const normalizedPayload = message.normalizedPayload || {};
+    const severity = message.level || 'info';
+    const date = new Date(message.timestamp ?? Date.now());
     const { fullTimestamp, timeDisplay, tooltipTimestamp } =
       this._formatTimestamp(date);
 
-    element.dataset.fullTimestamp = fullTimestamp;
-    if (logId) {
-      element.dataset.logId = logId;
+    const summaryText =
+      (normalizedPayload.decodedText || message.text || '').trim() ||
+      'Status update';
+    const detailText = stringifyForDisplay(normalizedPayload.structured);
+
+    const container = document.createElement('div');
+    container.className = 'progress-status-entry';
+    container.dataset.fullTimestamp = fullTimestamp;
+    if (message.id) {
+      container.dataset.logId = message.id;
+    }
+    if (message.groupId) {
+      container.dataset.groupId = message.groupId;
     }
 
-    const timeElem = element.querySelector('.native-status-time');
-    if (timeElem) {
-      timeElem.textContent = timeDisplay;
-      timeElem.title = tooltipTimestamp;
+    const header = document.createElement('div');
+    header.className = `log-line progress-status-line level-${severity}`;
+    const emoji = EMOJI_BY_LEVEL[severity] || '•';
+    header.innerHTML = `
+      <span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span>
+      <span class="progress-status-summary">${encodeHtml(summaryText)}</span>
+    `;
+    container.appendChild(header);
+
+    if (detailText) {
+      const detailElem = document.createElement('pre');
+      detailElem.className = `progress-status-detail progress-status-${severity}`;
+      detailElem.textContent = detailText;
+      container.appendChild(detailElem);
     }
 
-    const textElem = element.querySelector('.native-status-text');
-    if (textElem) {
-      const decodedContent = normalizedPayload?.decodedText || '';
-      textElem.textContent = decodedContent;
-    }
-
-    return element;
+    return container;
   }
 
   _formatUserMessage(normalizedPayload, logId, timestamp) {

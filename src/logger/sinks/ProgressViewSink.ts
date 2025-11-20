@@ -34,6 +34,10 @@ export class ProgressViewSink implements LogEventSink {
     const messageType: MessageType = isValidMessageType(event.messageType)
       ? event.messageType
       : MESSAGE_TYPES.DEFAULT;
+
+    if (messageType === MESSAGE_TYPES.INTERNAL) {
+      return;
+    }
     const id = randomUUID();
     const timestamp = new Date(event.timestamp).getTime();
     const logMessage: LogMessageData = {
