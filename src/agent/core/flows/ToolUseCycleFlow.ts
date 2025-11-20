@@ -11,7 +11,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { NormalizedToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { ProviderToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
@@ -90,13 +90,12 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
-  toolInfo?: NormalizedToolCall | null;
+  toolCalls?: ProviderToolCall[];
   text?: string;
-  toolCall?: NormalizedToolCall;
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, ['response', 'toolInfo', 'text', 'toolCall']);
+  resetCycleState(state, ['response', 'toolCalls', 'text']);
 }
 
 export interface ToolUseCycleContext<C = unknown> {
@@ -270,7 +269,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
   async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<{
-      toolInfo?: NormalizedToolCall | null;
+      toolCalls?: ProviderToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -295,7 +294,8 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
     }
 
-    const toolInfo = options.modelHandler.extractToolUse(state.response);
+    const toolCalls = options.modelHandler.extractToolUse(state.response);
+    const primaryCall = toolCalls?.[0];
     const {
       response: text,
       usage,
@@ -331,7 +331,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
-    if (!toolInfo || endTurn) {
+    if (!primaryCall || endTurn) {
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
@@ -343,14 +343,18 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       };
     }
 
-    state.toolCall = toolInfo;
-    state.toolInfo = toolInfo;
+    state.toolCalls = primaryCall ? [primaryCall] : [];
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
     return {
       skipped: false,
-      value: { toolInfo, stopReason, text: text ?? undefined, endTurn: false },
+      value: {
+        toolCalls: primaryCall ? [primaryCall] : [],
+        stopReason,
+        text: text ?? undefined,
+        endTurn: false,
+      },
     };
   }
 
@@ -358,7 +362,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     shared: ToolUseCycleContext<C>,
     _prepRes: unknown,
     execRes: SkippableNodeResult<{
-      toolInfo?: NormalizedToolCall | null;
+      toolCalls?: ProviderToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -394,19 +398,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleContext<C>): Promise<
-    SkippableNodeResult<
-      | {
-          raw: unknown;
-          name: string;
-          input: unknown;
-          toolCallId: string;
-        }
-      | ToolDispatchErrorResult
-    >
+  async exec(
+    context: ToolUseCycleContext<C>,
+  ): Promise<
+    SkippableNodeResult<{ call: ProviderToolCall } | ToolDispatchErrorResult>
   > {
     const { options, state, store } = context;
-    if (state.shouldStop || !state.toolInfo) {
+    if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
       return { skipped: true };
     }
 
@@ -417,20 +415,10 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return { skipped: true };
     }
 
-    if (!state.toolCall) {
-      state.shouldStop = true;
-      return { skipped: true };
-    }
-
-    const payload = state.toolCall;
+    const [payload] = state.toolCalls;
     return {
       skipped: false,
-      value: {
-        raw: payload.raw,
-        name: payload.name,
-        input: payload.input,
-        toolCallId: payload.callId,
-      },
+      value: { call: payload },
     };
   }
 
@@ -438,13 +426,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     _shared: ToolUseCycleContext<C>,
     prepRes: ToolUseCycleContext<C>,
     execRes: SkippableNodeResult<
-      | {
-          raw: unknown;
-          name: string;
-          input: unknown;
-          toolCallId: string;
-        }
-      | ToolDispatchErrorResult
+      { call: ProviderToolCall } | ToolDispatchErrorResult
     >,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
@@ -455,17 +437,19 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     if ('handledError' in execRes.value) {
-      const { toolCallId, result, fallbackMessage, toolName, raw } =
-        execRes.value;
+      const { toolCallId, result, fallbackMessage } = execRes.value;
       const workspace = store.workspace;
 
-      if (toolCallId) {
+      const fallbackCall =
+        (toolCallId
+          ? state.toolCalls?.find((call) => call.callId === toolCallId)
+          : undefined) ?? state.toolCalls?.[0];
+
+      if (fallbackCall) {
         const followUpMessages =
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
-            toolCallId,
-            toolName,
-            raw,
+            fallbackCall,
             buildToolResultPayload(result),
             workspace,
             state.text ?? '',
@@ -497,11 +481,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     const normalResult = execRes.value;
-    const tool = options.toolRegistry[normalResult.name];
+    const tool = options.toolRegistry[normalResult.call.name];
     let result: ToolResult;
     if (!tool) {
       result = toolResult({
-        error: `Unknown tool ${normalResult.name}`,
+        error: `Unknown tool ${normalResult.call.name}`,
         isError: true,
       });
     } else {
@@ -510,13 +494,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
           {
             streamId: options.logger.channelId,
             executionId: options.context.executionId,
-            toolCallId: normalResult.toolCallId,
+            toolCallId: normalResult.call.callId,
           },
-          () => tool.call(normalResult.input),
+          () => tool.call(normalResult.call.input),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
-          normalResult.name,
+          normalResult.call.name,
           err,
         );
         result = toolResult({
@@ -528,8 +512,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     }
 
     const toolUseLog = {
-      toolName: normalResult.name,
-      input: normalResult.input ?? normalResult.raw,
+      toolName: normalResult.call.name,
+      input: normalResult.call.input ?? normalResult.call.raw,
       output: sanitizeToolResultForLog(result),
       isError: Boolean(result.isError),
     };
@@ -563,9 +547,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const followUpMsgs =
       await options.modelHandler.createToolUseFollowUpMessages(
         options.client,
-        normalResult.toolCallId,
-        normalResult.name,
-        normalResult.raw,
+        normalResult.call,
         buildToolResultPayload(result),
         store.workspace,
         state.text ?? '',

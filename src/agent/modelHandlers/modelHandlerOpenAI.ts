@@ -64,7 +64,7 @@ import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  NormalizedToolCall,
+  ProviderToolCall,
 } from './types/IModelHandler';
 
 // Type imports
@@ -124,7 +124,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
-  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+  ProviderToolCall,
   OpenAI,
   ChatCompletion
 > {
@@ -1167,48 +1167,68 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
-  extractToolUse(responseObject: ChatCompletion): NormalizedToolCall | null {
+  extractToolUse(responseObject: ChatCompletion): ProviderToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
-      if (!call.id || !call.function?.name) {
-        return null;
-      }
-      return {
-        provider: 'openai',
-        callId: call.id,
-        name: call.function.name,
-        input: call.function.arguments,
-        raw: call,
-      };
+      return toolCalls
+        .filter(
+          (
+            call,
+          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
+            Boolean(
+              call &&
+                typeof call === 'object' &&
+                (call as ChatCompletionMessageFunctionToolCall).function
+                  ?.name &&
+                call.id,
+            ),
+        )
+        .map(
+          (call) =>
+            ({
+              provider: 'openai',
+              callId: call.id,
+              name: call.function!.name,
+              input: call.function!.arguments,
+              raw: call,
+            }) satisfies ProviderToolCall,
+        );
     }
 
-    const func = responseObject?.choices?.[0]?.message
-      ?.function_call as ChatCompletionMessage.FunctionCall | undefined;
+    const func = responseObject?.choices?.[0]?.message?.function_call as
+      | ChatCompletionMessage.FunctionCall
+      | undefined;
     if (func && func.name) {
-      const callId = func.name;
-      return {
-        provider: 'openai',
-        callId,
-        name: func.name,
-        input: func.arguments,
-        raw: func,
-      };
+      return [
+        {
+          provider: 'openai',
+          callId: func.name,
+          name: func.name,
+          input: func.arguments,
+          raw: func,
+        },
+      ];
     }
 
-    return null;
+    return [];
   }
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ProviderToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(id, name, call);
+    const callPayload = call as ProviderToolCall & {
+      raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+    };
+
+    const toolCall = this.normalizeToolCall(
+      callPayload.callId,
+      callPayload.name,
+      callPayload.raw,
+    );
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -1226,7 +1246,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? id,
+      tool_call_id: toolCall.id ?? callPayload.callId,
       content: JSON.stringify(sanitizedResult),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];

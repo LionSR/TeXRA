@@ -56,7 +56,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  NormalizedToolCall,
+  ProviderToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -95,7 +95,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
   ResponseUsage,
   OpenAIAPIResponseUsage,
-  ResponseFunctionToolCallItem,
+  ProviderToolCall,
   OpenAI,
   Response
 > {
@@ -1278,30 +1278,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): NormalizedToolCall | null {
+  extractToolUse(response: Response): ProviderToolCall[] {
     const items = response?.output;
-    if (!Array.isArray(items)) return null;
+    if (!Array.isArray(items)) return [];
 
     const call = items.find(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
     if (!call || !call.id || !call.name) {
-      return null;
+      return [];
     }
-    return {
-      provider: 'openai-response',
-      callId: call.id,
-      name: call.name,
-      input: call.arguments,
-      raw: call,
-    };
+    return [
+      {
+        provider: 'openai-response',
+        callId: call.id,
+        name: call.name,
+        input: call.arguments,
+        raw: call,
+      },
+    ];
   }
 
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ResponseFunctionToolCallItem,
+    call: ProviderToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1311,11 +1311,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
+    const callPayload = call as ProviderToolCall & {
+      raw: ResponseFunctionToolCallItem;
+    };
+
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
-      call_id: id,
-      name,
-      arguments: call.arguments,
+      call_id: callPayload.callId,
+      name: callPayload.name,
+      arguments: callPayload.raw.arguments,
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
@@ -1389,7 +1393,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
-      call_id: id,
+      call_id: callPayload.callId,
       output: outputPayload,
     };
 
