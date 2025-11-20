@@ -226,12 +226,10 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
     } catch (error) {
       const formattedError = formatProviderHttpError(error);
       const message = `Model invocation failed: ${formattedError.message}`;
-      options.logger.error(
-        message,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
-      );
+      options.logger.error(message, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: formattedError,
+      });
       state.shouldStop = true;
       state.endTurn = false;
       throw error;
@@ -355,7 +353,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       if (thinkingContent && !useStreaming) {
         const formatted = await xmlUtils.formatContent(thinkingContent);
         if (formatted.trim().length > 0) {
-          options.logger.info(formatted, undefined, MESSAGE_TYPES.THINKING);
+          options.logger.info(formatted, {
+            messageType: MESSAGE_TYPES.THINKING,
+          });
         }
       }
 
@@ -364,16 +364,16 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
         'scratchpad',
       );
       if (scratchpad) {
-        options.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+        options.logger.info(scratchpad, {
+          messageType: MESSAGE_TYPES.SCRATCHPAD,
+        });
       }
 
       if (newResponse && !useStreaming) {
         const formattedResponse = await xmlUtils.formatContent(newResponse);
-        options.logger.info(
-          formattedResponse,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
-        );
+        options.logger.info(formattedResponse, {
+          messageType: MESSAGE_TYPES.INTERNAL,
+        });
       }
 
       const apiUsage = options.modelHandler.computeResponseUsage(
@@ -516,11 +516,9 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       );
     }
 
-    options.logger.info(
-      `Stop reason: ${result.stopReason}`,
-      undefined,
-      MESSAGE_TYPES.PROGRESS_STATUS,
-    );
+    options.logger.info(`Stop reason: ${result.stopReason}`, {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
 
     if (result.apiUsage) {
       store.round.setUsage({
@@ -675,22 +673,18 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
     store.round.incrementContinuation();
     options.logger.info(
       `Starting continuation #${store.round.continuationCount}`,
-      undefined,
-      MESSAGE_TYPES.PROGRESS_STATUS,
+      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
     );
 
     if (reachedTokenLimit) {
-      options.logger.info(
-        'Continuing after hitting the model token limit',
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-      );
+      options.logger.info('Continuing after hitting the model token limit', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
     }
 
     options.logger.info(
       '🧵 Added continuation prompt from partial XML output',
-      undefined,
-      MESSAGE_TYPES.PROGRESS_STATUS,
+      { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
     );
 
     if (options.modelHandler.capabilities.supportsAssistantPrefill) {

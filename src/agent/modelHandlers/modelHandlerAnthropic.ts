@@ -518,12 +518,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
-      this.logger.error(
-        `Error creating response: ${formattedError.message}`,
-        undefined,
-        MESSAGE_TYPES.PROGRESS_STATUS,
-        formattedError,
-      );
+      this.logger.error(`Error creating response: ${formattedError.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: formattedError,
+      });
       throw err;
     }
 
@@ -644,9 +642,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
           const formattedError = formatProviderHttpError(err);
           this.logger.error(
             `Failed to upload document ${filename}: ${formattedError.message}`,
-            undefined,
-            MESSAGE_TYPES.PROGRESS_STATUS,
-            formattedError,
+            {
+              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+              data: formattedError,
+            },
           );
           throw err;
         } finally {
@@ -765,9 +764,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         unsupported.push(attachment);
       } finally {
@@ -874,9 +874,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error processing media files for follow-up round: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
       }
     }
@@ -1175,7 +1176,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     await flexibleFS.write(outputLocation, fileContent);
@@ -1530,9 +1531,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } catch (e) {
       this.logger.error(
         `Error extracting thinking blocks: ${getSdkErrorMessage(e)}`,
-        undefined,
-        undefined,
-        e,
+        { data: e },
       );
       return null;
     }

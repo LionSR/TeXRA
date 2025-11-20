@@ -325,9 +325,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error in createResponse(streaming): ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         throw err;
       }
@@ -348,9 +349,10 @@ export class ModelHandlerOpenAI extends ModelHandler<
         const formattedError = formatProviderHttpError(err);
         this.logger.error(
           `Error in createResponse: ${formattedError.message}`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
-          formattedError,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: formattedError,
+          },
         );
         throw err;
       }
@@ -520,9 +522,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       } catch (err) {
         this.logger.error(
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          undefined,
-          undefined,
-          err,
+          { data: err },
         );
       }
     }
@@ -803,7 +803,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, undefined, MESSAGE_TYPES.SCRATCHPAD);
+      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
     // Write file content to output file
@@ -1258,12 +1258,9 @@ export class ModelHandlerOpenAI extends ModelHandler<
       return countTokens(textToCount); // Assuming cl100k_base default
     } catch (err) {
       // Log the error and re-throw to indicate failure
-      this.logger.error(
-        `Error counting tokens: ${getSdkErrorMessage(err)}`,
-        undefined,
-        undefined,
-        err,
-      );
+      this.logger.error(`Error counting tokens: ${getSdkErrorMessage(err)}`, {
+        data: err,
+      });
       throw err;
     }
   }
