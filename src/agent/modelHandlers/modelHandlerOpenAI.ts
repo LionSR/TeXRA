@@ -200,6 +200,8 @@ export class ModelHandlerOpenAI<
     }
 
     if (tools && tools.length > 0) {
+      // Disable parallel tool calls for now; we dispatch sequentially.
+      (baseParams as any).parallel_tool_calls = false;
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
