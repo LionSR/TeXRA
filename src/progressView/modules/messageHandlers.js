@@ -69,7 +69,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _updatePlaceholderVisibility() {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!state.activeStream && logContent.children.length === 0) {
+    if (!logContent) {
+      return;
+    }
+
+    const hasContent = Array.from(logContent.children).some(
+      (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
+    );
+
+    if (!state.activeStream && !hasContent) {
       dom.placeholder.show();
     } else {
       dom.placeholder.hide();
