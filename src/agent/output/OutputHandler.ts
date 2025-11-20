@@ -90,6 +90,7 @@ export class OutputHandler implements IOutputHandler {
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
+  private readonly executionId?: string;
   private currentRunId: string | null;
   private runPreparation: Promise<void> | null;
 
@@ -100,6 +101,7 @@ export class OutputHandler implements IOutputHandler {
     baseFiles: FileLocation[] = [],
     logger?: AgentLogger,
     fileService?: TaskRunFileService,
+    executionId?: string | null,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
@@ -109,6 +111,7 @@ export class OutputHandler implements IOutputHandler {
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
     this.fileService = fileService || new TaskRunFileService();
+    this.executionId = executionId ?? this.fileService.getExecutionId();
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
@@ -128,6 +131,8 @@ export class OutputHandler implements IOutputHandler {
     this.openedOutputs = new Set();
     this.currentRunId = null;
     this.runPreparation = null;
+
+    this.setActiveRun(this.executionId ?? null);
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -161,16 +166,19 @@ export class OutputHandler implements IOutputHandler {
   }
 
   public setActiveRun(runId?: string | null): void {
-    const nextRunId = runId ?? null;
+    const targetExecutionId =
+      this.executionId ?? this.fileService.getExecutionId();
+    this.fileService.updateRunContext(targetExecutionId ?? undefined);
+
+    const nextRunId = runId ?? targetExecutionId ?? null;
     if (nextRunId === this.currentRunId) {
       return;
     }
 
     this.currentRunId = nextRunId;
     this.openedOutputs.clear();
-    this.fileService.updateRunContext(nextRunId ?? undefined);
 
-    if (nextRunId) {
+    if (targetExecutionId) {
       const snapshotTargets = this.collectRunSnapshotFiles();
       const supportFiles = this.collectRunSupportFiles();
       this.runPreparation = this.fileService.prepareRunWorkspace(
