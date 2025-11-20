@@ -234,9 +234,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       state.clearRunInstructions();
-      state.clearRunFiles();
-      state.clearRunMissingOutputs();
-      state.clearRunUsage();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
     } else {
@@ -255,9 +252,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.clear();
       state.taskGroups.clear();
       state.clearRunInstructions(message.stream);
-      state.clearRunFiles(message.stream);
-      state.clearRunMissingOutputs(message.stream);
-      state.clearRunUsage(message.stream);
       state.clearPendingInstruction(state.activeStream);
       const previousRunId = state.getActiveRunId(message.stream);
       state.clearActiveRun(message.stream);
@@ -470,56 +464,57 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateFiles(message) {
-    if (message.stream === state.activeStream) {
-      const targetStream = message.stream || state.activeStream || null;
-      if (!targetStream) {
-        return;
-      }
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
 
-      if (message.reset) {
-        state.clearRunFiles(targetStream);
+    if (message.reset) {
+      state.clearRunFiles(targetStream);
+      if (targetStream === state.activeStream) {
         this._refreshOutputsForActiveRun();
-        return;
       }
+      return;
+    }
 
-      const runId = message.runId;
-      if (!runId) {
-        return;
-      }
+    const runId = message.runId;
+    if (!runId) {
+      return;
+    }
 
-      const rounds = message.rounds;
-      if (!rounds || Object.keys(rounds).length === 0) {
-        state.deleteRunFiles(targetStream, runId);
-      } else {
-        state.setRunFiles(targetStream, runId, rounds);
-      }
+    const rounds = message.rounds;
+    if (!rounds || Object.keys(rounds).length === 0) {
+      state.deleteRunFiles(targetStream, runId);
+    } else {
+      state.setRunFiles(targetStream, runId, rounds);
+    }
+
+    if (targetStream === state.activeStream) {
       this._refreshOutputsForActiveRun();
     }
   }
 
   handleUpdateMissingOutputs(message) {
-    if (message.stream === state.activeStream) {
-      const targetStream = message.stream || state.activeStream || null;
-      if (!targetStream) {
-        return;
-      }
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream) {
+      return;
+    }
 
-      if (message.reset) {
-        state.clearRunMissingOutputs(targetStream);
-        return;
-      }
+    if (message.reset) {
+      state.clearRunMissingOutputs(targetStream);
+      return;
+    }
 
-      const runId = message.runId;
-      if (!runId) {
-        return;
-      }
+    const runId = message.runId;
+    if (!runId) {
+      return;
+    }
 
-      const rounds = message.rounds;
-      if (!rounds || Object.keys(rounds).length === 0) {
-        state.deleteRunMissingOutputs(targetStream, runId);
-      } else {
-        state.setRunMissingOutputs(targetStream, runId, rounds);
-      }
+    const rounds = message.rounds;
+    if (!rounds || Object.keys(rounds).length === 0) {
+      state.deleteRunMissingOutputs(targetStream, runId);
+    } else {
+      state.setRunMissingOutputs(targetStream, runId, rounds);
     }
   }
 

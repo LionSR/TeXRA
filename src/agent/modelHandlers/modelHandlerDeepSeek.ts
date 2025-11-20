@@ -21,7 +21,10 @@ import {
 import type { StreamingAggregator } from './modelHandlerOpenAI';
 
 // Type imports
-import type { CreateResponseOptions } from './types/IModelHandler';
+import type {
+  CreateResponseOptions,
+  DeepSeekToolCall,
+} from './types/IModelHandler';
 import type {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
@@ -68,7 +71,7 @@ import type {
 /**
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
-export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
+export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   protected createStreamingAggregator(): StreamingAggregator | null {
     return new DeepSeekStreamAggregator();
   }
@@ -136,28 +139,74 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(responseObject: any): string | null {
+  protected override parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'DeepSeek tool call arguments could not be parsed as JSON; using raw string.',
+        undefined,
+        undefined,
+        error,
+      );
+      return raw;
+    }
+  }
+
+  extractToolUse(responseObject: ChatCompletion): DeepSeekToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
+      return toolCalls
+        .filter(
+          (
+            call,
+          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
+            Boolean(
+              call &&
+                typeof call === 'object' &&
+                (call as ChatCompletionMessageFunctionToolCall).function
+                  ?.name &&
+                call.id,
+            ),
+        )
+        .map((call) => ({
+          provider: 'deepseek',
+          callId: call.id,
+          name: call.function!.name,
+          input: this.parseArguments(call.function!.arguments),
+          raw: call,
+        }));
     }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
+
+    const func = responseObject?.choices?.[0]?.message?.function_call as
+      | ChatCompletionMessage.FunctionCall
+      | undefined;
+    if (func && func.name) {
+      return [
+        {
+          provider: 'deepseek',
+          callId: func.name,
+          name: func.name,
+          input: this.parseArguments(func.arguments),
+          raw: func,
+        },
+      ];
     }
-    return null;
+    return [];
   }
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: DeepSeekToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(id, name, call);
+    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -174,7 +223,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? id,
+      tool_call_id: toolCall.id ?? call.callId,
       content: JSON.stringify(sanitizedResult),
     };
     return [callMsg, resultMsg];
@@ -184,8 +233,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for Deepseek models
    */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const { messages } = options;
     // Preprocess messages to merge consecutive messages and convert content to strings
     const processedMessages = this.prepareNormalizedMessages(

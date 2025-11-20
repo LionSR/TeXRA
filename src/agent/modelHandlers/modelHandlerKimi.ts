@@ -17,7 +17,10 @@ import type { ToolDefinition } from '@model';
 import { K_SLICE } from '@utils/config';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 
 // Internal imports
 
@@ -96,8 +99,8 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
    * Override createResponse to preprocess messages for Kimi models
    */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const { client, messages, temperature, endTag, signal } = options;
     // Preprocess messages for Kimi compatibility
     const processedMessages = this.prepareNormalizedMessages(
