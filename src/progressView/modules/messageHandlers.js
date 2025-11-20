@@ -67,21 +67,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Toggle the placeholder based on active stream and log content
    */
-  _updatePlaceholderVisibility() {
+  _updatePlaceholderVisibility(hasStreamsOverride) {
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     if (!logContent) {
       return;
     }
 
+    const streamTabs = document.getElementById(ELEMENT_IDS.STREAM_TABS);
+    const hasStreams =
+      typeof hasStreamsOverride === 'boolean'
+        ? hasStreamsOverride
+        : Boolean(streamTabs && streamTabs.children.length > 0);
     const hasContent = Array.from(logContent.children).some(
       (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
     );
 
-    if (!hasContent) {
+    if (!hasStreams && !hasContent) {
       dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
+      return;
     }
+
+    dom.placeholder.hide();
   }
 
   _handleRunSelectionChange(runId) {
@@ -207,7 +213,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       });
     }
 
-    this._updatePlaceholderVisibility();
+    const hasStreams = streams.length > 0;
+    this._updatePlaceholderVisibility(hasStreams);
 
     const activeStreamInfo = streams.find(
       (s) => s.name === message.activeStream,
@@ -367,6 +374,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       scrollToBottom(logContent);
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleUpdateLog(message) {
@@ -416,6 +425,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       scrollToBottom(logContent);
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleUpdateTaskGroup(message) {
@@ -639,6 +650,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         }
       }
 
+      this._updatePlaceholderVisibility();
       return;
     }
 
