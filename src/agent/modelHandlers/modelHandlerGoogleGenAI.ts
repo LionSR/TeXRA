@@ -565,24 +565,35 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
 
-        let finalOutputText = aggregatedText;
-        if (!finalOutputText) {
-          const partsText = aggregatedParts
-            .filter(isTextPart)
-            .map((part) => part.text)
-            .join('');
-          if (partsText) {
-            finalOutputText = partsText;
-          } else if (baseResponse.text) {
-            finalOutputText = baseResponse.text;
-            this.logger.warn(
-              'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
-            );
-          } else {
-            finalOutputText = '';
-          }
+        const nonThinkingText = aggregatedParts
+          .filter((part): part is Part & { text: string } => isTextPart(part))
+          .filter((part) => !part.thought)
+          .map((part) => part.text)
+          .join('');
+
+        let finalOutputText = aggregatedText || nonThinkingText;
+        if (!finalOutputText && baseResponse.text) {
+          finalOutputText = baseResponse.text;
+          this.logger.warn(
+            'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
+          );
         }
         output?.finalize(finalOutputText);
+
+        // Ensure text field excludes thinking content
+        const candidateContent = baseResponse.candidates?.[0]?.content;
+        if (candidateContent?.parts) {
+          const filteredParts = candidateContent.parts.filter(
+            (part) => !(part as any).thought,
+          );
+          const joined = filteredParts
+            .filter(isTextPart)
+            .map((p) => p.text)
+            .join('');
+          // Mutate defensively on the candidate object; the SDK types mark text as readonly
+          (baseResponse as any).text = joined || finalOutputText;
+          (candidateContent as any).parts = filteredParts;
+        }
 
         return baseResponse;
       }
@@ -755,16 +766,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const candidate = responseObject.candidates[0];
 
-    const rawResponseText = responseObject.text;
-    // if (rawResponseText === undefined) {
-    //   this.logger.warn(
-    //     'Candidate content or parts missing in response object.',
-    //   );
-    // }
+    const parts = candidate?.content?.parts;
+    const textParts = Array.isArray(parts)
+      ? parts.filter(
+          (part): part is Part & { text: string } =>
+            isTextPart(part) && !part.thought,
+        )
+      : [];
+    const rawResponseText =
+      textParts.length > 0
+        ? textParts
+            .map((p) => p.text)
+            .join('')
+            .trim()
+        : (responseObject.text ?? '').trim();
+
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
-    let responseText = replacementEngine.applyAll(
-      (rawResponseText ?? '').trim(),
-    );
+    let responseText = replacementEngine.applyAll(rawResponseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
