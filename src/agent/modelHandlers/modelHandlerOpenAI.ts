@@ -1170,6 +1170,24 @@ export class ModelHandlerOpenAI<
     };
   }
 
+  private parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'OpenAI tool call arguments could not be parsed as JSON; using raw string.',
+        undefined,
+        undefined,
+        error,
+      );
+      return raw;
+    }
+  }
+
   extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
@@ -1190,7 +1208,7 @@ export class ModelHandlerOpenAI<
           provider: 'openai',
           callId: call.id,
           name: call.function!.name,
-          input: call.function!.arguments,
+          input: this.parseArguments(call.function!.arguments),
           raw: call,
         })) as TCall[];
     }

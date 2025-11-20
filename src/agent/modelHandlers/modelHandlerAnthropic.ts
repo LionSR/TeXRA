@@ -1576,33 +1576,24 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [];
     }
 
-    const toolUseBlock = content.find(
+    const toolUseBlocks = content.filter(
       (block): block is ToolUseBlock =>
         (block as { type?: string }).type === 'tool_use',
     );
 
-    if (!toolUseBlock) {
+    if (toolUseBlocks.length === 0) {
       return [];
     }
 
-    if (!toolUseBlock.id || !toolUseBlock.name) {
-      this.logger.warn(
-        'Anthropic SDK returned malformed tool_use block',
-        undefined,
-        undefined,
-        toolUseBlock,
-      );
-      return [];
-    }
-    return [
-      {
+    return toolUseBlocks
+      .filter((block) => Boolean(block.id && block.name))
+      .map((toolUseBlock) => ({
         provider: 'anthropic',
-        callId: toolUseBlock.id,
-        name: toolUseBlock.name,
+        callId: toolUseBlock.id!,
+        name: toolUseBlock.name!,
         input: toolUseBlock.input,
         raw: toolUseBlock,
-      },
-    ];
+      }));
   }
 
   async createToolUseFollowUpMessages(
