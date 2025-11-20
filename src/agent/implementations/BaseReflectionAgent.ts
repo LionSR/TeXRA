@@ -521,13 +521,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
   }
 
   private shouldRunAnotherRound(endTurn: boolean): boolean {
-    const nextRound = this.currentRoundIndex + 1;
-    const hasRemainingRounds = nextRound < this.getTotalRounds();
-    if (endTurn) {
-      return false;
-    }
-
-    return hasRemainingRounds && !this.isInterruptionRequested();
+    return !endTurn;
   }
 
   private createResponseCycleOptions(): ResponseCycleOptions<C> {
