@@ -128,7 +128,7 @@ export class FileManager {
         'texra.refreshInputFiles',
       )) ?? [];
     await this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
@@ -147,7 +147,7 @@ export class FileManager {
       }
     })();
     await this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
@@ -163,14 +163,14 @@ export class FileManager {
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
     await this.postFileUpdate('Edited', allEditedFiles, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
     await this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
       additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
