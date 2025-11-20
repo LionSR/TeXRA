@@ -181,8 +181,8 @@ export class AgentLogger {
    */
   debug(
     message: string,
-    groupId?: string,
-    messageType?: MessageType,
+    groupId: string | undefined,
+    messageType: MessageType | undefined,
     data?: unknown,
   ): void;
 
@@ -233,8 +233,8 @@ export class AgentLogger {
    */
   info(
     message: string,
-    groupId?: string,
-    messageType?: MessageType,
+    groupId: string | undefined,
+    messageType: MessageType | undefined,
     data?: unknown,
   ): void;
 
@@ -285,8 +285,8 @@ export class AgentLogger {
    */
   warn(
     message: string,
-    groupId?: string,
-    messageType?: MessageType,
+    groupId: string | undefined,
+    messageType: MessageType | undefined,
     data?: unknown,
   ): void;
 
@@ -337,8 +337,8 @@ export class AgentLogger {
    */
   error(
     message: string,
-    groupId?: string,
-    messageType?: MessageType,
+    groupId: string | undefined,
+    messageType: MessageType | undefined,
     data?: unknown,
   ): void;
 
