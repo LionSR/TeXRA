@@ -67,7 +67,7 @@ export class LatexMediaManager {
         const message = toErrorMessage(error);
         this.logger.debug(
           `Unable to mirror figure dependency ${targetLocation.absolutePath}: ${message}`,
-          { groupId },
+          { groupId: groupId ?? undefined },
         );
       }
     });

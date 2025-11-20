@@ -1,4 +1,5 @@
 // Third-party imports
+import yaml from 'yaml';
 import markdownItKatex from '@vscode/markdown-it-katex';
 /**
  * Formatters for log entries in the progress view.
@@ -16,7 +17,6 @@ import markdownItKatex from '@vscode/markdown-it-katex';
 // Third-party imports
 import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
-import { stringify as yamlStringify } from 'yaml';
 
 // Local imports - progress view
 import { STATUS, GROUP_DOM_IDS } from './constants.js';
@@ -60,62 +60,172 @@ const TIME_FORMAT_OPTIONS = {
   hour12: false,
 };
 
-let cachedTimeFormatter;
-let cachedDateTimeFormatter;
+const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, TIME_FORMAT_OPTIONS);
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(
+  undefined,
+  DATETIME_FORMAT_OPTIONS,
+);
 
-const getTimeFormatter = () => {
-  if (cachedTimeFormatter === undefined) {
-    try {
-      cachedTimeFormatter = new Intl.DateTimeFormat(
-        undefined,
-        TIME_FORMAT_OPTIONS,
-      );
-    } catch (error) {
-      cachedTimeFormatter = null;
-    }
+let markdownRenderer;
+
+const stringifyForDisplay = (value) => {
+  if (value === undefined || value === null) {
+    return '';
   }
-  return cachedTimeFormatter;
-};
 
-const getDateTimeFormatter = () => {
-  if (cachedDateTimeFormatter === undefined) {
-    try {
-      cachedDateTimeFormatter = new Intl.DateTimeFormat(
-        undefined,
-        DATETIME_FORMAT_OPTIONS,
-      );
-    } catch (error) {
-      cachedDateTimeFormatter = null;
-    }
-  }
-  return cachedDateTimeFormatter;
-};
-
-const toYamlString = (value) => {
   if (typeof value === 'string') {
     return value;
   }
 
   try {
-    const yamlValue = yamlStringify(value);
-    return typeof yamlValue === 'string'
-      ? yamlValue.replace(/\n$/, '')
-      : String(yamlValue);
+    const yamlString = yaml.stringify(value);
+    return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
   } catch (error) {
     return String(value);
   }
 };
 
-const formatIsoDateTimeFallback = (date) => {
-  const isoTimestamp = date.toISOString();
-  const [datePart, timePart = ''] = isoTimestamp.split('T');
-  const trimmedTime = timePart.split('.')[0] || timePart;
-  return `${datePart} ${trimmedTime}`.trim();
+const getMarkdownRenderer = () => {
+  if (!markdownRenderer) {
+    markdownRenderer = new MarkdownIt({
+      breaks: false,
+      linkify: true,
+      html: false,
+    })
+      .use(markdownItKatex, {
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: katexMacros,
+      })
+      .use(highlight);
+  }
+
+  return markdownRenderer;
 };
 
-const formatIsoTimeFallback = (date) => {
-  const isoTimestamp = date.toISOString();
-  return isoTimestamp.split('T')[1]?.split('.')[0] ?? isoTimestamp;
+const tryParseJson = (text) => {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+};
+
+const normalizeStructuredContent = (text, data) => {
+  if (data !== undefined) {
+    return {
+      decodedText: '',
+      structured: data,
+    };
+  }
+
+  const decodedText = typeof text === 'string' ? decodeHtml(text) : '';
+  return { decodedText, structured: tryParseJson(decodedText) };
+};
+
+const normalizeFileListEntries = (structured) => {
+  if (!Array.isArray(structured)) {
+    return null;
+  }
+
+  return structured.map((file) => {
+    const rawPath = String(file?.path ?? '');
+    const source = file?.source || 'unknown';
+    const sourceDisplay =
+      typeof file?.sourceDisplay === 'string' ? file.sourceDisplay : source;
+
+    return {
+      filePath: rawPath,
+      fileName: getBasename(rawPath),
+      ok: Boolean(file?.ok),
+      source,
+      sourceDisplay,
+      internal: Boolean(file?.internal),
+      varName: typeof file?.varName === 'string' ? file.varName : '',
+    };
+  });
+};
+
+const normalizeMissingOutputsPayload = (structured) => {
+  if (!structured) return null;
+
+  return {
+    missing: Array.isArray(structured.missing) ? structured.missing : [],
+    xmlFile:
+      typeof structured.xmlFile === 'string' && structured.xmlFile
+        ? structured.xmlFile
+        : null,
+    documentTag:
+      typeof structured.documentTag === 'string' && structured.documentTag
+        ? structured.documentTag
+        : null,
+  };
+};
+
+const normalizeLatexdiffEntries = (structured) => {
+  if (!Array.isArray(structured)) return null;
+  return structured;
+};
+
+const normalizeToolUseLog = (structured) => {
+  if (
+    !structured ||
+    typeof structured !== 'object' ||
+    Array.isArray(structured)
+  ) {
+    return null;
+  }
+
+  const parsed = structured;
+  const outputDetails =
+    parsed.output && typeof parsed.output === 'object' && parsed.output !== null
+      ? parsed.output
+      : {};
+
+  const summaryText =
+    (typeof parsed.summary === 'string' && parsed.summary.trim()) ||
+    (typeof outputDetails.summary === 'string' &&
+      outputDetails.summary.trim()) ||
+    '';
+
+  const errorText =
+    (typeof parsed.error === 'string' && parsed.error.trim()) ||
+    (typeof outputDetails.error === 'string' && outputDetails.error.trim()) ||
+    '';
+
+  const outputCandidate =
+    parsed.output !== undefined ? parsed.output : outputDetails.output;
+  const outputText =
+    typeof outputCandidate === 'string'
+      ? outputCandidate
+      : outputCandidate !== undefined
+        ? stringifyForDisplay(outputCandidate)
+        : '';
+
+  const toolName =
+    typeof parsed.toolName === 'string'
+      ? parsed.toolName.trim()
+      : typeof parsed.tool === 'string'
+        ? parsed.tool.trim()
+        : '';
+
+  return {
+    parsed,
+    toolName,
+    summaryText,
+    errorText,
+    outputText,
+    diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
+    input: parsed.input,
+    isError: Boolean(
+      parsed.isError || outputDetails.isError || errorText.length > 0,
+    ),
+    headerSummary: summaryText || errorText,
+  };
 };
 
 /**
@@ -125,15 +235,7 @@ export const TaskGroupLevel = {
   ROOT: {
     name: 'root',
     formatTime: (date) => {
-      const formatter = getDateTimeFormatter();
-      if (formatter) {
-        try {
-          return formatter.format(date);
-        } catch (error) {
-          // Fall through to ISO fallback
-        }
-      }
-      return formatIsoDateTimeFallback(date);
+      return DATE_TIME_FORMATTER.format(date);
     },
     showTitle: false,
     headerOrder: 'time-first', // time → bullet → usage
@@ -142,15 +244,7 @@ export const TaskGroupLevel = {
   NESTED: {
     name: 'nested',
     formatTime: (date) => {
-      const formatter = getTimeFormatter();
-      if (formatter) {
-        try {
-          return formatter.format(date);
-        } catch (error) {
-          // Fall through to ISO fallback
-        }
-      }
-      return formatIsoTimeFallback(date);
+      return TIME_FORMATTER.format(date);
     },
     showTitle: true,
     headerOrder: 'usage-first', // usage → bullet → time
@@ -203,17 +297,7 @@ export class LogEntryFormatter {
   }
 
   _initializeMarkdown() {
-    this.md = new MarkdownIt({
-      breaks: false,
-      linkify: true,
-      html: false,
-    })
-      .use(markdownItKatex, {
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: katexMacros,
-      })
-      .use(highlight);
+    this.md = getMarkdownRenderer();
   }
 
   _buildFormatterMap() {
@@ -222,7 +306,7 @@ export class LogEntryFormatter {
         this._safeFormat(
           () =>
             this._formatBannerContent(
-              message.text,
+              message.normalizedPayload,
               'Thinking',
               message.id,
               message.groupId,
@@ -234,7 +318,7 @@ export class LogEntryFormatter {
         this._safeFormat(
           () =>
             this._formatBannerContent(
-              message.text,
+              message.normalizedPayload,
               'Scratchpad',
               message.id,
               message.groupId,
@@ -246,8 +330,7 @@ export class LogEntryFormatter {
         this._safeFormat(
           () =>
             this._formatToolUse(
-              message.text,
-              message.data,
+              message.normalizedPayload,
               message.id,
               message.groupId,
               message.timestamp,
@@ -262,37 +345,37 @@ export class LogEntryFormatter {
               groupId: message.groupId,
               timestamp: message.timestamp,
               verbose: message.verbose,
-              content: message.text,
+              content: message.normalizedPayload,
               level: message.level,
             }),
           'Assistant',
         ),
       fileList: (message) =>
         this._safeFormat(
-          () => this._formatFileList(message.text, message.data, message.id),
+          () => this._formatFileList(message.normalizedPayload, message.id),
           'file list',
         ),
       missingOutputs: (message) =>
         this._safeFormat(
           () =>
-            this._formatMissingOutputs(message.text, message.data, message.id),
+            this._formatMissingOutputs(message.normalizedPayload, message.id),
           'missing outputs',
         ),
       latexdiff: (message) =>
         this._safeFormat(
-          () => this._formatLatexdiff(message.text, message.data, message.id),
+          () => this._formatLatexdiff(message.normalizedPayload, message.id),
           'latexdiff',
         ),
       statistics: (message) =>
         this._safeFormat(
-          () => this._formatStatistics(message.text, message.data, message.id),
+          () => this._formatStatistics(message.normalizedPayload, message.id),
           'statistics',
         ),
       userMessage: (message) =>
         this._safeFormat(
           () =>
             this._formatUserMessage(
-              message.text,
+              message.normalizedPayload,
               message.id,
               message.timestamp,
             ),
@@ -302,7 +385,7 @@ export class LogEntryFormatter {
         this._safeFormat(
           () =>
             this._formatProgressStatus(
-              message.text,
+              message.normalizedPayload,
               message.id,
               message.timestamp,
             ),
@@ -358,30 +441,10 @@ export class LogEntryFormatter {
   _formatTimestamp(date) {
     const isoTimestamp = date.toISOString();
 
-    let timeDisplay = formatIsoTimeFallback(date);
-    const timeFormatter = getTimeFormatter();
-    if (timeFormatter) {
-      try {
-        timeDisplay = timeFormatter.format(date);
-      } catch (error) {
-        // Fall through to ISO fallback
-      }
-    }
-
-    let tooltipTimestamp = formatIsoDateTimeFallback(date);
-    const dateTimeFormatter = getDateTimeFormatter();
-    if (dateTimeFormatter) {
-      try {
-        tooltipTimestamp = dateTimeFormatter.format(date);
-      } catch (error) {
-        // Fall through to ISO fallback
-      }
-    }
-
     return {
       fullTimestamp: isoTimestamp,
-      timeDisplay,
-      tooltipTimestamp,
+      timeDisplay: TIME_FORMATTER.format(date),
+      tooltipTimestamp: DATE_TIME_FORMATTER.format(date),
     };
   }
 
@@ -391,8 +454,7 @@ export class LogEntryFormatter {
    * @param {boolean} decode - Whether to decode HTML entities (default: true)
    * @returns {string} Processed markdown HTML
    */
-  _processMarkdownContent(content, decode = true) {
-    // Unescape HTML entities if requested
+  _processMarkdownContent(content, decode = false) {
     if (decode) {
       content = decodeHtml(content);
     }
@@ -402,8 +464,10 @@ export class LogEntryFormatter {
     content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
     content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
+    const renderer = this.md || getMarkdownRenderer();
+
     // Process content as markdown
-    let parsedMarkdown = this.md.render(content);
+    let parsedMarkdown = renderer.render(content);
 
     // Post-process to restore and style LaTeX references
     parsedMarkdown = this._restoreLatexReferences(parsedMarkdown);
@@ -468,8 +532,16 @@ export class LogEntryFormatter {
    * whitespace formatting issue.
    */
   format(logMessage, options = {}) {
+    const messageWithPayload = {
+      ...logMessage,
+      normalizedPayload: normalizeStructuredContent(
+        logMessage.text,
+        logMessage.data,
+      ),
+    };
+
     const { id, text, level, timestamp, groupId, messageType, verbose } =
-      logMessage;
+      messageWithPayload;
 
     const emoji = EMOJI_BY_LEVEL[level] || '•';
     const date = new Date(timestamp);
@@ -479,7 +551,7 @@ export class LogEntryFormatter {
     const formatter = messageType ? this._formatters[messageType] : null;
 
     if (typeof formatter === 'function') {
-      const result = formatter(logMessage);
+      const result = formatter(messageWithPayload);
       if (result) {
         if (result instanceof HTMLElement) {
           const openOverride = this._resolveOpenState(messageType, options);
@@ -520,14 +592,19 @@ export class LogEntryFormatter {
     return wrapper.firstElementChild;
   }
 
-  _formatBannerContent(content, contentType, logId, groupId, timestamp) {
-    if (!content || !content.trim()) return null;
-    const decodedContent = decodeHtml(content);
-    if (!decodedContent.trim()) {
-      return null;
-    }
+  _formatBannerContent(
+    normalizedPayload,
+    contentType,
+    logId,
+    groupId,
+    timestamp,
+  ) {
+    const decodedContent = normalizedPayload?.decodedText || '';
+    const trimmedContent = decodedContent.trim();
 
-    const parsedMarkdown = this._processMarkdownContent(decodedContent, false);
+    if (!trimmedContent) return null;
+
+    const parsedMarkdown = this._processMarkdownContent(trimmedContent, false);
     const isThinking = contentType.includes('Thinking');
     const bannerEntry = this._createBannerEntry({
       logId,
@@ -546,13 +623,13 @@ export class LogEntryFormatter {
       return bannerEntry ? bannerEntry.element : null;
     }
 
-    bannerEntry.contentElem.dataset.rawContent = decodedContent;
+    bannerEntry.contentElem.dataset.rawContent = trimmedContent;
     bannerEntry.contentElem.innerHTML = parsedMarkdown;
 
     return bannerEntry.element;
   }
 
-  _formatToolUse(content, structuredData, logId, groupId, timestamp) {
+  _formatToolUse(normalizedPayload, logId, groupId, timestamp) {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
 
@@ -573,124 +650,41 @@ export class LogEntryFormatter {
       return element;
     }
 
-    const MAX_PREVIEW_CHARS = 240;
-    const makePreview = (value) => {
-      if (!value) return '';
-      const normalized = value.replace(/\s+/g, ' ').trim();
-      if (normalized.length <= MAX_PREVIEW_CHARS) {
-        return normalized;
-      }
-      return `${normalized.slice(0, MAX_PREVIEW_CHARS - 1)}…`;
-    };
+    const { structured } = normalizedPayload || {};
+    const normalizedToolLog = normalizeToolUseLog(structured);
 
-    const rawContent =
-      typeof content === 'string' && content.length > 0
-        ? decodeHtml(content)
-        : '';
-    const hasStructuredData =
-      structuredData &&
-      typeof structuredData === 'object' &&
-      !Array.isArray(structuredData);
-    let parsed = hasStructuredData ? structuredData : null;
-
-    if (!parsed && rawContent) {
-      try {
-        parsed = JSON.parse(rawContent);
-      } catch (error) {
-        parsed = null;
-      }
+    if (!normalizedToolLog) {
+      return null;
     }
 
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      if (headerLabel) headerLabel.textContent = 'Tool Use (raw entry)';
-      if (iconElem) iconElem.className = 'codicon codicon-wrench';
-      element.classList.remove('tool-use-error');
+    const {
+      parsed,
+      toolName,
+      summaryText,
+      errorText,
+      outputText,
+      diagnostics,
+      input,
+    } = normalizedToolLog;
 
-      let fallbackContent = rawContent;
-      if (!fallbackContent && structuredData !== undefined) {
-        fallbackContent = toYamlString(structuredData);
-      }
-
-      contentElem.innerHTML = `
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Raw log:</span>
-            <pre>${encodeHtml(fallbackContent || '')}</pre>
-          </div>
-        </div>
-      `;
-
-      return element;
-    }
-
-    const toolName =
-      typeof parsed.tool === 'string'
-        ? parsed.tool.trim()
-        : typeof parsed.name === 'string'
-          ? parsed.name.trim()
-          : '';
-
-    const outputCandidate =
-      parsed.output &&
-      typeof parsed.output === 'object' &&
-      !Array.isArray(parsed.output)
-        ? parsed.output
-        : parsed.result &&
-            typeof parsed.result === 'object' &&
-            !Array.isArray(parsed.result)
-          ? parsed.result
-          : {};
-
-    const summaryText =
-      typeof outputCandidate.summary === 'string' &&
-      outputCandidate.summary.trim()
-        ? outputCandidate.summary.trim()
-        : typeof parsed.summary === 'string' && parsed.summary.trim()
-          ? parsed.summary.trim()
-          : '';
-
-    const errorText =
-      typeof outputCandidate.error === 'string'
-        ? outputCandidate.error
-        : typeof parsed.error === 'string'
-          ? parsed.error
-          : '';
-
-    let outputText = '';
-    if (typeof outputCandidate.output === 'string') {
-      outputText = outputCandidate.output;
-    } else if (typeof parsed.output === 'string') {
-      outputText = parsed.output;
-    }
-
-    const isError = Boolean(
-      (typeof outputCandidate.isError === 'boolean' &&
-        outputCandidate.isError) ||
-        (typeof parsed.isError === 'boolean' && parsed.isError) ||
-        (typeof errorText === 'string' && errorText.trim().length > 0),
-    );
-
-    const headerSummary =
-      summaryText || makePreview(errorText || outputText || '');
-
-    const titlePrefix = isError ? 'Tool Error' : 'Tool Use';
+    const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
     const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
-    const titleText = headerSummary
-      ? `${titleBase} — ${headerSummary}`
+    const titleText = normalizedToolLog.headerSummary
+      ? `${titleBase} — ${normalizedToolLog.headerSummary}`
       : titleBase;
 
     if (headerLabel) headerLabel.textContent = titleText;
     if (iconElem) {
-      iconElem.className = isError
+      iconElem.className = normalizedToolLog.isError
         ? 'codicon codicon-error'
         : 'codicon codicon-wrench';
     }
-    element.classList.toggle('tool-use-error', isError);
+    element.classList.toggle('tool-use-error', normalizedToolLog.isError);
 
     const sections = [];
 
-    if (parsed.input !== undefined) {
-      const inputValue = toYamlString(parsed.input);
+    if (input !== undefined) {
+      const inputValue = stringifyForDisplay(input);
       sections.push(`
         <div class="tool-use-section">
           <div class="tool-use-subsection">
@@ -714,7 +708,9 @@ export class LogEntryFormatter {
 
     if (outputText) {
       const encodedOutput = encodeHtml(outputText);
-      if (!summaryText && outputText.length > MAX_PREVIEW_CHARS) {
+      const MAX_PREVIEW_CHARS = 240;
+      const isTruncated = outputText.length > MAX_PREVIEW_CHARS;
+      if (!summaryText && isTruncated) {
         const preview = encodeHtml(
           `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
         );
@@ -722,9 +718,11 @@ export class LogEntryFormatter {
           <div class="tool-use-section">
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Output:</span>
-              <pre class="tool-output-preview">${preview}</pre>
               <details class="tool-output-details">
-                <summary class="details-summary">Show full output</summary>
+                <summary class="details-summary">
+                  <pre class="tool-output-preview">${preview}</pre>
+                  <span class="details-summary-label">Show full output</span>
+                </summary>
                 <pre class="tool-output-full">${encodedOutput}</pre>
               </details>
             </div>
@@ -742,8 +740,8 @@ export class LogEntryFormatter {
       }
     }
 
-    if (outputCandidate && outputCandidate.diagnostics !== undefined) {
-      const diagnosticsText = toYamlString(outputCandidate.diagnostics).trim();
+    if (diagnostics !== undefined) {
+      const diagnosticsText = stringifyForDisplay(diagnostics).trim();
       const MAX_DIAGNOSTICS_LENGTH = 600;
 
       if (diagnosticsText && diagnosticsText.length <= MAX_DIAGNOSTICS_LENGTH) {
@@ -767,34 +765,11 @@ export class LogEntryFormatter {
       }
     }
 
-    if (outputCandidate && typeof outputCandidate.system === 'string') {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">System:</span>
-            <pre>${encodeHtml(outputCandidate.system)}</pre>
-          </div>
-        </div>
-      `);
-    }
-
-    if (outputCandidate && typeof outputCandidate.base64Image === 'string') {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Image:</span>
-            <pre>(base64 image omitted)</pre>
-          </div>
-        </div>
-      `);
-    }
-
-    if (sections.length === 0) {
-      const fallbackYaml = toYamlString(parsed) || rawContent;
-      contentElem.innerHTML = `<pre>${encodeHtml(fallbackYaml || '')}</pre>`;
-    } else {
-      contentElem.innerHTML = sections.join('<hr class="tool-use-separator">');
-    }
+    const fallbackYaml = stringifyForDisplay(parsed);
+    contentElem.innerHTML =
+      sections.length === 0
+        ? `<pre>${encodeHtml(fallbackYaml || '')}</pre>`
+        : sections.join('<hr class="tool-use-separator">');
 
     return element;
   }
@@ -810,8 +785,9 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const decodedContent = decodeHtml(content);
-    if (!decodedContent.trim()) {
+    const decodedContent = content.decodedText || '';
+    const trimmedContent = decodedContent.trim();
+    if (!trimmedContent) {
       return null;
     }
 
@@ -849,9 +825,9 @@ export class LogEntryFormatter {
 
     if (contentElem) {
       contentElem.classList.add(`message-${level}`);
-      contentElem.dataset.rawContent = decodedContent;
+      contentElem.dataset.rawContent = trimmedContent;
       contentElem.innerHTML = this._processMarkdownContent(
-        decodedContent,
+        trimmedContent,
         false,
       );
     }
@@ -919,7 +895,7 @@ export class LogEntryFormatter {
     };
   }
 
-  _formatFileList(content, data, logId) {
+  _formatFileList(normalizedPayload, logId) {
     const element = createFromTemplate('fileListDetailsTemplate');
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
@@ -927,49 +903,53 @@ export class LogEntryFormatter {
     const toggleIcon = element.querySelector('.toggle-icon');
     if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-    const parsed = data ?? JSON.parse(decodeHtml(content));
+    let parsed =
+      normalizeFileListEntries(normalizedPayload?.structured) || undefined;
 
-    if (!Array.isArray(parsed)) {
-      console.warn('Missing structured data for file list log entry');
-      return null;
+    if (!parsed && normalizedPayload?.decodedText) {
+      try {
+        const parsedJson = JSON.parse(normalizedPayload.decodedText);
+        parsed = normalizeFileListEntries(parsedJson) || undefined;
+      } catch {
+        // Fall through to raw display
+      }
     }
 
-    // Group files by source for better organization
+    if (!parsed) {
+      const rawContent = normalizedPayload?.decodedText ?? '';
+      if (summaryElem) summaryElem.textContent = 'Files (raw)';
+      if (contentElem) {
+        contentElem.innerHTML = `<pre>${encodeHtml(rawContent)}</pre>`;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+      return element;
+    }
+
     const filesBySource = {};
-    parsed.forEach((f) => {
-      const source = f.source || 'unknown';
+    parsed.forEach((file) => {
+      const source = file.source || 'unknown';
       if (!filesBySource[source]) {
         filesBySource[source] = [];
       }
-      filesBySource[source].push(f);
+      filesBySource[source].push(file);
     });
 
     let items = '';
     Object.entries(filesBySource).forEach(([source, files]) => {
       files.forEach((f) => {
         const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-        const filePath = String(f.path ?? '');
-        const escaped = encodeHtml(filePath);
+        const escaped = encodeHtml(f.filePath);
+        const fileNameEscaped = encodeHtml(f.fileName);
 
-        // Extract just the filename for display
-        const fileName = getBasename(filePath);
-        const fileNameEscaped = encodeHtml(fileName);
-
-        // Build metadata string
         let metadata = '';
         if (f.varName) {
           metadata += `<span class="file-var">[${f.varName}]</span>`;
         }
         if (source && source !== 'unknown') {
-          // Simplify source display
-          const sourceDisplay = source
-            .replace('requiredFiles', 'required')
-            .replace('Pattern ', '')
-            .replace(/'/g, '');
           if (f.internal) {
-            metadata += ` <span class="file-source">(${sourceDisplay}, internal)</span>`;
+            metadata += ` <span class="file-source">(${f.sourceDisplay}, internal)</span>`;
           } else {
-            metadata += ` <span class="file-source">(${sourceDisplay})</span>`;
+            metadata += ` <span class="file-source">(${f.sourceDisplay})</span>`;
           }
         }
 
@@ -996,7 +976,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatMissingOutputs(content, data, logId) {
+  _formatMissingOutputs(normalizedPayload, logId) {
     const element = createFromTemplate('missingOutputsDetailsTemplate');
     if (!element) return null;
     const contentElem = element.querySelector('.file-list-content');
@@ -1004,27 +984,18 @@ export class LogEntryFormatter {
     const toggleIcon = element.querySelector('.toggle-icon');
     if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-    const parsed = data ?? JSON.parse(decodeHtml(content));
+    const parsed = normalizeMissingOutputsPayload(
+      normalizedPayload?.structured,
+    );
 
-    // Handle both old format (array) and new format (object with missing, xmlFile, documentTag)
-    let missingFiles = [];
-    let xmlFile = null;
-    let documentTag = null;
-
-    if (Array.isArray(parsed)) {
-      // Old format: just an array of missing files
-      missingFiles = parsed;
-    } else if (parsed && typeof parsed === 'object') {
-      // New format: object with missing files, XML file, and optional document tag
-      missingFiles = parsed.missing || [];
-      xmlFile = parsed.xmlFile;
-      documentTag = parsed.documentTag;
-    } else {
+    if (!parsed) {
       console.warn('Missing structured data for missing outputs log entry');
       return null;
     }
 
-    const items = missingFiles
+    const { missing, xmlFile, documentTag } = parsed;
+
+    const items = missing
       .map((f) => {
         const filePath = String(f);
         const escaped = encodeHtml(filePath);
@@ -1034,7 +1005,6 @@ export class LogEntryFormatter {
       })
       .join('');
 
-    // Add XML file link if available
     let xmlLink = '';
     if (xmlFile) {
       const xmlEscaped = encodeHtml(xmlFile);
@@ -1051,7 +1021,7 @@ export class LogEntryFormatter {
         </div>`;
     }
 
-    if (missingFiles.length === 0 && xmlFile) {
+    if (missing.length === 0 && xmlFile) {
       const wrapper = document.createElement('div');
       wrapper.innerHTML = xmlLink;
       const element = wrapper.firstElementChild;
@@ -1062,7 +1032,7 @@ export class LogEntryFormatter {
       return element;
     }
 
-    const summary = `Missing outputs (${missingFiles.length})`;
+    const summary = `Missing outputs (${missing.length})`;
 
     if (summaryElem) summaryElem.textContent = summary;
     if (contentElem) {
@@ -1083,7 +1053,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatLatexdiff(content, data, logId) {
+  _formatLatexdiff(normalizedPayload, logId) {
     const element = createFromTemplate('latexdiffDetailsTemplate');
     if (!element) return null;
     const contentElem = element.querySelector('.latexdiff-content');
@@ -1091,14 +1061,9 @@ export class LogEntryFormatter {
     const toggleIcon = element.querySelector('.toggle-icon');
     if (toggleIcon) toggleIcon.className = `${CHEVRON_DOWN_CLASS} toggle-icon`;
 
-    const parsed = data ?? JSON.parse(decodeHtml(content));
-    const entries = Array.isArray(parsed)
-      ? parsed
-      : parsed && typeof parsed === 'object'
-        ? [parsed]
-        : [];
+    const entries = normalizeLatexdiffEntries(normalizedPayload?.structured);
 
-    if (entries.length === 0) {
+    if (!entries || entries.length === 0) {
       return null;
     }
 
@@ -1200,14 +1165,13 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatStatistics(content, data, logId) {
-    // Note: content parameter kept for consistency with other formatters but not used
+  _formatStatistics(normalizedPayload, logId) {
     const element = createFromTemplate('statisticsDetailsTemplate');
     if (!element) return null;
     const contentElem = element.querySelector('.statistics-content');
     const toggleIcon = element.querySelector('.toggle-icon');
     if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
-    const parsed = data;
+    const parsed = normalizedPayload?.structured;
     if (!parsed || typeof parsed !== 'object') {
       return null;
     }
@@ -1283,7 +1247,7 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatProgressStatus(content, logId, timestamp) {
+  _formatProgressStatus(normalizedPayload, logId, timestamp) {
     const element = createFromTemplate('nativeStatusTemplate');
     if (!element) return null;
 
@@ -1304,15 +1268,14 @@ export class LogEntryFormatter {
 
     const textElem = element.querySelector('.native-status-text');
     if (textElem) {
-      const decodedContent =
-        typeof content === 'string' ? decodeHtml(content) : '';
+      const decodedContent = normalizedPayload?.decodedText || '';
       textElem.textContent = decodedContent;
     }
 
     return element;
   }
 
-  _formatUserMessage(content, logId, timestamp) {
+  _formatUserMessage(normalizedPayload, logId, timestamp) {
     const element = createFromTemplate('userMessageTemplate');
     if (!element) return null;
 
@@ -1328,8 +1291,7 @@ export class LogEntryFormatter {
 
     const contentElem = element.querySelector('.user-message-content');
     if (contentElem) {
-      const decodedContent =
-        typeof content === 'string' ? decodeHtml(content) : '';
+      const decodedContent = normalizedPayload?.decodedText || '';
       contentElem.textContent = decodedContent;
       if (logId) contentElem.dataset.logId = logId;
     }
