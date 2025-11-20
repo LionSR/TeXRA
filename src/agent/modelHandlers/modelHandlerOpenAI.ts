@@ -64,6 +64,8 @@ import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  DeepSeekToolCall,
+  OpenAIToolCall,
 } from './types/IModelHandler';
 
 // Type imports
@@ -119,12 +121,15 @@ const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
 /**
  * OpenAI-specific handlers.
  */
-export class ModelHandlerOpenAI extends ModelHandler<
+export class ModelHandlerOpenAI<
+  TCall extends OpenAIToolCall | DeepSeekToolCall = OpenAIToolCall,
+> extends ModelHandler<
   ChatCompletionMessageParam,
   ExtendedCompletionUsage | null,
   OpenAIAPIResponseUsage,
-  ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  OpenAI
+  TCall,
+  OpenAI,
+  ChatCompletion
 > {
   /**
    * Creates a new OpenAI client using the stored credentials.
@@ -155,8 +160,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const {
       client,
       messages,
@@ -195,6 +200,8 @@ export class ModelHandlerOpenAI extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
+      // Disable parallel tool calls for now; we dispatch sequentially.
+      (baseParams as any).parallel_tool_calls = false;
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
@@ -1165,28 +1172,60 @@ export class ModelHandlerOpenAI extends ModelHandler<
     };
   }
 
-  extractToolUse(responseObject: any): string | null {
+  protected parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'OpenAI tool call arguments could not be parsed as JSON; using raw string.',
+        undefined,
+        undefined,
+        error,
+      );
+      return raw;
+    }
+  }
+
+  extractToolUse(responseObject: ChatCompletion): TCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return JSON.stringify(toolCalls[0], null, 2);
+      return toolCalls
+        .filter(
+          (
+            call,
+          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
+            Boolean(
+              call &&
+                typeof call === 'object' &&
+                (call as ChatCompletionMessageFunctionToolCall).function
+                  ?.name &&
+                call.id,
+            ),
+        )
+        .map((call) => ({
+          provider: 'openai',
+          callId: call.id,
+          name: call.function!.name,
+          input: this.parseArguments(call.function!.arguments),
+          raw: call,
+        })) as TCall[];
     }
-    const func = responseObject?.choices?.[0]?.message?.function_call;
-    if (func) {
-      return JSON.stringify(func, null, 2);
-    }
-    return null;
+
+    return [];
   }
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: TCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(id, name, call);
+    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -1204,7 +1243,7 @@ export class ModelHandlerOpenAI extends ModelHandler<
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? id,
+      tool_call_id: toolCall.id ?? call.callId,
       content: JSON.stringify(sanitizedResult),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];

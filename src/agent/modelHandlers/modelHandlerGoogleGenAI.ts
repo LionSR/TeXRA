@@ -1,7 +1,7 @@
 // Standard library imports
 import * as path from 'path';
 import { Buffer } from 'buffer';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 // Third-party imports
 import {
@@ -82,6 +82,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  GoogleToolCall,
 } from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
@@ -105,14 +106,6 @@ function findLastTextPart(
 type GoogleGenerationConfig = GenerateContentConfig & {
   thinkingLevel?: 'low' | 'medium' | 'high';
 };
-
-/**
- * Ensures a function call has an ID. Google's SDK may return function calls
- * without IDs in some cases, so we generate one if needed.
- */
-function ensureCallId(call: FunctionCall): string {
-  return call.id?.trim() || randomUUID();
-}
 
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
@@ -175,8 +168,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  FunctionCall,
-  GoogleGenAI
+  GoogleToolCall,
+  GoogleGenAI,
+  GenerateContentResponse
 > {
   private static readonly INLINE_MEDIA_LIMIT_BYTES = 20 * 1024 * 1024;
 
@@ -340,7 +334,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /** Creates a chat completion response using Google's GenAI API with specified parameters and optional system prompt. */
   async createResponse(
-    options: CreateResponseOptions<Content>,
+    options: CreateResponseOptions<Content, GoogleGenAI>,
   ): Promise<GenerateContentResponse> {
     const {
       client,
@@ -571,24 +565,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
 
-        let finalOutputText = aggregatedText;
-        if (!finalOutputText) {
-          const partsText = aggregatedParts
-            .filter(isTextPart)
-            .map((part) => part.text)
-            .join('');
-          if (partsText) {
-            finalOutputText = partsText;
-          } else if (baseResponse.text) {
-            finalOutputText = baseResponse.text;
-            this.logger.warn(
-              'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
-            );
-          } else {
-            finalOutputText = '';
-          }
+        const nonThinkingText = aggregatedParts
+          .filter((part): part is Part & { text: string } => isTextPart(part))
+          .filter((part) => !part.thought)
+          .map((part) => part.text)
+          .join('');
+
+        let finalOutputText = aggregatedText || nonThinkingText;
+        if (!finalOutputText && baseResponse.text) {
+          finalOutputText = baseResponse.text;
+          this.logger.warn(
+            'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
+          );
         }
         output?.finalize(finalOutputText);
+
+        // Ensure text field excludes thinking content
+        const candidateContent = baseResponse.candidates?.[0]?.content;
+        if (candidateContent?.parts) {
+          const filteredParts = candidateContent.parts.filter(
+            (part) => !(part as any).thought,
+          );
+          // Update the parts array; the SDK will compute the text property from it
+          (candidateContent as any).parts = filteredParts;
+        }
 
         return baseResponse;
       }
@@ -761,16 +761,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const candidate = responseObject.candidates[0];
 
-    const rawResponseText = responseObject.text;
-    // if (rawResponseText === undefined) {
-    //   this.logger.warn(
-    //     'Candidate content or parts missing in response object.',
-    //   );
-    // }
+    const parts = candidate?.content?.parts;
+    const textParts = Array.isArray(parts)
+      ? parts.filter(
+          (part): part is Part & { text: string } =>
+            isTextPart(part) && !part.thought,
+        )
+      : [];
+    const rawResponseText =
+      textParts.length > 0
+        ? textParts
+            .map((p) => p.text)
+            .join('')
+            .trim()
+        : (responseObject.text ?? '').trim();
+
     // For TOOL CALL ONLY RESPONSE this happens sometimes, we don't want to log it
-    let responseText = replacementEngine.applyAll(
-      (rawResponseText ?? '').trim(),
-    );
+    let responseText = replacementEngine.applyAll(rawResponseText);
 
     const usage = responseObject.usageMetadata;
     const stopReason: FinishReason =
@@ -1073,26 +1080,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): string | null {
+  extractToolUse(responseObject: GenerateContentResponse): GoogleToolCall[] {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
-      const funcPart = parts.find((part) => part.functionCall);
-      if (funcPart?.functionCall) {
-        const call = funcPart.functionCall;
-        // Ensure the call has an ID
-        const callId = ensureCallId(call);
-        const callWithId = { ...call, id: callId };
+      const functionCalls = parts
+        .map((part) => part.functionCall)
+        .filter((call): call is FunctionCall => Boolean(call?.name));
 
-        if (!call.id?.trim()) {
-          this.logger.debug(
-            `Generated ID for Google function call '${call.name ?? 'unknown'}': ${callId}`,
-          );
-        }
-        return JSON.stringify(callWithId, null, 2);
+      if (functionCalls.length > 0) {
+        return functionCalls.map((call) => ({
+          provider: 'google',
+          callId: call.id ?? randomUUID(),
+          name: call.name!,
+          input: call.args,
+          raw: call,
+        }));
       }
     }
-    return null;
+    return [];
   }
 
   private async buildAttachmentPart(
@@ -1128,29 +1134,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
-    _id: string,
-    name: string,
-    call: FunctionCall,
+    call: GoogleToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    // Handle both args and input fields for backward compatibility
-    const args =
-      call?.args && typeof call.args === 'object'
-        ? (call.args as Record<string, unknown>)
-        : ((call as any)?.input ?? {});
+    if (!call.callId) {
+      throw new Error('Function call id is required for follow-up messages');
+    }
 
-    // Use call.name if available, fall back to provided name
-    const functionName = call?.name ?? name;
+    const args = call.raw.args ?? {};
+
+    const functionName = call.name;
 
     // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
 
-    // Ensure the function call has an ID for correlation with result
-    const callId = ensureCallId(call);
     if (callPart.functionCall) {
-      callPart.functionCall.id = callId;
+      callPart.functionCall.id = call.callId;
     }
 
     // Use the same ID for the result to maintain correlation
@@ -1177,7 +1178,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
     const resultPart = createPartFromFunctionResponse(
-      callId,
+      call.callId,
       functionName,
       sanitizedResult,
     );
