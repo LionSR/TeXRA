@@ -414,8 +414,8 @@ export async function processPdf2Png(
     }
 
     // Use default values if not provided
-    const finalQuality = quality || 300;
-    const finalMaxSize: [number, number] = maxSize || [1024, 1024];
+    const finalQuality = quality ?? 300;
+    const finalMaxSize: [number, number] = maxSize ?? [1024, 1024];
 
     if (pageCount === 1) {
       return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);
