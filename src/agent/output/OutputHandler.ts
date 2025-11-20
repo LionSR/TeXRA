@@ -192,8 +192,7 @@ export class OutputHandler implements IOutputHandler {
     } catch (error) {
       this.logger.debug(
         `Failed to prepare run workspace: ${toErrorMessage(error)}`,
-        undefined,
-        MESSAGE_TYPES.INTERNAL,
+        { messageType: MESSAGE_TYPES.INTERNAL },
       );
     } finally {
       this.runPreparation = null;
@@ -676,8 +675,7 @@ export class OutputHandler implements IOutputHandler {
           } catch (err) {
             this.logger.debug(
               `Error processing output files: ${toErrorMessage(err)}`,
-              undefined,
-              MESSAGE_TYPES.INTERNAL,
+              { messageType: MESSAGE_TYPES.INTERNAL },
             );
             this.setRoundOutputs(currRound, []);
             await this.cleanupLatexBackups(rawLocation);
@@ -751,8 +749,7 @@ export class OutputHandler implements IOutputHandler {
           } catch (err) {
             this.logger.debug(
               `Error processing output file: ${toErrorMessage(err)}`,
-              undefined,
-              MESSAGE_TYPES.INTERNAL,
+              { messageType: MESSAGE_TYPES.INTERNAL },
             );
             const missingOutputsData = {
               missing: [],
@@ -893,8 +890,7 @@ export class OutputHandler implements IOutputHandler {
       } catch (error) {
         this.logger.debug(
           `Failed to collect XML summary for round ${round}: ${toErrorMessage(error)}`,
-          undefined,
-          MESSAGE_TYPES.INTERNAL,
+          { messageType: MESSAGE_TYPES.INTERNAL },
         );
         data.xmlSummary = {
           tagContents: {},
