@@ -53,6 +53,12 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
+interface RunScopedPayload {
+  stream: StreamTabId;
+  runId: string;
+  executionId?: ExecutionId;
+}
+
 export interface ProgressEventPayloads {
   addLogMessage: { stream: StreamTabId; logMessage: LogMessageData };
   updateLogMessage: { stream: StreamTabId; logMessage: LogMessageUpdate };
@@ -60,16 +66,10 @@ export interface ProgressEventPayloads {
   updateTaskGroup: UpdateTaskGroupPayload;
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: { stream: StreamTabId; status: StreamStatusOrReady };
-  addOutputFiles: {
-    stream: StreamTabId;
-    groupId?: string;
-    executionId?: ExecutionId;
+  addOutputFiles: RunScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
-  updateMissingOutputs: {
-    stream: StreamTabId;
-    groupId?: string;
-    executionId?: ExecutionId;
+  updateMissingOutputs: RunScopedPayload & {
     filesByRound: { [key: number]: string[] };
   };
   clearMissingOutputs: StreamTabId;

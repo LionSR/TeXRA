@@ -192,7 +192,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.fileService,
       this.executionId,
     );
-    this.outputHandler.setActiveRun(this.executionId ?? null);
 
     this.latexMediaManager = new LatexMediaManager(
       this.logger,
@@ -833,6 +832,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
                   'Run group identifier is required for reflection runs.',
                 );
               }
+              this.outputHandler.setActiveRun(runStage.id);
               return runStage;
             },
             resetPromptBuilder: () => this.resetPromptBuilder(),
