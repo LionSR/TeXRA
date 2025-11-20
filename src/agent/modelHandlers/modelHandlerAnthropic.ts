@@ -1571,14 +1571,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   extractToolUse(responseObject: BetaMessage): AnthropicToolCall[] {
-    const content = responseObject?.content;
-    if (!Array.isArray(content)) {
+    if (!Array.isArray(responseObject?.content)) {
       return [];
     }
 
-    const toolUseBlocks = content.filter(
-      (block): block is ToolUseBlock =>
-        (block as { type?: string }).type === 'tool_use',
+    const toolUseBlocks = responseObject.content.filter(
+      (block): block is ToolUseBlock => block?.type === 'tool_use',
     );
 
     if (toolUseBlocks.length === 0) {
