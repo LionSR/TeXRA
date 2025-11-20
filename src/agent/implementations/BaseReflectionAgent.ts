@@ -192,7 +192,6 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.fileService,
       this.executionId,
     );
-    this.outputHandler.setActiveRun(this.executionId ?? null);
 
     this.latexMediaManager = new LatexMediaManager(
       this.logger,
