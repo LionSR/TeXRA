@@ -436,9 +436,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
   async exec(
     context: ToolUseCycleContext<C>,
-  ): Promise<
-    SkippableNodeResult<{ calls: SdkToolCall[] } | ToolDispatchErrorResult>
-  > {
+  ): Promise<SkippableNodeResult<{ calls: SdkToolCall[] }>> {
     const { options, state, store } = context;
     if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
       return { skipped: true };
@@ -460,59 +458,13 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   async post(
     _shared: ToolUseCycleContext<C>,
     prepRes: ToolUseCycleContext<C>,
-    execRes: SkippableNodeResult<
-      { calls: SdkToolCall[] } | ToolDispatchErrorResult
-    >,
+    execRes: SkippableNodeResult<{ calls: SdkToolCall[] }>,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
     const groupId = options.logger.withCurrentGroup((id) => id);
     if (execRes.skipped) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
-    }
-
-    if ('handledError' in execRes.value) {
-      const { toolCallId, result, fallbackMessage } = execRes.value;
-      const workspace = store.workspace;
-
-      const fallbackCall =
-        (toolCallId
-          ? state.toolCalls?.find((call) => call.callId === toolCallId)
-          : undefined) ?? state.toolCalls?.[0];
-
-      if (fallbackCall) {
-        const followUpMessages =
-          await options.modelHandler.createToolUseFollowUpMessages(
-            options.client,
-            fallbackCall,
-            buildToolResultPayload(result),
-            workspace,
-            state.text ?? '',
-          );
-        state.messages.push(...followUpMessages);
-        const fallback =
-          result.summary ??
-          result.output ??
-          result.error ??
-          fallbackMessage ??
-          '';
-        if (fallback) {
-          workspace.assembly.updateLastResponse(String(fallback));
-        }
-      } else if (fallbackMessage) {
-        const assistantMessage =
-          options.modelHandler.createAssistantMessage(fallbackMessage);
-        state.messages.push(assistantMessage);
-        workspace.assembly.updateLastResponse(fallbackMessage);
-      }
-
-      state.shouldStop = false;
-
-      if (fallbackMessage) {
-        options.logger.warn(fallbackMessage, groupId);
-      }
-
-      return FlowTransition.CONTINUE;
     }
 
     const { calls } = execRes.value;
