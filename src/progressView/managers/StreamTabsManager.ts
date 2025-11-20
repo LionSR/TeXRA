@@ -35,7 +35,14 @@ export class StreamTabsManager extends PersistentMapManager<
   ): Promise<void> {
     const messages = this.ensureMessages(stream);
 
-    messages.push(message);
+    const existingIndex = messages.findIndex(
+      (entry) => entry.id === message.id,
+    );
+    if (existingIndex >= 0) {
+      messages[existingIndex] = message;
+    } else {
+      messages.push(message);
+    }
 
     // Limit message history to prevent memory issues
     if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {
