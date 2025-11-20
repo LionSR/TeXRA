@@ -11,6 +11,14 @@ import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
+import type {
+  ChatCompletionMessage,
+  ChatCompletionMessageFunctionToolCall,
+  ChatCompletionMessageToolCall,
+} from 'openai/resources/chat/completions';
+import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
+import type { FunctionCall } from '@google/genai';
+import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 
 /**
  * Options for creating a model response.
@@ -18,9 +26,10 @@ import type { ProviderStopReason } from './StopReasonTypes';
  */
 export interface CreateResponseOptions<
   M extends ProviderMessage = ProviderMessage,
+  C = unknown,
 > {
   /** Provider client instance */
-  client: any;
+  client: C;
   /** Conversation messages */
   messages: M[];
   /** Sampling temperature (0-1) */
@@ -57,6 +66,55 @@ export interface StopConditionsResult {
   shouldStop: boolean;
 }
 
+export type OpenAIToolCall = {
+  provider: 'openai';
+  callId: string;
+  name: string;
+  input:
+    | ChatCompletionMessageFunctionToolCall['function']['arguments']
+    | ChatCompletionMessage.FunctionCall['arguments'];
+  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+};
+
+export type DeepSeekToolCall = {
+  provider: 'deepseek';
+  callId: string;
+  name: string;
+  input: unknown;
+  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+};
+
+export type OpenAIResponseToolCall = {
+  provider: 'openai-response';
+  callId: string;
+  name: string;
+  input: unknown;
+  raw: ResponseFunctionToolCallItem;
+};
+
+export type GoogleToolCall = {
+  provider: 'google';
+  callId: string;
+  name: string;
+  input: FunctionCall['args'];
+  raw: FunctionCall;
+};
+
+export type AnthropicToolCall = {
+  provider: 'anthropic';
+  callId: string;
+  name: string;
+  input: ToolUseBlock['input'];
+  raw: ToolUseBlock;
+};
+
+export type SdkToolCall =
+  | OpenAIToolCall
+  | DeepSeekToolCall
+  | OpenAIResponseToolCall
+  | GoogleToolCall
+  | AnthropicToolCall;
+
 /**
  * Common interface implemented by all model handlers.
  *
@@ -71,8 +129,9 @@ export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = any,
   R = any,
-  T = unknown,
+  T extends SdkToolCall = SdkToolCall,
   C = unknown,
+  Resp = unknown,
 > {
   /** Model configuration used by the handler. */
   config: ModelConfig;
@@ -117,7 +176,7 @@ export interface IModelHandler<
    * Generate a response from the model.
    * @param options Options for creating the response
    */
-  createResponse(options: CreateResponseOptions<M>): Promise<any>;
+  createResponse(options: CreateResponseOptions<M, C>): Promise<Resp>;
 
   /** Initialize the conversation for the first round. */
   initializeMessages(
@@ -216,21 +275,17 @@ export interface IModelHandler<
   ): string | null;
 
   /** Extract tool-use details from a provider response. */
-  extractToolUse(responseObject: any): string | null;
+  extractToolUse(responseObject: Resp): T[];
 
   /**
    * Create provider-specific messages capturing the tool call and result.
    *
-   * @param id - Tool call identifier from the model response
-   * @param name - Tool name
    * @param call - Parsed tool call object or input payload
    * @param result - Object with output/error fields
    * @returns Tuple of [call message, result message]
    */
   createToolUseFollowUpMessages(
     client: C | undefined,
-    id: string,
-    name: string,
     call: T,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,

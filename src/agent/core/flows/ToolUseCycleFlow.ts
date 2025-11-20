@@ -1,6 +1,3 @@
-// Third-party imports
-import { z } from 'zod';
-
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
@@ -14,6 +11,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
@@ -26,7 +24,8 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+// Local imports - logging
+import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -51,123 +50,34 @@ interface ToolValidationDiagnostics {
   }>;
 }
 
-interface NormalizedToolCall {
-  callId: string;
-  name: string;
-  input: unknown;
-  raw: RawToolCallPayload;
+function parseToolInput(
+  raw: unknown,
+  callId: string,
+  logger: AgentLogger,
+): unknown {
+  if (raw === null) {
+    logger.warn(`Tool call ${callId}: Received null input, using empty object`);
+    return {};
+  }
+
+  if (typeof raw === 'boolean' || typeof raw === 'number') {
+    logger.warn(
+      `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
+    );
+    return raw;
+  }
+
+  if (typeof raw !== 'string') return raw ?? {};
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    logger.warn(
+      `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
+      { data: error },
+    );
+    return raw;
+  }
 }
-
-const RawToolCallPayloadSchema = z
-  .object({
-    call_id: z.string().optional(),
-    tool_call_id: z.string().optional(),
-    tool_use_id: z.string().optional(),
-    id: z.string().optional(),
-    name: z.string().optional(),
-    function: z
-      .object({
-        name: z.string().optional(),
-        arguments: z
-          .union([z.string(), z.record(z.string(), z.unknown())])
-          .optional(),
-      })
-      .optional(),
-    input: z.unknown().optional(),
-    args: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
-    arguments: z
-      .union([z.string(), z.record(z.string(), z.unknown())])
-      .optional(),
-  })
-  .superRefine((value, ctx) => {
-    const trimmed = (val?: string | null) =>
-      typeof val === 'string' ? val.trim() : '';
-
-    if (
-      !trimmed(value.call_id) &&
-      !trimmed(value.tool_call_id) &&
-      !trimmed(value.tool_use_id) &&
-      !trimmed(value.id)
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['call_id'],
-        message: 'Tool call is missing an identifier.',
-      });
-    }
-
-    if (!trimmed(value.name) && !trimmed(value.function?.name ?? '')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['name'],
-        message: 'Tool call is missing a name.',
-      });
-    }
-  });
-
-type RawToolCallPayload = z.infer<typeof RawToolCallPayloadSchema>;
-
-const ToolCallPayloadSchema =
-  RawToolCallPayloadSchema.transform<NormalizedToolCall>((payload) => {
-    const trim = (value?: string | null) =>
-      typeof value === 'string' ? value.trim() : '';
-
-    const callId = [
-      payload.call_id,
-      payload.tool_call_id,
-      payload.tool_use_id,
-      payload.id,
-    ]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
-
-    if (!callId) {
-      throw new Error('Tool call is missing an identifier.');
-    }
-
-    const name = [payload.name, payload.function?.name]
-      .map((candidate) => trim(candidate))
-      .find((candidate) => candidate.length > 0);
-
-    if (!name) {
-      throw new Error('Tool call is missing a name.');
-    }
-
-    const argumentSources: Array<unknown> = [
-      payload.input,
-      payload.args,
-      payload.arguments,
-      payload.function?.arguments,
-    ];
-
-    let input: unknown = {};
-    for (const candidate of argumentSources) {
-      if (candidate === undefined || candidate === null) {
-        continue;
-      }
-      if (typeof candidate === 'string') {
-        const trimmed = candidate.trim();
-        if (!trimmed) {
-          continue;
-        }
-        try {
-          input = JSON.parse(trimmed);
-        } catch {
-          input = trimmed;
-        }
-        break;
-      }
-      input = candidate;
-      break;
-    }
-
-    return {
-      callId,
-      name,
-      input,
-      raw: payload,
-    };
-  });
 
 function normalizeToolCallError(
   toolName: string,
@@ -211,12 +121,15 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
-  toolInfo?: string;
+  toolCalls?: SdkToolCall[];
   text?: string;
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, ['response', 'toolInfo', 'text']);
+  resetCycleState(state, []);
+  state.response = undefined;
+  state.toolCalls = undefined;
+  state.text = undefined;
 }
 
 export interface ToolUseCycleContext<C = unknown> {
@@ -390,7 +303,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
   async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<{
-      toolInfo?: string;
+      toolCalls?: SdkToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -418,7 +331,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
     }
 
-    const toolInfo = options.modelHandler.extractToolUse(state.response);
+    const toolCalls = options.modelHandler.extractToolUse(state.response);
     const {
       response: text,
       usage,
@@ -459,7 +372,8 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     const endTurn = options.modelHandler.isEndTurnStop(stopReason);
 
-    if (!toolInfo || endTurn) {
+    if (!toolCalls || toolCalls.length === 0 || endTurn) {
+      state.toolCalls = undefined;
       if (text) {
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
@@ -471,13 +385,18 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       };
     }
 
-    state.toolInfo = toolInfo;
+    state.toolCalls = toolCalls;
     state.text = text ?? undefined;
     state.stopReason = stopReason;
 
     return {
       skipped: false,
-      value: { toolInfo, stopReason, text: text ?? undefined, endTurn: false },
+      value: {
+        toolCalls,
+        stopReason,
+        text: text ?? undefined,
+        endTurn: false,
+      },
     };
   }
 
@@ -485,7 +404,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     shared: ToolUseCycleContext<C>,
     _prepRes: unknown,
     execRes: SkippableNodeResult<{
-      toolInfo?: string;
+      toolCalls?: SdkToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -521,19 +440,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleContext<C>): Promise<
-    SkippableNodeResult<
-      | {
-          raw: RawToolCallPayload;
-          name: string;
-          input: unknown;
-          toolCallId: string;
-        }
-      | ToolDispatchErrorResult
-    >
-  > {
+  async exec(
+    context: ToolUseCycleContext<C>,
+  ): Promise<SkippableNodeResult<{ calls: SdkToolCall[] }>> {
     const { options, state, store } = context;
-    if (state.shouldStop || !state.toolInfo) {
+    if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
       return { skipped: true };
     }
 
@@ -544,91 +455,16 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return { skipped: true };
     }
 
-    let parsedJson: unknown;
-    try {
-      parsedJson = JSON.parse(state.toolInfo);
-    } catch (error) {
-      const errorMsg = `Malformed tool JSON: ${toErrorMessage(error)}`;
-      const errorResult = toolResult({ error: errorMsg, isError: true });
-      const toolUseLog = {
-        tool: 'unknown',
-        input: state.toolInfo,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info('', {
-        groupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: toolUseLog,
-      });
-      return {
-        skipped: false,
-        value: {
-          handledError: true,
-          toolName: 'unknown',
-          result: errorResult,
-          fallbackMessage:
-            'I could not understand the tool request. Please resend valid JSON with call_id, name, and arguments.',
-        },
-      };
-    }
-
-    const parsed = ToolCallPayloadSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      const { message, diagnostics } = normalizeToolCallError(
-        'unknown',
-        parsed.error,
-      );
-      const errorResult = toolResult({
-        error: message,
-        isError: true,
-        diagnostics,
-      });
-      const toolUseLog = {
-        tool: 'unknown',
-        input: parsedJson,
-        output: sanitizeToolResultForLog(errorResult),
-      };
-      options.logger.info('', {
-        groupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: toolUseLog,
-      });
-      return {
-        skipped: false,
-        value: {
-          handledError: true,
-          toolName: 'unknown',
-          result: errorResult,
-          raw: parsedJson,
-          fallbackMessage: message,
-        },
-      };
-    }
-
-    const payload = parsed.data;
     return {
       skipped: false,
-      value: {
-        raw: payload.raw,
-        name: payload.name,
-        input: payload.input,
-        toolCallId: payload.callId,
-      },
+      value: { calls: state.toolCalls },
     };
   }
 
   async post(
     _shared: ToolUseCycleContext<C>,
     prepRes: ToolUseCycleContext<C>,
-    execRes: SkippableNodeResult<
-      | {
-          raw: RawToolCallPayload;
-          name: string;
-          input: unknown;
-          toolCallId: string;
-        }
-      | ToolDispatchErrorResult
-    >,
+    execRes: SkippableNodeResult<{ calls: SdkToolCall[] }>,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
     const groupId = options.logger.withCurrentGroup((id) => id);
@@ -637,136 +473,105 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return FlowTransition.COMPLETE;
     }
 
-    if ('handledError' in execRes.value) {
-      const { toolCallId, result, fallbackMessage, toolName, raw } =
-        execRes.value;
-      const workspace = store.workspace;
+    const { calls } = execRes.value;
 
-      if (toolCallId) {
-        const followUpMessages =
-          await options.modelHandler.createToolUseFollowUpMessages(
-            options.client,
-            toolCallId,
-            toolName,
-            raw,
-            buildToolResultPayload(result),
-            workspace,
-            state.text ?? '',
-          );
-        state.messages.push(...followUpMessages);
-        const fallback =
-          result.summary ??
-          result.output ??
-          result.error ??
-          fallbackMessage ??
-          '';
-        if (fallback) {
-          workspace.assembly.updateLastResponse(String(fallback));
-        }
-      } else if (fallbackMessage) {
-        const assistantMessage =
-          options.modelHandler.createAssistantMessage(fallbackMessage);
-        state.messages.push(assistantMessage);
-        workspace.assembly.updateLastResponse(fallbackMessage);
-      }
+    const assistantText = state.text ?? '';
 
-      state.shouldStop = false;
-
-      if (fallbackMessage) {
-        options.logger.warn(fallbackMessage, { groupId });
-      }
-
-      return FlowTransition.CONTINUE;
-    }
-
-    const normalResult = execRes.value;
-    const tool = options.toolRegistry[normalResult.name];
-    let result: ToolResult;
-    if (!tool) {
-      result = toolResult({
-        error: `Unknown tool ${normalResult.name}`,
-        isError: true,
-      });
-    } else {
-      try {
-        result = await withToolEditApprovalContext(
-          {
-            streamId: options.logger.channelId,
-            executionId: options.context.executionId,
-            toolCallId: normalResult.toolCallId,
-          },
-          () => tool.call(normalResult.input),
-        );
-      } catch (err) {
-        const { message, diagnostics } = normalizeToolCallError(
-          normalResult.name,
-          err,
-        );
+    for (const [index, call] of calls.entries()) {
+      const tool = options.toolRegistry[call.name];
+      let result: ToolResult;
+      const parsedInput = parseToolInput(
+        call.input,
+        call.callId,
+        options.logger,
+      );
+      if (!tool) {
         result = toolResult({
-          error: message,
+          error: `Unknown tool ${call.name}`,
           isError: true,
-          diagnostics,
         });
-      }
-    }
-
-    const toolUseLog = {
-      tool: normalResult.name,
-      input: normalResult.input ?? normalResult.raw,
-      output: sanitizeToolResultForLog(result),
-    };
-    options.logger.info('', {
-      groupId,
-      messageType: MESSAGE_TYPES.TOOL_USE,
-      data: toolUseLog,
-    });
-
-    if (result.files && result.files.length > 0) {
-      const existing = store.workspace.media.files;
-      const toAdd: string[] = [];
-      for (const attachment of result.files) {
-        const candidate = attachment.path;
-        if (typeof candidate !== 'string' || candidate.trim() === '') {
-          continue;
-        }
-        if (existing.includes(candidate) || toAdd.includes(candidate)) {
-          continue;
-        }
+      } else {
         try {
-          const exists = await WorkspaceFS.exists(candidate);
-          if (exists) {
-            toAdd.push(candidate);
-          }
-        } catch {
-          // Ignore errors when checking existence
+          result = await withToolEditApprovalContext(
+            {
+              streamId: options.logger.channelId,
+              executionId: options.context.executionId,
+              toolCallId: call.callId,
+            },
+            () => tool.call(parsedInput),
+          );
+        } catch (err) {
+          const { message, diagnostics } = normalizeToolCallError(
+            call.name,
+            err,
+          );
+          result = toolResult({
+            error: message,
+            isError: true,
+            diagnostics,
+          });
         }
       }
-      if (toAdd.length > 0) {
-        store.workspace.media.addMediaFiles(toAdd);
+
+      const toolUseLog = {
+        toolName: call.name,
+        input: parsedInput ?? call.raw,
+        output: sanitizeToolResultForLog(result),
+        isError: Boolean(result.isError),
+      };
+      options.logger.info('', {
+        groupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: toolUseLog,
+      });
+
+      if (result.files && result.files.length > 0) {
+        const existing = store.workspace.media.files;
+        const toAdd: string[] = [];
+        for (const attachment of result.files) {
+          const candidate = attachment.path;
+          if (typeof candidate !== 'string' || candidate.trim() === '') {
+            continue;
+          }
+          if (existing.includes(candidate) || toAdd.includes(candidate)) {
+            continue;
+          }
+          try {
+            const exists = await WorkspaceFS.exists(candidate);
+            if (exists) {
+              toAdd.push(candidate);
+            }
+          } catch {
+            // Ignore errors when checking existence
+          }
+        }
+        if (toAdd.length > 0) {
+          store.workspace.media.addMediaFiles(toAdd);
+        }
+      }
+
+      const followUpMsgs =
+        await options.modelHandler.createToolUseFollowUpMessages(
+          options.client,
+          call,
+          buildToolResultPayload(result),
+          store.workspace,
+          index === 0 && assistantText.length > 0 ? assistantText : undefined,
+        );
+
+      state.messages.push(...followUpMsgs);
+      if (
+        typeof result.userInstruction === 'string' &&
+        result.userInstruction.trim().length > 0
+      ) {
+        await options.modelHandler.createUserFollowUpMessages(
+          state.messages,
+          result.userInstruction,
+        );
       }
     }
 
-    const followUpMsgs =
-      await options.modelHandler.createToolUseFollowUpMessages(
-        options.client,
-        normalResult.toolCallId,
-        normalResult.name,
-        normalResult.raw,
-        buildToolResultPayload(result),
-        store.workspace,
-        state.text ?? '',
-      );
-
-    state.messages.push(...followUpMsgs);
-    if (
-      typeof result.userInstruction === 'string' &&
-      result.userInstruction.trim().length > 0
-    ) {
-      await options.modelHandler.createUserFollowUpMessages(
-        state.messages,
-        result.userInstruction,
-      );
-    }
+    state.toolCalls = [];
 
     return FlowTransition.CONTINUE;
   }

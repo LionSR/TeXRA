@@ -56,6 +56,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -94,7 +95,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
   ResponseUsage,
   OpenAIAPIResponseUsage,
-  ResponseFunctionToolCallItem
+  OpenAIResponseToolCall,
+  OpenAI,
+  Response
 > {
   private isOpenRouterRoutingEnabled(): boolean {
     return (
@@ -494,7 +497,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * request and relies on `previous_response_id` for conversation context.
    */
   async createResponse(
-    options: CreateResponseOptions<ResponseInputItem>,
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
@@ -624,22 +627,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `Background response ${response.id} created with status ${
             response.status ?? 'unknown'
           }`,
-          undefined,
-          undefined,
           {
-            responseId: response.id,
-            status: response.status,
-            usage: response.usage ?? undefined,
+            data: {
+              responseId: response.id,
+              status: response.status,
+              usage: response.usage ?? undefined,
+            },
           },
         );
         this.logger.info(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-          undefined,
-          MESSAGE_TYPES.PROGRESS_STATUS,
           {
-            responseId: response.id,
-            pollIntervalMs:
-              ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS,
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: {
+              responseId: response.id,
+              pollIntervalMs:
+                ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS,
+            },
           },
         );
       }
@@ -1276,21 +1280,47 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): string | null {
-    const items = response?.output;
-    if (!Array.isArray(items)) return null;
+  private parseArguments(raw: unknown): unknown {
+    if (typeof raw !== 'string') {
+      return raw;
+    }
 
-    const call = items.find(
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      this.logger.warn(
+        'OpenAI Responses tool call arguments could not be parsed as JSON; using raw string.',
+        { data: error },
+      );
+      return raw;
+    }
+  }
+
+  extractToolUse(response: Response): OpenAIResponseToolCall[] {
+    const items = response?.output;
+    if (!Array.isArray(items)) return [];
+
+    const calls = items.filter(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
-    return call ? JSON.stringify(call, null, 2) : null;
+    if (calls.length === 0) {
+      return [];
+    }
+
+    return calls
+      .filter((call) => Boolean(call.call_id && call.name))
+      .map((call) => ({
+        provider: 'openai-response',
+        callId: call.call_id!,
+        name: call.name!,
+        input: this.parseArguments(call.arguments),
+        raw: call,
+      }));
   }
 
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ResponseFunctionToolCallItem,
+    call: OpenAIResponseToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1302,18 +1332,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
-      call_id: id,
-      name,
-      arguments:
-        typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(
-              (call as unknown as { input?: unknown; arguments?: unknown })
-                ?.input ??
-                (call as unknown as { input?: unknown; arguments?: unknown })
-                  ?.arguments ??
-                {},
-            ),
+      call_id: call.callId,
+      name: call.name,
+      arguments: call.raw.arguments,
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
@@ -1387,7 +1408,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
-      call_id: id,
+      call_id: call.callId,
       output: outputPayload,
     };
 
