@@ -128,7 +128,10 @@ export interface ToolUseCycleState extends BaseCycleState {
 }
 
 function resetToolUseState(state: ToolUseCycleState): void {
-  resetCycleState(state, ['response', 'toolCalls', 'text']);
+  resetCycleState(state, []);
+  state.response = undefined;
+  state.toolCalls = undefined;
+  state.text = undefined;
 }
 
 export interface ToolUseCycleContext<C = unknown> {
