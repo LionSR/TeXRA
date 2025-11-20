@@ -187,14 +187,15 @@ const normalizeToolUseLog = (structured) => {
       : {};
 
   const summaryText =
-    typeof parsed.summary === 'string' && parsed.summary.trim()
-      ? parsed.summary.trim()
-      : '';
+    (typeof parsed.summary === 'string' && parsed.summary.trim()) ||
+    (typeof outputDetails.summary === 'string' &&
+      outputDetails.summary.trim()) ||
+    '';
 
   const errorText =
-    typeof parsed.error === 'string' && parsed.error.trim()
-      ? parsed.error.trim()
-      : '';
+    (typeof parsed.error === 'string' && parsed.error.trim()) ||
+    (typeof outputDetails.error === 'string' && outputDetails.error.trim()) ||
+    '';
 
   const outputCandidate =
     parsed.output !== undefined ? parsed.output : outputDetails.output;
@@ -220,7 +221,9 @@ const normalizeToolUseLog = (structured) => {
     outputText,
     diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
     input: parsed.input,
-    isError: Boolean(parsed.isError || errorText),
+    isError: Boolean(
+      parsed.isError || outputDetails.isError || errorText.length > 0,
+    ),
     headerSummary: summaryText || errorText,
   };
 };
@@ -706,7 +709,8 @@ export class LogEntryFormatter {
     if (outputText) {
       const encodedOutput = encodeHtml(outputText);
       const MAX_PREVIEW_CHARS = 240;
-      if (!summaryText && outputText.length > MAX_PREVIEW_CHARS) {
+      const isTruncated = outputText.length > MAX_PREVIEW_CHARS;
+      if (!summaryText && isTruncated) {
         const preview = encodeHtml(
           `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
         );
@@ -714,9 +718,11 @@ export class LogEntryFormatter {
           <div class="tool-use-section">
             <div class="tool-use-subsection">
               <span class="tool-use-sublabel">Output:</span>
-              <pre class="tool-output-preview">${preview}</pre>
               <details class="tool-output-details">
-                <summary class="details-summary">Show full output</summary>
+                <summary class="details-summary">
+                  <pre class="tool-output-preview">${preview}</pre>
+                  <span class="details-summary-label">Show full output</span>
+                </summary>
                 <pre class="tool-output-full">${encodedOutput}</pre>
               </details>
             </div>
@@ -897,11 +903,26 @@ export class LogEntryFormatter {
     const toggleIcon = element.querySelector('.toggle-icon');
     if (toggleIcon) toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
 
-    const parsed = normalizeFileListEntries(normalizedPayload?.structured);
+    let parsed =
+      normalizeFileListEntries(normalizedPayload?.structured) || undefined;
+
+    if (!parsed && normalizedPayload?.decodedText) {
+      try {
+        const parsedJson = JSON.parse(normalizedPayload.decodedText);
+        parsed = normalizeFileListEntries(parsedJson) || undefined;
+      } catch {
+        // Fall through to raw display
+      }
+    }
 
     if (!parsed) {
-      console.warn('Missing structured data for file list log entry');
-      return null;
+      const rawContent = normalizedPayload?.decodedText ?? '';
+      if (summaryElem) summaryElem.textContent = 'Files (raw)';
+      if (contentElem) {
+        contentElem.innerHTML = `<pre>${encodeHtml(rawContent)}</pre>`;
+        if (logId) contentElem.dataset.logId = logId;
+      }
+      return element;
     }
 
     const filesBySource = {};
