@@ -171,7 +171,8 @@ export class OutputHandler implements IOutputHandler {
       this.executionId ?? this.fileService.getExecutionId();
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
-    const nextRunId = runId ?? targetExecutionId ?? null;
+    const loggerRunId = this.logger.withCurrentGroup((id) => id);
+    const nextRunId = runId ?? loggerRunId ?? targetExecutionId ?? null;
     if (nextRunId === this.currentRunId) {
       return;
     }
@@ -192,6 +193,11 @@ export class OutputHandler implements IOutputHandler {
   }
 
   private getActiveRunId(): string {
+    const loggerRunId = this.logger.withCurrentGroup((id) => id);
+    if (loggerRunId && loggerRunId !== this.currentRunId) {
+      this.currentRunId = loggerRunId;
+    }
+
     return normalizeRunId(this.currentRunId);
   }
 
@@ -469,9 +475,9 @@ export class OutputHandler implements IOutputHandler {
     runId: string | null | undefined,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    const normalizedRunId = runId ?? this.currentRunId ?? null;
+    const normalizedRunId = runId ?? this.logger.withCurrentGroup((id) => id);
     if (normalizedRunId !== this.currentRunId) {
-      this.setActiveRun(normalizedRunId);
+      this.setActiveRun(normalizedRunId ?? null);
     }
 
     for (const [round, infos] of rounds.entries()) {
