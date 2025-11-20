@@ -649,10 +649,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteStream(message) {
     if (message.stream) {
+      const deletingActiveStream = message.stream === state.activeStream;
       pendingLogUpdates.clear();
-      if (message.stream === state.activeStream) {
-        state.activeStream = '';
-      }
       state.removeStream(message.stream);
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
@@ -661,7 +659,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunFiles(message.stream);
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
-      if (message.stream === state.activeStream) {
+      if (deletingActiveStream) {
+        state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
