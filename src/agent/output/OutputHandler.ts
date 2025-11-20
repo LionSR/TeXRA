@@ -195,7 +195,7 @@ export class OutputHandler implements IOutputHandler {
   private getActiveRunId(): string {
     const loggerRunId = this.logger.withCurrentGroup((id) => id);
     if (loggerRunId && loggerRunId !== this.currentRunId) {
-      this.currentRunId = loggerRunId;
+      this.setActiveRun(loggerRunId);
     }
 
     return normalizeRunId(this.currentRunId);
@@ -475,9 +475,12 @@ export class OutputHandler implements IOutputHandler {
     runId: string | null | undefined,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    const normalizedRunId = runId ?? this.logger.withCurrentGroup((id) => id);
-    if (normalizedRunId !== this.currentRunId) {
-      this.setActiveRun(normalizedRunId ?? null);
+    const loggerRunId = this.logger.withCurrentGroup((id) => id);
+    const effectiveRunId = runId ?? loggerRunId ?? null;
+    const normalizedCurrent = normalizeRunId(this.currentRunId);
+    const normalizedTarget = normalizeRunId(effectiveRunId);
+    if (normalizedTarget !== normalizedCurrent) {
+      this.setActiveRun(effectiveRunId);
     }
 
     for (const [round, infos] of rounds.entries()) {
