@@ -1253,31 +1253,29 @@ export class LogEntryFormatter {
       (normalizedPayload.decodedText || message.text || '').trim() ||
       'Status update';
     const detailText = stringifyForDisplay(normalizedPayload.structured);
+    const emoji = EMOJI_BY_LEVEL[severity] || '•';
 
     const container = document.createElement('div');
-    container.className = 'progress-status-entry';
-    container.dataset.fullTimestamp = fullTimestamp;
-    if (message.id) {
-      container.dataset.logId = message.id;
-    }
-    if (message.groupId) {
-      container.dataset.groupId = message.groupId;
-    }
 
-    const header = document.createElement('div');
-    header.className = `log-line progress-status-line level-${severity}`;
-    const emoji = EMOJI_BY_LEVEL[severity] || '•';
-    header.innerHTML = `
-      <span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span>
-      <span class="progress-status-summary">${encodeHtml(summaryText)}</span>
+    const summaryLine = document.createElement('div');
+    summaryLine.className = 'log-line';
+    summaryLine.dataset.fullTimestamp = fullTimestamp;
+    if (message.id) summaryLine.dataset.logId = message.id;
+    if (message.groupId) summaryLine.dataset.groupId = message.groupId;
+    summaryLine.innerHTML = `
+      <span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> 
+      <span class="message-${severity}">${encodeHtml(summaryText)}</span>
     `;
-    container.appendChild(header);
+    container.appendChild(summaryLine);
 
     if (detailText) {
-      const detailElem = document.createElement('pre');
-      detailElem.className = `progress-status-detail progress-status-${severity}`;
-      detailElem.textContent = detailText;
-      container.appendChild(detailElem);
+      const detailLine = document.createElement('pre');
+      detailLine.className = `log-line message-${severity}`;
+      detailLine.dataset.fullTimestamp = fullTimestamp;
+      if (message.id) detailLine.dataset.logId = message.id;
+      if (message.groupId) detailLine.dataset.groupId = message.groupId;
+      detailLine.textContent = detailText;
+      container.appendChild(detailLine);
     }
 
     return container;
