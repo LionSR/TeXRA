@@ -524,7 +524,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const nextRound = this.currentRoundIndex + 1;
     const hasRemainingRounds = nextRound < this.getTotalRounds();
     if (endTurn) {
-      return true;
+      return false;
     }
 
     return hasRemainingRounds && !this.isInterruptionRequested();
