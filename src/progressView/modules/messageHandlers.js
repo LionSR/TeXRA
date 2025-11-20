@@ -176,17 +176,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.pendingFilterUpdate = false;
     }
     state.resetExecutionIdAvailability();
-    message.streams.forEach((s) => {
-      if (s.status) {
-        state.streamStatuses.set(s.name, s.status);
+    // Preserve existing statuses when updates omit them so errored streams
+    // remain marked as error instead of reverting to stopped
+    const streams = (message.streams || []).map((s) => {
+      const status =
+        s.status !== undefined ? s.status : state.streamStatuses.get(s.name);
+      if (status) {
+        state.streamStatuses.set(s.name, status);
       } else {
         state.streamStatuses.delete(s.name);
       }
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
+      return { ...s, status };
     });
-
-    // Backend already sends filtered streams, no need to filter again
-    const streams = message.streams || [];
 
     dom.streamTabs.update(streams, message.activeStream);
 
