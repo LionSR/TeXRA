@@ -86,7 +86,7 @@ export async function getActiveEditorWithGuards(
     }
   }
 
-  const relativePath = WorkspaceFS.relativePath(editor.document.fileName);
+  const relativePath = WorkspaceFS.relativePath(editor.document.uri);
 
   return {
     status: 'ok',

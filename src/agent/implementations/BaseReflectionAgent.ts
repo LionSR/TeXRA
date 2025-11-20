@@ -152,6 +152,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Initialize fileService first so we can use it below
     this.fileService = new TaskRunFileService(context.executionId);
 
+    const workspaceRoot = WorkspaceFS.getUri();
+    if (!workspaceRoot) {
+      throw new Error('Workspace path is not available.');
+    }
+
     this.outputFile = new Array<AgentFileLocation>(numRounds);
     this.outputFiles = {};
     for (let i = 0; i < numRounds; i++) {
@@ -162,12 +167,12 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     this.baseFiles =
       this.agentConfig.outputFiles.length > 0
         ? this.agentConfig.outputFiles.map((f) =>
-            createWorkspaceLocation(WorkspaceFS.fullPath(f), f),
+            createWorkspaceLocation(WorkspaceFS.fullUri(f), workspaceRoot),
           )
         : [
             createWorkspaceLocation(
-              WorkspaceFS.fullPath(this.agentConfig.inputFile),
-              this.agentConfig.inputFile,
+              WorkspaceFS.fullUri(this.agentConfig.inputFile),
+              workspaceRoot,
             ),
           ];
 

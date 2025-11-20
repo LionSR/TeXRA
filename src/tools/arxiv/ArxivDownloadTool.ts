@@ -1,4 +1,5 @@
 // Third-party imports
+import * as vscode from 'vscode';
 import { z } from 'zod';
 
 // Local imports - tools
@@ -46,7 +47,7 @@ export class ArxivDownloadTool extends defineTool({
       );
     }
 
-    const relativeRaw = WorkspaceFS.relativePath(downloadPath);
+    const relativeRaw = WorkspaceFS.relativePath(vscode.Uri.file(downloadPath));
     // WorkspaceFS.relativePath returns an empty string for the workspace root; normalise to '.' for tooling.
     const relativePath = relativeRaw === '' ? '.' : relativeRaw;
     const displayPath = toPosixPath(relativePath);

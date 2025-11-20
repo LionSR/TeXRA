@@ -411,7 +411,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       resolvedRunId ?? this.provider.state.getExecutionId(stream);
 
     try {
-      let directoryToReveal: string | undefined;
+      let directoryToReveal: vscode.Uri | undefined;
 
       if (executionId) {
         await ensureRunDir(executionId);
@@ -424,7 +424,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
               info.location.kind === 'runStorage' ||
               info.location.kind === 'workspace'
             ) {
-              directoryToReveal = path.dirname(info.location.absolutePath);
+              directoryToReveal = vscode.Uri.file(
+                path.dirname(info.location.absolutePath),
+              );
               break;
             }
           }
@@ -439,9 +441,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         return;
       }
 
-      await safeExecuteCommand('revealFileInOS', [
-        vscode.Uri.file(directoryToReveal),
-      ]);
+      await safeExecuteCommand('revealFileInOS', [directoryToReveal]);
     } catch (error) {
       const errorMessage = toErrorMessage(error);
       this.logger.error(

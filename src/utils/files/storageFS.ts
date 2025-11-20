@@ -21,25 +21,25 @@ export class StorageFS extends RelativeFS {
   /**
    * Return the workspace storage base path (per-workspace)
    */
-  protected static override getBasePath(): string {
+  protected static override getBaseUri(): vscode.Uri {
     if (!this.context?.storageUri) {
       throw new Error(
         'StorageFS not initialized. Call StorageFS.initialize(context) first.',
       );
     }
-    return this.context.storageUri.fsPath;
+    return this.context.storageUri;
   }
 
   /**
    * Get the global storage base path (shared across workspaces)
    */
-  public static getGlobalPath(): string {
+  public static getGlobalUri(): vscode.Uri {
     if (!this.context?.globalStorageUri) {
       throw new Error(
         'StorageFS not initialized. Call StorageFS.initialize(context) first.',
       );
     }
-    return this.context.globalStorageUri.fsPath;
+    return this.context.globalStorageUri;
   }
 
   // Inherit file operations from RelativeFS
@@ -50,8 +50,8 @@ export class StorageFS extends RelativeFS {
  * Extends StorageFS but uses global storage paths instead of workspace storage.
  */
 export class GlobalStorageFS extends RelativeFS {
-  protected static override getBasePath(): string {
-    return StorageFS.getGlobalPath();
+  protected static override getBaseUri(): vscode.Uri {
+    return StorageFS.getGlobalUri();
   }
 }
 

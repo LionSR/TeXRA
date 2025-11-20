@@ -190,7 +190,7 @@ async function selectEditedFile(): Promise<string | null> {
 async function getCurrentFile(): Promise<string | null> {
   const currentFile = vscode.window.activeTextEditor?.document;
   if (currentFile && currentFile.uri.scheme === 'file') {
-    return WorkspaceFS.relativePath(currentFile.uri.fsPath);
+    return WorkspaceFS.relativePath(currentFile.uri);
   }
   return null;
 }

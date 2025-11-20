@@ -1,6 +1,9 @@
 // Node.js built-in imports
 import * as assert from 'assert';
 
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - tools
 import { LsTool } from '@tools/ls';
 import { toolResult } from '@tools/result';
@@ -76,7 +79,7 @@ describe('ArxivDownloadTool', () => {
       WorkspaceFS as unknown as {
         relativePath: typeof originalRelativePath;
       }
-    ).relativePath = () => 'sample';
+    ).relativePath = (_uri: vscode.Uri) => 'sample';
 
     (
       LsTool.prototype as unknown as {

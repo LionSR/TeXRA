@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
+import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
@@ -80,7 +81,7 @@ export function findFilesFromPatterns(
           nodir: true,
         });
         if (matches.length > 0) {
-          results.add(WorkspaceFS.relativePath(matches[0]));
+          results.add(WorkspaceFS.relativePath(vscode.Uri.file(matches[0])));
           break;
         }
       }

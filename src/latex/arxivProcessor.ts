@@ -3,6 +3,7 @@ import * as path from 'path';
 import { pipeline } from 'node:stream/promises';
 
 // Third-party imports
+import * as vscode from 'vscode';
 import axios from 'axios';
 import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
@@ -229,7 +230,9 @@ export class ArxivSourceProcessor {
       }
     } else {
       // For non-archive files, rename to main.tex and move to paper root
-      const downloadedRel = WorkspaceFS.relativePath(downloadedPath);
+      const downloadedRel = WorkspaceFS.relativePath(
+        vscode.Uri.file(downloadedPath),
+      );
       const targetRel = path.join(paperDirRelative, 'main.tex');
       // Always move the file to paper root, even if already named main.tex
       if (downloadedRel !== targetRel) {

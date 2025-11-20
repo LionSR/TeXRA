@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 // Local imports - utils
 import { ensureDirCommon } from './ensureDirCommon';
 
-type PathInput = string;
+export type PathInput = vscode.Uri | string;
 
 /**
  * Shared filesystem helpers backed by VS Code's workspace API.
@@ -18,26 +18,33 @@ type PathInput = string;
  */
 export abstract class BaseFS {
   /** Resolve caller supplied path to an absolute filesystem path. */
-  protected static resolvePath(target: PathInput): string {
+  protected static resolvePath(target: PathInput): PathInput {
     return target;
   }
 
   /** Allow subclasses to enforce additional invariants on resolved paths. */
   protected static validateResolvedPath(
-    _resolvedPath: string,
-    _original: string,
+    _resolvedPath: PathInput,
+    _original: PathInput,
   ): void {
     // Default implementation performs no validation.
   }
 
-  private static preparePath(this: typeof BaseFS, target: PathInput): string {
+  private static preparePath(
+    this: typeof BaseFS,
+    target: PathInput,
+  ): vscode.Uri {
     const resolved = this.resolvePath(target);
     this.validateResolvedPath(resolved, target);
-    return resolved;
+    if (resolved instanceof vscode.Uri) {
+      return resolved;
+    }
+
+    return vscode.Uri.file(resolved);
   }
 
   protected static toUri(this: typeof BaseFS, target: PathInput): vscode.Uri {
-    return vscode.Uri.file(this.preparePath(target));
+    return this.preparePath(target);
   }
 
   // ===== Async Methods =====
@@ -87,7 +94,7 @@ export abstract class BaseFS {
   ): Promise<void> {
     const data =
       typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
-    await fs.promises.appendFile(this.preparePath(target), data);
+    await fs.promises.appendFile(this.toUri(target).fsPath, data);
   }
 
   public static async delete(
@@ -198,15 +205,15 @@ export abstract class BaseFS {
   // ===== Sync Methods =====
 
   public static existsSync(this: typeof BaseFS, target: PathInput): boolean {
-    return fs.existsSync(this.preparePath(target));
+    return fs.existsSync(this.toUri(target).fsPath);
   }
 
   public static readSync(this: typeof BaseFS, target: PathInput): string {
-    return fs.readFileSync(this.preparePath(target), 'utf-8');
+    return fs.readFileSync(this.toUri(target).fsPath, 'utf-8');
   }
 
   public static readBytesSync(this: typeof BaseFS, target: PathInput): Buffer {
-    return fs.readFileSync(this.preparePath(target));
+    return fs.readFileSync(this.toUri(target).fsPath);
   }
 
   public static writeSync(
@@ -215,14 +222,14 @@ export abstract class BaseFS {
     content: string | Buffer,
   ): void {
     if (typeof content === 'string') {
-      fs.writeFileSync(this.preparePath(target), content, 'utf-8');
+      fs.writeFileSync(this.toUri(target).fsPath, content, 'utf-8');
       return;
     }
-    fs.writeFileSync(this.preparePath(target), content);
+    fs.writeFileSync(this.toUri(target).fsPath, content);
   }
 
   public static deleteSync(this: typeof BaseFS, target: PathInput): void {
-    fs.unlinkSync(this.preparePath(target));
+    fs.unlinkSync(this.toUri(target).fsPath);
   }
 
   public static mkdirSync(
@@ -230,7 +237,7 @@ export abstract class BaseFS {
     target: PathInput,
     options?: { recursive?: boolean },
   ): void {
-    fs.mkdirSync(this.preparePath(target), options);
+    fs.mkdirSync(this.toUri(target).fsPath, options);
   }
 
   public static ensureDirSync(this: typeof BaseFS, target: PathInput): void {
@@ -240,11 +247,11 @@ export abstract class BaseFS {
   }
 
   public static readDirSync(this: typeof BaseFS, target: PathInput): string[] {
-    return fs.readdirSync(this.preparePath(target));
+    return fs.readdirSync(this.toUri(target).fsPath);
   }
 
   public static statSync(this: typeof BaseFS, target: PathInput): fs.Stats {
-    return fs.statSync(this.preparePath(target));
+    return fs.statSync(this.toUri(target).fsPath);
   }
 
   // ===== Stream Methods =====
@@ -265,7 +272,7 @@ export abstract class BaseFS {
           highWaterMark?: number;
         }),
   ): fs.ReadStream {
-    return fs.createReadStream(this.preparePath(target), options);
+    return fs.createReadStream(this.toUri(target).fsPath, options);
   }
 
   public static createWriteStream(
@@ -282,7 +289,7 @@ export abstract class BaseFS {
           start?: number;
         }),
   ): fs.WriteStream {
-    return fs.createWriteStream(this.preparePath(target), options);
+    return fs.createWriteStream(this.toUri(target).fsPath, options);
   }
 
   public static unlink(
@@ -290,13 +297,17 @@ export abstract class BaseFS {
     target: PathInput,
     callback: (err: NodeJS.ErrnoException | null) => void,
   ): void {
-    fs.unlink(this.preparePath(target), callback);
+    fs.unlink(this.toUri(target).fsPath, callback);
   }
 
   // ===== Utility helpers =====
 
   public static fullPath(this: typeof BaseFS, target: PathInput): string {
-    return this.preparePath(target);
+    return this.toUri(target).fsPath;
+  }
+
+  public static fullUri(this: typeof BaseFS, target: PathInput): vscode.Uri {
+    return this.toUri(target);
   }
 }
 

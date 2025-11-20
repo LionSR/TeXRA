@@ -8,6 +8,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import * as configModule from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
+import type { PathInput } from '@utils/files/baseFS';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 describe('maybeSaveDebugObject', () => {
@@ -45,23 +46,26 @@ describe('maybeSaveDebugObject', () => {
     infoLogs = [];
     errorLogs = [];
 
-    storageFs.writeJson = async (relativePath, value) => {
-      storageWrites.push({ relativePath, value });
+    storageFs.writeJson = async (relativePath: PathInput, value) => {
+      storageWrites.push({ relativePath: relativePath.toString(), value });
     };
 
-    storageFs.ensureDir = async (relativePath) => {
-      ensured.push(relativePath);
+    storageFs.ensureDir = async (relativePath: PathInput) => {
+      ensured.push(relativePath.toString());
     };
 
-    storageFs.fullPath = (relativePath) =>
-      path.join('/mock/storage', relativePath);
+    storageFs.fullPath = (relativePath: PathInput) =>
+      path.join('/mock/storage', relativePath.toString());
 
-    workspaceFs.writeJson = async (relativePath, value) => {
-      workspaceWrites.push({ relativePath, value });
+    workspaceFs.writeJson = async (relativePath: PathInput, value) => {
+      workspaceWrites.push({
+        relativePath: relativePath.toString(),
+        value,
+      });
     };
 
-    workspaceFs.fullPath = (relativePath) =>
-      path.join('/mock/workspace', relativePath);
+    workspaceFs.fullPath = (relativePath: PathInput) =>
+      path.join('/mock/workspace', relativePath.toString());
 
     (configModule as { getConfig: typeof originalGetConfig }).getConfig = ((
       key: string,

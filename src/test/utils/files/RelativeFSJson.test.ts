@@ -3,6 +3,7 @@ import * as assert from 'assert';
 import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
+import * as vscode from 'vscode';
 
 // Local imports - utils
 import { RelativeFS } from '@utils/files/relativeFS';
@@ -10,8 +11,8 @@ import { RelativeFS } from '@utils/files/relativeFS';
 const BASE_DIR = path.join(os.tmpdir(), 'texra-relativefs-json-tests');
 
 class TestRelativeFS extends RelativeFS {
-  protected static override getBasePath(): string {
-    return BASE_DIR;
+  protected static override getBaseUri(): vscode.Uri {
+    return vscode.Uri.file(BASE_DIR);
   }
 }
 

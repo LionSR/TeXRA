@@ -34,7 +34,7 @@ async function handleTestTextEditor(): Promise<void> {
       return;
     }
 
-    const filePath = WorkspaceFS.relativePath(editor.document.fileName);
+    const filePath = WorkspaceFS.relativePath(editor.document.uri);
     logger.info(CHANNEL, `Testing text editor tool with file: ${filePath}`);
 
     // Get command to test

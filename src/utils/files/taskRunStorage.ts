@@ -2,6 +2,9 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - log
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -33,8 +36,9 @@ export const TASK_RUNS_DIR = 'taskRuns';
  */
 export interface WorkspaceFileLocation {
   kind: 'workspace';
-  absolutePath: string;
-  relativePath: string;
+  absoluteUri: vscode.Uri;
+  readonly absolutePath: string;
+  readonly relativePath: string;
 }
 
 /**
@@ -42,8 +46,9 @@ export interface WorkspaceFileLocation {
  */
 export interface RunStorageFileLocation {
   kind: 'runStorage';
-  absolutePath: string;
-  relativePath: string;
+  absoluteUri: vscode.Uri;
+  readonly absolutePath: string;
+  readonly relativePath: string;
   executionId: string;
 }
 
@@ -52,7 +57,8 @@ export interface RunStorageFileLocation {
  */
 export interface ExternalFileLocation {
   kind: 'external';
-  absolutePath: string;
+  absoluteUri: vscode.Uri;
+  readonly absolutePath: string;
 }
 
 /**
@@ -69,37 +75,88 @@ export type FileLocation =
  */
 export type AgentFileLocation = WorkspaceFileLocation | RunStorageFileLocation;
 
-export function createWorkspaceLocation(
-  absolutePath: string,
-  relativePath: string,
-): WorkspaceFileLocation {
-  return {
-    kind: 'workspace',
-    absolutePath,
-    relativePath,
+type LocationParams =
+  | { kind: 'workspace'; absoluteUri: vscode.Uri; baseUri: vscode.Uri }
+  | {
+      kind: 'runStorage';
+      absoluteUri: vscode.Uri;
+      baseUri: vscode.Uri;
+      executionId: string;
+    }
+  | { kind: 'external'; absoluteUri: vscode.Uri };
+
+function relativeFromBase(
+  absoluteUri: vscode.Uri,
+  baseUri: vscode.Uri,
+): string {
+  return path.relative(baseUri.fsPath, absoluteUri.fsPath);
+}
+
+function createFileLocation(params: LocationParams): FileLocation {
+  const { absoluteUri } = params;
+
+  const base = {
+    absoluteUri,
+    get absolutePath() {
+      return absoluteUri.fsPath;
+    },
   };
+
+  if (params.kind === 'external') {
+    return { ...base, kind: params.kind } satisfies ExternalFileLocation;
+  }
+
+  if (params.kind === 'workspace') {
+    return {
+      ...base,
+      kind: params.kind,
+      get relativePath() {
+        return relativeFromBase(absoluteUri, params.baseUri);
+      },
+    } satisfies WorkspaceFileLocation;
+  }
+
+  return {
+    ...base,
+    kind: params.kind,
+    executionId: params.executionId,
+    get relativePath() {
+      return relativeFromBase(absoluteUri, params.baseUri);
+    },
+  } satisfies RunStorageFileLocation;
+}
+
+export function createWorkspaceLocation(
+  absoluteUri: vscode.Uri,
+  baseUri: vscode.Uri,
+): WorkspaceFileLocation {
+  return createFileLocation({
+    kind: 'workspace',
+    absoluteUri,
+    baseUri,
+  }) as WorkspaceFileLocation;
 }
 
 export function createRunStorageLocation(
-  absolutePath: string,
-  relativePath: string,
+  absoluteUri: vscode.Uri,
+  baseUri: vscode.Uri,
   executionId: string,
 ): RunStorageFileLocation {
-  return {
+  return createFileLocation({
     kind: 'runStorage',
-    absolutePath,
-    relativePath,
+    absoluteUri,
+    baseUri,
     executionId,
-  };
+  }) as RunStorageFileLocation;
 }
 
 export function createExternalLocation(
-  absolutePath: string,
+  absoluteUri: vscode.Uri,
 ): ExternalFileLocation {
-  return {
+  return createFileLocation({
     kind: 'external',
-    absolutePath,
-  };
+    absoluteUri,
+  }) as ExternalFileLocation;
 }
 
 /**
@@ -107,8 +164,9 @@ export function createExternalLocation(
  * @param id - The execution ID for the task run
  * @returns The full path to the task run directory
  */
-export function getRunDir(id: ExecutionId): string {
-  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id));
+export function getRunDir(id: ExecutionId): vscode.Uri {
+  const runRoot = StorageFS.fullUri(TASK_RUNS_DIR);
+  return vscode.Uri.joinPath(runRoot, id);
 }
 
 /**
@@ -116,23 +174,27 @@ export function getRunDir(id: ExecutionId): string {
  */
 function getRunStoragePaths(
   id: ExecutionId,
-  workspaceRelative: string,
-): { absolute: string; storageRelative: string; runRelative: string } {
-  const relative = workspaceRelative ? path.normalize(workspaceRelative) : '';
-  const storageRelative = path.join(TASK_RUNS_DIR, id, relative);
+  workspaceRelative: string | string[],
+): { absolute: vscode.Uri; runRoot: vscode.Uri } {
+  const segments = Array.isArray(workspaceRelative)
+    ? workspaceRelative.filter(Boolean)
+    : workspaceRelative.replace(/\\/g, '/').split('/').filter(Boolean);
+  const runRoot = getRunDir(id);
+  const absolute =
+    segments.length > 0 ? vscode.Uri.joinPath(runRoot, ...segments) : runRoot;
+
   return {
-    absolute: StorageFS.fullPath(storageRelative),
-    storageRelative,
-    runRelative: relative,
+    absolute,
+    runRoot,
   };
 }
 
-async function ensureParentDir(filePath: string): Promise<void> {
-  const parentDir = path.dirname(filePath);
-  await fs.mkdir(parentDir, { recursive: true });
+async function ensureParentDir(filePath: vscode.Uri): Promise<void> {
+  const parentDir = vscode.Uri.file(path.dirname(filePath.fsPath));
+  await AbsoluteFS.ensureDir(parentDir);
 }
 
-async function removeIfExists(target: string): Promise<void> {
+async function removeIfExists(target: vscode.Uri): Promise<void> {
   if (await AbsoluteFS.exists(target)) {
     await AbsoluteFS.delete(target, { recursive: true, useTrash: false });
   }
@@ -140,17 +202,17 @@ async function removeIfExists(target: string): Promise<void> {
 
 async function createSymlink(
   source: FileLocation,
-  destination: string,
+  destination: vscode.Uri,
 ): Promise<void> {
-  const sourceAbsolute = source.absolutePath;
+  const sourceAbsolute = source.absoluteUri.fsPath;
   await ensureParentDir(destination);
   try {
-    await fs.symlink(sourceAbsolute, destination);
+    await fs.symlink(sourceAbsolute, destination.fsPath);
   } catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'EEXIST') {
-      await fs.rm(destination, { recursive: true, force: true });
-      await fs.symlink(sourceAbsolute, destination);
+      await fs.rm(destination.fsPath, { recursive: true, force: true });
+      await fs.symlink(sourceAbsolute, destination.fsPath);
       return;
     }
     if (
@@ -159,13 +221,13 @@ async function createSymlink(
     ) {
       logger.warn(
         CHANNEL,
-        `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${err.code}`,
+        `Falling back to copy ${sourceAbsolute} -> ${destination.fsPath} due to ${err.code}`,
       );
       const stats = await fs.lstat(sourceAbsolute);
       if (stats.isDirectory()) {
-        await fs.cp(sourceAbsolute, destination, { recursive: true });
+        await fs.cp(sourceAbsolute, destination.fsPath, { recursive: true });
       } else {
-        await fs.copyFile(sourceAbsolute, destination);
+        await fs.copyFile(sourceAbsolute, destination.fsPath);
       }
       return;
     }
@@ -186,31 +248,25 @@ function shouldSkipRelocation(relativePath: string): boolean {
     return false;
   }
 
-  const segments = relativePath.split(path.sep).filter(Boolean);
-  if (segments.length === 0) {
-    return false;
-  }
-
-  return IGNORED_WORKSPACE_ROOTS.has(segments[0]);
+  const [first] = relativePath.replace(/\\/g, '/').split('/').filter(Boolean);
+  return first ? IGNORED_WORKSPACE_ROOTS.has(first) : false;
 }
 
 export class TaskRunFileService {
-  private useRunStorage: boolean;
-  public metadata: {
+  private runContext: {
     mode: 'workspace' | 'taskRunStorage';
-    executionId: ExecutionId | undefined;
-    runDirectory: string | undefined;
+    executionId?: ExecutionId;
+    runDirectory?: vscode.Uri;
   };
   private hasPreparedSnapshot = false;
   private readonly mirroredDependencies = new Set<string>();
 
   constructor(executionId?: ExecutionId) {
-    this.metadata = {
+    this.runContext = {
       mode: 'workspace',
       executionId: undefined,
       runDirectory: undefined,
     };
-    this.useRunStorage = false;
     this.updateRunContext(executionId);
   }
 
@@ -229,14 +285,15 @@ export class TaskRunFileService {
       shouldUseRunStorage && executionId ? getRunDir(executionId) : undefined;
 
     const contextChanged =
-      this.metadata.mode !== nextMode ||
-      this.metadata.executionId !== executionId ||
-      this.metadata.runDirectory !== nextRunDirectory;
+      this.runContext.mode !== nextMode ||
+      this.runContext.executionId !== executionId ||
+      this.runContext.runDirectory !== nextRunDirectory;
 
-    this.metadata.mode = nextMode;
-    this.metadata.executionId = executionId ?? undefined;
-    this.metadata.runDirectory = nextRunDirectory;
-    this.useRunStorage = shouldUseRunStorage;
+    this.runContext = {
+      mode: nextMode,
+      executionId: executionId ?? undefined,
+      runDirectory: nextRunDirectory,
+    };
 
     if (contextChanged) {
       this.hasPreparedSnapshot = false;
@@ -248,21 +305,25 @@ export class TaskRunFileService {
     this.applyExecutionContext(executionId ?? undefined);
   }
 
-  private get workspaceRoot(): string | undefined {
-    return WorkspaceFS.getPath();
+  private get isRunStorageMode(): boolean {
+    return this.runContext.mode === 'taskRunStorage';
+  }
+
+  private get workspaceRoot(): vscode.Uri | undefined {
+    return WorkspaceFS.getUri();
   }
 
   // Direct access to activeExecutionId for internal use
   private get activeExecutionId(): ExecutionId | undefined {
-    return this.metadata.executionId;
+    return this.runContext.executionId;
   }
 
   public getExecutionId(): ExecutionId | undefined {
-    return this.metadata.executionId;
+    return this.runContext.executionId;
   }
 
   public hasRunDirectory(): boolean {
-    return Boolean(this.metadata.runDirectory);
+    return Boolean(this.runContext.runDirectory);
   }
 
   private async ensureRunDirectory(): Promise<void> {
@@ -295,7 +356,7 @@ export class TaskRunFileService {
       return;
     }
 
-    if (!this.useRunStorage) {
+    if (!this.isRunStorageMode) {
       return;
     }
 
@@ -306,7 +367,11 @@ export class TaskRunFileService {
     await this.ensureRunDirectory();
 
     const linkTargets = new Set<FileLocation>();
-    const workspaceRoot = WorkspaceFS.getPath()!;
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
+      return;
+    }
+
     const registerLink = (candidate?: string | null) => {
       if (!candidate) {
         return;
@@ -315,9 +380,8 @@ export class TaskRunFileService {
       if (trimmed.length === 0) {
         return;
       }
-      // Convert absolute path to FileLocation
-      const relativePath = path.relative(workspaceRoot, trimmed);
-      linkTargets.add(createWorkspaceLocation(trimmed, relativePath));
+      const candidateUri = vscode.Uri.file(trimmed);
+      linkTargets.add(createWorkspaceLocation(candidateUri, workspaceRoot));
     };
 
     if (options.mirrorBaseFiles !== false) {
@@ -346,26 +410,29 @@ export class TaskRunFileService {
       }
 
       try {
-        const stats = await fs.stat(sourceLocation.absolutePath);
+        const stats = await fs.stat(sourceLocation.absoluteUri.fsPath);
         if (!stats.isFile()) {
           return;
         }
 
-        const snapshotRelative = path.join(
+        const snapshotSegments = [
           'original',
-          sourceLocation.relativePath,
-        );
-        const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
+          ...sourceLocation.relativePath
+            .replace(/\\/g, '/')
+            .split('/')
+            .filter(Boolean),
+        ];
+        const snapshotPaths = getRunStoragePaths(executionId, snapshotSegments);
 
         try {
-          await fs.stat(snapshotPaths.absolute);
+          await fs.stat(snapshotPaths.absolute.fsPath);
           return;
         } catch (error) {
           const err = error as NodeJS.ErrnoException;
           if (err.code && err.code !== 'ENOENT') {
             throw Object.assign(
               new Error(
-                `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${err.message}`,
+                `Failed to inspect snapshot destination ${snapshotPaths.absolute.fsPath}: ${err.message}`,
               ),
               { cause: err },
             );
@@ -373,7 +440,10 @@ export class TaskRunFileService {
         }
 
         await ensureParentDir(snapshotPaths.absolute);
-        await fs.copyFile(sourceLocation.absolutePath, snapshotPaths.absolute);
+        await fs.copyFile(
+          sourceLocation.absoluteUri.fsPath,
+          snapshotPaths.absolute.fsPath,
+        );
       } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err?.code === 'ENOENT') {
@@ -423,25 +493,35 @@ export class TaskRunFileService {
   public createLocation(relativePath: string): FileLocation {
     const workspaceRoot = this.workspaceRoot;
     if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
+      const absolute = path.isAbsolute(relativePath)
+        ? vscode.Uri.file(path.normalize(relativePath))
+        : vscode.Uri.file(path.resolve(relativePath));
+      return createExternalLocation(absolute);
     }
 
     // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
     const normalized = relativePath ? path.normalize(relativePath) : '';
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+    const segments = normalized.split(/\\|\//).filter(Boolean);
+    const workspaceAbsolute =
+      segments.length > 0
+        ? vscode.Uri.joinPath(workspaceRoot, ...segments)
+        : workspaceRoot;
 
     // Check if run storage is enabled
     const executionId = this.activeExecutionId;
-    if (executionId && this.useRunStorage) {
-      const runDir = this.metadata.runDirectory;
+    if (executionId && this.isRunStorageMode) {
+      const runDir = this.runContext.runDirectory;
       if (runDir) {
-        const runAbsolute = path.join(runDir, normalized);
-        return createRunStorageLocation(runAbsolute, normalized, executionId);
+        const runAbsolute =
+          segments.length > 0
+            ? vscode.Uri.joinPath(runDir, ...segments)
+            : runDir;
+        return createRunStorageLocation(runAbsolute, runDir, executionId);
       }
     }
 
     // Default to workspace location
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+    return createWorkspaceLocation(workspaceAbsolute, workspaceRoot);
   }
 
   /**
@@ -474,7 +554,7 @@ export class TaskRunFileService {
 
     return createRunStorageLocation(
       runPaths.absolute,
-      runPaths.runRelative,
+      runPaths.runRoot,
       executionId,
     );
   }
@@ -488,7 +568,9 @@ export class TaskRunFileService {
  */
 export async function ensureRunDir(id: ExecutionId): Promise<void> {
   await StorageFS.ensureDir(TASK_RUNS_DIR);
-  await StorageFS.ensureDir(path.join(TASK_RUNS_DIR, id));
+  await StorageFS.ensureDir(
+    vscode.Uri.joinPath(StorageFS.fullUri(TASK_RUNS_DIR), id),
+  );
 }
 
 /**
@@ -514,39 +596,54 @@ export function getComparablePath(location: FileLocation): string {
  * @param target - Absolute or workspace-relative path
  * @returns FileLocation (workspace or external, never runStorage)
  */
-export function pathToLocation(target: string): FileLocation {
+export function pathToLocation(target: string | vscode.Uri): FileLocation {
   if (!target) {
-    // Empty strings should resolve to workspace root or error
-    const workspaceRoot = WorkspaceFS.getPath();
+    const workspaceRoot = WorkspaceFS.getUri();
     if (!workspaceRoot) {
       throw new Error('Cannot resolve empty path without workspace');
     }
-    return createWorkspaceLocation(workspaceRoot, '');
+    return createWorkspaceLocation(workspaceRoot, workspaceRoot);
+  }
+
+  if (target instanceof vscode.Uri) {
+    const workspaceRoot = WorkspaceFS.getUri();
+    if (workspaceRoot) {
+      const relative = WorkspaceFS.relativePath(target);
+      const workspaceCandidate = path.isAbsolute(relative)
+        ? undefined
+        : relative;
+      if (workspaceCandidate !== undefined && !relative.startsWith('..')) {
+        return createWorkspaceLocation(target, workspaceRoot);
+      }
+    }
+    return createExternalLocation(target);
   }
 
   if (!path.isAbsolute(target)) {
-    const workspaceRoot = WorkspaceFS.getPath();
+    const workspaceRoot = WorkspaceFS.getUri();
     if (!workspaceRoot) {
-      // Relative path without workspace: resolve to absolute using process.cwd()
       const absolutePath = path.resolve(target);
-      return createExternalLocation(absolutePath);
+      return createExternalLocation(vscode.Uri.file(absolutePath));
     }
-    // path.join() normalizes automatically
-    const absolutePath = path.join(workspaceRoot, target);
-    return createWorkspaceLocation(absolutePath, target);
+
+    const normalized = path.normalize(target);
+    const segments = normalized.split(/\\|\//).filter(Boolean);
+    const absolute =
+      segments.length > 0
+        ? vscode.Uri.joinPath(workspaceRoot, ...segments)
+        : workspaceRoot;
+    return createWorkspaceLocation(absolute, workspaceRoot);
   }
 
-  // Normalize only at entry point from external strings
   const normalized = path.normalize(target);
-
-  // Check if in workspace
-  const workspaceRoot = WorkspaceFS.getPath();
+  const absoluteUri = vscode.Uri.file(normalized);
+  const workspaceRoot = WorkspaceFS.getUri();
   if (workspaceRoot) {
-    const relative = path.relative(workspaceRoot, normalized);
+    const relative = WorkspaceFS.relativePath(absoluteUri);
     if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
-      return createWorkspaceLocation(normalized, relative);
+      return createWorkspaceLocation(absoluteUri, workspaceRoot);
     }
   }
 
-  return createExternalLocation(normalized);
+  return createExternalLocation(absoluteUri);
 }

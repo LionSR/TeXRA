@@ -58,8 +58,8 @@ async function handleCompare(
     }
 
     // Create URIs for diff editor
-    const baseUri = vscode.Uri.file(fileToUseLocation.absolutePath);
-    const editedUri = vscode.Uri.file(editedLocation.absolutePath);
+    const baseUri = fileToUseLocation.absoluteUri;
+    const editedUri = editedLocation.absoluteUri;
 
     // Create title for the diff editor
     const baseFileName = path.basename(fileToUseLocation.absolutePath);

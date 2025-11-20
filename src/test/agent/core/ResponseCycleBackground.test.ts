@@ -368,8 +368,8 @@ describe('ResponseCycle background reasoning logs', () => {
       },
       messages,
       outputLocation: createWorkspaceLocation(
-        WorkspaceFS.fullPath('output.txt'),
-        'output.txt',
+        WorkspaceFS.fullUri('output.txt'),
+        WorkspaceFS.getUri() ?? vscode.Uri.file(process.cwd()),
       ),
       store,
     });

@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -9,21 +6,38 @@ import { AbsoluteFS } from './absoluteFS';
 import { RelativeFS } from './relativeFS';
 
 export class WorkspaceFS extends RelativeFS {
-  protected static override getBasePath(): string {
+  private static workspaceFolder: vscode.WorkspaceFolder | undefined;
+
+  private static getWorkspaceFolder(): vscode.WorkspaceFolder {
     const folder = vscode.workspace.workspaceFolders?.[0];
     if (!folder) {
       throw new Error('Workspace path is not available.');
     }
-    return folder.uri.fsPath;
+    if (
+      !this.workspaceFolder ||
+      this.workspaceFolder.uri.toString() !== folder.uri.toString()
+    ) {
+      this.workspaceFolder = folder;
+    }
+    return this.workspaceFolder;
+  }
+
+  protected static override getBaseUri(): vscode.Uri {
+    return this.getWorkspaceFolder().uri;
   }
 
   public static getPath(): string | undefined {
-    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    return this.getUri()?.fsPath;
   }
 
-  public static relativePath(filePath: string): string {
-    const base = this.getPath();
-    return base ? path.relative(base, filePath) : filePath;
+  public static getUri(): vscode.Uri | undefined {
+    return (
+      this.workspaceFolder?.uri ?? vscode.workspace.workspaceFolders?.[0]?.uri
+    );
+  }
+
+  public static relativePath(filePath: vscode.Uri): string {
+    return vscode.workspace.asRelativePath(filePath, false);
   }
 
   public static async existsAndNonTrivial(target: string): Promise<boolean> {

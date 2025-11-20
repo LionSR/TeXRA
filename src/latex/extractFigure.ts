@@ -1,10 +1,13 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import * as vscode from 'vscode';
+
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { flexibleFS } from '@utils/files';
+import { createExternalLocation, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 
 const CHANNEL = 'LaTeXCommands';
@@ -101,10 +104,9 @@ export async function extractFigurePathsFromLatex(
             const pathToCheck = normPath + ext;
 
             if (
-              await flexibleFS.exists({
-                kind: 'external',
-                absolutePath: pathToCheck,
-              })
+              await flexibleFS.exists(
+                createExternalLocation(vscode.Uri.file(pathToCheck)),
+              )
             ) {
               const relative = path.relative(latexDir, pathToCheck);
               if (!discovered.has(relative)) {

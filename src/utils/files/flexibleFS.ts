@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - log
 import * as logger from '@logger/logUtils';
 
@@ -18,7 +15,7 @@ logger.initialize(CHANNEL);
  */
 export class FlexibleFS {
   exists(target: FileLocation): Promise<boolean> {
-    return AbsoluteFS.exists(target.absolutePath);
+    return AbsoluteFS.exists(target.absoluteUri);
   }
 
   /**
@@ -42,25 +39,25 @@ export class FlexibleFS {
   }
 
   read(target: FileLocation): Promise<string> {
-    return AbsoluteFS.read(target.absolutePath);
+    return AbsoluteFS.read(target.absoluteUri);
   }
 
   readBytes(target: FileLocation): Promise<Buffer> {
-    return AbsoluteFS.readBytes(target.absolutePath);
+    return AbsoluteFS.readBytes(target.absoluteUri);
   }
 
   appendFile(
     target: FileLocation,
     content: string | Uint8Array,
   ): Promise<void> {
-    return AbsoluteFS.appendFile(target.absolutePath, content);
+    return AbsoluteFS.appendFile(target.absoluteUri, content);
   }
 
   async write(
     target: FileLocation,
     content: string | Uint8Array,
   ): Promise<void> {
-    const absolutePath = target.absolutePath;
+    const absolutePath = target.absoluteUri;
 
     try {
       await AbsoluteFS.write(absolutePath, content);
@@ -76,7 +73,7 @@ export class FlexibleFS {
           : content.byteLength;
       logger.warn(
         CHANNEL,
-        `Detected circular symlink while writing ${absolutePath}, replaced with file (${replacementSize} bytes)`,
+        `Detected circular symlink while writing ${absolutePath.fsPath}, replaced with file (${replacementSize} bytes)`,
       );
       await AbsoluteFS.delete(absolutePath, {
         recursive: true,
@@ -87,18 +84,18 @@ export class FlexibleFS {
   }
 
   async ensureDir(target: FileLocation): Promise<void> {
-    await AbsoluteFS.ensureDir(target.absolutePath);
+    await AbsoluteFS.ensureDir(target.absoluteUri);
   }
 
   async delete(
     target: FileLocation,
     options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
-    await AbsoluteFS.delete(target.absolutePath, options);
+    await AbsoluteFS.delete(target.absoluteUri, options);
   }
 
   stat(target: FileLocation) {
-    return AbsoluteFS.stat(target.absolutePath);
+    return AbsoluteFS.stat(target.absoluteUri);
   }
 }
 

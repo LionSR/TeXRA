@@ -488,7 +488,7 @@ export class FileManager {
       }
 
       const relativePaths = fileUris.map((uri) =>
-        WorkspaceFS.relativePath(uri.fsPath),
+        WorkspaceFS.relativePath(uri),
       );
       logger.info(
         CHANNEL,

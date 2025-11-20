@@ -8,6 +8,7 @@ import { writePromptToXml } from '@agent/utils/promptUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
+import type { PathInput } from '@utils/files/baseFS';
 
 describe('promptUtils.writePromptToXml', () => {
   type StorageFsMutable = {
@@ -45,23 +46,23 @@ describe('promptUtils.writePromptToXml', () => {
     ensured = [];
     workspaceWrites = [];
 
-    storageFs.write = async (relativePath, content) => {
-      writes.push({ relativePath, content });
+    storageFs.write = async (relativePath: PathInput, content) => {
+      writes.push({ relativePath: relativePath.toString(), content });
     };
 
-    storageFs.ensureDir = async (relativePath) => {
-      ensured.push(relativePath);
+    storageFs.ensureDir = async (relativePath: PathInput) => {
+      ensured.push(relativePath.toString());
     };
 
-    storageFs.fullPath = (relativePath) =>
-      path.join('/mock/storage', relativePath);
+    storageFs.fullPath = (relativePath: PathInput) =>
+      path.join('/mock/storage', relativePath.toString());
 
-    workspaceFs.write = async (relativePath, content) => {
-      workspaceWrites.push({ relativePath, content });
+    workspaceFs.write = async (relativePath: PathInput, content) => {
+      workspaceWrites.push({ relativePath: relativePath.toString(), content });
     };
 
-    workspaceFs.fullPath = (relativePath) =>
-      path.join('/mock/workspace', relativePath);
+    workspaceFs.fullPath = (relativePath: PathInput) =>
+      path.join('/mock/workspace', relativePath.toString());
   });
 
   afterEach(() => {
