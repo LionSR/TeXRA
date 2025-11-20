@@ -215,16 +215,31 @@ export async function runWithGroupContext<T>(
 }
 
 /**
- * Log a debug message. Supports both legacy positional parameters and modern options object.
+ * Log a debug message using modern options object.
  *
  * @example
- * // Modern approach (recommended):
  * debug(CHANNEL, 'Processing file', { groupId: '123', data: fileInfo });
- *
- * @example
- * // Legacy approach (still supported):
- * debug(CHANNEL, 'Processing file', '123', undefined, false, fileInfo);
  */
+export function debug(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
+
+/**
+ * Log a debug message using legacy positional parameters.
+ *
+ * @deprecated Use options object signature instead
+ */
+export function debug(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
+
 export function debug(
   channel: string,
   message: string,
@@ -233,7 +248,6 @@ export function debug(
   isAgent = false,
   data?: unknown,
 ): void {
-  // Detect if using modern options object or legacy positional parameters
   if (
     typeof optionsOrGroupId === 'object' &&
     optionsOrGroupId !== null &&
@@ -250,7 +264,6 @@ export function debug(
       options.data,
     );
   } else {
-    // Legacy positional parameters
     logWithGroup(
       channel,
       'debug',
@@ -264,16 +277,31 @@ export function debug(
 }
 
 /**
- * Log an info message. Supports both legacy positional parameters and modern options object.
+ * Log an info message using modern options object.
  *
  * @example
- * // Modern approach (recommended):
  * info(CHANNEL, 'Operation completed', { groupId: '123', messageType: MESSAGE_TYPES.FILE_LIST });
- *
- * @example
- * // Legacy approach (still supported):
- * info(CHANNEL, 'Operation completed', '123', MESSAGE_TYPES.FILE_LIST);
  */
+export function info(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
+
+/**
+ * Log an info message using legacy positional parameters.
+ *
+ * @deprecated Use options object signature instead
+ */
+export function info(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
+
 export function info(
   channel: string,
   message: string,
@@ -282,7 +310,6 @@ export function info(
   isAgent = false,
   data?: unknown,
 ): void {
-  // Detect if using modern options object or legacy positional parameters
   if (
     typeof optionsOrGroupId === 'object' &&
     optionsOrGroupId !== null &&
@@ -299,7 +326,6 @@ export function info(
       options.data,
     );
   } else {
-    // Legacy positional parameters
     logWithGroup(
       channel,
       'info',
@@ -313,16 +339,31 @@ export function info(
 }
 
 /**
- * Log a warning message. Supports both legacy positional parameters and modern options object.
+ * Log a warning message using modern options object.
  *
  * @example
- * // Modern approach (recommended):
  * warn(CHANNEL, 'Invalid configuration', { data: errorDetails });
- *
- * @example
- * // Legacy approach (still supported):
- * warn(CHANNEL, 'Invalid configuration', undefined, undefined, false, errorDetails);
  */
+export function warn(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
+
+/**
+ * Log a warning message using legacy positional parameters.
+ *
+ * @deprecated Use options object signature instead
+ */
+export function warn(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
+
 export function warn(
   channel: string,
   message: string,
@@ -331,7 +372,6 @@ export function warn(
   isAgent = false,
   data?: unknown,
 ): void {
-  // Detect if using modern options object or legacy positional parameters
   if (
     typeof optionsOrGroupId === 'object' &&
     optionsOrGroupId !== null &&
@@ -348,7 +388,6 @@ export function warn(
       options.data,
     );
   } else {
-    // Legacy positional parameters
     logWithGroup(
       channel,
       'warn',
@@ -362,16 +401,31 @@ export function warn(
 }
 
 /**
- * Log an error message. Supports both legacy positional parameters and modern options object.
+ * Log an error message using modern options object.
  *
  * @example
- * // Modern approach (recommended):
  * error(CHANNEL, 'Operation failed', { groupId: '123', data: exception });
- *
- * @example
- * // Legacy approach (still supported):
- * error(CHANNEL, 'Operation failed', '123', undefined, false, exception);
  */
+export function error(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
+
+/**
+ * Log an error message using legacy positional parameters.
+ *
+ * @deprecated Use options object signature instead
+ */
+export function error(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
+
 export function error(
   channel: string,
   message: string,
@@ -380,7 +434,6 @@ export function error(
   isAgent = false,
   data?: unknown,
 ): void {
-  // Detect if using modern options object or legacy positional parameters
   if (
     typeof optionsOrGroupId === 'object' &&
     optionsOrGroupId !== null &&
@@ -397,7 +450,6 @@ export function error(
       options.data,
     );
   } else {
-    // Legacy positional parameters
     logWithGroup(
       channel,
       'error',
