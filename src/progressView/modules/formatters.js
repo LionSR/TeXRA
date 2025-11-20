@@ -189,12 +189,16 @@ const normalizeToolUseLog = (structured) => {
   const summaryText =
     typeof parsed.summary === 'string' && parsed.summary.trim()
       ? parsed.summary.trim()
-      : '';
+      : typeof outputDetails.summary === 'string' && outputDetails.summary.trim()
+        ? outputDetails.summary.trim()
+        : '';
 
   const errorText =
     typeof parsed.error === 'string' && parsed.error.trim()
       ? parsed.error.trim()
-      : '';
+      : typeof outputDetails.error === 'string' && outputDetails.error.trim()
+        ? outputDetails.error.trim()
+        : '';
 
   const outputCandidate =
     parsed.output !== undefined ? parsed.output : outputDetails.output;
