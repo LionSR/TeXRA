@@ -257,7 +257,7 @@ export class AgentLogger {
    */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.debug(summary, {
+    this.info(summary, {
       groupId,
       messageType: MESSAGE_TYPES.STATISTICS,
       data: stats,
