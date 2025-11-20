@@ -212,6 +212,18 @@
             "description": "Enable streaming for DeepSeek models via OpenAI-compatible API. Overrides the global useStreaming setting.",
             "scope": "resource"
           },
+          "texra.model.useStreamingMoonshot": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable streaming for Moonshot Kimi models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
+          "texra.model.useStreamingDashscope": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable streaming for DashScope Qwen models via OpenAI-compatible API. Overrides the global useStreaming setting.",
+            "scope": "resource"
+          },
           "texra.model.baseUrlDeepSeek": {
             "type": "string",
             "default": "",
