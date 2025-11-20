@@ -151,7 +151,7 @@ export class DiffCommandExecutor {
         throw new Error(ERROR_MESSAGES.TIMEOUT(commandType, this.timeoutMs));
       }
 
-      const errorOutput = result.stderr || '';
+      const errorOutput = result.stderr ?? '';
       if (this.isBibliographyError(errorOutput)) {
         logger.warn(
           this.channel,

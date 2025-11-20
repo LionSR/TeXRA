@@ -177,7 +177,7 @@ async function handleLatexdiff(
     return;
   }
 
-  const fileToUse = baseFile || inputFile;
+  const fileToUse = baseFile ?? inputFile;
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff'))) {
       return;
@@ -218,7 +218,7 @@ async function handleLatexdiffvc(
   baseFile: string,
   commitHash: string,
 ) {
-  const fileToUse = baseFile || inputFile;
+  const fileToUse = baseFile ?? inputFile;
   try {
     if (!(await ensureLatexdiffToolInstalled('latexdiff-vc'))) {
       return;
@@ -267,7 +267,7 @@ async function handlePackLatexdiffvc(
       CHANNEL,
       `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
     );
-    const fileToUse = baseFile || inputFile;
+    const fileToUse = baseFile ?? inputFile;
     await runPackLatexdiffvc(fileToUse, commitHash, clean);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error packing LaTeX diff', err);
@@ -309,7 +309,7 @@ async function handleCleanLatexdiffvc(
       CHANNEL,
       `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}`,
     );
-    const fileToUse = baseFile || inputFile;
+    const fileToUse = baseFile ?? inputFile;
     await runCleanLatexdiffvc(fileToUse, commitHash);
   } catch (err) {
     await showLoggedErrorMessage(CHANNEL, 'Error cleaning LaTeX diff', err);
