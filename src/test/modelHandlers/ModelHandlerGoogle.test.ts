@@ -98,7 +98,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
       ],
     };
 
-    const toolInfo = handler.extractToolUse(response);
+    const [toolInfo] = handler.extractToolUse(response);
     assert.ok(toolInfo, 'expected tool info to be returned');
 
     assert.equal(toolInfo?.callId, 'google-call-1');
@@ -121,15 +121,17 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
   });
 
   it('omits unsupported identifier fields on follow-up function call parts', async () => {
+    const providerCall = {
+      provider: 'google',
+      callId: 'call-123',
+      name: 'read_file',
+      input: { path: 'syk_v5.tex' },
+      raw: { id: 'call-123', name: 'read_file', args: { path: 'syk_v5.tex' } },
+    } as const;
+
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
-      'call-123',
-      'read_file',
-      {
-        id: 'call-123',
-        name: 'read_file',
-        args: { path: 'syk_v5.tex' },
-      } as any,
+      providerCall,
       {},
       undefined,
     );

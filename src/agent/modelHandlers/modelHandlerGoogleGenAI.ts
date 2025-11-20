@@ -81,7 +81,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  NormalizedToolCall,
+  ProviderToolCall,
 } from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
@@ -167,7 +167,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  FunctionCall,
+  ProviderToolCall,
   GoogleGenAI,
   GenerateContentResponse
 > {
@@ -1066,29 +1066,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(
-    responseObject: GenerateContentResponse,
-  ): NormalizedToolCall | null {
+  extractToolUse(responseObject: GenerateContentResponse): ProviderToolCall[] {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
-      const funcPart = parts.find((part) => part.functionCall);
-      if (funcPart?.functionCall) {
-        const call = funcPart.functionCall;
-        if (!call.id || !call.name) {
-          return null;
-        }
+      const functionCalls = parts
+        .map((part) => part.functionCall)
+        .filter((call): call is FunctionCall =>
+          Boolean(call?.id && call?.name),
+        );
 
-        return {
-          provider: 'google',
-          callId: call.id,
-          name: call.name,
-          input: call.args,
-          raw: call,
-        };
+      if (functionCalls.length > 0) {
+        return functionCalls.map(
+          (call) =>
+            ({
+              provider: 'google',
+              callId: call.id!,
+              name: call.name!,
+              input: call.args,
+              raw: call,
+            }) satisfies ProviderToolCall,
+        );
       }
     }
-    return null;
+    return [];
   }
 
   private async buildAttachmentPart(
@@ -1124,26 +1125,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
-    _id: string,
-    name: string,
-    call: FunctionCall,
+    call: ProviderToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    if (!call.id) {
+    const callPayload = call as ProviderToolCall & { raw: FunctionCall };
+
+    if (!callPayload.callId) {
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    const args = call.args ?? {};
+    const args = callPayload.raw.args ?? {};
 
-    const functionName = call.name ?? name;
+    const functionName = callPayload.name;
 
     // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
 
     if (callPart.functionCall) {
-      callPart.functionCall.id = call.id;
+      callPart.functionCall.id = callPayload.callId;
     }
 
     // Use the same ID for the result to maintain correlation
@@ -1170,7 +1171,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
     const resultPart = createPartFromFunctionResponse(
-      call.id,
+      callPayload.callId,
       functionName,
       sanitizedResult,
     );

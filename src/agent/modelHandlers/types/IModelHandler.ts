@@ -110,7 +110,7 @@ export type AnthropicToolCall = {
   raw: ToolUseBlock;
 };
 
-export type NormalizedToolCall =
+export type ProviderToolCall =
   | OpenAIToolCall
   | DeepSeekToolCall
   | OpenAIResponseToolCall
@@ -131,7 +131,7 @@ export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = any,
   R = any,
-  T = unknown,
+  T extends ProviderToolCall = ProviderToolCall,
   C = unknown,
   Resp = unknown,
 > {
@@ -277,21 +277,17 @@ export interface IModelHandler<
   ): string | null;
 
   /** Extract tool-use details from a provider response. */
-  extractToolUse(responseObject: Resp): NormalizedToolCall | null;
+  extractToolUse(responseObject: Resp): T[];
 
   /**
    * Create provider-specific messages capturing the tool call and result.
    *
-   * @param id - Tool call identifier from the model response
-   * @param name - Tool name
    * @param call - Parsed tool call object or input payload
    * @param result - Object with output/error fields
    * @returns Tuple of [call message, result message]
    */
   createToolUseFollowUpMessages(
     client: C | undefined,
-    id: string,
-    name: string,
     call: T,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
