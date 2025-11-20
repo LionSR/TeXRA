@@ -97,6 +97,7 @@ export type GoogleToolCall = {
   callId: string;
   name: string;
   input: FunctionCall['args'];
+  thoughtSignature?: string;
   raw: FunctionCall;
 };
 

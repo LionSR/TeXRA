@@ -103,6 +103,15 @@ function findLastTextPart(
   return undefined;
 }
 
+function getThoughtSignature(part: Part): string | undefined {
+  const candidate = part as {
+    thoughtSignature?: string;
+    thought_signature?: string;
+  };
+
+  return candidate.thoughtSignature ?? candidate.thought_signature;
+}
+
 type GoogleGenerationConfig = GenerateContentConfig & {
   thinkingLevel?: 'low' | 'medium' | 'high';
 };
@@ -1084,18 +1093,32 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
-      const functionCalls = parts
-        .map((part) => part.functionCall)
-        .filter((call): call is FunctionCall => Boolean(call?.name));
+      const functionCalls: GoogleToolCall[] = [];
+
+      for (const part of parts) {
+        const functionCall = part.functionCall;
+        if (!functionCall?.name) {
+          continue;
+        }
+
+        const thoughtSignature = getThoughtSignature(part);
+        const rawCall = {
+          ...functionCall,
+          ...(thoughtSignature ? { thoughtSignature } : {}),
+        } as FunctionCall & { thoughtSignature?: string };
+
+        functionCalls.push({
+          provider: 'google',
+          callId: functionCall.id ?? randomUUID(),
+          name: functionCall.name!,
+          input: functionCall.args,
+          thoughtSignature,
+          raw: rawCall,
+        });
+      }
 
       if (functionCalls.length > 0) {
-        return functionCalls.map((call) => ({
-          provider: 'google',
-          callId: call.id ?? randomUUID(),
-          name: call.name!,
-          input: call.args,
-          raw: call,
-        }));
+        return functionCalls;
       }
     }
     return [];
@@ -1152,6 +1175,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (callPart.functionCall) {
       callPart.functionCall.id = call.callId;
+    }
+
+    const thoughtSignature =
+      (call.raw as { thoughtSignature?: string }).thoughtSignature ??
+      call.thoughtSignature;
+    if (thoughtSignature) {
+      (callPart as { thoughtSignature?: string }).thoughtSignature =
+        thoughtSignature;
     }
 
     // Use the same ID for the result to maintain correlation

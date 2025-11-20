@@ -33,6 +33,7 @@ import type {
   UploadFileParameters,
   FunctionCall,
   Content,
+  GenerateContentResponse,
 } from '@google/genai';
 
 interface LoggerStub extends Partial<AgentLogger> {
@@ -303,6 +304,81 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
 
     handlerMediaProcessor.mediaProcessor.loadEntries = originalLoadEntries;
     handlerMediaProcessor.mediaProcessor.logResults = originalLogResults;
+  });
+
+  it('adds thought signatures to follow-up function calls', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const thoughtSignature = 'signature-123';
+    const rawCall = {
+      name: 'default_api:ls',
+      args: { path: '.' },
+      id: 'call-456',
+      thoughtSignature,
+    } as FunctionCall & { thoughtSignature: string };
+
+    const providerCall = {
+      provider: 'google' as const,
+      callId: rawCall.id!,
+      name: rawCall.name!,
+      input: rawCall.args,
+      thoughtSignature,
+      raw: rawCall,
+    };
+
+    const messages = await handler.createToolUseFollowUpMessages(
+      undefined,
+      providerCall,
+      {},
+    );
+
+    const callParts = messages[0].parts ?? [];
+    const callPart = callParts[callParts.length - 1] as unknown as {
+      thoughtSignature?: string;
+    };
+
+    assert.equal(callPart.thoughtSignature, thoughtSignature);
+  });
+});
+
+describe('ModelHandlerGoogleGenAI thought signatures', () => {
+  it('retains thought signatures when extracting tool calls', () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const functionCall: FunctionCall = {
+      name: 'default_api:ls',
+      args: { path: '.' },
+      id: 'call-789',
+    };
+
+    const response = {
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              {
+                functionCall,
+                thoughtSignature: 'sig-789',
+              } as unknown as Part,
+            ],
+          },
+        },
+      ],
+    } as unknown as GenerateContentResponse;
+
+    const calls = handler.extractToolUse(response);
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].thoughtSignature, 'sig-789');
+    assert.equal(
+      (calls[0].raw as { thoughtSignature?: string }).thoughtSignature,
+      'sig-789',
+    );
   });
 });
 
