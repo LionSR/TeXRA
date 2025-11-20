@@ -276,11 +276,17 @@ describe('ModelHandlerAnthropic message guards', () => {
       input: {},
     } as ToolUseBlock;
 
+    const providerCall = {
+      provider: 'anthropic',
+      callId: call.id,
+      name: call.name,
+      input: call.input,
+      raw: call,
+    } as const;
+
     const [, resultMsg] = await handler.createToolUseFollowUpMessages(
       undefined,
-      'tool-call',
-      'demo',
-      call,
+      providerCall,
       { output: 'ok' },
     );
 
@@ -310,11 +316,17 @@ describe('ModelHandlerAnthropic message guards', () => {
       'initial message should not include cache metadata when disabled',
     );
 
+    const providerCall = {
+      provider: 'anthropic',
+      callId: call.id,
+      name: call.name,
+      input: call.input,
+      raw: call,
+    } as const;
+
     const [, resultMsg] = await handler.createToolUseFollowUpMessages(
       undefined,
-      'tool-call',
-      'demo',
-      call,
+      providerCall,
       { output: 'ok' },
     );
 

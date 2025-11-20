@@ -1,4 +1,5 @@
 // Third-party imports
+import yaml from 'yaml';
 import markdownItKatex from '@vscode/markdown-it-katex';
 /**
  * Formatters for log entries in the progress view.
@@ -77,7 +78,8 @@ const stringifyForDisplay = (value) => {
   }
 
   try {
-    return JSON.stringify(value, null, 2);
+    const yamlString = yaml.stringify(value);
+    return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
   } catch (error) {
     return String(value);
   }
