@@ -89,7 +89,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  ProviderToolCall,
+  AnthropicToolCall,
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
@@ -152,7 +152,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
   AnthropicAPIResponseUsage,
-  ProviderToolCall,
+  AnthropicToolCall,
   Anthropic,
   BetaMessage
 > {
@@ -1570,7 +1570,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return regularThinkingContent;
   }
 
-  extractToolUse(responseObject: BetaMessage): ProviderToolCall[] {
+  extractToolUse(responseObject: BetaMessage): AnthropicToolCall[] {
     const content = responseObject?.content;
     if (!Array.isArray(content)) {
       return [];
@@ -1581,7 +1581,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
         (block as { type?: string }).type === 'tool_use',
     );
 
-    if (!toolUseBlock || !toolUseBlock.id || !toolUseBlock.name) {
+    if (!toolUseBlock) {
+      return [];
+    }
+
+    if (!toolUseBlock.id || !toolUseBlock.name) {
+      this.logger.warn(
+        'Anthropic SDK returned malformed tool_use block',
+        undefined,
+        undefined,
+        toolUseBlock,
+      );
       return [];
     }
     return [
@@ -1597,7 +1607,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
-    call: ProviderToolCall,
+    call: AnthropicToolCall,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1619,12 +1629,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (text) {
       content.push({ type: 'text', text });
     }
-    const callPayload = call as ProviderToolCall & { raw: ToolUseBlock };
-    const toolInput = callPayload.raw.input ?? {};
+    const toolInput = call.raw.input ?? {};
     content.push({
       type: 'tool_use',
-      id: callPayload.callId,
-      name: callPayload.name,
+      id: call.callId,
+      name: call.name,
       input: toolInput,
     });
     const callMsg: MessageParam = {
@@ -1749,7 +1758,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       content: [
         {
           type: 'tool_result',
-          tool_use_id: callPayload.callId,
+          tool_use_id: call.callId,
           content: toolResultContent,
           is_error: isError || undefined,
         },

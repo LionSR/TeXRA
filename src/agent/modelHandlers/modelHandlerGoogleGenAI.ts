@@ -81,7 +81,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  ProviderToolCall,
+  GoogleToolCall,
 } from './types/IModelHandler';
 
 type GoogleRole = 'user' | 'model';
@@ -167,7 +167,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   Content,
   GenerateContentResponseUsageMetadata | null,
   OpenAIAPIResponseUsage,
-  ProviderToolCall,
+  GoogleToolCall,
   GoogleGenAI,
   GenerateContentResponse
 > {
@@ -1066,7 +1066,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(responseObject: GenerateContentResponse): ProviderToolCall[] {
+  extractToolUse(responseObject: GenerateContentResponse): GoogleToolCall[] {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
     if (Array.isArray(parts)) {
@@ -1075,16 +1075,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         .filter((call): call is FunctionCall => Boolean(call?.name));
 
       if (functionCalls.length > 0) {
-        return functionCalls.map(
-          (call) =>
-            ({
-              provider: 'google',
-              callId: call.id ?? call.name ?? 'function_call',
-              name: call.name!,
-              input: call.args,
-              raw: call,
-            }) satisfies ProviderToolCall,
-        );
+        return functionCalls.map((call) => ({
+          provider: 'google',
+          callId: call.id ?? call.name ?? 'function_call',
+          name: call.name!,
+          input: call.args,
+          raw: call,
+        }));
       }
     }
     return [];
@@ -1123,26 +1120,24 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
-    call: ProviderToolCall,
+    call: GoogleToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
-    const callPayload = call as ProviderToolCall & { raw: FunctionCall };
-
-    if (!callPayload.callId) {
+    if (!call.callId) {
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    const args = callPayload.raw.args ?? {};
+    const args = call.raw.args ?? {};
 
-    const functionName = callPayload.name;
+    const functionName = call.name;
 
     // Create the call part with the function name and arguments
     const callPart = createPartFromFunctionCall(functionName, args);
 
     if (callPart.functionCall) {
-      callPart.functionCall.id = callPayload.callId;
+      callPart.functionCall.id = call.callId;
     }
 
     // Use the same ID for the result to maintain correlation
@@ -1169,7 +1164,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     }
     const resultPart = createPartFromFunctionResponse(
-      callPayload.callId,
+      call.callId,
       functionName,
       sanitizedResult,
     );
