@@ -92,7 +92,7 @@ export class OutputHandler implements IOutputHandler {
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private readonly executionId?: string;
-  private currentRunId: string | null;
+  private currentRunId: string | null | undefined;
   private runPreparation: Promise<void> | null;
 
   constructor(
@@ -130,10 +130,11 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
-    this.currentRunId = null;
+    this.currentRunId = undefined;
     this.runPreparation = null;
 
-    this.setActiveRun(this.executionId ?? null);
+    const initialRunId = this.logger.withCurrentGroup((id) => id);
+    this.setActiveRun(initialRunId ?? null);
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -172,7 +173,7 @@ export class OutputHandler implements IOutputHandler {
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
     const loggerRunId = this.logger.withCurrentGroup((id) => id);
-    const nextRunId = runId ?? loggerRunId ?? targetExecutionId ?? null;
+    const nextRunId = runId ?? loggerRunId ?? null;
     if (nextRunId === this.currentRunId) {
       return;
     }
