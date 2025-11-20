@@ -8,6 +8,7 @@ import { registry } from './LogChannelRegistry';
 // Type imports
 import type { MessageType } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
+import type { LogUtilsOptions } from './logOptions';
 
 type ChannelKey = string;
 
@@ -213,48 +214,200 @@ export async function runWithGroupContext<T>(
   }
 }
 
+/**
+ * Log a debug message. Supports both legacy positional parameters and modern options object.
+ *
+ * @example
+ * // Modern approach (recommended):
+ * debug(CHANNEL, 'Processing file', { groupId: '123', data: fileInfo });
+ *
+ * @example
+ * // Legacy approach (still supported):
+ * debug(CHANNEL, 'Processing file', '123', undefined, false, fileInfo);
+ */
 export function debug(
   channel: string,
   message: string,
-  groupId?: string,
+  optionsOrGroupId?: LogUtilsOptions | string,
   messageType?: MessageType,
   isAgent = false,
   data?: unknown,
 ): void {
-  logWithGroup(channel, 'debug', message, groupId, messageType, isAgent, data);
+  // Detect if using modern options object or legacy positional parameters
+  if (
+    typeof optionsOrGroupId === 'object' &&
+    optionsOrGroupId !== null &&
+    !Array.isArray(optionsOrGroupId)
+  ) {
+    const options = optionsOrGroupId;
+    logWithGroup(
+      channel,
+      'debug',
+      message,
+      options.groupId,
+      options.messageType,
+      options.isAgent ?? false,
+      options.data,
+    );
+  } else {
+    // Legacy positional parameters
+    logWithGroup(
+      channel,
+      'debug',
+      message,
+      optionsOrGroupId as string | undefined,
+      messageType,
+      isAgent,
+      data,
+    );
+  }
 }
 
+/**
+ * Log an info message. Supports both legacy positional parameters and modern options object.
+ *
+ * @example
+ * // Modern approach (recommended):
+ * info(CHANNEL, 'Operation completed', { groupId: '123', messageType: MESSAGE_TYPES.FILE_LIST });
+ *
+ * @example
+ * // Legacy approach (still supported):
+ * info(CHANNEL, 'Operation completed', '123', MESSAGE_TYPES.FILE_LIST);
+ */
 export function info(
   channel: string,
   message: string,
-  groupId?: string,
+  optionsOrGroupId?: LogUtilsOptions | string,
   messageType?: MessageType,
   isAgent = false,
   data?: unknown,
 ): void {
-  logWithGroup(channel, 'info', message, groupId, messageType, isAgent, data);
+  // Detect if using modern options object or legacy positional parameters
+  if (
+    typeof optionsOrGroupId === 'object' &&
+    optionsOrGroupId !== null &&
+    !Array.isArray(optionsOrGroupId)
+  ) {
+    const options = optionsOrGroupId;
+    logWithGroup(
+      channel,
+      'info',
+      message,
+      options.groupId,
+      options.messageType,
+      options.isAgent ?? false,
+      options.data,
+    );
+  } else {
+    // Legacy positional parameters
+    logWithGroup(
+      channel,
+      'info',
+      message,
+      optionsOrGroupId as string | undefined,
+      messageType,
+      isAgent,
+      data,
+    );
+  }
 }
 
+/**
+ * Log a warning message. Supports both legacy positional parameters and modern options object.
+ *
+ * @example
+ * // Modern approach (recommended):
+ * warn(CHANNEL, 'Invalid configuration', { data: errorDetails });
+ *
+ * @example
+ * // Legacy approach (still supported):
+ * warn(CHANNEL, 'Invalid configuration', undefined, undefined, false, errorDetails);
+ */
 export function warn(
   channel: string,
   message: string,
-  groupId?: string,
+  optionsOrGroupId?: LogUtilsOptions | string,
   messageType?: MessageType,
   isAgent = false,
   data?: unknown,
 ): void {
-  logWithGroup(channel, 'warn', message, groupId, messageType, isAgent, data);
+  // Detect if using modern options object or legacy positional parameters
+  if (
+    typeof optionsOrGroupId === 'object' &&
+    optionsOrGroupId !== null &&
+    !Array.isArray(optionsOrGroupId)
+  ) {
+    const options = optionsOrGroupId;
+    logWithGroup(
+      channel,
+      'warn',
+      message,
+      options.groupId,
+      options.messageType,
+      options.isAgent ?? false,
+      options.data,
+    );
+  } else {
+    // Legacy positional parameters
+    logWithGroup(
+      channel,
+      'warn',
+      message,
+      optionsOrGroupId as string | undefined,
+      messageType,
+      isAgent,
+      data,
+    );
+  }
 }
 
+/**
+ * Log an error message. Supports both legacy positional parameters and modern options object.
+ *
+ * @example
+ * // Modern approach (recommended):
+ * error(CHANNEL, 'Operation failed', { groupId: '123', data: exception });
+ *
+ * @example
+ * // Legacy approach (still supported):
+ * error(CHANNEL, 'Operation failed', '123', undefined, false, exception);
+ */
 export function error(
   channel: string,
   message: string,
-  groupId?: string,
+  optionsOrGroupId?: LogUtilsOptions | string,
   messageType?: MessageType,
   isAgent = false,
   data?: unknown,
 ): void {
-  logWithGroup(channel, 'error', message, groupId, messageType, isAgent, data);
+  // Detect if using modern options object or legacy positional parameters
+  if (
+    typeof optionsOrGroupId === 'object' &&
+    optionsOrGroupId !== null &&
+    !Array.isArray(optionsOrGroupId)
+  ) {
+    const options = optionsOrGroupId;
+    logWithGroup(
+      channel,
+      'error',
+      message,
+      options.groupId,
+      options.messageType,
+      options.isAgent ?? false,
+      options.data,
+    );
+  } else {
+    // Legacy positional parameters
+    logWithGroup(
+      channel,
+      'error',
+      message,
+      optionsOrGroupId as string | undefined,
+      messageType,
+      isAgent,
+      data,
+    );
+  }
 }
 
 export function getTimestamp(): string {

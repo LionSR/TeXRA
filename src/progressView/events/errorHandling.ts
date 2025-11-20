@@ -14,12 +14,7 @@ export function createErrorBoundary(
             error instanceof Error
               ? { message: error.message, stack: error.stack, error }
               : { error };
-          logger.error(
-            `[${moduleName}] ${context}`,
-            undefined,
-            undefined,
-            details,
-          );
+          logger.error(`[${moduleName}] ${context}`, { data: details });
         });
       }
     } catch (error) {
@@ -27,7 +22,7 @@ export function createErrorBoundary(
         error instanceof Error
           ? { message: error.message, stack: error.stack, error }
           : { error };
-      logger.error(`[${moduleName}] ${context}`, undefined, undefined, details);
+      logger.error(`[${moduleName}] ${context}`, { data: details });
     }
   };
 }
