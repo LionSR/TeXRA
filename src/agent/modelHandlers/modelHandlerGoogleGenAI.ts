@@ -1083,22 +1083,43 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   extractToolUse(responseObject: GenerateContentResponse): GoogleToolCall[] {
     const candidate = responseObject?.candidates?.[0];
     const parts = candidate?.content?.parts;
-    if (Array.isArray(parts)) {
-      const functionCalls = parts
-        .map((part) => part.functionCall)
-        .filter((call): call is FunctionCall => Boolean(call?.name));
-
-      if (functionCalls.length > 0) {
-        return functionCalls.map((call) => ({
-          provider: 'google',
-          callId: call.id ?? randomUUID(),
-          name: call.name!,
-          input: call.args,
-          raw: call,
-        }));
-      }
+    if (!Array.isArray(parts)) {
+      return [];
     }
-    return [];
+
+    type FunctionCallWithSignature = {
+      call: FunctionCall;
+      thoughtSignature: string | undefined;
+    };
+
+    const functionCalls = parts
+      .map<FunctionCallWithSignature | null>((part) => {
+        const call = part.functionCall;
+        if (!call?.name) {
+          return null;
+        }
+        return {
+          call,
+          thoughtSignature:
+            typeof part.thoughtSignature === 'string'
+              ? part.thoughtSignature
+              : undefined,
+        };
+      })
+      .filter((part): part is FunctionCallWithSignature => part !== null);
+
+    if (functionCalls.length === 0) {
+      return [];
+    }
+
+    return functionCalls.map(({ call, thoughtSignature }) => ({
+      provider: 'google',
+      callId: call.id ?? randomUUID(),
+      name: call.name!,
+      input: call.args,
+      raw: call,
+      thoughtSignature,
+    }));
   }
 
   private async buildAttachmentPart(
@@ -1152,6 +1173,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (callPart.functionCall) {
       callPart.functionCall.id = call.callId;
+    }
+
+    if (call.thoughtSignature) {
+      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
+        call.thoughtSignature;
     }
 
     // Use the same ID for the result to maintain correlation
