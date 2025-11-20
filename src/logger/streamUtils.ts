@@ -19,7 +19,7 @@ function formatToolUseStreamId(
   executionId?: ExecutionId,
 ): StreamTabId {
   const shortId = executionId?.slice(0, 8) ?? randomUUID().slice(0, 8);
-  const sanitizedAgent = agent || 'toolUse';
+  const sanitizedAgent = agent ?? 'toolUse';
   return `${sanitizedAgent}@${model}#${shortId}`;
 }
 

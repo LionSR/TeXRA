@@ -492,7 +492,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleComparePrevious(message: CompareMessage): Promise<void> {
-    const previousFile = message.prev || message.base;
+    const previousFile = message.prev ?? message.base;
 
     if (previousFile) {
       await vscode.commands.executeCommand(

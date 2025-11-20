@@ -40,7 +40,7 @@ async function handleMerge(
   }
 
   const model = getConfig('texra.merge.defaultModel', 'sonnet37');
-  const fileToUse = baseFile || inputFile;
+  const fileToUse = baseFile ?? inputFile;
 
   try {
     await executeMergeAgent(model, fileToUse, editedFile);

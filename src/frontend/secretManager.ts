@@ -82,7 +82,7 @@ export class SecretManager {
     }
 
     const envKey = `${provider.toUpperCase()}_API_KEY`;
-    return Boolean(process.env[envKey]);
+    return !!process.env[envKey];
   }
 
   public static async getApiProviderQuickPickItems(): Promise<

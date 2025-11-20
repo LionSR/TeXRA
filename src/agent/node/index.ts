@@ -46,7 +46,7 @@ class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
     return this;
   }
   getNextNode(action: Action = 'default'): BaseNode | undefined {
-    const nextAction = action || 'default',
+    const nextAction = action ?? 'default',
       next = this._successors.get(nextAction);
     if (!next && this._successors.size > 0)
       console.warn(
@@ -126,7 +126,7 @@ class Flow<
   }
   protected async _orchestrate(shared: S, params?: P): Promise<void> {
     let current: BaseNode | undefined = this.start.clone();
-    const p = params || this._params;
+    const p = params ?? this._params;
     while (current) {
       current.setParams(p);
       const action = await current._run(shared);

@@ -63,7 +63,7 @@ export class InstructionManager {
    * Type guard to ensure file is a string.
    */
   private isValidFile(file?: string): file is string {
-    return Boolean(file) && file !== 'None' && file !== '';
+    return !!file && file !== 'None' && file !== '';
   }
 
   /**
@@ -126,31 +126,31 @@ export class InstructionManager {
       this.addMultipleFilesIfValid(
         fileContext,
         'inputFiles',
-        Boolean(message.inputFilesActive),
+        !!message.inputFilesActive,
         message.inputFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'referenceFiles',
-        Boolean(message.referenceFilesActive),
+        !!message.referenceFilesActive,
         message.referenceFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'auxiliaryFiles',
-        Boolean(message.auxiliaryFilesActive),
+        !!message.auxiliaryFilesActive,
         message.auxiliaryFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'mediaFiles',
-        Boolean(message.mediaFilesActive),
+        !!message.mediaFilesActive,
         message.mediaFiles,
       );
       this.addMultipleFilesIfValid(
         fileContext,
         'outputFiles',
-        Boolean(message.outputFilesActive),
+        !!message.outputFilesActive,
         message.outputFiles,
       );
 

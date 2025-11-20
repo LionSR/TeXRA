@@ -790,6 +790,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       char.charCodeAt(0) < 32 ? '_' : char,
     ).join('');
     const withoutForbidden = withoutControlChars.replace(/[:<>"|?*\\/]/g, '_');
+    // Use || here (not ??) because we need to catch empty strings, not just null/undefined
     const sanitized = withoutForbidden || 'document.pdf';
     // Removing directory information avoids Anthropic rejecting names that contain
     // slashes, but it also means the model loses subdirectory context when
@@ -1076,7 +1077,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return {
       response: newResponse,
       usage: responseObject.usage,
-      stopReason: stopReason || 'stop',
+      stopReason: stopReason ?? 'stop',
     };
   }
 
