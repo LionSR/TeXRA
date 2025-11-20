@@ -218,31 +218,14 @@ export async function runWithGroupContext<T>(
 }
 
 /**
- * Log a debug message using modern options object.
- *
- * @example
- * debug(CHANNEL, 'Processing file', { groupId: '123', data: fileInfo });
+ * Log a debug message with options object.
  */
-export function debug(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions,
-): void;
-
+export function debug(channel: string, message: string, options: LogUtilsOptions): void;
 /**
- * Log a debug message using legacy positional parameters.
- *
- * @deprecated Use options object signature instead
+ * Log a debug message with positional parameters.
+ * @deprecated Use options object instead
  */
-export function debug(
-  channel: string,
-  message: string,
-  groupId: string | undefined,
-  messageType: MessageType | undefined,
-  isAgent: boolean,
-  data?: unknown,
-): void;
-
+export function debug(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
 export function debug(
   channel: string,
   message: string,
@@ -280,31 +263,14 @@ export function debug(
 }
 
 /**
- * Log an info message using modern options object.
- *
- * @example
- * info(CHANNEL, 'Operation completed', { groupId: '123', messageType: MESSAGE_TYPES.FILE_LIST });
+ * Log an info message with options object.
  */
-export function info(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions,
-): void;
-
+export function info(channel: string, message: string, options: LogUtilsOptions): void;
 /**
- * Log an info message using legacy positional parameters.
- *
- * @deprecated Use options object signature instead
+ * Log an info message with positional parameters.
+ * @deprecated Use options object instead
  */
-export function info(
-  channel: string,
-  message: string,
-  groupId: string | undefined,
-  messageType: MessageType | undefined,
-  isAgent: boolean,
-  data?: unknown,
-): void;
-
+export function info(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
 export function info(
   channel: string,
   message: string,
@@ -342,31 +308,14 @@ export function info(
 }
 
 /**
- * Log a warning message using modern options object.
- *
- * @example
- * warn(CHANNEL, 'Invalid configuration', { data: errorDetails });
+ * Log a warning message with options object.
  */
-export function warn(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions,
-): void;
-
+export function warn(channel: string, message: string, options: LogUtilsOptions): void;
 /**
- * Log a warning message using legacy positional parameters.
- *
- * @deprecated Use options object signature instead
+ * Log a warning message with positional parameters.
+ * @deprecated Use options object instead
  */
-export function warn(
-  channel: string,
-  message: string,
-  groupId: string | undefined,
-  messageType: MessageType | undefined,
-  isAgent: boolean,
-  data?: unknown,
-): void;
-
+export function warn(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
 export function warn(
   channel: string,
   message: string,
@@ -404,31 +353,14 @@ export function warn(
 }
 
 /**
- * Log an error message using modern options object.
- *
- * @example
- * error(CHANNEL, 'Operation failed', { groupId: '123', data: exception });
+ * Log an error message with options object.
  */
-export function error(
-  channel: string,
-  message: string,
-  options: LogUtilsOptions,
-): void;
-
+export function error(channel: string, message: string, options: LogUtilsOptions): void;
 /**
- * Log an error message using legacy positional parameters.
- *
- * @deprecated Use options object signature instead
+ * Log an error message with positional parameters.
+ * @deprecated Use options object instead
  */
-export function error(
-  channel: string,
-  message: string,
-  groupId: string | undefined,
-  messageType: MessageType | undefined,
-  isAgent: boolean,
-  data?: unknown,
-): void;
-
+export function error(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
 export function error(
   channel: string,
   message: string,
