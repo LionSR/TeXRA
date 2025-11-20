@@ -196,11 +196,13 @@ const normalizeToolUseLog = (structured) => {
       ? parsed.error.trim()
       : '';
 
+  const outputCandidate =
+    parsed.output !== undefined ? parsed.output : outputDetails.output;
   const outputText =
-    typeof parsed.output === 'string'
-      ? parsed.output
-      : typeof outputDetails.output === 'string'
-        ? outputDetails.output
+    typeof outputCandidate === 'string'
+      ? outputCandidate
+      : outputCandidate !== undefined
+        ? stringifyForDisplay(outputCandidate)
         : '';
 
   const toolName =

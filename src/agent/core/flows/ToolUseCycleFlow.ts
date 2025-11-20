@@ -48,6 +48,15 @@ interface ToolValidationDiagnostics {
   }>;
 }
 
+function parseToolInput(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function normalizeToolCallError(
   toolName: string,
   error: unknown,
@@ -489,6 +498,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         isError: true,
       });
     } else {
+      const parsedInput = parseToolInput(normalResult.call.input);
       try {
         result = await withToolEditApprovalContext(
           {
@@ -496,7 +506,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
             executionId: options.context.executionId,
             toolCallId: normalResult.call.callId,
           },
-          () => tool.call(normalResult.call.input),
+          () => tool.call(parsedInput),
         );
       } catch (err) {
         const { message, diagnostics } = normalizeToolCallError(
@@ -513,7 +523,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
     const toolUseLog = {
       toolName: normalResult.call.name,
-      input: normalResult.call.input ?? normalResult.call.raw,
+      input: parseToolInput(normalResult.call.input) ?? normalResult.call.raw,
       output: sanitizeToolResultForLog(result),
       isError: Boolean(result.isError),
     };
