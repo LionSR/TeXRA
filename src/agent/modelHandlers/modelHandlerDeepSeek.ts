@@ -23,7 +23,7 @@ import type { StreamingAggregator } from './modelHandlerOpenAI';
 // Type imports
 import type {
   CreateResponseOptions,
-  NormalizedToolCall,
+  ProviderToolCall,
 } from './types/IModelHandler';
 import type {
   ChatCompletion,
@@ -139,45 +139,56 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(responseObject: ChatCompletion): NormalizedToolCall | null {
+  extractToolUse(responseObject: ChatCompletion): ProviderToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
       const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
       if (!call.id || !call.function?.name) {
-        return null;
+        return [];
       }
-      return {
-        provider: 'deepseek',
-        callId: call.id,
-        name: call.function.name,
-        input: call.function.arguments,
-        raw: call,
-      };
+      return [
+        {
+          provider: 'deepseek',
+          callId: call.id,
+          name: call.function.name,
+          input: call.function.arguments,
+          raw: call,
+        },
+      ];
     }
-    const func = responseObject?.choices?.[0]?.message
-      ?.function_call as ChatCompletionMessage.FunctionCall | undefined;
+    const func = responseObject?.choices?.[0]?.message?.function_call as
+      | ChatCompletionMessage.FunctionCall
+      | undefined;
     if (func && func.name) {
-      return {
-        provider: 'deepseek',
-        callId: func.name,
-        name: func.name,
-        input: func.arguments,
-        raw: func,
-      };
+      return [
+        {
+          provider: 'deepseek',
+          callId: func.name,
+          name: func.name,
+          input: func.arguments,
+          raw: func,
+        },
+      ];
     }
-    return null;
+    return [];
   }
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    id: string,
-    name: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ProviderToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(id, name, call);
+    const callPayload = call as ProviderToolCall & {
+      raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+    };
+
+    const toolCall = this.normalizeToolCall(
+      callPayload.callId,
+      callPayload.name,
+      callPayload.raw,
+    );
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -194,7 +205,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? id,
+      tool_call_id: toolCall.id ?? callPayload.callId,
       content: JSON.stringify(sanitizedResult),
     };
     return [callMsg, resultMsg];
