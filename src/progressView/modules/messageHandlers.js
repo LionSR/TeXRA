@@ -234,9 +234,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       state.clearRunInstructions();
-      state.clearRunFiles();
-      state.clearRunMissingOutputs();
-      state.clearRunUsage();
       state.clearAllActiveRuns();
       state.clearAllPendingInstructions();
     } else {
@@ -255,9 +252,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.clear();
       state.taskGroups.clear();
       state.clearRunInstructions(message.stream);
-      state.clearRunFiles(message.stream);
-      state.clearRunMissingOutputs(message.stream);
-      state.clearRunUsage(message.stream);
       state.clearPendingInstruction(state.activeStream);
       const previousRunId = state.getActiveRunId(message.stream);
       state.clearActiveRun(message.stream);
