@@ -56,6 +56,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  NormalizedToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -94,7 +95,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
   ResponseUsage,
   OpenAIAPIResponseUsage,
-  ResponseFunctionToolCallItem
+  ResponseFunctionToolCallItem,
+  OpenAI,
+  Response
 > {
   private isOpenRouterRoutingEnabled(): boolean {
     return (
@@ -491,7 +494,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * request and relies on `previous_response_id` for conversation context.
    */
   async createResponse(
-    options: CreateResponseOptions<ResponseInputItem>,
+    options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<Response> {
     const { client, messages, temperature, systemPrompt, signal, tools } =
       options;
@@ -1275,14 +1278,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): string | null {
+  extractToolUse(response: Response): NormalizedToolCall | null {
     const items = response?.output;
     if (!Array.isArray(items)) return null;
 
     const call = items.find(
       (it): it is ResponseFunctionToolCallItem => it?.type === 'function_call',
     );
-    return call ? JSON.stringify(call, null, 2) : null;
+    if (!call || !call.id || !call.name) {
+      return null;
+    }
+    return {
+      provider: 'openai-response',
+      callId: call.id,
+      name: call.name,
+      input: call.arguments,
+      raw: call,
+    };
   }
 
   async createToolUseFollowUpMessages(
@@ -1303,16 +1315,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       type: 'function_call',
       call_id: id,
       name,
-      arguments:
-        typeof call?.arguments === 'string'
-          ? call.arguments
-          : JSON.stringify(
-              (call as unknown as { input?: unknown; arguments?: unknown })
-                ?.input ??
-                (call as unknown as { input?: unknown; arguments?: unknown })
-                  ?.arguments ??
-                {},
-            ),
+      arguments: call.arguments,
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
