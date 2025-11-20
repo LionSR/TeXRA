@@ -142,16 +142,18 @@ function logWithGroup(
   channel: string,
   level: 'debug' | 'info' | 'warn' | 'error',
   message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
+  const isAgent = options.isAgent ?? false;
   const entry = registry.ensure(channel, { isAgent });
   const { logger } = entry;
-  const activeGroupId = resolveActiveGroup(channel, groupId, isAgent);
+  const activeGroupId = resolveActiveGroup(channel, options.groupId, isAgent);
 
-  logger.log(level, message, { groupId: activeGroupId, messageType, data });
+  logger.log(level, message, {
+    groupId: activeGroupId,
+    messageType: options.messageType,
+    data: options.data,
+  });
 }
 
 export function initialize(channel: string, isAgent = false): void {
@@ -250,26 +252,14 @@ export function debug(
     optionsOrGroupId !== null &&
     !Array.isArray(optionsOrGroupId)
   ) {
-    const options = optionsOrGroupId;
-    logWithGroup(
-      channel,
-      'debug',
-      message,
-      options.groupId,
-      options.messageType,
-      options.isAgent ?? false,
-      options.data,
-    );
+    logWithGroup(channel, 'debug', message, optionsOrGroupId);
   } else {
-    logWithGroup(
-      channel,
-      'debug',
-      message,
-      optionsOrGroupId as string | undefined,
+    logWithGroup(channel, 'debug', message, {
+      groupId: optionsOrGroupId as string | undefined,
       messageType,
       isAgent,
       data,
-    );
+    });
   }
 }
 
@@ -306,26 +296,14 @@ export function info(
     optionsOrGroupId !== null &&
     !Array.isArray(optionsOrGroupId)
   ) {
-    const options = optionsOrGroupId;
-    logWithGroup(
-      channel,
-      'info',
-      message,
-      options.groupId,
-      options.messageType,
-      options.isAgent ?? false,
-      options.data,
-    );
+    logWithGroup(channel, 'info', message, optionsOrGroupId);
   } else {
-    logWithGroup(
-      channel,
-      'info',
-      message,
-      optionsOrGroupId as string | undefined,
+    logWithGroup(channel, 'info', message, {
+      groupId: optionsOrGroupId as string | undefined,
       messageType,
       isAgent,
       data,
-    );
+    });
   }
 }
 
@@ -362,26 +340,14 @@ export function warn(
     optionsOrGroupId !== null &&
     !Array.isArray(optionsOrGroupId)
   ) {
-    const options = optionsOrGroupId;
-    logWithGroup(
-      channel,
-      'warn',
-      message,
-      options.groupId,
-      options.messageType,
-      options.isAgent ?? false,
-      options.data,
-    );
+    logWithGroup(channel, 'warn', message, optionsOrGroupId);
   } else {
-    logWithGroup(
-      channel,
-      'warn',
-      message,
-      optionsOrGroupId as string | undefined,
+    logWithGroup(channel, 'warn', message, {
+      groupId: optionsOrGroupId as string | undefined,
       messageType,
       isAgent,
       data,
-    );
+    });
   }
 }
 
@@ -418,26 +384,14 @@ export function error(
     optionsOrGroupId !== null &&
     !Array.isArray(optionsOrGroupId)
   ) {
-    const options = optionsOrGroupId;
-    logWithGroup(
-      channel,
-      'error',
-      message,
-      options.groupId,
-      options.messageType,
-      options.isAgent ?? false,
-      options.data,
-    );
+    logWithGroup(channel, 'error', message, optionsOrGroupId);
   } else {
-    logWithGroup(
-      channel,
-      'error',
-      message,
-      optionsOrGroupId as string | undefined,
+    logWithGroup(channel, 'error', message, {
+      groupId: optionsOrGroupId as string | undefined,
       messageType,
       isAgent,
       data,
-    );
+    });
   }
 }
 
