@@ -260,7 +260,9 @@ export class LaTeXdiffService {
       };
     } catch (err) {
       const message = formatError('Error in runDiffVcMultiple', err);
-      logger.error(this.channel, message, undefined, MESSAGE_TYPES.INTERNAL);
+      logger.error(this.channel, message, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
       return {
         success: false,
         results: { success: [], failed: [] },
@@ -297,7 +299,9 @@ export class LaTeXdiffService {
       return { success: false, message };
     } catch (err) {
       const message = formatError('Error in runDiffForRound', err);
-      logger.error(this.channel, message, undefined, MESSAGE_TYPES.INTERNAL);
+      logger.error(this.channel, message, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
       return { success: false, message };
     }
   }
@@ -341,7 +345,9 @@ export class LaTeXdiffService {
       return { success: false, message };
     } catch (err) {
       const message = formatError('Error in runDiffBetweenRounds', err);
-      logger.error(this.channel, message, undefined, MESSAGE_TYPES.INTERNAL);
+      logger.error(this.channel, message, {
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
       return { success: false, message };
     }
   }

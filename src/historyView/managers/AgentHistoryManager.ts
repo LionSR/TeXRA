@@ -119,14 +119,9 @@ export class AgentHistoryManager {
         normalizedConfig = parseAgentConfig(candidate.config);
       } catch (error) {
         mutated = true;
-        logger.warn(
-          CHANNEL,
-          'Discarding malformed agent history entry',
-          undefined,
-          undefined,
-          false,
-          error,
-        );
+        logger.warn(CHANNEL, 'Discarding malformed agent history entry', {
+          data: error,
+        });
         continue;
       }
 
