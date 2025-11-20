@@ -1170,7 +1170,7 @@ export class ModelHandlerOpenAI<
     };
   }
 
-  private parseArguments(raw: unknown): unknown {
+  protected parseArguments(raw: unknown): unknown {
     if (typeof raw !== 'string') {
       return raw;
     }
