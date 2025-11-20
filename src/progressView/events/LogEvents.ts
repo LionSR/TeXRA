@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { LogMessageUpdate } from '@logger/LogTypes';
-// Internal imports
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -52,10 +50,6 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         return;
       }
 
-      if (logMessage.messageType === MESSAGE_TYPES.INTERNAL) {
-        return;
-      }
-
       await state.streamTabs.addMessage(stream, logMessage);
 
       if (updater.isAvailable()) {
@@ -80,13 +74,6 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
 
       const existing = messages.find((m) => m.id === logMessage.id);
       if (!existing) return;
-
-      if (
-        existing.messageType === MESSAGE_TYPES.INTERNAL ||
-        logMessage.messageType === MESSAGE_TYPES.INTERNAL
-      ) {
-        return;
-      }
 
       if (logMessage.text !== undefined) {
         existing.text = logMessage.text;
