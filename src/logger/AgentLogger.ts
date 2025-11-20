@@ -167,25 +167,14 @@ export class AgentLogger {
   }
 
   /**
-   * Log a debug message using modern options object.
-   *
-   * @example
-   * this.logger.debug('Processing file', { groupId: '123', data: fileInfo });
+   * Log a debug message with options object.
    */
   debug(message: string, options: LogOptions): void;
-
   /**
-   * Log a debug message using legacy positional parameters.
-   *
-   * @deprecated Use options object signature instead
+   * Log a debug message with positional parameters.
+   * @deprecated Use options object instead
    */
-  debug(
-    message: string,
-    groupId: string | undefined,
-    messageType: MessageType | undefined,
-    data?: unknown,
-  ): void;
-
+  debug(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
   debug(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -219,25 +208,14 @@ export class AgentLogger {
   }
 
   /**
-   * Log an info message using modern options object.
-   *
-   * @example
-   * this.logger.info('Operation completed', { messageType: MESSAGE_TYPES.FILE_LIST });
+   * Log an info message with options object.
    */
   info(message: string, options: LogOptions): void;
-
   /**
-   * Log an info message using legacy positional parameters.
-   *
-   * @deprecated Use options object signature instead
+   * Log an info message with positional parameters.
+   * @deprecated Use options object instead
    */
-  info(
-    message: string,
-    groupId: string | undefined,
-    messageType: MessageType | undefined,
-    data?: unknown,
-  ): void;
-
+  info(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
   info(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -271,25 +249,14 @@ export class AgentLogger {
   }
 
   /**
-   * Log a warning message using modern options object.
-   *
-   * @example
-   * this.logger.warn('Invalid configuration', { data: errorDetails });
+   * Log a warning message with options object.
    */
   warn(message: string, options: LogOptions): void;
-
   /**
-   * Log a warning message using legacy positional parameters.
-   *
-   * @deprecated Use options object signature instead
+   * Log a warning message with positional parameters.
+   * @deprecated Use options object instead
    */
-  warn(
-    message: string,
-    groupId: string | undefined,
-    messageType: MessageType | undefined,
-    data?: unknown,
-  ): void;
-
+  warn(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
   warn(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -323,25 +290,14 @@ export class AgentLogger {
   }
 
   /**
-   * Log an error message using modern options object.
-   *
-   * @example
-   * this.logger.error('Operation failed', { groupId: '123', data: exception });
+   * Log an error message with options object.
    */
   error(message: string, options: LogOptions): void;
-
   /**
-   * Log an error message using legacy positional parameters.
-   *
-   * @deprecated Use options object signature instead
+   * Log an error message with positional parameters.
+   * @deprecated Use options object instead
    */
-  error(
-    message: string,
-    groupId: string | undefined,
-    messageType: MessageType | undefined,
-    data?: unknown,
-  ): void;
-
+  error(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
   error(
     message: string,
     optionsOrGroupId?: LogOptions | string,
