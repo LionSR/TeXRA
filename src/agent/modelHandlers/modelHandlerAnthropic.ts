@@ -1586,14 +1586,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return toolUseBlocks
-      .filter((block) => Boolean(block.id && block.name))
-      .map((toolUseBlock) => ({
-        provider: 'anthropic',
-        callId: toolUseBlock.id!,
-        name: toolUseBlock.name!,
-        input: toolUseBlock.input,
-        raw: toolUseBlock,
-      }));
+      .map((toolUseBlock) => {
+        if (!toolUseBlock.id || !toolUseBlock.name) {
+          return null;
+        }
+        return {
+          provider: 'anthropic',
+          callId: toolUseBlock.id,
+          name: toolUseBlock.name,
+          input: toolUseBlock.input,
+          raw: toolUseBlock,
+        } satisfies AnthropicToolCall;
+      })
+      .filter((call): call is AnthropicToolCall => call !== null);
   }
 
   async createToolUseFollowUpMessages(
