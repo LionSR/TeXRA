@@ -1,13 +1,7 @@
 // (none needed)
 
-// Third-party imports
-import OpenAI from 'openai';
-
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-
-// Local imports - agent components
-import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { K_SLICE } from '@utils/config';
@@ -181,5 +175,3 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
     }
   }
 }
-
-export class ModelHandlerDeepSeekViaOpenRouter extends ModelHandlerOpenRouter {}
