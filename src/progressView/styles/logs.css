@@ -91,60 +91,6 @@
   color: var(--vscode-editorError-foreground, #f14c4c);
 }
 
-.progress-status-entry {
-  padding: calc(var(--spacing-tiny) / 2) 0 var(--spacing-small);
-}
-
-.progress-status-line {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-small);
-  border-left: 3px solid var(--vscode-panel-border);
-  padding-left: var(--spacing-small);
-}
-
-.progress-status-line.level-info {
-  border-color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
-}
-
-.progress-status-line.level-warn {
-  border-color: var(--vscode-editorWarning-foreground, #cca700);
-}
-
-.progress-status-line.level-error {
-  border-color: var(--vscode-editorError-foreground, #f14c4c);
-}
-
-.progress-status-line.level-debug {
-  border-color: var(--vscode-debugTokenExpression-name, #4b9ef9);
-}
-
-.progress-status-summary {
-  font-weight: 600;
-}
-
-.progress-status-detail {
-  margin: var(--spacing-tiny) 0 0 calc(var(--spacing-small) + 3px);
-  padding: var(--spacing-tiny) var(--spacing-small);
-  background: var(--vscode-editor-background);
-  border-radius: var(--border-radius-small);
-  border-left: 3px solid var(--vscode-panel-border);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.progress-status-detail.progress-status-info {
-  border-color: var(--vscode-notificationsInfoIcon-foreground, #75beff);
-}
-
-.progress-status-detail.progress-status-warn {
-  border-color: var(--vscode-editorWarning-foreground, #cca700);
-}
-
-.progress-status-detail.progress-status-error {
-  border-color: var(--vscode-editorError-foreground, #f14c4c);
-}
-
 .log-header {
   padding: var(--spacing-tiny) var(--spacing-small);
   font-size: var(--font-size-sm);
