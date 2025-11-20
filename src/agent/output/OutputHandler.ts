@@ -20,6 +20,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { normalizeRunId } from '@progressView/constants/runIds';
 import {
   replaceInputCommands,
   createFileMapping,
@@ -188,6 +189,10 @@ export class OutputHandler implements IOutputHandler {
     } else {
       this.runPreparation = null;
     }
+  }
+
+  private getActiveRunId(): string {
+    return normalizeRunId(this.currentRunId);
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
@@ -504,12 +509,14 @@ export class OutputHandler implements IOutputHandler {
       `Validate expected r${currRound}`,
       stage,
       async () => {
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
-            groupId: this.currentRunId ?? undefined,
-            executionId: this.fileService.getExecutionId(),
+            runId,
+            executionId,
             filesByRound: { [currRound]: [] },
           });
           return;
@@ -551,8 +558,8 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          groupId: this.currentRunId ?? undefined,
-          executionId: this.fileService.getExecutionId(),
+          runId,
+          executionId,
           filesByRound: { [currRound]: missing },
         });
       },
@@ -580,6 +587,8 @@ export class OutputHandler implements IOutputHandler {
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
 
         if (endTurn) {
           try {
@@ -596,8 +605,8 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
-          groupId: this.currentRunId ?? undefined,
-          executionId: this.fileService.getExecutionId(),
+          runId,
+          executionId,
           filesByRound: { [currRound]: fileInfos },
         });
 
@@ -639,6 +648,8 @@ export class OutputHandler implements IOutputHandler {
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
         const rawPath = rawLocation.absolutePath;
+        const executionId = this.fileService.getExecutionId();
+        const runId = this.getActiveRunId();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -767,8 +778,8 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
-              groupId: this.currentRunId ?? undefined,
-              executionId: this.fileService.getExecutionId(),
+              runId,
+              executionId,
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);
