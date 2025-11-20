@@ -6,10 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ## [0.34.5] - Unreleased
 
-### Features
+### Improvements
 
-- Added **Gemini 3 Pro Preview** (`gemini3p`) with full tool support and up-to-date
-  pricing so you can try Google's latest high-reasoning model in TeXRA.
+- General refactoring to streamline the extension and keep the progress board
+  experience smooth.
+
+### Bug Fixes
+
+- Fixed support for the Kimi 2 Thinking model so it streams reliably again.
 
 ## [0.34.4] - 2025-11-14
 
