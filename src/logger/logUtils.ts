@@ -225,42 +225,9 @@ export async function runWithGroupContext<T>(
 export function debug(
   channel: string,
   message: string,
-  options: LogUtilsOptions,
-): void;
-/**
- * Log a debug message with positional parameters.
- * @deprecated Use options object instead
- */
-export function debug(
-  channel: string,
-  message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
-  data?: unknown,
-): void;
-export function debug(
-  channel: string,
-  message: string,
-  optionsOrGroupId?: LogUtilsOptions | string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  if (
-    typeof optionsOrGroupId === 'object' &&
-    optionsOrGroupId !== null &&
-    !Array.isArray(optionsOrGroupId)
-  ) {
-    logWithGroup(channel, 'debug', message, optionsOrGroupId);
-  } else {
-    logWithGroup(channel, 'debug', message, {
-      groupId: optionsOrGroupId as string | undefined,
-      messageType,
-      isAgent,
-      data,
-    });
-  }
+  logWithGroup(channel, 'debug', message, options);
 }
 
 /**
@@ -269,42 +236,9 @@ export function debug(
 export function info(
   channel: string,
   message: string,
-  options: LogUtilsOptions,
-): void;
-/**
- * Log an info message with positional parameters.
- * @deprecated Use options object instead
- */
-export function info(
-  channel: string,
-  message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
-  data?: unknown,
-): void;
-export function info(
-  channel: string,
-  message: string,
-  optionsOrGroupId?: LogUtilsOptions | string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  if (
-    typeof optionsOrGroupId === 'object' &&
-    optionsOrGroupId !== null &&
-    !Array.isArray(optionsOrGroupId)
-  ) {
-    logWithGroup(channel, 'info', message, optionsOrGroupId);
-  } else {
-    logWithGroup(channel, 'info', message, {
-      groupId: optionsOrGroupId as string | undefined,
-      messageType,
-      isAgent,
-      data,
-    });
-  }
+  logWithGroup(channel, 'info', message, options);
 }
 
 /**
@@ -313,42 +247,9 @@ export function info(
 export function warn(
   channel: string,
   message: string,
-  options: LogUtilsOptions,
-): void;
-/**
- * Log a warning message with positional parameters.
- * @deprecated Use options object instead
- */
-export function warn(
-  channel: string,
-  message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
-  data?: unknown,
-): void;
-export function warn(
-  channel: string,
-  message: string,
-  optionsOrGroupId?: LogUtilsOptions | string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  if (
-    typeof optionsOrGroupId === 'object' &&
-    optionsOrGroupId !== null &&
-    !Array.isArray(optionsOrGroupId)
-  ) {
-    logWithGroup(channel, 'warn', message, optionsOrGroupId);
-  } else {
-    logWithGroup(channel, 'warn', message, {
-      groupId: optionsOrGroupId as string | undefined,
-      messageType,
-      isAgent,
-      data,
-    });
-  }
+  logWithGroup(channel, 'warn', message, options);
 }
 
 /**
@@ -357,42 +258,9 @@ export function warn(
 export function error(
   channel: string,
   message: string,
-  options: LogUtilsOptions,
-): void;
-/**
- * Log an error message with positional parameters.
- * @deprecated Use options object instead
- */
-export function error(
-  channel: string,
-  message: string,
-  groupId?: string,
-  messageType?: MessageType,
-  isAgent?: boolean,
-  data?: unknown,
-): void;
-export function error(
-  channel: string,
-  message: string,
-  optionsOrGroupId?: LogUtilsOptions | string,
-  messageType?: MessageType,
-  isAgent = false,
-  data?: unknown,
+  options: LogUtilsOptions = {},
 ): void {
-  if (
-    typeof optionsOrGroupId === 'object' &&
-    optionsOrGroupId !== null &&
-    !Array.isArray(optionsOrGroupId)
-  ) {
-    logWithGroup(channel, 'error', message, optionsOrGroupId);
-  } else {
-    logWithGroup(channel, 'error', message, {
-      groupId: optionsOrGroupId as string | undefined,
-      messageType,
-      isAgent,
-      data,
-    });
-  }
+  logWithGroup(channel, 'error', message, options);
 }
 
 export function getTimestamp(): string {
