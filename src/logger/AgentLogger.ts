@@ -191,24 +191,19 @@ export class AgentLogger {
       optionsOrGroupId !== null &&
       !Array.isArray(optionsOrGroupId)
     ) {
-      const options = optionsOrGroupId;
-      logger.debug(
-        this.channelId,
-        message,
-        options.groupId,
-        options.messageType,
-        this.isAgentLogger,
-        options.data,
-      );
+      logger.debug(this.channelId, message, {
+        groupId: optionsOrGroupId.groupId,
+        messageType: optionsOrGroupId.messageType,
+        isAgent: this.isAgentLogger,
+        data: optionsOrGroupId.data,
+      });
     } else {
-      logger.debug(
-        this.channelId,
-        message,
-        optionsOrGroupId as string | undefined,
+      logger.debug(this.channelId, message, {
+        groupId: optionsOrGroupId as string | undefined,
         messageType,
-        this.isAgentLogger,
+        isAgent: this.isAgentLogger,
         data,
-      );
+      });
     }
   }
 
@@ -237,24 +232,19 @@ export class AgentLogger {
       optionsOrGroupId !== null &&
       !Array.isArray(optionsOrGroupId)
     ) {
-      const options = optionsOrGroupId;
-      logger.info(
-        this.channelId,
-        message,
-        options.groupId,
-        options.messageType,
-        this.isAgentLogger,
-        options.data,
-      );
+      logger.info(this.channelId, message, {
+        groupId: optionsOrGroupId.groupId,
+        messageType: optionsOrGroupId.messageType,
+        isAgent: this.isAgentLogger,
+        data: optionsOrGroupId.data,
+      });
     } else {
-      logger.info(
-        this.channelId,
-        message,
-        optionsOrGroupId as string | undefined,
+      logger.info(this.channelId, message, {
+        groupId: optionsOrGroupId as string | undefined,
         messageType,
-        this.isAgentLogger,
+        isAgent: this.isAgentLogger,
         data,
-      );
+      });
     }
   }
 
@@ -283,24 +273,19 @@ export class AgentLogger {
       optionsOrGroupId !== null &&
       !Array.isArray(optionsOrGroupId)
     ) {
-      const options = optionsOrGroupId;
-      logger.warn(
-        this.channelId,
-        message,
-        options.groupId,
-        options.messageType,
-        this.isAgentLogger,
-        options.data,
-      );
+      logger.warn(this.channelId, message, {
+        groupId: optionsOrGroupId.groupId,
+        messageType: optionsOrGroupId.messageType,
+        isAgent: this.isAgentLogger,
+        data: optionsOrGroupId.data,
+      });
     } else {
-      logger.warn(
-        this.channelId,
-        message,
-        optionsOrGroupId as string | undefined,
+      logger.warn(this.channelId, message, {
+        groupId: optionsOrGroupId as string | undefined,
         messageType,
-        this.isAgentLogger,
+        isAgent: this.isAgentLogger,
         data,
-      );
+      });
     }
   }
 
@@ -329,24 +314,19 @@ export class AgentLogger {
       optionsOrGroupId !== null &&
       !Array.isArray(optionsOrGroupId)
     ) {
-      const options = optionsOrGroupId;
-      logger.error(
-        this.channelId,
-        message,
-        options.groupId,
-        options.messageType,
-        this.isAgentLogger,
-        options.data,
-      );
+      logger.error(this.channelId, message, {
+        groupId: optionsOrGroupId.groupId,
+        messageType: optionsOrGroupId.messageType,
+        isAgent: this.isAgentLogger,
+        data: optionsOrGroupId.data,
+      });
     } else {
-      logger.error(
-        this.channelId,
-        message,
-        optionsOrGroupId as string | undefined,
+      logger.error(this.channelId, message, {
+        groupId: optionsOrGroupId as string | undefined,
         messageType,
-        this.isAgentLogger,
+        isAgent: this.isAgentLogger,
         data,
-      );
+      });
     }
   }
 
@@ -355,7 +335,11 @@ export class AgentLogger {
    */
   fileList(files: unknown[], groupId?: string): void {
     const summary = `Loaded ${files.length} file${files.length === 1 ? '' : 's'}`;
-    this.info(summary, groupId, MESSAGE_TYPES.FILE_LIST, files);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.FILE_LIST,
+      data: files,
+    });
   }
 
   /**
@@ -365,7 +349,11 @@ export class AgentLogger {
     const missing = (info as any).missing as unknown[] | undefined;
     const count = missing ? missing.length : 0;
     const summary = `${count} output file${count === 1 ? '' : 's'} missing`;
-    this.info(summary, groupId, MESSAGE_TYPES.MISSING_OUTPUTS, info);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.MISSING_OUTPUTS,
+      data: info,
+    });
   }
 
   /**
@@ -373,7 +361,11 @@ export class AgentLogger {
    */
   latexDiff(results: unknown[], groupId?: string): void {
     const summary = `Latexdiff results: ${results.length}`;
-    this.info(summary, groupId, MESSAGE_TYPES.LATEXDIFF, results);
+    this.info(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.LATEXDIFF,
+      data: results,
+    });
   }
 
   /**
@@ -381,14 +373,21 @@ export class AgentLogger {
    */
   statistics(stats: ExtendedTokenUsageStats, groupId?: string): void {
     const summary = `Usage - input: ${stats.inputTokens ?? 0}, output: ${stats.outputTokens ?? 0}`;
-    this.debug(summary, groupId, MESSAGE_TYPES.STATISTICS, stats);
+    this.debug(summary, {
+      groupId,
+      messageType: MESSAGE_TYPES.STATISTICS,
+      data: stats,
+    });
   }
 
   /**
    * Log a user follow-up message.
    */
   userMessage(message: string, groupId?: string): void {
-    this.info(message, groupId, MESSAGE_TYPES.USER_MESSAGE);
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+    });
   }
 
   withCurrentGroup<T>(fn: (groupId: string) => T): T | undefined {
@@ -542,7 +541,7 @@ export class AgentLogger {
         }
 
         if (!progressEnabled) {
-          this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+          this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
           return buffer;
         }
 
@@ -570,7 +569,7 @@ export class AgentLogger {
           });
         }
 
-        this.debug(`Final ${type} length: ${buffer.length}`, groupId);
+        this.debug(`Final ${type} length: ${buffer.length}`, { groupId });
         return buffer;
       },
     };
