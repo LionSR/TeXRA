@@ -1,4 +1,5 @@
-// (none needed)
+// Third-party imports
+import OpenAI from 'openai';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';

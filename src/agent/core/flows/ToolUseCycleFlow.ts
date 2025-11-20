@@ -55,11 +55,16 @@ function parseToolInput(
   callId: string,
   logger: AgentLogger,
 ): unknown {
-  if (raw === null || typeof raw === 'boolean' || typeof raw === 'number') {
-    logger.warn(
-      `Tool call ${callId}: Expected object-like input, received ${String(raw)}`,
-    );
+  if (raw === null) {
+    logger.warn(`Tool call ${callId}: Received null input, using empty object`);
     return {};
+  }
+
+  if (typeof raw === 'boolean' || typeof raw === 'number') {
+    logger.warn(
+      `Tool call ${callId}: Received primitive input (${String(raw)}), passing through`,
+    );
+    return raw;
   }
 
   if (typeof raw !== 'string') return raw ?? {};
