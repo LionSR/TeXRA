@@ -1072,16 +1072,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (Array.isArray(parts)) {
       const functionCalls = parts
         .map((part) => part.functionCall)
-        .filter((call): call is FunctionCall =>
-          Boolean(call?.id && call?.name),
-        );
+        .filter((call): call is FunctionCall => Boolean(call?.name));
 
       if (functionCalls.length > 0) {
         return functionCalls.map(
           (call) =>
             ({
               provider: 'google',
-              callId: call.id!,
+              callId: call.id ?? call.name ?? 'function_call',
               name: call.name!,
               input: call.args,
               raw: call,
