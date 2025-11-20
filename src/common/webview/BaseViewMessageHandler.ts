@@ -77,7 +77,9 @@ export abstract class BaseViewMessageHandler<
    */
   protected async handleTheme(message: any, webviewView: T): Promise<void> {
     if (!message?.theme) {
-      this.logger.warn('Invalid theme message:', message);
+      this.logger.warn(this.channel, 'Invalid theme message', {
+        data: message,
+      });
       return;
     }
 

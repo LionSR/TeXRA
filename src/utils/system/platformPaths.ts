@@ -212,7 +212,7 @@ function isPathSafe(filepath: string): boolean {
 export function findToolInCommonPaths(tool: string): string | null {
   // Basic security validation
   if (!isPathSafe(tool)) {
-    logger.debug(`Unsafe tool name rejected: ${tool}`, 'warn');
+    logger.warn(CHANNEL, `Unsafe tool name rejected: ${tool}`);
     return null;
   }
   const candidates = [tool];
