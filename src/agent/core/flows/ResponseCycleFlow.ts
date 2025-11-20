@@ -508,12 +508,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       .join(', ');
     options.logger.debug(`Usage summary: ${usageSummary}`);
 
-    if (result.thinkingContent && !result.useStreaming) {
-      options.logger.info(result.thinkingContent, {
-        messageType: MESSAGE_TYPES.THINKING,
-      });
-    }
-
     options.logger.info(`Stop reason: ${result.stopReason}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
