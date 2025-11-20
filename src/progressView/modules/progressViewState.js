@@ -320,6 +320,7 @@ export class ProgressViewState {
   constructor() {
     this.stateManager = new WebviewStateManager();
     this.activeStream = '';
+    this.streams = new Set();
     this.agentTypeFilter = 'all';
     this.pendingFilterUpdate = false;
     this.currentGroupId = null;
@@ -375,6 +376,25 @@ export class ProgressViewState {
     if (Array.isArray(previous?.groupToggleStates)) {
       this.toggleStates.load(previous.groupToggleStates);
     }
+  }
+
+  setStreams(streams) {
+    this.streams = new Set(streams?.filter(Boolean));
+  }
+
+  removeStream(stream) {
+    if (!stream) {
+      return;
+    }
+    this.streams.delete(stream);
+  }
+
+  clearStreams() {
+    this.streams.clear();
+  }
+
+  hasStreams() {
+    return this.streams.size > 0;
   }
 
   /** Persist the current group toggle states. */
