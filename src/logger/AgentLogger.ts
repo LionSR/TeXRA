@@ -167,23 +167,31 @@ export class AgentLogger {
   }
 
   /**
-   * Log a debug message. Supports both legacy positional parameters and modern options object.
+   * Log a debug message using modern options object.
    *
    * @example
-   * // Modern approach (recommended):
    * this.logger.debug('Processing file', { groupId: '123', data: fileInfo });
-   *
-   * @example
-   * // Legacy approach (still supported):
-   * this.logger.debug('Processing file', '123', undefined, fileInfo);
    */
+  debug(message: string, options: LogOptions): void;
+
+  /**
+   * Log a debug message using legacy positional parameters.
+   *
+   * @deprecated Use options object signature instead
+   */
+  debug(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+
   debug(
     message: string,
     optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    // Detect if using modern options object or legacy positional parameters
     if (
       typeof optionsOrGroupId === 'object' &&
       optionsOrGroupId !== null &&
@@ -199,7 +207,6 @@ export class AgentLogger {
         options.data,
       );
     } else {
-      // Legacy positional parameters
       logger.debug(
         this.channelId,
         message,
@@ -212,23 +219,31 @@ export class AgentLogger {
   }
 
   /**
-   * Log an info message. Supports both legacy positional parameters and modern options object.
+   * Log an info message using modern options object.
    *
    * @example
-   * // Modern approach (recommended):
    * this.logger.info('Operation completed', { messageType: MESSAGE_TYPES.FILE_LIST });
-   *
-   * @example
-   * // Legacy approach (still supported):
-   * this.logger.info('Operation completed', undefined, MESSAGE_TYPES.FILE_LIST);
    */
+  info(message: string, options: LogOptions): void;
+
+  /**
+   * Log an info message using legacy positional parameters.
+   *
+   * @deprecated Use options object signature instead
+   */
+  info(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+
   info(
     message: string,
     optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    // Detect if using modern options object or legacy positional parameters
     if (
       typeof optionsOrGroupId === 'object' &&
       optionsOrGroupId !== null &&
@@ -244,7 +259,6 @@ export class AgentLogger {
         options.data,
       );
     } else {
-      // Legacy positional parameters
       logger.info(
         this.channelId,
         message,
@@ -257,23 +271,31 @@ export class AgentLogger {
   }
 
   /**
-   * Log a warning message. Supports both legacy positional parameters and modern options object.
+   * Log a warning message using modern options object.
    *
    * @example
-   * // Modern approach (recommended):
    * this.logger.warn('Invalid configuration', { data: errorDetails });
-   *
-   * @example
-   * // Legacy approach (still supported):
-   * this.logger.warn('Invalid configuration', undefined, undefined, errorDetails);
    */
+  warn(message: string, options: LogOptions): void;
+
+  /**
+   * Log a warning message using legacy positional parameters.
+   *
+   * @deprecated Use options object signature instead
+   */
+  warn(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+
   warn(
     message: string,
     optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    // Detect if using modern options object or legacy positional parameters
     if (
       typeof optionsOrGroupId === 'object' &&
       optionsOrGroupId !== null &&
@@ -289,7 +311,6 @@ export class AgentLogger {
         options.data,
       );
     } else {
-      // Legacy positional parameters
       logger.warn(
         this.channelId,
         message,
@@ -302,23 +323,31 @@ export class AgentLogger {
   }
 
   /**
-   * Log an error message. Supports both legacy positional parameters and modern options object.
+   * Log an error message using modern options object.
    *
    * @example
-   * // Modern approach (recommended):
    * this.logger.error('Operation failed', { groupId: '123', data: exception });
-   *
-   * @example
-   * // Legacy approach (still supported):
-   * this.logger.error('Operation failed', '123', undefined, exception);
    */
+  error(message: string, options: LogOptions): void;
+
+  /**
+   * Log an error message using legacy positional parameters.
+   *
+   * @deprecated Use options object signature instead
+   */
+  error(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
+
   error(
     message: string,
     optionsOrGroupId?: LogOptions | string,
     messageType?: MessageType,
     data?: unknown,
   ): void {
-    // Detect if using modern options object or legacy positional parameters
     if (
       typeof optionsOrGroupId === 'object' &&
       optionsOrGroupId !== null &&
@@ -334,7 +363,6 @@ export class AgentLogger {
         options.data,
       );
     } else {
-      // Legacy positional parameters
       logger.error(
         this.channelId,
         message,
