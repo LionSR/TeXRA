@@ -462,6 +462,130 @@ export function error(
   }
 }
 
+// ============================================================================
+// Separate Agent/Shared Logging Functions (Recommended API)
+// ============================================================================
+
+/**
+ * Log a debug message to an agent channel.
+ *
+ * @example
+ * debugAgent(CHANNEL, 'Processing file', { groupId: '123', data: fileInfo });
+ */
+export function debugAgent(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'debug', message, groupId, messageType, true, data);
+}
+
+/**
+ * Log a debug message to a shared channel.
+ *
+ * @example
+ * debugShared(CHANNEL, 'Processing file', { groupId: '123', data: fileInfo });
+ */
+export function debugShared(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'debug', message, groupId, messageType, false, data);
+}
+
+/**
+ * Log an info message to an agent channel.
+ *
+ * @example
+ * infoAgent(CHANNEL, 'Operation completed', { messageType: MESSAGE_TYPES.FILE_LIST });
+ */
+export function infoAgent(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'info', message, groupId, messageType, true, data);
+}
+
+/**
+ * Log an info message to a shared channel.
+ *
+ * @example
+ * infoShared(CHANNEL, 'Operation completed', { messageType: MESSAGE_TYPES.FILE_LIST });
+ */
+export function infoShared(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'info', message, groupId, messageType, false, data);
+}
+
+/**
+ * Log a warning message to an agent channel.
+ *
+ * @example
+ * warnAgent(CHANNEL, 'Invalid configuration', { data: errorDetails });
+ */
+export function warnAgent(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'warn', message, groupId, messageType, true, data);
+}
+
+/**
+ * Log a warning message to a shared channel.
+ *
+ * @example
+ * warnShared(CHANNEL, 'Invalid configuration', { data: errorDetails });
+ */
+export function warnShared(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'warn', message, groupId, messageType, false, data);
+}
+
+/**
+ * Log an error message to an agent channel.
+ *
+ * @example
+ * errorAgent(CHANNEL, 'Operation failed', { groupId: '123', data: exception });
+ */
+export function errorAgent(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'error', message, groupId, messageType, true, data);
+}
+
+/**
+ * Log an error message to a shared channel.
+ *
+ * @example
+ * errorShared(CHANNEL, 'Operation failed', { groupId: '123', data: exception });
+ */
+export function errorShared(
+  channel: string,
+  message: string,
+  options?: LogOptions,
+): void {
+  const { groupId, messageType, data } = options ?? {};
+  logWithGroup(channel, 'error', message, groupId, messageType, false, data);
+}
+
 export function getTimestamp(): string {
   return new Date()
     .toLocaleString('en-US', {

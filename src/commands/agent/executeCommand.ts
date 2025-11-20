@@ -56,13 +56,12 @@ export const executeCommand = {
         const message =
           'Invalid agent configuration provided for execution.' +
           (detail ? ` ${detail}` : '');
-        logger.warn(CHANNEL, message, { isAgent: false, data: error });
+        logger.warnShared(CHANNEL, message, { data: error });
         void vscode.window.showErrorMessage(message);
         return;
       }
 
-      logger.error(CHANNEL, 'Agent execution failed before start.', {
-        isAgent: false,
+      logger.errorShared(CHANNEL, 'Agent execution failed before start.', {
         data: error,
       });
       throw error;
