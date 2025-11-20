@@ -192,7 +192,12 @@ export function createUsageEvents(
     stream: string,
     requestedRunId: string | null | undefined,
     state: ProgressViewState,
-  ): string | null => state.resolveRunId(stream, requestedRunId ?? null);
+  ): string | null => {
+    if (requestedRunId) {
+      return requestedRunId;
+    }
+    return state.resolveRunId(stream, null);
+  };
 
   return {
     register(
