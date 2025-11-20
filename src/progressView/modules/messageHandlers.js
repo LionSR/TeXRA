@@ -64,24 +64,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
-  /**
-   * Toggle the placeholder based on active stream and log content
-   */
   _updatePlaceholderVisibility() {
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!logContent) {
+    if (state.hasStreams()) {
+      dom.placeholder.hide();
       return;
     }
 
-    const hasContent = Array.from(logContent.children).some(
-      (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
-    );
-
-    if (!hasContent) {
-      dom.placeholder.show();
-    } else {
-      dom.placeholder.hide();
-    }
+    dom.placeholder.show();
   }
 
   _handleRunSelectionChange(runId) {
@@ -189,6 +178,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
     });
+
+    state.setStreams(streams.map((s) => s.name));
 
     dom.streamTabs.update(streams, message.activeStream);
 
@@ -659,6 +650,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleDeleteStream(message) {
     if (message.stream) {
       pendingLogUpdates.clear();
+      if (message.stream === state.activeStream) {
+        state.activeStream = '';
+      }
+      state.removeStream(message.stream);
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       state.clearActiveRun(message.stream);
@@ -673,18 +668,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         dom.runSelector.clear();
       }
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleDeleteAll() {
     pendingLogUpdates.clear();
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
+    state.clearStreams();
+    state.activeStream = '';
     dom.instructionPanel.hide();
     state.clearRunInstructions();
     state.clearRunFiles();
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     dom.runSelector.clear();
+
+    this._updatePlaceholderVisibility();
   }
 
   handleFollowUpTextPolished(message) {
