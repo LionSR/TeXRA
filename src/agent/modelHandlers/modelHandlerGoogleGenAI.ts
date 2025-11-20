@@ -182,6 +182,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   private googleClient: GoogleGenAI | null = null;
 
+  // Temporary storage for thought signatures extracted with function calls
+  // Cleared after being transferred to workspace state in createToolUseFollowUpMessages
+  private pendingThoughtSignatures = new Map<string, string>();
+
   private supportsFileUploads(): boolean {
     return (
       this.config.capabilities.supportsVision ||
@@ -1064,29 +1068,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       workspaceState.reasoning.thinkingAdded = true;
     }
 
-    // Also check for ALL function call parts with thoughtSignature (for Gemini 3 Pro)
-    // Supports parallel function calling where multiple calls may each have signatures
-    if (workspaceState) {
-      const funcParts = parts.filter((part) => part.functionCall);
-      let signatureCount = 0;
-      for (const funcPart of funcParts) {
-        if (funcPart.thoughtSignature && funcPart.functionCall) {
-          // Store thoughtSignature keyed by call ID for later reconstruction
-          const callId = ensureCallId(funcPart.functionCall);
-          workspaceState.reasoning.toolCallThoughtSignatures.set(
-            callId,
-            funcPart.thoughtSignature,
-          );
-          signatureCount++;
-        }
-      }
-      if (signatureCount > 0) {
-        this.logger.debug(
-          `Stored ${signatureCount} thoughtSignature(s) from function call part(s) for later reconstruction`,
-        );
-      }
-    }
-
     if (thoughtContent) {
       this.logger.debug(
         `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
@@ -1112,8 +1093,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           );
         }
 
+        // Store thoughtSignature for later reconstruction (Gemini 3 Pro requirement)
+        // Supports parallel function calling by storing all signatures from all Parts
+        this.pendingThoughtSignatures.clear();
+        const funcParts = parts.filter((part) => part.functionCall);
+        for (const part of funcParts) {
+          if (part.thoughtSignature && part.functionCall) {
+            const id = ensureCallId(part.functionCall);
+            this.pendingThoughtSignatures.set(id, part.thoughtSignature);
+          }
+        }
+        if (this.pendingThoughtSignatures.size > 0) {
+          this.logger.debug(
+            `Stored ${this.pendingThoughtSignatures.size} thoughtSignature(s) for function call reconstruction`,
+          );
+        }
+
         // Serialize flat structure for schema compatibility
-        // thoughtSignature is stored separately in processThinkingBlock
         const flatCall = {
           id: callId,
           name: call.name ?? '',
@@ -1170,8 +1166,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const functionName = call.name ?? name;
     const callId = ensureCallId(call);
 
+    // Transfer pending thought signatures to workspace state for persistence
+    if (workspaceState && this.pendingThoughtSignatures.size > 0) {
+      for (const [id, sig] of this.pendingThoughtSignatures) {
+        workspaceState.reasoning.toolCallThoughtSignatures.set(id, sig);
+      }
+      this.pendingThoughtSignatures.clear();
+    }
+
     // Reconstruct Part with thoughtSignature if available (for Gemini 3 Pro)
-    // Look up signature by call ID (supports parallel function calling)
     const thoughtSig =
       workspaceState?.reasoning.toolCallThoughtSignatures.get(callId);
     const finalCallPart: Part = {
@@ -1179,7 +1182,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       ...(thoughtSig && { thoughtSignature: thoughtSig }),
     };
 
-    // Remove the used signature from the map
+    // Remove the used signature from workspace state
     if (workspaceState?.reasoning && thoughtSig) {
       workspaceState.reasoning.toolCallThoughtSignatures.delete(callId);
     }
