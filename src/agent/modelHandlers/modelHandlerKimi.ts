@@ -11,6 +11,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { K_SLICE } from '@utils/config';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
+import { toOpenAITools } from './toolConversion';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -141,7 +142,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       }
 
       if (tools && tools.length > 0) {
-        kwargs.tools = tools;
+        kwargs.tools = toOpenAITools(tools);
         kwargs.tool_choice = 'auto';
       }
 
