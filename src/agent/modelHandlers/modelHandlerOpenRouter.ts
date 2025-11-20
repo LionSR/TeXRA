@@ -16,7 +16,10 @@ import { K_SLICE } from '@utils/config';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import type { CreateResponseOptions } from './types/IModelHandler';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 
 /**
  * Handler for models accessed through OpenRouter.
@@ -24,8 +27,8 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
   /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam>,
-  ): Promise<any> {
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
     const { client, messages, temperature, endTag, signal, tools } = options;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();

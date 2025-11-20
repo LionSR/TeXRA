@@ -4,22 +4,24 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
-function createExcludePattern(
-  root: string,
-  directories: string[],
-): vscode.RelativePattern | undefined {
-  const sanitized = directories
+function sanitizeDirectories(directories: string[]): string[] {
+  return directories
     .map((dir) => dir.trim())
     .filter((dir) => dir.length > 0)
     .map((dir) =>
       dir.replace(/\\/g, '/').replace(/^\//, '').replace(/\/$/, ''),
     );
+}
 
-  if (sanitized.length === 0) {
+function createExcludePattern(
+  root: string,
+  sanitizedDirectories: string[],
+): vscode.RelativePattern | undefined {
+  if (sanitizedDirectories.length === 0) {
     return undefined;
   }
 
-  const globSegments = sanitized.map((dir) => `**/${dir}/**`);
+  const globSegments = sanitizedDirectories.map((dir) => `**/${dir}/**`);
   const globPattern =
     globSegments.length === 1 ? globSegments[0] : `{${globSegments.join(',')}}`;
 
@@ -59,7 +61,7 @@ interface NormalizedListingOptions {
   excludePattern?: vscode.RelativePattern;
 }
 
-function normalizeListingOptions(
+function prepareFilters(
   patternRoot: string,
   options: ListingOptions,
 ): NormalizedListingOptions {
@@ -69,13 +71,15 @@ function normalizeListingOptions(
   const excludeKeywords = options.excludeKeywords ?? [];
   const excludeFiles = options.excludeFiles ?? [];
 
+  const sanitizedDirectories = sanitizeDirectories(excludeDirectories);
+
   return {
     includeExt: includeExtensions.map((ext) => ext.toLowerCase()),
     excludeExt: excludeExtensions.map((ext) => ext.toLowerCase()),
     excludeKeywords: excludeKeywords.map((keyword) => keyword.toLowerCase()),
-    excludeDirs: excludeDirectories.map((dir) => dir.toLowerCase()),
+    excludeDirs: sanitizedDirectories.map((dir) => dir.toLowerCase()),
     excludeFiles: excludeFiles.map((file) => file.toLowerCase()),
-    excludePattern: createExcludePattern(patternRoot, excludeDirectories),
+    excludePattern: createExcludePattern(patternRoot, sanitizedDirectories),
   };
 }
 
@@ -86,7 +90,7 @@ export async function getFilesInDirectory(
   excludeDirectories: string[] = [],
   excludeKeywords: string[] = [],
 ): Promise<string[]> {
-  const filters = normalizeListingOptions(dir, {
+  const filters = prepareFilters(dir, {
     includeExtensions,
     excludeExtensions,
     excludeDirectories,
@@ -125,7 +129,7 @@ export async function getFilesRecursively(
   excludeKeywords: string[] = [],
   excludeFiles: string[] = [],
 ): Promise<string[]> {
-  const filters = normalizeListingOptions(root, {
+  const filters = prepareFilters(root, {
     includeExtensions,
     excludeExtensions,
     excludeDirectories,
