@@ -89,6 +89,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
+  NormalizedToolCall,
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
@@ -152,7 +153,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
   AnthropicUsage,
   AnthropicAPIResponseUsage,
   ToolUseBlock,
-  Anthropic
+  Anthropic,
+  BetaMessage
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
 
@@ -249,7 +251,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
   async createResponse(
-    requestOptions: CreateResponseOptions<MessageParam>,
+    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<BetaMessage> {
     const {
       client,
@@ -1568,15 +1570,27 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return regularThinkingContent;
   }
 
-  extractToolUse(responseObject: BetaMessage): string | null {
+  extractToolUse(responseObject: BetaMessage): NormalizedToolCall | null {
     const content = responseObject?.content;
-    if (Array.isArray(content)) {
-      const tu = content.find((c: any) => c.type === 'tool_use');
-      if (tu) {
-        return JSON.stringify(tu, null, 2);
-      }
+    if (!Array.isArray(content)) {
+      return null;
     }
-    return null;
+
+    const toolUseBlock = content.find(
+      (block): block is ToolUseBlock =>
+        (block as { type?: string }).type === 'tool_use',
+    );
+
+    if (!toolUseBlock || !toolUseBlock.id || !toolUseBlock.name) {
+      return null;
+    }
+    return {
+      provider: 'anthropic',
+      callId: toolUseBlock.id,
+      name: toolUseBlock.name,
+      input: toolUseBlock.input,
+      raw: toolUseBlock,
+    };
   }
 
   async createToolUseFollowUpMessages(
