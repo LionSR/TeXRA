@@ -353,7 +353,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   // Implement handler methods
   private async handleInfoMessage(message: any): Promise<void> {
     vscode.window.showInformationMessage(message.text);
-    this.logger.debug(`Information message: ${message.text}`);
+    this.logger.debug(this.channel, `Information message: ${message.text}`);
   }
 
   private async handleThemeRequest(message: any): Promise<void> {
