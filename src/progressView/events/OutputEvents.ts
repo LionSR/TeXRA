@@ -48,7 +48,7 @@ const sendRunFileUpdate = (
   stream: string,
   runId: string,
 ): void => {
-  if (state.activeStream !== stream || !updater.isAvailable()) {
+  if (!updater.isAvailable()) {
     return;
   }
 
@@ -64,7 +64,7 @@ const sendRunMissingUpdate = (
   stream: string,
   runId: string,
 ): void => {
-  if (state.activeStream !== stream || !updater.isAvailable()) {
+  if (!updater.isAvailable()) {
     return;
   }
 

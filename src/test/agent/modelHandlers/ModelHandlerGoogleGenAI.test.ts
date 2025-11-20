@@ -355,13 +355,20 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
     const functionCall: FunctionCall = {
       name: 'extract_figures',
       args: { source: 'doc.tex' },
+      id: 'call-123',
     };
+
+    const providerCall = {
+      provider: 'google',
+      callId: functionCall.id!,
+      name: functionCall.name!,
+      input: functionCall.args,
+      raw: functionCall,
+    } as const;
 
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
-      'call-123',
-      'extract_figures',
-      functionCall,
+      providerCall,
       toolResult,
     );
 
