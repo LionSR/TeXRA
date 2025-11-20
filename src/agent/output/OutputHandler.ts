@@ -135,6 +135,12 @@ export class OutputHandler implements IOutputHandler {
 
     const initialRunId = this.logger.withCurrentGroup((id) => id);
     this.setActiveRun(initialRunId ?? null);
+    this.logger.debug(
+      `OutputHandler initialized with runId=${normalizeRunId(this.currentRunId)} (loggerGroup=${normalizeRunId(initialRunId)} executionId=${
+        this.executionId ?? 'none'
+      })`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -174,6 +180,13 @@ export class OutputHandler implements IOutputHandler {
 
     const loggerRunId = this.logger.withCurrentGroup((id) => id);
     const nextRunId = runId ?? loggerRunId ?? null;
+    const previousRunId = this.currentRunId;
+    this.logger.debug(
+      `setActiveRun(runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} prev=${normalizeRunId(
+        previousRunId,
+      )} next=${normalizeRunId(nextRunId)} executionId=${targetExecutionId ?? 'none'})`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
     if (nextRunId === this.currentRunId) {
       return;
     }
@@ -196,6 +209,10 @@ export class OutputHandler implements IOutputHandler {
   private getActiveRunId(): string {
     const loggerRunId = this.logger.withCurrentGroup((id) => id);
     if (loggerRunId && loggerRunId !== this.currentRunId) {
+      this.logger.debug(
+        `Logger group changed: current=${normalizeRunId(this.currentRunId)} logger=${normalizeRunId(loggerRunId)}`,
+        { messageType: MESSAGE_TYPES.INTERNAL },
+      );
       this.setActiveRun(loggerRunId);
     }
 
@@ -480,6 +497,10 @@ export class OutputHandler implements IOutputHandler {
     const effectiveRunId = runId ?? loggerRunId ?? null;
     const normalizedCurrent = normalizeRunId(this.currentRunId);
     const normalizedTarget = normalizeRunId(effectiveRunId);
+    this.logger.debug(
+      `Hydrate outputs for runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} current=${normalizedCurrent} target=${normalizedTarget}`,
+      { messageType: MESSAGE_TYPES.INTERNAL },
+    );
     if (normalizedTarget !== normalizedCurrent) {
       this.setActiveRun(effectiveRunId);
     }
@@ -529,6 +550,10 @@ export class OutputHandler implements IOutputHandler {
             executionId,
             filesByRound: { [currRound]: [] },
           });
+          this.logger.debug(
+            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+            { messageType: MESSAGE_TYPES.INTERNAL },
+          );
           return;
         }
 
@@ -572,6 +597,10 @@ export class OutputHandler implements IOutputHandler {
           executionId,
           filesByRound: { [currRound]: missing },
         });
+        this.logger.debug(
+          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
       },
     );
   }
@@ -619,6 +648,10 @@ export class OutputHandler implements IOutputHandler {
           executionId,
           filesByRound: { [currRound]: fileInfos },
         });
+        this.logger.debug(
+          `addOutputFiles emitted for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'} files=${fileInfos.length}`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
 
         for (const info of fileInfos) {
           const filePath = info.location.absolutePath;
