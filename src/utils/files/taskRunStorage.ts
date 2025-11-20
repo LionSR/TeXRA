@@ -380,7 +380,10 @@ export class TaskRunFileService {
       if (trimmed.length === 0) {
         return;
       }
-      const candidateUri = vscode.Uri.file(trimmed);
+      // Resolve relative paths against workspace root
+      const candidateUri = path.isAbsolute(trimmed)
+        ? vscode.Uri.file(trimmed)
+        : vscode.Uri.joinPath(workspaceRoot, trimmed);
       linkTargets.add(createWorkspaceLocation(candidateUri, workspaceRoot));
     };
 

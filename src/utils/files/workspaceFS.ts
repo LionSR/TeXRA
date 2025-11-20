@@ -38,8 +38,12 @@ export class WorkspaceFS extends RelativeFS {
   }
 
   public static relativePath(filePath: vscode.Uri): string {
-    const base = this.getBaseUri().fsPath;
-    const relative = path.relative(base, filePath.fsPath);
+    const baseUri = this.getUri();
+    if (!baseUri) {
+      // No workspace available - return the file path as-is
+      return filePath.fsPath;
+    }
+    const relative = path.relative(baseUri.fsPath, filePath.fsPath);
     return relative ? path.normalize(relative) : '';
   }
 
