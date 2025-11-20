@@ -41,7 +41,7 @@ import type {
   IModelHandler,
   CreateResponseOptions,
   ExtractResponseResult,
-  NormalizedToolCall,
+  ProviderToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
 
@@ -77,7 +77,7 @@ export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = unknown,
   R = unknown,
-  T = unknown,
+  T extends ProviderToolCall = ProviderToolCall,
   C = unknown,
   Resp = unknown,
 > implements IModelHandler<M, U, R, T, C, Resp>
@@ -581,15 +581,13 @@ export abstract class ModelHandler<
    * @param responseObject The raw response object from the model
    * @returns A normalized tool call or null if not present
    */
-  abstract extractToolUse(responseObject: Resp): NormalizedToolCall | null;
+  abstract extractToolUse(responseObject: Resp): T[];
 
   /**
    * Build a provider-specific follow-up message containing a tool result.
    */
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
-    id: string,
-    name: string,
     call: T,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
