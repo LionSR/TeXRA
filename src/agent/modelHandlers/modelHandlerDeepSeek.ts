@@ -23,7 +23,7 @@ import type { StreamingAggregator } from './modelHandlerOpenAI';
 // Type imports
 import type {
   CreateResponseOptions,
-  ProviderToolCall,
+  DeepSeekToolCall,
 } from './types/IModelHandler';
 import type {
   ChatCompletion,
@@ -71,7 +71,7 @@ import type {
 /**
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
-export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
+export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   protected createStreamingAggregator(): StreamingAggregator | null {
     return new DeepSeekStreamAggregator();
   }
@@ -139,7 +139,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     return reasoningContent;
   }
 
-  extractToolUse(responseObject: ChatCompletion): ProviderToolCall[] {
+  extractToolUse(responseObject: ChatCompletion): DeepSeekToolCall[] {
     const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
       const call = toolCalls[0] as ChatCompletionMessageFunctionToolCall;
@@ -175,20 +175,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
 
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
-    call: ProviderToolCall,
+    call: DeepSeekToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const callPayload = call as ProviderToolCall & {
-      raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
-    };
-
-    const toolCall = this.normalizeToolCall(
-      callPayload.callId,
-      callPayload.name,
-      callPayload.raw,
-    );
+    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -205,7 +197,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI {
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? callPayload.callId,
+      tool_call_id: toolCall.id ?? call.callId,
       content: JSON.stringify(sanitizedResult),
     };
     return [callMsg, resultMsg];

@@ -110,7 +110,7 @@ export type AnthropicToolCall = {
   raw: ToolUseBlock;
 };
 
-export type ProviderToolCall =
+export type SdkToolCall =
   | OpenAIToolCall
   | DeepSeekToolCall
   | OpenAIResponseToolCall
@@ -131,7 +131,7 @@ export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = any,
   R = any,
-  T extends ProviderToolCall = ProviderToolCall,
+  T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
 > {

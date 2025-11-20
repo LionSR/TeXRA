@@ -41,7 +41,7 @@ import type {
   IModelHandler,
   CreateResponseOptions,
   ExtractResponseResult,
-  ProviderToolCall,
+  SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
 
@@ -77,7 +77,7 @@ export abstract class ModelHandler<
   M extends ProviderMessage = ProviderMessage,
   U = unknown,
   R = unknown,
-  T extends ProviderToolCall = ProviderToolCall,
+  T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
 > implements IModelHandler<M, U, R, T, C, Resp>
