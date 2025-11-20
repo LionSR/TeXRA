@@ -11,7 +11,7 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ProviderToolCall } from '@agent/modelHandlers/types/IModelHandler';
+import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
@@ -24,6 +24,8 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+// Local imports - logging
+import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -48,11 +50,21 @@ interface ToolValidationDiagnostics {
   }>;
 }
 
-function parseToolInput(raw: unknown): unknown {
+function parseToolInput(
+  raw: unknown,
+  callId: string,
+  logger: AgentLogger,
+): unknown {
   if (typeof raw !== 'string') return raw;
   try {
     return JSON.parse(raw);
-  } catch {
+  } catch (error) {
+    logger.warn(
+      `Tool call ${callId}: Failed to parse input as JSON, using raw string`,
+      undefined,
+      undefined,
+      error,
+    );
     return raw;
   }
 }
@@ -99,7 +111,7 @@ type ToolDispatchErrorResult = {
 
 export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
-  toolCalls?: ProviderToolCall[];
+  toolCalls?: SdkToolCall[];
   text?: string;
 }
 
@@ -278,7 +290,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
   async exec(context: ToolUseCycleContext<C>): Promise<
     SkippableNodeResult<{
-      toolCalls?: ProviderToolCall[];
+      toolCalls?: SdkToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -370,7 +382,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     shared: ToolUseCycleContext<C>,
     _prepRes: unknown,
     execRes: SkippableNodeResult<{
-      toolCalls?: ProviderToolCall[];
+      toolCalls?: SdkToolCall[];
       stopReason: ProviderStopReason;
       text?: string;
       endTurn: boolean;
@@ -409,7 +421,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   async exec(
     context: ToolUseCycleContext<C>,
   ): Promise<
-    SkippableNodeResult<{ calls: ProviderToolCall[] } | ToolDispatchErrorResult>
+    SkippableNodeResult<{ calls: SdkToolCall[] } | ToolDispatchErrorResult>
   > {
     const { options, state, store } = context;
     if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
@@ -433,7 +445,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     _shared: ToolUseCycleContext<C>,
     prepRes: ToolUseCycleContext<C>,
     execRes: SkippableNodeResult<
-      { calls: ProviderToolCall[] } | ToolDispatchErrorResult
+      { calls: SdkToolCall[] } | ToolDispatchErrorResult
     >,
   ): Promise<string | undefined> {
     const { options, state, store } = prepRes;
@@ -498,7 +510,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
           isError: true,
         });
       } else {
-        const parsedInput = parseToolInput(call.input);
+        const parsedInput = parseToolInput(
+          call.input,
+          call.callId,
+          options.logger,
+        );
         try {
           result = await withToolEditApprovalContext(
             {
@@ -521,7 +537,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         }
       }
 
-      const parsedInput = parseToolInput(call.input);
+      const parsedInput = parseToolInput(
+        call.input,
+        call.callId,
+        options.logger,
+      );
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,

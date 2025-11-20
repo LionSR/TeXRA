@@ -56,7 +56,7 @@ import type { ProviderStopReason } from './types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   ExtractResponseResult,
-  ProviderToolCall,
+  OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
@@ -95,7 +95,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   ResponseInputItem,
   ResponseUsage,
   OpenAIAPIResponseUsage,
-  ProviderToolCall,
+  OpenAIResponseToolCall,
   OpenAI,
   Response
 > {
@@ -1278,7 +1278,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return thoughtContent || null;
   }
 
-  extractToolUse(response: Response): ProviderToolCall[] {
+  extractToolUse(response: Response): OpenAIResponseToolCall[] {
     const items = response?.output;
     if (!Array.isArray(items)) return [];
 
@@ -1301,7 +1301,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
-    call: ProviderToolCall,
+    call: OpenAIResponseToolCall,
     result: Record<string, unknown>,
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1311,15 +1311,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       messages.push(this.createAssistantMessage(text));
     }
 
-    const callPayload = call as ProviderToolCall & {
-      raw: ResponseFunctionToolCallItem;
-    };
-
     const callMsg: ResponseFunctionToolCall = {
       type: 'function_call',
-      call_id: callPayload.callId,
-      name: callPayload.name,
-      arguments: callPayload.raw.arguments,
+      call_id: call.callId,
+      name: call.name,
+      arguments: call.raw.arguments,
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
@@ -1393,7 +1389,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const resultMsg: ResponseInputItem.FunctionCallOutput = {
       type: 'function_call_output',
-      call_id: callPayload.callId,
+      call_id: call.callId,
       output: outputPayload,
     };
 
