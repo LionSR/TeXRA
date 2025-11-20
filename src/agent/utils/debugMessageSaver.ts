@@ -92,22 +92,19 @@ export async function maybeSaveDebugObject({
       const relativePath = path.join(TASK_RUNS_DIR, executionId, debugFileName);
       await StorageFS.writeJson(relativePath, object);
       const debugFilePath = StorageFS.fullPath(relativePath);
-      logger.info(
-        `Saved ${objectType} object to ${debugFilePath}`,
-        activeGroupId,
-      );
+      logger.info(`Saved ${objectType} object to ${debugFilePath}`, {
+        groupId: activeGroupId,
+      });
     } else {
       await WorkspaceFS.writeJson(debugFileName, object);
       const debugFilePath = WorkspaceFS.fullPath(debugFileName);
-      logger.info(
-        `Saved ${objectType} object to ${debugFilePath}`,
-        activeGroupId,
-      );
+      logger.info(`Saved ${objectType} object to ${debugFilePath}`, {
+        groupId: activeGroupId,
+      });
     }
   } catch (error) {
-    logger.error(
-      `Failed to save ${objectType} object: ${error}`,
-      activeGroupId,
-    );
+    logger.error(`Failed to save ${objectType} object: ${error}`, {
+      groupId: activeGroupId,
+    });
   }
 }

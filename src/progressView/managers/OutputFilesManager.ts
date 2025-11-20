@@ -424,7 +424,7 @@ export class OutputFilesManager extends PersistentMapManager<
           this.missingOutputsLoaded = true;
         })
         .catch((error) => {
-          this.logger.error('Failed to load missing outputs', error);
+          this.logger.error('Failed to load missing outputs', { data: error });
           this.missingOutputsLoadPromise = null;
           throw error;
         });
