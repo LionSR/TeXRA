@@ -169,165 +169,49 @@ export class AgentLogger {
   /**
    * Log a debug message with options object.
    */
-  debug(message: string, options: LogOptions): void;
-  /**
-   * Log a debug message with positional parameters.
-   * @deprecated Use options object instead
-   */
-  debug(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void;
-  debug(
-    message: string,
-    optionsOrGroupId?: LogOptions | string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    if (
-      typeof optionsOrGroupId === 'object' &&
-      optionsOrGroupId !== null &&
-      !Array.isArray(optionsOrGroupId)
-    ) {
-      logger.debug(this.channelId, message, {
-        groupId: optionsOrGroupId.groupId,
-        messageType: optionsOrGroupId.messageType,
-        isAgent: this.isAgentLogger,
-        data: optionsOrGroupId.data,
-      });
-    } else {
-      logger.debug(this.channelId, message, {
-        groupId: optionsOrGroupId as string | undefined,
-        messageType,
-        isAgent: this.isAgentLogger,
-        data,
-      });
-    }
+  debug(message: string, options: LogOptions = {}): void {
+    logger.debug(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
   /**
    * Log an info message with options object.
    */
-  info(message: string, options: LogOptions): void;
-  /**
-   * Log an info message with positional parameters.
-   * @deprecated Use options object instead
-   */
-  info(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void;
-  info(
-    message: string,
-    optionsOrGroupId?: LogOptions | string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    if (
-      typeof optionsOrGroupId === 'object' &&
-      optionsOrGroupId !== null &&
-      !Array.isArray(optionsOrGroupId)
-    ) {
-      logger.info(this.channelId, message, {
-        groupId: optionsOrGroupId.groupId,
-        messageType: optionsOrGroupId.messageType,
-        isAgent: this.isAgentLogger,
-        data: optionsOrGroupId.data,
-      });
-    } else {
-      logger.info(this.channelId, message, {
-        groupId: optionsOrGroupId as string | undefined,
-        messageType,
-        isAgent: this.isAgentLogger,
-        data,
-      });
-    }
+  info(message: string, options: LogOptions = {}): void {
+    logger.info(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
   /**
    * Log a warning message with options object.
    */
-  warn(message: string, options: LogOptions): void;
-  /**
-   * Log a warning message with positional parameters.
-   * @deprecated Use options object instead
-   */
-  warn(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void;
-  warn(
-    message: string,
-    optionsOrGroupId?: LogOptions | string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    if (
-      typeof optionsOrGroupId === 'object' &&
-      optionsOrGroupId !== null &&
-      !Array.isArray(optionsOrGroupId)
-    ) {
-      logger.warn(this.channelId, message, {
-        groupId: optionsOrGroupId.groupId,
-        messageType: optionsOrGroupId.messageType,
-        isAgent: this.isAgentLogger,
-        data: optionsOrGroupId.data,
-      });
-    } else {
-      logger.warn(this.channelId, message, {
-        groupId: optionsOrGroupId as string | undefined,
-        messageType,
-        isAgent: this.isAgentLogger,
-        data,
-      });
-    }
+  warn(message: string, options: LogOptions = {}): void {
+    logger.warn(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
   /**
    * Log an error message with options object.
    */
-  error(message: string, options: LogOptions): void;
-  /**
-   * Log an error message with positional parameters.
-   * @deprecated Use options object instead
-   */
-  error(
-    message: string,
-    groupId?: string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void;
-  error(
-    message: string,
-    optionsOrGroupId?: LogOptions | string,
-    messageType?: MessageType,
-    data?: unknown,
-  ): void {
-    if (
-      typeof optionsOrGroupId === 'object' &&
-      optionsOrGroupId !== null &&
-      !Array.isArray(optionsOrGroupId)
-    ) {
-      logger.error(this.channelId, message, {
-        groupId: optionsOrGroupId.groupId,
-        messageType: optionsOrGroupId.messageType,
-        isAgent: this.isAgentLogger,
-        data: optionsOrGroupId.data,
-      });
-    } else {
-      logger.error(this.channelId, message, {
-        groupId: optionsOrGroupId as string | undefined,
-        messageType,
-        isAgent: this.isAgentLogger,
-        data,
-      });
-    }
+  error(message: string, options: LogOptions = {}): void {
+    logger.error(this.channelId, message, {
+      groupId: options.groupId,
+      messageType: options.messageType,
+      isAgent: this.isAgentLogger,
+      data: options.data,
+    });
   }
 
   /**
