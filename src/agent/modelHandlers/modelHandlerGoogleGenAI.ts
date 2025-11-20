@@ -586,12 +586,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           const filteredParts = candidateContent.parts.filter(
             (part) => !(part as any).thought,
           );
-          const joined = filteredParts
-            .filter(isTextPart)
-            .map((p) => p.text)
-            .join('');
-          // Mutate defensively on the candidate object; the SDK types mark text as readonly
-          (baseResponse as any).text = joined || finalOutputText;
+          // Update the parts array; the SDK will compute the text property from it
           (candidateContent as any).parts = filteredParts;
         }
 
