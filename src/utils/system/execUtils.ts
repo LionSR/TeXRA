@@ -32,7 +32,7 @@ function truncateOutput(
 }
 
 function normalizeOutput(text: string | null | undefined): string | null {
-  if (text === null || text === undefined) {
+  if (text == null) {
     return null;
   }
   const trimmed = text.trim();

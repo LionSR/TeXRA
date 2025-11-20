@@ -69,8 +69,8 @@ function findRootGroupId(
     current = parent;
   }
 
-  context.rootCache.set(groupId, current ? current.id : null);
-  return current ? current.id : null;
+  context.rootCache.set(groupId, current?.id ?? null);
+  return current?.id ?? null;
 }
 
 /**
