@@ -2,12 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - agent components
-import {
-  AgentCategory,
-  AgentType,
-  type AgentSessionDescriptor,
-  resolveAgentSessionDescriptor,
-} from './AgentDataclass';
+import { AgentType, resolveAgentSessionDescriptor } from './AgentDataclass';
 import { AgentSessionDescriptorSchema } from './AgentSessionSchema';
 import { DEFAULT_TOOL_CONFIG, ToolConfigSchema } from './ToolConfig';
 
@@ -41,7 +36,7 @@ const stringArrayField = () =>
 
 const AgentConfigBaseSchema = z
   .strictObject({
-    model: z.string().prefault('gemini25p'),
+    model: z.string().prefault('gemini3p'),
     agent: z.string().prefault('correct'),
     instruction: z.string().prefault(''),
     useMultipleOutputs: z.boolean().prefault(false),

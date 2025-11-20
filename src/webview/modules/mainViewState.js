@@ -4,7 +4,6 @@ import {
   CHECK_BOXES,
   VALUE_ELEMENTS,
   CHECK_BOXES_TOOL_USE,
-  CHECK_BOXES_AUTO_EXTRACT,
   ELEMENT_IDS,
   SESSION_TYPES,
   SESSION_TYPE_INPUT,
@@ -161,7 +160,7 @@ export class MainViewState {
           AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
           DEFAULT_TOOL_USE_AGENT,
         ),
-        model: 'gemini25p',
+        model: 'gemini3p',
         commit: 'HEAD',
       };
 
