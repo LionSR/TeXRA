@@ -220,12 +220,23 @@ export async function runWithGroupContext<T>(
 /**
  * Log a debug message with options object.
  */
-export function debug(channel: string, message: string, options: LogUtilsOptions): void;
+export function debug(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
 /**
  * Log a debug message with positional parameters.
  * @deprecated Use options object instead
  */
-export function debug(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
+export function debug(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
 export function debug(
   channel: string,
   message: string,
@@ -265,12 +276,23 @@ export function debug(
 /**
  * Log an info message with options object.
  */
-export function info(channel: string, message: string, options: LogUtilsOptions): void;
+export function info(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
 /**
  * Log an info message with positional parameters.
  * @deprecated Use options object instead
  */
-export function info(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
+export function info(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
 export function info(
   channel: string,
   message: string,
@@ -310,12 +332,23 @@ export function info(
 /**
  * Log a warning message with options object.
  */
-export function warn(channel: string, message: string, options: LogUtilsOptions): void;
+export function warn(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
 /**
  * Log a warning message with positional parameters.
  * @deprecated Use options object instead
  */
-export function warn(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
+export function warn(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
 export function warn(
   channel: string,
   message: string,
@@ -355,12 +388,23 @@ export function warn(
 /**
  * Log an error message with options object.
  */
-export function error(channel: string, message: string, options: LogUtilsOptions): void;
+export function error(
+  channel: string,
+  message: string,
+  options: LogUtilsOptions,
+): void;
 /**
  * Log an error message with positional parameters.
  * @deprecated Use options object instead
  */
-export function error(channel: string, message: string, groupId?: string, messageType?: MessageType, isAgent?: boolean, data?: unknown): void;
+export function error(
+  channel: string,
+  message: string,
+  groupId?: string,
+  messageType?: MessageType,
+  isAgent?: boolean,
+  data?: unknown,
+): void;
 export function error(
   channel: string,
   message: string,

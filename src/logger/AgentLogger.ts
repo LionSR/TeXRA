@@ -174,7 +174,12 @@ export class AgentLogger {
    * Log a debug message with positional parameters.
    * @deprecated Use options object instead
    */
-  debug(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
+  debug(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
   debug(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -215,7 +220,12 @@ export class AgentLogger {
    * Log an info message with positional parameters.
    * @deprecated Use options object instead
    */
-  info(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
+  info(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
   info(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -256,7 +266,12 @@ export class AgentLogger {
    * Log a warning message with positional parameters.
    * @deprecated Use options object instead
    */
-  warn(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
+  warn(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
   warn(
     message: string,
     optionsOrGroupId?: LogOptions | string,
@@ -297,7 +312,12 @@ export class AgentLogger {
    * Log an error message with positional parameters.
    * @deprecated Use options object instead
    */
-  error(message: string, groupId?: string, messageType?: MessageType, data?: unknown): void;
+  error(
+    message: string,
+    groupId?: string,
+    messageType?: MessageType,
+    data?: unknown,
+  ): void;
   error(
     message: string,
     optionsOrGroupId?: LogOptions | string,
