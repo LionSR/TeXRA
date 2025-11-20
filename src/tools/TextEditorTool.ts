@@ -476,9 +476,7 @@ export class TextEditorTool extends defineTool({
       if (error instanceof ToolError) {
         throw error;
       }
-      throw new ToolError(
-        `Error replacing text in ${filePath}: ${error}`,
-      );
+      throw new ToolError(`Error replacing text in ${filePath}: ${error}`);
     }
   }
 
@@ -591,9 +589,7 @@ export class TextEditorTool extends defineTool({
       if (error instanceof ToolError) {
         throw error;
       }
-      throw new ToolError(
-        `Error inserting text in ${filePath}: ${error}`,
-      );
+      throw new ToolError(`Error inserting text in ${filePath}: ${error}`);
     }
   }
 
@@ -662,9 +658,7 @@ export class TextEditorTool extends defineTool({
       if (error instanceof ToolError) {
         throw error;
       }
-      throw new ToolError(
-        `Error undoing edit to ${filePath}: ${error}`,
-      );
+      throw new ToolError(`Error undoing edit to ${filePath}: ${error}`);
     }
   }
 
