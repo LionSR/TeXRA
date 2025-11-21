@@ -32,7 +32,7 @@ export class StreamTabsManager extends PersistentMapManager<
   async addMessage(
     stream: StreamTabId,
     message: LogMessageData,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const messages = this.ensureMessages(stream);
 
     const existingIndex = messages.findIndex(
@@ -40,6 +40,8 @@ export class StreamTabsManager extends PersistentMapManager<
     );
     if (existingIndex >= 0) {
       messages[existingIndex] = message;
+      await this.save();
+      return false;
     } else {
       messages.push(message);
     }
@@ -53,6 +55,7 @@ export class StreamTabsManager extends PersistentMapManager<
     }
 
     await this.save();
+    return true;
   }
 
   /**
