@@ -699,65 +699,15 @@ export class LogEntryFormatter {
           </div>
         </div>
       `);
-    }
-
-    if (outputText) {
-      const encodedOutput = encodeHtml(outputText);
-      const MAX_PREVIEW_CHARS = 240;
-      const isTruncated = outputText.length > MAX_PREVIEW_CHARS;
-      if (!summaryText && isTruncated) {
-        const preview = encodeHtml(
-          `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
-        );
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Output:</span>
-              <details class="tool-output-details">
-                <summary class="details-summary">
-                  <pre class="tool-output-preview">${preview}</pre>
-                  <span class="details-summary-label">Show full output</span>
-                </summary>
-                <pre class="tool-output-full">${encodedOutput}</pre>
-              </details>
-            </div>
+    } else if (outputText) {
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">Output:</span>
+            <pre class="tool-output-full">${encodeHtml(outputText)}</pre>
           </div>
-        `);
-      } else {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Output:</span>
-              <pre class="tool-output-full">${encodedOutput}</pre>
-            </div>
-          </div>
-        `);
-      }
-    }
-
-    if (diagnostics !== undefined) {
-      const diagnosticsText = stringifyForDisplay(diagnostics).trim();
-      const MAX_DIAGNOSTICS_LENGTH = 600;
-
-      if (diagnosticsText && diagnosticsText.length <= MAX_DIAGNOSTICS_LENGTH) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Diagnostics:</span>
-              <pre>${encodeHtml(diagnosticsText)}</pre>
-            </div>
-          </div>
-        `);
-      } else if (diagnosticsText) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Diagnostics:</span>
-              <div>Diagnostics omitted (too verbose for progress view).</div>
-            </div>
-          </div>
-        `);
-      }
+        </div>
+      `);
     }
 
     const fallbackYaml = stringifyForDisplay(parsed);
