@@ -42,10 +42,12 @@ describe('StreamTabsManager', () => {
       timestamp: Date.now() + 1,
     };
 
-    await manager.addMessage(streamId, firstMessage);
-    await manager.addMessage(streamId, updatedMessage);
+    const wasAdded = await manager.addMessage(streamId, firstMessage);
+    const wasUpdated = await manager.addMessage(streamId, updatedMessage);
 
     const messages = manager.getMessages(streamId);
+    assert.equal(wasAdded, true);
+    assert.equal(wasUpdated, false);
     assert.equal(messages.length, 1);
     assert.deepEqual(messages[0], updatedMessage);
 
