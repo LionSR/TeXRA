@@ -1,5 +1,6 @@
 // Local imports - agent types
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Local imports - logger
 import {
@@ -12,6 +13,7 @@ import { AgentUsageReporter } from '@logger/AgentUsageReporter';
 export interface AgentExecutionContextInit {
   streamId: StreamTabId;
   executionId?: ExecutionId;
+  agentCategory?: AgentCategory;
 }
 
 /**
@@ -20,10 +22,16 @@ export interface AgentExecutionContextInit {
 export class AgentExecutionContext {
   public readonly logger: AgentLogger;
   public readonly usageReporter: AgentUsageReporter;
+  private readonly agentCategory: AgentCategory;
 
   constructor(private readonly init: AgentExecutionContextInit) {
     this.logger = new AgentLogger(init.streamId, true);
-    this.usageReporter = new AgentUsageReporter(this.logger, init.streamId);
+    this.agentCategory = init.agentCategory ?? AgentCategory.Workflow;
+    this.usageReporter = new AgentUsageReporter(
+      this.logger,
+      init.streamId,
+      this.agentCategory,
+    );
   }
 
   get streamId(): StreamTabId {
@@ -32,6 +40,10 @@ export class AgentExecutionContext {
 
   get executionId(): ExecutionId | undefined {
     return this.init.executionId;
+  }
+
+  get sessionCategory(): AgentCategory {
+    return this.agentCategory;
   }
 
   stage(
