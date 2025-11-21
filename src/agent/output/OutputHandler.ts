@@ -740,10 +740,11 @@ export class OutputHandler implements IOutputHandler {
               this.agentSetting.prefills?.some((prefill) =>
                 /<scratchpad\s*>/i.test(prefill),
               ) ?? false;
+            const hasDocumentTag = Boolean(this.agentSetting.documentTag);
             const shouldProcessXml =
               this.agentSetting.agentType === AgentType.CoT ||
               (this.agentSetting.agentType === AgentType.Direct &&
-                hasScratchpadPrefill);
+                (hasDocumentTag || hasScratchpadPrefill));
 
             if (shouldProcessXml) {
               processed =
