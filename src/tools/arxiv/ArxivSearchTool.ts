@@ -44,7 +44,13 @@ export class ArxivSearchTool extends defineTool({
     }
 
     // Build query using arxiv-client query builder
-    let query = all(trimmedQuery);
+    const terms = Array.from(
+      trimmedQuery.matchAll(/"([^"]+)"|\S+/g),
+      (match) => match[1] ?? match[0],
+    );
+
+    const termQueries = terms.map((term) => all(term));
+    let query = termQueries.length === 1 ? termQueries[0] : and(...termQueries);
 
     // Add category filters if provided
     if (input.categories && input.categories.length > 0) {
