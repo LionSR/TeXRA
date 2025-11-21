@@ -55,9 +55,9 @@ export function createLogEvents(shared: LogEventsShared): LogEventsModule {
         return;
       }
 
-      await state.streamTabs.addMessage(stream, logMessage);
+      const isNew = await state.streamTabs.addMessage(stream, logMessage);
 
-      if (updater.isAvailable()) {
+      if (isNew && updater.isAvailable()) {
         updater.appendLogMessage(stream, logMessage);
       }
     });
