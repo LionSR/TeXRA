@@ -1,6 +1,7 @@
 // Local imports - agent types
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Internal imports
 import { bus } from '@eventBus/ProgressEventBus';
@@ -15,12 +16,14 @@ export class AgentUsageReporter {
   constructor(
     private readonly logger: AgentLogger,
     private readonly streamId: StreamTabId,
+    private readonly agentCategory: AgentCategory = AgentCategory.Workflow,
   ) {}
 
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    */
   public report(stats: ExtendedTokenUsageStats, runId?: string): void {
+    const logStatistics = this.agentCategory === AgentCategory.Workflow;
     const usage = {
       inputTokens: stats.inputTokens + (stats.cacheCreationInputTokens ?? 0),
       outputTokens: stats.outputTokens,
@@ -35,7 +38,9 @@ export class AgentUsageReporter {
         groupId,
         usage,
       });
-      this.logger.statistics(stats, groupId);
+      if (logStatistics) {
+        this.logger.statistics(stats, groupId);
+      }
       return;
     }
 
@@ -47,6 +52,8 @@ export class AgentUsageReporter {
       });
     }
 
-    this.logger.statistics(stats);
+    if (logStatistics) {
+      this.logger.statistics(stats);
+    }
   }
 }
