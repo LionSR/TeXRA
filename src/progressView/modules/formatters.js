@@ -658,7 +658,6 @@ export class LogEntryFormatter {
       summaryText,
       errorText,
       outputText,
-      diagnostics,
       input,
     } = normalizedToolLog;
 
