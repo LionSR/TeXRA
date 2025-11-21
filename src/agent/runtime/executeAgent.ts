@@ -300,8 +300,16 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
   );
 
   const context = contextFactory
-    ? contextFactory({ streamId, executionId })
-    : new AgentExecutionContext({ streamId, executionId });
+    ? contextFactory({
+        streamId,
+        executionId,
+        agentCategory: sessionDescriptor.agentCategory,
+      })
+    : new AgentExecutionContext({
+        streamId,
+        executionId,
+        agentCategory: sessionDescriptor.agentCategory,
+      });
 
   const agent = new AgentClass(
     modelHandler,
