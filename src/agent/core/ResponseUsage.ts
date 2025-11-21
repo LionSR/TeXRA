@@ -81,7 +81,10 @@ export class ResponseUsageFactory {
   ): OpenAIAPIResponseUsage {
     // Extract tokens from response usage
     const promptTokensDetails = responseUsage.prompt_tokens_details;
-    const cachedTokens = promptTokensDetails?.cached_tokens ?? 0;
+    const cachedTokens =
+      promptTokensDetails?.cached_tokens ??
+      responseUsage.prompt_cache_hit_tokens ??
+      0;
 
     // Extract completion details
     const completionDetails = responseUsage.completion_tokens_details;
@@ -111,6 +114,8 @@ export class ResponseUsageFactory {
       reasoning_tokens: reasoningTokens,
       accepted_prediction_tokens: acceptedPredictionTokens,
       rejected_prediction_tokens: rejectedPredictionTokens,
+      prompt_tokens_details: { cached_tokens: cachedTokens },
+      completion_tokens_details: { reasoning_tokens: reasoningTokens },
     };
   }
 
