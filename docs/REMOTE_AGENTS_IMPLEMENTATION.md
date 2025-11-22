@@ -9,6 +9,7 @@ We've successfully implemented a complete authentication and remote agents syste
 ## 📁 New Files Created
 
 ### Authentication System
+
 - **`src/auth/SupabaseClient.ts`** - Singleton wrapper for Supabase with auth helpers
 - **`src/auth/SupabaseAuthProvider.ts`** - VS Code AuthenticationProvider implementation
 - **`src/auth/authCommands.ts`** - Sign in/out and profile commands
@@ -16,9 +17,11 @@ We've successfully implemented a complete authentication and remote agents syste
 - **`src/commands/auth/index.ts`** - Command registration
 
 ### Remote Agents
+
 - **`src/agent/remote/RemoteAgentLoader.ts`** - Loads agents from Supabase Storage
 
 ### Documentation
+
 - **`docs/SUPABASE_SETUP.md`** - Comprehensive setup guide
 - **`docs/REMOTE_AGENTS_IMPLEMENTATION.md`** - This file
 
@@ -27,6 +30,7 @@ We've successfully implemented a complete authentication and remote agents syste
 ## 🔧 Modified Files
 
 ### Agent Runtime
+
 - **`src/agent/runtime/AgentPathTypes.ts`**
   - Added `AgentDirectorySource.Remote` enum value
 
@@ -39,6 +43,7 @@ We've successfully implemented a complete authentication and remote agents syste
   - Remote agents bypass local file system loading
 
 ### Extension & Commands
+
 - **`src/extension.ts`**
   - Added Supabase client initialization
   - Registered authentication provider
@@ -48,6 +53,7 @@ We've successfully implemented a complete authentication and remote agents syste
   - Imported and registered auth commands
 
 ### Configuration
+
 - **`package.json`**
   - Added new configuration section: "Authentication & Remote Agents"
   - Added 6 new settings (Supabase URL, anon key, OAuth provider, etc.)
@@ -58,12 +64,14 @@ We've successfully implemented a complete authentication and remote agents syste
 ## 🎯 Features Implemented
 
 ### 1. **Supabase Authentication**
+
 - OAuth integration (GitHub, Google, GitLab)
 - Session management via VS Code's `AuthenticationProvider` API
 - Secure token storage in VS Code's SecretStorage
 - Auto-refresh of expired sessions
 
 ### 2. **Remote Agent System**
+
 - Agents stored in Supabase Storage (never on disk)
 - Row-Level Security (RLS) for access control
 - Tier-based permissions (free vs premium)
@@ -71,6 +79,7 @@ We've successfully implemented a complete authentication and remote agents syste
 - Metadata database for agent discovery
 
 ### 3. **User Interface**
+
 - `TeXRA: Sign In` - OAuth authentication flow
 - `TeXRA: Sign Out` - Clear session
 - `TeXRA: View Profile` - View user info and tier
@@ -78,6 +87,7 @@ We've successfully implemented a complete authentication and remote agents syste
 - Remote agents referenced as `remote://agent-name`
 
 ### 4. **Security**
+
 - YAML configs never written to disk (in-memory only)
 - RLS policies enforce access control
 - Encrypted session tokens
@@ -90,6 +100,7 @@ We've successfully implemented a complete authentication and remote agents syste
 ### For Extension Users:
 
 1. **Configure Settings** (after Supabase is set up):
+
    ```
    TeXRA: Auth › Supabase Url: https://your-project.supabase.co
    TeXRA: Auth › Supabase Anon Key: your-anon-key
@@ -196,6 +207,7 @@ We've successfully implemented a complete authentication and remote agents syste
    - Configure RLS policies
 
 2. **Test Authentication**:
+
    ```bash
    # In VS Code:
    # 1. Configure settings with your Supabase credentials
@@ -205,6 +217,7 @@ We've successfully implemented a complete authentication and remote agents syste
    ```
 
 3. **Add Your First Remote Agent**:
+
    ```bash
    # Upload YAML to Supabase Storage: premium/my-agent.yaml
    # Add metadata to database
@@ -222,12 +235,14 @@ We've successfully implemented a complete authentication and remote agents syste
 ## 🐛 Troubleshooting
 
 ### Code compiled successfully! ✅
+
 ```bash
 npm run compile
 # ✓ No errors, only 1 warning (unrelated to our changes)
 ```
 
 ### All new files follow TeXRA conventions:
+
 - TypeScript with modern syntax
 - Proper error handling
 - Logging via `logger` module
@@ -281,6 +296,7 @@ You now have a **production-ready** authentication and remote agents system:
 ## 📞 Support
 
 If you encounter issues:
+
 1. Check `docs/SUPABASE_SETUP.md` troubleshooting section
 2. Review Supabase logs: **Edge Functions** → **Logs**
 3. Check VS Code Developer Console: **Help** → **Toggle Developer Tools**
