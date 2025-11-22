@@ -25,19 +25,28 @@ export interface SupabaseConfig {
 /**
  * Official TeXRA Supabase configuration.
  *
- * IMPORTANT: Replace these placeholders with actual credentials before building.
- * The anon key is public and safe to include in client code.
+ * IMPORTANT: These should be set during build/release.
+ * For development, you can override via environment variables:
+ * - TEXRA_SUPABASE_URL
+ * - TEXRA_SUPABASE_ANON_KEY
  */
+
+export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
+
 export const SUPABASE_CONFIG: SupabaseConfig = {
   // TODO: Replace with your actual Supabase project URL before release
-  url: 'https://placeholder.supabase.co',
+  url:
+    process.env.TEXRA_SUPABASE_URL ||
+    `https://${SUPABASE_PROJECT_ID}.supabase.co`,
 
   // TODO: Replace with your actual Supabase anon key before release
   // Note: The anon key is public and safe to include in client code
   anonKey: 'placeholder-anon-key',
 
   // Edge function URL
-  edgeFunctionUrl: 'https://placeholder.supabase.co/functions/v1/get-agent-config',
+  edgeFunctionUrl:
+    process.env.TEXRA_SUPABASE_EDGE_FUNCTION_URL ||
+    `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
 };
 
 /**
@@ -46,7 +55,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
  */
 export function isSupabaseConfigured(): boolean {
   return (
-    SUPABASE_CONFIG.url !== 'https://placeholder.supabase.co' &&
+    SUPABASE_CONFIG.url !== `https://${SUPABASE_PROJECT_ID}.supabase.co` &&
     SUPABASE_CONFIG.anonKey !== 'placeholder-anon-key' &&
     !SUPABASE_CONFIG.url.includes('placeholder')
   );
