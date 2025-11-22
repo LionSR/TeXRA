@@ -24,10 +24,9 @@ export class SupabaseClient {
     this.config = { url, anonKey };
     this.instance = createClient(url, anonKey, {
       auth: {
-        // Enable persistence temporarily for OAuth flow
-        // The session will be stored in browser's localStorage during OAuth callback
-        // Then we copy it to VS Code SecretStorage and manage it ourselves
-        persistSession: true,
+        // Disable persistence - we handle session via VS Code SecretStorage
+        // OAuth callbacks are captured via URI handler and tokens extracted from URL
+        persistSession: false,
         autoRefreshToken: false, // We handle refresh manually via VS Code auth provider
       },
     });
