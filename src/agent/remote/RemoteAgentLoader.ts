@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import yaml from 'yaml';
 import { SupabaseClient } from '@/auth/SupabaseClient';
+import { SUPABASE_CONFIG } from '@/auth/config';
 import {
   AgentSetting,
   AgentPrompt,
@@ -58,14 +59,6 @@ export class RemoteAgentLoader {
       );
     }
 
-    // Get edge function URL from config
-    const edgeFunctionUrl = config.get<string>('edgeFunctionUrl');
-    if (!edgeFunctionUrl) {
-      throw new Error(
-        'Remote agent edge function URL not configured. Set texra.remoteAgents.edgeFunctionUrl in settings.',
-      );
-    }
-
     logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
 
     try {
@@ -75,8 +68,8 @@ export class RemoteAgentLoader {
         throw new Error('Failed to get authentication token');
       }
 
-      // Fetch agent config from edge function
-      const response = await fetch(edgeFunctionUrl, {
+      // Fetch agent config from edge function (using hardcoded URL)
+      const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
