@@ -97,6 +97,25 @@ Once your project is ready:
    - **Client Secret**: (from Google Cloud)
 5. Click "Save"
 
+### ⚠️ CRITICAL: Configure VS Code Redirect URLs
+
+For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI scheme to Supabase's allowed redirect URLs:
+
+1. In Supabase dashboard, go to **Authentication** → **URL Configuration**
+2. In the **Redirect URLs** section, add these URLs:
+   ```
+   vscode://texra-ai.texra/auth-callback
+   vscode-insiders://texra-ai.texra/auth-callback
+   ```
+3. Click "Save"
+
+**Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to VS Code using the `vscode://` URI scheme. Without adding these URLs to the allowed list, Supabase will redirect to `localhost:3000` which won't work in the VS Code extension.
+
+**Common mistakes**:
+- ❌ Using `vscode://LionSR.texra/auth-callback` (wrong extension ID)
+- ❌ Only adding `localhost:3000` (this is for web apps, not VS Code extensions)
+- ❌ Forgetting to add both `vscode://` and `vscode-insiders://` variants
+
 ---
 
 ## Part 3: Set Up Database

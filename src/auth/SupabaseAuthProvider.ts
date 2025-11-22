@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
 import { SUPABASE_CONFIG, DEFAULT_OAUTH_PROVIDER, EXTENSION_ID } from './config';
 import * as logger from '@logger/logUtils';
+import type { SupabaseUriHandler } from './UriHandler';
 
 /**
  * Supabase session data stored in VS Code SecretStorage.
@@ -34,6 +35,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
   public readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
+  private uriHandler: SupabaseUriHandler | null = null;
+
   constructor(private context: vscode.ExtensionContext) {
     // Initialize Supabase client with hardcoded config
     SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
@@ -46,6 +49,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
    */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
+  }
+
+  /**
+   * Set the URI handler for OAuth callbacks.
+   * Called during extension initialization.
+   */
+  setUriHandler(handler: SupabaseUriHandler): void {
+    this.uriHandler = handler;
   }
 
   /**
@@ -198,56 +209,98 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   }
 
   /**
-   * Wait for OAuth callback and return session.
+   * Wait for OAuth callback via URI handler.
    */
   private async waitForSession(
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
-    const supabase = SupabaseClient.getClient();
+    if (!this.uriHandler) {
+      throw new Error('URI handler not initialized');
+    }
+
     const timeout = 120000; // 2 minutes
-    const pollInterval = 1000; // 1 second
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        // Check for cancellation
-        if (cancellationToken.isCancellationRequested) {
-          clearInterval(interval);
-          resolve(null);
-          return;
-        }
+      // Set up timeout
+      const timeoutHandle = setTimeout(() => {
+        subscription.dispose();
+        reject(new Error('Authentication timeout'));
+      }, timeout);
 
-        // Check for timeout
-        if (Date.now() - startTime > timeout) {
-          clearInterval(interval);
-          reject(new Error('Authentication timeout'));
-          return;
-        }
+      // Listen for cancellation
+      if (cancellationToken.isCancellationRequested) {
+        clearTimeout(timeoutHandle);
+        resolve(null);
+        return;
+      }
 
-        // Poll for session
+      const cancellationListener = cancellationToken.onCancellationRequested(() => {
+        clearTimeout(timeoutHandle);
+        subscription.dispose();
+        cancellationListener.dispose();
+        resolve(null);
+      });
+
+      // Listen for OAuth callback
+      const subscription = this.uriHandler!.onDidReceiveCallback(async (uri) => {
+        clearTimeout(timeoutHandle);
+        subscription.dispose();
+        cancellationListener.dispose();
+
         try {
-          const { data } = await supabase.auth.getSession();
-          if (data.session) {
-            clearInterval(interval);
+          // Parse OAuth callback parameters
+          const params = new URLSearchParams(uri.query);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          const expiresIn = params.get('expires_in');
+          const tokenType = params.get('token_type');
 
-            const session: SupabaseSession = {
-              id: data.session.user.id,
-              accessToken: data.session.access_token,
-              refreshToken: data.session.refresh_token,
-              account: {
-                id: data.session.user.id,
-                label: data.session.user.email || data.session.user.id,
-              },
-              expiresAt: (data.session.expires_at || 0) * 1000, // Convert to milliseconds
-            };
-
-            resolve(session);
+          // Check for error in callback
+          const error = params.get('error');
+          const errorDescription = params.get('error_description');
+          if (error) {
+            reject(new Error(`OAuth error: ${error} - ${errorDescription || 'Unknown error'}`));
+            return;
           }
+
+          if (!accessToken || !refreshToken) {
+            reject(new Error('Missing tokens in OAuth callback'));
+            return;
+          }
+
+          // Get user info from access token
+          const supabase = SupabaseClient.getClient();
+          const { data, error: userError } = await supabase.auth.getUser(accessToken);
+
+          if (userError || !data.user) {
+            reject(new Error(`Failed to get user info: ${userError?.message || 'Unknown error'}`));
+            return;
+          }
+
+          // Calculate expiration time
+          const expiresAt = expiresIn
+            ? Date.now() + parseInt(expiresIn) * 1000
+            : Date.now() + 3600000; // Default 1 hour
+
+          const session: SupabaseSession = {
+            id: data.user.id,
+            accessToken,
+            refreshToken,
+            account: {
+              id: data.user.id,
+              label: data.user.email || data.user.id,
+            },
+            expiresAt,
+          };
+
+          resolve(session);
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
-          logger.error('SupabaseAuthProvider', `Error polling for session: ${errorMsg}`);
+          logger.error('SupabaseAuthProvider', `Error processing OAuth callback: ${errorMsg}`);
+          reject(error);
         }
-      }, pollInterval);
+      });
     });
   }
 

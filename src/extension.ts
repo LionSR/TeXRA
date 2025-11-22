@@ -136,6 +136,9 @@ export async function activate(context: vscode.ExtensionContext) {
           vscode.window.registerUriHandler(uriHandler),
         );
 
+        // Connect URI handler to auth provider
+        authProvider.setUriHandler(uriHandler);
+
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
