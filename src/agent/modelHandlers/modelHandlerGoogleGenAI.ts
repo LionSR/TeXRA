@@ -1089,7 +1089,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     type FunctionCallWithSignature = {
       call: FunctionCall;
-      thoughtSignature: string | undefined;
+      thoughtSignature: string;
     };
 
     const functionCalls = parts
@@ -1098,12 +1098,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         if (!call?.name) {
           return null;
         }
+        if (
+          typeof part.thoughtSignature !== 'string' ||
+          part.thoughtSignature.length === 0
+        ) {
+          throw new Error(
+            'Google functionCall parts must include a thoughtSignature for tool use.',
+          );
+        }
         return {
           call,
-          thoughtSignature:
-            typeof part.thoughtSignature === 'string'
-              ? part.thoughtSignature
-              : undefined,
+          thoughtSignature: part.thoughtSignature,
         };
       })
       .filter((part): part is FunctionCallWithSignature => part !== null);
@@ -1164,6 +1169,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
+    if (!call.thoughtSignature) {
+      throw new Error(
+        'Google function call follow-ups require a thoughtSignature from the model response.',
+      );
+    }
+
     const args = call.raw.args ?? {};
 
     const functionName = call.name;
@@ -1175,10 +1186,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       callPart.functionCall.id = call.callId;
     }
 
-    if (call.thoughtSignature) {
-      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
-        call.thoughtSignature;
-    }
+    (callPart as Part & { thoughtSignature: string }).thoughtSignature =
+      call.thoughtSignature;
 
     // Use the same ID for the result to maintain correlation
     const { attachments, sanitizedResult } = extractToolAttachments(result);

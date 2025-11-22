@@ -364,6 +364,7 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       name: functionCall.name!,
       input: functionCall.args,
       raw: functionCall,
+      thoughtSignature: 'sig-call',
     } as const;
 
     const messages = await handler.createToolUseFollowUpMessages(

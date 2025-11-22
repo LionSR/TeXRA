@@ -91,6 +91,7 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
                   name: 'read_file',
                   args: { path: 'syk_v5.tex' },
                 },
+                thoughtSignature: 'sig-123',
               },
             ],
           },
@@ -104,6 +105,29 @@ describe('ModelHandlerGoogleGenAI.extractToolUse', () => {
     assert.equal(toolInfo?.callId, 'google-call-1');
     assert.equal(toolInfo?.name, 'read_file');
     assert.deepEqual(toolInfo?.input, { path: 'syk_v5.tex' });
+    assert.equal(toolInfo?.thoughtSignature, 'sig-123');
+  });
+
+  it('throws when a function call part omits a thought signature', () => {
+    const response: any = {
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                functionCall: {
+                  id: 'google-call-2',
+                  name: 'read_file',
+                  args: { path: 'syk_v6.tex' },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    assert.throws(() => handler.extractToolUse(response));
   });
 });
 
@@ -127,6 +151,7 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
       name: 'read_file',
       input: { path: 'syk_v5.tex' },
       raw: { id: 'call-123', name: 'read_file', args: { path: 'syk_v5.tex' } },
+      thoughtSignature: 'sig-abc',
     } as const;
 
     const messages = await handler.createToolUseFollowUpMessages(
@@ -148,6 +173,26 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
     assert.equal('call_id' in functionCall, false);
     assert.equal('tool_call_id' in functionCall, false);
     assert.equal('tool_use_id' in functionCall, false);
+    assert.equal((callPart as any).thoughtSignature, 'sig-abc');
+  });
+
+  it('throws when the follow-up call lacks a thought signature', async () => {
+    const providerCall = {
+      provider: 'google',
+      callId: 'call-456',
+      name: 'read_file',
+      input: { path: 'syk_v6.tex' },
+      raw: { id: 'call-456', name: 'read_file', args: { path: 'syk_v6.tex' } },
+    } as const;
+
+    await assert.rejects(() =>
+      handler.createToolUseFollowUpMessages(
+        undefined,
+        providerCall,
+        {},
+        undefined,
+      ),
+    );
   });
 });
 
