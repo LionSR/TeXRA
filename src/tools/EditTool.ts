@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { ToolError, ToolResult, toolResult } from '@tools/result';
+import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -56,6 +57,12 @@ export class EditFileTool extends defineTool({
       );
     }
 
+    const exists = await WorkspaceFS.exists(targetPath);
+    const readGate = requireFileReadForEdit(targetPath, exists);
+    if (readGate) {
+      return readGate;
+    }
+
     const currentContent = await WorkspaceFS.read(targetPath);
     const occurrences = countOccurrences(currentContent, old_string);
 
@@ -71,8 +78,6 @@ export class EditFileTool extends defineTool({
       );
     }
 
-    // TODO: Reintroduce a read-before-edit guard when the tool runtime provides
-    // session-scoped state. The previous implementation persisted state across runs.
     const updatedContent = replace_all
       ? currentContent.replaceAll(old_string, new_string)
       : currentContent.replace(old_string, new_string);
@@ -121,6 +126,7 @@ export class EditFileTool extends defineTool({
       summary,
       output,
       userPatch: approval.userPatch,
+      edits: [{ path: targetPath, lineChanges: approval.lineChanges }],
     });
   }
 }

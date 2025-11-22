@@ -105,26 +105,7 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-/** @type {ToolbarButtonDefinition[]} */
-const WORKFLOW_TOOLBAR = [
-  STOP_STREAM_BUTTON,
-  {
-    id: ELEMENT_IDS.RUN_NEW_BTN,
-    icon: 'debug-start',
-    command: COMMANDS.RUN_NEW,
-    title: 'Start a new run for this task',
-    className: 'run-button run-new-button',
-    disabled: true,
-  },
-  {
-    id: ELEMENT_IDS.RUN_AGAIN_BTN,
-    icon: 'debug-rerun',
-    command: COMMANDS.RUN_AGAIN,
-    title: 'Resume the last run from saved outputs',
-    className: 'run-button run-again-button toolbar-button--hidden',
-    disabled: true,
-  },
-  RESTORE_STATE_BUTTON,
+const OUTPUT_ACTION_BUTTONS = [
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
@@ -149,13 +130,37 @@ const WORKFLOW_TOOLBAR = [
     className: 'pack-button',
     disabled: true,
   },
+];
+
+const SHARED_TOOLBAR_PREFIX = [STOP_STREAM_BUTTON, RESTORE_STATE_BUTTON];
+
+/** @type {ToolbarButtonDefinition[]} */
+const WORKFLOW_TOOLBAR = [
+  ...SHARED_TOOLBAR_PREFIX,
+  {
+    id: ELEMENT_IDS.RUN_NEW_BTN,
+    icon: 'debug-start',
+    command: COMMANDS.RUN_NEW,
+    title: 'Start a new run for this task',
+    className: 'run-button run-new-button',
+    disabled: true,
+  },
+  {
+    id: ELEMENT_IDS.RUN_AGAIN_BTN,
+    icon: 'debug-rerun',
+    command: COMMANDS.RUN_AGAIN,
+    title: 'Resume the last run from saved outputs',
+    className: 'run-button run-again-button toolbar-button--hidden',
+    disabled: true,
+  },
+  ...OUTPUT_ACTION_BUTTONS,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
-  STOP_STREAM_BUTTON,
-  RESTORE_STATE_BUTTON,
+  ...SHARED_TOOLBAR_PREFIX,
+  ...OUTPUT_ACTION_BUTTONS,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
 
