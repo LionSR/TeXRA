@@ -4,6 +4,7 @@ import {
   User,
 } from '@supabase/supabase-js';
 import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
 
 /**
  * Singleton wrapper for Supabase client with authentication helpers.
@@ -23,8 +24,11 @@ export class SupabaseClient {
     this.config = { url, anonKey };
     this.instance = createClient(url, anonKey, {
       auth: {
-        persistSession: false, // We handle session persistence via VS Code SecretStorage
-        autoRefreshToken: false,
+        // Enable persistence temporarily for OAuth flow
+        // The session will be stored in browser's localStorage during OAuth callback
+        // Then we copy it to VS Code SecretStorage and manage it ourselves
+        persistSession: true,
+        autoRefreshToken: false, // We handle refresh manually via VS Code auth provider
       },
     });
   }
@@ -55,7 +59,8 @@ export class SupabaseClient {
       );
       return session?.accessToken || null;
     } catch (error) {
-      console.error('Error getting access token:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseClient', `Error getting access token: ${errorMsg}`);
       return null;
     }
   }
@@ -76,7 +81,8 @@ export class SupabaseClient {
       }
       return data.user;
     } catch (error) {
-      console.error('Error getting user:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseClient', `Error getting user: ${errorMsg}`);
       return null;
     }
   }
@@ -91,19 +97,27 @@ export class SupabaseClient {
     }
 
     try {
-      // Set auth header for RLS
-      const { data, error } = await this.getClient()
+      // Set auth session for RLS
+      const client = this.getClient();
+      await client.auth.setSession({
+        access_token: token,
+        refresh_token: '', // Not needed for read-only queries
+      });
+
+      const { data, error } = await client
         .from('profiles')
         .select('tier')
         .single();
 
       if (error || !data) {
-        console.error('Error fetching user tier:', error);
+        const errorMsg = error?.message || 'Unknown error';
+        logger.error('SupabaseClient', `Error fetching user tier: ${errorMsg}`);
         return 'free';
       }
       return (data.tier as 'free' | 'premium') || 'free';
     } catch (error) {
-      console.error('Error getting user tier:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseClient', `Error getting user tier: ${errorMsg}`);
       return 'free';
     }
   }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
+import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 
 /**
  * Command to sign in to TeXRA account.
@@ -74,15 +75,16 @@ export async function signOut(): Promise<void> {
       return;
     }
 
-    // Remove session (triggers SupabaseAuthProvider.removeSession)
-    // Note: VS Code doesn't have a direct API to remove sessions,
-    // so we need to handle this through our provider
-    const config = SupabaseClient.getConfig();
-    if (config) {
-      await SupabaseClient.getClient().auth.signOut();
+    // Use authentication provider to properly sign out
+    const authProvider = SupabaseAuthProvider.getInstance();
+    if (authProvider) {
+      await authProvider.removeSession(session.id);
+      void vscode.window.showInformationMessage('Signed out successfully');
+    } else {
+      void vscode.window.showErrorMessage(
+        'Authentication provider not available',
+      );
     }
-
-    void vscode.window.showInformationMessage('Signed out successfully');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(`Sign out failed: ${message}`);
