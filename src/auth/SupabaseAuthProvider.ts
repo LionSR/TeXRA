@@ -1,6 +1,10 @@
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
-import { SUPABASE_CONFIG, DEFAULT_OAUTH_PROVIDER, EXTENSION_ID } from './config';
+import {
+  SUPABASE_CONFIG,
+  DEFAULT_OAUTH_PROVIDER,
+  EXTENSION_ID,
+} from './config';
 import * as logger from '@logger/logUtils';
 import type { SupabaseUriHandler } from './UriHandler';
 
@@ -99,7 +103,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return [this.toVSCodeSession(session)];
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseAuthProvider', `Error loading session: ${errorMsg}`);
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error loading session: ${errorMsg}`,
+      );
       return [];
     }
   }
@@ -204,7 +211,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseAuthProvider', `Error removing session: ${errorMsg}`);
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error removing session: ${errorMsg}`,
+      );
     }
   }
 
@@ -299,6 +309,12 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           const errorMsg = error instanceof Error ? error.message : String(error);
           logger.error('SupabaseAuthProvider', `Error processing OAuth callback: ${errorMsg}`);
           reject(error);
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            'SupabaseAuthProvider',
+            `Error polling for session: ${errorMsg}`,
+          );
         }
       });
     });
@@ -340,7 +356,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return refreshed;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('SupabaseAuthProvider', `Error refreshing session: ${errorMsg}`);
+      logger.error(
+        'SupabaseAuthProvider',
+        `Error refreshing session: ${errorMsg}`,
+      );
       return null;
     }
   }
