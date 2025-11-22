@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
-import { SUPABASE_CONFIG, DEFAULT_OAUTH_PROVIDER } from './config';
+import { SUPABASE_CONFIG, DEFAULT_OAUTH_PROVIDER, EXTENSION_ID } from './config';
+import * as logger from '@logger/logUtils';
 
 /**
  * Supabase session data stored in VS Code SecretStorage.
@@ -27,6 +28,7 @@ interface SupabaseSession {
 export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private static readonly SESSION_KEY = 'texra.supabase.session';
   private static readonly PROVIDER_ID = 'texra-supabase';
+  private static instance: SupabaseAuthProvider | null = null;
 
   private _onDidChangeSessions =
     new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
@@ -35,6 +37,15 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   constructor(private context: vscode.ExtensionContext) {
     // Initialize Supabase client with hardcoded config
     SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    SupabaseAuthProvider.instance = this;
+  }
+
+  /**
+   * Get the singleton instance of the auth provider.
+   * Used by commands to trigger sign out properly.
+   */
+  static getInstance(): SupabaseAuthProvider | null {
+    return this.instance;
   }
 
   /**
@@ -76,7 +87,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return [this.toVSCodeSession(session)];
     } catch (error) {
-      console.error('Error loading session:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseAuthProvider', `Error loading session: ${errorMsg}`);
       return [];
     }
   }
@@ -96,10 +108,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: DEFAULT_OAUTH_PROVIDER,
         options: {
-          redirectTo:
-            vscode.env.uriScheme === 'vscode'
-              ? 'vscode://LionSR.texra/auth-callback'
-              : 'vscode-insiders://LionSR.texra/auth-callback',
+          redirectTo: `${vscode.env.uriScheme}://${EXTENSION_ID}/auth-callback`,
         },
       });
 
@@ -183,7 +192,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         changed: [],
       });
     } catch (error) {
-      console.error('Error removing session:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseAuthProvider', `Error removing session: ${errorMsg}`);
     }
   }
 
@@ -234,7 +244,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             resolve(session);
           }
         } catch (error) {
-          console.error('Error polling for session:', error);
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          logger.error('SupabaseAuthProvider', `Error polling for session: ${errorMsg}`);
         }
       }, pollInterval);
     });
@@ -275,7 +286,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       return refreshed;
     } catch (error) {
-      console.error('Error refreshing session:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error('SupabaseAuthProvider', `Error refreshing session: ${errorMsg}`);
       return null;
     }
   }

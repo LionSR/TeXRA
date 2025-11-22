@@ -5,6 +5,9 @@
  * Users authenticate to TeXRA's service, not their own Supabase instance.
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
+ *
+ * IMPORTANT: Update these constants before building for production.
+ * These are placeholders for development. Set real values before release.
  */
 
 /**
@@ -22,22 +25,19 @@ export interface SupabaseConfig {
 /**
  * Official TeXRA Supabase configuration.
  *
- * IMPORTANT: These should be set during build/release.
- * For development, you can override via environment variables:
- * - TEXRA_SUPABASE_URL
- * - TEXRA_SUPABASE_ANON_KEY
+ * IMPORTANT: Replace these placeholders with actual credentials before building.
+ * The anon key is public and safe to include in client code.
  */
 export const SUPABASE_CONFIG: SupabaseConfig = {
   // TODO: Replace with your actual Supabase project URL before release
-  url: process.env.TEXRA_SUPABASE_URL || 'https://placeholder.supabase.co',
+  url: 'https://placeholder.supabase.co',
 
   // TODO: Replace with your actual Supabase anon key before release
   // Note: The anon key is public and safe to include in client code
-  anonKey: process.env.TEXRA_SUPABASE_ANON_KEY || 'placeholder-anon-key',
+  anonKey: 'placeholder-anon-key',
 
   // Edge function URL
-  edgeFunctionUrl: process.env.TEXRA_SUPABASE_EDGE_FUNCTION_URL ||
-    'https://placeholder.supabase.co/functions/v1/get-agent-config',
+  edgeFunctionUrl: 'https://placeholder.supabase.co/functions/v1/get-agent-config',
 };
 
 /**
@@ -64,3 +64,9 @@ export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
  * Users can choose during sign-in if multiple are configured in Supabase.
  */
 export const DEFAULT_OAUTH_PROVIDER: OAuthProvider = 'github';
+
+/**
+ * VS Code extension ID for OAuth redirects.
+ * Format: publisher.extensionName (from package.json)
+ */
+export const EXTENSION_ID = 'texra-ai.texra';
