@@ -93,7 +93,22 @@ export async function executeCommand(
         options.channel ?? CHANNEL,
         `Running command: ${commandForLog}`,
       );
-      const result = await execa(cmd, args, execaOptions);
+
+      let result;
+      try {
+        result = await execa(cmd, args, execaOptions);
+      } catch {
+        const fallbackCommand = shellQuote(command);
+        logger.debug(
+          options.channel ?? CHANNEL,
+          `Falling back to shell: ${fallbackCommand}`,
+        );
+        result = await execa(fallbackCommand, {
+          ...execaOptions,
+          shell: true,
+        });
+      }
+
       stdout = (result.stdout as string) ?? '';
       stderr = (result.stderr as string) ?? '';
       exitCode = result.exitCode ?? 1;

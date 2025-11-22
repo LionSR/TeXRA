@@ -24,4 +24,15 @@ describe('executeCommand', () => {
     assert.strictEqual(result.stdout, 'fallback');
     assert.strictEqual(result.stderr, null);
   });
+
+  it('quotes array commands when falling back to the shell', async () => {
+    const result = await executeCommand([
+      'node -e "process.stdout.write(process.argv[1])"',
+      'argument with spaces | pipe',
+    ]);
+
+    assert.ok(result.success);
+    assert.strictEqual(result.stdout, 'argument with spaces | pipe');
+    assert.strictEqual(result.stderr, null);
+  });
 });
