@@ -445,9 +445,10 @@ Edit `src/auth/config.ts`:
 
 ```typescript
 export const SUPABASE_CONFIG: SupabaseConfig = {
-  url: 'https://your-actual-project-id.supabase.co',  // Replace with your project URL
-  anonKey: 'your-actual-anon-key-here',  // Replace with your anon key
-  edgeFunctionUrl: 'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
+  url: 'https://your-actual-project-id.supabase.co', // Replace with your project URL
+  anonKey: 'your-actual-anon-key-here', // Replace with your anon key
+  edgeFunctionUrl:
+    'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
 };
 ```
 
