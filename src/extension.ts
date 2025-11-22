@@ -100,6 +100,48 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
+  // Initialize Supabase authentication if enabled
+  const authConfig = vscode.workspace.getConfiguration('texra.auth');
+  const authEnabled = authConfig.get<boolean>('enabled', true);
+  const supabaseUrl = authConfig.get<string>('supabaseUrl', '');
+  const supabaseAnonKey = authConfig.get<string>('supabaseAnonKey', '');
+
+  if (authEnabled && supabaseUrl && supabaseAnonKey) {
+    try {
+      const { SupabaseAuthProvider } = await import(
+        '@/auth/SupabaseAuthProvider'
+      );
+      const { SupabaseClient } = await import('@/auth/SupabaseClient');
+
+      // Initialize Supabase client
+      SupabaseClient.initialize(supabaseUrl, supabaseAnonKey);
+
+      // Register authentication provider
+      const authProvider = new SupabaseAuthProvider(
+        context,
+        supabaseUrl,
+        supabaseAnonKey,
+      );
+      context.subscriptions.push(
+        vscode.authentication.registerAuthenticationProvider(
+          'texra-supabase',
+          'TeXRA Account',
+          authProvider,
+          { supportsMultipleAccounts: false },
+        ),
+      );
+
+      logger.info('extension', 'Supabase authentication provider registered');
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error(
+        'extension',
+        `Failed to initialize Supabase authentication: ${errorMessage}`,
+      );
+    }
+  }
+
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();

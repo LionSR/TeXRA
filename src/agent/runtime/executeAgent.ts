@@ -79,12 +79,30 @@ type AgentConstructor = {
 
 /**
  * Find and return the path to agent's yaml configuration file.
+ * Supports remote agents with "remote://" prefix.
  */
 export async function getAgentPath(
   agentName: string,
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
+    // Check if this is a remote agent
+    if (agentName.startsWith('remote://')) {
+      const { RemoteAgentLoader } = await import(
+        '@agent/remote/RemoteAgentLoader'
+      );
+      const actualName = RemoteAgentLoader.extractRemoteAgentName(agentName);
+
+      // Return a special resolution for remote agents
+      return {
+        directory: '', // No directory for remote agents
+        source: AgentDirectorySource.Remote,
+        definitionPath: `remote://${actualName}`, // Virtual path
+        resolvedName: actualName,
+        usedFallback: false,
+      };
+    }
+
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
       agentDirectories.custom(),
       agentDirectories.builtIn(),
