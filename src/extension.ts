@@ -103,35 +103,34 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize Supabase authentication if enabled
   const authConfig = vscode.workspace.getConfiguration('texra.auth');
   const authEnabled = authConfig.get<boolean>('enabled', true);
-  const supabaseUrl = authConfig.get<string>('supabaseUrl', '');
-  const supabaseAnonKey = authConfig.get<string>('supabaseAnonKey', '');
 
-  if (authEnabled && supabaseUrl && supabaseAnonKey) {
+  if (authEnabled) {
     try {
       const { SupabaseAuthProvider } = await import(
         '@/auth/SupabaseAuthProvider'
       );
-      const { SupabaseClient } = await import('@/auth/SupabaseClient');
+      const { isSupabaseConfigured } = await import('@/auth/config');
 
-      // Initialize Supabase client
-      SupabaseClient.initialize(supabaseUrl, supabaseAnonKey);
+      // Check if Supabase credentials are configured
+      if (!isSupabaseConfigured()) {
+        logger.warn(
+          'extension',
+          'Supabase authentication is enabled but credentials are not configured. Please set TEXRA_SUPABASE_URL and TEXRA_SUPABASE_ANON_KEY environment variables or hardcode them in src/auth/config.ts before building.',
+        );
+      } else {
+        // Register authentication provider
+        const authProvider = new SupabaseAuthProvider(context);
+        context.subscriptions.push(
+          vscode.authentication.registerAuthenticationProvider(
+            'texra-supabase',
+            'TeXRA Account',
+            authProvider,
+            { supportsMultipleAccounts: false },
+          ),
+        );
 
-      // Register authentication provider
-      const authProvider = new SupabaseAuthProvider(
-        context,
-        supabaseUrl,
-        supabaseAnonKey,
-      );
-      context.subscriptions.push(
-        vscode.authentication.registerAuthenticationProvider(
-          'texra-supabase',
-          'TeXRA Account',
-          authProvider,
-          { supportsMultipleAccounts: false },
-        ),
-      );
-
-      logger.info('extension', 'Supabase authentication provider registered');
+        logger.info('extension', 'Supabase authentication provider registered');
+      }
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);

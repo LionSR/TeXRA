@@ -600,45 +600,13 @@
           "texra.auth.enabled": {
             "type": "boolean",
             "default": true,
-            "description": "Enable TeXRA authentication for remote features",
-            "scope": "resource"
-          },
-          "texra.auth.supabaseUrl": {
-            "type": "string",
-            "default": "",
-            "description": "Supabase project URL (e.g., https://your-project.supabase.co)",
-            "editPresentation": "singlelineText",
-            "scope": "resource"
-          },
-          "texra.auth.supabaseAnonKey": {
-            "type": "string",
-            "default": "",
-            "description": "Supabase anonymous (public) key",
-            "editPresentation": "singlelineText",
-            "scope": "resource"
-          },
-          "texra.auth.oauthProvider": {
-            "type": "string",
-            "enum": [
-              "github",
-              "google",
-              "gitlab"
-            ],
-            "default": "github",
-            "description": "OAuth provider for authentication",
+            "description": "Enable TeXRA authentication for remote agents and cloud features",
             "scope": "resource"
           },
           "texra.remoteAgents.enabled": {
             "type": "boolean",
             "default": true,
             "description": "Allow loading remote agents from TeXRA cloud",
-            "scope": "resource"
-          },
-          "texra.remoteAgents.edgeFunctionUrl": {
-            "type": "string",
-            "default": "",
-            "description": "URL for the agent decryption edge function (e.g., https://your-project.supabase.co/functions/v1/get-agent-config)",
-            "editPresentation": "singlelineText",
             "scope": "resource"
           }
         }

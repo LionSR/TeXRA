@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { SupabaseClient } from './SupabaseClient';
+import { SUPABASE_CONFIG, DEFAULT_OAUTH_PROVIDER } from './config';
 
 /**
  * Supabase session data stored in VS Code SecretStorage.
@@ -19,6 +20,9 @@ interface SupabaseSession {
  * Authentication provider for Supabase integration.
  * Implements VS Code's AuthenticationProvider interface to manage
  * user sessions for remote agent access.
+ *
+ * Uses TeXRA's official Supabase backend (hardcoded credentials).
+ * Similar to how GitHub Copilot works - users sign in to the official service.
  */
 export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private static readonly SESSION_KEY = 'texra.supabase.session';
@@ -28,13 +32,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     new vscode.EventEmitter<vscode.AuthenticationProviderAuthenticationSessionsChangeEvent>();
   public readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
-  constructor(
-    private context: vscode.ExtensionContext,
-    private supabaseUrl: string,
-    private supabaseAnonKey: string,
-  ) {
-    // Initialize Supabase client
-    SupabaseClient.initialize(supabaseUrl, supabaseAnonKey);
+  constructor(private context: vscode.ExtensionContext) {
+    // Initialize Supabase client with hardcoded config
+    SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
   }
 
   /**
@@ -83,20 +83,18 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /**
    * Create a new authentication session via OAuth.
+   * Uses GitHub as the default provider (can support Google/GitLab too).
    */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
     try {
-      // Get OAuth provider from settings (default to GitHub)
-      const config = vscode.workspace.getConfiguration('texra.auth');
-      const oauthProvider = config.get<string>('oauthProvider', 'github');
-
       const supabase = SupabaseClient.getClient();
 
-      // Start OAuth flow
+      // Start OAuth flow with default provider (GitHub)
+      // TODO: Add UI to let user choose provider if multiple are configured in Supabase
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: oauthProvider as any,
+        provider: DEFAULT_OAUTH_PROVIDER,
         options: {
           redirectTo:
             vscode.env.uriScheme === 'vscode'
