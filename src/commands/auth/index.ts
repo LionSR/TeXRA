@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import * as authCommands from '@/auth/authCommands';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import * as authCommands from '@/auth/authCommands';
 
 /**
  * Register authentication-related commands.
@@ -14,6 +14,10 @@ export function registerAuthCommands(
     vscode.commands.registerCommand(
       'texra.auth.viewProfile',
       authCommands.viewProfile,
+    ),
+    vscode.commands.registerCommand(
+      'texra.auth.accountMenu',
+      authCommands.showAccountMenu,
     ),
     vscode.commands.registerCommand(
       'texra.remoteAgents.browse',
@@ -95,5 +99,6 @@ export const authCommandsList = {
   signIn: 'texra.auth.signIn',
   signOut: 'texra.auth.signOut',
   viewProfile: 'texra.auth.viewProfile',
+  accountMenu: 'texra.auth.accountMenu',
   browseRemoteAgents: 'texra.remoteAgents.browse',
 };

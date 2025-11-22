@@ -1162,6 +1162,12 @@
         "icon": "$(account)"
       },
       {
+        "command": "texra.auth.accountMenu",
+        "title": "Account",
+        "category": "TeXRA",
+        "icon": "$(account)"
+      },
+      {
         "command": "texra.remoteAgents.browse",
         "title": "Browse Remote Agents",
         "category": "TeXRA",
@@ -1439,6 +1445,11 @@
           "command": "texra.showAgentHistory",
           "when": "view == texra.mainView",
           "group": "navigation@2"
+        },
+        {
+          "command": "texra.auth.accountMenu",
+          "when": "view == texra.mainView",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
