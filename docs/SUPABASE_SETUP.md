@@ -10,6 +10,8 @@ TeXRA uses Supabase for:
 - **Remote Agents** - Secure storage and access control for agent configurations
 - **Permissions** - Tier-based access (free vs premium users)
 
+**Important**: Users authenticate to **TeXRA's official Supabase service**, not their own. This guide is for **extension maintainers** who need to set up the TeXRA backend.
+
 ---
 
 ## Part 1: Create Supabase Project
@@ -25,9 +27,9 @@ TeXRA uses Supabase for:
 1. Click "New Project"
 2. Choose an organization (or create one)
 3. Set project details:
-   - **Name**: `texra-auth` (or your choice)
-   - **Database Password**: Generate a strong password and save it
-   - **Region**: Choose closest to your users
+   - **Name**: `texra-production` (or your choice)
+   - **Database Password**: Generate a strong password and **save it securely**
+   - **Region**: Choose closest to your primary user base
 4. Click "Create new project"
 5. Wait 2-3 minutes for setup to complete
 
@@ -36,17 +38,17 @@ TeXRA uses Supabase for:
 Once your project is ready:
 
 1. Go to **Settings** → **API**
-2. Copy these values (you'll need them later):
+2. **IMPORTANT**: Copy these values:
    - **Project URL**: `https://your-project-id.supabase.co`
    - **anon public key**: Long string starting with `eyJ...`
+
+**These will be hardcoded in the extension (see Part 6).**
 
 ---
 
 ## Part 2: Configure OAuth Providers
 
-You need to set up at least one OAuth provider (GitHub, Google, or GitLab).
-
-### Option A: GitHub OAuth (Recommended)
+### GitHub OAuth (Recommended for Developers)
 
 #### Step 1: Create GitHub OAuth App
 
@@ -58,7 +60,7 @@ You need to set up at least one OAuth provider (GitHub, Google, or GitLab).
    - **Authorization callback URL**: `https://your-project-id.supabase.co/auth/v1/callback`
 4. Click "Register application"
 5. Click "Generate a new client secret"
-6. Copy **Client ID** and **Client Secret**
+6. **Copy both Client ID and Client Secret** (save securely)
 
 #### Step 2: Configure in Supabase
 
@@ -70,7 +72,7 @@ You need to set up at least one OAuth provider (GitHub, Google, or GitLab).
    - **Client Secret**: (from GitHub app)
 5. Click "Save"
 
-### Option B: Google OAuth
+### Google OAuth (Optional, for General Users)
 
 #### Step 1: Create Google OAuth App
 
@@ -83,7 +85,7 @@ You need to set up at least one OAuth provider (GitHub, Google, or GitLab).
 7. Add **Authorized redirect URIs**:
    - `https://your-project-id.supabase.co/auth/v1/callback`
 8. Click "Create"
-9. Copy **Client ID** and **Client Secret**
+9. **Copy Client ID and Client Secret**
 
 #### Step 2: Configure in Supabase
 
@@ -99,7 +101,7 @@ You need to set up at least one OAuth provider (GitHub, Google, or GitLab).
 
 ## Part 3: Set Up Database
 
-### 1. Create Tables
+### 1. Create Tables and Policies
 
 Go to **SQL Editor** in Supabase dashboard and run this SQL:
 
@@ -414,27 +416,38 @@ https://your-project-id.supabase.co/functions/v1/get-agent-config
 
 ---
 
-## Part 6: Configure TeXRA Extension
+## Part 6: Configure Extension Source Code
 
-### 1. Open VS Code Settings
+**This is for extension maintainers/developers**, not end users.
 
-1. Press `Cmd/Ctrl + ,` to open settings
-2. Search for "TeXRA auth"
+### 1. Update Hardcoded Credentials
 
-### 2. Configure Settings
+Edit `src/auth/config.ts`:
 
-Set these values:
+```typescript
+export const SUPABASE_CONFIG: SupabaseConfig = {
+  url: 'https://your-actual-project-id.supabase.co',  // Replace with your project URL
+  anonKey: 'your-actual-anon-key-here',  // Replace with your anon key
+  edgeFunctionUrl: 'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
+};
+```
 
-- **TeXRA: Auth › Enabled**: ✓ (checked)
-- **TeXRA: Auth › Supabase Url**: `https://your-project-id.supabase.co`
-- **TeXRA: Auth › Supabase Anon Key**: `your-anon-key`
-- **TeXRA: Auth › OAuth Provider**: `github` (or `google`/`gitlab`)
-- **TeXRA: Remote Agents › Enabled**: ✓ (checked)
-- **TeXRA: Remote Agents › Edge Function Url**: `https://your-project-id.supabase.co/functions/v1/get-agent-config`
+**OR** use environment variables:
 
-### 3. Reload VS Code
+```bash
+# .env (for development)
+TEXRA_SUPABASE_URL=https://your-project-id.supabase.co
+TEXRA_SUPABASE_ANON_KEY=your-anon-key
+TEXRA_SUPABASE_EDGE_FUNCTION_URL=https://your-project-id.supabase.co/functions/v1/get-agent-config
+```
 
-Press `Cmd/Ctrl + Shift + P` → "Developer: Reload Window"
+### 2. Build Extension
+
+```bash
+npm run build
+```
+
+The extension will now use the configured credentials. Users don't need to configure anything - they just sign in!
 
 ---
 
@@ -465,18 +478,9 @@ VALUES (
 );
 ```
 
-### 3. Test the Agent
-
-1. In VS Code, press `Cmd/Ctrl + Shift + P`
-2. Run **TeXRA: Sign In**
-3. Authenticate in the browser
-4. Run **TeXRA: Browse Remote Agents**
-5. Select your agent
-6. Use it with `remote://advanced-researcher` in the agent selector
-
 ---
 
-## Part 8: Manage Users
+## Part 8: User Management
 
 ### 1. Upgrade User to Premium
 
@@ -506,30 +510,29 @@ INSERT INTO agent_whitelist (agent_id, user_id)
 VALUES ('agent-uuid-here', 'user-uuid-here');
 ```
 
-### 3. View Usage Logs
+---
 
-```sql
-SELECT
-  p.email,
-  u.agent_name,
-  u.model_provider,
-  u.model_name,
-  u.created_at
-FROM usage_logs u
-JOIN profiles p ON u.user_id = p.user_id
-ORDER BY u.created_at DESC
-LIMIT 100;
-```
+## End User Experience
+
+For end users, the process is simple:
+
+1. **No configuration needed** - credentials are hardcoded in the extension
+2. **Sign in**: Run `TeXRA: Sign In` command
+3. **Authenticate** via browser (GitHub/Google)
+4. **Browse remote agents**: Run `TeXRA: Browse Remote Agents`
+5. **Use agents**: Paste `remote://agent-name` in agent selector
+
+That's it! No Supabase URLs, API keys, or other configuration.
 
 ---
 
 ## Troubleshooting
 
-### "Unauthorized" Error
+### "Supabase authentication provider registered" doesn't appear in logs
 
-- Check that Supabase URL and anon key are correct in VS Code settings
-- Verify user is signed in: Run "TeXRA: View Profile"
-- Check that OAuth provider is properly configured in Supabase
+- Check that `texra.auth.enabled` is true in settings
+- Verify credentials in `src/auth/config.ts` are correct
+- Check browser console in VS Code Developer Tools
 
 ### "Agent not found" Error
 
@@ -543,17 +546,11 @@ LIMIT 100;
 - Verify `SUPABASE_SERVICE_ROLE_KEY` is set (it's automatic in deployed functions)
 - Test function in Supabase dashboard using the "Invoke" button
 
-### OAuth Redirect Not Working
-
-- Verify OAuth app callback URL matches exactly: `https://your-project-id.supabase.co/auth/v1/callback`
-- Check that OAuth provider is enabled in Supabase **Authentication** → **Providers**
-- Ensure client ID and secret are correct
-
 ---
 
 ## Security Best Practices
 
-1. **Never commit Supabase keys to git** - Use VS Code settings or environment variables
+1. **Never commit real credentials to git** - Use environment variables for development
 2. **Use Row Level Security (RLS)** - Always enable RLS on tables containing user data
 3. **Rotate secrets regularly** - Periodically regenerate OAuth client secrets
 4. **Monitor usage** - Check usage logs for suspicious activity
@@ -564,7 +561,7 @@ LIMIT 100;
 ## Next Steps
 
 - [ ] Set up automated backups in Supabase
-- [ ] Add more OAuth providers (Google, GitLab)
+- [ ] Configure additional OAuth providers (Google, GitLab)
 - [ ] Create admin dashboard for managing users and agents
 - [ ] Implement usage quotas and rate limiting
 - [ ] Add email notifications for important events
