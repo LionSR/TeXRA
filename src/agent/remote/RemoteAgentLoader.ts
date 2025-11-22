@@ -9,7 +9,6 @@ import {
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentDefinitionSchema } from '@agent/core/AgentDataclass';
-import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
 import type { ToolDefinition } from '@model';
 import * as logger from '@logger/logUtils';
 
@@ -118,6 +117,7 @@ export class RemoteAgentLoader {
 
       // Resolve tool names to definitions
       if (Array.isArray(settings.tools)) {
+        const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
         settings.tools = (settings.tools as any[]).map((item) => {
           if (typeof item === 'string') {
             const tool = DEFAULT_TOOL_REGISTRY[item];
@@ -183,6 +183,12 @@ export class RemoteAgentLoader {
 
       const supabase = SupabaseClient.getClient();
 
+      // Set auth session for RLS
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: '', // Not needed for read-only queries
+      });
+
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
@@ -216,6 +222,12 @@ export class RemoteAgentLoader {
       }
 
       const supabase = SupabaseClient.getClient();
+
+      // Set auth session for RLS
+      await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: '', // Not needed for read-only queries
+      });
 
       const { data, error } = await supabase
         .from('remote_agents')

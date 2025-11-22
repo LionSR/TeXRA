@@ -129,6 +129,13 @@ export async function activate(context: vscode.ExtensionContext) {
           ),
         );
 
+        // Register URI handler for OAuth callbacks
+        const { SupabaseUriHandler } = await import('@/auth/UriHandler');
+        const uriHandler = new SupabaseUriHandler();
+        context.subscriptions.push(
+          vscode.window.registerUriHandler(uriHandler),
+        );
+
         logger.info('extension', 'Supabase authentication provider registered');
       }
     } catch (error) {
