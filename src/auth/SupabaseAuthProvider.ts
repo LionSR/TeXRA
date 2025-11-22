@@ -245,78 +245,89 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      const cancellationListener = cancellationToken.onCancellationRequested(() => {
-        clearTimeout(timeoutHandle);
-        subscription.dispose();
-        cancellationListener.dispose();
-        resolve(null);
-      });
+      const cancellationListener = cancellationToken.onCancellationRequested(
+        () => {
+          clearTimeout(timeoutHandle);
+          subscription.dispose();
+          cancellationListener.dispose();
+          resolve(null);
+        },
+      );
 
       // Listen for OAuth callback
-      const subscription = this.uriHandler!.onDidReceiveCallback(async (uri) => {
-        clearTimeout(timeoutHandle);
-        subscription.dispose();
-        cancellationListener.dispose();
+      const subscription = this.uriHandler!.onDidReceiveCallback(
+        async (uri) => {
+          clearTimeout(timeoutHandle);
+          subscription.dispose();
+          cancellationListener.dispose();
 
-        try {
-          // Parse OAuth callback parameters
-          const params = new URLSearchParams(uri.query);
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-          const expiresIn = params.get('expires_in');
-          const tokenType = params.get('token_type');
+          try {
+            // Parse OAuth callback parameters
+            const params = new URLSearchParams(uri.query);
+            const accessToken = params.get('access_token');
+            const refreshToken = params.get('refresh_token');
+            const expiresIn = params.get('expires_in');
+            const tokenType = params.get('token_type');
 
-          // Check for error in callback
-          const error = params.get('error');
-          const errorDescription = params.get('error_description');
-          if (error) {
-            reject(new Error(`OAuth error: ${error} - ${errorDescription || 'Unknown error'}`));
-            return;
-          }
+            // Check for error in callback
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+            if (error) {
+              reject(
+                new Error(
+                  `OAuth error: ${error} - ${errorDescription || 'Unknown error'}`,
+                ),
+              );
+              return;
+            }
 
-          if (!accessToken || !refreshToken) {
-            reject(new Error('Missing tokens in OAuth callback'));
-            return;
-          }
+            if (!accessToken || !refreshToken) {
+              reject(new Error('Missing tokens in OAuth callback'));
+              return;
+            }
 
-          // Get user info from access token
-          const supabase = SupabaseClient.getClient();
-          const { data, error: userError } = await supabase.auth.getUser(accessToken);
+            // Get user info from access token
+            const supabase = SupabaseClient.getClient();
+            const { data, error: userError } =
+              await supabase.auth.getUser(accessToken);
 
-          if (userError || !data.user) {
-            reject(new Error(`Failed to get user info: ${userError?.message || 'Unknown error'}`));
-            return;
-          }
+            if (userError || !data.user) {
+              reject(
+                new Error(
+                  `Failed to get user info: ${userError?.message || 'Unknown error'}`,
+                ),
+              );
+              return;
+            }
 
-          // Calculate expiration time
-          const expiresAt = expiresIn
-            ? Date.now() + parseInt(expiresIn) * 1000
-            : Date.now() + 3600000; // Default 1 hour
+            // Calculate expiration time
+            const expiresAt = expiresIn
+              ? Date.now() + parseInt(expiresIn) * 1000
+              : Date.now() + 3600000; // Default 1 hour
 
-          const session: SupabaseSession = {
-            id: data.user.id,
-            accessToken,
-            refreshToken,
-            account: {
+            const session: SupabaseSession = {
               id: data.user.id,
-              label: data.user.email || data.user.id,
-            },
-            expiresAt,
-          };
+              accessToken,
+              refreshToken,
+              account: {
+                id: data.user.id,
+                label: data.user.email || data.user.id,
+              },
+              expiresAt,
+            };
 
-          resolve(session);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          logger.error('SupabaseAuthProvider', `Error processing OAuth callback: ${errorMsg}`);
-          reject(error);
-          const errorMsg =
-            error instanceof Error ? error.message : String(error);
-          logger.error(
-            'SupabaseAuthProvider',
-            `Error polling for session: ${errorMsg}`,
-          );
-        }
-      });
+            resolve(session);
+          } catch (error) {
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
+            logger.error(
+              'SupabaseAuthProvider',
+              `Error processing OAuth callback: ${errorMsg}`,
+            );
+            reject(error);
+          }
+        },
+      );
     });
   }
 
