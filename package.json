@@ -595,6 +595,55 @@
         }
       },
       {
+        "title": "Authentication & Remote Agents",
+        "properties": {
+          "texra.auth.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable TeXRA authentication for remote features",
+            "scope": "resource"
+          },
+          "texra.auth.supabaseUrl": {
+            "type": "string",
+            "default": "",
+            "description": "Supabase project URL (e.g., https://your-project.supabase.co)",
+            "editPresentation": "singlelineText",
+            "scope": "resource"
+          },
+          "texra.auth.supabaseAnonKey": {
+            "type": "string",
+            "default": "",
+            "description": "Supabase anonymous (public) key",
+            "editPresentation": "singlelineText",
+            "scope": "resource"
+          },
+          "texra.auth.oauthProvider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "google",
+              "gitlab"
+            ],
+            "default": "github",
+            "description": "OAuth provider for authentication",
+            "scope": "resource"
+          },
+          "texra.remoteAgents.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow loading remote agents from TeXRA cloud",
+            "scope": "resource"
+          },
+          "texra.remoteAgents.edgeFunctionUrl": {
+            "type": "string",
+            "default": "",
+            "description": "URL for the agent decryption edge function (e.g., https://your-project.supabase.co/functions/v1/get-agent-config)",
+            "editPresentation": "singlelineText",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "TikZ Figures",
         "properties": {
           "texra.latex.tikzInputDirectory": {
@@ -1127,6 +1176,30 @@
         "category": "TeXRA"
       },
       {
+        "command": "texra.auth.signIn",
+        "title": "Sign In",
+        "category": "TeXRA",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "texra.auth.signOut",
+        "title": "Sign Out",
+        "category": "TeXRA",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "texra.auth.viewProfile",
+        "title": "View Profile",
+        "category": "TeXRA",
+        "icon": "$(account)"
+      },
+      {
+        "command": "texra.remoteAgents.browse",
+        "title": "Browse Remote Agents",
+        "category": "TeXRA",
+        "icon": "$(cloud)"
+      },
+      {
         "command": "texra.testTextEditor",
         "title": "Test Text Editor Tool",
         "category": "TeXRA",
@@ -1527,6 +1600,7 @@
     "@google/genai": "^1.30.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
+    "@supabase/supabase-js": "^2.84.0",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.43",
     "@vscode/markdown-it-katex": "^1.1.2",
