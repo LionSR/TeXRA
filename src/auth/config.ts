@@ -5,9 +5,6 @@
  * Users authenticate to TeXRA's service, not their own Supabase instance.
  *
  * Similar to how GitHub Copilot works - users sign in to the official service.
- *
- * IMPORTANT: Update these constants before building for production.
- * These are placeholders for development. Set real values before release.
  */
 
 /**
@@ -25,22 +22,17 @@ export interface SupabaseConfig {
 /**
  * Official TeXRA Supabase configuration.
  *
- * IMPORTANT: These should be set during build/release.
- * For development, you can override via environment variables:
- * - TEXRA_SUPABASE_URL
- * - TEXRA_SUPABASE_ANON_KEY
+ * These are the production credentials for TeXRA's official Supabase backend.
+ * The anon key is public and safe to include in client code (required for Supabase client initialization).
  */
 
 export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
 
 export const SUPABASE_CONFIG: SupabaseConfig = {
-  // TODO: Replace with your actual Supabase project URL before release
-  url:
-    process.env.TEXRA_SUPABASE_URL ||
-    `https://${SUPABASE_PROJECT_ID}.supabase.co`,
+  // Production Supabase project URL
+  url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
 
-  // TODO: Replace with your actual Supabase anon key before release
-  // Note: The anon key is public and safe to include in client code
+  // Production anon key - safe to include in client code, required for Supabase client
   anonKey:
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpudHVibWNnYmh3dGNrdHViZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDI5ODksImV4cCI6MjA3NDg3ODk4OX0.67InRy428t3zSBelbC92wo1nj5Llo4Jfb3A0yWNSzFo',
 
