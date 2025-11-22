@@ -36,6 +36,7 @@ export interface ToolEditApprovalResult {
   userMessage?: string;
   appliedContent?: string;
   userPatch?: string;
+  lineChanges?: LineChangeSummary;
 }
 
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
@@ -556,7 +557,10 @@ async function nativeRequestApproval(
       };
     }
 
-    return result;
+    return {
+      lineChanges: result.lineChanges ?? lineChanges,
+      ...result,
+    };
   } finally {
     pendingApprovals.delete(requestId);
     await closeApprovalEditors(originalUri, proposedUri);
@@ -626,6 +630,9 @@ function finalizeApprovalResult(
     ...result,
     appliedContent,
     userPatch,
+    lineChanges:
+      result.lineChanges ??
+      computeLineChangeSummary(request.originalContent, appliedContent),
   };
 }
 

@@ -213,6 +213,26 @@ const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  const edits = Array.isArray(parsed.edits)
+    ? parsed.edits
+    : Array.isArray(outputDetails.edits)
+      ? outputDetails.edits
+      : [];
+
+  const lineChanges =
+    parsed.lineChanges ||
+    outputDetails.lineChanges ||
+    edits.reduce(
+      (acc, entry) => {
+        if (!entry?.lineChanges) return acc;
+        return {
+          added: acc.added + (entry.lineChanges.added || 0),
+          removed: acc.removed + (entry.lineChanges.removed || 0),
+        };
+      },
+      { added: 0, removed: 0 },
+    );
+
   return {
     parsed,
     toolName,
@@ -221,6 +241,8 @@ const normalizeToolUseLog = (structured) => {
     outputText,
     diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
     input: parsed.input,
+    edits,
+    lineChanges,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
@@ -660,6 +682,8 @@ export class LogEntryFormatter {
       outputText,
       diagnostics,
       input,
+      edits,
+      lineChanges,
     } = normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
@@ -688,6 +712,42 @@ export class LogEntryFormatter {
           </div>
         </div>
       `);
+    }
+
+    if (Array.isArray(edits) && edits.length > 0) {
+      const items = edits
+        .map((edit) => {
+          const filePath = typeof edit?.path === 'string' ? edit.path : '';
+          if (!filePath) return '';
+
+          const lineStats = edit?.lineChanges;
+          const statsLabel = lineStats
+            ? `<span class="edit-stats"><span class="added">+${lineStats.added || 0}</span><span class="removed">-${lineStats.removed || 0}</span></span>`
+            : '';
+
+          const escaped = encodeHtml(filePath);
+          const fileName = encodeHtml(getBasename(filePath));
+          return `<li class="detail-item" title="${escaped}"><i class="codicon codicon-edit"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileName}</span> ${statsLabel}</li>`;
+        })
+        .filter(Boolean)
+        .join('');
+
+      if (items) {
+        const summaryStats =
+          lineChanges && (lineChanges.added !== 0 || lineChanges.removed !== 0)
+            ? `<span class="edit-stats"><span class="added">+${lineChanges.added}</span><span class="removed">-${lineChanges.removed}</span></span>`
+            : '';
+
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Edited files:</span>
+              ${summaryStats}
+              <ul class="detail-list">${items}</ul>
+            </div>
+          </div>
+        `);
+      }
     }
 
     if (errorText) {

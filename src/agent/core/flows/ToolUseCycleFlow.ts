@@ -24,6 +24,7 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -37,6 +38,27 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
+
+const summarizeLineChanges = (
+  edits: { lineChanges?: { added: number; removed: number } }[] | undefined,
+): { added: number; removed: number } | undefined => {
+  if (!Array.isArray(edits) || edits.length === 0) {
+    return undefined;
+  }
+
+  return edits.reduce(
+    (acc, edit) => {
+      if (!edit?.lineChanges) {
+        return acc;
+      }
+
+      acc.added += edit.lineChanges.added || 0;
+      acc.removed += edit.lineChanges.removed || 0;
+      return acc;
+    },
+    { added: 0, removed: 0 },
+  );
+};
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -476,6 +498,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const { calls } = execRes.value;
 
     const assistantText = state.text ?? '';
+    const tracker = store.workspace.interactions;
 
     for (const [index, call] of calls.entries()) {
       const tool = options.toolRegistry[call.name];
@@ -492,13 +515,22 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         });
       } else {
         try {
-          result = await withToolEditApprovalContext(
+          result = await withToolFileInteractionContext(
             {
+              tracker,
               streamId: options.logger.channelId,
               executionId: options.context.executionId,
               toolCallId: call.callId,
             },
-            () => tool.call(parsedInput),
+            () =>
+              withToolEditApprovalContext(
+                {
+                  streamId: options.logger.channelId,
+                  executionId: options.context.executionId,
+                  toolCallId: call.callId,
+                },
+                () => tool.call(parsedInput),
+              ),
           );
         } catch (err) {
           const { message, diagnostics } = normalizeToolCallError(
@@ -513,10 +545,19 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         }
       }
 
+      const trackedEdits = tracker.recordEdits(result.edits);
+      const sanitizedOutput = sanitizeToolResultForLog(result);
+      sanitizedOutput.edits = trackedEdits.edits;
+      sanitizedOutput.lineChanges =
+        trackedEdits.lineChanges || summarizeLineChanges(result.edits);
+
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,
-        output: sanitizeToolResultForLog(result),
+        output: sanitizedOutput,
+        edits: trackedEdits.edits,
+        lineChanges:
+          trackedEdits.lineChanges || summarizeLineChanges(trackedEdits.edits),
         isError: Boolean(result.isError),
       };
       options.logger.info('', {
