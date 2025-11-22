@@ -262,8 +262,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           cancellationListener.dispose();
 
           try {
-            // Parse OAuth callback parameters
-            const params = new URLSearchParams(uri.query);
+            // Parse OAuth callback parameters from fragment (hash)
+            // Supabase OAuth uses implicit flow which puts tokens in the fragment, not query
+            const params = new URLSearchParams(uri.fragment);
             const accessToken = params.get('access_token');
             const refreshToken = params.get('refresh_token');
             const expiresIn = params.get('expires_in');
@@ -282,6 +283,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             }
 
             if (!accessToken || !refreshToken) {
+              logger.error(
+                'SupabaseAuthProvider',
+                `Missing tokens in OAuth callback. Fragment: ${uri.fragment}, Query: ${uri.query}`,
+              );
               reject(new Error('Missing tokens in OAuth callback'));
               return;
             }
