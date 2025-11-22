@@ -219,7 +219,6 @@ const normalizeToolUseLog = (structured) => {
     summaryText,
     errorText,
     outputText,
-    diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
     input: parsed.input,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
@@ -652,14 +651,8 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const {
-      parsed,
-      toolName,
-      summaryText,
-      errorText,
-      outputText,
-      input,
-    } = normalizedToolLog;
+    const { parsed, toolName, summaryText, errorText, outputText, input } =
+      normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
     const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
