@@ -360,7 +360,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           id: data.session.user.id,
           label: data.session.user.email || data.session.user.id,
         },
-        expiresAt: (data.session.expires_at || 0) * 1000,
+        // If expires_at is missing, default to 1 hour from now to avoid immediate expiration
+        expiresAt: data.session.expires_at
+          ? data.session.expires_at * 1000
+          : Date.now() + 3600000,
       };
 
       // Update stored session
