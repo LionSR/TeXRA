@@ -221,3 +221,72 @@ export async function getAuthStatus(): Promise<{
     tier,
   };
 }
+
+/**
+ * Command to show account menu with sign in/out and profile options.
+ * Provides accessible UI for authentication actions.
+ */
+export async function showAccountMenu(): Promise<void> {
+  try {
+    const status = await getAuthStatus();
+
+    if (!status.authenticated) {
+      // Not signed in - show sign in option
+      const items = [
+        {
+          label: '$(sign-in) Sign In',
+          description: 'Sign in to access remote agents and premium features',
+          action: 'signIn' as const,
+        },
+      ];
+
+      const choice = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Account Options',
+      });
+
+      if (choice?.action === 'signIn') {
+        await vscode.commands.executeCommand('texra.auth.signIn');
+      }
+    } else {
+      // Signed in - show profile, browse agents, and sign out options
+      const items = [
+        {
+          label: '$(account) View Profile',
+          description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
+          action: 'viewProfile' as const,
+        },
+        {
+          label: '$(cloud) Browse Remote Agents',
+          description: 'Explore available remote agents',
+          action: 'browseAgents' as const,
+        },
+        {
+          label: '$(sign-out) Sign Out',
+          description: 'Sign out of your TeXRA account',
+          action: 'signOut' as const,
+        },
+      ];
+
+      const choice = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Account Options',
+      });
+
+      if (choice) {
+        switch (choice.action) {
+          case 'viewProfile':
+            await vscode.commands.executeCommand('texra.auth.viewProfile');
+            break;
+          case 'browseAgents':
+            await vscode.commands.executeCommand('texra.remoteAgents.browse');
+            break;
+          case 'signOut':
+            await vscode.commands.executeCommand('texra.auth.signOut');
+            break;
+        }
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(`Failed to show account menu: ${message}`);
+  }
+}
