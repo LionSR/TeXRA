@@ -7,6 +7,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { ToolResult, toolResult } from '@tools/result';
 import { buildFileAttachment } from '@tools/utils';
+import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 // Local file imports
@@ -52,10 +53,12 @@ export class ReadFileTool extends defineTool({
   protected async execute(input: ReadInput): Promise<ToolResult> {
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
+      recordToolFileRead(input.path);
       return this.returnBinaryAttachment(input, attachmentConfig);
     }
 
     const content = await WorkspaceFS.read(input.path);
+    recordToolFileRead(input.path);
     const lines = content.split(/\r?\n/);
     if (lines.length > 0 && lines.at(-1) === '') {
       lines.pop();
