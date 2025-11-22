@@ -41,12 +41,11 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 
   // TODO: Replace with your actual Supabase anon key before release
   // Note: The anon key is public and safe to include in client code
-  anonKey: 'placeholder-anon-key',
+  anonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpudHVibWNnYmh3dGNrdHViZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDI5ODksImV4cCI6MjA3NDg3ODk4OX0.67InRy428t3zSBelbC92wo1nj5Llo4Jfb3A0yWNSzFo',
 
   // Edge function URL
-  edgeFunctionUrl:
-    process.env.TEXRA_SUPABASE_EDGE_FUNCTION_URL ||
-    `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
+  edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
 };
 
 /**
@@ -55,7 +54,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
  */
 export function isSupabaseConfigured(): boolean {
   return (
-    SUPABASE_CONFIG.url !== `https://${SUPABASE_PROJECT_ID}.supabase.co` &&
+    SUPABASE_CONFIG.url !== `placeholder-url` &&
     SUPABASE_CONFIG.anonKey !== 'placeholder-anon-key' &&
     !SUPABASE_CONFIG.url.includes('placeholder')
   );
