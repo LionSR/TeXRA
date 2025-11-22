@@ -36,6 +36,10 @@ export interface ToolResult {
   base64Image?: string;
   userInstruction?: string;
   userPatch?: string;
+  edits?: {
+    path: string;
+    lineChanges?: { added: number; removed: number };
+  }[];
   isError?: boolean;
   diagnostics?: ErrorDiagnostics; // Additional error details like validation issues
   files?: ToolFileAttachment[];
