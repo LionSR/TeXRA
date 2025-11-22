@@ -224,12 +224,6 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
 
       return { skipped: false, value: { response, responseTime } };
     } catch (error) {
-      const formattedError = formatProviderHttpError(error);
-      const message = `Model invocation failed: ${formattedError.message}`;
-      options.logger.error(message, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: formattedError,
-      });
       state.shouldStop = true;
       state.endTurn = false;
       throw error;

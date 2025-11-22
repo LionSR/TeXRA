@@ -603,10 +603,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       const formattedError = formatProviderHttpError(error);
       this.logger.error(
         `Error during Google GenAI Chat API call: ${formattedError.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: formattedError,
-        },
+        { data: formattedError },
       );
       if (
         error instanceof Error &&

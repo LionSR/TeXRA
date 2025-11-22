@@ -572,13 +572,15 @@ export class LogEntryFormatter {
       ? `<span class="level-${level}">${level.toUpperCase().padEnd(8)}</span> `
       : '';
 
+    const encodedMessageText = encodeHtml(text ?? '');
+
     const htmlMessage =
       prefix +
       `<span class="timestamp" title="${tooltipTimestamp}">${emoji}${
         verbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
       levelMarkup +
-      `<span class="message-${level}">${text}</span>` +
+      `<span class="message-${level}">${encodedMessageText}</span>` +
       `</div>`;
 
     // Convert HTML string to DOM element
