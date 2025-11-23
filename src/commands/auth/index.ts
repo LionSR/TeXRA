@@ -70,8 +70,8 @@ async function browseRemoteAgents(): Promise<void> {
       return;
     }
 
-    // Set up the agent reference
-    const agentRef = `remote://${selected.agentName}`;
+    // Use the clean agent name (no remote:// prefix needed anymore!)
+    const agentName = selected.agentName;
 
     // Try to populate the agent selector automatically
     await vscode.commands.executeCommand('texra.mainView.focus');
@@ -86,24 +86,24 @@ async function browseRemoteAgents(): Promise<void> {
         webviewView.webview.postMessage({
           command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
           state: {
-            workflowAgent: agentRef,
+            workflowAgent: agentName,
           },
         });
         void vscode.window.showInformationMessage(
-          `Remote agent "${selected.agentName}" is now selected.`,
+          `Remote agent "${agentName}" is now selected.`,
         );
       } else {
         // Fallback: copy to clipboard and show manual instruction
-        await vscode.env.clipboard.writeText(agentRef);
+        await vscode.env.clipboard.writeText(agentName);
         void vscode.window.showInformationMessage(
-          `Could not auto-populate agent. Reference "${agentRef}" copied to clipboard - paste it in the agent selector.`,
+          `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
         );
       }
     } catch (error) {
       // Fallback: copy to clipboard and show manual instruction
-      await vscode.env.clipboard.writeText(agentRef);
+      await vscode.env.clipboard.writeText(agentName);
       void vscode.window.showInformationMessage(
-        `Could not auto-populate agent. Reference "${agentRef}" copied to clipboard - paste it in the agent selector.`,
+        `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
       );
     }
   } catch (error) {
