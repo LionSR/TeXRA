@@ -287,6 +287,8 @@ export async function showAccountMenu(): Promise<void> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    void vscode.window.showErrorMessage(`Failed to show account menu: ${message}`);
+    void vscode.window.showErrorMessage(
+      `Failed to show account menu: ${message}`,
+    );
   }
 }
