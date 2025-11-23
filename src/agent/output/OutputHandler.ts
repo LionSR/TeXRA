@@ -28,6 +28,7 @@ import {
   flexibleFS,
   WorkspaceFS,
   AbsoluteFS,
+  pathToLocation,
   getComparablePath,
 } from '@utils/files';
 // Type imports
@@ -141,17 +142,16 @@ export class OutputHandler implements IOutputHandler {
     return this.baseFiles.filter((candidate) => candidate !== null);
   }
 
-  private collectRunSupportFiles(): string[] {
-    const extras = new Set<string>();
-    const add = (value?: string | null) => {
+  private collectRunSupportFiles(): FileLocation[] {
+    const extras = new Map<string, FileLocation>();
+    const add = (value?: string | FileLocation | null) => {
       if (!value) {
         return;
       }
-      const trimmed = value.trim();
-      if (trimmed.length === 0) {
-        return;
-      }
-      extras.add(trimmed);
+
+      const location =
+        typeof value === 'string' ? pathToLocation(value) : value;
+      extras.set(getComparablePath(location), location);
     };
 
     const cfg = this.agentConfig;
@@ -164,7 +164,7 @@ export class OutputHandler implements IOutputHandler {
     add(cfg.inputFile ?? undefined);
     cfg.inputFiles.forEach((file) => add(file));
 
-    return Array.from(extras);
+    return Array.from(extras.values());
   }
 
   public setActiveRun(runId?: string | null): void {
