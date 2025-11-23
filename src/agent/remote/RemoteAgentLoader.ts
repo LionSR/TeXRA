@@ -109,8 +109,8 @@ export class RemoteAgentLoader {
       const validated = AgentDefinitionSchema.parse(parsed);
 
       // Extract settings and prompts
-      let settings: Partial<AgentSetting> = validated.settings || {};
-      let prompts: Partial<AgentPrompt> = validated.prompts || {};
+      const settings: Partial<AgentSetting> = validated.settings || {};
+      const prompts: Partial<AgentPrompt> = validated.prompts || {};
 
       // TODO: Handle inheritance for remote agents if needed
       // For now, remote agents should be self-contained
@@ -176,17 +176,17 @@ export class RemoteAgentLoader {
     }
 
     try {
-      const token = await SupabaseClient.getAccessToken();
-      if (!token) {
+      const tokens = await SupabaseClient.getSessionTokens();
+      if (!tokens) {
         return [];
       }
 
       const supabase = SupabaseClient.getClient();
 
-      // Set auth session for RLS
+      // Set auth session for RLS - requires both tokens
       await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: '', // Not needed for read-only queries
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
       });
 
       // RLS will automatically filter based on user's permissions
@@ -216,17 +216,17 @@ export class RemoteAgentLoader {
     agentName: string,
   ): Promise<RemoteAgentMetadata | null> {
     try {
-      const token = await SupabaseClient.getAccessToken();
-      if (!token) {
+      const tokens = await SupabaseClient.getSessionTokens();
+      if (!tokens) {
         return null;
       }
 
       const supabase = SupabaseClient.getClient();
 
-      // Set auth session for RLS
+      // Set auth session for RLS - requires both tokens
       await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: '', // Not needed for read-only queries
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
       });
 
       const { data, error } = await supabase

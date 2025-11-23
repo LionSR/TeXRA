@@ -42,8 +42,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private uriHandler: SupabaseUriHandler | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
-    // Initialize Supabase client with hardcoded config
-    SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    // Initialize Supabase client with hardcoded config and context
+    // Context is needed to access secret storage for refresh tokens
+    SupabaseClient.initialize(
+      SUPABASE_CONFIG.url,
+      SUPABASE_CONFIG.anonKey,
+      context,
+    );
     SupabaseAuthProvider.instance = this;
   }
 
