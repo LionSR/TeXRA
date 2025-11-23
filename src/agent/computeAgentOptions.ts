@@ -70,9 +70,7 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
 
   // Fetch available remote agents and add them to the list
   const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
-  const remoteAgentRefs = remoteAgents.map(
-    (agent) => `remote://${agent.name}`,
-  );
+  const remoteAgentRefs = remoteAgents.map((agent) => `remote://${agent.name}`);
 
   // Combine local and remote agents
   const allAgentsWithRemote = [...allAgents, ...remoteAgentRefs];
