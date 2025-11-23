@@ -68,6 +68,16 @@ export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
+  // Handle remote agents specially
+  if (agentName.startsWith('remote://')) {
+    return {
+      hasDefinition: true, // Remote agents always have definitions (on server)
+      hasMultipleSibling: false,
+      isMultipleOutput: false,
+      isToolUse: false, // Remote agents are workflow agents by default
+    };
+  }
+
   const candidates = mapToCandidates(directories);
   const definitionResolution = resolveAgentDefinitionSync(
     agentName,
@@ -96,6 +106,13 @@ function decorateLabel(
   metadata: AgentOptionMetadata,
 ): string {
   let label = agentName;
+
+  // Add cloud icon for remote agents
+  if (agentName.startsWith('remote://')) {
+    const remoteName = agentName.replace('remote://', '');
+    label = `☁ ${remoteName}`;
+  }
+
   if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
   }
@@ -111,9 +128,14 @@ export function createAgentOptionTag(
   metadata: AgentOptionMetadata,
   options: AgentOptionTagOptions = {},
 ): string {
+  // For remote agents, use the name without the remote:// prefix for the label
+  const displayName = agentName.startsWith('remote://')
+    ? agentName.replace('remote://', '')
+    : agentName;
+
   const attributes = [
     `value="${encodeHtml(agentName)}"`,
-    `data-label="${encodeHtml(agentName)}"`,
+    `data-label="${encodeHtml(displayName)}"`,
   ];
 
   if (!metadata.hasDefinition) {
