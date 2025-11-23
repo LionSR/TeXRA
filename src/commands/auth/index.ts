@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import * as authCommands from '@/auth/authCommands';
+import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 /**
  * Register authentication-related commands.
@@ -69,49 +70,41 @@ async function browseRemoteAgents(): Promise<void> {
       return;
     }
 
-    // Copy the remote agent reference to clipboard for easy use
+    // Set up the agent reference
     const agentRef = `remote://${selected.agentName}`;
-    await vscode.env.clipboard.writeText(agentRef);
 
-    const useNow = 'Use Now';
-    const action = await vscode.window.showInformationMessage(
-      `Remote agent reference "${agentRef}" copied to clipboard. You can paste it in the agent selector.`,
-      useNow,
-    );
+    // Try to populate the agent selector automatically
+    await vscode.commands.executeCommand('texra.mainView.focus');
 
-    if (action === useNow) {
-      // Open main view and populate the agent selector
-      await vscode.commands.executeCommand('texra.mainView.focus');
+    try {
+      const webviewView = await vscode.commands.executeCommand<
+        vscode.WebviewView | undefined
+      >('texra.getWebviewView');
 
-      // Get the webview and set the agent value
-      try {
-        const webviewView = await vscode.commands.executeCommand<
-          vscode.WebviewView | undefined
-        >('texra.getWebviewView');
-
-        if (webviewView) {
-          // Send STATE_RESTORE message to set the agent selector value
-          webviewView.webview.postMessage({
-            command: 'restoreState',
-            state: {
-              workflowAgent: agentRef,
-            },
-          });
-          void vscode.window.showInformationMessage(
-            `Remote agent "${selected.agentName}" is now selected.`,
-          );
-        } else {
-          // Fallback to manual paste instruction
-          void vscode.window.showInformationMessage(
-            `Paste "${agentRef}" in the agent selector to use this remote agent.`,
-          );
-        }
-      } catch (error) {
-        // Fallback to manual paste instruction if webview is not available
+      if (webviewView) {
+        // Send STATE_RESTORE message to set the agent selector value
+        webviewView.webview.postMessage({
+          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
+          state: {
+            workflowAgent: agentRef,
+          },
+        });
         void vscode.window.showInformationMessage(
-          `Paste "${agentRef}" in the agent selector to use this remote agent.`,
+          `Remote agent "${selected.agentName}" is now selected.`,
+        );
+      } else {
+        // Fallback: copy to clipboard and show manual instruction
+        await vscode.env.clipboard.writeText(agentRef);
+        void vscode.window.showInformationMessage(
+          `Could not auto-populate agent. Reference "${agentRef}" copied to clipboard - paste it in the agent selector.`,
         );
       }
+    } catch (error) {
+      // Fallback: copy to clipboard and show manual instruction
+      await vscode.env.clipboard.writeText(agentRef);
+      void vscode.window.showInformationMessage(
+        `Could not auto-populate agent. Reference "${agentRef}" copied to clipboard - paste it in the agent selector.`,
+      );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
