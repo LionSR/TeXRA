@@ -91,6 +91,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         const refreshed = await this.refreshSession(session);
         if (!refreshed) {
           await this.removeSession(session.id);
+          // Notify user that session expired and offer to re-authenticate
+          const action = await vscode.window.showWarningMessage(
+            'Your TeXRA session has expired. Please sign in again to use remote agents.',
+            'Sign In',
+          );
+          if (action === 'Sign In') {
+            // Trigger re-authentication
+            await vscode.commands.executeCommand(
+              'texra.signInToSupabase',
+            );
+          }
           return [];
         }
         return [this.toVSCodeSession(refreshed)];
@@ -102,6 +113,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
       if (error || !data.user) {
         await this.removeSession(session.id);
+        // Notify user that session is invalid and offer to re-authenticate
+        const action = await vscode.window.showWarningMessage(
+          'Your TeXRA session is no longer valid. Please sign in again to use remote agents.',
+          'Sign In',
+        );
+        if (action === 'Sign In') {
+          // Trigger re-authentication
+          await vscode.commands.executeCommand(
+            'texra.signInToSupabase',
+          );
+        }
         return [];
       }
 
@@ -237,34 +259,20 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      // Set up timeout
-      const timeoutHandle = setTimeout(() => {
-        subscription.dispose();
-        reject(new Error('Authentication timeout'));
-      }, timeout);
-
-      // Listen for cancellation
-      if (cancellationToken.isCancellationRequested) {
+      // Track cleanup state to avoid disposing already-disposed subscriptions
+      let isCleanedUp = false;
+      const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
         clearTimeout(timeoutHandle);
-        resolve(null);
-        return;
-      }
+        subscription.dispose();
+        cancellationListener.dispose();
+      };
 
-      const cancellationListener = cancellationToken.onCancellationRequested(
-        () => {
-          clearTimeout(timeoutHandle);
-          subscription.dispose();
-          cancellationListener.dispose();
-          resolve(null);
-        },
-      );
-
-      // Listen for OAuth callback
+      // Listen for OAuth callback (must be declared before timeout/cancellation handlers use it)
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
-          clearTimeout(timeoutHandle);
-          subscription.dispose();
-          cancellationListener.dispose();
+          cleanup();
 
           try {
             // Parse OAuth callback parameters from fragment (hash)
@@ -336,6 +344,26 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             );
             reject(error);
           }
+        },
+      );
+
+      // Set up timeout
+      const timeoutHandle = setTimeout(() => {
+        cleanup();
+        reject(new Error('Authentication timeout'));
+      }, timeout);
+
+      // Listen for cancellation
+      if (cancellationToken.isCancellationRequested) {
+        cleanup();
+        resolve(null);
+        return;
+      }
+
+      const cancellationListener = cancellationToken.onCancellationRequested(
+        () => {
+          cleanup();
+          resolve(null);
         },
       );
     });

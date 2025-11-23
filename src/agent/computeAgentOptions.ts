@@ -69,8 +69,15 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   const dirs = await getAgentDirectories();
 
   // Fetch available remote agents and add them to the list
-  const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
-  const remoteAgentRefs = remoteAgents.map((agent) => `remote://${agent.name}`);
+  // Wrap in try-catch to prevent remote agent failures from breaking local agent loading
+  let remoteAgentRefs: string[] = [];
+  try {
+    const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
+    remoteAgentRefs = remoteAgents.map((agent) => `remote://${agent.name}`);
+  } catch (error) {
+    // Silently fail - user can still use local agents even if remote agent loading fails
+    // The listRemoteAgents method already handles logging
+  }
 
   // Combine local and remote agents
   const allAgentsWithRemote = [...allAgents, ...remoteAgentRefs];
