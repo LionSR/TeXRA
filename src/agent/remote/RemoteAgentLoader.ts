@@ -1,17 +1,17 @@
 import * as vscode from 'vscode';
 import yaml from 'yaml';
-import { SupabaseClient } from '@/auth/SupabaseClient';
-import { SUPABASE_CONFIG } from '@/auth/config';
 import {
   AgentSetting,
   AgentPrompt,
   AgentPromptSchema,
   parseAgentSetting,
+  AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import { AgentDefinitionSchema } from '@agent/core/AgentDataclass';
-import type { ToolDefinition } from '@model';
-import { RemoteAgentRegistry } from './RemoteAgentRegistry';
 import * as logger from '@logger/logUtils';
+import type { ToolDefinition } from '@model';
+import { SupabaseClient } from '@/auth/SupabaseClient';
+import { SUPABASE_CONFIG } from '@/auth/config';
+import { RemoteAgentRegistry } from './RemoteAgentRegistry';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
@@ -90,7 +90,12 @@ export class RemoteAgentLoader {
             `Access denied to remote agent "${agentName}". You may need to upgrade your account.`,
           );
         } else {
-          const errorText = await response.text();
+          let errorText = 'Unknown error';
+          try {
+            errorText = await response.text();
+          } catch (error) {
+            logger.warn(CHANNEL, 'Failed to read error response body');
+          }
           throw new Error(
             `Failed to load remote agent: ${response.statusText} - ${errorText}`,
           );
@@ -163,10 +168,8 @@ export class RemoteAgentLoader {
         CHANNEL,
         `Failed to load remote agent "${agentName}": ${errorMessage}`,
       );
-      // Throw new error with context instead of rethrowing to avoid duplicate messages
-      throw new Error(
-        `Failed to load remote agent "${agentName}": ${errorMessage}`,
-      );
+      // Rethrow the original error to avoid duplicate prefixes
+      throw error;
     }
   }
 
