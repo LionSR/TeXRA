@@ -10,6 +10,7 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentDefinitionSchema } from '@agent/core/AgentDataclass';
 import type { ToolDefinition } from '@model';
+import { RemoteAgentRegistry } from './RemoteAgentRegistry';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'RemoteAgentLoader';
@@ -259,21 +260,19 @@ export class RemoteAgentLoader {
   }
 
   /**
-   * Check if a given agent name is a remote agent reference.
-   * Remote agents are prefixed with "remote://"
+   * Check if a given agent name is a remote agent.
+   * Uses the RemoteAgentRegistry instead of prefix checking.
+   * @deprecated Use RemoteAgentRegistry.isRemote() instead
    */
   static isRemoteAgent(agentName: string): boolean {
-    return agentName.startsWith('remote://');
+    return RemoteAgentRegistry.isRemote(agentName);
   }
 
   /**
-   * Extract the actual agent name from a remote agent reference.
-   * e.g., "remote://advanced-researcher" -> "advanced-researcher"
+   * Extract the actual agent name (strip remote:// prefix if present).
+   * @deprecated Use RemoteAgentRegistry.getCleanName() instead
    */
   static extractRemoteAgentName(agentRef: string): string {
-    if (!this.isRemoteAgent(agentRef)) {
-      return agentRef;
-    }
-    return agentRef.replace(/^remote:\/\//, '');
+    return RemoteAgentRegistry.getCleanName(agentRef);
   }
 }
