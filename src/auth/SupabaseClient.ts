@@ -13,15 +13,24 @@ import * as logger from '@logger/logUtils';
 export class SupabaseClient {
   private static instance: Client | null = null;
   private static config: { url: string; anonKey: string } | null = null;
+  private static context: vscode.ExtensionContext | null = null;
+  private static readonly SESSION_KEY = 'texra.supabase.session';
 
   /**
    * Initialize the Supabase client with project credentials.
    */
-  static initialize(url: string, anonKey: string): void {
+  static initialize(
+    url: string,
+    anonKey: string,
+    context?: vscode.ExtensionContext,
+  ): void {
     if (!url || !anonKey) {
       throw new Error('Supabase URL and anon key are required');
     }
     this.config = { url, anonKey };
+    if (context) {
+      this.context = context;
+    }
     this.instance = createClient(url, anonKey, {
       auth: {
         // Disable persistence - we handle session via VS Code SecretStorage
@@ -65,6 +74,54 @@ export class SupabaseClient {
   }
 
   /**
+   * Get both access and refresh tokens from secure storage.
+   * This is needed when calling Supabase auth.setSession() which requires both tokens.
+   */
+  static async getSessionTokens(): Promise<{
+    accessToken: string;
+    refreshToken: string;
+  } | null> {
+    if (!this.context) {
+      logger.warn(
+        'SupabaseClient',
+        'Extension context not set, falling back to access token only',
+      );
+      const accessToken = await this.getAccessToken();
+      if (!accessToken) {
+        return null;
+      }
+      // If context not available, we can't get refresh token
+      // This shouldn't happen in normal operation
+      return { accessToken, refreshToken: '' };
+    }
+
+    try {
+      const sessionData = await this.context.secrets.get(this.SESSION_KEY);
+      if (!sessionData) {
+        return null;
+      }
+
+      interface StoredSession {
+        accessToken: string;
+        refreshToken: string;
+      }
+
+      const session: StoredSession = JSON.parse(sessionData);
+      return {
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(
+        'SupabaseClient',
+        `Error getting session tokens: ${errorMsg}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Get the current authenticated user.
    */
   static async getUser(): Promise<User | null> {
@@ -90,17 +147,17 @@ export class SupabaseClient {
    * Get the current user's tier (free or premium).
    */
   static async getUserTier(): Promise<'free' | 'premium'> {
-    const token = await this.getAccessToken();
-    if (!token) {
+    const tokens = await this.getSessionTokens();
+    if (!tokens) {
       return 'free';
     }
 
     try {
-      // Set auth session for RLS
+      // Set auth session for RLS - requires both tokens
       const client = this.getClient();
       await client.auth.setSession({
-        access_token: token,
-        refresh_token: '', // Not needed for read-only queries
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
       });
 
       const { data, error } = await client
