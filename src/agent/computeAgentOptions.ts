@@ -6,6 +6,7 @@ import {
   type AgentDirectoryMap,
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
+import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
@@ -67,7 +68,16 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
     await getAllAgents();
   const dirs = await getAgentDirectories();
 
-  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
+  // Fetch available remote agents and add them to the list
+  const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
+  const remoteAgentRefs = remoteAgents.map(
+    (agent) => `remote://${agent.name}`,
+  );
+
+  // Combine local and remote agents
+  const allAgentsWithRemote = [...allAgents, ...remoteAgentRefs];
+
+  return buildAgentOptionsPayload(allAgentsWithRemote, dirs, toolUseAgents, {
     workflowAgent: defaultWorkflowAgent,
     toolUseAgent: DEFAULT_TOOL_USE_AGENT,
   });
