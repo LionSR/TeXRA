@@ -80,12 +80,38 @@ async function browseRemoteAgents(): Promise<void> {
     );
 
     if (action === useNow) {
-      // Open main view and suggest using this agent
-      // This is a best-effort action - the user can manually paste the reference
+      // Open main view and populate the agent selector
       await vscode.commands.executeCommand('texra.mainView.focus');
-      void vscode.window.showInformationMessage(
-        `Paste "${agentRef}" in the agent selector to use this remote agent.`,
-      );
+
+      // Get the webview and set the agent value
+      try {
+        const webviewView = await vscode.commands.executeCommand<
+          vscode.WebviewView | undefined
+        >('texra.getWebviewView');
+
+        if (webviewView) {
+          // Send STATE_RESTORE message to set the agent selector value
+          webviewView.webview.postMessage({
+            command: 'restoreState',
+            state: {
+              workflowAgent: agentRef,
+            },
+          });
+          void vscode.window.showInformationMessage(
+            `Remote agent "${selected.agentName}" is now selected.`,
+          );
+        } else {
+          // Fallback to manual paste instruction
+          void vscode.window.showInformationMessage(
+            `Paste "${agentRef}" in the agent selector to use this remote agent.`,
+          );
+        }
+      } catch (error) {
+        // Fallback to manual paste instruction if webview is not available
+        void vscode.window.showInformationMessage(
+          `Paste "${agentRef}" in the agent selector to use this remote agent.`,
+        );
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
