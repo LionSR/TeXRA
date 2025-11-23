@@ -301,6 +301,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   /**
    * Sets an agent selector value, creating the option if it's a remote agent.
+   * Remote agents are now identified by data-remote attribute instead of remote:// prefix.
    * @param {string} selectId - The ID of the agent select element
    * @param {string} value - The agent value to set
    */
@@ -310,32 +311,32 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // Check if this is a remote agent
-    if (value.startsWith('remote://')) {
-      const selectElement = document.getElementById(selectId);
-      if (!selectElement) {
-        console.warn(`Agent select element with id '${selectId}' not found`);
-        return;
-      }
+    const selectElement = document.getElementById(selectId);
+    if (!selectElement) {
+      console.warn(`Agent select element with id '${selectId}' not found`);
+      safeSetElementValue(selectId, value);
+      return;
+    }
 
-      // Check if option already exists
-      const existingOption = Array.from(selectElement.children).find(
-        (opt) => opt.value === value,
-      );
+    // Check if option already exists
+    const existingOption = Array.from(selectElement.children).find(
+      (opt) => opt.value === value,
+    );
 
-      // Create option if it doesn't exist
-      if (!existingOption) {
-        const option = document.createElement('vscode-option');
-        option.value = value;
-        // Extract agent name from remote:// URL for display
-        const agentName = value.replace('remote://', '');
-        option.textContent = `☁ ${agentName}`;
-        option.dataset.label = `☁ ${agentName}`;
-        option.setAttribute('title', `Remote agent: ${agentName}`);
+    // If option doesn't exist, it might be a newly selected remote agent
+    // Check if this looks like it could be a remote agent and create the option
+    if (!existingOption) {
+      // This could be a remote agent being set programmatically
+      // Create the option with remote styling
+      const option = document.createElement('vscode-option');
+      option.value = value;
+      option.textContent = `☁ ${value}`;
+      option.dataset.label = `☁ ${value}`;
+      option.dataset.remote = 'true';
+      option.setAttribute('title', `Remote agent: ${value}`);
 
-        // Add the option to the select
-        selectElement.appendChild(option);
-      }
+      // Add the option to the select
+      selectElement.appendChild(option);
     }
 
     // Set the value
