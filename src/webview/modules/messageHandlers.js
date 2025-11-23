@@ -299,6 +299,49 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     };
   }
 
+  /**
+   * Sets an agent selector value, creating the option if it's a remote agent.
+   * @param {string} selectId - The ID of the agent select element
+   * @param {string} value - The agent value to set
+   */
+  _setAgentValue(selectId, value) {
+    if (!value) {
+      safeSetElementValue(selectId, value);
+      return;
+    }
+
+    // Check if this is a remote agent
+    if (value.startsWith('remote://')) {
+      const selectElement = document.getElementById(selectId);
+      if (!selectElement) {
+        console.warn(`Agent select element with id '${selectId}' not found`);
+        return;
+      }
+
+      // Check if option already exists
+      const existingOption = Array.from(selectElement.children).find(
+        (opt) => opt.value === value,
+      );
+
+      // Create option if it doesn't exist
+      if (!existingOption) {
+        const option = document.createElement('vscode-option');
+        option.value = value;
+        // Extract agent name from remote:// URL for display
+        const agentName = value.replace('remote://', '');
+        option.textContent = `☁ ${agentName}`;
+        option.dataset.label = `☁ ${agentName}`;
+        option.setAttribute('title', `Remote agent: ${agentName}`);
+
+        // Add the option to the select
+        selectElement.appendChild(option);
+      }
+    }
+
+    // Set the value
+    safeSetElementValue(selectId, value);
+  }
+
   _getSessionTypeValue() {
     const input = this._getElement(SESSION_TYPE_INPUT);
     const rawValue = input?.value ?? '';
@@ -449,11 +492,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       state.toolUseAgent ?? (isToolUseSession ? state.agent : undefined) ?? '';
 
     safeSetElementValue(SESSION_TYPE_INPUT, normalizedSessionType);
-    safeSetElementValue(
+    this._setAgentValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       workflowAgentValue,
     );
-    safeSetElementValue(
+    this._setAgentValue(
       AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
       toolUseAgentValue,
     );
