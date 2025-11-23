@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import * as authCommands from '@/auth/authCommands';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import * as authCommands from '@/auth/authCommands';
 
 /**
  * Register authentication-related commands.
