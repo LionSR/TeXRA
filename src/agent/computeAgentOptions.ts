@@ -7,6 +7,7 @@ import {
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
@@ -70,17 +71,20 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
 
   // Fetch available remote agents and add them to the list
   // Wrap in try-catch to prevent remote agent failures from breaking local agent loading
-  let remoteAgentRefs: string[] = [];
+  let remoteAgentNames: string[] = [];
   try {
     const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
-    remoteAgentRefs = remoteAgents.map((agent) => `remote://${agent.name}`);
+    remoteAgentNames = remoteAgents.map((agent) => agent.name);
+
+    // Register remote agents in the registry (no more remote:// prefix!)
+    RemoteAgentRegistry.registerMultiple(remoteAgentNames);
   } catch (error) {
     // Silently fail - user can still use local agents even if remote agent loading fails
     // The listRemoteAgents method already handles logging
   }
 
-  // Combine local and remote agents
-  const allAgentsWithRemote = [...allAgents, ...remoteAgentRefs];
+  // Combine local and remote agents (using clean names)
+  const allAgentsWithRemote = [...allAgents, ...remoteAgentNames];
 
   return buildAgentOptionsPayload(allAgentsWithRemote, dirs, toolUseAgents, {
     workflowAgent: defaultWorkflowAgent,
