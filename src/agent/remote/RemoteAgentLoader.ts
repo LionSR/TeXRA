@@ -162,7 +162,10 @@ export class RemoteAgentLoader {
         CHANNEL,
         `Failed to load remote agent "${agentName}": ${errorMessage}`,
       );
-      throw error;
+      // Throw new error with context instead of rethrowing to avoid duplicate messages
+      throw new Error(
+        `Failed to load remote agent "${agentName}": ${errorMessage}`,
+      );
     }
   }
 
