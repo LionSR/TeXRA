@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
+import * as logger from '@logger/logUtils';
 import { SupabaseClient } from './SupabaseClient';
 import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
   EXTENSION_ID,
 } from './config';
-import * as logger from '@logger/logUtils';
 import type { SupabaseUriHandler } from './UriHandler';
 
 /**
@@ -40,6 +40,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   public readonly onDidChangeSessions = this._onDidChangeSessions.event;
 
   private uriHandler: SupabaseUriHandler | null = null;
+  private refreshPromise: Promise<SupabaseSession | null> | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
     // Initialize Supabase client with hardcoded config and context
@@ -98,9 +99,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           );
           if (action === 'Sign In') {
             // Trigger re-authentication
-            await vscode.commands.executeCommand(
-              'texra.signInToSupabase',
-            );
+            try {
+              await vscode.commands.executeCommand('texra.auth.signIn');
+            } catch (error) {
+              logger.error(
+                'SupabaseAuthProvider',
+                `Failed to trigger sign-in: ${error}`,
+              );
+            }
           }
           return [];
         }
@@ -120,9 +126,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         );
         if (action === 'Sign In') {
           // Trigger re-authentication
-          await vscode.commands.executeCommand(
-            'texra.signInToSupabase',
-          );
+          try {
+            await vscode.commands.executeCommand('texra.auth.signIn');
+          } catch (error) {
+            logger.error(
+              'SupabaseAuthProvider',
+              `Failed to trigger sign-in: ${error}`,
+            );
+          }
         }
         return [];
       }
@@ -298,7 +309,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             if (!accessToken || !refreshToken) {
               logger.error(
                 'SupabaseAuthProvider',
-                `Missing tokens in OAuth callback. Fragment: ${uri.fragment}, Query: ${uri.query}`,
+                `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
               );
               reject(new Error('Missing tokens in OAuth callback'));
               return;
@@ -371,8 +382,28 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
   /**
    * Refresh an expired session.
+   * Uses a promise lock to prevent concurrent refresh attempts.
    */
   private async refreshSession(
+    session: SupabaseSession,
+  ): Promise<SupabaseSession | null> {
+    // If a refresh is already in progress, wait for it
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    // Start a new refresh and store the promise
+    this.refreshPromise = this._refreshSession(session).finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
+  }
+
+  /**
+   * Internal method to actually perform the refresh.
+   */
+  private async _refreshSession(
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     try {
