@@ -75,6 +75,23 @@ export class ToolUseSessionLifecycle<C = unknown> {
     }
   }
 
+  async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
+    const store = this.store;
+    const executionId = this.agent.getExecutionId();
+    if (!store || !executionId) {
+      return;
+    }
+
+    await ToolUseSessionPersistence.persistCheckpointSnapshot({
+      executionId,
+      streamId: this.agent.getStreamTabId(),
+      agentConfig: this.agent.config,
+      messages,
+      store,
+      queue: this.followUps,
+    });
+  }
+
   async markRunning(): Promise<void> {
     StreamStatusService.set(this.agent.getStreamTabId(), STATUS.RUNNING);
   }
