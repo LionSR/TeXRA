@@ -52,6 +52,46 @@ interface PersistSnapshotArgs {
   queue: FollowUpQueue;
 }
 
+async function persistSnapshot({
+  executionId,
+  streamId,
+  agentConfig,
+  messages,
+  store,
+  queue,
+}: PersistSnapshotArgs): Promise<boolean> {
+  if (!ToolUseSessionPersistence.isEnabled() || !executionId || !store) {
+    return false;
+  }
+
+  const payload: SaveToolUseSnapshotPayload = {
+    executionId,
+    streamId,
+    agentConfig,
+    messages,
+    store,
+  };
+
+  const outcome = await queue.runIfIdle(() =>
+    ToolUseSnapshotStore.save(payload),
+  );
+  const stored = outcome.result;
+  if (!stored) {
+    return false;
+  }
+
+  if (outcome.aborted) {
+    await ToolUseSnapshotStore.delete(payload.executionId);
+    logger.debug(
+      `Dropped snapshot for execution ${payload.executionId} because a follow-up arrived during persistence.`,
+    );
+    return false;
+  }
+
+  ToolUseSnapshotCache.cacheSnapshot(stored);
+  return true;
+}
+
 async function buildToolUseAgent(
   snapshot: ToolUseSessionSnapshot,
   contextFactory: (init: AgentExecutionContextInit) => AgentExecutionContext,
@@ -107,40 +147,22 @@ export const ToolUseSessionPersistence = {
     store,
     queue,
   }: PersistSnapshotArgs): Promise<boolean> {
-    if (!this.isEnabled() || !executionId || !store) {
+    if (!this.isEnabled() || !queue.isEmpty()) {
       return false;
     }
 
-    if (!queue.isEmpty()) {
-      return false;
-    }
-
-    const payload: SaveToolUseSnapshotPayload = {
+    return persistSnapshot({
       executionId,
       streamId,
       agentConfig,
       messages,
       store,
-    };
+      queue,
+    });
+  },
 
-    const outcome = await queue.runIfIdle(() =>
-      ToolUseSnapshotStore.save(payload),
-    );
-    const stored = outcome.result;
-    if (!stored) {
-      return false;
-    }
-
-    if (outcome.aborted) {
-      await ToolUseSnapshotStore.delete(payload.executionId);
-      logger.debug(
-        `Dropped snapshot for execution ${payload.executionId} because a follow-up arrived during persistence.`,
-      );
-      return false;
-    }
-
-    ToolUseSnapshotCache.cacheSnapshot(stored);
-    return true;
+  async persistCheckpointSnapshot(args: PersistSnapshotArgs): Promise<boolean> {
+    return persistSnapshot(args);
   },
 
   async clearPersistedSnapshot(
