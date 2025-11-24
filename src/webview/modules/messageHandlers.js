@@ -26,6 +26,7 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { bannerManager } from './uiManagers/BannerManager.js';
+import { updateModelApiKeyBanner } from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
@@ -74,7 +75,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
       [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) =>
-        bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, m),
+        updateModelApiKeyBanner(this._getElement('model'), m, {
+          forceShow: true,
+        }),
       [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
         bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
@@ -219,14 +222,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       }
     });
 
-    const selectedOption = getSelectedOptionElement(selectElement);
-    if (selectedOption?.dataset?.requiresKey === 'true') {
-      bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, {
-        provider: selectedOption.dataset?.provider,
-      });
-    } else {
-      bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER);
-    }
+    updateModelApiKeyBanner(selectElement);
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
