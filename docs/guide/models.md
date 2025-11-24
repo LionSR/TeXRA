@@ -24,8 +24,10 @@ Known for strong instruction following and context handling.
 
 | Model ID    | Key Strength / Use Case                     | Relative Cost | Relative Speed | Notes                           |
 | :---------- | :------------------------------------------ | :------------ | :------------- | :------------------------------ |
-| `opus41T`   | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4.1 Opus with thinking   |
-| `opus41`    | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4.1 Opus                 |
+| `opus45T`   | Latest Opus with explicit reasoning steps   | $$$$          | Slow           | Claude 4.5 Opus with thinking   |
+| `opus45`    | Latest high quality, complex tasks          | $$$$          | Slow           | Claude 4.5 Opus                 |
+| `opus41T`   | Previous-gen Opus with explicit reasoning   | $$$$          | Slow           | Claude 4.1 Opus with thinking   |
+| `opus41`    | Previous-gen high quality, complex tasks    | $$$$          | Slow           | Claude 4.1 Opus                 |
 | `opus4T`    | Opus 4 with explicit reasoning steps        | $$$$          | Slow           | Claude 4 Opus with thinking     |
 | `opus4`     | Opus 4 high quality, complex tasks          | $$$$          | Slow           | Claude 4 Opus                   |
 | `sonnet45T` | Latest Sonnet with explicit reasoning steps | $$$           | Medium         | Claude 4.5 Sonnet with thinking |
@@ -210,15 +212,12 @@ The specific models available by default and their identifiers (`sonnet45`, `gpt
 ```json
 "texra.models": [
   "gemini3p",
-  "gemini25p",
-  "gemini25f",
-  "opus41T",
   "sonnet45T",
-  "sonnet4T",
-  "gpt5",
+  "opus45T",
+  "gpt51",
   "gpt41",
-  "deepseek",
   "deepseekT",
+  "kimi2T",
   "kimi2",
   "qwen3max",
   "grok4"
