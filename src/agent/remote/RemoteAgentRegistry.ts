@@ -1,6 +1,5 @@
 /**
- * Registry to track which agents are remote.
- * Replaces the "remote://" prefix approach to avoid file path issues.
+ * Registry tracking remote agent status without prefix markers.
  */
 class RemoteAgentRegistryClass {
   private remoteAgents = new Set<string>();
@@ -23,7 +22,7 @@ class RemoteAgentRegistryClass {
    * Check if an agent is remote.
    */
   isRemote(agentName: string): boolean {
-    // Also check for legacy remote:// prefix for backwards compatibility
+    // Support legacy remote:// prefix for backwards compatibility
     if (agentName.startsWith('remote://')) {
       return true;
     }
@@ -31,7 +30,7 @@ class RemoteAgentRegistryClass {
   }
 
   /**
-   * Get the clean agent name (strip remote:// prefix if present).
+   * Get clean agent name (strips legacy remote:// prefix).
    */
   getCleanName(agentName: string): string {
     return agentName.replace(/^remote:\/\//, '');
@@ -59,7 +58,5 @@ class RemoteAgentRegistryClass {
   }
 }
 
-/**
- * Singleton instance of the remote agent registry.
- */
+/** Singleton remote agent registry. */
 export const RemoteAgentRegistry = new RemoteAgentRegistryClass();

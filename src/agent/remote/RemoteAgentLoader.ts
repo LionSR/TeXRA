@@ -33,20 +33,18 @@ export interface RemoteAgentConfig {
 
 /**
  * Loader for remote agents stored in Supabase.
- * Fetches agent configurations from Supabase Storage via Edge Function,
- * with proper authentication and permission checking.
+ * Fetches agent configurations via Edge Function with authentication.
  */
 export class RemoteAgentLoader {
   /**
    * Load a remote agent configuration by name.
-   * The agent YAML is fetched from Supabase Storage and parsed in memory only.
    */
   static async loadRemoteAgent(agentName: string): Promise<RemoteAgentConfig> {
     // Check if user is authenticated
     const isAuth = await SupabaseClient.isAuthenticated();
     if (!isAuth) {
       throw new Error(
-        'Authentication required to use remote agents. Please sign in using the "TeXRA: Sign In" command.',
+        'Remote agents require authentication. Sign in using the "TeXRA: Sign In" command.',
       );
     }
 
@@ -55,7 +53,7 @@ export class RemoteAgentLoader {
     const enabled = config.get<boolean>('enabled', true);
     if (!enabled) {
       throw new Error(
-        'Remote agents are disabled. Enable in settings: texra.remoteAgents.enabled',
+        'Remote agents are disabled. Enable them in settings: texra.remoteAgents.enabled',
       );
     }
 
@@ -65,10 +63,10 @@ export class RemoteAgentLoader {
       // Get auth token
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
-        throw new Error('Failed to get authentication token');
+        throw new Error('Authentication token unavailable. Try signing in again.');
       }
 
-      // Fetch agent config from edge function (using hardcoded URL)
+      // Fetch agent config from edge function
       const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
         method: 'POST',
         headers: {
@@ -80,14 +78,14 @@ export class RemoteAgentLoader {
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Session expired. Please sign in again.');
+          throw new Error('Session expired. Sign in again to continue.');
         } else if (response.status === 404) {
           throw new Error(
-            `Remote agent "${agentName}" not found or you don't have access to it.`,
+            `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
           );
         } else if (response.status === 403) {
           throw new Error(
-            `Access denied to remote agent "${agentName}". You may need to upgrade your account.`,
+            `Access denied to agent "${agentName}". Upgrade your account for access.`,
           );
         } else {
           let errorText = 'Unknown error';
@@ -97,7 +95,7 @@ export class RemoteAgentLoader {
             logger.warn(CHANNEL, 'Failed to read error response body');
           }
           throw new Error(
-            `Failed to load remote agent: ${response.statusText} - ${errorText}`,
+            `Failed to load agent: ${response.statusText} - ${errorText}`,
           );
         }
       }
@@ -106,10 +104,10 @@ export class RemoteAgentLoader {
       const { config: yamlContent, name, description } = responseData;
 
       if (!yamlContent) {
-        throw new Error('No configuration returned from server');
+        throw new Error('Server returned empty configuration. Contact support.');
       }
 
-      // Parse YAML (in memory only, never written to disk)
+      // Parse YAML configuration
       logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
       const parsed = yaml.parse(yamlContent);
       const validated = AgentDefinitionSchema.parse(parsed);
@@ -117,9 +115,6 @@ export class RemoteAgentLoader {
       // Extract settings and prompts
       const settings: Partial<AgentSetting> = validated.settings || {};
       const prompts: Partial<AgentPrompt> = validated.prompts || {};
-
-      // TODO: Handle inheritance for remote agents if needed
-      // For now, remote agents should be self-contained
 
       // Resolve tool names to definitions
       if (Array.isArray(settings.tools)) {
@@ -140,11 +135,10 @@ export class RemoteAgentLoader {
         });
       }
 
-      // Validate and parse
       const validatedSettings = parseAgentSetting(settings);
       const validatedPrompts = AgentPromptSchema.parse(prompts);
 
-      // Fetch metadata from database
+      // Fetch metadata
       const metadata = await this.getAgentMetadata(agentName);
 
       logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
@@ -168,7 +162,6 @@ export class RemoteAgentLoader {
         CHANNEL,
         `Failed to load remote agent "${agentName}": ${errorMessage}`,
       );
-      // Rethrow the original error to avoid duplicate prefixes
       throw error;
     }
   }
@@ -262,20 +255,4 @@ export class RemoteAgentLoader {
     }
   }
 
-  /**
-   * Check if a given agent name is a remote agent.
-   * Uses the RemoteAgentRegistry instead of prefix checking.
-   * @deprecated Use RemoteAgentRegistry.isRemote() instead
-   */
-  static isRemoteAgent(agentName: string): boolean {
-    return RemoteAgentRegistry.isRemote(agentName);
-  }
-
-  /**
-   * Extract the actual agent name (strip remote:// prefix if present).
-   * @deprecated Use RemoteAgentRegistry.getCleanName() instead
-   */
-  static extractRemoteAgentName(agentRef: string): string {
-    return RemoteAgentRegistry.getCleanName(agentRef);
-  }
 }
