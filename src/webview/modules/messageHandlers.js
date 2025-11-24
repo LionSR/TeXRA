@@ -231,20 +231,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml ?? '';
-    if (previous) {
-      selectElement.value = previous;
-      if (
-        selectElement.value !== previous &&
-        getSelectOptionElements(selectElement).length > 0
-      ) {
-        const fallbackOption = getSelectOptionElements(selectElement).find(
-          (option) => !option.disabled,
-        );
-        if (fallbackOption) {
-          selectElement.value = fallbackOption.value;
-        }
-      }
-    }
+    this._restoreAgentSelection(selectElement, previous);
 
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
@@ -319,6 +306,49 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const element = this._getElement(selectId);
     return isSelectLikeElement(element) ? element : null;
+  }
+
+  _getSessionTypeForSelect(selectElement) {
+    if (!selectElement?.id) {
+      return null;
+    }
+    const entry = Object.entries(AGENT_SELECT_IDS).find(
+      ([, id]) => id === selectElement.id,
+    );
+    return entry ? entry[0] : null;
+  }
+
+  _getSavedAgentValue(sessionType) {
+    const state = mainViewState.get?.() ?? {};
+    if (sessionType === SESSION_TYPES.TOOL_USE) {
+      return state.toolUseAgent ?? state.agent ?? '';
+    }
+    if (sessionType === SESSION_TYPES.WORKFLOW) {
+      return state.workflowAgent ?? state.agent ?? '';
+    }
+    return '';
+  }
+
+  _restoreAgentSelection(selectElement, previousValue) {
+    const sessionType = this._getSessionTypeForSelect(selectElement);
+    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
+    const candidates = [savedValue, previousValue].filter(Boolean);
+
+    const options = getSelectOptionElements(selectElement);
+    const match = candidates.find((value) =>
+      options.some((option) => option.value === value),
+    );
+
+    if (match) {
+      selectElement.value = match;
+      return;
+    }
+
+    const fallbackOption =
+      options.find((option) => !option.disabled) ?? options[0];
+    if (fallbackOption) {
+      selectElement.value = fallbackOption.value;
+    }
   }
 
   _getActiveAgentSelection() {
