@@ -7,7 +7,6 @@ import {
   ChatCompletionContentPart,
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
-  ChatCompletionCreateParamsNonStreaming,
   ChatCompletionCreateParamsStreaming,
   ChatCompletionMessage,
   ChatCompletionMessageCustomToolCall,
@@ -60,6 +59,10 @@ import {
   describeAttachments,
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
+import {
+  executeStreamingWithRetry,
+  executeWithRequestRetry,
+} from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
@@ -158,22 +161,13 @@ export class ModelHandlerOpenAI<
     return null;
   }
 
-  /** Creates a chat completion with model-specific parameters. */
-  async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
-  ): Promise<ChatCompletion> {
-    const {
-      client,
-      messages,
-      temperature,
-      systemPrompt,
-      endTag,
-      signal,
-      tools,
-    } = options;
-    // Get streaming config
-    const useStreaming = this.getStreamingConfig();
-
+  protected buildChatBaseParams(
+    messages: ChatCompletionMessageParam[],
+    temperature?: number,
+    systemPrompt?: string,
+    endTag?: string,
+    tools?: ToolDefinition[],
+  ): ChatCompletionRequestBase {
     const baseParams: ChatCompletionRequestBase = {
       model: this.config.fullName,
       messages,
@@ -200,7 +194,6 @@ export class ModelHandlerOpenAI<
     }
 
     if (tools && tools.length > 0) {
-      // Disable parallel tool calls for now; we dispatch sequentially.
       (baseParams as any).parallel_tool_calls = false;
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
@@ -216,7 +209,16 @@ export class ModelHandlerOpenAI<
       baseParams.max_tokens = DEEPSEEK_OFFICIAL_API_MAX_TOKENS;
     }
 
-    // Calculate input tokens using the helper method
+    this.applyTokenHeuristics(baseParams, messages, systemPrompt);
+
+    return baseParams;
+  }
+
+  protected applyTokenHeuristics(
+    baseParams: ChatCompletionRequestBase,
+    messages: ChatCompletionMessageParam[],
+    systemPrompt?: string,
+  ): void {
     try {
       const approximateInputTokens = this._calculateApproximateTokens(
         messages,
@@ -266,17 +268,42 @@ export class ModelHandlerOpenAI<
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         { data: err },
       );
-      // Decide if you want to throw here or let the API call potentially fail
+    }
+  }
+
+  protected finalizeStreams(
+    thinking: ReturnType<ModelHandler['createThinkingStream']>,
+    output: ReturnType<ModelHandler['createOutputStream']> | undefined,
+    finalResponse: ChatCompletion,
+  ): void {
+    const finalReasoning = this.processThinkingBlock(finalResponse);
+    if (finalReasoning === null) {
+      thinking.finalize();
+    } else {
+      thinking.finalize(finalReasoning);
     }
 
-    if (useStreaming) {
-      const streamParams: ChatCompletionStreamParams = {
-        ...baseParams,
-        stream: true,
-        stream_options: { include_usage: true },
-      };
+    const finalOutput = finalResponse.choices?.[0]?.message?.content ?? '';
+    output?.finalize(finalOutput);
+  }
 
-      try {
+  protected async executeStreamingChat(
+    client: OpenAI,
+    baseParams: ChatCompletionRequestBase,
+    signal?: AbortSignal,
+  ): Promise<ChatCompletion> {
+    const streamParams: ChatCompletionStreamParams = {
+      ...baseParams,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+
+    return executeStreamingWithRetry({
+      logger: this.logger,
+      model: this.config.name,
+      operation: 'openai.chat.completions.stream',
+      signal,
+      create: async () => {
         const stream = await client.chat.completions.stream(streamParams, {
           signal,
         });
@@ -284,7 +311,6 @@ export class ModelHandlerOpenAI<
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;
-        // Allow subclasses to stitch streaming deltas into a final message shape.
         const streamingAggregator = this.createStreamingAggregator();
 
         const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
@@ -307,61 +333,79 @@ export class ModelHandlerOpenAI<
         stream.on('content.delta', onContentDelta);
         stream.on('chunk', onChunk);
 
+        const cleanup = (): void => {
+          stream.off('content.delta', onContentDelta);
+          stream.off('chunk', onChunk);
+        };
+
         try {
           const sdkFinalResponse = await stream.finalChatCompletion();
           const finalResponse = streamingAggregator
             ? streamingAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
-          const finalReasoning = this.processThinkingBlock(finalResponse);
-          if (finalReasoning === null) {
-            thinking.finalize();
-          } else {
-            thinking.finalize(finalReasoning);
-          }
-          const finalOutput =
-            finalResponse.choices?.[0]?.message?.content ?? '';
-          output?.finalize(finalOutput);
-          return finalResponse;
-        } finally {
-          stream.off('content.delta', onContentDelta);
-          stream.off('chunk', onChunk);
+
+          this.finalizeStreams(thinking, output, finalResponse);
+          return { result: finalResponse, cleanup };
+        } catch (error) {
+          output?.finalize();
+          thinking.finalize();
+          cleanup();
+          throw error;
         }
-      } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Error in createResponse(streaming): ${formattedError.message}`,
+      },
+    });
+  }
+
+  protected async executeNonStreamingChat(
+    client: OpenAI,
+    baseParams: ChatCompletionRequestBase,
+    signal?: AbortSignal,
+  ): Promise<ChatCompletion> {
+    return executeWithRequestRetry(
+      {
+        logger: this.logger,
+        model: this.config.name,
+        operation: 'openai.chat.completions.create',
+        signal,
+      },
+      () =>
+        client.chat.completions.create(
           {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
+            ...baseParams,
+            stream: false,
           },
-        );
-        throw err;
-      }
-    } else {
-      try {
-        const nonStreamingParams: ChatCompletionCreateParamsNonStreaming = {
-          ...baseParams,
-          stream: false,
-        };
-        const response = await client.chat.completions.create(
-          nonStreamingParams,
-          {
-            signal,
-          },
-        );
-        return response;
-      } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Error in createResponse: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
-        );
-        throw err;
-      }
+          { signal },
+        ),
+    );
+  }
+
+  /** Creates a chat completion with model-specific parameters. */
+  async createResponse(
+    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
+  ): Promise<ChatCompletion> {
+    const {
+      client,
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      signal,
+      tools,
+    } = options;
+    const useStreaming = this.getStreamingConfig();
+    const baseParams = this.buildChatBaseParams(
+      messages,
+      temperature,
+      systemPrompt,
+      endTag,
+      tools,
+    );
+
+    if (useStreaming) {
+      return this.executeStreamingChat(client, baseParams, signal);
     }
+
+    return this.executeNonStreamingChat(client, baseParams, signal);
   }
 
   /**
