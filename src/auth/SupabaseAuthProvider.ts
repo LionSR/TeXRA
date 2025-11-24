@@ -8,9 +8,7 @@ import {
 } from './config';
 import type { SupabaseUriHandler } from './UriHandler';
 
-/**
- * Supabase session data stored in VS Code SecretStorage.
- */
+/** Session data stored in VS Code SecretStorage. */
 interface SupabaseSession {
   id: string;
   accessToken: string;
@@ -24,11 +22,7 @@ interface SupabaseSession {
 
 /**
  * Authentication provider for Supabase integration.
- * Implements VS Code's AuthenticationProvider interface to manage
- * user sessions for remote agent access.
- *
- * Uses TeXRA's official Supabase backend (hardcoded credentials).
- * Similar to how GitHub Copilot works - users sign in to the official service.
+ * Manages user sessions for remote agent access.
  */
 export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private static readonly SESSION_KEY = 'texra.supabase.session';
@@ -43,8 +37,6 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private refreshPromise: Promise<SupabaseSession | null> | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
-    // Initialize Supabase client with hardcoded config and context
-    // Context is needed to access secret storage for refresh tokens
     SupabaseClient.initialize(
       SUPABASE_CONFIG.url,
       SUPABASE_CONFIG.anonKey,
@@ -53,25 +45,17 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     SupabaseAuthProvider.instance = this;
   }
 
-  /**
-   * Get the singleton instance of the auth provider.
-   * Used by commands to trigger sign out properly.
-   */
+  /** Get singleton instance for sign out operations. */
   static getInstance(): SupabaseAuthProvider | null {
     return this.instance;
   }
 
-  /**
-   * Set the URI handler for OAuth callbacks.
-   * Called during extension initialization.
-   */
+  /** Set URI handler for OAuth callbacks. */
   setUriHandler(handler: SupabaseUriHandler): void {
     this.uriHandler = handler;
   }
 
-  /**
-   * Get existing sessions from secure storage.
-   */
+  /** Get sessions from secure storage. */
   async getSessions(
     scopes?: readonly string[],
     options?: vscode.AuthenticationProviderSessionOptions,
@@ -86,19 +70,15 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     try {
       const session: SupabaseSession = JSON.parse(sessionData);
 
-      // Check if session is expired
       if (Date.now() >= session.expiresAt) {
-        // Try to refresh
         const refreshed = await this.refreshSession(session);
         if (!refreshed) {
           await this.removeSession(session.id);
-          // Notify user that session expired and offer to re-authenticate
           const action = await vscode.window.showWarningMessage(
             'Your TeXRA session has expired. Please sign in again to use remote agents.',
             'Sign In',
           );
           if (action === 'Sign In') {
-            // Trigger re-authentication
             try {
               await vscode.commands.executeCommand('texra.auth.signIn');
             } catch (error) {
@@ -119,13 +99,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       );
       if (error || !data.user) {
         await this.removeSession(session.id);
-        // Notify user that session is invalid and offer to re-authenticate
         const action = await vscode.window.showWarningMessage(
           'Your TeXRA session is no longer valid. Please sign in again to use remote agents.',
           'Sign In',
         );
         if (action === 'Sign In') {
-          // Trigger re-authentication
           try {
             await vscode.commands.executeCommand('texra.auth.signIn');
           } catch (error) {
@@ -149,18 +127,13 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /**
-   * Create a new authentication session via OAuth.
-   * Uses GitHub as the default provider (can support Google/GitLab too).
-   */
+  /** Create authentication session via OAuth. */
   async createSession(
     scopes: readonly string[],
   ): Promise<vscode.AuthenticationSession> {
     try {
       const supabase = SupabaseClient.getClient();
 
-      // Start OAuth flow with default provider (GitHub)
-      // TODO: Add UI to let user choose provider if multiple are configured in Supabase
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: DEFAULT_OAUTH_PROVIDER,
         options: {
@@ -170,14 +143,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
       if (error || !data.url) {
         throw new Error(
-          `Failed to initiate OAuth: ${error?.message || 'Unknown error'}`,
+          `OAuth initialization failed: ${error?.message || 'Unknown error'}. Try again.`,
         );
       }
 
-      // Open OAuth URL in browser
       await vscode.env.openExternal(vscode.Uri.parse(data.url));
-
-      // Show message while waiting for authentication
       await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -186,20 +156,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         },
         async (progress, token) => {
           progress.report({ message: 'Waiting for authentication...' });
-
-          // Wait for callback with session
           const session = await this.waitForSession(token);
           if (!session) {
-            throw new Error('Authentication was cancelled or timed out');
+            throw new Error('Authentication cancelled or timed out. Try again.');
           }
-
-          // Store session
           await this.context.secrets.store(
             SupabaseAuthProvider.SESSION_KEY,
             JSON.stringify(session),
           );
-
-          // Notify listeners
           this._onDidChangeSessions.fire({
             added: [this.toVSCodeSession(session)],
             removed: [],
@@ -209,11 +173,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           return this.toVSCodeSession(session);
         },
       );
-
-      // Get the stored session
       const sessions = await this.getSessions();
       if (sessions.length === 0) {
-        throw new Error('Failed to create session');
+        throw new Error('Session creation failed. Try signing in again.');
       }
       return sessions[0];
     } catch (error) {
@@ -223,18 +185,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /**
-   * Remove an authentication session.
-   */
+  /** Remove authentication session. */
   async removeSession(sessionId: string): Promise<void> {
     try {
-      // Sign out from Supabase
       await SupabaseClient.getClient().auth.signOut();
-
-      // Remove from storage
       await this.context.secrets.delete(SupabaseAuthProvider.SESSION_KEY);
-
-      // Notify listeners
       this._onDidChangeSessions.fire({
         added: [],
         removed: [
@@ -256,21 +211,18 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     }
   }
 
-  /**
-   * Wait for OAuth callback via URI handler.
-   */
+  /** Wait for OAuth callback. */
   private async waitForSession(
     cancellationToken: vscode.CancellationToken,
   ): Promise<SupabaseSession | null> {
     if (!this.uriHandler) {
-      throw new Error('URI handler not initialized');
+      throw new Error('OAuth handler not initialized. Restart the extension.');
     }
 
     const timeout = 120000; // 2 minutes
     const startTime = Date.now();
 
     return new Promise((resolve, reject) => {
-      // Track cleanup state to avoid disposing already-disposed subscriptions
       let isCleanedUp = false;
       const cleanup = () => {
         if (isCleanedUp) return;
@@ -279,22 +231,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         subscription.dispose();
         cancellationListener.dispose();
       };
-
-      // Listen for OAuth callback (must be declared before timeout/cancellation handlers use it)
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
           cleanup();
 
           try {
-            // Parse OAuth callback parameters from fragment (hash)
-            // Supabase OAuth uses implicit flow which puts tokens in the fragment, not query
             const params = new URLSearchParams(uri.fragment);
             const accessToken = params.get('access_token');
             const refreshToken = params.get('refresh_token');
             const expiresIn = params.get('expires_in');
             const tokenType = params.get('token_type');
-
-            // Check for error in callback
             const error = params.get('error');
             const errorDescription = params.get('error_description');
             if (error) {
@@ -311,11 +257,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
                 'SupabaseAuthProvider',
                 `Missing tokens in OAuth callback. Has fragment: ${!!uri.fragment}, Has query: ${!!uri.query}`,
               );
-              reject(new Error('Missing tokens in OAuth callback'));
+              reject(new Error('OAuth callback missing tokens. Try again.'));
               return;
             }
-
-            // Get user info from access token
             const supabase = SupabaseClient.getClient();
             const { data, error: userError } =
               await supabase.auth.getUser(accessToken);
@@ -323,13 +267,11 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
             if (userError || !data.user) {
               reject(
                 new Error(
-                  `Failed to get user info: ${userError?.message || 'Unknown error'}`,
+                  `User verification failed: ${userError?.message || 'Unknown error'}. Try again.`,
                 ),
               );
               return;
             }
-
-            // Calculate expiration time
             const expiresAt = expiresIn
               ? Date.now() + parseInt(expiresIn) * 1000
               : Date.now() + 3600000; // Default 1 hour
@@ -357,14 +299,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           }
         },
       );
-
-      // Set up timeout
       const timeoutHandle = setTimeout(() => {
         cleanup();
-        reject(new Error('Authentication timeout'));
+        reject(new Error('Authentication timed out. Try again.'));
       }, timeout);
-
-      // Listen for cancellation
       if (cancellationToken.isCancellationRequested) {
         cleanup();
         resolve(null);
@@ -380,37 +318,26 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     });
   }
 
-  /**
-   * Refresh an expired session.
-   * Uses a promise lock to prevent concurrent refresh attempts.
-   */
+  /** Refresh session with concurrency protection. */
   private async refreshSession(
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
-    // If a refresh is already in progress, wait for it
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
-
-    // Start a new refresh and store the promise
     this.refreshPromise = this._refreshSession(session).finally(() => {
       this.refreshPromise = null;
     });
 
     return this.refreshPromise;
   }
-
-  /**
-   * Internal method to actually perform the refresh.
-   */
   private async _refreshSession(
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     try {
-      const { data, error } =
-        await SupabaseClient.getClient().auth.refreshSession({
-          refresh_token: session.refreshToken,
-        });
+      const { data, error } = await SupabaseClient.getClient().auth.refreshSession({
+        refresh_token: session.refreshToken,
+      });
 
       if (error || !data.session) {
         return null;
@@ -446,13 +373,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return null;
     }
   }
-
-  /**
-   * Convert internal session to VS Code session format.
-   */
-  private toVSCodeSession(
-    session: SupabaseSession,
-  ): vscode.AuthenticationSession {
+  private toVSCodeSession(session: SupabaseSession): vscode.AuthenticationSession {
     return {
       id: session.id,
       accessToken: session.accessToken,
