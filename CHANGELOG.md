@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.6] - 2025-11-24
+
+### Improvements
+
+- Added Claude Opus 4.5 (thinking and regular) to the default model catalog,
+  VS Code settings, and documentation so the latest Anthropic tier is
+  available out of the box.
+
 ## [0.34.5] - 2025-11-21
 
 ### Improvements
