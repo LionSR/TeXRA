@@ -7,8 +7,7 @@ import * as vscode from 'vscode';
 import * as logger from '@logger/logUtils';
 
 /**
- * Singleton wrapper for Supabase client with authentication helpers.
- * Provides centralized access to Supabase services and user session management.
+ * Singleton Supabase client with authentication helpers.
  */
 export class SupabaseClient {
   private static instance: Client | null = null;
@@ -25,7 +24,7 @@ export class SupabaseClient {
     context?: vscode.ExtensionContext,
   ): void {
     if (!url || !anonKey) {
-      throw new Error('Supabase URL and anon key are required');
+      throw new Error('Supabase credentials missing. Check extension configuration.');
     }
     this.config = { url, anonKey };
     if (context) {
@@ -33,10 +32,8 @@ export class SupabaseClient {
     }
     this.instance = createClient(url, anonKey, {
       auth: {
-        // Disable persistence - we handle session via VS Code SecretStorage
-        // OAuth callbacks are captured via URI handler and tokens extracted from URL
-        persistSession: false,
-        autoRefreshToken: false, // We handle refresh manually via VS Code auth provider
+        persistSession: false, // VS Code manages session storage
+        autoRefreshToken: false, // Manual refresh via auth provider
       },
     });
   }
@@ -46,9 +43,7 @@ export class SupabaseClient {
    */
   static getClient(): Client {
     if (!this.instance) {
-      throw new Error(
-        'Supabase client not initialized. Call initialize() first.',
-      );
+      throw new Error('Supabase client not initialized. Restart the extension.');
     }
     return this.instance;
   }
@@ -74,24 +69,18 @@ export class SupabaseClient {
   }
 
   /**
-   * Get both access and refresh tokens from secure storage.
-   * This is needed when calling Supabase auth.setSession() which requires both tokens.
+   * Get access and refresh tokens from secure storage.
    */
   static async getSessionTokens(): Promise<{
     accessToken: string;
     refreshToken: string;
   } | null> {
     if (!this.context) {
-      logger.warn(
-        'SupabaseClient',
-        'Extension context not set, falling back to access token only',
-      );
+      logger.warn('SupabaseClient', 'Extension context not set');
       const accessToken = await this.getAccessToken();
       if (!accessToken) {
         return null;
       }
-      // If context not available, we can't get refresh token
-      // This shouldn't happen in normal operation
       return { accessToken, refreshToken: '' };
     }
 
@@ -144,7 +133,7 @@ export class SupabaseClient {
   }
 
   /**
-   * Get the current user's tier (free or premium).
+   * Get user tier (free or premium).
    */
   static async getUserTier(): Promise<'free' | 'premium'> {
     const tokens = await this.getSessionTokens();
@@ -153,7 +142,6 @@ export class SupabaseClient {
     }
 
     try {
-      // Set auth session for RLS - requires both tokens
       const client = this.getClient();
       await client.auth.setSession({
         access_token: tokens.accessToken,
@@ -186,9 +174,7 @@ export class SupabaseClient {
     return token !== null;
   }
 
-  /**
-   * Get configuration (for re-initialization if needed).
-   */
+  /** Get configuration for re-initialization. */
   static getConfig(): { url: string; anonKey: string } | null {
     return this.config;
   }
