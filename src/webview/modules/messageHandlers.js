@@ -218,6 +218,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
       }
     });
+
+    const selectedOption = getSelectedOptionElement(selectElement);
+    if (selectedOption?.dataset?.requiresKey === 'true') {
+      bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, {
+        provider: selectedOption.dataset?.provider,
+      });
+    } else {
+      bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER);
+    }
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
