@@ -36,18 +36,37 @@ export function registerAuthCommands(
  */
 async function browseRemoteAgents(): Promise<void> {
   try {
+    // Check authentication status first
+    const authStatus = await authCommands.getAuthStatus();
+
     // List available remote agents
     const agents = await RemoteAgentLoader.listRemoteAgents();
 
     if (agents.length === 0) {
-      const signIn = 'Sign In';
-      const choice = await vscode.window.showInformationMessage(
-        'No remote agents available. Sign in to access remote agents from the researcher access program.',
-        signIn,
-      );
+      if (!authStatus.authenticated) {
+        // User is not authenticated - prompt to sign in
+        const signIn = 'Sign In';
+        const choice = await vscode.window.showInformationMessage(
+          'No remote agents available. Sign in to access remote agents from the researcher access program.',
+          signIn,
+        );
 
-      if (choice === signIn) {
-        await vscode.commands.executeCommand('texra.auth.signIn');
+        if (choice === signIn) {
+          await vscode.commands.executeCommand('texra.auth.signIn');
+        }
+      } else {
+        // User is authenticated but no agents available - suggest contacting support
+        const contactSupport = 'Contact Support';
+        const choice = await vscode.window.showInformationMessage(
+          'No remote agents available for your account tier. Please contact contact@texra.ai for assistance.',
+          contactSupport,
+        );
+
+        if (choice === contactSupport) {
+          await vscode.env.openExternal(
+            vscode.Uri.parse('mailto:contact@texra.ai'),
+          );
+        }
       }
       return;
     }
