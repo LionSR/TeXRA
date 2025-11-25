@@ -34,6 +34,7 @@ export interface ToolUseCycleOptions<C = unknown>
   toolRegistry: Record<string, BaseTool<any>>;
   workspaceState: AgentWorkspaceState;
   modelName?: string;
+  agentName?: string;
 }
 
 export interface ToolUseCycleInput<C = unknown> {
