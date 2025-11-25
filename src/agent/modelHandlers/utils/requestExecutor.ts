@@ -58,7 +58,7 @@ export async function executeWithRequestRetry<T>(
     }
 
     try {
-      return await request();
+      return request();
     } catch (error) {
       const formatted = formatProviderHttpError(error);
       const statusCode = formatted.statusCode;
@@ -117,15 +117,12 @@ export async function executeWithRequestRetry<T>(
 }
 
 interface StreamingRetryOptions<T> extends RequestRetryOptions {
-  create: () => Promise<{ result: T; cleanup?: () => void }>;
+  create: () => Promise<T>;
 }
 
 export async function executeStreamingWithRetry<T>(
   options: StreamingRetryOptions<T>,
 ): Promise<T> {
   const { create, ...requestOptions } = options;
-  return executeWithRequestRetry(requestOptions, async () => {
-    const { result } = await create();
-    return result;
-  });
+  return executeWithRequestRetry(requestOptions, () => create());
 }
