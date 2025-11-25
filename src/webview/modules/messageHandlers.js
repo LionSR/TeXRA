@@ -26,7 +26,10 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { bannerManager } from './uiManagers/BannerManager.js';
-import { updateModelApiKeyBanner } from './uiManagers/apiKeyBannerUtils.js';
+import {
+  hideModelApiKeyBanner,
+  updateModelApiKeyBanner,
+} from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
@@ -78,8 +81,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         updateModelApiKeyBanner(this._getElement('model'), m, {
           forceShow: true,
         }),
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
-        bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => hideModelApiKeyBanner(),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
         bannerManager.showBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER, m),
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
