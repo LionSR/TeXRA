@@ -1,3 +1,7 @@
+import {
+  clearManualRetry,
+  registerManualRetry,
+} from '@agent/runtime/ManualRetryController';
 // Local imports - logging
 import {
   formatProviderHttpError,
@@ -14,11 +18,13 @@ interface RequestRetryOptions {
   signal?: AbortSignal;
   maxAttempts?: number;
   baseDelayMs?: number;
+  enableManualRetry?: boolean;
+  manualRetryKey?: string;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 1000;
-const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const RETRYABLE_STATUS_CODES = new Set([408, 429]);
 
 function shouldRetry(statusCode?: number): boolean {
   if (statusCode === undefined) {
@@ -36,6 +42,12 @@ export async function executeWithRequestRetry<T>(
 ): Promise<T> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS);
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_BACKOFF_MS;
+  const allowManualRetry = options.enableManualRetry ?? true;
+  const manualRetryKey = options.manualRetryKey ?? options.logger.channelId;
+
+  if (allowManualRetry && manualRetryKey) {
+    clearManualRetry(manualRetryKey);
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (options.signal?.aborted) {
@@ -57,6 +69,22 @@ export async function executeWithRequestRetry<T>(
       };
 
       if (!retryable) {
+        if (allowManualRetry && manualRetryKey) {
+          registerManualRetry(manualRetryKey, {
+            operation: options.operation,
+            logger: options.logger,
+            model: options.model,
+            run: () =>
+              executeWithRequestRetry(
+                {
+                  ...options,
+                  enableManualRetry: false,
+                },
+                request,
+              ),
+          });
+        }
+
         options.logger.error(
           `Error in ${options.operation}: ${formatted.message}`,
           {
@@ -94,8 +122,7 @@ export async function executeStreamingWithRetry<T>(
 ): Promise<T> {
   const { create, ...requestOptions } = options;
   return executeWithRequestRetry(requestOptions, async () => {
-    const { result, cleanup } = await create();
-    cleanup?.();
+    const { result } = await create();
     return result;
   });
 }
