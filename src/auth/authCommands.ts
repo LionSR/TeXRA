@@ -235,7 +235,8 @@ export async function showAccountMenu(): Promise<void> {
       const items = [
         {
           label: '$(sign-in) Sign In',
-          description: 'Sign in to access remote agents via the researcher access program',
+          description:
+            'Sign in to access remote agents via the researcher access program',
           action: 'signIn' as const,
         },
       ];
