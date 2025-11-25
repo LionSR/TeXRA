@@ -140,11 +140,16 @@ export class RemoteAgentLoader {
         const { config: yamlContent, name, description } = responseData;
 
         if (!yamlContent) {
-          throw new Error('Server returned empty configuration. Contact support.');
+          throw new Error(
+            'Server returned empty configuration. Contact support.',
+          );
         }
 
         // Parse YAML configuration
-        logger.debug(CHANNEL, `Parsing YAML for remote agent: ${candidateName}`);
+        logger.debug(
+          CHANNEL,
+          `Parsing YAML for remote agent: ${candidateName}`,
+        );
         const parsed = yaml.parse(yamlContent);
         const validated = AgentDefinitionSchema.parse(parsed);
 
@@ -309,5 +314,4 @@ export class RemoteAgentLoader {
       return null;
     }
   }
-
 }
