@@ -10,6 +10,7 @@ import {
   CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -150,6 +151,9 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
+      isRemote: options.agentName
+        ? RemoteAgentRegistry.isRemote(options.agentName)
+        : false,
     };
     const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: store.round.roundIndex,
@@ -225,6 +229,9 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       logger: options.logger,
       modelName: options.modelName,
       executionId: options.context.executionId,
+      isRemote: options.agentName
+        ? RemoteAgentRegistry.isRemote(options.agentName)
+        : false,
     };
     const debugFileOptions: CycleDebugFileOptions = {
       continuationCount: store.round.roundIndex,
