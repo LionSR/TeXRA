@@ -1579,7 +1579,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.70.1",
+    "@anthropic-ai/sdk": "^0.71.0",
     "@cantoo/pdf-lib": "^2.5.3",
     "@google/genai": "^1.30.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
