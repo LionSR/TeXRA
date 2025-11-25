@@ -4,6 +4,7 @@ import * as path from 'path';
 
 // Local imports
 import { AgentType } from '@agent/core/AgentDataclass';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -33,15 +34,18 @@ export function getStreamTabId(
   inputFile: string,
   options: StreamTabIdOptions = {},
 ): StreamTabId {
+  // Sanitize agent name by removing remote:// prefix to avoid file path issues
+  const cleanAgent = RemoteAgentRegistry.getCleanName(agent);
+
   if (options.agentType === AgentType.ToolUse) {
-    return formatToolUseStreamId(agent, model, options.executionId);
+    return formatToolUseStreamId(cleanAgent, model, options.executionId);
   }
 
   const agentName = options.useMultipleOutputs
-    ? agent.endsWith('_multiple')
-      ? agent
-      : `${agent}_multiple`
-    : agent;
+    ? cleanAgent.endsWith('_multiple')
+      ? cleanAgent
+      : `${cleanAgent}_multiple`
+    : cleanAgent;
   const baseName = inputFile ? path.basename(inputFile) : '';
   return `${agentName}@${model}: ${baseName}`;
 }
