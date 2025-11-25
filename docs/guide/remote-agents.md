@@ -4,12 +4,11 @@ Remote agents are cloud-hosted AI agents maintained by the TeXRA team that exten
 
 ## What Are Remote Agents?
 
-Remote agents are pre-configured AI assistants hosted in the cloud that you can access directly from TeXRA. Unlike built-in agents that come with the extension, remote agents:
+Remote agents are pre-configured AI assistants hosted in the cloud that you can access directly from TeXRA. Unlike built-in agents, they:
 
-- **Stay up-to-date**: Receive improvements and bug fixes without extension updates
-- **Specialized capabilities**: Access agents designed for specific research domains or workflows
-- **Community-tested**: Benefit from agents refined through real-world usage
-- **No local storage**: Agent configurations are loaded on-demand, keeping your extension lightweight
+- Receive updates automatically without requiring extension updates
+- Provide specialized capabilities for specific research domains
+- Load on-demand to keep your extension lightweight
 
 ## Getting Started
 
