@@ -6,6 +6,8 @@ import {
   isSelectLikeElement,
 } from '@common/domUtils.js';
 
+let apiKeyBannerState = { forced: false, visible: false };
+
 /**
  * Syncs the API key banner with the currently selected model option.
  *
@@ -20,27 +22,45 @@ export function updateModelApiKeyBanner(
   options = {},
 ) {
   const { forceShow = false } = options;
+  const wasForced = apiKeyBannerState.forced === true;
+  const persistForced = wasForced || forceShow;
 
   if (!isSelectLikeElement(selectElement)) {
     if (forceShow) {
       bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, bannerPayload);
+      apiKeyBannerState = { forced: persistForced, visible: true };
     }
     return;
   }
 
   const selectedOption = getSelectedOptionElement(selectElement);
-  const provider = bannerPayload.provider ?? selectedOption?.dataset?.provider;
   const requiresKey =
-    bannerPayload.requiresKey === true ||
-    selectedOption?.dataset?.requiresKey === 'true';
+    bannerPayload.requiresKey !== undefined
+      ? bannerPayload.requiresKey === true
+      : selectedOption?.dataset?.requiresKey === 'true';
+  const provider =
+    bannerPayload.provider ??
+    (requiresKey ? selectedOption?.dataset?.provider : undefined);
 
   if (forceShow || requiresKey) {
-    bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, {
-      ...bannerPayload,
-      provider,
-    });
+    const payload = provider
+      ? { ...bannerPayload, provider }
+      : { ...bannerPayload };
+
+    bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, payload);
+    apiKeyBannerState = { forced: persistForced, visible: true };
     return;
   }
 
+  if (persistForced) {
+    return;
+  }
+
+  bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER);
+  apiKeyBannerState = { forced: false, visible: false };
+}
+
+export function hideModelApiKeyBanner() {
+  apiKeyBannerState = { forced: false, visible: false };
   bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER);
 }
