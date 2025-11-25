@@ -200,6 +200,7 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
+  if (result.edits !== undefined) payload.edits = result.edits;
   if (result.files !== undefined) payload.files = result.files;
   return payload;
 }
