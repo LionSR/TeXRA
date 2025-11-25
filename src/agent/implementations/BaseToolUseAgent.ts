@@ -288,6 +288,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       workspaceState: store.workspace,
       modelName: this.agentConfig.model,
+      agentName: this.agentConfig.agent,
     };
   }
 

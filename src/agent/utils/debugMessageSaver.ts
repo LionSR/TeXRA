@@ -23,6 +23,8 @@ export interface DebugContext {
   executionId?: ExecutionId;
   /** Group ID for log correlation */
   groupId?: string;
+  /** Whether this is a remote agent (don't save messages to avoid leaking prompts) */
+  isRemote?: boolean;
 }
 
 /**
@@ -60,6 +62,8 @@ export interface SaveDebugParams {
  * Save debug objects (messages or responses) to a JSON file when
  * `texra.debug.saveDebugObjects` is enabled.
  *
+ * For remote agents, this function skips saving to avoid leaking prompts.
+ *
  * @param params - Parameters for saving the debug object
  */
 export async function maybeSaveDebugObject({
@@ -70,6 +74,11 @@ export async function maybeSaveDebugObject({
 }: SaveDebugParams): Promise<void> {
   const shouldSave = getConfig<boolean>('texra.debug.saveDebugObjects', false);
   if (!shouldSave) {
+    return;
+  }
+
+  // Skip saving for remote agents to avoid leaking prompts
+  if (context.isRemote) {
     return;
   }
 
