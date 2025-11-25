@@ -132,6 +132,7 @@ const baseConfig = {
               link: '/guide/agent-architecture.md',
             },
             { text: 'Built-in Agents', link: '/guide/built-in-agents.md' },
+            { text: 'Remote Agents', link: '/guide/remote-agents' },
             { text: 'Models', link: '/guide/models' },
             { text: 'File Management', link: '/guide/file-management' },
             {

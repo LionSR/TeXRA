@@ -8,6 +8,8 @@ export enum AgentDirectorySource {
   BuiltIn = 'builtIn',
   /** Built-in tool-use agents bundled with the extension. */
   BuiltInToolUse = 'builtInToolUse',
+  /** Remote agents loaded from Supabase (authenticated users only). */
+  Remote = 'remote',
 }
 
 /**
