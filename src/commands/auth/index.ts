@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as authCommands from '@/auth/authCommands';
 
@@ -41,7 +42,7 @@ async function browseRemoteAgents(): Promise<void> {
     if (agents.length === 0) {
       const signIn = 'Sign In';
       const choice = await vscode.window.showInformationMessage(
-        'No remote agents available. Sign in to access premium remote agents.',
+        'No remote agents available. Sign in to access remote agents from the researcher access program.',
         signIn,
       );
 
@@ -50,6 +51,10 @@ async function browseRemoteAgents(): Promise<void> {
       }
       return;
     }
+
+    // Register remote agents so they can be executed
+    const agentNames = agents.map((agent) => agent.name);
+    RemoteAgentRegistry.registerMultiple(agentNames);
 
     // Create quick pick items
     const items = agents.map((agent) => ({

@@ -72,15 +72,20 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
   // Fetch available remote agents and add them to the list
   // Wrap in try-catch to prevent remote agent failures from breaking local agent loading
   let remoteAgentNames: string[] = [];
-  try {
-    const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
-    remoteAgentNames = remoteAgents.map((agent) => agent.name);
 
-    // Register remote agents in the registry (no more remote:// prefix!)
-    RemoteAgentRegistry.registerMultiple(remoteAgentNames);
-  } catch (error) {
-    // Silently fail - user can still use local agents even if remote agent loading fails
-    // The listRemoteAgents method already handles logging
+  // Check if remote agents are enabled before fetching
+  const remoteEnabled = getConfig<boolean>('texra.remoteAgents.enabled', true);
+  if (remoteEnabled) {
+    try {
+      const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
+      remoteAgentNames = remoteAgents.map((agent) => agent.name);
+
+      // Register remote agents in the registry (no more remote:// prefix!)
+      RemoteAgentRegistry.registerMultiple(remoteAgentNames);
+    } catch (error) {
+      // Silently fail - user can still use local agents even if remote agent loading fails
+      // The listRemoteAgents method already handles logging
+    }
   }
 
   // Combine local and remote agents (using clean names)
