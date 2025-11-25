@@ -8,7 +8,7 @@ TeXRA uses Supabase for:
 
 - **User Authentication** - OAuth login (GitHub, Google, GitLab)
 - **Remote Agents** - Secure storage and access control for agent configurations
-- **Permissions** - Tier-based access (free vs premium users)
+- **Permissions** - Tier-based access (free vs researcher access program)
 
 **Important**: Users authenticate to **TeXRA's official Supabase service**, not their own. This guide is for **extension maintainers** who need to set up the TeXRA backend.
 
@@ -133,7 +133,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE profiles (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
-  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'premium')),
+  tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'researcher')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -144,7 +144,7 @@ CREATE TABLE remote_agents (
   name TEXT UNIQUE NOT NULL,
   description TEXT,
   storage_path TEXT NOT NULL,
-  visibility TEXT DEFAULT 'premium' CHECK (visibility IN ('public', 'premium', 'whitelist')),
+  visibility TEXT DEFAULT 'researcher' CHECK (visibility IN ('public', 'researcher', 'whitelist')),
   tags TEXT[],
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -198,9 +198,9 @@ CREATE POLICY "Users can view allowed agents"
   ON remote_agents FOR SELECT
   USING (
     visibility = 'public' OR
-    (visibility = 'premium' AND EXISTS (
+    (visibility = 'researcher' AND EXISTS (
       SELECT 1 FROM profiles
-      WHERE user_id = auth.uid() AND tier = 'premium'
+      WHERE user_id = auth.uid() AND tier = 'researcher'
     )) OR
     EXISTS (
       SELECT 1 FROM agent_whitelist
@@ -265,19 +265,19 @@ CREATE TRIGGER on_auth_user_created
 5. Paste this policy:
 
 ```sql
-CREATE POLICY "Premium users can read agent configs"
+CREATE POLICY "Researcher access users can read agent configs"
 ON storage.objects FOR SELECT
 USING (
   bucket_id = 'agent-configs' AND
   (
     -- Public agents (in public/ folder)
     (storage.foldername(name))[1] = 'public' OR
-    -- Premium agents (requires premium tier)
+    -- Researcher access agents (requires researcher tier)
     (
-      (storage.foldername(name))[1] = 'premium' AND
+      (storage.foldername(name))[1] = 'researcher' AND
       EXISTS (
         SELECT 1 FROM profiles
-        WHERE user_id = auth.uid() AND tier = 'premium'
+        WHERE user_id = auth.uid() AND tier = 'researcher'
       )
     ) OR
     -- Whitelisted agents
@@ -480,9 +480,9 @@ The extension will now use the configured credentials. Users don't need to confi
 2. In Supabase dashboard, go to **Storage** → `agent-configs`
 3. Create folder structure:
    - `public/` - for free agents
-   - `premium/` - for premium agents
+   - `researcher/` - for researcher access program agents
    - `whitelist/` - for whitelisted agents
-4. Upload your YAML file to the appropriate folder (e.g., `premium/advanced-researcher.yaml`)
+4. Upload your YAML file to the appropriate folder (e.g., `researcher/advanced-researcher.yaml`)
 
 ### 2. Add Agent Metadata to Database
 
@@ -493,8 +493,8 @@ INSERT INTO remote_agents (name, description, storage_path, visibility, tags)
 VALUES (
   'advanced-researcher',
   'AI-powered research assistant for academic papers',
-  'premium/advanced-researcher.yaml',
-  'premium',
+  'researcher/advanced-researcher.yaml',
+  'researcher',
   ARRAY['research', 'academic', 'writing']
 );
 ```
@@ -503,7 +503,7 @@ VALUES (
 
 ## Part 8: User Management
 
-### 1. Upgrade User to Premium
+### 1. Grant User Researcher Access
 
 In **SQL Editor**:
 
@@ -511,9 +511,9 @@ In **SQL Editor**:
 -- Get user's ID first
 SELECT user_id, email FROM profiles;
 
--- Upgrade specific user to premium
+-- Grant specific user researcher access
 UPDATE profiles
-SET tier = 'premium'
+SET tier = 'researcher'
 WHERE email = 'user@example.com';
 ```
 

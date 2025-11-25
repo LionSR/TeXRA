@@ -133,9 +133,9 @@ export class SupabaseClient {
   }
 
   /**
-   * Get user tier (free or premium).
+   * Get user tier (free or researcher).
    */
-  static async getUserTier(): Promise<'free' | 'premium'> {
+  static async getUserTier(): Promise<'free' | 'researcher'> {
     const tokens = await this.getSessionTokens();
     if (!tokens) {
       return 'free';
@@ -158,7 +158,7 @@ export class SupabaseClient {
         logger.error('SupabaseClient', `Error fetching user tier: ${errorMsg}`);
         return 'free';
       }
-      return (data.tier as 'free' | 'premium') || 'free';
+      return (data.tier as 'free' | 'researcher') || 'free';
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error('SupabaseClient', `Error getting user tier: ${errorMsg}`);

@@ -74,7 +74,7 @@ We've successfully implemented a complete authentication and remote agents syste
 
 - Agents stored in Supabase Storage (never on disk)
 - Row-Level Security (RLS) for access control
-- Tier-based permissions (free vs premium)
+- Tier-based permissions (free vs researcher access program)
 - Optional per-user whitelisting
 - Metadata database for agent discovery
 
@@ -163,7 +163,7 @@ We've successfully implemented a complete authentication and remote agents syste
 
 2. **Row-Level Security**
    - Database enforces access at PostgreSQL level
-   - Premium agents only visible to premium users
+   - Researcher agents only visible to researcher access program users
    - Whitelist table allows exceptions
 
 3. **Edge Function Decryption**
@@ -219,9 +219,9 @@ We've successfully implemented a complete authentication and remote agents syste
 3. **Add Your First Remote Agent**:
 
    ```bash
-   # Upload YAML to Supabase Storage: premium/my-agent.yaml
+   # Upload YAML to Supabase Storage: researcher/my-agent.yaml
    # Add metadata to database
-   # Test with: remote://my-agent
+   # Test with agent name: my-agent
    ```
 
 4. **Optional Enhancements**:

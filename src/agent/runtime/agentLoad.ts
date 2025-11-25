@@ -151,6 +151,7 @@ export async function loadAgentSettingAndPrompts(
       );
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
         resolution.resolvedName,
+        { preferMultiple: options?.preferMultiple },
       );
 
       // Remote agents are already fully processed (tools resolved, validated)
