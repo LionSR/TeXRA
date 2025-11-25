@@ -1,14 +1,44 @@
+import * as vscode from 'vscode';
+
 /**
  * Registry tracking remote agent status without prefix markers.
+ * State is persisted to ExtensionContext.globalState for resilience across VS Code reloads.
  */
 class RemoteAgentRegistryClass {
+  private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry';
   private remoteAgents = new Set<string>();
+  private context: vscode.ExtensionContext | null = null;
+
+  /**
+   * Initialize the registry with ExtensionContext and restore persisted state.
+   */
+  initialize(context: vscode.ExtensionContext): void {
+    this.context = context;
+    const persisted = context.globalState.get<string[]>(
+      RemoteAgentRegistryClass.STORAGE_KEY,
+      [],
+    );
+    this.remoteAgents = new Set(persisted);
+  }
+
+  /**
+   * Persist current state to ExtensionContext.globalState.
+   */
+  private async persist(): Promise<void> {
+    if (this.context) {
+      await this.context.globalState.update(
+        RemoteAgentRegistryClass.STORAGE_KEY,
+        Array.from(this.remoteAgents),
+      );
+    }
+  }
 
   /**
    * Register an agent as remote.
    */
   register(agentName: string): void {
     this.remoteAgents.add(agentName);
+    void this.persist();
   }
 
   /**
@@ -16,6 +46,7 @@ class RemoteAgentRegistryClass {
    */
   registerMultiple(agentNames: string[]): void {
     agentNames.forEach((name) => this.remoteAgents.add(name));
+    void this.persist();
   }
 
   /**
@@ -41,6 +72,7 @@ class RemoteAgentRegistryClass {
    */
   unregister(agentName: string): void {
     this.remoteAgents.delete(agentName);
+    void this.persist();
   }
 
   /**
@@ -48,6 +80,7 @@ class RemoteAgentRegistryClass {
    */
   clear(): void {
     this.remoteAgents.clear();
+    void this.persist();
   }
 
   /**
