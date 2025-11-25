@@ -133,10 +133,11 @@ const OUTPUT_ACTION_BUTTONS = [
 ];
 
 const SHARED_TOOLBAR_PREFIX = [STOP_STREAM_BUTTON, RESTORE_STATE_BUTTON];
+const BASE_TOOLBAR = [...SHARED_TOOLBAR_PREFIX];
 
 /** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
-  ...SHARED_TOOLBAR_PREFIX,
+  ...BASE_TOOLBAR,
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
     icon: 'debug-start',
@@ -158,11 +159,7 @@ const WORKFLOW_TOOLBAR = [
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
-const TOOL_USE_TOOLBAR = [
-  ...SHARED_TOOLBAR_PREFIX,
-  ...OUTPUT_ACTION_BUTTONS,
-  { ...OPEN_TASK_STORAGE_BUTTON },
-];
+const TOOL_USE_TOOLBAR = [...BASE_TOOLBAR, { ...OPEN_TASK_STORAGE_BUTTON }];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
 export const TOOLBAR_BUTTONS = {
