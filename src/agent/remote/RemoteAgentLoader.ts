@@ -21,7 +21,7 @@ export interface RemoteAgentMetadata {
   name: string;
   description: string;
   tags: string[];
-  visibility: 'public' | 'premium' | 'whitelist';
+  visibility: 'public' | 'researcher' | 'whitelist';
 }
 
 export interface RemoteAgentConfig {
@@ -38,8 +38,13 @@ export interface RemoteAgentConfig {
 export class RemoteAgentLoader {
   /**
    * Load a remote agent configuration by name.
+   * Supports _multiple variant: if agentName ends with _multiple, tries to load
+   * the _multiple variant first, then falls back to base agent if not found.
    */
-  static async loadRemoteAgent(agentName: string): Promise<RemoteAgentConfig> {
+  static async loadRemoteAgent(
+    agentName: string,
+    options?: { preferMultiple?: boolean },
+  ): Promise<RemoteAgentConfig> {
     // Check if user is authenticated
     const isAuth = await SupabaseClient.isAuthenticated();
     if (!isAuth) {
@@ -57,113 +62,163 @@ export class RemoteAgentLoader {
       );
     }
 
-    logger.info(CHANNEL, `Loading remote agent: ${agentName}`);
+    const preferMultiple = options?.preferMultiple ?? false;
 
-    try {
-      // Get auth token
-      const token = await SupabaseClient.getAccessToken();
-      if (!token) {
-        throw new Error('Authentication token unavailable. Try signing in again.');
-      }
+    // Build candidate names: if preferMultiple, try _multiple variant first
+    const candidateNames: string[] = [];
+    if (preferMultiple) {
+      const multipleName = agentName.endsWith('_multiple')
+        ? agentName
+        : `${agentName}_multiple`;
+      candidateNames.push(multipleName);
+    }
+    candidateNames.push(agentName);
 
-      // Fetch agent config from edge function
-      const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ agentName }),
-      });
+    logger.info(
+      CHANNEL,
+      `Loading remote agent: ${agentName} (preferMultiple: ${preferMultiple}, candidates: ${candidateNames.join(', ')})`,
+    );
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Session expired. Sign in again to continue.');
-        } else if (response.status === 404) {
+    // Try each candidate name in order
+    let lastError: Error | null = null;
+    for (const candidateName of candidateNames) {
+      try {
+        // Get auth token
+        const token = await SupabaseClient.getAccessToken();
+        if (!token) {
           throw new Error(
-            `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
-          );
-        } else if (response.status === 403) {
-          throw new Error(
-            `Access denied to agent "${agentName}". Upgrade your account for access.`,
-          );
-        } else {
-          let errorText = 'Unknown error';
-          try {
-            errorText = await response.text();
-          } catch (error) {
-            logger.warn(CHANNEL, 'Failed to read error response body');
-          }
-          throw new Error(
-            `Failed to load agent: ${response.statusText} - ${errorText}`,
+            'Authentication token unavailable. Try signing in again.',
           );
         }
-      }
 
-      const responseData = await response.json();
-      const { config: yamlContent, name, description } = responseData;
-
-      if (!yamlContent) {
-        throw new Error('Server returned empty configuration. Contact support.');
-      }
-
-      // Parse YAML configuration
-      logger.debug(CHANNEL, `Parsing YAML for remote agent: ${agentName}`);
-      const parsed = yaml.parse(yamlContent);
-      const validated = AgentDefinitionSchema.parse(parsed);
-
-      // Extract settings and prompts
-      const settings: Partial<AgentSetting> = validated.settings || {};
-      const prompts: Partial<AgentPrompt> = validated.prompts || {};
-
-      // Resolve tool names to definitions
-      if (Array.isArray(settings.tools)) {
-        const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-        settings.tools = (settings.tools as any[]).map((item) => {
-          if (typeof item === 'string') {
-            const tool = DEFAULT_TOOL_REGISTRY[item];
-            if (!tool) {
-              logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
-              return { name: item } as ToolDefinition;
-            }
-            return tool.definition;
-          }
-          if (!DEFAULT_TOOL_REGISTRY[item.name]) {
-            logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
-          }
-          return item as ToolDefinition;
+        // Fetch agent config from edge function
+        const response = await fetch(SUPABASE_CONFIG.edgeFunctionUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ agentName: candidateName }),
         });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error('Session expired. Sign in again to continue.');
+          } else if (response.status === 404) {
+            // If not found and we have more candidates to try, continue to next
+            if (candidateName !== candidateNames[candidateNames.length - 1]) {
+              logger.debug(
+                CHANNEL,
+                `Agent variant "${candidateName}" not found, trying next candidate`,
+              );
+              lastError = new Error(
+                `Agent variant "${candidateName}" not found`,
+              );
+              continue;
+            }
+            throw new Error(
+              `Agent "${agentName}" not found or access denied. Verify the agent name and your permissions.`,
+            );
+          } else if (response.status === 403) {
+            throw new Error(
+              `Access denied to agent "${agentName}". Upgrade your account for access.`,
+            );
+          } else {
+            let errorText = 'Unknown error';
+            try {
+              errorText = await response.text();
+            } catch (error) {
+              logger.warn(CHANNEL, 'Failed to read error response body');
+            }
+            throw new Error(
+              `Failed to load agent: ${response.statusText} - ${errorText}`,
+            );
+          }
+        }
+
+        const responseData = await response.json();
+        const { config: yamlContent, name, description } = responseData;
+
+        if (!yamlContent) {
+          throw new Error('Server returned empty configuration. Contact support.');
+        }
+
+        // Parse YAML configuration
+        logger.debug(CHANNEL, `Parsing YAML for remote agent: ${candidateName}`);
+        const parsed = yaml.parse(yamlContent);
+        const validated = AgentDefinitionSchema.parse(parsed);
+
+        // Extract settings and prompts
+        const settings: Partial<AgentSetting> = validated.settings || {};
+        const prompts: Partial<AgentPrompt> = validated.prompts || {};
+
+        // Resolve tool names to definitions
+        if (Array.isArray(settings.tools)) {
+          const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
+          settings.tools = (settings.tools as any[]).map((item) => {
+            if (typeof item === 'string') {
+              const tool = DEFAULT_TOOL_REGISTRY[item];
+              if (!tool) {
+                logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
+                return { name: item } as ToolDefinition;
+              }
+              return tool.definition;
+            }
+            if (!DEFAULT_TOOL_REGISTRY[item.name]) {
+              logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
+            }
+            return item as ToolDefinition;
+          });
+        }
+
+        const validatedSettings = parseAgentSetting(settings);
+        const validatedPrompts = AgentPromptSchema.parse(prompts);
+
+        // Fetch metadata for the original agent name (not the candidate variant)
+        const metadata = await this.getAgentMetadata(agentName);
+
+        logger.info(
+          CHANNEL,
+          `Successfully loaded remote agent: ${agentName} (resolved to ${candidateName})`,
+        );
+
+        return {
+          name: validated.name || agentName,
+          settings: validatedSettings,
+          prompts: validatedPrompts,
+          metadata: metadata || {
+            id: '',
+            name: agentName,
+            description: description || '',
+            tags: [],
+            visibility: 'researcher',
+          },
+        };
+      } catch (error) {
+        // If this is the last candidate, throw the error
+        if (candidateName === candidateNames[candidateNames.length - 1]) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          logger.error(
+            CHANNEL,
+            `Failed to load remote agent "${agentName}": ${errorMessage}`,
+          );
+          throw error;
+        }
+        // Otherwise, store the error and continue to next candidate
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.debug(
+          CHANNEL,
+          `Failed to load candidate "${candidateName}", trying next: ${lastError.message}`,
+        );
       }
-
-      const validatedSettings = parseAgentSetting(settings);
-      const validatedPrompts = AgentPromptSchema.parse(prompts);
-
-      // Fetch metadata
-      const metadata = await this.getAgentMetadata(agentName);
-
-      logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
-
-      return {
-        name: validated.name || agentName,
-        settings: validatedSettings,
-        prompts: validatedPrompts,
-        metadata: metadata || {
-          id: '',
-          name: agentName,
-          description: description || '',
-          tags: [],
-          visibility: 'premium',
-        },
-      };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.error(
-        CHANNEL,
-        `Failed to load remote agent "${agentName}": ${errorMessage}`,
-      );
-      throw error;
     }
+
+    // If we get here, all candidates failed
+    throw (
+      lastError ||
+      new Error(`Failed to load remote agent "${agentName}" after all attempts`)
+    );
   }
 
   /**
