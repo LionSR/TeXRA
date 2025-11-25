@@ -158,7 +158,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
           progress.report({ message: 'Waiting for authentication...' });
           const session = await this.waitForSession(token);
           if (!session) {
-            throw new Error('Authentication cancelled or timed out. Try again.');
+            throw new Error(
+              'Authentication cancelled or timed out. Try again.',
+            );
           }
           await this.context.secrets.store(
             SupabaseAuthProvider.SESSION_KEY,
@@ -335,9 +337,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
     session: SupabaseSession,
   ): Promise<SupabaseSession | null> {
     try {
-      const { data, error } = await SupabaseClient.getClient().auth.refreshSession({
-        refresh_token: session.refreshToken,
-      });
+      const { data, error } =
+        await SupabaseClient.getClient().auth.refreshSession({
+          refresh_token: session.refreshToken,
+        });
 
       if (error || !data.session) {
         return null;
@@ -373,7 +376,9 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       return null;
     }
   }
-  private toVSCodeSession(session: SupabaseSession): vscode.AuthenticationSession {
+  private toVSCodeSession(
+    session: SupabaseSession,
+  ): vscode.AuthenticationSession {
     return {
       id: session.id,
       accessToken: session.accessToken,

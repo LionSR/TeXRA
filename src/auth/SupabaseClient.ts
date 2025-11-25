@@ -24,7 +24,9 @@ export class SupabaseClient {
     context?: vscode.ExtensionContext,
   ): void {
     if (!url || !anonKey) {
-      throw new Error('Supabase credentials missing. Check extension configuration.');
+      throw new Error(
+        'Supabase credentials missing. Check extension configuration.',
+      );
     }
     this.config = { url, anonKey };
     if (context) {
@@ -43,7 +45,9 @@ export class SupabaseClient {
    */
   static getClient(): Client {
     if (!this.instance) {
-      throw new Error('Supabase client not initialized. Restart the extension.');
+      throw new Error(
+        'Supabase client not initialized. Restart the extension.',
+      );
     }
     return this.instance;
   }
