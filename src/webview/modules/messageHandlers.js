@@ -26,6 +26,10 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { bannerManager } from './uiManagers/BannerManager.js';
+import {
+  hideModelApiKeyBanner,
+  updateModelApiKeyBanner,
+} from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
@@ -74,9 +78,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
       [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) =>
-        bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, m),
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
-        bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER),
+        updateModelApiKeyBanner(this._getElement('model'), m, {
+          forceShow: true,
+        }),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => hideModelApiKeyBanner(),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
         bannerManager.showBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER, m),
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
@@ -218,6 +223,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
       }
     });
+
+    updateModelApiKeyBanner(selectElement);
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
@@ -226,20 +233,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml ?? '';
-    if (previous) {
-      selectElement.value = previous;
-      if (
-        selectElement.value !== previous &&
-        getSelectOptionElements(selectElement).length > 0
-      ) {
-        const fallbackOption = getSelectOptionElements(selectElement).find(
-          (option) => !option.disabled,
-        );
-        if (fallbackOption) {
-          selectElement.value = fallbackOption.value;
-        }
-      }
-    }
+    this._restoreAgentSelection(selectElement, previous);
 
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
@@ -358,6 +352,49 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const element = this._getElement(selectId);
     return isSelectLikeElement(element) ? element : null;
+  }
+
+  _getSessionTypeForSelect(selectElement) {
+    if (!selectElement?.id) {
+      return null;
+    }
+    const entry = Object.entries(AGENT_SELECT_IDS).find(
+      ([, id]) => id === selectElement.id,
+    );
+    return entry ? entry[0] : null;
+  }
+
+  _getSavedAgentValue(sessionType) {
+    const state = mainViewState.get?.() ?? {};
+    if (sessionType === SESSION_TYPES.TOOL_USE) {
+      return state.toolUseAgent ?? state.agent ?? '';
+    }
+    if (sessionType === SESSION_TYPES.WORKFLOW) {
+      return state.workflowAgent ?? state.agent ?? '';
+    }
+    return '';
+  }
+
+  _restoreAgentSelection(selectElement, previousValue) {
+    const sessionType = this._getSessionTypeForSelect(selectElement);
+    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
+    const candidates = [savedValue, previousValue].filter(Boolean);
+
+    const options = getSelectOptionElements(selectElement);
+    const match = candidates.find((value) =>
+      options.some((option) => option.value === value),
+    );
+
+    if (match) {
+      selectElement.value = match;
+      return;
+    }
+
+    const fallbackOption =
+      options.find((option) => !option.disabled) ?? options[0];
+    if (fallbackOption) {
+      selectElement.value = fallbackOption.value;
+    }
   }
 
   _getActiveAgentSelection() {
