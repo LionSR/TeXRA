@@ -243,11 +243,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleRetryStreamRequest(message: any): Promise<void> {
     const success = await triggerManualRetry(message.stream);
-    if (!success) {
-      await vscode.window.showInformationMessage(
-        'No retryable request is available for this stream yet.',
-      );
+    if (success) {
+      await this.withToolbarTaskState(message.stream, async (taskState) => {
+        const executionId = this.provider.state.getExecutionId(message.stream);
+        if (!executionId) {
+          return;
+        }
+
+        await safeExecuteCommand('texra.execute', [
+          {
+            config: taskState.agentConfig,
+            executionId,
+            stream: message.stream,
+            resume: true,
+          },
+        ]);
+      });
+      return;
     }
+
+    await vscode.window.showInformationMessage(
+      'No retryable request is available for this stream yet.',
+    );
   }
 
   private async handleDiffStream(message: any): Promise<void> {

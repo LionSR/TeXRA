@@ -360,9 +360,7 @@ export class ModelHandlerOpenAI<
             : sdkFinalResponse;
 
           this.finalizeStreams(thinking, output ?? undefined, finalResponse);
-          return { result: finalResponse };
-        } catch (error) {
-          throw error;
+          return finalResponse;
         } finally {
           cleanup();
         }

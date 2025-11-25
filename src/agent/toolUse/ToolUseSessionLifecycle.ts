@@ -61,6 +61,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
       return;
     }
 
+    const persistenceEnabled = ToolUseSessionPersistence.isEnabled();
     const persisted = await ToolUseSessionPersistence.maybePersistIdleSnapshot({
       executionId,
       streamId: this.agent.getStreamTabId(),
@@ -70,7 +71,9 @@ export class ToolUseSessionLifecycle<C = unknown> {
       queue: this.followUps,
     });
 
-    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
+    if (persisted || !persistenceEnabled) {
+      StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
+    }
   }
 
   async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
