@@ -478,7 +478,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.error(
         `Failed to upload file ${filename}: ${formattedError.message}`,
         {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
           data: formattedError,
         },
       );
@@ -660,7 +659,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
       this.logger.error(`Error in createResponse: ${formattedError.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
         data: formattedError,
       });
       throw err;

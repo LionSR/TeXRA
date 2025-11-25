@@ -331,7 +331,6 @@ export class ModelHandlerOpenAI<
         this.logger.error(
           `Error in createResponse(streaming): ${formattedError.message}`,
           {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
             data: formattedError,
           },
         );
@@ -355,7 +354,6 @@ export class ModelHandlerOpenAI<
         this.logger.error(
           `Error in createResponse: ${formattedError.message}`,
           {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
             data: formattedError,
           },
         );

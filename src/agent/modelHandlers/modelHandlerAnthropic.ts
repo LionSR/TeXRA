@@ -521,7 +521,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
       this.logger.error(`Error creating response: ${formattedError.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
         data: formattedError,
       });
       throw err;
@@ -645,7 +644,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           this.logger.error(
             `Failed to upload document ${filename}: ${formattedError.message}`,
             {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
               data: formattedError,
             },
           );
