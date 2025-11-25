@@ -546,18 +546,18 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
 
       const trackedEdits = tracker.recordEdits(result.edits);
+      const lineChanges =
+        trackedEdits.lineChanges ?? summarizeLineChanges(result.edits);
       const sanitizedOutput = sanitizeToolResultForLog(result);
       sanitizedOutput.edits = trackedEdits.edits;
-      sanitizedOutput.lineChanges =
-        trackedEdits.lineChanges || summarizeLineChanges(result.edits);
+      sanitizedOutput.lineChanges = lineChanges;
 
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,
         output: sanitizedOutput,
         edits: trackedEdits.edits,
-        lineChanges:
-          trackedEdits.lineChanges || summarizeLineChanges(trackedEdits.edits),
+        lineChanges,
         isError: Boolean(result.isError),
       };
       options.logger.info('', {
