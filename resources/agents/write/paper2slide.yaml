@@ -21,7 +21,8 @@ prompts:
     - Maintain a professional and scientifically rigorous tone throughout the presentation
     - Use appropriate notation and terminology consistently
     - Prioritize visual representations and key takeaways over verbose descriptions
-    - Cite relevant key papers using commands like \cite{Jarzynski2011Equalities} or \cite{Feynman1965Quantum} which include only the first word of the paper name.
+    - Cite relevant key papers using commands like \cite{Author2020Title} (e.g., \cite{Smith2020Analysis}) which include the author, year, and first word of the paper title
+    - Output a complete, self-contained LaTeX file that can be compiled directly
 
   userPrefix: |
     You are tasked with creating a LaTeX Beamer presentation based on the following research paper:
@@ -79,10 +80,50 @@ prompts:
 
       </scratchpad>
 
-      Then, please create the LaTeX Beamer presentation, incorporating the key points outlined in the scratchpad. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
+      Then, please create a complete, self-contained LaTeX Beamer presentation, incorporating the key points outlined in the scratchpad. The presentation should be professional, condensed, and effectively highlight the main aspects of the research paper. Use the following format:
 
       <beamer_presentation>
-      {{ TEMPLATE_SLIDE_CONTENT }}
+      \documentclass{beamer}
+
+      \usetheme{Madrid}
+      \usecolortheme{dolphin}
+
+      \setbeamertemplate{footline}[page number]
+      \setbeamertemplate{navigation symbols}{}
+      \setbeamertemplate{frametitle}[default][center]
+
+      \AtBeginSection[]
+      {
+      \begin{frame}<beamer>
+      \frametitle{Outline}
+      \tableofcontents[currentsection]
+      \end{frame}
+      }
+
+      \usepackage{amsmath}
+      \usepackage{amssymb}
+      \usepackage{graphicx}
+      \usepackage{physics}
+      \usepackage{hyperref}
+      \usepackage{natbib}
+
+      % Add any additional packages needed
+
+      % Title information
+      \title{...}
+      \author{...}
+      \institute{...}
+      \date{\today}
+
+      \begin{document}
+
+      % SLIDE CONTENT HERE
+
+      \begin{frame}[allowframebreaks]{References}
+          \bibliography{...}
+      \end{frame}
+
+      \end{document}
       </beamer_presentation>
     - |
       Please review your draft LaTeX Beamer presentation critically, focusing on the following points:
@@ -123,8 +164,8 @@ prompts:
       </improvements>
       </scratchpad>
 
-      Based on this reflection, please revise your presentation to address any identified issues while maintaining its professional quality and technical accuracy. Output the new version based on the previous version you just wrote. Use the following format:
+      Based on this reflection, please revise your presentation to address any identified issues while maintaining its professional quality and technical accuracy. Output the complete, self-contained revised version based on the previous version you just wrote. Use the following format:
 
       <beamer_presentation>
-      {{ TEMPLATE_SLIDE_CONTENT }}
+      % Complete revised LaTeX Beamer presentation here
       </beamer_presentation>
