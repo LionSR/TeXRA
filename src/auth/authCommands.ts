@@ -128,8 +128,8 @@ export async function viewProfile(): Promise<void> {
       `Tier: ${tier}`,
       ``,
       tier === 'free'
-        ? `Upgrade to premium to access remote agents`
-        : `You have access to premium remote agents`,
+        ? `Join the researcher access program to access remote agents`
+        : `You have access to remote agents via the researcher access program`,
     ].join('\n');
 
     // Create a simple webview or use QuickPick to show info
@@ -165,8 +165,8 @@ export async function viewProfile(): Promise<void> {
               display: inline-block;
               padding: 4px 8px;
               border-radius: 4px;
-              background: ${tier === 'premium' ? 'var(--vscode-badge-background)' : 'var(--vscode-inputValidation-warningBackground)'};
-              color: ${tier === 'premium' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-inputValidation-warningForeground)'};
+              background: ${tier === 'researcher' ? 'var(--vscode-badge-background)' : 'var(--vscode-inputValidation-warningBackground)'};
+              color: ${tier === 'researcher' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-inputValidation-warningForeground)'};
               text-transform: uppercase;
               font-size: 0.9em;
             }
@@ -186,8 +186,8 @@ export async function viewProfile(): Promise<void> {
           <div class="info-row" style="margin-top: 20px;">
             ${
               tier === 'free'
-                ? '<p>Upgrade to premium to access remote agents and advanced features.</p>'
-                : '<p>You have access to premium remote agents.</p>'
+                ? '<p>Join the researcher access program to access remote agents and advanced features.</p>'
+                : '<p>You have access to remote agents via the researcher access program.</p>'
             }
           </div>
         </body>
@@ -205,7 +205,7 @@ export async function viewProfile(): Promise<void> {
 export async function getAuthStatus(): Promise<{
   authenticated: boolean;
   email?: string;
-  tier?: 'free' | 'premium';
+  tier?: 'free' | 'researcher';
 }> {
   const isAuth = await SupabaseClient.isAuthenticated();
   if (!isAuth) {
@@ -235,7 +235,7 @@ export async function showAccountMenu(): Promise<void> {
       const items = [
         {
           label: '$(sign-in) Sign In',
-          description: 'Sign in to access remote agents and premium features',
+          description: 'Sign in to access remote agents via the researcher access program',
           action: 'signIn' as const,
         },
       ];
