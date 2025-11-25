@@ -39,27 +39,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 
-const summarizeLineChanges = (
-  edits: { lineChanges?: { added: number; removed: number } }[] | undefined,
-): { added: number; removed: number } | undefined => {
-  if (!Array.isArray(edits) || edits.length === 0) {
-    return undefined;
-  }
-
-  return edits.reduce(
-    (acc, edit) => {
-      if (!edit?.lineChanges) {
-        return acc;
-      }
-
-      acc.added += edit.lineChanges.added || 0;
-      acc.removed += edit.lineChanges.removed || 0;
-      return acc;
-    },
-    { added: 0, removed: 0 },
-  );
-};
-
 interface ToolValidationDiagnostics {
   type: 'validation_error';
   issues: any;
@@ -546,18 +525,23 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
 
       const trackedEdits = tracker.recordEdits(result.edits);
-      const lineChanges =
-        trackedEdits.lineChanges ?? summarizeLineChanges(result.edits);
       const sanitizedOutput = sanitizeToolResultForLog(result);
-      sanitizedOutput.edits = trackedEdits.edits;
-      sanitizedOutput.lineChanges = lineChanges;
+      const editedFiles = trackedEdits.edits.map((entry) => ({
+        path: entry.path,
+        ok: true,
+        source: 'tool',
+        sourceDisplay: 'Tool use',
+      }));
+
+      if (editedFiles.length > 0) {
+        sanitizedOutput.files = editedFiles;
+      }
 
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,
         output: sanitizedOutput,
-        edits: trackedEdits.edits,
-        lineChanges,
+        files: editedFiles,
         isError: Boolean(result.isError),
       };
       options.logger.info('', {
