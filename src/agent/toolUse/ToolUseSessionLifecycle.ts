@@ -70,9 +70,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
       queue: this.followUps,
     });
 
-    if (persisted) {
-      StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
-    }
+    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
   }
 
   async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {

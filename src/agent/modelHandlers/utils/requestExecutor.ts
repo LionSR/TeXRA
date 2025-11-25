@@ -20,11 +20,12 @@ interface RequestRetryOptions {
   baseDelayMs?: number;
   enableManualRetry?: boolean;
   manualRetryKey?: string;
+  onAttemptStart?: (attempt: number) => void;
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BACKOFF_MS = 1000;
-const RETRYABLE_STATUS_CODES = new Set([408, 429]);
+const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
 function shouldRetry(statusCode?: number): boolean {
   if (statusCode === undefined) {
@@ -33,7 +34,7 @@ function shouldRetry(statusCode?: number): boolean {
   if (statusCode >= 500) {
     return true;
   }
-  return RETRYABLE_STATUS_CODES.has(statusCode);
+  return RETRYABLE_NON_5XX_STATUS_CODES.has(statusCode);
 }
 
 export async function executeWithRequestRetry<T>(
@@ -50,12 +51,14 @@ export async function executeWithRequestRetry<T>(
   }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    options.onAttemptStart?.(attempt);
+
     if (options.signal?.aborted) {
       throw options.signal.reason ?? new Error('The request was aborted.');
     }
 
     try {
-      return await Promise.resolve(request());
+      return await request();
     } catch (error) {
       const formatted = formatProviderHttpError(error);
       const statusCode = formatted.statusCode;

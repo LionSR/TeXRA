@@ -146,6 +146,7 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
             throw new Error('Tool-use store is not initialized.');
           }
           await hooks.runCycle(cycleOptions, state.conversation, state.store);
+          // Only persist successful cycles to avoid checkpointing failed state.
           await hooks.persistCheckpoint(state.conversation, state.store);
         } else {
           state.shouldSkipCycle = false;
