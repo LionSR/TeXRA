@@ -292,10 +292,20 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    const thinking = this.createThinkingStream();
-    const output = this.isOutputStreamingEnabled()
-      ? this.createOutputStream()
-      : undefined;
+    let thinking!: ReturnType<ModelHandler['createThinkingStream']>;
+    let output: ReturnType<ModelHandler['createOutputStream']> | undefined;
+
+    const resetStreamsForAttempt = (attempt: number): void => {
+      if (attempt > 1) {
+        thinking?.finalize();
+        output?.finalize();
+      }
+
+      thinking = this.createThinkingStream();
+      output = this.isOutputStreamingEnabled()
+        ? this.createOutputStream()
+        : undefined;
+    };
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
       stream: true,
@@ -309,6 +319,9 @@ export class ModelHandlerOpenAI<
       manualRetryKey: this.logger.channelId,
       enableManualRetry: true,
       signal,
+      onAttemptStart: (nextAttempt) => {
+        resetStreamsForAttempt(nextAttempt);
+      },
       create: async () => {
         const stream = await client.chat.completions.stream(streamParams, {
           signal,
@@ -346,12 +359,12 @@ export class ModelHandlerOpenAI<
             ? streamingAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
 
-          this.finalizeStreams(thinking, output, finalResponse);
-          cleanup();
+          this.finalizeStreams(thinking, output ?? undefined, finalResponse);
           return { result: finalResponse };
         } catch (error) {
-          cleanup();
           throw error;
+        } finally {
+          cleanup();
         }
       },
     });
