@@ -224,12 +224,14 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
 
     return new Promise((resolve, reject) => {
       let isCleanedUp = false;
+      let cancellationListener: vscode.Disposable | undefined = undefined;
+
       const cleanup = () => {
         if (isCleanedUp) return;
         isCleanedUp = true;
         clearTimeout(timeoutHandle);
         subscription.dispose();
-        cancellationListener.dispose();
+        cancellationListener?.dispose();
       };
       const subscription = this.uriHandler!.onDidReceiveCallback(
         async (uri) => {
@@ -309,12 +311,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         return;
       }
 
-      const cancellationListener = cancellationToken.onCancellationRequested(
-        () => {
-          cleanup();
-          resolve(null);
-        },
-      );
+      cancellationListener = cancellationToken.onCancellationRequested(() => {
+        cleanup();
+        resolve(null);
+      });
     });
   }
 
