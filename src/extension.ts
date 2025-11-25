@@ -100,6 +100,12 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
+  // Initialize remote agent registry
+  const { RemoteAgentRegistry } = await import(
+    '@agent/remote/RemoteAgentRegistry'
+  );
+  RemoteAgentRegistry.initialize(context);
+
   // Initialize Supabase authentication if enabled
   const authConfig = vscode.workspace.getConfiguration('texra.auth');
   const authEnabled = authConfig.get<boolean>('enabled', true);
