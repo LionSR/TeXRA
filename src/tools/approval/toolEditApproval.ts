@@ -558,8 +558,8 @@ async function nativeRequestApproval(
     }
 
     return {
-      lineChanges: result.lineChanges ?? lineChanges,
       ...result,
+      lineChanges: result.lineChanges ?? lineChanges,
     };
   } finally {
     pendingApprovals.delete(requestId);
