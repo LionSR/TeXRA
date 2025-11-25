@@ -292,6 +292,10 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
+    const thinking = this.createThinkingStream();
+    const output = this.isOutputStreamingEnabled()
+      ? this.createOutputStream()
+      : undefined;
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
       stream: true,
@@ -302,15 +306,13 @@ export class ModelHandlerOpenAI<
       logger: this.logger,
       model: this.config.name,
       operation: 'openai.chat.completions.stream',
+      manualRetryKey: this.logger.channelId,
+      enableManualRetry: true,
       signal,
       create: async () => {
         const stream = await client.chat.completions.stream(streamParams, {
           signal,
         });
-        const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : undefined;
         const streamingAggregator = this.createStreamingAggregator();
 
         const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
@@ -345,10 +347,9 @@ export class ModelHandlerOpenAI<
             : sdkFinalResponse;
 
           this.finalizeStreams(thinking, output, finalResponse);
-          return { result: finalResponse, cleanup };
+          cleanup();
+          return { result: finalResponse };
         } catch (error) {
-          output?.finalize();
-          thinking.finalize();
           cleanup();
           throw error;
         }
@@ -366,6 +367,8 @@ export class ModelHandlerOpenAI<
         logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.create',
+        manualRetryKey: this.logger.channelId,
+        enableManualRetry: true,
         signal,
       },
       () =>
