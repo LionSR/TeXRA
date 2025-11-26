@@ -39,15 +39,6 @@ export const FileLineageSchema = z
   })
   .strict();
 
-/** @deprecated Old structure, use FileLineageSchema */
-const LegacyFileLineageSchema = z
-  .object({
-    base: z.custom<FileLocation>().nullable(),
-    previous: z.custom<FileLocation>().nullable(),
-    original: z.custom<FileLocation>().nullable(),
-  })
-  .strict();
-
 /**
  * Complete output file metadata.
  * - source: Document name (e.g., "main.tex")
