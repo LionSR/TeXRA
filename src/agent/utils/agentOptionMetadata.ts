@@ -119,22 +119,16 @@ export function getAgentOptionMetadata(
   };
 }
 
+/**
+ * Get the clean label for an agent option.
+ * Note: Visual decoration (icons) is handled client-side by _decorateAgentOption
+ * using the data-remote and data-multiple attributes with the shared AGENT_DECORATORS config.
+ */
 function decorateLabel(
   agentName: string,
-  metadata: AgentOptionMetadata,
+  _metadata: AgentOptionMetadata,
 ): string {
-  const cleanName = RemoteAgentRegistry.getCleanName(agentName);
-  let label = cleanName;
-
-  // Add cloud icon for remote agents
-  if (metadata.isRemote) {
-    label = `☁ ${cleanName}`;
-  }
-
-  if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
-    label += ' ∶∶';
-  }
-  return label;
+  return RemoteAgentRegistry.getCleanName(agentName);
 }
 
 interface AgentOptionTagOptions {
