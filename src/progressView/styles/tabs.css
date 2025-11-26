@@ -54,7 +54,8 @@
   flex-direction: column;
   align-items: flex-start;
   padding: var(--spacing-small)
-    calc(var(--spacing-medium) + var(--height-control));
+    calc(var(--spacing-medium) + var(--height-control)) var(--spacing-small)
+    var(--spacing-small);
   cursor: pointer;
   border: none;
   background: none;
