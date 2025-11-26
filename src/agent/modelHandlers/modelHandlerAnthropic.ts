@@ -83,6 +83,7 @@ import {
 } from './utils/toolAttachmentUtils';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
+import { executeWithRequestRetry } from './utils/requestExecutor';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -380,8 +381,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
           countTokensParams.betas = countTokenBetas;
         }
 
-        const responseTokenCount =
-          await client.beta.messages.countTokens(countTokensParams);
+        const responseTokenCount = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: 'anthropic.beta.messages.countTokens',
+            signal,
+          },
+          () => client.beta.messages.countTokens(countTokensParams),
+        );
         const { input_tokens: inputTokens } = responseTokenCount;
         this.logger.debug(`Token count of message: ${inputTokens}`);
         if (inputTokens > effectiveContextWindow) {
@@ -467,7 +475,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (useStreaming) {
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
-        const stream = client.beta.messages.stream(options, { signal });
+        const stream = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: 'anthropic.beta.messages.stream',
+            signal,
+          },
+          () => client.beta.messages.stream(options, { signal }),
+        );
 
         if (signal?.aborted) {
           stream.controller.abort();
@@ -517,7 +533,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
           cleanupAbortListener?.();
         }
       } else {
-        response = await client.beta.messages.create(options, { signal });
+        response = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: 'anthropic.beta.messages.create',
+            signal,
+          },
+          () => client.beta.messages.create(options, { signal }),
+        );
       }
     } catch (err) {
       const formattedError = formatProviderHttpError(err);
@@ -632,24 +656,26 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         try {
           buffer = Buffer.from(base64Data, 'base64');
-          const uploadedFile = await client.beta.files.upload({
-            file: await toFile(buffer, sanitizedFilename, { type: mediaType }),
-            betas: [FILES_API_BETA],
-          });
+          const uploadedFile = await executeWithRequestRetry(
+            {
+              logger: this.logger,
+              model: this.config.name,
+              operation: `anthropic.beta.files.upload:${sanitizedFilename}`,
+            },
+            async () =>
+              client.beta.files.upload({
+                file: await toFile(buffer!, sanitizedFilename, {
+                  type: mediaType,
+                }),
+                betas: [FILES_API_BETA],
+              }),
+          );
 
           uploadedSource = {
             type: 'file',
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
         } catch (err) {
-          const formattedError = formatProviderHttpError(err);
-          this.logger.error(
-            `Failed to upload document ${filename}: ${formattedError.message}`,
-            {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-              data: formattedError,
-            },
-          );
           throw err;
         } finally {
           if (buffer) {
@@ -751,10 +777,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
 
         const base64Data = buffer.toString('base64');
-        const uploadedFile = await client.beta.files.upload({
-          file: await toFile(buffer, filename, { type: mimeType }),
-          betas: [FILES_API_BETA],
-        });
+        const uploadedFile = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: `anthropic.beta.files.upload:${filename}`,
+          },
+          async () =>
+            client.beta.files.upload({
+              file: await toFile(buffer!, filename, { type: mimeType }),
+              betas: [FILES_API_BETA],
+            }),
+        );
 
         uploaded.push({
           attachment,
@@ -764,14 +798,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           mediaType: normalized,
         });
       } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
-        );
         unsupported.push(attachment);
       } finally {
         if (buffer) {

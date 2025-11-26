@@ -927,6 +927,25 @@
             "scope": "resource"
           }
         }
+      },
+      {
+        "title": "Model Retries",
+        "properties": {
+          "texra.model.retry.maxAttempts": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls. Default is 1 (no automatic retries, requires manual retry button click).",
+            "scope": "resource"
+          },
+          "texra.model.retry.backoffMs": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 0,
+            "description": "Base backoff delay in milliseconds between retry attempts for model calls",
+            "scope": "resource"
+          }
+        }
       }
     ],
     "commands": [
