@@ -1,8 +1,9 @@
 /**
  * Retry state management for flow-based retry handling.
  *
- * This module provides PURE state management functions only.
- * Side effects (logging, sleeping, events) belong in flow nodes.
+ * This module centralizes retry state management. Functions that mutate state
+ * are clearly documented. Side effects (logging, sleeping, events) belong in
+ * flow nodes.
  */
 
 import {
@@ -14,8 +15,8 @@ import {
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
-// Timeout for manual retry wait (5 minutes)
-const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+/** Timeout for manual retry wait (5 minutes) - exported for BaseRetryWaitNode */
+export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
 // Types
@@ -93,11 +94,21 @@ export function resetRetryState(state: RetryState): void {
 /**
  * Clears error state and resets attempt counter after successful operation.
  * This ensures the next invocation gets a fresh retry budget.
+ * @mutates state.attemptCount, state.lastError, state.awaitingManualRetry
  */
 export function clearRetryError(state: RetryState): void {
   state.attemptCount = 0;
   state.lastError = undefined;
   state.awaitingManualRetry = false;
+}
+
+/**
+ * Increments the attempt counter before each invocation attempt.
+ * Call this at the start of exec() in invocation nodes.
+ * @mutates state.attemptCount
+ */
+export function beginAttempt(state: RetryState): void {
+  state.attemptCount++;
 }
 
 // ============================================================================
@@ -184,9 +195,10 @@ export interface RetryDecision {
 }
 
 /**
- * Pure function to determine retry strategy after an error.
+ * Determines retry strategy after an error.
  * This is the SINGLE SOURCE OF TRUTH for retry decision logic.
  *
+ * @mutates state.lastError, state.awaitingManualRetry
  * Side effects (logging, sleeping, UI events) are handled by the caller.
  */
 export function determineRetryStrategy(
