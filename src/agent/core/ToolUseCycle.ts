@@ -11,11 +11,9 @@
 
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { BaseTool } from '@tools/core/base';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
-import { AgentWorkspaceState } from './AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -23,20 +21,9 @@ import {
 } from './flows/ToolUseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
-// Local imports - option helpers
-import type { AgentCycleBaseOptions } from './AgentCycleOptions';
-
-// Local imports - model handlers
-
-// Local imports - tools
-
-export interface ToolUseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
-  toolRegistry: Record<string, BaseTool<any>>;
-  workspaceState: AgentWorkspaceState;
-  modelName?: string;
-  agentName?: string;
-}
+// Import and re-export from single source of truth
+import type { ToolUseCycleOptions } from './flows/CycleServices';
+export type { ToolUseCycleOptions };
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;

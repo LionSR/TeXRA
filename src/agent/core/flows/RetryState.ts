@@ -1,17 +1,22 @@
 /**
  * Retry state management for flow-based retry handling.
  *
- * This module centralizes retry state management. Functions that mutate state
- * are clearly documented. Side effects (logging, sleeping, events) belong in
- * flow nodes.
+ * This module centralizes retry state management AND side-effect handling.
+ * - Pure functions: createRetryState, resetRetryState, determineRetryStrategy
+ * - Side-effect helper: applyRetryDecision (logging, sleeping)
  */
 
+import type { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
   DEFAULT_MODEL_RETRY_ATTEMPTS,
   DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
+import { sleep } from '@utils/helpers';
+
+import { FlowTransition } from './FlowTransitions';
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
@@ -238,4 +243,62 @@ export function determineRetryStrategy(
     action: 'fail',
     error,
   };
+}
+
+// ============================================================================
+// Retry side-effects (single source of truth for retry handling)
+// ============================================================================
+
+/**
+ * Applies a retry decision by performing side effects (logging, sleeping).
+ * Returns the flow transition to take.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for retry side-effect handling.
+ * Call this in flow node post() methods instead of duplicating switch logic.
+ *
+ * @param decision - The retry decision from determineRetryStrategy
+ * @param logger - Logger for status messages
+ * @param retryState - Current retry state (for logging attempt counts)
+ * @param operationName - Name of the operation for log messages (e.g., "Model invocation")
+ * @returns The flow transition string, or undefined to continue to next node
+ */
+export async function applyRetryDecision(
+  decision: RetryDecision,
+  logger: AgentLogger,
+  retryState: RetryState,
+  operationName: string,
+): Promise<string | undefined> {
+  switch (decision.action) {
+    case 'auto_retry':
+      logger.warn(
+        `Retrying ${operationName.toLowerCase()} after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: {
+            attempt: retryState.attemptCount,
+            maxAttempts: retryState.maxAutoAttempts,
+            statusCode: decision.error.statusCode,
+          },
+        },
+      );
+      await sleep(decision.delayMs!);
+      return FlowTransition.RETRY;
+
+    case 'manual_retry':
+      logger.error(`${operationName} failed: ${decision.error.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: decision.error.statusCode, retryable: true },
+      });
+      return FlowTransition.AWAIT_RETRY;
+
+    case 'fail':
+      logger.error(
+        `${operationName} failed (not retryable): ${decision.error.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: { statusCode: decision.error.statusCode, retryable: false },
+        },
+      );
+      return FlowTransition.COMPLETE;
+  }
 }

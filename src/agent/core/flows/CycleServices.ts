@@ -1,8 +1,9 @@
 /**
- * Service interfaces for cycle flows.
+ * Service interfaces and option types for cycle flows.
  *
- * This module defines the service container pattern for separating
- * immutable dependencies from mutable state in PocketFlow nodes.
+ * This module defines:
+ * 1. Cycle option interfaces (ResponseCycleOptions, ToolUseCycleOptions)
+ * 2. Service container pattern for separating immutable dependencies from mutable state
  *
  * ## Architecture
  *
@@ -30,8 +31,41 @@
  */
 
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
-import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
+import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { BaseTool } from '@tools/core/base';
+import type { TaskRunFileService } from '@utils/files';
+
+// ============================================================================
+// CYCLE OPTIONS (single source of truth)
+// ============================================================================
+
+/**
+ * Options for response cycle execution.
+ * Used by workflow agents (BaseReflectionAgent) for turn-based generation.
+ */
+export interface ResponseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
+  agentConfig: AgentConfig;
+  fileService: TaskRunFileService;
+}
+
+/**
+ * Options for tool-use cycle execution.
+ * Used by interactive agents (BaseToolUseAgent) for session-based execution.
+ */
+export interface ToolUseCycleOptions<C = unknown>
+  extends AgentCycleBaseOptions<C> {
+  toolRegistry: Record<string, BaseTool<any>>;
+  workspaceState: AgentWorkspaceState;
+  modelName?: string;
+  agentName?: string;
+}
+
+// ============================================================================
+// SERVICE CONTAINERS
+// ============================================================================
 
 /**
  * Base services shared by all cycle flows.
