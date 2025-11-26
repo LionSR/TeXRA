@@ -122,7 +122,7 @@ export class AgentHistoryManager {
         continue;
       }
 
-      // Mark as mutated if we're migrating from legacy format
+      // Legacy entries use 'config' field; mark for persistence with new 'agentConfig' field
       if (candidate.config && !candidate.agentConfig) {
         mutated = true;
       }
