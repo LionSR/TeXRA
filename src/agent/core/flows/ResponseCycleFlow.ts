@@ -16,6 +16,10 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -33,13 +37,16 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import { bestConnectionMethod } from '@latex';
 
 // Local file imports
@@ -54,13 +61,6 @@ import {
   shouldOfferManualRetry,
   computeBackoffDelay,
 } from './RetryState';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
-import { sleep } from '@utils/helpers';
-import { bus } from '@eventBus/ProgressEventBus';
-import {
-  registerManualRetry,
-  clearManualRetry,
-} from '@agent/runtime/ManualRetryController';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -782,7 +782,9 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
  * Handles manual retry by waiting for UI callback.
  */
 class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(shared: ResponseCycleContext<C>): Promise<ResponseCycleContext<C>> {
+  async prep(
+    shared: ResponseCycleContext<C>,
+  ): Promise<ResponseCycleContext<C>> {
     return shared;
   }
 
