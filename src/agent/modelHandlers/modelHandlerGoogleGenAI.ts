@@ -1179,6 +1179,78 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
   }
 
+  /**
+   * Build a single function call part with optional thought signature.
+   * This is used internally to create properly structured function call parts.
+   */
+  private buildFunctionCallPart(call: GoogleToolCall): Part {
+    const args = call.raw.args ?? {};
+    const callPart = createPartFromFunctionCall(call.name, args);
+
+    if (callPart.functionCall) {
+      callPart.functionCall.id = call.callId;
+    }
+
+    // Preserve thought signature if present (required for Gemini 3 models)
+    if (call.thoughtSignature) {
+      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
+        call.thoughtSignature;
+    }
+
+    return callPart;
+  }
+
+  /**
+   * Build a function response part with attachments for a single tool call result.
+   */
+  private async buildFunctionResponsePart(
+    call: GoogleToolCall,
+    result: Record<string, unknown>,
+  ): Promise<Part[]> {
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    const parts: Part[] = [];
+
+    if (attachments.length > 0) {
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments included in this response:\n${describeAttachments(
+          attachments,
+        ).join('\n')}`;
+
+      const encodedParts = await Promise.all(
+        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
+      );
+
+      const validParts = encodedParts.filter(
+        (part): part is Part => part !== null,
+      );
+
+      if (validParts.length === 0 && attachments.length > 0) {
+        this.logger.warn(
+          `All attachments for Google function response '${call.name}' failed to encode.`,
+        );
+      }
+
+      parts.push(...validParts);
+    }
+
+    const resultPart = createPartFromFunctionResponse(
+      call.callId,
+      call.name,
+      sanitizedResult,
+    );
+    // Result part should come first, then attachments
+    return [resultPart, ...parts];
+  }
+
+  /**
+   * Create follow-up messages for a SINGLE tool call.
+   *
+   * IMPORTANT: For Gemini 3 models with parallel tool calls, use
+   * `createBatchedToolUseFollowUpMessages` instead to properly handle
+   * thought signatures. This method creates separate model/user message
+   * pairs which can cause validation errors when multiple parallel calls
+   * are processed individually.
+   */
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
@@ -1190,61 +1262,86 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    const args = call.raw.args ?? {};
+    const callPart = this.buildFunctionCallPart(call);
+    const responseParts = await this.buildFunctionResponsePart(call, result);
 
-    const functionName = call.name;
-
-    // Create the call part with the function name and arguments
-    const callPart = createPartFromFunctionCall(functionName, args);
-
-    if (callPart.functionCall) {
-      callPart.functionCall.id = call.callId;
-    }
-
-    if (call.thoughtSignature) {
-      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
-        call.thoughtSignature;
-    }
-
-    // Use the same ID for the result to maintain correlation
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    let attachmentParts: Part[] = [];
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments included in this response:\n${describeAttachments(
-          attachments,
-        ).join('\n')}`;
-
-      const encodedParts = await Promise.all(
-        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
-      );
-
-      attachmentParts = encodedParts.filter(
-        (part): part is Part => part !== null,
-      );
-
-      if (attachmentParts.length === 0) {
-        this.logger.warn(
-          `All attachments for Google function response '${functionName}' failed to encode.`,
-        );
-      }
-    }
-    const resultPart = createPartFromFunctionResponse(
-      call.callId,
-      functionName,
-      sanitizedResult,
-    );
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
+
     const callMsg: Content = {
       role: 'model',
       parts: callParts,
     };
-    const resultParts: Part[] = [resultPart, ...attachmentParts];
-    const resultMsg: Content = { role: 'user', parts: resultParts };
+    const resultMsg: Content = { role: 'user', parts: responseParts };
+    return [callMsg, resultMsg];
+  }
+
+  /**
+   * Create follow-up messages for MULTIPLE parallel tool calls.
+   *
+   * For Gemini 3 models with thinking enabled, parallel function calls must be
+   * structured correctly to preserve thought signatures:
+   * - All function calls go in ONE model message (first call has thoughtSignature)
+   * - All function responses go in ONE user message
+   *
+   * This is required because Gemini 3 validates that the first functionCall part
+   * in each "step" has a thought_signature. If calls are split into separate
+   * model messages, each becomes a new step requiring its own signature.
+   *
+   * @param calls - Array of tool calls (should preserve original order from model response)
+   * @param results - Array of results corresponding to each call (same order as calls)
+   * @param text - Optional text to include before function calls
+   */
+  async createBatchedToolUseFollowUpMessages(
+    calls: GoogleToolCall[],
+    results: Record<string, unknown>[],
+    text?: string,
+  ): Promise<Content[]> {
+    if (calls.length === 0) {
+      return [];
+    }
+
+    if (calls.length !== results.length) {
+      throw new Error(
+        `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
+      );
+    }
+
+    // Validate all calls have IDs
+    for (const call of calls) {
+      if (!call.callId) {
+        throw new Error('Function call id is required for follow-up messages');
+      }
+    }
+
+    // Build all function call parts (preserving thought signature on first call)
+    const callParts: Part[] = [];
+    if (text) {
+      callParts.push(createPartFromText(text));
+    }
+    for (const call of calls) {
+      callParts.push(this.buildFunctionCallPart(call));
+    }
+
+    // Build all function response parts
+    const responseParts: Part[] = [];
+    for (let i = 0; i < calls.length; i++) {
+      const parts = await this.buildFunctionResponsePart(calls[i], results[i]);
+      responseParts.push(...parts);
+    }
+
+    // Create single model message with all function calls
+    const callMsg: Content = {
+      role: 'model',
+      parts: callParts,
+    };
+
+    // Create single user message with all function responses
+    const resultMsg: Content = { role: 'user', parts: responseParts };
+
     return [callMsg, resultMsg];
   }
 
