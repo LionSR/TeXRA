@@ -1,5 +1,6 @@
 // Local imports - profile view
 import { ELEMENT_IDS } from '../constants.js';
+import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById, addEventListenerSafely } from '@common/domUtils.js';
 
@@ -20,7 +21,7 @@ export class ProfileEventsManager {
     const signInBtn = safeGetElementById(ELEMENT_IDS.SIGN_IN_BTN);
     if (signInBtn) {
       const signInHandler = () => {
-        vscode.postMessage({ command: 'signIn' });
+        vscode.postMessage({ command: PROFILE_VIEW_COMMANDS.SIGN_IN });
       };
       const cleanup = addEventListenerSafely(signInBtn, 'click', signInHandler);
       if (cleanup) {
