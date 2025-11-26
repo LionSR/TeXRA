@@ -162,7 +162,25 @@ export const ToolUseSessionPersistence = {
   },
 
   async persistCheckpointSnapshot(args: PersistSnapshotArgs): Promise<boolean> {
-    return persistSnapshot(args);
+    if (!this.isEnabled() || !args.executionId || !args.store) {
+      return false;
+    }
+
+    const payload: SaveToolUseSnapshotPayload = {
+      executionId: args.executionId,
+      streamId: args.streamId,
+      agentConfig: args.agentConfig,
+      messages: args.messages,
+      store: args.store,
+    };
+
+    const stored = await ToolUseSnapshotStore.save(payload);
+    if (!stored) {
+      return false;
+    }
+
+    ToolUseSnapshotCache.cacheSnapshot(stored);
+    return true;
   },
 
   async clearPersistedSnapshot(
