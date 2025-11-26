@@ -1,5 +1,11 @@
 // Local imports - history view
-import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
+import {
+  COMMANDS,
+  ELEMENT_IDS,
+  CLASS_NAMES,
+  LABELS,
+  AGENT_CATEGORY,
+} from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
 import {
   addEventListenerSafely,
@@ -53,8 +59,17 @@ export class HistoryRenderer {
   }
 
   _createHistoryItemElement(item) {
-    const config = item.config;
+    // Use agentConfig as primary (consistent with TaskState), with fallback for legacy data
+    const config = item.agentConfig || item.config;
+    // Session is accessed via config.session - single source of truth
+    const session = config?.session;
     const date = new Date(item.timestamp).toLocaleString();
+
+    // Determine session kind display
+    const isToolUse = session?.agentCategory === AGENT_CATEGORY.TOOL_USE;
+    const kindLabel = isToolUse ? 'Tool Use' : 'Workflow';
+    const kindIcon = isToolUse ? 'tools' : 'symbol-method';
+    const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
 
     const container = createFromTemplate('historyItemTemplate', {
       text: {
@@ -87,13 +102,23 @@ export class HistoryRenderer {
       return document.createElement('div');
     }
 
-    const encodedAgent = encodeHtml(config.agent);
-    const encodedModel = encodeHtml(config.model);
-    const encodedInstruction = config.instruction
-      ? encodeHtml(config.instruction)
-      : 'None';
+    const encodedAgent = encodeHtml(config?.agent || 'Unknown');
+    const encodedModel = encodeHtml(config?.model || 'Unknown');
+    // Instruction is a primary field shown prominently, so it gets "Not set" indicator when empty.
+    // Optional fields like reference/auxiliary files are in the collapsible section and can be omitted.
+    const instructionText = config?.instruction;
+    const encodedInstruction =
+      instructionText && instructionText.trim()
+        ? encodeHtml(instructionText)
+        : '<em class="history-none">Not set</em>';
+
+    // Build session kind badge with icon
+    const kindIconEl = createCodicon(kindIcon);
+    const kindIconHtml = kindIconEl ? kindIconEl.outerHTML : '';
 
     let basicHTML = `
+      <span class="history-label">Kind:</span>
+      <span class="history-value"><span class="session-kind-badge ${kindClass}">${kindIconHtml} ${kindLabel}</span></span>
       <span class="history-label">Agent:</span>
       <span class="history-value">${encodedAgent}</span>
       <span class="history-label">Model:</span>
