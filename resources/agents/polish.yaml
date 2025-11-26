@@ -1,4 +1,6 @@
 name: polish
+description: Improves writing quality and clarity based on your specific instructions.
+
 settings:
   documentTag: latex_document
   endTag: </latex_document>
