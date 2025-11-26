@@ -1,4 +1,5 @@
 name: generic
+description: General-purpose agent for flexible document editing tasks.
 
 settings:
   agentType: CoT
