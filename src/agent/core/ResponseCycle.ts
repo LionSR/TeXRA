@@ -11,7 +11,7 @@
 
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
+import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
@@ -22,15 +22,9 @@ import {
 } from './flows/ResponseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
-// Local imports - option helpers
-import type { AgentCycleBaseOptions } from './AgentCycleOptions';
-import type { AgentConfig } from './AgentConfig';
-
-export interface ResponseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
-  agentConfig: AgentConfig;
-  fileService: TaskRunFileService;
-}
+// Import and re-export from single source of truth
+import type { ResponseCycleOptions } from './flows/CycleServices';
+export type { ResponseCycleOptions };
 
 export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
