@@ -56,7 +56,7 @@
   padding-top: var(--spacing-small);
   padding-right: calc(var(--spacing-medium) + var(--height-control));
   padding-bottom: var(--spacing-small);
-  padding-left: 0;
+  padding-left: var(--spacing-small);
   cursor: pointer;
   border: none;
   background: none;
@@ -95,6 +95,7 @@
   width: 100%;
 }
 
+.tab-meta .remote-agent,
 .tab-meta .agent-type,
 .tab-meta .multi-file {
   margin-left: var(--spacing-small);
@@ -112,10 +113,7 @@
   height: var(--height-control);
   margin: 0;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  opacity: var(--opacity-subtle);
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
+  transition: color 120ms ease;
 }
 
 .tab-container:hover {
@@ -135,10 +133,6 @@
   border-radius: var(--border-radius-small);
 }
 
-.tab-container:hover .tab-delete,
-.tab-delete:focus-within {
-  opacity: var(--opacity-full);
-}
 
 .tab-delete:hover::part(control),
 .tab-delete:focus-within::part(control) {
@@ -150,14 +144,3 @@
   color: var(--vscode-errorForeground);
 }
 
-.tab-delete vscode-icon {
-  opacity: var(--opacity-subtle);
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
-}
-
-.tab-container:hover .tab-delete vscode-icon,
-.tab-delete:focus-within vscode-icon {
-  opacity: var(--opacity-full);
-}
