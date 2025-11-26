@@ -20,6 +20,7 @@ import {
   type ResponseCycleContext,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
+import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
@@ -42,6 +43,8 @@ export interface ResponseCycleInput<C = unknown> {
 export interface ResponseCycleResult {
   store: AgentSharedStore;
   endTurn: boolean;
+  /** Callbacks for triggering manual retry from UI. */
+  retryCallbacks: RetryCallbacks;
 }
 
 /**
@@ -60,6 +63,10 @@ export interface ResponseCycleResult {
 export async function runResponseCycle<C = unknown>(
   input: ResponseCycleInput<C>,
 ): Promise<ResponseCycleResult> {
+  // Initialize retry callbacks - these will be populated by RetryWaitNode
+  // and can be called by the UI to trigger manual retry
+  const retryCallbacks: RetryCallbacks = {};
+
   const context: ResponseCycleContext<C> = {
     options: input.options,
     store: input.store,
@@ -79,6 +86,8 @@ export async function runResponseCycle<C = unknown>(
       processedResponse: undefined,
       roundFinalized: false,
     } satisfies ResponseCycleState,
+    retryState: createRetryState(),
+    retryCallbacks,
   };
 
   const flow = createResponseCycleFlow<C>();
@@ -87,5 +96,6 @@ export async function runResponseCycle<C = unknown>(
   return {
     store: context.store,
     endTurn: context.state.endTurn,
+    retryCallbacks,
   };
 }

@@ -11,6 +11,10 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -25,6 +29,7 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -35,10 +40,22 @@ import type { ToolDefinition } from '@model';
 import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
+import {
+  type RetryState,
+  type RetryCallbacks,
+  clearRetryError,
+  resetRetryState,
+  recordRetryError,
+  shouldAutoRetry,
+  shouldOfferManualRetry,
+  computeBackoffDelay,
+} from './RetryState';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -138,6 +155,10 @@ export interface ToolUseCycleContext<C = unknown> {
   options: ToolUseCycleOptions<C>;
   state: ToolUseCycleState;
   store: AgentSharedStore;
+  /** Retry state for model invocation errors. */
+  retryState: RetryState;
+  /** Callbacks for manual retry control from UI. */
+  retryCallbacks: RetryCallbacks;
 }
 
 class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
@@ -214,23 +235,40 @@ function buildToolResultPayload(
   return payload;
 }
 
+/**
+ * Result type for tool-use call that captures both success and error cases.
+ */
+type ToolUseCallResult =
+  | {
+      success: true;
+      response: unknown;
+      responseTime?: number;
+      debugContext: CycleDebugContext;
+      debugFileOptions: CycleDebugFileOptions;
+    }
+  | { success: false; error: unknown };
+
+/**
+ * Handles model invocation for tool-use cycles with integrated retry support.
+ */
 class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleContext<C>): Promise<
-    SkippableNodeResult<{
-      response: unknown;
-      responseTime?: number;
-      debugContext: CycleDebugContext;
-      debugFileOptions: CycleDebugFileOptions;
-    }>
-  > {
-    const { options, state, store } = context;
+  async exec(context: ToolUseCycleContext<C>): Promise<ToolUseCallResult> {
+    const { options, state, store, retryState } = context;
     if (state.shouldStop) {
-      return { skipped: true };
+      return {
+        success: true,
+        response: undefined,
+        debugContext: {} as CycleDebugContext,
+        debugFileOptions: {} as CycleDebugFileOptions,
+      };
     }
+
+    // Increment attempt counter
+    retryState.attemptCount++;
 
     const debugContext: CycleDebugContext = {
       logger: options.logger,
@@ -248,65 +286,104 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const abortController = new AbortController();
     options.setAbortController(abortController);
 
-    let response: unknown;
     const start = Date.now();
     try {
       options.modelHandler.setOutputStreaming(true);
-      response = await options.modelHandler.createResponse({
+      const response = await options.modelHandler.createResponse({
         client: options.client,
         messages: state.messages,
         temperature: options.agentSetting.temperature ?? 0,
         signal: abortController.signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
       });
+
+      const responseTime = (Date.now() - start) / 1000;
+
+      return {
+        success: true,
+        response,
+        responseTime,
+        debugContext,
+        debugFileOptions,
+      };
+    } catch (error) {
+      return { success: false, error };
     } finally {
       options.setAbortController(null);
     }
-
-    const responseTime = (Date.now() - start) / 1000;
-
-    return {
-      skipped: false,
-      value: { response, responseTime, debugContext, debugFileOptions },
-    };
   }
 
   async post(
-    _shared: ToolUseCycleContext<C>,
+    shared: ToolUseCycleContext<C>,
     prepRes: ToolUseCycleContext<C>,
-    execRes: SkippableNodeResult<{
-      response: unknown;
-      responseTime?: number;
-      debugContext: CycleDebugContext;
-      debugFileOptions: CycleDebugFileOptions;
-    }>,
+    execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
-    const { options, state } = prepRes;
+    const { options, state, retryState } = shared;
 
-    if (execRes.skipped) {
-      state.shouldStop = true;
-      return FlowTransition.COMPLETE;
+    // Handle successful invocation
+    if (execRes.success) {
+      clearRetryError(retryState);
+
+      if (!execRes.response) {
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
+
+      state.response = execRes.response;
+      state.responseTime = execRes.responseTime;
+
+      await maybeSaveDebugObject({
+        context: execRes.debugContext,
+        fileOptions: execRes.debugFileOptions,
+        object: execRes.response,
+        objectType: 'response',
+      });
+
+      return undefined; // Continue to process node
     }
 
-    const { response, responseTime, debugContext, debugFileOptions } =
-      execRes.value;
+    // Handle error - determine retry strategy
+    const formatted = formatProviderHttpError(execRes.error);
+    recordRetryError(retryState, formatted.message, formatted.statusCode);
 
-    state.response = response;
-    state.responseTime = responseTime;
-
-    await maybeSaveDebugObject({
-      context: debugContext,
-      fileOptions: debugFileOptions,
-      object: response,
-      objectType: 'response',
-    });
-
-    if (!response) {
-      state.shouldStop = true;
-      return FlowTransition.COMPLETE;
+    // Auto-retry available?
+    if (shouldAutoRetry(retryState)) {
+      const delay = computeBackoffDelay(retryState);
+      options.logger.warn(
+        `Retrying tool-use call after ${delay}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: {
+            attempt: retryState.attemptCount,
+            maxAttempts: retryState.maxAutoAttempts,
+            statusCode: formatted.statusCode,
+          },
+        },
+      );
+      await sleep(delay);
+      return FlowTransition.RETRY;
     }
 
-    return undefined;
+    // Manual retry available?
+    if (shouldOfferManualRetry(retryState)) {
+      retryState.awaitingManualRetry = true;
+      options.logger.error(`Tool-use call failed: ${formatted.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: true },
+      });
+      return FlowTransition.AWAIT_RETRY;
+    }
+
+    // Non-retryable error
+    options.logger.error(
+      `Tool-use call failed (not retryable): ${formatted.message}`,
+      {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: false },
+      },
+    );
+    state.shouldStop = true;
+    return FlowTransition.COMPLETE;
   }
 }
 
@@ -619,16 +696,125 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return FlowTransition.CONTINUE;
   }
 }
+/**
+ * Specialized retry wait node for tool-use cycle.
+ * Handles manual retry by waiting for UI callback.
+ */
+class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
+  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
+    return shared;
+  }
+
+  async exec(context: ToolUseCycleContext<C>): Promise<'retry' | 'cancel'> {
+    const { retryState, options, retryCallbacks } = context;
+    const streamId = options.context.streamId;
+
+    // Log waiting status
+    options.logger.info('Waiting for manual retry', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: { error: retryState.lastError, awaitingManualRetry: true },
+    });
+
+    // Emit waiting status to UI
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+
+    // Wait for external signal via callbacks with timeout
+    return new Promise<'retry' | 'cancel'>((resolve) => {
+      let resolved = false;
+
+      // Timeout after 5 minutes
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          options.logger.warn('Manual retry wait timed out after 5 minutes');
+          resolve('cancel');
+        }
+      }, 5 * 60 * 1000);
+
+      retryCallbacks.triggerRetry = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('retry');
+        }
+      };
+      retryCallbacks.cancelRetry = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('cancel');
+        }
+      };
+
+      // Register with ManualRetryController for UI-triggered retries
+      registerManualRetry(streamId, {
+        run: async () => retryCallbacks.triggerRetry?.(),
+        logger: options.logger,
+        operation: 'Tool-use call',
+      });
+    });
+  }
+
+  async post(
+    shared: ToolUseCycleContext<C>,
+    _prepRes: ToolUseCycleContext<C>,
+    execRes: 'retry' | 'cancel',
+  ): Promise<string | undefined> {
+    const { retryState, options, state } = shared;
+    const streamId = options.context.streamId;
+
+    if (execRes === 'retry') {
+      resetRetryState(retryState);
+      options.logger.info('Manual retry triggered', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      return FlowTransition.RETRY;
+    }
+
+    // User cancelled
+    options.logger.info('Retry cancelled by user', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    state.shouldStop = true;
+    return FlowTransition.COMPLETE;
+  }
+}
+
 export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleContext<C>> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
+  const retryWaitNode = new ToolUseRetryWaitNode<C>();
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
 
+  // Main flow: prep → call → process → dispatch
   prepNode.next(callNode);
   callNode.next(processNode);
   processNode.next(dispatchNode);
 
+  // Retry transitions from call node:
+  // - RETRY: Loop back to call for auto-retry
+  // - AWAIT_RETRY: Go to retry wait node for manual retry
+  callNode.on(FlowTransition.RETRY, callNode);
+  callNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
+
+  // Retry wait node transitions:
+  // - RETRY: Loop back to call node after user triggers retry
+  // - COMPLETE: Exit flow if user cancels
+  retryWaitNode.on(FlowTransition.RETRY, callNode);
+
+  // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ToolUseCycleContext<C>>(prepNode);
