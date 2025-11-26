@@ -53,8 +53,9 @@ export class ReadFileTool extends defineTool({
   protected async execute(input: ReadInput): Promise<ToolResult> {
     const attachmentConfig = this.getAttachmentConfig(input.path);
     if (attachmentConfig) {
+      const result = await this.returnBinaryAttachment(input, attachmentConfig);
       recordToolFileRead(input.path);
-      return this.returnBinaryAttachment(input, attachmentConfig);
+      return result;
     }
 
     const content = await WorkspaceFS.read(input.path);

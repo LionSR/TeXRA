@@ -62,6 +62,10 @@ export class FileInteractionState {
     return this.readFiles.has(path);
   }
 
+  /**
+   * Records per-path edit deltas and returns a deduped list of files edited
+   * during this call alongside the aggregate line change totals for the call.
+   */
   recordEdits(
     edits:
       | { path?: string; lineChanges?: { added?: number; removed?: number } }[]
@@ -74,10 +78,7 @@ export class FileInteractionState {
       return { edits: [] };
     }
 
-    const newEntries: {
-      path: string;
-      lineChanges?: { added: number; removed: number };
-    }[] = [];
+    const perCallEdits = new Map<string, { added: number; removed: number }>();
     let added = 0;
     let removed = 0;
 
@@ -86,7 +87,6 @@ export class FileInteractionState {
       if (!path) continue;
 
       const existing = this.edits.get(path) ?? { added: 0, removed: 0 };
-      const isNew = !this.edits.has(path);
       const deltaAdded = entry.lineChanges?.added ?? 0;
       const deltaRemoved = entry.lineChanges?.removed ?? 0;
 
@@ -94,22 +94,27 @@ export class FileInteractionState {
       existing.removed += deltaRemoved;
       this.edits.set(path, existing);
 
+      const current = perCallEdits.get(path) ?? { added: 0, removed: 0 };
+      current.added += deltaAdded;
+      current.removed += deltaRemoved;
+      perCallEdits.set(path, current);
+
       added += deltaAdded;
       removed += deltaRemoved;
-
-      if (isNew && !newEntries.find((item) => item.path === path)) {
-        newEntries.push({
-          path,
-          lineChanges:
-            existing.added || existing.removed
-              ? { added: existing.added, removed: existing.removed }
-              : undefined,
-        });
-      }
     }
 
+    const editsForCall = Array.from(perCallEdits.entries()).map(
+      ([path, diff]) => ({
+        path,
+        lineChanges:
+          diff.added || diff.removed
+            ? { added: diff.added, removed: diff.removed }
+            : undefined,
+      }),
+    );
+
     const lineChanges = added || removed ? { added, removed } : undefined;
-    return { edits: newEntries, lineChanges };
+    return { edits: editsForCall, lineChanges };
   }
 
   toJSON(): {
@@ -195,18 +200,16 @@ export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
     thinkingAdded: z.boolean(),
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
-  interactions: z
-    .strictObject({
-      readFiles: z.array(z.string()),
-      edits: z.array(
-        z.strictObject({
-          path: z.string(),
-          added: z.number().optional(),
-          removed: z.number().optional(),
-        }),
-      ),
-    })
-    .optional(),
+  interactions: z.strictObject({
+    readFiles: z.array(z.string()),
+    edits: z.array(
+      z.strictObject({
+        path: z.string(),
+        added: z.number().optional(),
+        removed: z.number().optional(),
+      }),
+    ),
+  }),
 });
 
 export type AgentWorkspaceSnapshot = z.infer<
@@ -258,18 +261,22 @@ export class AgentWorkspaceState {
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
     state.document.texcountStats = snapshot.document.texcountStats;
-    if (snapshot.interactions) {
-      const restored = FileInteractionState.fromJSON(snapshot.interactions);
-      const restoredJson = restored.toJSON();
-      restoredJson.readFiles.forEach((path) =>
-        state.interactions.recordRead(path),
-      );
-      restoredJson.edits.forEach(({ path, added, removed }) =>
-        state.interactions.recordEdits([
-          { path, lineChanges: { added: added ?? 0, removed: removed ?? 0 } },
-        ]),
-      );
-    }
+    const interactions =
+      snapshot.interactions ??
+      ({
+        readFiles: [],
+        edits: [],
+      } satisfies AgentWorkspaceSnapshot['interactions']);
+    const restored = FileInteractionState.fromJSON(interactions);
+    const restoredJson = restored.toJSON();
+    restoredJson.readFiles.forEach((path) =>
+      state.interactions.recordRead(path),
+    );
+    restoredJson.edits.forEach(({ path, added, removed }) =>
+      state.interactions.recordEdits([
+        { path, lineChanges: { added: added ?? 0, removed: removed ?? 0 } },
+      ]),
+    );
     return state;
   }
 }
