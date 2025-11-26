@@ -310,6 +310,7 @@ export class OutputHandler implements IOutputHandler {
       path.join(dir, `${name}.bak`),
       path.join(dir, `${name}.bak0`),
       path.join(dir, `${name}.bak1`),
+      path.join(dir, 'indent.log'),
     ]);
 
     for (const candidateAbsolute of backupCandidates) {
