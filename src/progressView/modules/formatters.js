@@ -717,8 +717,15 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const { parsed, toolName, summaryText, errorText, outputText, input } =
-      normalizedToolLog;
+    const {
+      parsed,
+      toolName,
+      summaryText,
+      errorText,
+      outputText,
+      input,
+      files,
+    } = normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
     const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
