@@ -59,10 +59,7 @@ import {
   describeAttachments,
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
-import {
-  executeStreamingWithRetry,
-  executeWithRequestRetry,
-} from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
@@ -312,17 +309,17 @@ export class ModelHandlerOpenAI<
       stream_options: { include_usage: true },
     };
 
-    return executeStreamingWithRetry({
-      logger: this.logger,
-      model: this.config.name,
-      operation: 'openai.chat.completions.stream',
-      manualRetryKey: this.logger.channelId,
-      enableManualRetry: true,
-      signal,
-      onAttemptStart: (nextAttempt) => {
-        markRetryAttempt(nextAttempt);
+    return executeRequest(
+      {
+        logger: this.logger,
+        model: this.config.name,
+        operation: 'openai.chat.completions.stream',
+        signal,
+        onAttemptStart: (nextAttempt) => {
+          markRetryAttempt(nextAttempt);
+        },
       },
-      create: async () => {
+      async () => {
         const stream = await client.chat.completions.stream(streamParams, {
           signal,
         });
@@ -365,7 +362,7 @@ export class ModelHandlerOpenAI<
           cleanup();
         }
       },
-    });
+    );
   }
 
   protected async executeNonStreamingChat(
@@ -373,13 +370,11 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    return executeWithRequestRetry(
+    return executeRequest(
       {
         logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.create',
-        manualRetryKey: this.logger.channelId,
-        enableManualRetry: true,
         signal,
       },
       () =>

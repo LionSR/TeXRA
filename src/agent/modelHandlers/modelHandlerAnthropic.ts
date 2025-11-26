@@ -83,7 +83,7 @@ import {
 } from './utils/toolAttachmentUtils';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
-import { executeWithRequestRetry } from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -381,7 +381,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           countTokensParams.betas = countTokenBetas;
         }
 
-        const responseTokenCount = await executeWithRequestRetry(
+        const responseTokenCount = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -475,7 +475,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (useStreaming) {
         // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
         // we should also make sure partial results can be returned in the presence of errors!
-        const stream = await executeWithRequestRetry(
+        const stream = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -533,7 +533,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           cleanupAbortListener?.();
         }
       } else {
-        response = await executeWithRequestRetry(
+        response = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -656,7 +656,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         try {
           buffer = Buffer.from(base64Data, 'base64');
-          const uploadedFile = await executeWithRequestRetry(
+          const uploadedFile = await executeRequest(
             {
               logger: this.logger,
               model: this.config.name,
@@ -777,7 +777,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
 
         const base64Data = buffer.toString('base64');
-        const uploadedFile = await executeWithRequestRetry(
+        const uploadedFile = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
