@@ -27,7 +27,8 @@ interface RequestRetryOptions {
   onAttemptStart?: (attempt: number) => void;
 }
 
-const FALLBACK_MAX_ATTEMPTS = 3;
+// Default to 1 attempt (no automatic retries) - users must click retry button
+const FALLBACK_MAX_ATTEMPTS = 1;
 const FALLBACK_BACKOFF_MS = 1000;
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
@@ -45,10 +46,9 @@ export async function executeWithRequestRetry<T>(
   options: RequestRetryOptions,
   request: () => Promise<T> | T,
 ): Promise<T> {
-  const maxAttempts = Math.max(
-    1,
-    options.maxAttempts ?? getModelRetryMaxAttempts() ?? FALLBACK_MAX_ATTEMPTS,
-  );
+  // Default to 1 attempt (no automatic retries) unless explicitly configured
+  const configuredMaxAttempts = options.maxAttempts ?? getModelRetryMaxAttempts();
+  const maxAttempts = Math.max(1, configuredMaxAttempts ?? 1);
   const baseDelayMs =
     options.baseDelayMs ?? getModelRetryBackoffMs() ?? FALLBACK_BACKOFF_MS;
   const allowManualRetry = options.enableManualRetry ?? true;
