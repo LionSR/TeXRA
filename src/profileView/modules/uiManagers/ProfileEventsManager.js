@@ -2,7 +2,10 @@
 import { ELEMENT_IDS } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
-import { safeGetElementById, addEventListenerSafely } from '@common/domUtils.js';
+import {
+  safeGetElementById,
+  addEventListenerSafely,
+} from '@common/domUtils.js';
 
 /**
  * Manages event listeners for the profile view.

@@ -16,7 +16,10 @@ export class ProfileViewContentProvider extends BaseViewContentProvider {
   private readonly moduleDescriptors: ModuleDescriptor[] = [
     { key: 'profileViewStateUri', path: 'modules/profileViewState.js' },
     { key: 'agentsTableUri', path: 'modules/uiManagers/AgentsTable.js' },
-    { key: 'profileEventsUri', path: 'modules/uiManagers/ProfileEventsManager.js' },
+    {
+      key: 'profileEventsUri',
+      path: 'modules/uiManagers/ProfileEventsManager.js',
+    },
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {

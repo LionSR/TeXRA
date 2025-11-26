@@ -218,7 +218,9 @@ export async function showAccountMenu(): Promise<void> {
             await vscode.commands.executeCommand(AUTH_COMMANDS.VIEW_PROFILE);
             break;
           case 'browseAgents':
-            await vscode.commands.executeCommand(AUTH_COMMANDS.BROWSE_REMOTE_AGENTS);
+            await vscode.commands.executeCommand(
+              AUTH_COMMANDS.BROWSE_REMOTE_AGENTS,
+            );
             break;
           case 'signOut':
             await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);

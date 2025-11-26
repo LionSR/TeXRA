@@ -2,7 +2,10 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import { BaseWebviewProvider, getSharedLocalResourceRoots } from '@common/webview';
+import {
+  BaseWebviewProvider,
+  getSharedLocalResourceRoots,
+} from '@common/webview';
 
 // Local imports - profile view components
 import { ProfileViewContentProvider } from './ProfileViewContentProvider';
