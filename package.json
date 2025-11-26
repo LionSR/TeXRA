@@ -1192,12 +1192,6 @@
         "icon": "$(account)"
       },
       {
-        "command": "texra.remoteAgents.browse",
-        "title": "Browse Remote Agents",
-        "category": "TeXRA",
-        "icon": "$(cloud)"
-      },
-      {
         "command": "texra.testTextEditor",
         "title": "Test Text Editor Tool",
         "category": "TeXRA",
