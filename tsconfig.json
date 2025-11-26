@@ -24,6 +24,7 @@
       "@housekeeping/*": ["src/housekeeping/*"],
       "@progressView/*": ["src/progressView/*"],
       "@historyView/*": ["src/historyView/*"],
+      "@profileView/*": ["src/profileView/*"],
       "@replacement/*": ["src/replacement/*"],
       "@tools/*": ["src/tools/*"],
       "@types/*": ["src/types/*"],
