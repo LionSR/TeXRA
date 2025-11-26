@@ -25,6 +25,7 @@ import {
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
@@ -79,12 +80,28 @@ type AgentConstructor = {
 
 /**
  * Find and return the path to agent's yaml configuration file.
+ * Supports remote agents using the RemoteAgentRegistry.
  */
 export async function getAgentPath(
   agentName: string,
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
+    // Get clean agent name (strip legacy remote:// prefix if present)
+    const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+
+    // Check if this is a remote agent using the registry
+    if (RemoteAgentRegistry.isRemote(agentName)) {
+      // Return a special resolution for remote agents
+      return {
+        directory: '', // No directory for remote agents
+        source: AgentDirectorySource.Remote,
+        definitionPath: '', // No local path for remote agents
+        resolvedName: cleanName,
+        usedFallback: false,
+      };
+    }
+
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
       agentDirectories.custom(),
       agentDirectories.builtIn(),

@@ -1,0 +1,72 @@
+/**
+ * Supabase configuration for TeXRA authentication and remote agents.
+ *
+ * These credentials are for TeXRA's official Supabase backend.
+ * Users authenticate to TeXRA's service, not their own Supabase instance.
+ *
+ * Similar to how GitHub Copilot works - users sign in to the official service.
+ */
+
+/**
+ * Supabase configuration interface
+ */
+export interface SupabaseConfig {
+  /** Supabase project URL */
+  url: string;
+  /** Supabase anonymous (public) key - safe to include in client code */
+  anonKey: string;
+  /** Edge function URL for fetching remote agent configurations */
+  edgeFunctionUrl: string;
+}
+
+/**
+ * Official TeXRA Supabase configuration.
+ *
+ * These are the production credentials for TeXRA's official Supabase backend.
+ * The anon key is public and safe to include in client code (required for Supabase client initialization).
+ */
+
+export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
+
+export const SUPABASE_CONFIG: SupabaseConfig = {
+  // Production Supabase project URL
+  url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
+
+  // Production anon key - safe to include in client code, required for Supabase client
+  anonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpudHVibWNnYmh3dGNrdHViZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDI5ODksImV4cCI6MjA3NDg3ODk4OX0.67InRy428t3zSBelbC92wo1nj5Llo4Jfb3A0yWNSzFo',
+
+  // Edge function URL
+  edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
+};
+
+/**
+ * Check if Supabase is configured.
+ * Returns false if using placeholder values.
+ */
+export function isSupabaseConfigured(): boolean {
+  return (
+    SUPABASE_CONFIG.url !== `placeholder-url` &&
+    SUPABASE_CONFIG.anonKey !== 'placeholder-anon-key' &&
+    !SUPABASE_CONFIG.url.includes('placeholder')
+  );
+}
+
+/**
+ * Supported OAuth providers for TeXRA authentication.
+ * All providers are supported - no need for user configuration.
+ */
+export const OAUTH_PROVIDERS = ['github', 'google', 'gitlab'] as const;
+export type OAuthProvider = (typeof OAUTH_PROVIDERS)[number];
+
+/**
+ * Default OAuth provider to use.
+ * Users can choose during sign-in if multiple are configured in Supabase.
+ */
+export const DEFAULT_OAUTH_PROVIDER: OAuthProvider = 'github';
+
+/**
+ * VS Code extension ID for OAuth redirects.
+ * Format: publisher.extensionName (from package.json)
+ */
+export const EXTENSION_ID = 'texra-ai.texra';

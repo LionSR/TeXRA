@@ -100,6 +100,63 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
+  // Initialize remote agent registry
+  const { RemoteAgentRegistry } = await import(
+    '@agent/remote/RemoteAgentRegistry'
+  );
+  RemoteAgentRegistry.initialize(context);
+
+  // Initialize Supabase authentication if enabled
+  const authConfig = vscode.workspace.getConfiguration('texra.auth');
+  const authEnabled = authConfig.get<boolean>('enabled', true);
+
+  if (authEnabled) {
+    try {
+      const { SupabaseAuthProvider } = await import(
+        '@/auth/SupabaseAuthProvider'
+      );
+      const { isSupabaseConfigured } = await import('@/auth/config');
+
+      // Check if Supabase credentials are configured
+      if (!isSupabaseConfigured()) {
+        logger.warn(
+          'extension',
+          'Supabase authentication is enabled but credentials are not configured. Please set TEXRA_SUPABASE_URL and TEXRA_SUPABASE_ANON_KEY environment variables or hardcode them in src/auth/config.ts before building.',
+        );
+      } else {
+        // Register authentication provider
+        const authProvider = new SupabaseAuthProvider(context);
+        context.subscriptions.push(
+          vscode.authentication.registerAuthenticationProvider(
+            'texra-supabase',
+            'TeXRA Account',
+            authProvider,
+            { supportsMultipleAccounts: false },
+          ),
+        );
+
+        // Register URI handler for OAuth callbacks
+        const { SupabaseUriHandler } = await import('@/auth/UriHandler');
+        const uriHandler = new SupabaseUriHandler();
+        context.subscriptions.push(
+          vscode.window.registerUriHandler(uriHandler),
+        );
+
+        // Connect URI handler to auth provider
+        authProvider.setUriHandler(uriHandler);
+
+        logger.info('extension', 'Supabase authentication provider registered');
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error(
+        'extension',
+        `Failed to initialize Supabase authentication: ${errorMessage}`,
+      );
+    }
+  }
+
   // Create the log view provider
   const progressViewProvider = new ProgressViewProvider(context);
   await progressViewProvider.initialize();
