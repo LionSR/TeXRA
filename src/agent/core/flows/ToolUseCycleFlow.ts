@@ -45,6 +45,7 @@ import {
   type RetryState,
   type RetryCallbacks,
   clearRetryError,
+  beginAttempt,
   determineRetryStrategy,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
@@ -259,8 +260,8 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       };
     }
 
-    // Increment attempt counter
-    retryState.attemptCount++;
+    // Increment attempt counter (single source of truth)
+    beginAttempt(retryState);
 
     const debugContext: CycleDebugContext = {
       logger: options.logger,

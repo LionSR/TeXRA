@@ -50,6 +50,7 @@ import {
   type RetryState,
   type RetryCallbacks,
   clearRetryError,
+  beginAttempt,
   determineRetryStrategy,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
@@ -220,8 +221,8 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return { success: true, response: undefined };
     }
 
-    // Increment attempt counter
-    retryState.attemptCount++;
+    // Increment attempt counter (single source of truth)
+    beginAttempt(retryState);
 
     const abortController = new AbortController();
     options.setAbortController(abortController);
