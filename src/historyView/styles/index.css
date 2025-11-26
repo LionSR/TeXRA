@@ -170,3 +170,31 @@ mark.current-match {
     var(--width-button-min) + var(--spacing-xlarge) + var(--spacing-xlarge)
   );
 }
+
+/* Session kind badge */
+.session-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-small);
+  padding: var(--spacing-xsmall) var(--spacing-medium);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.session-kind-badge .codicon {
+  font-size: var(--font-size-sm);
+}
+
+.kind-workflow {
+  background-color: var(--vscode-editorInfo-background, rgba(0, 127, 212, 0.15));
+  color: var(--vscode-editorInfo-foreground, #3794ff);
+}
+
+.kind-tool-use {
+  background-color: var(
+    --vscode-editorWarning-background,
+    rgba(255, 204, 0, 0.15)
+  );
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
