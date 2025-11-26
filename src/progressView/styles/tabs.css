@@ -103,6 +103,17 @@
   top: 50%;
   right: var(--spacing-small);
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--height-control);
+  height: var(--height-control);
+  margin: 0;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+  opacity: var(--opacity-subtle);
+  transition:
+    opacity 120ms ease,
+    color 120ms ease;
 }
 
 .tab-container:hover {
@@ -115,20 +126,6 @@
 
 .tab-container.active .tab {
   color: var(--vscode-list-activeSelectionForeground);
-}
-
-.tab-delete {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--height-control);
-  height: var(--height-control);
-  margin: 0;
-  color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  opacity: var(--opacity-subtle);
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
 }
 
 .tab-delete::part(control) {
