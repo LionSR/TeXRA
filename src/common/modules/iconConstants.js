@@ -11,8 +11,8 @@ export const AGENT_DECORATORS = {
   properties: {
     remote: {
       icon: 'cloud',
-      label: 'Remote agent',
-      hint: 'Remote agent',
+      label: 'Remote',
+      hint: 'Agent prompts loaded from remote',
     },
     multipleOutputs: {
       icon: 'files',
