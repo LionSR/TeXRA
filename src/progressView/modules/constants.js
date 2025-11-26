@@ -160,9 +160,6 @@ const WORKFLOW_TOOLBAR = [
   },
 ];
 
-const SHARED_TOOLBAR_PREFIX = [STOP_STREAM_BUTTON, RESTORE_STATE_BUTTON];
-const BASE_TOOLBAR = [...SHARED_TOOLBAR_PREFIX];
-
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
@@ -177,9 +174,6 @@ const TOOL_USE_TOOLBAR = [
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
-
-/** @type {ToolbarButtonDefinition[]} */
-const TOOL_USE_TOOLBAR = [...BASE_TOOLBAR, { ...OPEN_TASK_STORAGE_BUTTON }];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
 export const TOOLBAR_BUTTONS = {
