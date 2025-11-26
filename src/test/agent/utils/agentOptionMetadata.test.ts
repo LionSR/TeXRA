@@ -38,7 +38,7 @@ describe('agentOptionMetadata', () => {
     assert.equal(metadata.isMultipleOutput, true);
     const optionTag = createAgentOptionTag('custom_multi', metadata);
     assert.ok(optionTag.includes('data-multiple="true"'));
-    assert.ok(optionTag.includes('∶∶'));
+    // Note: Visual decoration (icons) is now handled client-side via AGENT_DECORATORS
   });
 
   it('keeps base agents decorated when a sibling _multiple file exists', () => {
@@ -61,6 +61,6 @@ describe('agentOptionMetadata', () => {
     assert.equal(metadata.hasMultipleSibling, true);
     const optionTag = createAgentOptionTag('writer', metadata);
     assert.ok(optionTag.includes('data-multiple="true"'));
-    assert.ok(optionTag.includes('∶∶'));
+    // Note: Visual decoration (icons) is now handled client-side via AGENT_DECORATORS
   });
 });

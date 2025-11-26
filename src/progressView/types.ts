@@ -20,6 +20,8 @@ export interface StreamTabInfo {
   agentSessionKind: AgentCategory;
   uiTraits: StreamUITraits;
   hasMultipleOutputs?: boolean;
+  /** Whether this is a remote agent */
+  isRemote?: boolean;
   lastTimestamp?: number;
   inputFile?: string;
   creationTimestamp?: number;
