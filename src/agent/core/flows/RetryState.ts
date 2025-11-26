@@ -183,21 +183,22 @@ export function recordRetryError(
 // ============================================================================
 
 /**
- * Result of retry strategy determination.
- * The caller handles side effects (logging, sleeping, UI events).
+ * Error info included in retry decisions.
  */
-export interface RetryDecision {
-  /** The flow transition to take */
-  action: 'auto_retry' | 'manual_retry' | 'fail';
-  /** Backoff delay in ms (only for auto_retry) */
-  delayMs?: number;
-  /** Formatted error info for logging */
-  error: {
-    message: string;
-    statusCode?: number;
-    retryable: boolean;
-  };
+export interface RetryDecisionError {
+  message: string;
+  statusCode?: number;
+  retryable: boolean;
 }
+
+/**
+ * Result of retry strategy determination.
+ * Uses discriminated union to make delayMs type-safe (required for auto_retry only).
+ */
+export type RetryDecision =
+  | { action: 'auto_retry'; delayMs: number; error: RetryDecisionError }
+  | { action: 'manual_retry'; error: RetryDecisionError }
+  | { action: 'fail'; error: RetryDecisionError };
 
 /**
  * Determines retry strategy after an error.
@@ -281,7 +282,7 @@ export async function applyRetryDecision(
           },
         },
       );
-      await sleep(decision.delayMs!);
+      await sleep(decision.delayMs);
       return FlowTransition.RETRY;
 
     case 'manual_retry':
