@@ -11,6 +11,10 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -25,6 +29,7 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -34,7 +39,9 @@ import type { ToolDefinition } from '@model';
 import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -48,13 +55,6 @@ import {
   shouldOfferManualRetry,
   computeBackoffDelay,
 } from './RetryState';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
-import { sleep } from '@utils/helpers';
-import { bus } from '@eventBus/ProgressEventBus';
-import {
-  registerManualRetry,
-  clearManualRetry,
-} from '@agent/runtime/ManualRetryController';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
