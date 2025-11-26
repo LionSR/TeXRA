@@ -1,7 +1,5 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-// Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import {
   BaseCycleState,
   resetCycleState,
@@ -35,7 +33,6 @@ import type { ToolDefinition } from '@model';
 import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
-import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -46,9 +43,14 @@ import {
   clearRetryError,
   beginAttempt,
   determineRetryStrategy,
+  applyRetryDecision,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
-import type { ToolUseCycleServices, ToolUseCycleParams } from './CycleServices';
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleServices,
+  ToolUseCycleParams,
+} from './CycleServices';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -361,7 +363,7 @@ class ToolUseCallNode<C> extends BaseNode<
       return undefined; // Continue to process node
     }
 
-    // Handle error - use single source of truth for retry decision
+    // Handle error - use single source of truth for retry decision and side-effects
     const formatted = formatProviderHttpError(execRes.error);
     const decision = determineRetryStrategy(
       retryState,
@@ -369,43 +371,20 @@ class ToolUseCallNode<C> extends BaseNode<
       formatted.statusCode,
     );
 
-    switch (decision.action) {
-      case 'auto_retry':
-        options.logger.warn(
-          `Retrying tool-use call after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: {
-              attempt: retryState.attemptCount,
-              maxAttempts: retryState.maxAutoAttempts,
-              statusCode: decision.error.statusCode,
-            },
-          },
-        );
-        await sleep(decision.delayMs!);
-        return FlowTransition.RETRY;
+    // Apply retry decision (logging, sleeping) via shared helper
+    const transition = await applyRetryDecision(
+      decision,
+      options.logger,
+      retryState,
+      'Tool-use call',
+    );
 
-      case 'manual_retry':
-        options.logger.error(
-          `Tool-use call failed: ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: { statusCode: decision.error.statusCode, retryable: true },
-          },
-        );
-        return FlowTransition.AWAIT_RETRY;
-
-      case 'fail':
-        options.logger.error(
-          `Tool-use call failed (not retryable): ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: { statusCode: decision.error.statusCode, retryable: false },
-          },
-        );
-        state.shouldStop = true;
-        return FlowTransition.COMPLETE;
+    // Set state flags on failure
+    if (decision.action === 'fail') {
+      state.shouldStop = true;
     }
+
+    return transition;
   }
 }
 
