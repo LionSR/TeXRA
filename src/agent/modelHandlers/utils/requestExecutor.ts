@@ -60,39 +60,3 @@ export async function executeRequest<T>(
     throw error;
   }
 }
-
-// =============================================================================
-// Legacy aliases (for backward compatibility with existing model handlers)
-// =============================================================================
-
-/**
- * @deprecated Use `executeRequest` instead. This alias exists for backward compatibility.
- */
-export async function executeWithRequestRetry<T>(
-  options: RequestExecutionOptions & {
-    // Deprecated parameters - ignored but kept for API compatibility
-    maxAttempts?: number;
-    baseDelayMs?: number;
-    enableManualRetry?: boolean;
-    manualRetryKey?: string;
-  },
-  request: () => Promise<T> | T,
-): Promise<T> {
-  return executeRequest(options, request);
-}
-
-/**
- * @deprecated Use `executeRequest` instead. This alias exists for backward compatibility.
- */
-export async function executeStreamingWithRetry<T>(
-  options: RequestExecutionOptions & {
-    create: () => Promise<T>;
-    // Deprecated parameters - ignored but kept for API compatibility
-    maxAttempts?: number;
-    baseDelayMs?: number;
-    enableManualRetry?: boolean;
-    manualRetryKey?: string;
-  },
-): Promise<T> {
-  return executeRequest(options, options.create);
-}
