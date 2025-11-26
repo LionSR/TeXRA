@@ -20,8 +20,7 @@ import {
   type ResponseCycleContext,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
-import { createRetryState } from './flows/RetryState';
-import type { RetryCallbacks } from './flows/RetryWaitNode';
+import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
