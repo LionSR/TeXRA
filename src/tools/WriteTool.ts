@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult, toolResult } from '@tools/result';
+import { requireFileReadForEdit } from '@tools/fileInteractions';
 import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
@@ -35,9 +36,13 @@ export class WriteFileTool extends defineTool({
   schema: WriteInputSchema,
 }) {
   protected async execute(input: WriteInput): Promise<ToolResult> {
-    const originalContent = (await WorkspaceFS.exists(input.path))
-      ? await WorkspaceFS.read(input.path)
-      : '';
+    const exists = await WorkspaceFS.exists(input.path);
+    const readGate = requireFileReadForEdit(input.path, exists);
+    if (readGate) {
+      return readGate;
+    }
+
+    const originalContent = exists ? await WorkspaceFS.read(input.path) : '';
 
     const proposedContent = isTexFile(input.path)
       ? replacementEngine.applyAll(input.content)
@@ -76,6 +81,7 @@ export class WriteFileTool extends defineTool({
       summary: `Wrote ${input.path}`,
       output,
       userPatch: approval.userPatch,
+      edits: [{ path: input.path, lineChanges: approval.lineChanges }],
     });
   }
 }
