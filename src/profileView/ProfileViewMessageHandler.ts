@@ -25,8 +25,6 @@ interface ProfileDataMessage {
   command: string;
 }
 
-type ProfileViewMessage = SelectAgentMessage | ProfileDataMessage;
-
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
