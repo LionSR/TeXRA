@@ -14,6 +14,7 @@ import {
   resolveAgentDefinitionSync,
   type AgentDirectoryMap,
 } from '@agent/utils/agentPathResolver';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { AbsoluteFS } from '@utils/files';
 
 export type { AgentDirectoryMap } from '@agent/utils/agentPathResolver';
@@ -23,6 +24,7 @@ export interface AgentOptionMetadata {
   hasMultipleSibling: boolean;
   isMultipleOutput: boolean;
   isToolUse: boolean;
+  isRemote: boolean;
 }
 
 export interface AgentOptionsPayload {
@@ -68,12 +70,27 @@ export function getAgentOptionMetadata(
   agentName: string,
   directories: AgentDirectoryMap,
 ): AgentOptionMetadata {
+  // Check if this is a remote agent using the registry
+  const isRemote = RemoteAgentRegistry.isRemote(agentName);
+  const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+
+  // Handle remote agents specially
+  if (isRemote) {
+    return {
+      hasDefinition: true, // Remote agents always have definitions (on server)
+      hasMultipleSibling: false,
+      isMultipleOutput: false,
+      isToolUse: false, // Remote agents are workflow agents by default
+      isRemote: true,
+    };
+  }
+
   const candidates = mapToCandidates(directories);
   const definitionResolution = resolveAgentDefinitionSync(
-    agentName,
+    cleanName,
     candidates,
   );
-  const multipleResolution = resolveAgentDefinitionSync(agentName, candidates, {
+  const multipleResolution = resolveAgentDefinitionSync(cleanName, candidates, {
     preferMultiple: true,
   });
   const definition = readAgentDefinition(definitionResolution?.definitionPath);
@@ -88,6 +105,7 @@ export function getAgentOptionMetadata(
     hasMultipleSibling,
     isMultipleOutput,
     isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
+    isRemote: false,
   };
 }
 
@@ -95,7 +113,14 @@ function decorateLabel(
   agentName: string,
   metadata: AgentOptionMetadata,
 ): string {
-  let label = agentName;
+  const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+  let label = cleanName;
+
+  // Add cloud icon for remote agents
+  if (metadata.isRemote) {
+    label = `☁ ${cleanName}`;
+  }
+
   if (metadata.hasMultipleSibling || metadata.isMultipleOutput) {
     label += ' ∶∶';
   }
@@ -111,9 +136,12 @@ export function createAgentOptionTag(
   metadata: AgentOptionMetadata,
   options: AgentOptionTagOptions = {},
 ): string {
+  // Use the clean name (without remote:// prefix)
+  const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+
   const attributes = [
-    `value="${encodeHtml(agentName)}"`,
-    `data-label="${encodeHtml(agentName)}"`,
+    `value="${encodeHtml(cleanName)}"`,
+    `data-label="${encodeHtml(cleanName)}"`,
   ];
 
   if (!metadata.hasDefinition) {
@@ -124,6 +152,9 @@ export function createAgentOptionTag(
   }
   if (metadata.isToolUse) {
     attributes.push('data-tool-use="true"');
+  }
+  if (metadata.isRemote) {
+    attributes.push('data-remote="true"');
   }
   if (options.isSelected) {
     attributes.push('selected');

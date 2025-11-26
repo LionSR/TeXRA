@@ -15,6 +15,7 @@ import {
   CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -118,6 +119,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
+          isRemote: RemoteAgentRegistry.isRemote(agentConfig.agent),
         };
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
