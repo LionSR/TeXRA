@@ -1,4 +1,6 @@
 name: tex_linter_fix
+description: Automatically fixes LaTeX linter warnings and errors.
+
 settings:
   agentType: toolUse
   tools:
