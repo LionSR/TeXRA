@@ -45,8 +45,7 @@
   align-items: center;
   position: relative;
   width: 100%;
-  gap: var(--spacing-small);
-  padding-right: var(--spacing-small);
+  gap: var(--spacing-tiny);
 }
 
 .tab {
@@ -54,7 +53,8 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--spacing-small) var(--spacing-medium);
+  padding: var(--spacing-small)
+    calc(var(--spacing-medium) + var(--height-control));
   cursor: pointer;
   border: none;
   background: none;
@@ -98,19 +98,11 @@
   margin-left: var(--spacing-small);
 }
 
-.tab-container:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-
-.tab-container.active {
-  background-color: var(--vscode-list-activeSelectionBackground);
-}
-
-.tab-container.active .tab {
-  color: var(--vscode-list-activeSelectionForeground);
-}
-
 .tab-delete {
+  position: absolute;
+  top: 50%;
+  right: var(--spacing-small);
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,6 +114,18 @@
   transition:
     opacity 120ms ease,
     color 120ms ease;
+}
+
+.tab-container:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.tab-container.active {
+  background-color: var(--vscode-list-activeSelectionBackground);
+}
+
+.tab-container.active .tab {
+  color: var(--vscode-list-activeSelectionForeground);
 }
 
 .tab-delete::part(control) {
