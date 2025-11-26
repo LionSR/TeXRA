@@ -3,13 +3,11 @@
 import { ELEMENT_IDS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
-
-const AGENT_ICONS = {
-  CoT: 'list-tree',
-  direct: 'lightbulb',
-  toolUse: 'tools',
-  unknown: 'question',
-};
+import {
+  AGENT_DECORATORS,
+  getAgentTypeDecorator,
+  applyCodiconClass,
+} from '@common/iconConstants.js';
 
 /**
  * Manages stream tab UI updates.
@@ -62,22 +60,8 @@ export class StreamTabs {
         statusEl.dataset.status =
           status.charAt(0).toUpperCase() + status.slice(1);
       }
-      const agentIcon = tabEl.querySelector('.agent-type');
-      if (agentIcon) {
-        const key = info.agentType || info.agent || 'unknown';
-        const icon = AGENT_ICONS[key] || AGENT_ICONS.unknown;
-        agentIcon.classList.add('codicon', `codicon-${icon}`);
-        agentIcon.title = `Agent type: ${key}`;
-      }
-      const multiIcon = tabEl.querySelector('.multi-file');
-      if (multiIcon) {
-        if (info.hasMultipleOutputs) {
-          multiIcon.classList.add('codicon', 'codicon-files');
-          multiIcon.title = 'Multiple output files';
-        } else {
-          multiIcon.remove();
-        }
-      }
+      // Apply agent decorators from shared config
+      this._applyAgentDecorators(tabEl, info);
       if (info.name === activeStream) {
         tabEl.classList.add('active');
         activeInfo = info;
@@ -126,5 +110,46 @@ export class StreamTabs {
       }
     }
     return parts.filter(Boolean).join('\n');
+  }
+
+  /**
+   * Apply agent decorator icons to a tab element.
+   * Uses shared AGENT_DECORATORS config for consistency.
+   * @param {HTMLElement} tabEl - The tab element
+   * @param {Object} info - Stream info object
+   */
+  _applyAgentDecorators(tabEl, info) {
+    // Agent type icon (CoT, direct, toolUse)
+    const agentIcon = tabEl.querySelector('.agent-type');
+    if (agentIcon) {
+      const key = info.agentType ?? info.agent ?? 'unknown';
+      const decorator = getAgentTypeDecorator(key);
+      applyCodiconClass(agentIcon, decorator.icon);
+      agentIcon.title = `Agent type: ${decorator.label}`;
+    }
+
+    // Remote agent icon
+    const remoteIcon = tabEl.querySelector('.remote-agent');
+    if (remoteIcon) {
+      if (info.isRemote) {
+        const { icon, hint } = AGENT_DECORATORS.properties.remote;
+        applyCodiconClass(remoteIcon, icon);
+        remoteIcon.title = hint;
+      } else {
+        remoteIcon.remove();
+      }
+    }
+
+    // Multiple outputs icon
+    const multiIcon = tabEl.querySelector('.multi-file');
+    if (multiIcon) {
+      if (info.hasMultipleOutputs) {
+        const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
+        applyCodiconClass(multiIcon, icon);
+        multiIcon.title = hint;
+      } else {
+        multiIcon.remove();
+      }
+    }
   }
 }
