@@ -191,26 +191,6 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 }
 
-function summarizeLineChanges(
-  edits:
-    | { path?: string; lineChanges?: { added?: number; removed?: number } }[]
-    | undefined,
-): { added: number; removed: number } | undefined {
-  if (!Array.isArray(edits)) {
-    return undefined;
-  }
-
-  let added = 0;
-  let removed = 0;
-
-  for (const edit of edits) {
-    added += edit?.lineChanges?.added ?? 0;
-    removed += edit?.lineChanges?.removed ?? 0;
-  }
-
-  return added || removed ? { added, removed } : undefined;
-}
-
 function buildToolResultPayload(
   result: ToolResult,
   fallbackLineChanges?: { added: number; removed: number },
@@ -557,10 +537,9 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         }
       }
 
+      // recordEdits returns per-call line changes as the single source of truth
       const trackedEdits = tracker.recordEdits(result.edits);
-      const fallbackLineChanges =
-        trackedEdits.lineChanges ?? summarizeLineChanges(trackedEdits.edits);
-      const lineChanges = result.lineChanges ?? fallbackLineChanges;
+      const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
       const sanitizedOutput = sanitizeToolResultForLog(result);
       if (lineChanges) {
         sanitizedOutput.lineChanges = lineChanges;
