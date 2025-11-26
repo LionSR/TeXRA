@@ -149,9 +149,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return false;
     }
 
-    // Workflow agents are CoT or Direct (anything except ToolUse)
+    // Workflow agents are CoT or Direct - must explicitly match, not just exclude ToolUse
     const agentType = this.getAgentType();
-    const isWorkflowAgent = agentType !== 'toolUse';
+    const isWorkflowAgent = agentType === 'CoT' || agentType === 'direct';
     return isWorkflowAgent;
   }
 
