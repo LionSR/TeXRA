@@ -52,10 +52,18 @@ export class FileSelect {
 
     // Restore selection if file still exists, prioritizing stored state
     const { storedValue, currentValue } = options;
+    let restoredValue = null;
+
     if (storedValue && sortedFiles.includes(storedValue)) {
-      safeSetElementValue(id, storedValue);
+      restoredValue = storedValue;
     } else if (currentValue && sortedFiles.includes(currentValue)) {
-      safeSetElementValue(id, currentValue);
+      restoredValue = currentValue;
+    }
+
+    if (restoredValue) {
+      safeSetElementValue(id, restoredValue);
+      // Sync state so mainViewState.restore() doesn't overwrite with stale value
+      mainViewState.update({ [id]: restoredValue });
     }
   }
 
