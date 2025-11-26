@@ -41,11 +41,11 @@ export class ProfileViewProvider
    * Create and show the webview panel (for command palette activation)
    */
   public async showProfileView() {
-    // If we already have a panel, show it
+    // If we already have a panel, show it and refresh data
     if (this._view && 'reveal' in this._view) {
       this._view.reveal(vscode.ViewColumn.One);
-      // Refresh data when revealing existing panel
-      await this.updateWebviewContent();
+      // Send fresh data to existing panel - no need to reset HTML
+      await this.messageHandler.sendProfileData(this._view.webview);
       return;
     }
 
@@ -65,24 +65,10 @@ export class ProfileViewProvider
     );
 
     super.resolveWebviewViewInternal(this._view);
-    await this.updateWebviewContent();
-  }
 
-  /**
-   * Update the content of the webview
-   */
-  private async updateWebviewContent() {
-    if (this._view) {
-      // Set the HTML content first
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
-      // Then send the profile data after a short delay
-      setTimeout(() => {
-        if (this._view) {
-          void this.messageHandler.sendProfileData(this._view.webview);
-        }
-      }, 100);
-    }
+    // Set the HTML content - webview will request data via GET_PROFILE_DATA on DOMContentLoaded
+    this._view.webview.html = this.contentProvider.getHtmlContent(
+      this._view.webview,
+    );
   }
 }
