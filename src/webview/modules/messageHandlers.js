@@ -214,9 +214,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml;
-    if (previous) {
-      selectElement.value = previous;
-    }
+    this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
       const { provider, context, cost } = opt.dataset;
       if (provider || context || cost) {
@@ -379,6 +377,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const sessionType = this._getSessionTypeForSelect(selectElement);
     const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
     const candidates = [savedValue, previousValue].filter(Boolean);
+
+    const options = getSelectOptionElements(selectElement);
+    const match = candidates.find((value) =>
+      options.some((option) => option.value === value),
+    );
+
+    if (match) {
+      selectElement.value = match;
+      return;
+    }
+
+    const fallbackOption =
+      options.find((option) => !option.disabled) ?? options[0];
+    if (fallbackOption) {
+      selectElement.value = fallbackOption.value;
+    }
+  }
+
+  _restoreModelSelection(selectElement, previousValue) {
+    const savedValue = mainViewState.get?.()?.model ?? '';
+    const candidates = [previousValue, savedValue].filter(Boolean);
 
     const options = getSelectOptionElements(selectElement);
     const match = candidates.find((value) =>
