@@ -211,6 +211,7 @@ const DefinitionBlockSchema = z.record(z.string(), z.unknown()).prefault({});
 
 export const AgentDefinitionSchema = z.strictObject({
   name: z.string().trim().min(1),
+  description: z.string().optional(),
   inherits: z.string().optional(),
   settings: DefinitionBlockSchema,
   prompts: DefinitionBlockSchema,
