@@ -15,7 +15,6 @@ import * as path from 'path';
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
-import { normalizeRunId } from '@progressView/constants/runIds';
 import type { BaseTool } from '@tools/core/base';
 import { pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -115,9 +114,11 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const stream = options.context.streamId;
   const executionId = options.context.executionId;
   const roundIndex = store.round.roundIndex;
-  // Tool-use agents don't create logger groups, so runId may be undefined.
-  // normalizeRunId handles this by returning DEFAULT_RUN_ID ('__default__').
-  const runId = options.logger.withCurrentGroup((id) => id);
+  // Tool-use agents don't create logger groups. Use executionId (or streamId
+  // as fallback) to match the runId used by UsageMonitor for consistency.
+  // This ensures files and usage are stored under the same runId in the
+  // progress view, allowing resolveActiveRunId to correctly display files.
+  const runId = executionId ?? stream;
 
   // Deduplicate by path in case the same file was edited multiple times
   const uniquePaths = [...new Set(interactions.edits.map((e) => e.path))];
@@ -130,7 +131,7 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
 
   bus.emit('addOutputFiles', {
     stream,
-    runId: normalizeRunId(runId),
+    runId,
     executionId,
     filesByRound: { [roundIndex]: fileInfos },
   });
