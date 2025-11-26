@@ -1,21 +1,27 @@
 /**
  * Retry state management for flow-based retry handling.
  *
- * This module provides PURE state management functions only.
- * Side effects (logging, sleeping, events) belong in flow nodes.
+ * This module centralizes retry state management AND side-effect handling.
+ * - Pure functions: createRetryState, resetRetryState, determineRetryStrategy
+ * - Side-effect helper: applyRetryDecision (logging, sleeping)
  */
 
+import type { AgentLogger } from '@logger/AgentLogger';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
   DEFAULT_MODEL_RETRY_ATTEMPTS,
   DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
+import { sleep } from '@utils/helpers';
+
+import { FlowTransition } from './FlowTransitions';
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
-// Timeout for manual retry wait (5 minutes)
-const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+/** Timeout for manual retry wait (5 minutes) - exported for BaseRetryWaitNode */
+export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
 // ============================================================================
 // Types
@@ -93,11 +99,21 @@ export function resetRetryState(state: RetryState): void {
 /**
  * Clears error state and resets attempt counter after successful operation.
  * This ensures the next invocation gets a fresh retry budget.
+ * @mutates state.attemptCount, state.lastError, state.awaitingManualRetry
  */
 export function clearRetryError(state: RetryState): void {
   state.attemptCount = 0;
   state.lastError = undefined;
   state.awaitingManualRetry = false;
+}
+
+/**
+ * Increments the attempt counter before each invocation attempt.
+ * Call this at the start of exec() in invocation nodes.
+ * @mutates state.attemptCount
+ */
+export function beginAttempt(state: RetryState): void {
+  state.attemptCount++;
 }
 
 // ============================================================================
@@ -160,4 +176,130 @@ export function recordRetryError(
     statusCode,
     retryable: isRetryableStatusCode(statusCode),
   };
+}
+
+// ============================================================================
+// Retry decision (single source of truth for retry logic)
+// ============================================================================
+
+/**
+ * Error info included in retry decisions.
+ */
+export interface RetryDecisionError {
+  message: string;
+  statusCode?: number;
+  retryable: boolean;
+}
+
+/**
+ * Result of retry strategy determination.
+ * Uses discriminated union to make delayMs type-safe (required for auto_retry only).
+ */
+export type RetryDecision =
+  | { action: 'auto_retry'; delayMs: number; error: RetryDecisionError }
+  | { action: 'manual_retry'; error: RetryDecisionError }
+  | { action: 'fail'; error: RetryDecisionError };
+
+/**
+ * Determines retry strategy after an error.
+ * This is the SINGLE SOURCE OF TRUTH for retry decision logic.
+ *
+ * @mutates state.lastError, state.awaitingManualRetry
+ * Side effects (logging, sleeping, UI events) are handled by the caller.
+ */
+export function determineRetryStrategy(
+  state: RetryState,
+  errorMessage: string,
+  statusCode?: number,
+): RetryDecision {
+  // Record the error in state
+  recordRetryError(state, errorMessage, statusCode);
+
+  const error = {
+    message: errorMessage,
+    statusCode,
+    retryable: state.lastError?.retryable ?? false,
+  };
+
+  // Check auto-retry first
+  if (shouldAutoRetry(state)) {
+    return {
+      action: 'auto_retry',
+      delayMs: computeBackoffDelay(state),
+      error,
+    };
+  }
+
+  // Check manual retry
+  if (shouldOfferManualRetry(state)) {
+    state.awaitingManualRetry = true;
+    return {
+      action: 'manual_retry',
+      error,
+    };
+  }
+
+  // Non-retryable failure
+  return {
+    action: 'fail',
+    error,
+  };
+}
+
+// ============================================================================
+// Retry side-effects (single source of truth for retry handling)
+// ============================================================================
+
+/**
+ * Applies a retry decision by performing side effects (logging, sleeping).
+ * Returns the flow transition to take.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for retry side-effect handling.
+ * Call this in flow node post() methods instead of duplicating switch logic.
+ *
+ * @param decision - The retry decision from determineRetryStrategy
+ * @param logger - Logger for status messages
+ * @param retryState - Current retry state (for logging attempt counts)
+ * @param operationName - Name of the operation for log messages (e.g., "Model invocation")
+ * @returns The flow transition string, or undefined to continue to next node
+ */
+export async function applyRetryDecision(
+  decision: RetryDecision,
+  logger: AgentLogger,
+  retryState: RetryState,
+  operationName: string,
+): Promise<string | undefined> {
+  switch (decision.action) {
+    case 'auto_retry':
+      logger.warn(
+        `Retrying ${operationName.toLowerCase()} after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: {
+            attempt: retryState.attemptCount,
+            maxAttempts: retryState.maxAutoAttempts,
+            statusCode: decision.error.statusCode,
+          },
+        },
+      );
+      await sleep(decision.delayMs);
+      return FlowTransition.RETRY;
+
+    case 'manual_retry':
+      logger.error(`${operationName} failed: ${decision.error.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: decision.error.statusCode, retryable: true },
+      });
+      return FlowTransition.AWAIT_RETRY;
+
+    case 'fail':
+      logger.error(
+        `${operationName} failed (not retryable): ${decision.error.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: { statusCode: decision.error.statusCode, retryable: false },
+        },
+      );
+      return FlowTransition.COMPLETE;
+  }
 }

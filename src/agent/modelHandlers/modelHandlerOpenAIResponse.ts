@@ -47,7 +47,7 @@ import {
   extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
-import { executeWithRequestRetry } from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
@@ -473,7 +473,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           : fileData;
 
       buffer = Buffer.from(payload, 'base64');
-      const uploadedFile = await executeWithRequestRetry(
+      const uploadedFile = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
@@ -615,7 +615,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (useStreaming) {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
-      const stream = await executeWithRequestRetry(
+      const stream = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
@@ -662,7 +662,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ...nonStreamRest,
         stream: false,
       };
-      let response = await executeWithRequestRetry(
+      let response = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
@@ -932,13 +932,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const requestOptions = signal ? { signal } : undefined;
-      current = await executeWithRequestRetry(
+      current = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
           operation: `openai.responses.retrieve:${responseId}`,
           signal,
-          maxAttempts: maxRetries,
         },
         () => client.responses.retrieve(responseId, undefined, requestOptions),
       );
@@ -1469,7 +1468,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             : 'attachment';
         const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
-        const uploadedFile = await executeWithRequestRetry(
+        const uploadedFile = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,

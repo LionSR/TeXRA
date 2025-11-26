@@ -25,15 +25,9 @@ export enum AgentCategory {
   ToolUse = 'toolUse',
 }
 
-/**
- * Shared metadata describing how an agent session should be classified.
- */
-export interface AgentSessionDescriptor {
-  /** Specific agent implementation type if known. */
-  agentType?: AgentType;
-  /** Canonical grouping used by the UI to filter sessions. */
-  agentCategory: AgentCategory;
-}
+// Re-export AgentSessionDescriptor from schema (single source of truth)
+// Note: The type is derived from AgentSessionDescriptorSchema in AgentSessionSchema.ts
+export type { AgentSessionDescriptor } from './AgentSessionSchema';
 
 /**
  * Derive the canonical {@link AgentCategory} from a specific agent type.
