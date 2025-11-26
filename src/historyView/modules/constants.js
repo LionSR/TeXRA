@@ -30,3 +30,9 @@ export const LABELS = {
   CLEAR_ALL_HISTORY: 'Clear All History',
   MORE_DETAILS: 'More details',
 };
+
+// Agent category constants - must match AgentCategory enum in AgentDataclass.ts
+export const AGENT_CATEGORY = {
+  WORKFLOW: 'workflow',
+  TOOL_USE: 'toolUse',
+};
