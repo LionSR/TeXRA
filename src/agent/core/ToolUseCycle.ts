@@ -21,8 +21,7 @@ import {
   type ToolUseCycleContext,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
-import { createRetryState } from './flows/RetryState';
-import type { RetryCallbacks } from './flows/RetryWaitNode';
+import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
