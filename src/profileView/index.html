@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src ${cspSource} vscode-resource: 'unsafe-inline'; script-src 'nonce-${nonce}'; font-src ${cspSource} vscode-resource:;"
+    />
+    <link rel="stylesheet" href="${commonStyleUri}" />
+    <link rel="stylesheet" href="${styleUri}" />
+    <link
+      rel="stylesheet"
+      href="${codiconUri}"
+      id="vscode-codicon-stylesheet"
+    />
+    <title>TeXRA Profile</title>
+    <script type="importmap" nonce="${nonce}">
+      {
+        "imports": {
+          "./modules/domHandlers.js": "${domHandlersUri}",
+          "./modules/constants.js": "${constantsUri}",
+          "./modules/profileViewState.js": "${profileViewStateUri}",
+          "./modules/uiManagers/AgentsTable.js": "${agentsTableUri}",
+          "./modules/uiManagers/ProfileEventsManager.js": "${profileEventsUri}",
+          "./modules/messageHandlers.js": "${messageHandlersUri}",
+          "@common/webviewState.js": "${webviewStateUri}",
+          "@common/webview/commands.js": "${commandsUri}",
+          "@common/webviewContext.js": "${webviewContextUri}",
+          "@common/domUtils.js": "${domUtilsUri}",
+          "@common/templateUtils.js": "${templateUtilsUri}",
+          "@common/htmlEncoding.js": "${htmlEncodingUri}",
+          "@common/BaseWebviewMessageHandler.js": "${baseWebviewMessageHandlerUri}",
+          "@common/BaseDomHandler.js": "${baseDomHandlerUri}"
+        }
+      }
+    </script>
+    <script
+      type="module"
+      nonce="${nonce}"
+      src="${vscodeElementsBundleUri}"
+    ></script>
+    <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+  </head>
+
+  <body>
+    <div class="profile-container">
+      <h1>TeXRA Account</h1>
+
+      <div id="profileInfo" class="profile-info">
+        <div class="info-row">
+          <span class="label">Email:</span>
+          <span id="userEmail" class="value">Loading...</span>
+        </div>
+        <div class="info-row">
+          <span class="label">User ID:</span>
+          <span id="userId" class="value">Loading...</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Tier:</span>
+          <span id="userTier" class="tier-badge">Loading...</span>
+        </div>
+      </div>
+
+      <div id="tierInfo" class="tier-info">
+        <p id="tierMessage">Loading account information...</p>
+      </div>
+
+      <div id="notAuthenticated" class="not-authenticated" style="display: none;">
+        <p>You are not signed in to TeXRA.</p>
+        <vscode-button id="signInBtn">
+          <span slot="start" class="codicon codicon-sign-in"></span>
+          Sign In
+        </vscode-button>
+      </div>
+
+      <div id="remoteAgentsSection" class="remote-agents-section" style="display: none;">
+        <h2>Available Remote Agents</h2>
+        <div id="agentsTableContainer">
+          <!-- Agents table will be rendered here -->
+        </div>
+        <p id="noAgentsMessage" class="no-agents" style="display: none;">
+          No remote agents available. Contact support@texra.ai for assistance.
+        </p>
+      </div>
+    </div>
+
+    <template id="agentRowTemplate">
+      <tr class="agent-row">
+        <td class="agent-name"></td>
+        <td class="agent-description"></td>
+        <td class="agent-visibility">
+          <span class="visibility-badge"></span>
+        </td>
+        <td class="agent-tags"></td>
+        <td class="agent-action">
+          <vscode-button class="select-btn" appearance="primary">
+            <span slot="start" class="codicon codicon-arrow-right"></span>
+            Select
+          </vscode-button>
+        </td>
+      </tr>
+    </template>
+
+    <template id="tagTemplate">
+      <span class="tag"></span>
+    </template>
+  </body>
+</html>
