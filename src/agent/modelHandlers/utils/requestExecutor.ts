@@ -5,12 +5,12 @@
  * These utilities provide consistent error logging and abort handling for model requests.
  */
 
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Options for request execution.
