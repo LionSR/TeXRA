@@ -48,10 +48,19 @@ import {
   type RetryState,
   type RetryCallbacks,
   clearRetryError,
-  handleInvocationError,
-  executeRetryWait,
-  handleRetryWaitResult,
+  resetRetryState,
+  recordRetryError,
+  shouldAutoRetry,
+  shouldOfferManualRetry,
+  computeBackoffDelay,
 } from './RetryState';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import { sleep } from '@utils/helpers';
+import { bus } from '@eventBus/ProgressEventBus';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -298,20 +307,49 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
       return undefined; // Continue to process node
     }
 
-    // Handle error - determine retry strategy using shared helper
-    const result = await handleInvocationError(
-      retryState,
-      execRes.error,
-      options.logger,
-      'Model invocation',
-    );
+    // Handle error - determine retry strategy
+    const formatted = formatProviderHttpError(execRes.error);
+    recordRetryError(retryState, formatted.message, formatted.statusCode);
 
-    if (result.shouldStop) {
-      state.shouldStop = true;
-      state.endTurn = false;
+    // Auto-retry available?
+    if (shouldAutoRetry(retryState)) {
+      const delay = computeBackoffDelay(retryState);
+      options.logger.warn(
+        `Retrying model invocation after ${delay}ms (attempt ${retryState.attemptCount}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: {
+            attempt: retryState.attemptCount,
+            maxAttempts: retryState.maxAutoAttempts,
+            statusCode: formatted.statusCode,
+          },
+        },
+      );
+      await sleep(delay);
+      return FlowTransition.RETRY;
     }
 
-    return result.transition;
+    // Manual retry available?
+    if (shouldOfferManualRetry(retryState)) {
+      retryState.awaitingManualRetry = true;
+      options.logger.error(`Model invocation failed: ${formatted.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: true },
+      });
+      return FlowTransition.AWAIT_RETRY;
+    }
+
+    // Non-retryable error
+    options.logger.error(
+      `Model invocation failed (not retryable): ${formatted.message}`,
+      {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: false },
+      },
+    );
+    state.shouldStop = true;
+    state.endTurn = false;
+    return FlowTransition.COMPLETE;
   }
 }
 
@@ -741,7 +779,7 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
 
 /**
  * Specialized retry wait node for response cycle.
- * Uses shared retry helpers for consistent behavior.
+ * Handles manual retry by waiting for UI callback.
  */
 class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
   async prep(shared: ResponseCycleContext<C>): Promise<ResponseCycleContext<C>> {
@@ -750,13 +788,39 @@ class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
 
   async exec(context: ResponseCycleContext<C>): Promise<'retry' | 'cancel'> {
     const { retryState, options, retryCallbacks } = context;
-    return executeRetryWait(
-      retryState,
-      retryCallbacks,
-      options.logger,
-      options.context.streamId,
-      'Model invocation',
-    );
+    const streamId = options.context.streamId;
+
+    // Log waiting status
+    options.logger.info('Waiting for manual retry', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: { error: retryState.lastError, awaitingManualRetry: true },
+    });
+
+    // Emit waiting status to UI
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+
+    // Wait for external signal via callbacks
+    return new Promise<'retry' | 'cancel'>((resolve) => {
+      retryCallbacks.triggerRetry = () => {
+        clearManualRetry(streamId);
+        retryCallbacks.triggerRetry = undefined;
+        retryCallbacks.cancelRetry = undefined;
+        resolve('retry');
+      };
+      retryCallbacks.cancelRetry = () => {
+        clearManualRetry(streamId);
+        retryCallbacks.triggerRetry = undefined;
+        retryCallbacks.cancelRetry = undefined;
+        resolve('cancel');
+      };
+
+      // Register with ManualRetryController for UI-triggered retries
+      registerManualRetry(streamId, {
+        run: async () => retryCallbacks.triggerRetry?.(),
+        logger: options.logger,
+        operation: 'Model invocation',
+      });
+    });
   }
 
   async post(
@@ -765,20 +829,25 @@ class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
     execRes: 'retry' | 'cancel',
   ): Promise<string | undefined> {
     const { retryState, options, state } = shared;
+    const streamId = options.context.streamId;
 
-    const result = handleRetryWaitResult(
-      execRes,
-      retryState,
-      options.logger,
-      options.context.streamId,
-    );
-
-    if (result.shouldStop) {
-      state.shouldStop = true;
-      state.endTurn = false;
+    if (execRes === 'retry') {
+      resetRetryState(retryState);
+      options.logger.info('Manual retry triggered', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      return FlowTransition.RETRY;
     }
 
-    return result.transition;
+    // User cancelled
+    options.logger.info('Retry cancelled by user', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    state.shouldStop = true;
+    state.endTurn = false;
+    return FlowTransition.COMPLETE;
   }
 }
 
