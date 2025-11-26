@@ -25,6 +25,7 @@ export interface AgentOptionMetadata {
   isMultipleOutput: boolean;
   isToolUse: boolean;
   isRemote: boolean;
+  description?: string;
 }
 
 export interface AgentOptionsPayload {
@@ -43,27 +44,35 @@ export const DEFAULT_TOOL_USE_AGENT = 'chat';
 const MULTIPLE_SUFFIX = '_multiple';
 const TOOL_USE_AGENT_TYPE = AgentType.ToolUse;
 
-function readAgentDefinition(yamlPath?: string): AgentSetting | undefined {
+interface ParsedAgentDefinition {
+  settings: AgentSetting;
+  description?: string;
+}
+
+function readAgentDefinition(yamlPath?: string): ParsedAgentDefinition | undefined {
   if (!yamlPath) {
     return undefined;
   }
   try {
     const fileContent = AbsoluteFS.readSync(yamlPath);
     const parsed = AgentDefinitionSchema.parse(yaml.parse(fileContent));
-    return parseAgentSetting(parsed.settings);
+    return {
+      settings: parseAgentSetting(parsed.settings),
+      description: parsed.description,
+    };
   } catch {
     return undefined;
   }
 }
 
-function getMultipleOutputFlag(setting?: AgentSetting): boolean {
-  if (!setting) {
+function getMultipleOutputFlag(parsed?: ParsedAgentDefinition): boolean {
+  if (!parsed?.settings) {
     return false;
   }
-  if (setting.agentType === AgentType.ToolUse) {
+  if (parsed.settings.agentType === AgentType.ToolUse) {
     return false;
   }
-  return setting.isMultipleOutput ?? false;
+  return parsed.settings.isMultipleOutput ?? false;
 }
 
 export function getAgentOptionMetadata(
@@ -93,8 +102,8 @@ export function getAgentOptionMetadata(
   const multipleResolution = resolveAgentDefinitionSync(cleanName, candidates, {
     preferMultiple: true,
   });
-  const definition = readAgentDefinition(definitionResolution?.definitionPath);
-  const isMultipleOutput = getMultipleOutputFlag(definition);
+  const parsed = readAgentDefinition(definitionResolution?.definitionPath);
+  const isMultipleOutput = getMultipleOutputFlag(parsed);
   const hasMultipleSibling = Boolean(
     multipleResolution &&
       !multipleResolution.usedFallback &&
@@ -104,8 +113,9 @@ export function getAgentOptionMetadata(
     hasDefinition: Boolean(definitionResolution),
     hasMultipleSibling,
     isMultipleOutput,
-    isToolUse: definition?.agentType === TOOL_USE_AGENT_TYPE,
+    isToolUse: parsed?.settings.agentType === TOOL_USE_AGENT_TYPE,
     isRemote: false,
+    description: parsed?.description,
   };
 }
 
@@ -155,6 +165,9 @@ export function createAgentOptionTag(
   }
   if (metadata.isRemote) {
     attributes.push('data-remote="true"');
+  }
+  if (metadata.description) {
+    attributes.push(`data-description="${encodeHtml(metadata.description)}"`);
   }
   if (options.isSelected) {
     attributes.push('selected');
