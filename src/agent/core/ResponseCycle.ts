@@ -17,7 +17,7 @@ import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
 import { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
-  type ResponseCycleContext,
+  type ResponseCycleShared,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
@@ -67,9 +67,9 @@ export async function runResponseCycle<C = unknown>(
   // and can be called by the UI to trigger manual retry
   const retryCallbacks: RetryCallbacks = {};
 
-  const context: ResponseCycleContext<C> = {
-    options: input.options,
-    store: input.store,
+  // Shared state contains only mutable data that flows through nodes.
+  // Services (options, store) are injected via setParams().
+  const shared: ResponseCycleShared<C> = {
     state: {
       messages: input.messages,
       outputLocation: input.outputLocation,
@@ -91,11 +91,13 @@ export async function runResponseCycle<C = unknown>(
   };
 
   const flow = createResponseCycleFlow<C>();
-  await flow.run(context);
+  // Inject immutable services via params (PocketFlow pattern)
+  flow.setParams({ services: { options: input.options, store: input.store } });
+  await flow.run(shared);
 
   return {
-    store: context.store,
-    endTurn: context.state.endTurn,
+    store: input.store,
+    endTurn: shared.state.endTurn,
     retryCallbacks,
   };
 }
