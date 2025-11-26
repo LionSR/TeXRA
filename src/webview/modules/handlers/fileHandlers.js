@@ -155,6 +155,7 @@ export function createFileHandlers(ctx) {
         options.currentValue = undefined;
       }
       fileSelect.update(BASE_FILE, message.files, options);
+      // Read value after update to get the actual restored value
       fileSelect.updateEdited(currentBaseFileDiv.value);
     }
     postHandle();
