@@ -755,6 +755,7 @@ class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
       retryCallbacks,
       options.logger,
       options.context.streamId,
+      'Model invocation',
     );
   }
 

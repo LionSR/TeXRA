@@ -99,12 +99,14 @@ export function isRetryableStatusCode(statusCode?: number): boolean {
 
 /**
  * Determines if automatic retry should be attempted based on current state.
+ * Uses <= so maxAutoAttempts represents the number of retry attempts allowed,
+ * not total attempts (initial attempt + maxAutoAttempts retries).
  */
 export function shouldAutoRetry(state: RetryState): boolean {
   if (!state.lastError?.retryable) {
     return false;
   }
-  return state.attemptCount < state.maxAutoAttempts;
+  return state.attemptCount <= state.maxAutoAttempts;
 }
 
 /**
@@ -231,6 +233,7 @@ export function executeRetryWait(
   retryCallbacks: RetryCallbacks,
   logger: AgentLogger,
   streamId: string,
+  operationName = 'model invocation',
 ): Promise<'retry' | 'cancel'> {
   // Log that we're waiting for manual retry
   logger.info('Waiting for manual retry', {
@@ -269,7 +272,7 @@ export function executeRetryWait(
         retryCallbacks.triggerRetry?.();
       },
       logger,
-      operation: 'model invocation',
+      operation: operationName,
     });
   });
 }
