@@ -6,7 +6,7 @@ import { formatRelativeTime } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
   getAgentTypeDecorator,
-  getCodiconClass,
+  applyCodiconClass,
 } from '@common/iconConstants.js';
 
 /**
@@ -124,7 +124,7 @@ export class StreamTabs {
     if (agentIcon) {
       const key = info.agentType || info.agent || 'unknown';
       const decorator = getAgentTypeDecorator(key);
-      agentIcon.classList.add(...getCodiconClass(decorator.icon).split(' '));
+      applyCodiconClass(agentIcon, decorator.icon);
       agentIcon.title = `Agent type: ${decorator.label}`;
     }
 
@@ -132,9 +132,9 @@ export class StreamTabs {
     const remoteIcon = tabEl.querySelector('.remote-agent');
     if (remoteIcon) {
       if (info.isRemote) {
-        const { icon, label } = AGENT_DECORATORS.properties.remote;
-        remoteIcon.classList.add(...getCodiconClass(icon).split(' '));
-        remoteIcon.title = label;
+        const { icon, hint } = AGENT_DECORATORS.properties.remote;
+        applyCodiconClass(remoteIcon, icon);
+        remoteIcon.title = hint;
       } else {
         remoteIcon.remove();
       }
@@ -144,9 +144,9 @@ export class StreamTabs {
     const multiIcon = tabEl.querySelector('.multi-file');
     if (multiIcon) {
       if (info.hasMultipleOutputs) {
-        const { icon, label } = AGENT_DECORATORS.properties.multipleOutputs;
-        multiIcon.classList.add(...getCodiconClass(icon).split(' '));
-        multiIcon.title = label;
+        const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
+        applyCodiconClass(multiIcon, icon);
+        multiIcon.title = hint;
       } else {
         multiIcon.remove();
       }
