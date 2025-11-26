@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  loadAndRegisterRemoteAgents,
+  selectAgentInMainView,
+} from '@agent/remote/remoteAgentUtils';
 import * as authCommands from '@/auth/authCommands';
+import { AUTH_COMMANDS } from '@/auth/authCommands';
 
 /**
  * Register authentication-related commands.
@@ -10,19 +12,25 @@ import * as authCommands from '@/auth/authCommands';
 export function registerAuthCommands(
   context: vscode.ExtensionContext,
 ): vscode.Disposable[] {
+  // Initialize the profile view provider
+  authCommands.initializeProfileViewProvider(context);
+
   const disposables = [
-    vscode.commands.registerCommand('texra.auth.signIn', authCommands.signIn),
-    vscode.commands.registerCommand('texra.auth.signOut', authCommands.signOut),
+    vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, authCommands.signIn),
     vscode.commands.registerCommand(
-      'texra.auth.viewProfile',
+      AUTH_COMMANDS.SIGN_OUT,
+      authCommands.signOut,
+    ),
+    vscode.commands.registerCommand(
+      AUTH_COMMANDS.VIEW_PROFILE,
       authCommands.viewProfile,
     ),
     vscode.commands.registerCommand(
-      'texra.auth.accountMenu',
+      AUTH_COMMANDS.ACCOUNT_MENU,
       authCommands.showAccountMenu,
     ),
     vscode.commands.registerCommand(
-      'texra.remoteAgents.browse',
+      AUTH_COMMANDS.BROWSE_REMOTE_AGENTS,
       browseRemoteAgents,
     ),
   ];
@@ -39,8 +47,8 @@ async function browseRemoteAgents(): Promise<void> {
     // Check authentication status first
     const authStatus = await authCommands.getAuthStatus();
 
-    // List available remote agents
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    // Use shared utility to load and register agents
+    const { agents } = await loadAndRegisterRemoteAgents();
 
     if (agents.length === 0) {
       if (!authStatus.authenticated) {
@@ -52,7 +60,7 @@ async function browseRemoteAgents(): Promise<void> {
         );
 
         if (choice === signIn) {
-          await vscode.commands.executeCommand('texra.auth.signIn');
+          await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
         }
       } else {
         // User is authenticated but no agents available - suggest contacting support
@@ -70,10 +78,6 @@ async function browseRemoteAgents(): Promise<void> {
       }
       return;
     }
-
-    // Register remote agents so they can be executed
-    const agentNames = agents.map((agent) => agent.name);
-    RemoteAgentRegistry.registerMultiple(agentNames);
 
     // Create quick pick items
     const items = agents.map((agent) => ({
@@ -94,42 +98,11 @@ async function browseRemoteAgents(): Promise<void> {
       return;
     }
 
-    // Use the clean agent name (no remote:// prefix needed anymore!)
-    const agentName = selected.agentName;
-
-    // Try to populate the agent selector automatically
-    await vscode.commands.executeCommand('texra.mainView.focus');
-
-    try {
-      const webviewView = await vscode.commands.executeCommand<
-        vscode.WebviewView | undefined
-      >('texra.getWebviewView');
-
-      if (webviewView) {
-        // Send STATE_RESTORE message to set the agent selector value
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state: {
-            workflowAgent: agentName,
-          },
-        });
-        void vscode.window.showInformationMessage(
-          `Remote agent "${agentName}" is now selected.`,
-        );
-      } else {
-        // Fallback: copy to clipboard and show manual instruction
-        await vscode.env.clipboard.writeText(agentName);
-        void vscode.window.showInformationMessage(
-          `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-        );
-      }
-    } catch (error) {
-      // Fallback: copy to clipboard and show manual instruction
-      await vscode.env.clipboard.writeText(agentName);
-      void vscode.window.showInformationMessage(
-        `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-      );
-    }
+    // Use shared utility for agent selection with clipboard fallback
+    await selectAgentInMainView(selected.agentName, {
+      showSuccessMessage: true,
+      copyToClipboardOnFailure: true,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(
@@ -138,10 +111,5 @@ async function browseRemoteAgents(): Promise<void> {
   }
 }
 
-export const authCommandsList = {
-  signIn: 'texra.auth.signIn',
-  signOut: 'texra.auth.signOut',
-  viewProfile: 'texra.auth.viewProfile',
-  accountMenu: 'texra.auth.accountMenu',
-  browseRemoteAgents: 'texra.remoteAgents.browse',
-};
+// Re-export AUTH_COMMANDS for external use
+export { AUTH_COMMANDS } from '@/auth/authCommands';
