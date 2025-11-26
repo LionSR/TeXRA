@@ -1,7 +1,6 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 // Type imports
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import {
   BaseCycleState,
@@ -163,14 +162,6 @@ export interface ToolUseCycleShared<C = unknown> {
   /** Callbacks for manual retry control from UI */
   retryCallbacks: RetryCallbacks;
 }
-
-/**
- * @deprecated Use ToolUseCycleShared instead. Kept for backward compatibility.
- */
-export type ToolUseCycleContext<C = unknown> = ToolUseCycleShared<C> & {
-  options: ToolUseCycleOptions<C>;
-  store: AgentSharedStore;
-};
 
 /**
  * Prepares a tool-use cycle by checking interruptions and setting up debug context.

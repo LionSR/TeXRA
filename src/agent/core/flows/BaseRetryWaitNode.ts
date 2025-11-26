@@ -43,9 +43,9 @@ export interface RetryableShared {
  * Accessors to extract flow-specific values from shared state and params.
  * This allows the base node to work with different flow types.
  *
- * Accessors receive both `shared` and `params` to support:
- * - Legacy pattern: values in shared context
- * - Services pattern: values in params.services
+ * Accessors receive both `shared` and `params` to access:
+ * - Mutable state from `shared` (retryState, retryCallbacks)
+ * - Immutable services from `params.services` (options, store)
  */
 export interface RetryWaitAccessors<S extends RetryableShared, P = unknown> {
   /** Get the stream ID for UI events and retry registration */

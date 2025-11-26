@@ -4,7 +4,6 @@ import * as path from 'path';
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
 // Type imports
-import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
@@ -106,14 +105,6 @@ export interface ResponseCycleShared<C = unknown> {
   /** Callbacks for manual retry control from UI */
   retryCallbacks: RetryCallbacks;
 }
-
-/**
- * @deprecated Use ResponseCycleShared instead. Kept for backward compatibility.
- */
-export type ResponseCycleContext<C = unknown> = ResponseCycleShared<C> & {
-  options: ResponseCycleOptions<C>;
-  store: AgentSharedStore;
-};
 
 type InvocationNodeResult = SkippableNodeResult<{
   response: unknown;
