@@ -6,6 +6,10 @@ import { isTexFile } from '@common/files/fileTypeUtils';
 import replacementEngine from '@replacement/engine';
 import { ToolResult, ToolError, toolResult } from '@tools/result';
 import {
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@tools/fileInteractions';
+import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
   getApprovedContent,
@@ -37,6 +41,7 @@ export class FileOpTool extends defineTool({
     switch (command) {
       case 'read': {
         const data = await WorkspaceFS.read(path);
+        recordToolFileRead(path);
         return toolResult({
           summary: `Read ${path}`,
           output: data,
@@ -49,9 +54,12 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
-        const originalContent = (await WorkspaceFS.exists(path))
-          ? await WorkspaceFS.read(path)
-          : '';
+        const exists = await WorkspaceFS.exists(path);
+        const readGate = requireFileReadForEdit(path, exists);
+        if (readGate) {
+          return readGate;
+        }
+        const originalContent = exists ? await WorkspaceFS.read(path) : '';
 
         const proposed = isTexFile(path)
           ? replacementEngine.applyAll(content)
@@ -88,6 +96,7 @@ export class FileOpTool extends defineTool({
           summary: `Wrote ${path}`,
           output: userDiffNote ? `written\n\n${userDiffNote}` : 'written',
           userPatch: approval.userPatch,
+          edits: [{ path, lineChanges: approval.lineChanges }],
         });
       }
       case 'append': {
@@ -97,9 +106,12 @@ export class FileOpTool extends defineTool({
             isError: true,
           });
         }
-        const originalContent = (await WorkspaceFS.exists(path))
-          ? await WorkspaceFS.read(path)
-          : '';
+        const exists = await WorkspaceFS.exists(path);
+        const readGate = requireFileReadForEdit(path, exists);
+        if (readGate) {
+          return readGate;
+        }
+        const originalContent = exists ? await WorkspaceFS.read(path) : '';
         const proposedContent = `${originalContent}${content}`;
 
         const approval = await requestToolEditApproval({
@@ -150,6 +162,7 @@ export class FileOpTool extends defineTool({
           summary: `Appended to ${path}`,
           output: userDiffNote ? `appended\n\n${userDiffNote}` : 'appended',
           userPatch: approval.userPatch,
+          edits: [{ path, lineChanges: approval.lineChanges }],
         });
       }
       default:

@@ -1,4 +1,5 @@
 name: correct
+description: Corrects typos, grammar, and LaTeX formatting issues in your document.
 
 settings:
   agentType: direct

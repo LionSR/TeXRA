@@ -158,7 +158,6 @@ const WORKFLOW_TOOLBAR = [
     className: 'pack-button',
     disabled: true,
   },
-  { ...OPEN_TASK_STORAGE_BUTTON },
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
