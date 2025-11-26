@@ -71,6 +71,39 @@ export interface SelectAgentResult {
 }
 
 /**
+ * Handle fallback when agent selection fails.
+ * Extracted to avoid duplication between error cases.
+ */
+async function handleSelectionFallback(
+  agentName: string,
+  errorMessage: string,
+  copyToClipboard: boolean,
+): Promise<SelectAgentResult> {
+  if (copyToClipboard) {
+    await vscode.env.clipboard.writeText(agentName);
+    void vscode.window.showInformationMessage(
+      `Could not auto-select agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
+    );
+    return {
+      success: false,
+      message: errorMessage
+        ? `${errorMessage}, copied to clipboard`
+        : 'Copied to clipboard',
+      fallbackAction: 'clipboard',
+    };
+  } else {
+    void vscode.window.showWarningMessage(
+      `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
+    );
+    return {
+      success: false,
+      message: errorMessage || 'Selection failed',
+      fallbackAction: 'manual',
+    };
+  }
+}
+
+/**
  * Select an agent in the main webview's dropdown.
  * This is the single source of truth for agent selection across the extension.
  *
@@ -116,54 +149,21 @@ export async function selectAgentInMainView(
         message: `Agent "${agentName}" selected successfully`,
       };
     } else {
-      // Main webview not available
       logger.warn(CHANNEL, 'Main webview not available for agent selection');
-
-      if (copyToClipboardOnFailure) {
-        await vscode.env.clipboard.writeText(agentName);
-        void vscode.window.showInformationMessage(
-          `Could not auto-select agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-        );
-        return {
-          success: false,
-          message: 'Main webview not available, copied to clipboard',
-          fallbackAction: 'clipboard',
-        };
-      } else {
-        void vscode.window.showWarningMessage(
-          `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
-        );
-        return {
-          success: false,
-          message: 'Main webview not available',
-          fallbackAction: 'manual',
-        };
-      }
+      return handleSelectionFallback(
+        agentName,
+        'Main webview not available',
+        copyToClipboardOnFailure,
+      );
     }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : 'Unknown error';
     logger.error(CHANNEL, `Failed to select agent: ${errorMessage}`);
-
-    if (copyToClipboardOnFailure) {
-      await vscode.env.clipboard.writeText(agentName);
-      void vscode.window.showInformationMessage(
-        `Could not auto-select agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-      );
-      return {
-        success: false,
-        message: `Error: ${errorMessage}, copied to clipboard`,
-        fallbackAction: 'clipboard',
-      };
-    } else {
-      void vscode.window.showWarningMessage(
-        `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
-      );
-      return {
-        success: false,
-        message: `Error: ${errorMessage}`,
-        fallbackAction: 'manual',
-      };
-    }
+    return handleSelectionFallback(
+      agentName,
+      `Error: ${errorMessage}`,
+      copyToClipboardOnFailure,
+    );
   }
 }
