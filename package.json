@@ -933,9 +933,9 @@
         "properties": {
           "texra.model.retry.maxAttempts": {
             "type": "number",
-            "default": 3,
+            "default": 1,
             "minimum": 1,
-            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls",
+            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls. Default is 1 (no automatic retries, requires manual retry button click).",
             "scope": "resource"
           },
           "texra.model.retry.backoffMs": {
