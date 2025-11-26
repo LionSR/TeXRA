@@ -31,6 +31,8 @@ export interface CycleDebugContext {
   logger: AgentLogger;
   modelName?: string;
   executionId?: ExecutionId;
+  /** Whether this is a remote agent (don't save messages to avoid leaking prompts) */
+  isRemote?: boolean;
 }
 
 /**
