@@ -11,8 +11,25 @@ import {
   DEFAULT_MODEL_RETRY_ATTEMPTS,
   DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { sleep } from '@utils/helpers';
+import { bus } from '@eventBus/ProgressEventBus';
+import { FlowTransition } from './FlowTransitions';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import type { AgentLogger } from '@logger/AgentLogger';
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
+
+/**
+ * Callbacks for manual retry control.
+ * Store these in your flow context to allow external triggering.
+ */
+export interface RetryCallbacks {
+  /** Call to trigger a retry attempt. */
+  triggerRetry?: () => void;
+  /** Call to cancel and abort the operation. */
+  cancelRetry?: () => void;
+}
 
 export interface RetryErrorInfo {
   message: string;
@@ -121,4 +138,158 @@ export function recordRetryError(
 export function clearRetryError(state: RetryState): void {
   state.lastError = undefined;
   state.awaitingManualRetry = false;
+}
+
+// ============================================================================
+// Shared retry flow helpers
+// ============================================================================
+
+/**
+ * Result of handleInvocationError indicating which flow transition to take.
+ * When shouldStop is true, the caller should set state.shouldStop = true.
+ */
+export interface RetryTransitionResult {
+  transition: string;
+  shouldStop?: boolean;
+}
+
+/**
+ * Handles an invocation error and determines the appropriate flow transition.
+ * This is the shared error handling logic for both ResponseModelInvocationNode
+ * and ToolUseCallNode.
+ *
+ * @param retryState - The retry state to update
+ * @param error - The error that occurred
+ * @param logger - Logger for status messages
+ * @param operationName - Human-readable operation name for logs (e.g., "model invocation")
+ * @returns The flow transition to take
+ */
+export async function handleInvocationError(
+  retryState: RetryState,
+  error: unknown,
+  logger: AgentLogger,
+  operationName: string,
+): Promise<RetryTransitionResult> {
+  const formatted = formatProviderHttpError(error);
+  recordRetryError(retryState, formatted.message, formatted.statusCode);
+
+  // Auto-retry available?
+  if (shouldAutoRetry(retryState)) {
+    const delay = computeBackoffDelay(retryState);
+    logger.warn(
+      `Retrying ${operationName} after ${delay}ms (attempt ${retryState.attemptCount}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+      {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: {
+          attempt: retryState.attemptCount,
+          maxAttempts: retryState.maxAutoAttempts,
+          statusCode: formatted.statusCode,
+        },
+      },
+    );
+    await sleep(delay);
+    return { transition: FlowTransition.RETRY };
+  }
+
+  // Manual retry available?
+  if (shouldOfferManualRetry(retryState)) {
+    retryState.awaitingManualRetry = true;
+    logger.error(`${operationName} failed: ${formatted.message}`, {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: {
+        statusCode: formatted.statusCode,
+        retryable: true,
+      },
+    });
+    return { transition: FlowTransition.AWAIT_RETRY };
+  }
+
+  // Non-retryable error
+  logger.error(`${operationName} failed (not retryable): ${formatted.message}`, {
+    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    data: {
+      statusCode: formatted.statusCode,
+      retryable: false,
+    },
+  });
+  return { transition: FlowTransition.COMPLETE, shouldStop: true };
+}
+
+/**
+ * Executes the retry wait logic, emitting status and waiting for user action.
+ * Returns 'retry' or 'cancel' based on user action.
+ */
+export function executeRetryWait(
+  retryState: RetryState,
+  retryCallbacks: RetryCallbacks,
+  logger: AgentLogger,
+  streamId: string,
+): Promise<'retry' | 'cancel'> {
+  // Log that we're waiting for manual retry
+  logger.info('Waiting for manual retry', {
+    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    data: {
+      error: retryState.lastError,
+      awaitingManualRetry: true,
+    },
+  });
+
+  // Emit waiting status to UI
+  bus.emit('updateStreamStatus', {
+    stream: streamId,
+    status: 'waiting',
+  });
+
+  // Wait for external signal via callbacks
+  return new Promise<'retry' | 'cancel'>((resolve) => {
+    retryCallbacks.triggerRetry = () => {
+      retryCallbacks.triggerRetry = undefined;
+      retryCallbacks.cancelRetry = undefined;
+      resolve('retry');
+    };
+    retryCallbacks.cancelRetry = () => {
+      retryCallbacks.triggerRetry = undefined;
+      retryCallbacks.cancelRetry = undefined;
+      resolve('cancel');
+    };
+  });
+}
+
+/**
+ * Handles the result of executeRetryWait and returns the appropriate transition.
+ */
+export function handleRetryWaitResult(
+  result: 'retry' | 'cancel',
+  retryState: RetryState,
+  logger: AgentLogger,
+  streamId: string,
+): { transition: string; shouldStop?: boolean } {
+  if (result === 'retry') {
+    // Reset attempt count for fresh retry cycle
+    resetRetryState(retryState);
+
+    logger.info('Manual retry triggered', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+
+    // Update status back to running
+    bus.emit('updateStreamStatus', {
+      stream: streamId,
+      status: 'resuming',
+    });
+
+    return { transition: FlowTransition.RETRY };
+  }
+
+  // User cancelled
+  logger.info('Retry cancelled by user', {
+    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+  });
+
+  bus.emit('updateStreamStatus', {
+    stream: streamId,
+    status: 'stopped',
+  });
+
+  return { transition: FlowTransition.COMPLETE, shouldStop: true };
 }
