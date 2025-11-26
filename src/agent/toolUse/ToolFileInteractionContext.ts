@@ -18,12 +18,9 @@ export function withToolFileInteractionContext<T>(
 ): Promise<T> {
   contextStack.push(context);
   const maybeCleanup = () => {
-    const last = contextStack.pop();
-    if (last !== context) {
-      const index = contextStack.lastIndexOf(context);
-      if (index >= 0) {
-        contextStack.splice(index, 1);
-      }
+    const index = contextStack.lastIndexOf(context);
+    if (index >= 0) {
+      contextStack.splice(index, 1);
     }
   };
 
