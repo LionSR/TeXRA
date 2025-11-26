@@ -65,10 +65,7 @@ export class ProfileViewProvider
     );
 
     super.resolveWebviewViewInternal(this._view);
-
-    // Set the HTML content - webview will request data via GET_PROFILE_DATA on DOMContentLoaded
-    this._view.webview.html = this.contentProvider.getHtmlContent(
-      this._view.webview,
-    );
+    // HTML content is set by resolveWebviewViewInternal
+    // Webview will request data via GET_PROFILE_DATA on DOMContentLoaded
   }
 }

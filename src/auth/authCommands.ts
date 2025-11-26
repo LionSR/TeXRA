@@ -3,6 +3,17 @@ import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
 
+/**
+ * Command identifiers for auth-related commands.
+ */
+export const AUTH_COMMANDS = {
+  SIGN_IN: 'texra.auth.signIn',
+  SIGN_OUT: 'texra.auth.signOut',
+  VIEW_PROFILE: 'texra.auth.viewProfile',
+  ACCOUNT_MENU: 'texra.auth.accountMenu',
+  BROWSE_REMOTE_AGENTS: 'texra.remoteAgents.browse',
+} as const;
+
 // Singleton instance of ProfileViewProvider
 let profileViewProvider: ProfileViewProvider | null = null;
 
@@ -175,7 +186,7 @@ export async function showAccountMenu(): Promise<void> {
       });
 
       if (choice?.action === 'signIn') {
-        await vscode.commands.executeCommand('texra.auth.signIn');
+        await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
       }
     } else {
       // Signed in - show profile, browse agents, and sign out options
@@ -204,13 +215,13 @@ export async function showAccountMenu(): Promise<void> {
       if (choice) {
         switch (choice.action) {
           case 'viewProfile':
-            await vscode.commands.executeCommand('texra.auth.viewProfile');
+            await vscode.commands.executeCommand(AUTH_COMMANDS.VIEW_PROFILE);
             break;
           case 'browseAgents':
-            await vscode.commands.executeCommand('texra.remoteAgents.browse');
+            await vscode.commands.executeCommand(AUTH_COMMANDS.BROWSE_REMOTE_AGENTS);
             break;
           case 'signOut':
-            await vscode.commands.executeCommand('texra.auth.signOut');
+            await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
             break;
         }
       }

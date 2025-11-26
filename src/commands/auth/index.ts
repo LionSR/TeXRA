@@ -3,6 +3,7 @@ import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as authCommands from '@/auth/authCommands';
+import { AUTH_COMMANDS } from '@/auth/authCommands';
 
 /**
  * Register authentication-related commands.
@@ -14,18 +15,21 @@ export function registerAuthCommands(
   authCommands.initializeProfileViewProvider(context);
 
   const disposables = [
-    vscode.commands.registerCommand('texra.auth.signIn', authCommands.signIn),
-    vscode.commands.registerCommand('texra.auth.signOut', authCommands.signOut),
+    vscode.commands.registerCommand(AUTH_COMMANDS.SIGN_IN, authCommands.signIn),
     vscode.commands.registerCommand(
-      'texra.auth.viewProfile',
+      AUTH_COMMANDS.SIGN_OUT,
+      authCommands.signOut,
+    ),
+    vscode.commands.registerCommand(
+      AUTH_COMMANDS.VIEW_PROFILE,
       authCommands.viewProfile,
     ),
     vscode.commands.registerCommand(
-      'texra.auth.accountMenu',
+      AUTH_COMMANDS.ACCOUNT_MENU,
       authCommands.showAccountMenu,
     ),
     vscode.commands.registerCommand(
-      'texra.remoteAgents.browse',
+      AUTH_COMMANDS.BROWSE_REMOTE_AGENTS,
       browseRemoteAgents,
     ),
   ];
@@ -55,7 +59,7 @@ async function browseRemoteAgents(): Promise<void> {
         );
 
         if (choice === signIn) {
-          await vscode.commands.executeCommand('texra.auth.signIn');
+          await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
         }
       } else {
         // User is authenticated but no agents available - suggest contacting support
@@ -141,10 +145,5 @@ async function browseRemoteAgents(): Promise<void> {
   }
 }
 
-export const authCommandsList = {
-  signIn: 'texra.auth.signIn',
-  signOut: 'texra.auth.signOut',
-  viewProfile: 'texra.auth.viewProfile',
-  accountMenu: 'texra.auth.accountMenu',
-  browseRemoteAgents: 'texra.remoteAgents.browse',
-};
+// Re-export AUTH_COMMANDS for external use
+export { AUTH_COMMANDS } from '@/auth/authCommands';
