@@ -638,6 +638,7 @@ class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       retryCallbacks,
       options.logger,
       options.context.streamId,
+      'Tool-use call',
     );
   }
 
