@@ -129,13 +129,32 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'texra.model.useBackgroundResponses',
       false,
     );
-    if (useBackgroundResponses) {
+    if (useBackgroundResponses && this.isBackgroundModeEligible()) {
       return false;
     }
     return super.getStreamingConfig();
   }
 
   protected override backgroundModeSupported = true;
+
+  /**
+   * Determines if background mode should be enabled for this request.
+   * Background mode is only supported for GPT 5 series models when running
+   * workflow agents (CoT or Direct), not tool-use agents.
+   * @returns true if background mode is eligible for this model and agent type
+   */
+  private isBackgroundModeEligible(): boolean {
+    const isGpt5 = this.config.name.startsWith('gpt5');
+    if (!isGpt5) {
+      return false;
+    }
+
+    // Workflow agents are CoT or Direct (anything except ToolUse)
+    const agentType = this.getAgentType();
+    const isWorkflowAgent = agentType !== 'toolUse';
+    return isWorkflowAgent;
+  }
+
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
@@ -516,13 +535,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'texra.model.useBackgroundResponses',
       false,
     );
+    const isEligible = this.isBackgroundModeEligible();
     if (backgroundToggleEnabled && !this.backgroundModeSupported) {
       this.logger.debug(
         'Background mode toggle is enabled but this handler does not support background execution. Falling back to synchronous requests.',
       );
     }
+    if (backgroundToggleEnabled && this.backgroundModeSupported && !isEligible) {
+      this.logger.debug(
+        'Background mode toggle is enabled but not eligible for this model/agent type (requires GPT 5 series with workflow agents). Falling back to synchronous requests.',
+      );
+    }
     const useBackgroundResponses =
-      this.backgroundModeSupported && backgroundToggleEnabled;
+      this.backgroundModeSupported && backgroundToggleEnabled && isEligible;
     const useStreaming = streamingToggleEnabled && !useBackgroundResponses;
 
     if (streamingToggleEnabled && useBackgroundResponses) {
