@@ -239,11 +239,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse, description } =
+    const { label, isMultiple, isToolUse, isRemote, description } =
       this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
+
+    // Add cloud icon for remote agents
+    if (isRemote) {
+      displayLabel = `☁ ${displayLabel}`;
+      hints.push('Remote agent');
+    }
 
     // Add description as the primary hint if available
     if (description) {
@@ -294,6 +300,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       label,
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
+      isRemote: opt.dataset.remote === 'true',
       description: opt.dataset.description ?? '',
     };
   }
