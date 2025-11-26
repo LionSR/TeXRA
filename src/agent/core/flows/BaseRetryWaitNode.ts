@@ -15,10 +15,12 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 
 import { FlowTransition } from './FlowTransitions';
-import { resetRetryState, type RetryState, type RetryCallbacks } from './RetryState';
-
-/** Timeout for manual retry wait (5 minutes) */
-const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+import {
+  resetRetryState,
+  MANUAL_RETRY_TIMEOUT_MS,
+  type RetryState,
+  type RetryCallbacks,
+} from './RetryState';
 
 /**
  * Minimal interface for contexts that support manual retry.
