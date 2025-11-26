@@ -191,7 +191,30 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 }
 
-function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
+function summarizeLineChanges(
+  edits:
+    | { path?: string; lineChanges?: { added?: number; removed?: number } }[]
+    | undefined,
+): { added: number; removed: number } | undefined {
+  if (!Array.isArray(edits)) {
+    return undefined;
+  }
+
+  let added = 0;
+  let removed = 0;
+
+  for (const edit of edits) {
+    added += edit?.lineChanges?.added ?? 0;
+    removed += edit?.lineChanges?.removed ?? 0;
+  }
+
+  return added || removed ? { added, removed } : undefined;
+}
+
+function buildToolResultPayload(
+  result: ToolResult,
+  fallbackLineChanges?: { added: number; removed: number },
+): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   if (result.summary !== undefined) payload.summary = result.summary;
   if (result.output !== undefined) payload.output = result.output;
@@ -204,6 +227,8 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
+  const lineChanges = result.lineChanges ?? fallbackLineChanges;
+  if (lineChanges !== undefined) payload.lineChanges = lineChanges;
   if (result.edits !== undefined) payload.edits = result.edits;
   if (result.files !== undefined) payload.files = result.files;
   return payload;
@@ -533,7 +558,11 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
 
       const trackedEdits = tracker.recordEdits(result.edits);
+      const lineChanges = result.lineChanges ?? summarizeLineChanges(result.edits);
       const sanitizedOutput = sanitizeToolResultForLog(result);
+      if (lineChanges) {
+        sanitizedOutput.lineChanges = lineChanges;
+      }
       const editedFiles = trackedEdits.edits.map((entry) => ({
         path: entry.path,
         ok: true,
@@ -587,7 +616,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         await options.modelHandler.createToolUseFollowUpMessages(
           options.client,
           call,
-          buildToolResultPayload(result),
+          buildToolResultPayload(result, lineChanges),
           store.workspace,
           index === 0 && assistantText.length > 0 ? assistantText : undefined,
         );
