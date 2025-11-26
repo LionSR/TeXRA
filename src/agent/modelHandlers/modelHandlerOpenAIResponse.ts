@@ -912,7 +912,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           model: this.config.name,
           operation: `openai.responses.retrieve:${responseId}`,
           signal,
-          maxAttempts: maxRetries,
         },
         () => client.responses.retrieve(responseId, undefined, requestOptions),
       );
