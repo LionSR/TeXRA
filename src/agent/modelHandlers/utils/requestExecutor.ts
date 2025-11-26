@@ -13,6 +13,8 @@ import { sleep } from '@utils/helpers';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
+  DEFAULT_MODEL_RETRY_ATTEMPTS,
+  DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
 
 interface RequestRetryOptions {
@@ -27,9 +29,6 @@ interface RequestRetryOptions {
   onAttemptStart?: (attempt: number) => void;
 }
 
-// Default to 1 attempt (no automatic retries) - users must click retry button
-const FALLBACK_MAX_ATTEMPTS = 1;
-const FALLBACK_BACKOFF_MS = 1000;
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
 function shouldRetry(statusCode?: number): boolean {
@@ -48,9 +47,9 @@ export async function executeWithRequestRetry<T>(
 ): Promise<T> {
   // Default to 1 attempt (no automatic retries) unless explicitly configured
   const configuredMaxAttempts = options.maxAttempts ?? getModelRetryMaxAttempts();
-  const maxAttempts = Math.max(1, configuredMaxAttempts ?? 1);
+  const maxAttempts = Math.max(1, configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS);
   const baseDelayMs =
-    options.baseDelayMs ?? getModelRetryBackoffMs() ?? FALLBACK_BACKOFF_MS;
+    options.baseDelayMs ?? getModelRetryBackoffMs() ?? DEFAULT_MODEL_RETRY_BACKOFF_MS;
   const allowManualRetry = options.enableManualRetry ?? true;
   const manualRetryKey = options.manualRetryKey ?? options.logger.channelId;
 
