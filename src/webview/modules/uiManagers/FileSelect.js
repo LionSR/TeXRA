@@ -36,6 +36,7 @@ export class FileSelect {
     }
     const previousValue = selectDiv.value;
     const normalizedFiles = Array.isArray(files) ? files : [];
+    const sortedFiles = [...normalizedFiles].sort((a, b) => a.localeCompare(b));
     const shouldPreserveValue =
       previousValue !== undefined &&
       previousValue !== null &&
@@ -43,10 +44,10 @@ export class FileSelect {
 
     selectDiv.innerHTML = '';
     this.addOption(selectDiv, '', 'None');
-    normalizedFiles.forEach((f) => this.addOption(selectDiv, f, f));
+    sortedFiles.forEach((f) => this.addOption(selectDiv, f, f));
 
     if (shouldPreserveValue) {
-      const hasPreviousOption = normalizedFiles.includes(previousValue);
+      const hasPreviousOption = sortedFiles.includes(previousValue);
       if (!hasPreviousOption) {
         this.addOption(selectDiv, previousValue, previousValue);
       }
