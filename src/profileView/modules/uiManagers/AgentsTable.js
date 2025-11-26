@@ -1,4 +1,4 @@
-/* global document */
+/* global document, console */
 // Local imports - profile view
 import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -153,36 +153,54 @@ export class AgentsTable {
    * Create a table row for an agent.
    */
   createAgentRow(agent) {
+    if (!this.template) {
+      console.error('Agent row template not found');
+      return document.createElement('tr');
+    }
+
     const row = this.template.content.cloneNode(true).querySelector('tr');
+    if (!row) {
+      console.error('Could not clone agent row from template');
+      return document.createElement('tr');
+    }
 
     // Set agent name
-    row.querySelector('.agent-name').textContent = agent.name;
+    const agentName = row.querySelector('.agent-name');
+    if (agentName) agentName.textContent = agent.name;
 
     // Set description
-    row.querySelector('.agent-description').textContent = agent.description;
+    const description = row.querySelector('.agent-description');
+    if (description) description.textContent = agent.description;
 
     // Set visibility badge
     const visibilityBadge = row.querySelector('.visibility-badge');
-    visibilityBadge.textContent = agent.visibility;
-    visibilityBadge.classList.add(agent.visibility);
+    if (visibilityBadge) {
+      visibilityBadge.textContent = agent.visibility;
+      visibilityBadge.classList.add(agent.visibility);
+    }
 
     // Set tags
     const tagsContainer = row.querySelector('.agent-tags');
-    if (agent.tags && agent.tags.length > 0) {
+    if (tagsContainer && agent.tags && agent.tags.length > 0) {
       agent.tags.forEach((tag) => {
+        if (!this.tagTemplate) return;
         const tagEl = this.tagTemplate.content
           .cloneNode(true)
           .querySelector('.tag');
-        tagEl.textContent = tag;
-        tagsContainer.appendChild(tagEl);
+        if (tagEl) {
+          tagEl.textContent = tag;
+          tagsContainer.appendChild(tagEl);
+        }
       });
     }
 
     // Set up select button
     const selectBtn = row.querySelector('.select-btn');
-    selectBtn.addEventListener('click', () => {
-      this.selectAgent(agent.name);
-    });
+    if (selectBtn) {
+      selectBtn.addEventListener('click', () => {
+        this.selectAgent(agent.name);
+      });
+    }
 
     return row;
   }
