@@ -43,6 +43,7 @@ export const ELEMENT_IDS = {
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RUN_AGAIN_BTN: 'runAgainBtn',
+  RETRY_REQUEST_BTN: 'retryRequestBtn',
   RESTORE_STATE_BTN: 'restoreStateBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
@@ -124,6 +125,14 @@ const WORKFLOW_TOOLBAR = [
     className: 'run-button run-again-button toolbar-button--hidden',
     disabled: true,
   },
+  {
+    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
+    icon: 'refresh',
+    command: COMMANDS.RETRY_STREAM_REQUEST,
+    title: 'Retry the last failed request for this stream',
+    className: 'retry-button',
+    disabled: true,
+  },
   RESTORE_STATE_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
@@ -155,6 +164,14 @@ const WORKFLOW_TOOLBAR = [
 /** @type {ToolbarButtonDefinition[]} */
 const TOOL_USE_TOOLBAR = [
   STOP_STREAM_BUTTON,
+  {
+    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
+    icon: 'refresh',
+    command: COMMANDS.RETRY_STREAM_REQUEST,
+    title: 'Retry the last failed request for this stream',
+    className: 'retry-button',
+    disabled: true,
+  },
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
