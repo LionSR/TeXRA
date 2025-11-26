@@ -28,12 +28,12 @@ You can check your authentication status anytime by running **TeXRA: View Profil
 
 ### 2. Browse Available Agents
 
-Once signed in, you can explore remote agents:
+Once signed in, you can explore remote agents from your profile:
 
 1. Open the Command Palette
-2. Run: **TeXRA: Browse Remote Agents**
-3. Browse through the list of available agents
-4. Select an agent to add it to your agent selector
+2. Run: **TeXRA: View Profile**
+3. Browse the **Remote Agents** table showing all available agents
+4. Click **Use** on any agent to add it to your agent selector
 
 The selected agent will appear in your main TeXRA view alongside your built-in agents.
 
