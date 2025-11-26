@@ -18,7 +18,7 @@ import { AgentSharedStore } from './AgentSharedStore';
 import { AgentWorkspaceState } from './AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  type ToolUseCycleContext,
+  type ToolUseCycleShared,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
@@ -70,9 +70,9 @@ export async function runToolUseCycle<C = unknown>(
   // and can be called by the UI to trigger manual retry
   const retryCallbacks: RetryCallbacks = {};
 
-  const context: ToolUseCycleContext<C> = {
-    options: input.options,
-    store: input.store,
+  // Shared state contains only mutable data that flows through nodes.
+  // Services (options, store) are injected via setParams().
+  const shared: ToolUseCycleShared<C> = {
     state: {
       messages: input.messages,
       shouldStop: false,
@@ -87,7 +87,9 @@ export async function runToolUseCycle<C = unknown>(
   };
 
   const flow = createToolUseCycleFlow<C>();
-  await flow.run(context);
+  // Inject immutable services via params (PocketFlow pattern)
+  flow.setParams({ services: { options: input.options, store: input.store } });
+  await flow.run(shared);
 
   return { retryCallbacks };
 }

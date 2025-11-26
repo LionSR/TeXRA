@@ -87,10 +87,18 @@ class RetryWaitNode<
     this.accessors = accessors;
   }
 
-  async exec(shared: S): Promise<'retry' | 'cancel'> {
-    const { retryState, retryCallbacks } = shared;
-    const streamId = this.accessors.getStreamId(shared, this._params);
-    const logger = this.accessors.getLogger(shared, this._params);
+  /**
+   * Pass shared context through to exec.
+   * Required because BaseNode.exec receives the result of prep, not shared directly.
+   */
+  async prep(shared: S): Promise<S> {
+    return shared;
+  }
+
+  async exec(prepRes: S): Promise<'retry' | 'cancel'> {
+    const { retryState, retryCallbacks } = prepRes;
+    const streamId = this.accessors.getStreamId(prepRes, this._params);
+    const logger = this.accessors.getLogger(prepRes, this._params);
 
     // Log waiting status
     logger.info('Waiting for manual retry', {
