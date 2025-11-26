@@ -1,6 +1,23 @@
 /**
  * Common types shared across different flow cycles to reduce duplication
  * and provide consistent interfaces.
+ *
+ * ## Architectural Note: Pass-through prep() pattern
+ *
+ * Many flow nodes use a pass-through `prep()` that just returns `shared`:
+ * ```typescript
+ * async prep(shared: Context): Promise<Context> { return shared; }
+ * ```
+ *
+ * This pattern exists because:
+ * 1. `BaseNode._run()` calls `prep(shared)` and passes the result to `exec(prepRes)`
+ * 2. Nodes that need the full context in `exec()` must pass it through `prep()`
+ * 3. This deviates from PocketFlow's ideal separation where `prep()` extracts
+ *    only what `exec()` needs, keeping `exec()` isolated from shared state
+ *
+ * The tradeoff was made for simplicity - extracting specific fields in each
+ * `prep()` would add boilerplate without clear benefits in this codebase.
+ * Nodes that do meaningful preparation (PrepNodes) properly extract data.
  */
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
