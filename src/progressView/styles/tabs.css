@@ -112,10 +112,7 @@
   height: var(--height-control);
   margin: 0;
   color: var(--vscode-icon-foreground, var(--vscode-foreground));
-  opacity: var(--opacity-subtle);
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
+  transition: color 120ms ease;
 }
 
 .tab-container:hover {
@@ -135,10 +132,6 @@
   border-radius: var(--border-radius-small);
 }
 
-.tab-container:hover .tab-delete,
-.tab-delete:focus-within {
-  opacity: var(--opacity-full);
-}
 
 .tab-delete:hover::part(control),
 .tab-delete:focus-within::part(control) {
@@ -150,14 +143,3 @@
   color: var(--vscode-errorForeground);
 }
 
-.tab-delete vscode-icon {
-  opacity: var(--opacity-subtle);
-  transition:
-    opacity 120ms ease,
-    color 120ms ease;
-}
-
-.tab-container:hover .tab-delete vscode-icon,
-.tab-delete:focus-within vscode-icon {
-  opacity: var(--opacity-full);
-}
