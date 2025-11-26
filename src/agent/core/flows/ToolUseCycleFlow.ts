@@ -558,7 +558,8 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       }
 
       const trackedEdits = tracker.recordEdits(result.edits);
-      const lineChanges = result.lineChanges ?? summarizeLineChanges(result.edits);
+      const lineChanges =
+        result.lineChanges ?? summarizeLineChanges(result.edits);
       const sanitizedOutput = sanitizeToolResultForLog(result);
       if (lineChanges) {
         sanitizedOutput.lineChanges = lineChanges;

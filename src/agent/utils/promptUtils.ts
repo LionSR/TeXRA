@@ -70,7 +70,9 @@ export function getListOfFiles(files: string[] | null | undefined): string {
       return '';
     }
     return files
-      .filter((f): f is string => f != null && f.trim() !== '')
+      .filter(
+        (f): f is string => f !== null && f !== undefined && f.trim() !== '',
+      )
       .join(', ');
   } catch (err) {
     logger.error(CHANNEL, `Error creating file list: ${toErrorMessage(err)}`);
