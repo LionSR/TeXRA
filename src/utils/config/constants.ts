@@ -52,8 +52,8 @@ export const DEFAULT_TOOL_USE_PERSISTENCE_TTL_HOURS = 72;
 
 // Retry defaults
 // Default to 1 attempt (no automatic retries) - users must click retry button
-const DEFAULT_MODEL_RETRY_ATTEMPTS = 1;
-const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
+export const DEFAULT_MODEL_RETRY_ATTEMPTS = 1;
+export const DEFAULT_MODEL_RETRY_BACKOFF_MS = 1000;
 
 /** Determine whether tool-use session persistence is enabled. */
 export function getToolUsePersistenceEnabled(): boolean {
