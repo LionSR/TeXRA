@@ -1,4 +1,6 @@
 name: draw
+description: Creates or polishes TikZ figures for your research paper.
+
 settings:
   agentType: CoT
   documentTag: latex_document

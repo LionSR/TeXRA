@@ -3,7 +3,7 @@
 // (none)
 
 export function serializeLogData(data: unknown): unknown {
-  if (data === undefined || data === null) {
+  if (data === null || data === undefined) {
     return data;
   }
   if (data instanceof Error) {

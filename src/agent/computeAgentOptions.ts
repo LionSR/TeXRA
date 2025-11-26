@@ -6,6 +6,8 @@ import {
   type AgentDirectoryMap,
   type AgentOptionsPayload,
 } from '@agent/utils/agentOptionMetadata';
+import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { getConfig } from '@utils/config';
 
@@ -67,7 +69,29 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
     await getAllAgents();
   const dirs = await getAgentDirectories();
 
-  return buildAgentOptionsPayload(allAgents, dirs, toolUseAgents, {
+  // Fetch available remote agents and add them to the list
+  // Wrap in try-catch to prevent remote agent failures from breaking local agent loading
+  let remoteAgentNames: string[] = [];
+
+  // Check if remote agents are enabled before fetching
+  const remoteEnabled = getConfig<boolean>('texra.remoteAgents.enabled', true);
+  if (remoteEnabled) {
+    try {
+      const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
+      remoteAgentNames = remoteAgents.map((agent) => agent.name);
+
+      // Register remote agents in the registry (no more remote:// prefix!)
+      RemoteAgentRegistry.registerMultiple(remoteAgentNames);
+    } catch (error) {
+      // Silently fail - user can still use local agents even if remote agent loading fails
+      // The listRemoteAgents method already handles logging
+    }
+  }
+
+  // Combine local and remote agents (using clean names)
+  const allAgentsWithRemote = [...allAgents, ...remoteAgentNames];
+
+  return buildAgentOptionsPayload(allAgentsWithRemote, dirs, toolUseAgents, {
     workflowAgent: defaultWorkflowAgent,
     toolUseAgent: DEFAULT_TOOL_USE_AGENT,
   });

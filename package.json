@@ -2,7 +2,7 @@
   "name": "texra",
   "displayName": "TeXRA",
   "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
-  "version": "0.34.5",
+  "version": "0.34.6",
   "publisher": "texra-ai",
   "engines": {
     "vscode": "^1.99.3"
@@ -63,6 +63,8 @@
             "items": {
               "type": "string",
               "enum": [
+                "opus45T",
+                "opus45",
                 "opus41T",
                 "opus41",
                 "opus4T",
@@ -114,6 +116,7 @@
             "default": [
               "gemini3p",
               "sonnet45T",
+              "opus45T",
               "gpt51",
               "gpt41",
               "deepseekT",
@@ -122,7 +125,7 @@
               "qwen3max",
               "grok4"
             ],
-            "description": "List of available models. Model codes: opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt51/gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5.1/5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini3p/gemini25p/gemini25f/gemini2fT (Gemini 3 Pro Preview, 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2+/kimi2T/kimi2T+ (Kimi Thinking/Vision/K2/K2 Turbo/K2 Thinking/K2 Thinking Turbo)",
+            "description": "List of available models. Model codes: opus45T/opus45 (Claude Opus 4.5 Thinking/Regular), opus41T/opus41 (Claude Opus 4.1 Thinking/Regular), opus4T/opus4 (Claude Opus 4 Thinking/Regular), sonnet45T/sonnet45 (Claude Sonnet 4.5 Thinking/Regular), haiku45T/haiku45 (Claude Haiku 4.5 Thinking/Regular), sonnet4T/sonnet4 (Claude Sonnet 4 Thinking/Regular), sonnet37T/sonnet37 (Claude Sonnet 3.7 Thinking/Regular), o4-/o3/o3pro/o3-/o1pro/o1/gptoss/gptoss- (OpenAI reasoning models), gpt51/gpt5/gpt5pro/gpt5-/gpt5--/gpt41/gpt4o (GPT-5.1/5/5 Pro/5 Mini/5 Nano/4.1/4O), gemini3p/gemini25p/gemini25f/gemini2fT (Gemini 3 Pro Preview, 2.5 Pro/Flash, 2.0 Flash Thinking), deepseek/deepseekT(DeepSeek V3.1 Regular/Thinking), dsv3/dsr1 (DeepSeek V3/R1), grok4 (Grok 4), grok3 (Grok 3), qwen3max (Qwen-Max latest), qwenplus (Qwen Plus latest), qwenturbo (Qwen Turbo), kimit/kimiv/kimi2/kimi2+/kimi2T/kimi2T+ (Kimi Thinking/Vision/K2/K2 Turbo/K2 Thinking/K2 Thinking Turbo)",
             "scope": "resource"
           },
           "texra.agentOutputs.storageMode": {
@@ -264,6 +267,8 @@
             "type": "string",
             "default": "sonnet45",
             "enum": [
+              "opus45T",
+              "opus45",
               "opus41T",
               "opus41",
               "opus4T",
@@ -595,6 +600,23 @@
         }
       },
       {
+        "title": "Authentication & Remote Agents",
+        "properties": {
+          "texra.auth.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Enable TeXRA authentication for remote agents and cloud features",
+            "scope": "resource"
+          },
+          "texra.remoteAgents.enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow loading remote agents from TeXRA cloud",
+            "scope": "resource"
+          }
+        }
+      },
+      {
         "title": "TikZ Figures",
         "properties": {
           "texra.latex.tikzInputDirectory": {
@@ -905,6 +927,25 @@
             "scope": "resource"
           }
         }
+      },
+      {
+        "title": "Model Retries",
+        "properties": {
+          "texra.model.retry.maxAttempts": {
+            "type": "number",
+            "default": 1,
+            "minimum": 1,
+            "description": "Number of automatic retry attempts before surfacing a manual retry option for model calls. Default is 1 (no automatic retries, requires manual retry button click).",
+            "scope": "resource"
+          },
+          "texra.model.retry.backoffMs": {
+            "type": "number",
+            "default": 1000,
+            "minimum": 0,
+            "description": "Base backoff delay in milliseconds between retry attempts for model calls",
+            "scope": "resource"
+          }
+        }
       }
     ],
     "commands": [
@@ -1125,6 +1166,30 @@
         "command": "texra.removeApiKey",
         "title": "Remove API Key",
         "category": "TeXRA"
+      },
+      {
+        "command": "texra.auth.signIn",
+        "title": "Sign In",
+        "category": "TeXRA",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "texra.auth.signOut",
+        "title": "Sign Out",
+        "category": "TeXRA",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "texra.auth.viewProfile",
+        "title": "View Profile",
+        "category": "TeXRA",
+        "icon": "$(account)"
+      },
+      {
+        "command": "texra.auth.accountMenu",
+        "title": "Account",
+        "category": "TeXRA",
+        "icon": "$(account)"
       },
       {
         "command": "texra.testTextEditor",
@@ -1398,6 +1463,11 @@
           "command": "texra.showAgentHistory",
           "when": "view == texra.mainView",
           "group": "navigation@2"
+        },
+        {
+          "command": "texra.auth.accountMenu",
+          "when": "view == texra.mainView",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -1527,6 +1597,7 @@
     "@google/genai": "^1.30.0",
     "@jamesgopsill/crossref-client": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
+    "@supabase/supabase-js": "^2.84.0",
     "@vscode-elements/elements": "^2.3.1",
     "@vscode/codicons": "^0.0.43",
     "@vscode/markdown-it-katex": "^1.1.2",
@@ -1561,6 +1632,6 @@
     "turndown-plugin-gfm": "^1.0.2",
     "winston": "^3.18.3",
     "yaml": "^2.8.1",
-    "zod": "^4.1.12"
+    "zod": "^4.1.13"
   }
 }

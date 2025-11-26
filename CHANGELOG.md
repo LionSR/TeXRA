@@ -2,14 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.34.6] - 2025-11-24
 
-## [0.34.5] - Unreleased
+### Improvements
 
-### Features
+- Added Claude Opus 4.5 (thinking and regular) to the default model catalog,
+  VS Code settings, and documentation so the latest Anthropic tier is
+  available out of the box.
 
-- Added **Gemini 3 Pro Preview** (`gemini3p`) with full tool support and up-to-date
-  pricing so you can try Google's latest high-reasoning model in TeXRA.
+## [0.34.5] - 2025-11-21
+
+### Improvements
+
+- General refactoring to streamline the extension and keep the progress board
+  experience smooth.
+
+### Bug Fixes
+
+- Fixed support for the Kimi 2 Thinking model so it streams reliably again.
 
 ## [0.34.4] - 2025-11-14
 
