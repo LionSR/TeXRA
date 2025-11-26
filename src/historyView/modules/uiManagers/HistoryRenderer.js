@@ -1,5 +1,11 @@
 // Local imports - history view
-import { COMMANDS, ELEMENT_IDS, CLASS_NAMES, LABELS } from '../constants.js';
+import {
+  COMMANDS,
+  ELEMENT_IDS,
+  CLASS_NAMES,
+  LABELS,
+  AGENT_CATEGORY,
+} from '../constants.js';
 import { historyViewState } from '../historyViewState.js';
 import {
   addEventListenerSafely,
@@ -60,7 +66,7 @@ export class HistoryRenderer {
     const date = new Date(item.timestamp).toLocaleString();
 
     // Determine session kind display
-    const isToolUse = session?.agentCategory === 'toolUse';
+    const isToolUse = session?.agentCategory === AGENT_CATEGORY.TOOL_USE;
     const kindLabel = isToolUse ? 'Tool Use' : 'Workflow';
     const kindIcon = isToolUse ? 'tools' : 'symbol-method';
     const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
@@ -98,7 +104,8 @@ export class HistoryRenderer {
 
     const encodedAgent = encodeHtml(config?.agent || 'Unknown');
     const encodedModel = encodeHtml(config?.model || 'Unknown');
-    // Show instruction content or indicate it wasn't set
+    // Instruction is a primary field shown prominently, so it gets "Not set" indicator when empty.
+    // Optional fields like reference/auxiliary files are in the collapsible section and can be omitted.
     const instructionText = config?.instruction;
     const encodedInstruction =
       instructionText && instructionText.trim()
