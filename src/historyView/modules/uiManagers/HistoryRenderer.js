@@ -53,9 +53,10 @@ export class HistoryRenderer {
   }
 
   _createHistoryItemElement(item) {
-    // Support both naming conventions for consistency with TaskState
+    // Use agentConfig as primary (consistent with TaskState), with fallback for legacy data
     const config = item.agentConfig || item.config;
-    const session = item.session || config?.session;
+    // Session is accessed via config.session - single source of truth
+    const session = config?.session;
     const date = new Date(item.timestamp).toLocaleString();
 
     // Determine session kind display
