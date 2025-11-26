@@ -22,8 +22,23 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
  */
 export function createFileHandlers(ctx) {
   const { postHandle, getElement, setToggleIcon } = ctx;
+
+  /**
+   * Helper to get restoration options for a file select.
+   * Captures current UI value and stored state value.
+   */
+  const getRestorationOptions = (domId) => {
+    const selectDiv = getElement(domId);
+    const state = mainViewState.get();
+    return {
+      currentValue: selectDiv?.value,
+      storedValue: state?.[domId],
+    };
+  };
+
   const createSetFileHandler = (fileType, domId) => (message) => {
-    fileSelect.update(domId, message.files);
+    const options = getRestorationOptions(domId);
+    fileSelect.update(domId, message.files, options);
     postHandle();
   };
 
@@ -134,22 +149,13 @@ export function createFileHandlers(ctx) {
   function handleSetBaseFile(message) {
     const currentBaseFileDiv = getElement(BASE_FILE);
     if (currentBaseFileDiv) {
-      const currentBaseFile = currentBaseFileDiv.value;
-      fileSelect.update(BASE_FILE, message.files);
-
-      const state = mainViewState.get();
-      const storedBaseFile = state?.baseFile;
-
-      if (storedBaseFile && message.files.includes(storedBaseFile)) {
-        currentBaseFileDiv.value = storedBaseFile;
-      } else if (
-        message.preserveBaseFile &&
-        currentBaseFile &&
-        message.files.includes(currentBaseFile)
-      ) {
-        currentBaseFileDiv.value = currentBaseFile;
+      const options = getRestorationOptions(BASE_FILE);
+      // Only restore currentValue if preserveBaseFile flag is set
+      if (!message.preserveBaseFile) {
+        options.currentValue = undefined;
       }
-
+      fileSelect.update(BASE_FILE, message.files, options);
+      // Read value after update to get the actual restored value
       fileSelect.updateEdited(currentBaseFileDiv.value);
     }
     postHandle();

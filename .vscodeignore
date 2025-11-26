@@ -69,5 +69,12 @@ CLAUDE.md
 !src/progressView/*.html
 !src/progressView/*.css
 
+!src/profileView/modules/uiManagers/*.js
+!src/profileView/modules/*.js
+!src/profileView/styles/*.css
+!src/profileView/*.js
+!src/profileView/*.html
+!src/profileView/*.css
+
 .env
 

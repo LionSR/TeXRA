@@ -13,7 +13,6 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
 import { uncapitalize } from '@frontend/ui/messageUtils';
 import * as logger from '@logger/logUtils';
-import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 // Local imports - types
@@ -128,7 +127,7 @@ export class FileManager {
         'texra.refreshInputFiles',
       )) ?? [];
     await this.postFileUpdate('Input', refreshedInputFiles, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
@@ -147,7 +146,7 @@ export class FileManager {
       }
     })();
     await this.postFileUpdate(fileType, files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
@@ -163,14 +162,14 @@ export class FileManager {
       allEditedFiles = await fileLister.listEditedFiles(baseFileNameForEdited);
     }
     await this.postFileUpdate('Edited', allEditedFiles, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
   }
 
   async handleRequestBaseFile(message: RequestBaseFileMessage): Promise<void> {
     const files = await fileLister.list('input');
     await this.postFileUpdate('Base', files, {
-      notifyWhenEmpty: Boolean(message.notifyWhenEmpty),
+      notifyWhenEmpty: !!message.notifyWhenEmpty,
       additionalPayload: message.preserveBaseFile
         ? { preserveBaseFile: true }
         : undefined,
@@ -553,15 +552,10 @@ export class FileManager {
       return [];
     }
 
-    const modelNames = getConfig<string[]>('texra.models', []);
     const openedDocuments = workspace.textDocuments;
     const relevantFiles = openedDocuments
       .filter((doc) => doc.uri.scheme === 'file')
-      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false))
-      .filter((filePath) => {
-        const fileName = path.basename(filePath);
-        return !modelNames.some((model) => fileName.includes(`_${model}`));
-      });
+      .map((doc) => workspace.asRelativePath(doc.uri.fsPath, false));
 
     logger.debug(CHANNEL, `Found opened files: ${relevantFiles.join(', ')}`);
     return relevantFiles;

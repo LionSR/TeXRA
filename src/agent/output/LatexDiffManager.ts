@@ -162,7 +162,7 @@ export class LatexDiffManager {
         return;
       }
 
-      const outputFiles = this.getOutputFiles()[currRound] || [];
+      const outputFiles = this.getOutputFiles()[currRound] ?? [];
       const outputPaths = outputFiles.map(
         (entry) => entry.location.absolutePath,
       );

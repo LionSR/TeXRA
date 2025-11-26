@@ -26,6 +26,10 @@ import { mainViewState } from './mainViewState.js';
 // Local imports - UI managers
 import { fileSelect } from './uiManagers/FileSelect.js';
 import { bannerManager } from './uiManagers/BannerManager.js';
+import {
+  hideModelApiKeyBanner,
+  updateModelApiKeyBanner,
+} from './uiManagers/apiKeyBannerUtils.js';
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
@@ -74,9 +78,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       ...createRecordingHandlers({ postHandle: ctx.postHandle }),
       ...createFileHandlers(ctx),
       [MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER]: (m) =>
-        bannerManager.showBanner(ELEMENT_IDS.API_KEY_BANNER, m),
-      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () =>
-        bannerManager.hideBanner(ELEMENT_IDS.API_KEY_BANNER),
+        updateModelApiKeyBanner(this._getElement('model'), m, {
+          forceShow: true,
+        }),
+      [MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER]: () => hideModelApiKeyBanner(),
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER]: (m) =>
         bannerManager.showBanner(ELEMENT_IDS.AGENT_CONFIG_BANNER, m),
       [MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER]: () =>
@@ -209,15 +214,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml;
-    if (previous) {
-      selectElement.value = previous;
-    }
+    this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
       const { provider, context, cost } = opt.dataset;
       if (provider || context || cost) {
         opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
       }
     });
+
+    updateModelApiKeyBanner(selectElement);
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
@@ -226,20 +231,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const previous = selectElement.value;
     selectElement.innerHTML = optionsHtml ?? '';
-    if (previous) {
-      selectElement.value = previous;
-      if (
-        selectElement.value !== previous &&
-        getSelectOptionElements(selectElement).length > 0
-      ) {
-        const fallbackOption = getSelectOptionElements(selectElement).find(
-          (option) => !option.disabled,
-        );
-        if (fallbackOption) {
-          selectElement.value = fallbackOption.value;
-        }
-      }
-    }
+    this._restoreAgentSelection(selectElement, previous);
 
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
@@ -247,10 +239,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse } = this._readAgentOptionMetadata(opt);
+    const { label, isMultiple, isToolUse, description } =
+      this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
+
+    // Add description as the primary hint if available
+    if (description) {
+      hints.push(description);
+    }
 
     if (isMultiple) {
       displayLabel += ' ∶∶';
@@ -296,7 +294,52 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       label,
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
+      description: opt.dataset.description ?? '',
     };
+  }
+
+  /**
+   * Sets an agent selector value, creating the option if it's a remote agent.
+   * Remote agents are now identified by data-remote attribute instead of remote:// prefix.
+   * @param {string} selectId - The ID of the agent select element
+   * @param {string} value - The agent value to set
+   */
+  _setAgentValue(selectId, value) {
+    if (!value) {
+      safeSetElementValue(selectId, value);
+      return;
+    }
+
+    const selectElement = document.getElementById(selectId);
+    if (!selectElement) {
+      console.warn(`Agent select element with id '${selectId}' not found`);
+      safeSetElementValue(selectId, value);
+      return;
+    }
+
+    // Check if option already exists
+    const existingOption = Array.from(selectElement.children).find(
+      (opt) => opt.value === value,
+    );
+
+    // If option doesn't exist, it might be a newly selected remote agent
+    // Check if this looks like it could be a remote agent and create the option
+    if (!existingOption) {
+      // This could be a remote agent being set programmatically
+      // Create the option with remote styling
+      const option = document.createElement('vscode-option');
+      option.value = value;
+      option.textContent = `☁ ${value}`;
+      option.dataset.label = `☁ ${value}`;
+      option.dataset.remote = 'true';
+      option.setAttribute('title', `Remote agent: ${value}`);
+
+      // Add the option to the select
+      selectElement.appendChild(option);
+    }
+
+    // Set the value
+    safeSetElementValue(selectId, value);
   }
 
   _getSessionTypeValue() {
@@ -314,6 +357,68 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
     const element = this._getElement(selectId);
     return isSelectLikeElement(element) ? element : null;
+  }
+
+  _getSessionTypeForSelect(selectElement) {
+    if (!selectElement?.id) {
+      return null;
+    }
+    const entry = Object.entries(AGENT_SELECT_IDS).find(
+      ([, id]) => id === selectElement.id,
+    );
+    return entry ? entry[0] : null;
+  }
+
+  _getSavedAgentValue(sessionType) {
+    const state = mainViewState.get?.() ?? {};
+    if (sessionType === SESSION_TYPES.TOOL_USE) {
+      return state.toolUseAgent ?? state.agent ?? '';
+    }
+    if (sessionType === SESSION_TYPES.WORKFLOW) {
+      return state.workflowAgent ?? state.agent ?? '';
+    }
+    return '';
+  }
+
+  /**
+   * Generic helper to restore a select element's value using a fallback chain.
+   * Attempts to restore from a list of candidate values in order, falling back
+   * to the first enabled option if no candidate matches.
+   *
+   * @param {HTMLElement} selectElement - The select element to restore
+   * @param {string[]} candidates - Array of candidate values to try, in priority order
+   */
+  _restoreSelectValue(selectElement, candidates) {
+    const filteredCandidates = candidates.filter(Boolean);
+    const options = getSelectOptionElements(selectElement);
+
+    const match = filteredCandidates.find((value) =>
+      options.some((option) => option.value === value),
+    );
+
+    if (match) {
+      selectElement.value = match;
+      return;
+    }
+
+    const fallbackOption =
+      options.find((option) => !option.disabled) ?? options[0];
+    if (fallbackOption) {
+      selectElement.value = fallbackOption.value;
+    }
+  }
+
+  _restoreAgentSelection(selectElement, previousValue) {
+    const sessionType = this._getSessionTypeForSelect(selectElement);
+    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
+    // Prioritize saved state over previous UI value for agents
+    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+  }
+
+  _restoreModelSelection(selectElement, previousValue) {
+    const savedValue = mainViewState.get?.()?.model ?? '';
+    // Prioritize saved state over previous UI value for consistency
+    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
   }
 
   _getActiveAgentSelection() {
@@ -449,11 +554,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       state.toolUseAgent ?? (isToolUseSession ? state.agent : undefined) ?? '';
 
     safeSetElementValue(SESSION_TYPE_INPUT, normalizedSessionType);
-    safeSetElementValue(
+    this._setAgentValue(
       AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
       workflowAgentValue,
     );
-    safeSetElementValue(
+    this._setAgentValue(
       AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
       toolUseAgentValue,
     );

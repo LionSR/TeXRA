@@ -47,6 +47,7 @@ import {
   registerWolframScriptCommands,
   registerWolframToolCommands,
 } from '@commands/wolfram';
+import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
@@ -80,6 +81,7 @@ export function registerCommands(context: vscode.ExtensionContext) {
     agent: registerAgentCommands(context),
     agentCreator: registerAgentCreatorCommands(context),
     apiKey: registerApiKeyCommands(context),
+    auth: registerAuthCommands(context),
     stateRestore: registerStateRestoreCommand(context),
     textEditor: registerTextEditorCommands(context),
     linter: registerLinterCommands(context),

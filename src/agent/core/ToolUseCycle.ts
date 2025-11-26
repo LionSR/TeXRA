@@ -21,6 +21,7 @@ import {
   type ToolUseCycleContext,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
+import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
 // Local imports - option helpers
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
@@ -34,12 +35,18 @@ export interface ToolUseCycleOptions<C = unknown>
   toolRegistry: Record<string, BaseTool<any>>;
   workspaceState: AgentWorkspaceState;
   modelName?: string;
+  agentName?: string;
 }
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
+}
+
+export interface ToolUseCycleResult {
+  /** Callbacks for triggering manual retry from UI. */
+  retryCallbacks: RetryCallbacks;
 }
 
 /**
@@ -53,11 +60,16 @@ export interface ToolUseCycleInput<C = unknown> {
  * where the agent responds to tools and waits for user input.
  *
  * @param input - Cycle input with options, messages, and store
+ * @returns Result with retry callbacks for UI to trigger manual retry
  * @see runResponseCycle for workflow-based cycle execution that returns control flags
  */
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,
-): Promise<void> {
+): Promise<ToolUseCycleResult> {
+  // Initialize retry callbacks - these will be populated by RetryWaitNode
+  // and can be called by the UI to trigger manual retry
+  const retryCallbacks: RetryCallbacks = {};
+
   const context: ToolUseCycleContext<C> = {
     options: input.options,
     store: input.store,
@@ -70,8 +82,12 @@ export async function runToolUseCycle<C = unknown>(
       text: undefined,
       stopReason: undefined,
     } satisfies ToolUseCycleState,
+    retryState: createRetryState(),
+    retryCallbacks,
   };
 
   const flow = createToolUseCycleFlow<C>();
   await flow.run(context);
+
+  return { retryCallbacks };
 }

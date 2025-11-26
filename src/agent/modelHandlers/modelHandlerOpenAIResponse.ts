@@ -47,6 +47,7 @@ import {
   extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
+import { executeWithRequestRetry } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
@@ -452,10 +453,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           : fileData;
 
       buffer = Buffer.from(payload, 'base64');
-      const uploadedFile = await client.files.create({
-        file: await toFile(buffer, filename),
-        purpose: 'assistants',
-      });
+      const uploadedFile = await executeWithRequestRetry(
+        {
+          logger: this.logger,
+          model: this.config.name,
+          operation: `openai.files.create:${filename}`,
+        },
+        async () =>
+          client.files.create({
+            file: await toFile(buffer!, filename),
+            purpose: 'assistants',
+          }),
+      );
 
       content.file_id = uploadedFile.id;
       delete content.file_data;
@@ -580,7 +589,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (useStreaming) {
       const { stream: _stream, ...rest } = params;
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
-      const stream = client.responses.stream(streamParams, { signal });
+      const stream = await executeWithRequestRetry(
+        {
+          logger: this.logger,
+          model: this.config.name,
+          operation: 'openai.responses.stream',
+          signal,
+        },
+        () => client.responses.stream(streamParams, { signal }),
+      );
       const thinking = this.createThinkingStream();
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
@@ -619,9 +636,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         ...nonStreamRest,
         stream: false,
       };
-      let response = await client.responses.create(nonStreamingParams, {
-        signal,
-      });
+      let response = await executeWithRequestRetry(
+        {
+          logger: this.logger,
+          model: this.config.name,
+          operation: 'openai.responses.create',
+          signal,
+        },
+        () => client.responses.create(nonStreamingParams, { signal }),
+      );
       if (useBackgroundResponses) {
         this.logger.debug(
           `Background response ${response.id} created with status ${
@@ -820,7 +843,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
     let pollCount = 0;
-    let consecutiveErrors = 0;
     const initialStatus = current.status ?? 'unknown';
 
     this.logger.debug(
@@ -883,56 +905,30 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
       }
 
-      try {
-        const requestOptions = signal ? { signal } : undefined;
-        current = await client.responses.retrieve(
-          responseId,
-          undefined,
-          requestOptions,
-        );
-        consecutiveErrors = 0;
-        this.logger.debug(
-          `Background poll ${pollCount} for response ${responseId}: status=${
-            current.status ?? 'unknown'
-          }`,
-          {
-            data: {
-              responseId,
-              status: current.status,
-              pollCount,
-            },
-          },
-        );
-      } catch (err) {
-        consecutiveErrors += 1;
-        const message = getSdkErrorMessage(err);
-        this.logger.warn(
-          `Background poll ${pollCount} for response ${responseId} failed (${consecutiveErrors}/${maxRetries}): ${message}. Will retry...`,
-          {
-            data: {
-              responseId,
-              pollCount,
-              error: message,
-            },
-          },
-        );
+      const requestOptions = signal ? { signal } : undefined;
+      current = await executeWithRequestRetry(
+        {
+          logger: this.logger,
+          model: this.config.name,
+          operation: `openai.responses.retrieve:${responseId}`,
+          signal,
+          maxAttempts: maxRetries,
+        },
+        () => client.responses.retrieve(responseId, undefined, requestOptions),
+      );
 
-        if (consecutiveErrors >= maxRetries) {
-          this.logger.error(
-            `Giving up after ${consecutiveErrors} errors retrieving background response ${responseId}`,
-            {
-              data: {
-                responseId,
-                pollCount,
-                error: message,
-              },
-            },
-          );
-          throw err;
-        }
-
-        continue;
-      }
+      this.logger.debug(
+        `Background poll ${pollCount} for response ${responseId}: status=${
+          current.status ?? 'unknown'
+        }`,
+        {
+          data: {
+            responseId,
+            status: current.status,
+            pollCount,
+          },
+        },
+      );
     }
 
     const elapsedMs = Date.now() - startTime;
@@ -1447,10 +1443,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             : 'attachment';
         const mimeType = attachment.mimeType ?? 'application/octet-stream';
 
-        const uploadedFile = await client.files.create({
-          file: await toFile(buffer, filename, { type: mimeType }),
-          purpose: 'assistants',
-        });
+        const uploadedFile = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: `openai.files.create:${filename}`,
+          },
+          async () =>
+            client.files.create({
+              file: await toFile(buffer!, filename, { type: mimeType }),
+              purpose: 'assistants',
+            }),
+        );
 
         uploaded.push({
           attachment,
@@ -1458,14 +1462,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           isImage: mimeType.startsWith('image/'),
         });
       } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
-        );
+        // Logged via retry helper
       } finally {
         if (buffer) {
           buffer.fill(0);
