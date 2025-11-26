@@ -46,6 +46,15 @@ export function getCodiconClass(iconName) {
 }
 
 /**
+ * Apply codicon classes to an element.
+ * @param {HTMLElement} element - The element to apply classes to
+ * @param {string} iconName - Icon name (e.g., 'cloud', 'tools')
+ */
+export function applyCodiconClass(element, iconName) {
+  element.classList.add('codicon', `codicon-${iconName}`);
+}
+
+/**
  * Get the decorator config for an agent type.
  * @param {string} agentType - Agent type key (CoT, direct, toolUse)
  * @returns {{ icon: string, label: string }}
