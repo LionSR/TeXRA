@@ -23,7 +23,22 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
 export function createFileHandlers(ctx) {
   const { postHandle, getElement, setToggleIcon } = ctx;
   const createSetFileHandler = (fileType, domId) => (message) => {
+    const selectDiv = getElement(domId);
+    const currentValue = selectDiv?.value;
+
     fileSelect.update(domId, message.files);
+
+    // Restore selection if the file still exists in the updated list
+    // Prioritize saved state over current UI value
+    const state = mainViewState.get();
+    const storedValue = state?.[domId];
+
+    if (storedValue && message.files.includes(storedValue)) {
+      safeSetElementValue(domId, storedValue);
+    } else if (currentValue && message.files.includes(currentValue)) {
+      safeSetElementValue(domId, currentValue);
+    }
+
     postHandle();
   };
 
