@@ -44,7 +44,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { STATUS } from '@progressView/modules/constants.js';
+import { STATUS } from '@common/constants/streamStatus';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
