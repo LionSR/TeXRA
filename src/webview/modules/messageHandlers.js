@@ -373,13 +373,19 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     return '';
   }
 
-  _restoreAgentSelection(selectElement, previousValue) {
-    const sessionType = this._getSessionTypeForSelect(selectElement);
-    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
-    const candidates = [savedValue, previousValue].filter(Boolean);
-
+  /**
+   * Generic helper to restore a select element's value using a fallback chain.
+   * Attempts to restore from a list of candidate values in order, falling back
+   * to the first enabled option if no candidate matches.
+   *
+   * @param {HTMLElement} selectElement - The select element to restore
+   * @param {string[]} candidates - Array of candidate values to try, in priority order
+   */
+  _restoreSelectValue(selectElement, candidates) {
+    const filteredCandidates = candidates.filter(Boolean);
     const options = getSelectOptionElements(selectElement);
-    const match = candidates.find((value) =>
+
+    const match = filteredCandidates.find((value) =>
       options.some((option) => option.value === value),
     );
 
@@ -395,25 +401,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  _restoreAgentSelection(selectElement, previousValue) {
+    const sessionType = this._getSessionTypeForSelect(selectElement);
+    const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
+    // Prioritize saved state over previous UI value for agents
+    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+  }
+
   _restoreModelSelection(selectElement, previousValue) {
     const savedValue = mainViewState.get?.()?.model ?? '';
-    const candidates = [previousValue, savedValue].filter(Boolean);
-
-    const options = getSelectOptionElements(selectElement);
-    const match = candidates.find((value) =>
-      options.some((option) => option.value === value),
-    );
-
-    if (match) {
-      selectElement.value = match;
-      return;
-    }
-
-    const fallbackOption =
-      options.find((option) => !option.disabled) ?? options[0];
-    if (fallbackOption) {
-      selectElement.value = fallbackOption.value;
-    }
+    // Prioritize saved state over previous UI value for consistency
+    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
   }
 
   _getActiveAgentSelection() {
