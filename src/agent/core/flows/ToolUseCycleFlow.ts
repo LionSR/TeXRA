@@ -25,6 +25,7 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -190,7 +191,10 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 }
 
-function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
+function buildToolResultPayload(
+  result: ToolResult,
+  fallbackLineChanges?: { added: number; removed: number },
+): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   if (result.summary !== undefined) payload.summary = result.summary;
   if (result.output !== undefined) payload.output = result.output;
@@ -203,6 +207,9 @@ function buildToolResultPayload(result: ToolResult): Record<string, unknown> {
   if (result.isError) payload.isError = true;
   if (result.diagnostics !== undefined)
     payload.diagnostics = result.diagnostics;
+  const lineChanges = result.lineChanges ?? fallbackLineChanges;
+  if (lineChanges !== undefined) payload.lineChanges = lineChanges;
+  if (result.edits !== undefined) payload.edits = result.edits;
   if (result.files !== undefined) payload.files = result.files;
   return payload;
 }
@@ -483,6 +490,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     const { calls } = execRes.value;
 
     const assistantText = state.text ?? '';
+    const tracker = store.workspace.interactions;
 
     for (const [index, call] of calls.entries()) {
       const tool = options.toolRegistry[call.name];
@@ -499,13 +507,22 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         });
       } else {
         try {
-          result = await withToolEditApprovalContext(
+          result = await withToolFileInteractionContext(
             {
+              tracker,
               streamId: options.logger.channelId,
               executionId: options.context.executionId,
               toolCallId: call.callId,
             },
-            () => tool.call(parsedInput),
+            () =>
+              withToolEditApprovalContext(
+                {
+                  streamId: options.logger.channelId,
+                  executionId: options.context.executionId,
+                  toolCallId: call.callId,
+                },
+                () => tool.call(parsedInput),
+              ),
           );
         } catch (err) {
           const { message, diagnostics } = normalizeToolCallError(
@@ -520,10 +537,29 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         }
       }
 
+      // recordEdits returns per-call line changes as the single source of truth
+      const trackedEdits = tracker.recordEdits(result.edits);
+      const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
+      const sanitizedOutput = sanitizeToolResultForLog(result);
+      if (lineChanges) {
+        sanitizedOutput.lineChanges = lineChanges;
+      }
+      const editedFiles = trackedEdits.edits.map((entry) => ({
+        path: entry.path,
+        ok: true,
+        source: 'tool',
+        sourceDisplay: 'Tool use',
+      }));
+
+      if (editedFiles.length > 0) {
+        sanitizedOutput.files = editedFiles;
+      }
+
       const toolUseLog = {
         toolName: call.name,
         input: parsedInput ?? call.raw,
-        output: sanitizeToolResultForLog(result),
+        output: sanitizedOutput,
+        ...(editedFiles.length > 0 && { files: editedFiles }),
         isError: Boolean(result.isError),
       };
       options.logger.info('', {
@@ -561,7 +597,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         await options.modelHandler.createToolUseFollowUpMessages(
           options.client,
           call,
-          buildToolResultPayload(result),
+          buildToolResultPayload(result, lineChanges),
           store.workspace,
           index === 0 && assistantText.length > 0 ? assistantText : undefined,
         );

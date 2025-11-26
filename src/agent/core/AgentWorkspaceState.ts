@@ -45,6 +45,111 @@ export class ResponseAssemblyState {
   }
 }
 
+export class FileInteractionState {
+  private readonly readFiles = new Set<string>();
+  private readonly edits = new Map<
+    string,
+    { added: number; removed: number }
+  >();
+
+  recordRead(path: string | undefined | null): void {
+    if (!path) return;
+    this.readFiles.add(path);
+  }
+
+  hasRead(path: string | undefined | null): boolean {
+    if (!path) return false;
+    return this.readFiles.has(path);
+  }
+
+  /**
+   * Records per-path edit deltas and returns a deduped list of files edited
+   * during this call alongside the aggregate line change totals for the call.
+   */
+  recordEdits(
+    edits:
+      | { path?: string; lineChanges?: { added?: number; removed?: number } }[]
+      | undefined,
+  ): {
+    edits: { path: string; lineChanges?: { added: number; removed: number } }[];
+    lineChanges?: { added: number; removed: number };
+  } {
+    if (!Array.isArray(edits)) {
+      return { edits: [] };
+    }
+
+    const perCallEdits = new Map<string, { added: number; removed: number }>();
+    let added = 0;
+    let removed = 0;
+
+    for (const entry of edits) {
+      const path = entry?.path;
+      if (!path) continue;
+
+      const existing = this.edits.get(path) ?? { added: 0, removed: 0 };
+      const deltaAdded = entry.lineChanges?.added ?? 0;
+      const deltaRemoved = entry.lineChanges?.removed ?? 0;
+
+      existing.added += deltaAdded;
+      existing.removed += deltaRemoved;
+      this.edits.set(path, existing);
+
+      const current = perCallEdits.get(path) ?? { added: 0, removed: 0 };
+      current.added += deltaAdded;
+      current.removed += deltaRemoved;
+      perCallEdits.set(path, current);
+
+      added += deltaAdded;
+      removed += deltaRemoved;
+    }
+
+    const editsForCall = Array.from(perCallEdits.entries()).map(
+      ([path, diff]) => ({
+        path,
+        lineChanges:
+          diff.added || diff.removed
+            ? { added: diff.added, removed: diff.removed }
+            : undefined,
+      }),
+    );
+
+    const lineChanges = added || removed ? { added, removed } : undefined;
+    return { edits: editsForCall, lineChanges };
+  }
+
+  toJSON(): {
+    readFiles: string[];
+    edits: { path: string; added: number; removed: number }[];
+  } {
+    return {
+      readFiles: Array.from(this.readFiles),
+      edits: Array.from(this.edits.entries()).map(([path, diff]) => ({
+        path,
+        added: diff.added,
+        removed: diff.removed,
+      })),
+    };
+  }
+
+  static fromJSON(data: {
+    readFiles?: string[];
+    edits?: { path?: string; added?: number; removed?: number }[];
+  }): FileInteractionState {
+    const state = new FileInteractionState();
+    // Restore read files
+    (data.readFiles ?? []).forEach((path) => state.recordRead(path));
+    // Restore edits directly (absolute values, not deltas)
+    (data.edits ?? []).forEach((entry) => {
+      if (!entry?.path) return;
+      state.edits.set(entry.path, {
+        added: entry.added ?? 0,
+        removed: entry.removed ?? 0,
+      });
+    });
+    return state;
+  }
+}
+
 export class MediaAttachmentState {
   public readonly files: string[] = [];
 
@@ -97,6 +202,22 @@ export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
     thinkingAdded: z.boolean(),
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
+  interactions: z
+    .strictObject({
+      readFiles: z.array(z.string()),
+      edits: z.array(
+        z.strictObject({
+          path: z.string(),
+          added: z.number().optional(),
+          removed: z.number().optional(),
+        }),
+      ),
+    })
+    .optional()
+    .default({
+      readFiles: [],
+      edits: [],
+    }),
 });
 
 export type AgentWorkspaceSnapshot = z.infer<
@@ -108,6 +229,7 @@ export class AgentWorkspaceState {
   public readonly media = new MediaAttachmentState();
   public readonly reasoning = new ReasoningCacheState();
   public readonly document = new DocumentStatsState();
+  public readonly interactions = new FileInteractionState();
 
   resetReasoning(): void {
     this.reasoning.reset();
@@ -129,6 +251,7 @@ export class AgentWorkspaceState {
       document: {
         texcountStats: this.document.texcountStats,
       },
+      interactions: this.interactions.toJSON(),
     };
   }
 
@@ -146,6 +269,16 @@ export class AgentWorkspaceState {
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
     state.document.texcountStats = snapshot.document.texcountStats;
+    // Restore file interactions directly using fromJSON (single source of truth)
+    const interactions =
+      snapshot.interactions ??
+      ({
+        readFiles: [],
+        edits: [],
+      } satisfies AgentWorkspaceSnapshot['interactions']);
+    const restored = FileInteractionState.fromJSON(interactions);
+    // Replace the default instance with the restored state
+    (state as any).interactions = restored;
     return state;
   }
 }

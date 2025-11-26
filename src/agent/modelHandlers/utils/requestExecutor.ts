@@ -46,10 +46,16 @@ export async function executeWithRequestRetry<T>(
   request: () => Promise<T> | T,
 ): Promise<T> {
   // Default to 1 attempt (no automatic retries) unless explicitly configured
-  const configuredMaxAttempts = options.maxAttempts ?? getModelRetryMaxAttempts();
-  const maxAttempts = Math.max(1, configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS);
+  const configuredMaxAttempts =
+    options.maxAttempts ?? getModelRetryMaxAttempts();
+  const maxAttempts = Math.max(
+    1,
+    configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS,
+  );
   const baseDelayMs =
-    options.baseDelayMs ?? getModelRetryBackoffMs() ?? DEFAULT_MODEL_RETRY_BACKOFF_MS;
+    options.baseDelayMs ??
+    getModelRetryBackoffMs() ??
+    DEFAULT_MODEL_RETRY_BACKOFF_MS;
   const allowManualRetry = options.enableManualRetry ?? true;
   const manualRetryKey = options.manualRetryKey ?? options.logger.channelId;
 
