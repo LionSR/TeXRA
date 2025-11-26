@@ -66,7 +66,11 @@
         <p id="tierMessage">Loading account information...</p>
       </div>
 
-      <div id="notAuthenticated" class="not-authenticated" style="display: none;">
+      <div
+        id="notAuthenticated"
+        class="not-authenticated"
+        style="display: none"
+      >
         <p>You are not signed in to TeXRA.</p>
         <vscode-button id="signInBtn">
           <span slot="start" class="codicon codicon-sign-in"></span>
@@ -74,12 +78,16 @@
         </vscode-button>
       </div>
 
-      <div id="remoteAgentsSection" class="remote-agents-section" style="display: none;">
+      <div
+        id="remoteAgentsSection"
+        class="remote-agents-section"
+        style="display: none"
+      >
         <h2>Available Remote Agents</h2>
         <div id="agentsTableContainer">
           <!-- Agents table will be rendered here -->
         </div>
-        <p id="noAgentsMessage" class="no-agents" style="display: none;">
+        <p id="noAgentsMessage" class="no-agents" style="display: none">
           No remote agents available. Contact support@texra.ai for assistance.
         </p>
       </div>

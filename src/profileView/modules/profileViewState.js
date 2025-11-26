@@ -1,16 +1,41 @@
 // Local imports - common
-import { WebviewState } from '@common/webviewState.js';
+import { WebviewStateManager } from '@common/webviewState.js';
 
 /**
  * State management for the profile view.
+ * Uses composition with WebviewStateManager following the pattern of other views.
  */
-class ProfileViewState extends WebviewState {
+class ProfileViewState {
   constructor() {
-    super('profileView');
+    this.stateManager = new WebviewStateManager();
     this._authenticated = false;
     this._user = null;
     this._tier = 'free';
     this._remoteAgents = [];
+  }
+
+  /**
+   * Initialize state from persisted storage.
+   */
+  initialize() {
+    const state = this.stateManager.getState();
+    const saved = typeof state === 'object' && state !== null ? state : {};
+    this._authenticated = saved.authenticated ?? false;
+    this._user = saved.user ?? null;
+    this._tier = saved.tier ?? 'free';
+    this._remoteAgents = saved.remoteAgents ?? [];
+  }
+
+  /**
+   * Save current state to persisted storage.
+   */
+  save() {
+    this.stateManager.update({
+      authenticated: this._authenticated,
+      user: this._user,
+      tier: this._tier,
+      remoteAgents: this._remoteAgents,
+    });
   }
 
   get authenticated() {
@@ -19,7 +44,7 @@ class ProfileViewState extends WebviewState {
 
   set authenticated(value) {
     this._authenticated = value;
-    this.saveState();
+    this.save();
   }
 
   get user() {
@@ -28,7 +53,7 @@ class ProfileViewState extends WebviewState {
 
   set user(value) {
     this._user = value;
-    this.saveState();
+    this.save();
   }
 
   get tier() {
@@ -37,7 +62,7 @@ class ProfileViewState extends WebviewState {
 
   set tier(value) {
     this._tier = value;
-    this.saveState();
+    this.save();
   }
 
   get remoteAgents() {
@@ -46,36 +71,18 @@ class ProfileViewState extends WebviewState {
 
   set remoteAgents(value) {
     this._remoteAgents = value;
-    this.saveState();
+    this.save();
   }
 
   /**
-   * Update profile data from message
+   * Update profile data from message.
    */
   updateProfile(data) {
     this._authenticated = data.authenticated;
     this._user = data.user;
     this._tier = data.tier;
     this._remoteAgents = data.remoteAgents || [];
-    this.saveState();
-  }
-
-  getStateForSave() {
-    return {
-      authenticated: this._authenticated,
-      user: this._user,
-      tier: this._tier,
-      remoteAgents: this._remoteAgents,
-    };
-  }
-
-  restoreFromState(state) {
-    if (state) {
-      this._authenticated = state.authenticated ?? false;
-      this._user = state.user ?? null;
-      this._tier = state.tier ?? 'free';
-      this._remoteAgents = state.remoteAgents ?? [];
-    }
+    this.save();
   }
 }
 
