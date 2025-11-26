@@ -338,8 +338,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
-   * Sets an agent selector value, creating the option if it's a remote agent.
-   * Remote agents are now identified by data-remote attribute instead of remote:// prefix.
+   * Sets an agent selector value, creating a placeholder option if needed.
+   * Note: Placeholder options are created without remote styling since we can't
+   * determine remote status on the client side. When SET_AGENT_OPTIONS arrives,
+   * it will replace options with properly decorated versions.
    * @param {string} selectId - The ID of the agent select element
    * @param {string} value - The agent value to set
    */
@@ -361,20 +363,17 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       (opt) => opt.value === value,
     );
 
-    // If option doesn't exist, it might be a newly selected remote agent
-    // Check if this looks like it could be a remote agent and create the option
+    // If option doesn't exist, create a placeholder without remote styling.
+    // SET_AGENT_OPTIONS will replace this with properly decorated options.
     if (!existingOption) {
-      // This could be a remote agent being set programmatically
-      // Create the option with remote styling using shared config
-      const { icon, hint } = AGENT_DECORATORS.properties.remote;
       const option = document.createElement('vscode-option');
       option.value = value;
-      option.innerHTML = `${this._createCodiconHtml(icon)} ${this._escapeHtml(value)}`;
+      option.textContent = value;
       option.dataset.label = value;
-      option.dataset.remote = 'true';
-      option.setAttribute('title', hint);
+      // Note: We don't set data-remote here since we can't determine
+      // remote status on the client side. The server will provide this
+      // info when SET_AGENT_OPTIONS arrives.
 
-      // Add the option to the select
       selectElement.appendChild(option);
     }
 
