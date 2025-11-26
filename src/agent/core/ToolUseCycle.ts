@@ -22,22 +22,18 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
-import { AgentWorkspaceState } from './AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
-  type ToolUseCycleContext,
+  type ToolUseCycleShared,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
+
+// Import and re-export from single source of truth
+import type { ToolUseCycleOptions } from './flows/CycleServices';
+export type { ToolUseCycleOptions };
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
-export interface ToolUseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
-  toolRegistry: Record<string, BaseTool<any>>;
-  workspaceState: AgentWorkspaceState;
-  modelName?: string;
-  agentName?: string;
-}
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
@@ -71,9 +67,9 @@ export async function runToolUseCycle<C = unknown>(
   // and can be called by the UI to trigger manual retry
   const retryCallbacks: RetryCallbacks = {};
 
-  const context: ToolUseCycleContext<C> = {
-    options: input.options,
-    store: input.store,
+  // Shared state contains only mutable data that flows through nodes.
+  // Services (options, store) are injected via setParams().
+  const shared: ToolUseCycleShared<C> = {
     state: {
       messages: input.messages,
       shouldStop: false,
@@ -88,7 +84,9 @@ export async function runToolUseCycle<C = unknown>(
   };
 
   const flow = createToolUseCycleFlow<C>();
-  await flow.run(context);
+  // Inject immutable services via params (PocketFlow pattern)
+  flow.setParams({ services: { options: input.options, store: input.store } });
+  await flow.run(shared);
 
   // Emit edited files to the progress view
   emitEditedFiles(input);

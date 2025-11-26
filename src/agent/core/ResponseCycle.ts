@@ -11,26 +11,20 @@
 
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { TaskRunFileService, AgentFileLocation } from '@utils/files';
+import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
 import {
   createResponseCycleFlow,
-  type ResponseCycleContext,
+  type ResponseCycleShared,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 
-// Local imports - option helpers
-import type { AgentCycleBaseOptions } from './AgentCycleOptions';
-import type { AgentConfig } from './AgentConfig';
-
-export interface ResponseCycleOptions<C = unknown>
-  extends AgentCycleBaseOptions<C> {
-  agentConfig: AgentConfig;
-  fileService: TaskRunFileService;
-}
+// Import and re-export from single source of truth
+import type { ResponseCycleOptions } from './flows/CycleServices';
+export type { ResponseCycleOptions };
 
 export interface ResponseCycleInput<C = unknown> {
   options: ResponseCycleOptions<C>;
@@ -67,9 +61,9 @@ export async function runResponseCycle<C = unknown>(
   // and can be called by the UI to trigger manual retry
   const retryCallbacks: RetryCallbacks = {};
 
-  const context: ResponseCycleContext<C> = {
-    options: input.options,
-    store: input.store,
+  // Shared state contains only mutable data that flows through nodes.
+  // Services (options, store) are injected via setParams().
+  const shared: ResponseCycleShared<C> = {
     state: {
       messages: input.messages,
       outputLocation: input.outputLocation,
@@ -91,11 +85,13 @@ export async function runResponseCycle<C = unknown>(
   };
 
   const flow = createResponseCycleFlow<C>();
-  await flow.run(context);
+  // Inject immutable services via params (PocketFlow pattern)
+  flow.setParams({ services: { options: input.options, store: input.store } });
+  await flow.run(shared);
 
   return {
-    store: context.store,
-    endTurn: context.state.endTurn,
+    store: input.store,
+    endTurn: shared.state.endTurn,
     retryCallbacks,
   };
 }
