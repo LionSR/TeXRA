@@ -30,23 +30,24 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
       'beamer_poster',
     ];
 
-    // Initialize patterns object
-    const patterns: { [key: string]: string } = {};
-
     // ===== XML to LaTeX conversions =====
     // Examples:
     // <align> -> \begin{align}
     // </tikzpicture> -> \end{tikzpicture}
     // <figure}> -> \begin{figure}
     const xmlToLatexPatterns = generateXmlLatexConversions(latexEnvironments);
-    Object.assign(patterns, xmlToLatexPatterns);
 
     // ===== LaTeX to XML conversions =====
     // Examples:
     // \begin{scratchpad} -> <scratchpad>
     // \end{latex_document} -> </latex_document>
     const latexToXmlPatterns = generateLatexToXmlConversions(pureXmlTags);
-    Object.assign(patterns, latexToXmlPatterns);
+
+    // Initialize patterns object with generated conversions
+    const patterns: { [key: string]: string } = {
+      ...xmlToLatexPatterns,
+      ...latexToXmlPatterns,
+    };
 
     // ===================================================================
     // Manual replacements - for specific cases that need special handling

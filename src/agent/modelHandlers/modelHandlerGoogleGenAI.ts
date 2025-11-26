@@ -74,6 +74,7 @@ import {
   extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
+import { executeWithRequestRetry } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
 
 // Type imports
@@ -222,8 +223,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const inlineLimit = this.getInlineUploadLimitBytes();
 
     for (const entry of entries) {
-      const fileName = entry.file_name || 'unnamed-file';
-      const mimeType = entry.media_type || DEFAULT_ATTACHMENT_MIME_TYPE;
+      const fileName = entry.file_name ?? 'unnamed-file';
+      const mimeType = entry.media_type ?? DEFAULT_ATTACHMENT_MIME_TYPE;
       const inlinePayload =
         typeof entry.data === 'string' && entry.data.length > 0
           ? entry.data
@@ -262,13 +263,21 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         this.logger.debug(
           `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
         );
-        const uploadResult: File = await client.files.upload({
-          file: uploadPath,
-          config: {
-            mimeType,
-            displayName: fileName,
+        const uploadResult: File = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: `google.files.upload:${fileName}`,
           },
-        });
+          () =>
+            client.files.upload({
+              file: uploadPath,
+              config: {
+                mimeType,
+                displayName: fileName,
+              },
+            }),
+        );
         const fileUri = uploadResult.uri;
 
         if (!fileUri) {
@@ -286,14 +295,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         uploadedParts.push(createPartFromUri(fileUri, resolvedMimeType));
         uploadSummaries.push({ path: fileName, ok: true });
       } catch (error) {
-        const formattedError = formatProviderHttpError(error);
-        this.logger.error(
-          `Failed to upload media entry ${fileName}: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
-        );
         uploadSummaries.push({ path: fileName, ok: false });
       }
     }
@@ -420,11 +421,20 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // history, so append the final user message that will be sent next.
         countContents.push({ role: 'user', parts: [...lastMessageParts] });
 
-        const responseTokenCount = await client.models.countTokens({
-          model: this.config.fullName,
-          contents: countContents,
-          config: { abortSignal: signal },
-        });
+        const responseTokenCount = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: 'google.models.countTokens',
+            signal,
+          },
+          () =>
+            client.models.countTokens({
+              model: this.config.fullName,
+              contents: countContents,
+              config: { abortSignal: signal },
+            }),
+        );
         const totalTokens = responseTokenCount.totalTokens ?? 0;
         this.logger.debug(`Token count of message: ${totalTokens}`);
         if (totalTokens > this.config.contextWindow) {
@@ -474,7 +484,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           message: [...lastMessageParts],
           config: { ...generationConfig, abortSignal: signal },
         };
-        const stream = await chat.sendMessageStream(streamParams);
+        const stream = await executeWithRequestRetry(
+          {
+            logger: this.logger,
+            model: this.config.name,
+            operation: 'google.chat.sendMessageStream',
+            signal,
+          },
+          () => chat.sendMessageStream(streamParams),
+        );
 
         const thinking = this.createThinkingStream();
         const output = this.isOutputStreamingEnabled()
@@ -596,7 +614,15 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         message: [...lastMessageParts],
         config: { ...generationConfig, abortSignal: signal },
       };
-      const result = await chat.sendMessage(sendParams);
+      const result = await executeWithRequestRetry(
+        {
+          logger: this.logger,
+          model: this.config.name,
+          operation: 'google.chat.sendMessage',
+          signal,
+        },
+        () => chat.sendMessage(sendParams),
+      );
 
       return result;
     } catch (error) {

@@ -1,0 +1,198 @@
+/*
+ * Profile view styles
+ */
+
+/* Base styles */
+body {
+  font-family: var(--font-family);
+  color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
+  padding: var(--spacing-xlarge);
+}
+
+h1 {
+  color: var(--vscode-textLink-foreground);
+  margin-bottom: var(--spacing-xlarge);
+}
+
+h2 {
+  color: var(--vscode-foreground);
+  margin-top: var(--spacing-xlarge);
+  margin-bottom: var(--spacing-medium);
+  font-size: 1.2em;
+  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
+  padding-bottom: var(--spacing-small);
+}
+
+/* Profile container */
+.profile-container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Profile info section */
+.profile-info {
+  margin-bottom: var(--spacing-xlarge);
+}
+
+.info-row {
+  margin: var(--spacing-medium) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-medium);
+}
+
+.label {
+  font-weight: bold;
+  color: var(--vscode-textPreformat-foreground);
+  min-width: 80px;
+}
+
+.value {
+  color: var(--vscode-foreground);
+}
+
+/* Tier badge */
+.tier-badge {
+  display: inline-block;
+  padding: var(--spacing-small) var(--spacing-medium);
+  border-radius: var(--border-radius);
+  text-transform: uppercase;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.tier-badge.free {
+  background: var(--vscode-inputValidation-warningBackground);
+  color: var(--vscode-inputValidation-warningForeground);
+}
+
+.tier-badge.researcher {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+/* Tier info box */
+.tier-info {
+  margin-top: var(--spacing-xlarge);
+  padding: var(--spacing-medium);
+  background: var(--vscode-textBlockQuote-background);
+  border-left: 3px solid var(--vscode-textBlockQuote-border);
+  border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.tier-info p {
+  margin: 0;
+}
+
+/* Not authenticated state */
+.not-authenticated {
+  text-align: center;
+  padding: var(--spacing-xlarge);
+}
+
+.not-authenticated p {
+  margin-bottom: var(--spacing-xlarge);
+  color: var(--vscode-descriptionForeground);
+}
+
+/* Remote agents section */
+.remote-agents-section {
+  margin-top: var(--spacing-xlarge);
+}
+
+/* Agents table */
+.agents-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-medium);
+}
+
+.agents-table th,
+.agents-table td {
+  padding: var(--spacing-medium) var(--spacing-medium);
+  text-align: left;
+  border-bottom: var(--border-thin) solid var(--vscode-panel-border);
+}
+
+.agents-table th {
+  background: var(--vscode-editor-background);
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  position: sticky;
+  top: 0;
+}
+
+.agents-table tbody tr:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.agent-name {
+  font-weight: 500;
+  color: var(--vscode-textLink-foreground);
+  white-space: nowrap;
+}
+
+.agent-description {
+  color: var(--vscode-foreground);
+  max-width: 300px;
+}
+
+/* Visibility badges */
+.visibility-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  text-transform: lowercase;
+}
+
+.visibility-badge.public {
+  background: var(--vscode-testing-iconPassed);
+  color: white;
+}
+
+.visibility-badge.researcher {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.visibility-badge.whitelist {
+  background: var(--vscode-inputValidation-warningBackground);
+  color: var(--vscode-inputValidation-warningForeground);
+}
+
+/* Tags */
+.agent-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-small);
+}
+
+.tag {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  font-size: var(--font-size-sm);
+}
+
+/* Select button */
+.select-btn {
+  white-space: nowrap;
+}
+
+/* No agents message */
+.no-agents {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+  padding: var(--spacing-xlarge);
+  text-align: center;
+}
+
+/* Loading state */
+.loading {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}

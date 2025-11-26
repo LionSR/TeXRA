@@ -2,6 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
+import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -29,7 +30,11 @@ describe('AgentUsageReporter', () => {
       },
     } as unknown as AgentLogger;
 
-    const reporter = new AgentUsageReporter(loggerStub, streamId);
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.Workflow,
+    );
     const stats: ExtendedTokenUsageStats = {
       inputTokens: 10,
       outputTokens: 5,
@@ -55,6 +60,53 @@ describe('AgentUsageReporter', () => {
     } finally {
       disposeStream();
       disposeGroup();
+    }
+  });
+
+  it('skips statistics logging for tool-use sessions', () => {
+    const streamId = 'stream:test';
+    const runId = 'run-456';
+    const streamEvents: unknown[] = [];
+    const disposeStream = bus.on('updateStreamUsage', (payload) => {
+      streamEvents.push(payload);
+    });
+
+    const loggerStub = {
+      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined =>
+        undefined,
+      statistics: () => {
+        throw new Error('statistics should not be called for tool-use runs');
+      },
+    } as unknown as AgentLogger;
+
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.ToolUse,
+    );
+
+    const stats: ExtendedTokenUsageStats = {
+      inputTokens: 6,
+      outputTokens: 2,
+      cost: 0.1,
+      cacheCreationInputTokens: 1,
+    };
+
+    try {
+      reporter.report(stats, runId);
+
+      assert.equal(streamEvents.length, 1);
+      assert.deepEqual(streamEvents[0], {
+        stream: streamId,
+        runId,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 2,
+          cost: 0.1,
+        },
+      });
+    } finally {
+      disposeStream();
     }
   });
 });

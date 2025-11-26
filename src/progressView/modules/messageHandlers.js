@@ -40,6 +40,7 @@ function scrollToBottom(element) {
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
+    this._hasStreams = false;
     this._entryFormatter = getSharedLogEntryFormatter();
     this._handlers = {
       ...createThemeHandlers(),
@@ -65,8 +66,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _updatePlaceholderVisibility() {
-    if (state.hasStreams()) {
+    if (this._hasStreams) {
       dom.placeholder.hide();
+      return;
+    }
+
+    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
+    if (!logContent) {
       return;
     }
 
@@ -154,6 +160,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreams(message) {
     try {
       state.activeStream = message.activeStream;
+      this._hasStreams = Array.isArray(message.streams)
+        ? message.streams.length > 0
+        : false;
       if (
         !state.pendingFilterUpdate &&
         message.agentFilter !== undefined &&
@@ -358,6 +367,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       scrollToBottom(logContent);
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleUpdateLog(message) {
@@ -407,6 +418,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
       scrollToBottom(logContent);
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleUpdateTaskGroup(message) {
@@ -673,6 +686,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteAll() {
     pendingLogUpdates.clear();
+    this._hasStreams = false;
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
     state.clearStreams();
@@ -683,7 +697,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.clearRunMissingOutputs();
     state.clearAllActiveRuns();
     dom.runSelector.clear();
-
     this._updatePlaceholderVisibility();
   }
 

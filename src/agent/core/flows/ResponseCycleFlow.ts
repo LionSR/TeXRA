@@ -15,6 +15,11 @@ import {
   CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
@@ -39,11 +44,23 @@ import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
+import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 import { bestConnectionMethod } from '@latex';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
+import {
+  type RetryState,
+  type RetryCallbacks,
+  clearRetryError,
+  resetRetryState,
+  recordRetryError,
+  shouldAutoRetry,
+  shouldOfferManualRetry,
+  computeBackoffDelay,
+} from './RetryState';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -78,6 +95,10 @@ export interface ResponseCycleContext<C = unknown> {
   options: ResponseCycleOptions<C>;
   store: AgentSharedStore;
   state: ResponseCycleState;
+  /** Retry state for model invocation errors. */
+  retryState: RetryState;
+  /** Callbacks for manual retry control from UI. */
+  retryCallbacks: RetryCallbacks;
 }
 
 type InvocationNodeResult = SkippableNodeResult<{
@@ -118,6 +139,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
+          isRemote: RemoteAgentRegistry.isRemote(agentConfig.agent),
         };
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
@@ -177,8 +199,21 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
 }
 
 /**
- * Handles the actual model invocation step, storing the raw response payload and
- * timing information for downstream processing.
+ * Result type for model invocation that captures both success and error cases.
+ */
+type InvocationExecResult =
+  | { success: true; response: unknown; responseTime?: number }
+  | { success: false; error: unknown };
+
+/**
+ * Handles the actual model invocation step with integrated retry support.
+ *
+ * Instead of throwing errors and relying on external retry logic, this node
+ * uses flow transitions to handle retry:
+ * - RETRY: Auto-retry with backoff (loops back to self)
+ * - AWAIT_RETRY: Pause for manual retry (goes to RetryWaitNode)
+ * - default: Continue to next node on success
+ * - COMPLETE: Non-retryable error
  */
 class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
   async prep(
@@ -187,11 +222,14 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
     return shared;
   }
 
-  async exec(context: ResponseCycleContext<C>): Promise<InvocationNodeResult> {
-    const { options, state } = context;
+  async exec(context: ResponseCycleContext<C>): Promise<InvocationExecResult> {
+    const { options, state, retryState } = context;
     if (state.shouldStop) {
-      return { skipped: true };
+      return { success: true, response: undefined };
     }
+
+    // Increment attempt counter
+    retryState.attemptCount++;
 
     const abortController = new AbortController();
     options.setAbortController(abortController);
@@ -201,6 +239,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
       skip: true,
     });
 
+    const start = Date.now();
     try {
       const { response, responseTime } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
@@ -215,65 +254,101 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
             : undefined,
         });
 
-        const elapsed = state.startTime
-          ? (Date.now() - state.startTime) / 1000
-          : undefined;
+        const elapsed = (Date.now() - start) / 1000;
 
         return { response: modelResponse, responseTime: elapsed };
       });
 
-      return { skipped: false, value: { response, responseTime } };
+      return { success: true, response, responseTime };
     } catch (error) {
-      const formattedError = formatProviderHttpError(error);
-      const message = `Model invocation failed: ${formattedError.message}`;
-      options.logger.error(message, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: formattedError,
-      });
-      state.shouldStop = true;
-      state.endTurn = false;
-      throw error;
+      return { success: false, error };
     } finally {
       options.setAbortController(null);
     }
   }
 
   async post(
-    _shared: ResponseCycleContext<C>,
+    shared: ResponseCycleContext<C>,
     prepRes: ResponseCycleContext<C>,
-    execRes: InvocationNodeResult,
+    execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { options, state } = prepRes;
+    const { options, state, retryState } = shared;
 
-    if (execRes.skipped) {
-      state.endTurn = false;
-      return FlowTransition.COMPLETE;
+    // Handle successful invocation
+    if (execRes.success) {
+      clearRetryError(retryState);
+
+      if (!execRes.response) {
+        // Skipped or aborted
+        state.endTurn = false;
+        if (state.shouldStop) {
+          return FlowTransition.COMPLETE;
+        }
+        options.logger.warn(
+          'Model response was aborted or returned no data; output may be incomplete.',
+        );
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
+      }
+
+      state.responseObject = execRes.response;
+      state.responseTime = execRes.responseTime;
+
+      if (state.debugContext && state.debugFileOptions) {
+        await maybeSaveDebugObject({
+          object: execRes.response,
+          objectType: 'response',
+          context: state.debugContext,
+          fileOptions: state.debugFileOptions,
+        });
+      }
+
+      return undefined; // Continue to process node
     }
 
-    const { response, responseTime } = execRes.value;
+    // Handle error - determine retry strategy
+    const formatted = formatProviderHttpError(execRes.error);
+    recordRetryError(retryState, formatted.message, formatted.statusCode);
 
-    state.responseObject = response;
-    state.responseTime = responseTime;
-
-    if (state.debugContext && state.debugFileOptions) {
-      await maybeSaveDebugObject({
-        object: response,
-        objectType: 'response',
-        context: state.debugContext,
-        fileOptions: state.debugFileOptions,
-      });
-    }
-
-    if (!response) {
+    // Auto-retry available?
+    if (shouldAutoRetry(retryState)) {
+      const delay = computeBackoffDelay(retryState);
       options.logger.warn(
-        'Model response was aborted or returned no data; output may be incomplete.',
+        `Retrying model invocation after ${delay}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+        {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          data: {
+            attempt: retryState.attemptCount,
+            maxAttempts: retryState.maxAutoAttempts,
+            statusCode: formatted.statusCode,
+          },
+        },
       );
-      state.endTurn = false;
-      state.shouldStop = true;
-      return FlowTransition.COMPLETE;
+      await sleep(delay);
+      return FlowTransition.RETRY;
     }
 
-    return undefined;
+    // Manual retry available?
+    if (shouldOfferManualRetry(retryState)) {
+      retryState.awaitingManualRetry = true;
+      options.logger.error(`Model invocation failed: ${formatted.message}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: true },
+      });
+      return FlowTransition.AWAIT_RETRY;
+    }
+
+    // Non-retryable error
+    options.logger.error(
+      `Model invocation failed (not retryable): ${formatted.message}`,
+      {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { statusCode: formatted.statusCode, retryable: false },
+      },
+    );
+    state.shouldStop = true;
+    state.endTurn = false;
+    return FlowTransition.COMPLETE;
   }
 }
 
@@ -508,12 +583,6 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
       .join(', ');
     options.logger.debug(`Usage summary: ${usageSummary}`);
 
-    if (result.thinkingContent && !result.useStreaming) {
-      options.logger.info(result.thinkingContent, {
-        messageType: MESSAGE_TYPES.THINKING,
-      });
-    }
-
     options.logger.info(`Stop reason: ${result.stopReason}`, {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
@@ -707,16 +776,128 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 }
 
+/**
+ * Specialized retry wait node for response cycle.
+ * Handles manual retry by waiting for UI callback.
+ */
+class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
+  async prep(
+    shared: ResponseCycleContext<C>,
+  ): Promise<ResponseCycleContext<C>> {
+    return shared;
+  }
+
+  async exec(context: ResponseCycleContext<C>): Promise<'retry' | 'cancel'> {
+    const { retryState, options, retryCallbacks } = context;
+    const streamId = options.context.streamId;
+
+    // Log waiting status
+    options.logger.info('Waiting for manual retry', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: { error: retryState.lastError, awaitingManualRetry: true },
+    });
+
+    // Emit waiting status to UI
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
+
+    // Wait for external signal via callbacks with timeout
+    return new Promise<'retry' | 'cancel'>((resolve) => {
+      let resolved = false;
+
+      // Timeout after 5 minutes
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          options.logger.warn('Manual retry wait timed out after 5 minutes');
+          resolve('cancel');
+        }
+      }, 5 * 60 * 1000);
+
+      retryCallbacks.triggerRetry = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('retry');
+        }
+      };
+      retryCallbacks.cancelRetry = () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('cancel');
+        }
+      };
+
+      // Register with ManualRetryController for UI-triggered retries
+      registerManualRetry(streamId, {
+        run: async () => retryCallbacks.triggerRetry?.(),
+        logger: options.logger,
+        operation: 'Model invocation',
+      });
+    });
+  }
+
+  async post(
+    shared: ResponseCycleContext<C>,
+    _prepRes: ResponseCycleContext<C>,
+    execRes: 'retry' | 'cancel',
+  ): Promise<string | undefined> {
+    const { retryState, options, state } = shared;
+    const streamId = options.context.streamId;
+
+    if (execRes === 'retry') {
+      resetRetryState(retryState);
+      options.logger.info('Manual retry triggered', {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      });
+      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
+      return FlowTransition.RETRY;
+    }
+
+    // User cancelled
+    options.logger.info('Retry cancelled by user', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+    });
+    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
+    state.shouldStop = true;
+    state.endTurn = false;
+    return FlowTransition.COMPLETE;
+  }
+}
+
 export function createResponseCycleFlow<C>(): Flow<ResponseCycleContext<C>> {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ResponseModelInvocationNode<C>();
+  const retryWaitNode = new ResponseRetryWaitNode<C>();
   const processNode = new ResponseProcessNode<C>();
   const continuationNode = new ResponseContinuationNode<C>();
 
+  // Main flow: prep → invoke → process → continuation
   prepNode.next(invokeNode);
   invokeNode.next(processNode);
   processNode.next(continuationNode);
 
+  // Retry transitions from invoke node:
+  // - RETRY: Loop back to invoke for auto-retry
+  // - AWAIT_RETRY: Go to retry wait node for manual retry
+  invokeNode.on(FlowTransition.RETRY, invokeNode);
+  invokeNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
+
+  // Retry wait node transitions:
+  // - RETRY: Loop back to invoke node after user triggers retry
+  // - COMPLETE: Exit flow if user cancels
+  retryWaitNode.on(FlowTransition.RETRY, invokeNode);
+
+  // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
   return new Flow<ResponseCycleContext<C>>(prepNode);
