@@ -3,8 +3,6 @@ import * as path from 'path';
 
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-// Type imports
-import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import {
@@ -39,7 +37,6 @@ import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
 import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
-import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -51,9 +48,11 @@ import {
   clearRetryError,
   beginAttempt,
   determineRetryStrategy,
+  applyRetryDecision,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
 import type {
+  ResponseCycleOptions,
   ResponseCycleServices,
   ResponseCycleParams,
 } from './CycleServices';
@@ -324,7 +323,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<
       return undefined; // Continue to process node
     }
 
-    // Handle error - use single source of truth for retry decision
+    // Handle error - use single source of truth for retry decision and side-effects
     const formatted = formatProviderHttpError(execRes.error);
     const decision = determineRetryStrategy(
       retryState,
@@ -332,44 +331,21 @@ class ResponseModelInvocationNode<C> extends BaseNode<
       formatted.statusCode,
     );
 
-    switch (decision.action) {
-      case 'auto_retry':
-        options.logger.warn(
-          `Retrying model invocation after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: {
-              attempt: retryState.attemptCount,
-              maxAttempts: retryState.maxAutoAttempts,
-              statusCode: decision.error.statusCode,
-            },
-          },
-        );
-        await sleep(decision.delayMs!);
-        return FlowTransition.RETRY;
+    // Apply retry decision (logging, sleeping) via shared helper
+    const transition = await applyRetryDecision(
+      decision,
+      options.logger,
+      retryState,
+      'Model invocation',
+    );
 
-      case 'manual_retry':
-        options.logger.error(
-          `Model invocation failed: ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: { statusCode: decision.error.statusCode, retryable: true },
-          },
-        );
-        return FlowTransition.AWAIT_RETRY;
-
-      case 'fail':
-        options.logger.error(
-          `Model invocation failed (not retryable): ${decision.error.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: { statusCode: decision.error.statusCode, retryable: false },
-          },
-        );
-        state.shouldStop = true;
-        state.endTurn = false;
-        return FlowTransition.COMPLETE;
+    // Set state flags on failure (response-cycle specific)
+    if (decision.action === 'fail') {
+      state.shouldStop = true;
+      state.endTurn = false;
     }
+
+    return transition;
   }
 }
 
