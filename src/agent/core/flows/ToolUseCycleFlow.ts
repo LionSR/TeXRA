@@ -22,15 +22,16 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { ToolResult } from '@agent/core/ToolTypes';
+import { toolResult } from '@agent/core/ToolTypes';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-// Internal imports
-import { ToolResult, toolResult } from '@tools/result';
+// Internal imports - use core ToolTypes as single source of truth
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -590,7 +591,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     const tracker = store.workspace.interactions;
 
     for (const [index, call] of calls.entries()) {
-      const tool = options.toolRegistry[call.name];
+      const tool = options.toolRegistry.get(call.name);
       let result: ToolResult;
       const parsedInput = parseToolInput(
         call.input,
