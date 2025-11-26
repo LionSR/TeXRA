@@ -144,6 +144,20 @@ export async function loadAgentSettingAndPrompts(
       );
     }
 
+    // Handle remote agents
+    if (resolution.source === AgentDirectorySource.Remote) {
+      const { RemoteAgentLoader } = await import(
+        '@agent/remote/RemoteAgentLoader'
+      );
+      const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
+        resolution.resolvedName,
+        { preferMultiple: options?.preferMultiple },
+      );
+
+      // Remote agents are already fully processed (tools resolved, validated)
+      return [remoteConfig.settings, remoteConfig.prompts];
+    }
+
     const rawConfig = await loadYaml(resolution.definitionPath);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
