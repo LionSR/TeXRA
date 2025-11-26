@@ -41,6 +41,10 @@ import {
   getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
+import {
+  AGENT_DECORATORS,
+  getCodiconClass,
+} from '@common/iconConstants.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -243,12 +247,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._readAgentOptionMetadata(opt);
 
     const hints = [];
-    let displayLabel = label;
+    const prefixIcons = [];
+    const suffixIcons = [];
 
-    // Add cloud icon for remote agents
+    // Add cloud icon for remote agents (using shared config)
     if (isRemote) {
-      displayLabel = `☁ ${displayLabel}`;
-      hints.push('Remote agent');
+      const { icon, hint } = AGENT_DECORATORS.properties.remote;
+      prefixIcons.push(this._createCodiconHtml(icon));
+      hints.push(hint);
     }
 
     // Add description as the primary hint if available
@@ -256,9 +262,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(description);
     }
 
+    // Add multiple outputs icon (using shared config)
     if (isMultiple) {
-      displayLabel += ' ∶∶';
-      hints.push('Supports multi-file inputs.');
+      const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
+      suffixIcons.push(this._createCodiconHtml(icon));
+      hints.push(hint);
       opt.style.opacity = '0.9';
     } else {
       opt.style.opacity = '';
@@ -268,7 +276,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push('Uses tools for actions.');
     }
 
-    opt.textContent = displayLabel;
+    // Build display with codicons
+    const escapedLabel = this._escapeHtml(label);
+    const prefix = prefixIcons.length > 0 ? prefixIcons.join('') + ' ' : '';
+    const suffix = suffixIcons.length > 0 ? ' ' + suffixIcons.join('') : '';
+    opt.innerHTML = `${prefix}${escapedLabel}${suffix}`;
 
     if (hints.length > 0) {
       opt.title = hints.join('\n');
@@ -279,6 +291,26 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       opt.setAttribute('aria-label', label);
       opt.removeAttribute('aria-description');
     }
+  }
+
+  /**
+   * Create a codicon HTML string for inline use.
+   * @param {string} iconName - Icon name (e.g., 'cloud', 'files')
+   * @returns {string} HTML string for the codicon
+   */
+  _createCodiconHtml(iconName) {
+    return `<i class="${getCodiconClass(iconName)}"></i>`;
+  }
+
+  /**
+   * Escape HTML special characters in a string.
+   * @param {string} text - Text to escape
+   * @returns {string} Escaped text
+   */
+  _escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   _readAgentOptionMetadata(opt) {
@@ -333,13 +365,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Check if this looks like it could be a remote agent and create the option
     if (!existingOption) {
       // This could be a remote agent being set programmatically
-      // Create the option with remote styling
+      // Create the option with remote styling using shared config
+      const { icon, hint } = AGENT_DECORATORS.properties.remote;
       const option = document.createElement('vscode-option');
       option.value = value;
-      option.textContent = `☁ ${value}`;
-      option.dataset.label = `☁ ${value}`;
+      option.innerHTML = `${this._createCodiconHtml(icon)} ${this._escapeHtml(value)}`;
+      option.dataset.label = value;
       option.dataset.remote = 'true';
-      option.setAttribute('title', `Remote agent: ${value}`);
+      option.setAttribute('title', hint);
 
       // Add the option to the select
       selectElement.appendChild(option);
