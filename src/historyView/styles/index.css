@@ -198,3 +198,9 @@ mark.current-match {
   );
   color: var(--vscode-editorWarning-foreground, #cca700);
 }
+
+/* Empty/unset value styling */
+.history-none {
+  color: var(--vscode-descriptionForeground);
+  font-style: italic;
+}
