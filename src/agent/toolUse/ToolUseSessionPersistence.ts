@@ -24,7 +24,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import { STATUS } from '@progressView/modules/constants.js';
+import { STATUS } from '@common/constants/streamStatus';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local imports - persistence helpers
