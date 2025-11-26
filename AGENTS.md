@@ -9,7 +9,6 @@ When updating CHANGELOG.md:
 - Focus on user-visible features and bug fixes
 - Use clear, concise language that end users can understand
 - Group changes into Features, Bug Fixes, and (rarely) Breaking Changes
-- Avoid technical implementation details
 
 ## Development workflow
 
@@ -47,22 +46,19 @@ When updating CHANGELOG.md:
 
 ### Pragmatic implementations
 
-- **Lead with Occam's Razor**: prioritize the simplest implementation that fully solves the problem before considering additional abstractions or indirection. Each new helper, class, or configuration option must earn its place by clearly reducing complexity.
-- Default to "stupid simple" solutions that rely on core JavaScript/TypeScript data structures, native VS Code APIs, and structured objects. Avoid stringifying state or inventing custom serialization when SDK helpers, JSON objects, or Maps/Sets already solve the problem.
-- Favor solutions that are readable and straightforward over exhaustive edge-case handling.
-- Avoid over-engineering and unnecessary abstractions when a direct approach communicates intent better.
-- Keep generated code tight: trim redundant helpers, repeated type checks, or defensive guards that do not serve a demonstrated scenario. Prefer trusting upstream APIs unless the codebase has a documented bug.
-- Remove redundant normalization layers, re-parsing, or data massaging when the input is already controlled by the extension. Let the data flow through in its natural shape unless a real issue emerges.
-- Do not add extra try/catch wrappers around well-behaved code paths or optional chaining that simply rethrows errors. Surface the error once through the shared error utilities instead of masking it.
-- Prefer improving existing structures incrementally instead of rewriting modules unless there is a clear, documented benefit.
+- **Start simple**: Choose the most direct solution that solves the problem. A new abstraction earns its place only when it clearly reduces complexity.
+- **Use native constructs**: Rely on JavaScript/TypeScript built-ins (objects, Maps, Sets, arrays), VS Code APIs, and JSON for state. These are well-understood and require no extra code.
+- **Trust your inputs**: When data flows from code you control, pass it through directly. Transform or validate only at true system boundaries (user input, external APIs).
+- **One error path**: Surface errors once through the shared error utilities in `@common/errors`. Let exceptions propagate naturally to that single handler.
+- **Evolve incrementally**: Improve existing structures in small steps. Rewrite only when there's a documented, concrete benefit.
 
 ### Refactoring for simplicity
 
-When refactoring, aim for code that looks like it was designed correctly from the start:
+Aim for code that looks like it was designed correctly from the start:
 
-- **Prefer native methods over normalization helpers**: Use `Array.isArray()`, optional chaining, and built-in JavaScript methods instead of writing custom normalization functions.
-- **Handle legacy formats at entry points**: Use Zod schemas or load-time transformations to convert old formats to current ones, then delete legacy fields immediately. The rest of the codebase should only work with the current format.
-- **Remove all traces of old design**: After refactoring, there should be no leftover wrapper functions, intermediate variables, or "compatibility" abstractions in core logic. Extract helpers only when the same logic truly appears in multiple places.
+- **Use built-in methods**: `Array.isArray()`, optional chaining, and standard library functions handle most cases cleanly.
+- **Normalize at the edge**: Convert legacy formats once at load time (Zod schemas work well), then use only the current format everywhere else.
+- **Extract only when repeated**: Create a helper when the same logic appears in multiple places—not before.
 
 ### Patterns across the codebase
 
@@ -123,8 +119,8 @@ When refactoring, aim for code that looks like it was designed correctly from th
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors
-- **Module Structure**: Keep UI managers modular and focused on single responsibilities - avoid large consolidated classes
-- **Trust Dependencies**: Avoid defensive programming for standard APIs. When uncertain about a dependency's behavior, **always investigate first**: examine `node_modules/` (source code, type definitions, package.json, custom-elements.json) to understand the actual behavior before adding code. If you must add fallbacks to make things work initially, treat them as temporary—track down the root cause and remove unnecessary defensive code afterward. Exception: workarounds for documented component quirks should be kept but simplified and clearly commented
+- **Module Structure**: Keep UI managers focused on a single responsibility
+- **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
 
 ### Source Organization
@@ -147,14 +143,7 @@ adding new code or refactoring existing modules:
   addresses them. Favor deep modules with minimal, clear APIs.
 - Most importantly, ideally, when you have finished with each change, the system will have the structure it would have had if you had designed it from the start with that change in mind.
 - When your refactoring include a large number of renames, use search tools to make sure you are not missing any files or paths where changes need to be made.
-- When creating manager classes that share state, avoid creating separate instances:
-  - Pass shared dependencies through constructors (e.g., `new UsageGroup(this.usageSummary)`)
-  - This prevents inconsistent state across different parts of the UI
-- Avoid circular dependencies and forward references:
-  - Don't use global window references for accessing parent singletons from child components
-  - Instead, pass required dependencies through constructors
-  - This prevents ReferenceError from const declarations and maintains clean architecture
-  - Example: UsageGroup should use the same UsageSummary instance as the main handler
+- **Share instances via constructors**: When managers share state, pass the shared dependency through the constructor (e.g., `new UsageGroup(this.usageSummary)`). This keeps state consistent and dependencies explicit.
 
 ## Documentation
 
