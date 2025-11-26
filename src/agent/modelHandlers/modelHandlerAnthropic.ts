@@ -325,6 +325,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
       if (
         this.config.fullName.includes('claude-opus-4') ||
+        this.config.fullName.includes('claude-opus-4-5') ||
         this.config.fullName.includes('claude-sonnet-4-5') ||
         this.config.fullName.includes('claude-sonnet-4') ||
         this.config.fullName.includes('claude-haiku-4-5') ||

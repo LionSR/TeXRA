@@ -1,0 +1,295 @@
+import * as vscode from 'vscode';
+import { SupabaseClient } from './SupabaseClient';
+import { SupabaseAuthProvider } from './SupabaseAuthProvider';
+
+/**
+ * Command to sign in to TeXRA account.
+ */
+export async function signIn(): Promise<void> {
+  try {
+    // Check if already signed in
+    const existing = await vscode.authentication.getSession(
+      'texra-supabase',
+      [],
+      {
+        silent: true,
+      },
+    );
+
+    if (existing) {
+      const user = await SupabaseClient.getUser();
+      void vscode.window.showInformationMessage(
+        `Already signed in as ${user?.email || 'unknown user'}`,
+      );
+      return;
+    }
+
+    // Request authentication (will trigger SupabaseAuthProvider.createSession)
+    const session = await vscode.authentication.getSession(
+      'texra-supabase',
+      [],
+      {
+        createIfNone: true,
+      },
+    );
+
+    if (session) {
+      const user = await SupabaseClient.getUser();
+      const tier = await SupabaseClient.getUserTier();
+      void vscode.window.showInformationMessage(
+        `Signed in as ${user?.email || 'unknown user'} (${tier} tier)`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(`Sign in failed: ${message}`);
+  }
+}
+
+/**
+ * Command to sign out of TeXRA account.
+ */
+export async function signOut(): Promise<void> {
+  try {
+    const session = await vscode.authentication.getSession(
+      'texra-supabase',
+      [],
+      {
+        silent: true,
+      },
+    );
+
+    if (!session) {
+      void vscode.window.showInformationMessage('Not signed in');
+      return;
+    }
+
+    // Confirm sign out
+    const confirm = await vscode.window.showWarningMessage(
+      'Are you sure you want to sign out?',
+      { modal: true },
+      'Sign Out',
+    );
+
+    if (confirm !== 'Sign Out') {
+      return;
+    }
+
+    // Use authentication provider to properly sign out
+    const authProvider = SupabaseAuthProvider.getInstance();
+    if (authProvider) {
+      await authProvider.removeSession(session.id);
+      void vscode.window.showInformationMessage('Signed out successfully');
+    } else {
+      void vscode.window.showErrorMessage(
+        'Authentication provider not available',
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(`Sign out failed: ${message}`);
+  }
+}
+
+/**
+ * Command to view profile and account status.
+ */
+export async function viewProfile(): Promise<void> {
+  try {
+    const isAuth = await SupabaseClient.isAuthenticated();
+
+    if (!isAuth) {
+      const signIn = 'Sign In';
+      const choice = await vscode.window.showInformationMessage(
+        'You are not signed in to TeXRA',
+        signIn,
+      );
+
+      if (choice === signIn) {
+        await vscode.commands.executeCommand('texra.auth.signIn');
+      }
+      return;
+    }
+
+    const user = await SupabaseClient.getUser();
+    const tier = await SupabaseClient.getUserTier();
+
+    if (!user) {
+      void vscode.window.showErrorMessage('Failed to load user profile');
+      return;
+    }
+
+    // Show profile info in a message
+    const info = [
+      `**TeXRA Account**`,
+      ``,
+      `Email: ${user.email || 'N/A'}`,
+      `User ID: ${user.id}`,
+      `Tier: ${tier}`,
+      ``,
+      tier === 'free'
+        ? `Join the researcher access program to access remote agents`
+        : `You have access to remote agents via the researcher access program`,
+    ].join('\n');
+
+    // Create a simple webview or use QuickPick to show info
+    const panel = vscode.window.createWebviewPanel(
+      'texraProfile',
+      'TeXRA Profile',
+      vscode.ViewColumn.One,
+      {},
+    );
+
+    panel.webview.html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body {
+              font-family: var(--vscode-font-family);
+              padding: 20px;
+              color: var(--vscode-foreground);
+            }
+            h1 {
+              color: var(--vscode-textLink-foreground);
+            }
+            .info-row {
+              margin: 10px 0;
+            }
+            .label {
+              font-weight: bold;
+              color: var(--vscode-textPreformat-foreground);
+            }
+            .tier-badge {
+              display: inline-block;
+              padding: 4px 8px;
+              border-radius: 4px;
+              background: ${tier === 'researcher' ? 'var(--vscode-badge-background)' : 'var(--vscode-inputValidation-warningBackground)'};
+              color: ${tier === 'researcher' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-inputValidation-warningForeground)'};
+              text-transform: uppercase;
+              font-size: 0.9em;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>TeXRA Account</h1>
+          <div class="info-row">
+            <span class="label">Email:</span> ${user.email || 'N/A'}
+          </div>
+          <div class="info-row">
+            <span class="label">User ID:</span> ${user.id}
+          </div>
+          <div class="info-row">
+            <span class="label">Tier:</span> <span class="tier-badge">${tier}</span>
+          </div>
+          <div class="info-row" style="margin-top: 20px;">
+            ${
+              tier === 'free'
+                ? '<p>Join the researcher access program to access remote agents and advanced features.</p>'
+                : '<p>You have access to remote agents via the researcher access program.</p>'
+            }
+          </div>
+        </body>
+      </html>
+    `;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(`Failed to load profile: ${message}`);
+  }
+}
+
+/**
+ * Command to check authentication status (for status bar, etc.).
+ */
+export async function getAuthStatus(): Promise<{
+  authenticated: boolean;
+  email?: string;
+  tier?: 'free' | 'researcher';
+}> {
+  const isAuth = await SupabaseClient.isAuthenticated();
+  if (!isAuth) {
+    return { authenticated: false };
+  }
+
+  const user = await SupabaseClient.getUser();
+  const tier = await SupabaseClient.getUserTier();
+
+  return {
+    authenticated: true,
+    email: user?.email,
+    tier,
+  };
+}
+
+/**
+ * Command to show account menu with sign in/out and profile options.
+ * Provides accessible UI for authentication actions.
+ */
+export async function showAccountMenu(): Promise<void> {
+  try {
+    const status = await getAuthStatus();
+
+    if (!status.authenticated) {
+      // Not signed in - show sign in option
+      const items = [
+        {
+          label: '$(sign-in) Sign In',
+          description:
+            'Sign in to access remote agents via the researcher access program',
+          action: 'signIn' as const,
+        },
+      ];
+
+      const choice = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Account Options',
+      });
+
+      if (choice?.action === 'signIn') {
+        await vscode.commands.executeCommand('texra.auth.signIn');
+      }
+    } else {
+      // Signed in - show profile, browse agents, and sign out options
+      const items = [
+        {
+          label: '$(account) View Profile',
+          description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
+          action: 'viewProfile' as const,
+        },
+        {
+          label: '$(cloud) Browse Remote Agents',
+          description: 'Explore available remote agents',
+          action: 'browseAgents' as const,
+        },
+        {
+          label: '$(sign-out) Sign Out',
+          description: 'Sign out of your TeXRA account',
+          action: 'signOut' as const,
+        },
+      ];
+
+      const choice = await vscode.window.showQuickPick(items, {
+        placeHolder: 'Account Options',
+      });
+
+      if (choice) {
+        switch (choice.action) {
+          case 'viewProfile':
+            await vscode.commands.executeCommand('texra.auth.viewProfile');
+            break;
+          case 'browseAgents':
+            await vscode.commands.executeCommand('texra.remoteAgents.browse');
+            break;
+          case 'signOut':
+            await vscode.commands.executeCommand('texra.auth.signOut');
+            break;
+        }
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    void vscode.window.showErrorMessage(
+      `Failed to show account menu: ${message}`,
+    );
+  }
+}
