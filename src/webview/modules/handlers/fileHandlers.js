@@ -22,23 +22,23 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
  */
 export function createFileHandlers(ctx) {
   const { postHandle, getElement, setToggleIcon } = ctx;
-  const createSetFileHandler = (fileType, domId) => (message) => {
+
+  /**
+   * Helper to get restoration options for a file select.
+   * Captures current UI value and stored state value.
+   */
+  const getRestorationOptions = (domId) => {
     const selectDiv = getElement(domId);
-    const currentValue = selectDiv?.value;
-
-    fileSelect.update(domId, message.files);
-
-    // Restore selection if the file still exists in the updated list
-    // Prioritize saved state over current UI value
     const state = mainViewState.get();
-    const storedValue = state?.[domId];
+    return {
+      currentValue: selectDiv?.value,
+      storedValue: state?.[domId],
+    };
+  };
 
-    if (storedValue && message.files.includes(storedValue)) {
-      safeSetElementValue(domId, storedValue);
-    } else if (currentValue && message.files.includes(currentValue)) {
-      safeSetElementValue(domId, currentValue);
-    }
-
+  const createSetFileHandler = (fileType, domId) => (message) => {
+    const options = getRestorationOptions(domId);
+    fileSelect.update(domId, message.files, options);
     postHandle();
   };
 
@@ -149,22 +149,12 @@ export function createFileHandlers(ctx) {
   function handleSetBaseFile(message) {
     const currentBaseFileDiv = getElement(BASE_FILE);
     if (currentBaseFileDiv) {
-      const currentBaseFile = currentBaseFileDiv.value;
-      fileSelect.update(BASE_FILE, message.files);
-
-      const state = mainViewState.get();
-      const storedBaseFile = state?.baseFile;
-
-      if (storedBaseFile && message.files.includes(storedBaseFile)) {
-        currentBaseFileDiv.value = storedBaseFile;
-      } else if (
-        message.preserveBaseFile &&
-        currentBaseFile &&
-        message.files.includes(currentBaseFile)
-      ) {
-        currentBaseFileDiv.value = currentBaseFile;
+      const options = getRestorationOptions(BASE_FILE);
+      // Only restore currentValue if preserveBaseFile flag is set
+      if (!message.preserveBaseFile) {
+        options.currentValue = undefined;
       }
-
+      fileSelect.update(BASE_FILE, message.files, options);
       fileSelect.updateEdited(currentBaseFileDiv.value);
     }
     postHandle();
