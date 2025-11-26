@@ -10,6 +10,10 @@ import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import {
+  recordToolFileRead,
+  requireFileReadForEdit,
+} from '@tools/fileInteractions';
+import {
   buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
   getApprovedContent,
@@ -283,6 +287,9 @@ export class TextEditorTool extends defineTool({
         }
       }
 
+      // Record read only after successful validation
+      recordToolFileRead(filePath);
+
       let rangeSummary: string | undefined;
       if (viewRange) {
         const [startLine, endLine] = viewRange;
@@ -355,6 +362,7 @@ export class TextEditorTool extends defineTool({
         summary: `Created file ${filePath}`,
         output,
         userPatch: approval.userPatch,
+        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       });
     } catch (error) {
       throw new ToolError(`Error creating file ${filePath}: ${error}`);
@@ -375,6 +383,11 @@ export class TextEditorTool extends defineTool({
   ): Promise<ToolResult> {
     try {
       // Read file content
+      const exists = await WorkspaceFS.exists(filePath);
+      const readGate = requireFileReadForEdit(filePath, exists);
+      if (readGate) {
+        return readGate;
+      }
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and search string
@@ -471,6 +484,7 @@ export class TextEditorTool extends defineTool({
         summary: `Updated ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
+        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       });
     } catch (error) {
       if (error instanceof ToolError) {
@@ -494,6 +508,11 @@ export class TextEditorTool extends defineTool({
   ): Promise<ToolResult> {
     try {
       // Read file content
+      const exists = await WorkspaceFS.exists(filePath);
+      const readGate = requireFileReadForEdit(filePath, exists);
+      if (readGate) {
+        return readGate;
+      }
       const fileContent = await WorkspaceFS.read(filePath);
 
       // Expand tabs in content and new string
@@ -584,6 +603,7 @@ export class TextEditorTool extends defineTool({
         summary: `Inserted text into ${filePath}`,
         output: successMsg,
         userPatch: approval.userPatch,
+        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       });
     } catch (error) {
       if (error instanceof ToolError) {
@@ -604,6 +624,12 @@ export class TextEditorTool extends defineTool({
       const history = this.fileHistory.get(filePath);
       if (!history || history.length === 0) {
         throw new ToolError(`No edit history found for ${filePath}.`);
+      }
+
+      const exists = await WorkspaceFS.exists(filePath);
+      const readGate = requireFileReadForEdit(filePath, exists);
+      if (readGate) {
+        return readGate;
       }
 
       // Restore previous content
@@ -653,6 +679,7 @@ export class TextEditorTool extends defineTool({
         summary: `Undid edit on ${filePath}`,
         output,
         userPatch: approval.userPatch,
+        edits: [{ path: filePath, lineChanges: approval.lineChanges }],
       });
     } catch (error) {
       if (error instanceof ToolError) {
