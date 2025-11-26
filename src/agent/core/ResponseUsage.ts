@@ -1,69 +1,27 @@
-// Third-party imports
-import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
-import type { GenerateContentResponseUsageMetadata } from '@google/genai';
-import type { CompletionUsage } from 'openai/resources/completions';
-
 /**
- * Extended OpenAI usage type with additional fields used by various providers.
+ * @file ResponseUsage.ts
  *
- * This interface extends the `CompletionUsage` type from the OpenAI SDK to include
- * additional metrics required by DeepSeek and other providers.
- *
- * Fields:
- * - `prompt_cache_hit_tokens` (optional): Represents the number of tokens retrieved
- *   from the prompt cache during a completion request. This is specific to DeepSeek's
- *   caching mechanism, which aims to optimize performance by reusing previously
- *   processed prompts. A higher value indicates greater cache utilization.
+ * Factory for creating provider-specific response usage objects.
+ * Type definitions are in UsageTypes.ts (single source of truth).
  */
-export interface ExtendedCompletionUsage extends CompletionUsage {
-  prompt_cache_hit_tokens?: number;
-}
-
-// Re-export SDK types for use in model handlers
-export type {
-  CompletionUsage,
+// Local imports - consolidated usage types
+import type {
+  AnthropicAPIResponseUsage,
   AnthropicUsage,
+  ExtendedCompletionUsage,
+  OpenAIAPIResponseUsage,
+} from './UsageTypes';
+
+// Re-export types for backward compatibility
+export type {
+  AnthropicAPIResponseUsage,
+  AnthropicUsage,
+  CompletionUsage,
+  ExtendedCompletionUsage,
   GenerateContentResponseUsageMetadata,
-};
-
-/** Base interface for common response usage metrics across all model providers. */
-export interface ResponseUsageBase {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  percentageCached: number;
-  cost: number;
-  responseTime: number;
-}
-
-/** OpenAI-specific response usage metrics with detailed token breakdowns. */
-export interface OpenAIAPIResponseUsage extends ResponseUsageBase {
-  prompt_tokens: number;
-  completion_tokens: number;
-  cached_tokens: number;
-  reasoning_tokens: number;
-  accepted_prediction_tokens: number | null;
-  rejected_prediction_tokens: number | null;
-  // Some providers expose tool-use tokens via the OpenAI-compatible interface.
-  tool_use_tokens?: number;
-  prompt_tokens_details?: {
-    cached_tokens?: number;
-  };
-  completion_tokens_details?: {
-    reasoning_tokens?: number;
-    accepted_prediction_tokens?: number | null;
-    rejected_prediction_tokens?: number | null;
-  };
-}
-
-/** Anthropic-specific response usage metrics with cache statistics. */
-export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_input_tokens: number | null;
-  cache_creation_input_tokens: number | null;
-  // Optional field surfaced by compatibility layers that expose tool-use costs.
-  tool_use_tokens?: number;
-}
+  OpenAIAPIResponseUsage,
+  ResponseUsageBase,
+} from './UsageTypes';
 
 /** Factory class for creating provider-specific response usage objects. */
 export class ResponseUsageFactory {

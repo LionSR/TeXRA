@@ -5,14 +5,14 @@
  */
 
 // Local imports - logging
-import { MESSAGE_TYPES } from '@logger/messageTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - error utilities
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
+import { MESSAGE_TYPES } from '@logger/messageTypes';
+import type { AgentLogger } from '@logger/AgentLogger';
+
+// Local imports - error utilities
 
 interface RequestRetryOptions {
   logger: AgentLogger;

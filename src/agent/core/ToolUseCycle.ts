@@ -16,9 +16,10 @@ import * as path from 'path';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
 import { normalizeRunId } from '@progressView/constants/runIds';
-import type { BaseTool } from '@tools/core/base';
 import { pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
+
+// Local file imports - types
 
 // Local file imports
 import { AgentSharedStore } from './AgentSharedStore';
@@ -29,11 +30,12 @@ import {
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
 import { createRetryState, type RetryCallbacks } from './flows/RetryState';
+import type { IToolRegistry } from './ToolTypes';
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
-  toolRegistry: Record<string, BaseTool<any>>;
+  toolRegistry: IToolRegistry;
   workspaceState: AgentWorkspaceState;
   modelName?: string;
   agentName?: string;

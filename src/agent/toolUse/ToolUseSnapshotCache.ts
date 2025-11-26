@@ -7,10 +7,17 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local file imports - tool-use snapshots
 import type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
 
-const CHANNEL = 'ToolUseSnapshotCache';
+const CHANNEL = 'ToolUseSessionManager';
 const logger = new AgentLogger(CHANNEL);
 
-export class ToolUseSnapshotCache {
+/**
+ * Manages in-memory caching of tool-use session snapshots.
+ *
+ * This class provides static methods for caching, retrieving, and clearing
+ * session snapshots indexed by stream ID and execution ID. Used for lazy
+ * resume of tool-use sessions.
+ */
+export class ToolUseSessionManager {
   private static readonly index =
     new StreamExecutionIndex<ToolUseSessionSnapshot>();
 
@@ -86,3 +93,8 @@ export class ToolUseSnapshotCache {
     logger.debug('Cleared all pending tool-use snapshots.');
   }
 }
+
+/**
+ * @deprecated Use {@link ToolUseSessionManager} instead.
+ */
+export const ToolUseSnapshotCache = ToolUseSessionManager;

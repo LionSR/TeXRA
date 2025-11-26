@@ -1,49 +1,27 @@
-// Local imports - response usage types
+/**
+ * @file RunUsageAccumulator.ts
+ *
+ * Accumulates usage statistics across multiple conversation rounds.
+ */
+// Local imports - consolidated usage types
 import type {
-  AnthropicAPIResponseUsage,
-  OpenAIAPIResponseUsage,
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
-} from './ResponseUsage';
+  NativeUsagePayload,
+  NativeUsageSnapshot,
+  RunUsageAccumulatorJSON,
+  RunUsageTotals,
+  UsageProvider,
+  UsageSummary,
+} from './UsageTypes';
 
-export type NativeUsagePayload =
-  | ExtendedCompletionUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
-
-export type UsageSummary =
-  | OpenAIAPIResponseUsage
-  | AnthropicAPIResponseUsage
-  | null;
-
-export type UsageProvider =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'deepseek'
-  | 'unknown';
-
-export interface NativeUsageSnapshot {
-  round: number;
-  provider: UsageProvider;
-  payload: NativeUsagePayload;
-}
-
-export interface RunUsageTotals {
-  firstInputTokens: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCacheReadInputTokens: number;
-  totalCacheCreationInputTokens: number;
-  totalReasoningTokens: number;
-  totalToolUseTokens: number;
-}
-
-export interface RunUsageAccumulatorJSON {
-  totals: RunUsageTotals;
-  snapshots: NativeUsageSnapshot[];
-}
+// Re-export types for backward compatibility
+export type {
+  NativeUsagePayload,
+  NativeUsageSnapshot,
+  RunUsageAccumulatorJSON,
+  RunUsageTotals,
+  UsageProvider,
+  UsageSummary,
+};
 
 export class RunUsageAccumulator {
   private totals: RunUsageTotals = {

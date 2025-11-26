@@ -29,15 +29,18 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { type ToolResult, toolResult } from '@agent/core/ToolTypes';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
+
+// Local imports - tool types (from agent core, the single source of truth)
+
 // Internal imports
-import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';

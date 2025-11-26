@@ -1,6 +1,8 @@
+// Local imports - agent core
+import type { IToolRegistry } from '@agent/core/ToolTypes';
+
 // Local imports - tools
 import { BashTool } from './bash';
-import { BaseTool } from './core/base';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
@@ -23,7 +25,7 @@ import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 
-export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
+export const DEFAULT_TOOL_REGISTRY: IToolRegistry = {
   str_replace_editor: new TextEditorTool(),
   diagnostics: new DiagnosticsTool(),
   bash: new BashTool(),

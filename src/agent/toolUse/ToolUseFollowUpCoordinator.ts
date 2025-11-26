@@ -10,7 +10,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local imports - persistence
-import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';
+import { ToolUseSessionManager } from './ToolUseSnapshotCache';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
 import {
   ToolUseSessionPersistence,
@@ -46,7 +46,7 @@ export async function sendFollowUp(
     }
   }
 
-  const pendingSnapshot = ToolUseSnapshotCache.getByStream(streamId);
+  const pendingSnapshot = ToolUseSessionManager.getByStream(streamId);
   if (pendingSnapshot) {
     logger.debug(`Resuming agent lazily for stream ${streamId}.`);
     await ToolUseSessionPersistence.resumeFromSnapshot(pendingSnapshot, text);

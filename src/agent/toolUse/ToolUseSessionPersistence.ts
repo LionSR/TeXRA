@@ -31,7 +31,7 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local file imports
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
-import { ToolUseSnapshotCache } from './ToolUseSnapshotCache';
+import { ToolUseSessionManager } from './ToolUseSnapshotCache';
 import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
 // Type imports
 import {
@@ -88,7 +88,7 @@ async function persistSnapshot({
     return false;
   }
 
-  ToolUseSnapshotCache.cacheSnapshot(stored);
+  ToolUseSessionManager.cacheSnapshot(stored);
   return true;
 }
 
@@ -132,11 +132,11 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    ToolUseSnapshotCache.registerSnapshots(snapshots);
+    ToolUseSessionManager.registerSnapshots(snapshots);
   },
 
   clearAllPersistedSnapshots(): void {
-    ToolUseSnapshotCache.clearAll();
+    ToolUseSessionManager.clearAll();
   },
 
   async maybePersistIdleSnapshot({
@@ -179,7 +179,7 @@ export const ToolUseSessionPersistence = {
       return false;
     }
 
-    ToolUseSnapshotCache.cacheSnapshot(stored);
+    ToolUseSessionManager.cacheSnapshot(stored);
     return true;
   },
 
@@ -190,7 +190,7 @@ export const ToolUseSessionPersistence = {
       return;
     }
 
-    ToolUseSnapshotCache.clearByExecution(executionId);
+    ToolUseSessionManager.clearByExecution(executionId);
 
     await ToolUseSnapshotStore.delete(executionId);
   },
@@ -242,7 +242,7 @@ export const ToolUseSessionPersistence = {
         { resume: true },
       );
 
-      ToolUseSnapshotCache.clearByStream(streamId);
+      ToolUseSessionManager.clearByStream(streamId);
 
       return { success: true };
     } catch (error) {

@@ -41,17 +41,22 @@ import {
 import { ToolUseSessionLifecycle } from '@agent/toolUse/ToolUseSessionLifecycle';
 
 // Type imports
+import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { DEFAULT_TOOL_REGISTRY } from '@tools/registry';
-import { BaseTool } from '@tools/core/base';
 
 // Local file imports
 import { BaseAgent } from './BaseAgent';
 
+export interface BaseToolUseAgentOptions {
+  /** Optional tool registry to use. Defaults to DEFAULT_TOOL_REGISTRY. */
+  toolRegistry?: IToolRegistry;
+}
+
 export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
-  private toolRegistry: Record<string, BaseTool<any>>;
+  private readonly toolRegistry: IToolRegistry;
   private readonly sessionLifecycle: ToolUseSessionLifecycle<C>;
   private resumeSnapshot: ToolUseSessionSnapshot | null = null;
   private activeState: ToolUseRunState<C> | null = null;
@@ -63,6 +68,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
     agentPrompt: AgentPrompt,
     agentPath: string,
     context: AgentExecutionContext,
+    options?: BaseToolUseAgentOptions,
   ) {
     super(
       modelHandler,
@@ -72,7 +78,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       agentPath,
       context,
     );
-    this.toolRegistry = DEFAULT_TOOL_REGISTRY;
+    this.toolRegistry = options?.toolRegistry ?? DEFAULT_TOOL_REGISTRY;
     this.sessionLifecycle = new ToolUseSessionLifecycle(this);
   }
 

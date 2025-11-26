@@ -26,14 +26,23 @@ export enum AgentCategory {
 }
 
 /**
- * Shared metadata describing how an agent session should be classified.
+ * Canonical schema for agent session descriptors.
+ * This is the single source of truth - the type is derived from the schema.
  */
-export interface AgentSessionDescriptor {
+export const AgentSessionDescriptorSchema = z.strictObject({
   /** Specific agent implementation type if known. */
-  agentType?: AgentType;
+  agentType: z.enum(AgentType).optional(),
   /** Canonical grouping used by the UI to filter sessions. */
-  agentCategory: AgentCategory;
-}
+  agentCategory: z.enum(AgentCategory),
+});
+
+/**
+ * Shared metadata describing how an agent session should be classified.
+ * Type derived from {@link AgentSessionDescriptorSchema}.
+ */
+export type AgentSessionDescriptor = z.infer<
+  typeof AgentSessionDescriptorSchema
+>;
 
 /**
  * Derive the canonical {@link AgentCategory} from a specific agent type.
