@@ -1,4 +1,6 @@
 name: xml_validator
+description: Validates and fixes XML syntax errors.
+
 settings:
   agentType: toolUse
   tools:
