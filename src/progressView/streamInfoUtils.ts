@@ -36,7 +36,6 @@ function matchesAgentFilter(
 
 function buildStreamLabel(
   agentName: string,
-  model: string | undefined,
   inputFile: string,
   sessionCategory: AgentCategory,
 ): string {
@@ -44,7 +43,7 @@ function buildStreamLabel(
     return agentName;
   }
 
-  const agentLabel = model ? `${agentName}@${model}` : agentName;
+  const agentLabel = agentName;
   const baseName = inputFile ? path.basename(inputFile) : '';
   return baseName ? `${agentLabel}: ${baseName}` : agentLabel;
 }
@@ -83,12 +82,7 @@ export function buildStreamInfos(
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
     const executionId = state.getExecutionId(id);
-    const label = buildStreamLabel(
-      agentName,
-      taskState?.agentConfig.model,
-      inputFile,
-      sessionCategory,
-    );
+    const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
       name: id,
       label,
