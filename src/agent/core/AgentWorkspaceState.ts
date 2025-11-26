@@ -273,16 +273,21 @@ export class AgentWorkspaceState {
         readFiles: [],
         edits: [],
       } satisfies AgentWorkspaceSnapshot['interactions']);
-    const restored = FileInteractionState.fromJSON(interactions);
-    const restoredJson = restored.toJSON();
-    restoredJson.readFiles.forEach((path) =>
-      state.interactions.recordRead(path),
-    );
-    restoredJson.edits.forEach(({ path, added, removed }) =>
+
+    // Restore file interactions directly to avoid unnecessary round-trip serialization
+    interactions.readFiles.forEach((path) => state.interactions.recordRead(path));
+    interactions.edits.forEach((entry) => {
+      if (!entry?.path) return;
       state.interactions.recordEdits([
-        { path, lineChanges: { added: added ?? 0, removed: removed ?? 0 } },
-      ]),
-    );
+        {
+          path: entry.path,
+          lineChanges: {
+            added: entry.added ?? 0,
+            removed: entry.removed ?? 0,
+          },
+        },
+      ]);
+    });
     return state;
   }
 }
