@@ -3,6 +3,13 @@
  * This is the SINGLE SOURCE OF TRUTH for manual retry wait behavior.
  *
  * Both ResponseCycleFlow and ToolUseCycleFlow use this to avoid duplication.
+ *
+ * ## Architecture
+ *
+ * This node uses accessors to extract flow-specific values. The accessors
+ * receive both `shared` state and `params` to support the services pattern:
+ * - Services (options, store) can be accessed via `params.services`
+ * - Mutable state (retryState, retryCallbacks) is in `shared`
  */
 
 import { BaseNode } from '@agent/node';
@@ -23,54 +30,67 @@ import {
 } from './RetryState';
 
 /**
- * Minimal interface for contexts that support manual retry.
- * Both ResponseCycleContext and ToolUseCycleContext satisfy this.
+ * Minimal interface for shared state that supports manual retry.
+ * Both ResponseCycleShared and ToolUseCycleShared satisfy this.
  */
-export interface RetryableContext {
+export interface RetryableShared {
   retryState: RetryState;
   retryCallbacks: RetryCallbacks;
   state: { shouldStop: boolean };
 }
 
 /**
- * Accessors to extract flow-specific values from the context.
- * This allows the base node to work with different context types.
+ * Accessors to extract flow-specific values from shared state and params.
+ * This allows the base node to work with different flow types.
+ *
+ * Accessors receive both `shared` and `params` to support:
+ * - Legacy pattern: values in shared context
+ * - Services pattern: values in params.services
  */
-export interface RetryWaitAccessors<C extends RetryableContext> {
+export interface RetryWaitAccessors<S extends RetryableShared, P = unknown> {
   /** Get the stream ID for UI events and retry registration */
-  getStreamId: (context: C) => string;
+  getStreamId: (shared: S, params: P) => string;
   /** Get the logger for status messages and retry registration */
-  getLogger: (context: C) => AgentLogger;
+  getLogger: (shared: S, params: P) => AgentLogger;
   /** Operation name for logging (e.g., "Model invocation", "Tool-use call") */
   operationName: string;
 }
+
+/** Index signature type for params constraint */
+type ParamsConstraint = { [key: string]: unknown };
 
 /**
  * Creates a retry wait node with the given accessors.
  * This is a factory function that returns a configured BaseNode.
  */
-export function createRetryWaitNode<C extends RetryableContext>(
-  accessors: RetryWaitAccessors<C>,
-): BaseNode<C> {
+export function createRetryWaitNode<
+  S extends RetryableShared,
+  P extends ParamsConstraint = ParamsConstraint,
+>(accessors: RetryWaitAccessors<S, P>): BaseNode<S, P> {
   return new RetryWaitNode(accessors);
 }
 
 /**
  * Shared retry wait node implementation.
  * Handles manual retry by waiting for UI callback with timeout.
+ *
+ * Uses `_params` to access services via the accessors pattern.
  */
-class RetryWaitNode<C extends RetryableContext> extends BaseNode<C> {
-  private accessors: RetryWaitAccessors<C>;
+class RetryWaitNode<
+  S extends RetryableShared,
+  P extends ParamsConstraint = ParamsConstraint,
+> extends BaseNode<S, P> {
+  private accessors: RetryWaitAccessors<S, P>;
 
-  constructor(accessors: RetryWaitAccessors<C>) {
+  constructor(accessors: RetryWaitAccessors<S, P>) {
     super();
     this.accessors = accessors;
   }
 
-  async exec(context: C): Promise<'retry' | 'cancel'> {
-    const { retryState, retryCallbacks } = context;
-    const streamId = this.accessors.getStreamId(context);
-    const logger = this.accessors.getLogger(context);
+  async exec(shared: S): Promise<'retry' | 'cancel'> {
+    const { retryState, retryCallbacks } = shared;
+    const streamId = this.accessors.getStreamId(shared, this._params);
+    const logger = this.accessors.getLogger(shared, this._params);
 
     // Log waiting status
     logger.info('Waiting for manual retry', {
@@ -129,13 +149,13 @@ class RetryWaitNode<C extends RetryableContext> extends BaseNode<C> {
   }
 
   async post(
-    context: C,
+    shared: S,
     _prepRes: unknown,
     execRes: 'retry' | 'cancel',
   ): Promise<string | undefined> {
-    const { retryState, state } = context;
-    const streamId = this.accessors.getStreamId(context);
-    const logger = this.accessors.getLogger(context);
+    const { retryState, state } = shared;
+    const streamId = this.accessors.getStreamId(shared, this._params);
+    const logger = this.accessors.getLogger(shared, this._params);
 
     if (execRes === 'retry') {
       resetRetryState(retryState);

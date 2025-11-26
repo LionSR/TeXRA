@@ -1,7 +1,7 @@
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Type imports
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 import {
   BaseCycleState,
@@ -49,6 +49,7 @@ import {
   determineRetryStrategy,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
+import type { ToolUseCycleServices, ToolUseCycleParams } from './CycleServices';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -144,23 +145,48 @@ function resetToolUseState(state: ToolUseCycleState): void {
   state.text = undefined;
 }
 
-export interface ToolUseCycleContext<C = unknown> {
-  options: ToolUseCycleOptions<C>;
+/**
+ * Shared state for tool-use cycle flows.
+ *
+ * This contains only MUTABLE state that flows through nodes.
+ * Services (options, store) are accessed via `_params.services`.
+ *
+ * ## Architecture
+ * - Mutable state: `shared` (this interface)
+ * - Immutable services: `_params.services` (ToolUseCycleServices)
+ */
+export interface ToolUseCycleShared<C = unknown> {
+  /** Runtime state for this cycle */
   state: ToolUseCycleState;
-  store: AgentSharedStore;
-  /** Retry state for model invocation errors. */
+  /** Retry state for model invocation errors */
   retryState: RetryState;
-  /** Callbacks for manual retry control from UI. */
+  /** Callbacks for manual retry control from UI */
   retryCallbacks: RetryCallbacks;
 }
 
-class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
-  async prep(shared: ToolUseCycleContext<C>): Promise<{
+/**
+ * @deprecated Use ToolUseCycleShared instead. Kept for backward compatibility.
+ */
+export type ToolUseCycleContext<C = unknown> = ToolUseCycleShared<C> & {
+  options: ToolUseCycleOptions<C>;
+  store: AgentSharedStore;
+};
+
+/**
+ * Prepares a tool-use cycle by checking interruptions and setting up debug context.
+ *
+ * Services accessed via `_params.services`: options, store
+ */
+class ToolUsePrepNode<C> extends BaseNode<
+  ToolUseCycleShared<C>,
+  ToolUseCycleParams<C>
+> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
   }> {
-    const { options, state, store } = shared;
+    const { options, store } = this._params.services;
     const interrupted = Boolean(await options.checkInterruption());
     const debugContext: CycleDebugContext = {
       logger: options.logger,
@@ -178,13 +204,15 @@ class ToolUsePrepNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 
   async post(
-    { state }: ToolUseCycleContext<C>,
+    shared: ToolUseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       debugContext: CycleDebugContext;
       debugFileOptions: CycleDebugFileOptions;
     },
   ): Promise<string | undefined> {
+    const { state } = shared;
+
     if (prepRes.interrupted) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
@@ -243,14 +271,20 @@ type ToolUseCallResult =
 
 /**
  * Handles model invocation for tool-use cycles with integrated retry support.
+ *
+ * Services accessed via `_params.services`: options, store
  */
-class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
-  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
+class ToolUseCallNode<C> extends BaseNode<
+  ToolUseCycleShared<C>,
+  ToolUseCycleParams<C>
+> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleContext<C>): Promise<ToolUseCallResult> {
-    const { options, state, store, retryState } = context;
+  async exec(shared: ToolUseCycleShared<C>): Promise<ToolUseCallResult> {
+    const { options, store } = this._params.services;
+    const { state, retryState } = shared;
     if (state.shouldStop) {
       return {
         success: true,
@@ -307,11 +341,12 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 
   async post(
-    shared: ToolUseCycleContext<C>,
-    prepRes: ToolUseCycleContext<C>,
+    shared: ToolUseCycleShared<C>,
+    _prepRes: ToolUseCycleShared<C>,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
-    const { options, state, retryState } = shared;
+    const { options } = this._params.services;
+    const { state, retryState } = shared;
 
     // Handle successful invocation
     if (execRes.success) {
@@ -383,12 +418,20 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 }
 
-class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
-  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
+/**
+ * Processes the model response to extract tool calls and usage data.
+ *
+ * Services accessed via `_params.services`: options, store
+ */
+class ToolUseProcessNode<C> extends BaseNode<
+  ToolUseCycleShared<C>,
+  ToolUseCycleParams<C>
+> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
     return shared;
   }
 
-  async exec(context: ToolUseCycleContext<C>): Promise<
+  async exec(shared: ToolUseCycleShared<C>): Promise<
     SkippableNodeResult<{
       toolCalls?: SdkToolCall[];
       stopReason: ProviderStopReason;
@@ -396,7 +439,8 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       endTurn: boolean;
     }>
   > {
-    const { options, state, store } = context;
+    const { options, store } = this._params.services;
+    const { state } = shared;
     if (state.shouldStop || !state.response) {
       return { skipped: true };
     }
@@ -488,7 +532,7 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 
   async post(
-    shared: ToolUseCycleContext<C>,
+    shared: ToolUseCycleShared<C>,
     _prepRes: unknown,
     execRes: SkippableNodeResult<{
       toolCalls?: SdkToolCall[];
@@ -497,7 +541,8 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       endTurn: boolean;
     }>,
   ): Promise<string | undefined> {
-    const { options, state, store } = shared;
+    const { store } = this._params.services;
+    const { state } = shared;
 
     if (execRes.skipped) {
       store.round.clearUsage();
@@ -522,20 +567,27 @@ class ToolUseProcessNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 }
 
-class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
-  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
+/**
+ * Dispatches tool calls and processes their results.
+ *
+ * Services accessed via `_params.services`: options, store
+ */
+class ToolUseDispatchNode<C> extends BaseNode<
+  ToolUseCycleShared<C>,
+  ToolUseCycleParams<C>
+> {
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
     return shared;
   }
 
   async exec(
-    context: ToolUseCycleContext<C>,
+    shared: ToolUseCycleShared<C>,
   ): Promise<SkippableNodeResult<{ calls: SdkToolCall[] }>> {
-    const { options, state, store } = context;
+    const { options } = this._params.services;
+    const { state } = shared;
     if (state.shouldStop || !state.toolCalls || state.toolCalls.length === 0) {
       return { skipped: true };
     }
-
-    const groupId = options.logger.withCurrentGroup((id) => id);
 
     if (await options.checkInterruption()) {
       state.shouldStop = true;
@@ -549,12 +601,14 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   }
 
   async post(
-    _shared: ToolUseCycleContext<C>,
-    prepRes: ToolUseCycleContext<C>,
+    shared: ToolUseCycleShared<C>,
+    _prepRes: ToolUseCycleShared<C>,
     execRes: SkippableNodeResult<{ calls: SdkToolCall[] }>,
   ): Promise<string | undefined> {
-    const { options, state, store } = prepRes;
+    const { options, store } = this._params.services;
+    const { state } = shared;
     const groupId = options.logger.withCurrentGroup((id) => id);
+
     if (execRes.skipped) {
       state.shouldStop = true;
       return FlowTransition.COMPLETE;
@@ -692,13 +746,33 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return FlowTransition.CONTINUE;
   }
 }
-export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleContext<C>> {
+/**
+ * Creates a tool-use cycle flow with services injected via params.
+ *
+ * The returned flow uses the services pattern:
+ * - Services (options, store) are passed via `setParams({ services })`
+ * - Only mutable state flows through the shared context
+ *
+ * @example
+ * ```typescript
+ * const flow = createToolUseCycleFlow<MyContext>();
+ * flow.setParams({ services: { options, store } });
+ * await flow.run(sharedState);
+ * ```
+ */
+export function createToolUseCycleFlow<C>(): Flow<
+  ToolUseCycleShared<C>,
+  ToolUseCycleParams<C>
+> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
   // Use shared retry wait node (single source of truth)
-  const retryWaitNode = createRetryWaitNode<ToolUseCycleContext<C>>({
-    getStreamId: (ctx) => ctx.options.context.streamId,
-    getLogger: (ctx) => ctx.options.logger,
+  // Note: RetryWaitNode accesses services via its own accessor pattern
+  const retryWaitNode = createRetryWaitNode<ToolUseCycleShared<C>>({
+    getStreamId: (_shared, params) =>
+      (params as ToolUseCycleParams<C>).services.options.context.streamId,
+    getLogger: (_shared, params) =>
+      (params as ToolUseCycleParams<C>).services.options.logger,
     operationName: 'Tool-use call',
   });
   const processNode = new ToolUseProcessNode<C>();
@@ -723,5 +797,5 @@ export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleContext<C>> {
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ToolUseCycleContext<C>>(prepNode);
+  return new Flow<ToolUseCycleShared<C>, ToolUseCycleParams<C>>(prepNode);
 }
