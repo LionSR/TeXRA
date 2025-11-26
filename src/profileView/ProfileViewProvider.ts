@@ -64,6 +64,13 @@ export class ProfileViewProvider
       },
     );
 
+    // Track panel disposal to clear reference
+    this.addViewDisposables(
+      this._view.onDidDispose(() => {
+        this._view = undefined;
+      }),
+    );
+
     super.resolveWebviewViewInternal(this._view);
     // HTML content is set by resolveWebviewViewInternal
     // Webview will request data via GET_PROFILE_DATA on DOMContentLoaded

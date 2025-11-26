@@ -2,16 +2,21 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import {
+  loadAndRegisterRemoteAgents,
+  selectAgentInMainView,
+} from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
-import { BaseViewMessageHandler, type MessageHandler } from '@common/webview';
-// @ts-ignore - Import JavaScript module
-import { PROFILE_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  BaseViewMessageHandler,
+  type MessageHandler,
+  PROFILE_VIEW_COMMANDS,
+} from '@common/webview';
 
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
+import { AUTH_COMMANDS } from '@/auth/authCommands';
 
 /**
  * Message interfaces for type safety
@@ -71,24 +76,21 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }> = [];
 
     if (tier === 'researcher') {
-      const agents = await RemoteAgentLoader.listRemoteAgents();
-      remoteAgents = agents.map((agent) => ({
-        name: agent.name,
-        description: agent.description,
-        tags: agent.tags,
-        visibility: agent.visibility,
-      }));
-
-      // Register remote agents so they appear in the dropdown
-      // Only register agents that aren't already registered
-      if (agents.length > 0) {
-        const agentNames = agents.map((agent) => agent.name);
-        const unregisteredAgents = agentNames.filter(
-          (name) => !RemoteAgentRegistry.isRemote(name),
+      try {
+        // Use shared utility for loading and registering agents
+        const { agents } = await loadAndRegisterRemoteAgents();
+        remoteAgents = agents.map((agent) => ({
+          name: agent.name,
+          description: agent.description,
+          tags: agent.tags,
+          visibility: agent.visibility,
+        }));
+      } catch (error) {
+        // Log error but continue - show profile without agents
+        this.logger.error(
+          this.channel,
+          `Failed to load remote agents: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        if (unregisteredAgents.length > 0) {
-          RemoteAgentRegistry.registerMultiple(unregisteredAgents);
-        }
       }
     }
 
@@ -121,52 +123,24 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
-    // Focus the main view and select the agent
-    await vscode.commands.executeCommand('texra.mainView.focus');
-
-    try {
-      const webviewView = await vscode.commands.executeCommand<
-        vscode.WebviewView | undefined
-      >('texra.getWebviewView');
-
-      if (webviewView) {
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state: {
-            workflowAgent: agentName,
-          },
-        });
-        void vscode.window.showInformationMessage(
-          `Remote agent "${agentName}" is now selected.`,
-        );
-      } else {
-        this.logger.warn(this.channel, 'Main webview not available');
-        void vscode.window.showWarningMessage(
-          `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        this.channel,
-        `Failed to select agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      void vscode.window.showWarningMessage(
-        `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
-      );
-    }
+    // Use shared utility for agent selection
+    await selectAgentInMainView(agentName, {
+      showSuccessMessage: true,
+      copyToClipboardOnFailure: false,
+    });
   }
 
   private async handleSignIn(
     _message: ProfileDataMessage,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    await vscode.commands.executeCommand('texra.auth.signIn');
+    await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
   }
 
   private async handleSignOut(
     _message: ProfileDataMessage,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    await vscode.commands.executeCommand('texra.auth.signOut');
+    await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
   }
 }

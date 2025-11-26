@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import {
+  loadAndRegisterRemoteAgents,
+  selectAgentInMainView,
+} from '@agent/remote/remoteAgentUtils';
 import * as authCommands from '@/auth/authCommands';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 
@@ -46,8 +47,8 @@ async function browseRemoteAgents(): Promise<void> {
     // Check authentication status first
     const authStatus = await authCommands.getAuthStatus();
 
-    // List available remote agents
-    const agents = await RemoteAgentLoader.listRemoteAgents();
+    // Use shared utility to load and register agents
+    const { agents } = await loadAndRegisterRemoteAgents();
 
     if (agents.length === 0) {
       if (!authStatus.authenticated) {
@@ -78,10 +79,6 @@ async function browseRemoteAgents(): Promise<void> {
       return;
     }
 
-    // Register remote agents so they can be executed
-    const agentNames = agents.map((agent) => agent.name);
-    RemoteAgentRegistry.registerMultiple(agentNames);
-
     // Create quick pick items
     const items = agents.map((agent) => ({
       label: `$(cloud) ${agent.name}`,
@@ -101,42 +98,11 @@ async function browseRemoteAgents(): Promise<void> {
       return;
     }
 
-    // Use the clean agent name (no remote:// prefix needed anymore!)
-    const agentName = selected.agentName;
-
-    // Try to populate the agent selector automatically
-    await vscode.commands.executeCommand('texra.mainView.focus');
-
-    try {
-      const webviewView = await vscode.commands.executeCommand<
-        vscode.WebviewView | undefined
-      >('texra.getWebviewView');
-
-      if (webviewView) {
-        // Send STATE_RESTORE message to set the agent selector value
-        webviewView.webview.postMessage({
-          command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-          state: {
-            workflowAgent: agentName,
-          },
-        });
-        void vscode.window.showInformationMessage(
-          `Remote agent "${agentName}" is now selected.`,
-        );
-      } else {
-        // Fallback: copy to clipboard and show manual instruction
-        await vscode.env.clipboard.writeText(agentName);
-        void vscode.window.showInformationMessage(
-          `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-        );
-      }
-    } catch (error) {
-      // Fallback: copy to clipboard and show manual instruction
-      await vscode.env.clipboard.writeText(agentName);
-      void vscode.window.showInformationMessage(
-        `Could not auto-populate agent. Agent name "${agentName}" copied to clipboard - paste it in the agent selector.`,
-      );
-    }
+    // Use shared utility for agent selection with clipboard fallback
+    await selectAgentInMainView(selected.agentName, {
+      showSuccessMessage: true,
+      copyToClipboardOnFailure: true,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(
