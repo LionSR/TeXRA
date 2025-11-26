@@ -292,19 +292,19 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
-    let thinking!: ReturnType<ModelHandler['createThinkingStream']>;
-    let output: ReturnType<ModelHandler['createOutputStream']> | undefined;
+    const thinking = this.createThinkingStream();
+    const output = this.isOutputStreamingEnabled()
+      ? this.createOutputStream()
+      : undefined;
 
-    const resetStreamsForAttempt = (attempt: number): void => {
-      if (attempt > 1) {
-        thinking?.finalize();
-        output?.finalize();
+    const markRetryAttempt = (attempt: number): void => {
+      if (attempt === 1) {
+        return;
       }
 
-      thinking = this.createThinkingStream();
-      output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream()
-        : undefined;
+      const retryNotice = `\n[Retrying request: attempt ${attempt}]`;
+      thinking.append(retryNotice);
+      output?.append(retryNotice);
     };
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
@@ -320,7 +320,7 @@ export class ModelHandlerOpenAI<
       enableManualRetry: true,
       signal,
       onAttemptStart: (nextAttempt) => {
-        resetStreamsForAttempt(nextAttempt);
+        markRetryAttempt(nextAttempt);
       },
       create: async () => {
         const stream = await client.chat.completions.stream(streamParams, {

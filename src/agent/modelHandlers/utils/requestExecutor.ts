@@ -10,6 +10,10 @@ import {
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { sleep } from '@utils/helpers';
+import {
+  getModelRetryBackoffMs,
+  getModelRetryMaxAttempts,
+} from '@utils/config';
 
 interface RequestRetryOptions {
   logger: AgentLogger;
@@ -23,8 +27,8 @@ interface RequestRetryOptions {
   onAttemptStart?: (attempt: number) => void;
 }
 
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BACKOFF_MS = 1000;
+const FALLBACK_MAX_ATTEMPTS = 3;
+const FALLBACK_BACKOFF_MS = 1000;
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
 function shouldRetry(statusCode?: number): boolean {
@@ -41,8 +45,12 @@ export async function executeWithRequestRetry<T>(
   options: RequestRetryOptions,
   request: () => Promise<T> | T,
 ): Promise<T> {
-  const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS);
-  const baseDelayMs = options.baseDelayMs ?? DEFAULT_BACKOFF_MS;
+  const maxAttempts = Math.max(
+    1,
+    options.maxAttempts ?? getModelRetryMaxAttempts() ?? FALLBACK_MAX_ATTEMPTS,
+  );
+  const baseDelayMs =
+    options.baseDelayMs ?? getModelRetryBackoffMs() ?? FALLBACK_BACKOFF_MS;
   const allowManualRetry = options.enableManualRetry ?? true;
   const manualRetryKey = options.manualRetryKey ?? options.logger.channelId;
 
@@ -58,7 +66,7 @@ export async function executeWithRequestRetry<T>(
     }
 
     try {
-      return request();
+      return await request();
     } catch (error) {
       const formatted = formatProviderHttpError(error);
       const statusCode = formatted.statusCode;
