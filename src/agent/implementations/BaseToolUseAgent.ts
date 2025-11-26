@@ -188,6 +188,8 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
           markRunning: () => this.markRunning(),
           applyFollowUp: (followUp, messages) =>
             this.applyFollowUpMessage(followUp, messages),
+          persistCheckpoint: (messages, store) =>
+            this.persistCheckpoint(messages, store),
           logFinalizeWarning: (message, error) =>
             this.logger.warn(message, { data: error }),
           cleanup: async () => {
@@ -288,6 +290,7 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
       toolRegistry: this.toolRegistry,
       workspaceState: store.workspace,
       modelName: this.agentConfig.model,
+      agentName: this.agentConfig.agent,
     };
   }
 
@@ -303,6 +306,13 @@ export class BaseToolUseAgent<C = unknown> extends BaseAgent<C> {
 
   public async clearPersistedSnapshot(): Promise<void> {
     await this.sessionLifecycle.clearPersistedSnapshot();
+  }
+
+  public async persistCheckpoint(
+    messages: ProviderMessage[],
+    _store: AgentSharedStore,
+  ): Promise<void> {
+    await this.sessionLifecycle.persistCheckpoint(messages);
   }
 
   private getActiveState(): ToolUseRunState<C> {

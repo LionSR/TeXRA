@@ -28,6 +28,7 @@ import {
   flexibleFS,
   WorkspaceFS,
   AbsoluteFS,
+  pathToLocation,
   getComparablePath,
 } from '@utils/files';
 // Type imports
@@ -135,29 +136,22 @@ export class OutputHandler implements IOutputHandler {
 
     const initialRunId = this.logger.withCurrentGroup((id) => id);
     this.setActiveRun(initialRunId ?? null);
-    this.logger.debug(
-      `OutputHandler initialized with runId=${normalizeRunId(this.currentRunId)} (loggerGroup=${normalizeRunId(initialRunId)} executionId=${
-        this.executionId ?? 'none'
-      })`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
     return this.baseFiles.filter((candidate) => candidate !== null);
   }
 
-  private collectRunSupportFiles(): string[] {
-    const extras = new Set<string>();
-    const add = (value?: string | null) => {
+  private collectRunSupportFiles(): FileLocation[] {
+    const extras = new Map<string, FileLocation>();
+    const add = (value?: string | FileLocation | null) => {
       if (!value) {
         return;
       }
-      const trimmed = value.trim();
-      if (trimmed.length === 0) {
-        return;
-      }
-      extras.add(trimmed);
+
+      const location =
+        typeof value === 'string' ? pathToLocation(value) : value;
+      extras.set(getComparablePath(location), location);
     };
 
     const cfg = this.agentConfig;
@@ -170,7 +164,7 @@ export class OutputHandler implements IOutputHandler {
     add(cfg.inputFile ?? undefined);
     cfg.inputFiles.forEach((file) => add(file));
 
-    return Array.from(extras);
+    return Array.from(extras.values());
   }
 
   public setActiveRun(runId?: string | null): void {
@@ -180,12 +174,6 @@ export class OutputHandler implements IOutputHandler {
 
     const nextRunId = runId ?? null;
     const previousRunId = this.currentRunId;
-    this.logger.debug(
-      `setActiveRun(runId=${normalizeRunId(runId)} prev=${normalizeRunId(previousRunId)} next=${normalizeRunId(
-        nextRunId,
-      )} executionId=${targetExecutionId ?? 'none'})`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
-    );
     if (nextRunId === this.currentRunId) {
       return;
     }
@@ -322,6 +310,7 @@ export class OutputHandler implements IOutputHandler {
       path.join(dir, `${name}.bak`),
       path.join(dir, `${name}.bak0`),
       path.join(dir, `${name}.bak1`),
+      path.join(dir, 'indent.log'),
     ]);
 
     for (const candidateAbsolute of backupCandidates) {
@@ -752,10 +741,11 @@ export class OutputHandler implements IOutputHandler {
               this.agentSetting.prefills?.some((prefill) =>
                 /<scratchpad\s*>/i.test(prefill),
               ) ?? false;
+            const hasDocumentTag = Boolean(this.agentSetting.documentTag);
             const shouldProcessXml =
               this.agentSetting.agentType === AgentType.CoT ||
               (this.agentSetting.agentType === AgentType.Direct &&
-                hasScratchpadPrefill);
+                (hasDocumentTag || hasScratchpadPrefill));
 
             if (shouldProcessXml) {
               processed =

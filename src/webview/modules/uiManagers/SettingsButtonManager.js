@@ -15,6 +15,7 @@ import { mainViewState } from '../mainViewState.js';
 import { BaseUIManager } from './BaseUIManager.js';
 import { webviewEventBus } from '../eventBus.js';
 import { bannerManager } from './BannerManager.js';
+import { updateModelApiKeyBanner } from './apiKeyBannerUtils.js';
 import {
   safeGetElementById,
   safeGetElementChecked,
@@ -415,7 +416,6 @@ export class SettingsButtonManager extends BaseUIManager {
       ) {
         return;
       }
-      const selectedOption = getSelectedOptionElement(selectElement);
 
       // Always notify about model selection
       this.vscode.postMessage({
@@ -424,23 +424,7 @@ export class SettingsButtonManager extends BaseUIManager {
       });
       this.state.save();
 
-      // Check if the selected option requires an API key (using data attribute)
-      // Show banner to guide API key setup if needed
-      if (selectedOption?.dataset?.requiresKey === 'true') {
-        // Get provider from the option
-        const provider = selectedOption?.dataset?.provider || 'Unknown';
-
-        // Show banner with provider info - user can click banner button to access setup
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER,
-          provider,
-        });
-      } else {
-        // Hide banner for models that don't require API keys
-        this.vscode.postMessage({
-          command: MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER,
-        });
-      }
+      updateModelApiKeyBanner(selectElement);
     });
   }
 

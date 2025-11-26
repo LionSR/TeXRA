@@ -150,6 +150,56 @@ const normalizeFileListEntries = (structured) => {
   });
 };
 
+const buildFileListRender = (files) => {
+  if (!Array.isArray(files)) {
+    return null;
+  }
+
+  const filesBySource = {};
+  files.forEach((file) => {
+    const source = file.source || 'unknown';
+    if (!filesBySource[source]) {
+      filesBySource[source] = [];
+    }
+    filesBySource[source].push(file);
+  });
+
+  let items = '';
+  Object.entries(filesBySource).forEach(([source, groupedFiles]) => {
+    groupedFiles.forEach((file) => {
+      const icon = file.ok ? 'codicon-check' : 'codicon-warning';
+      const escaped = encodeHtml(file.filePath);
+      const fileNameEscaped = encodeHtml(file.fileName);
+
+      let metadata = '';
+      if (file.varName) {
+        metadata += `<span class="file-var">[${file.varName}]</span>`;
+      }
+      if (source && source !== 'unknown') {
+        if (file.internal) {
+          metadata += ` <span class="file-source">(${file.sourceDisplay}, internal)</span>`;
+        } else {
+          metadata += ` <span class="file-source">(${file.sourceDisplay})</span>`;
+        }
+      }
+
+      items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+    });
+  });
+
+  const totalFiles = files.length;
+  const loadedFiles = files.filter((file) => file.ok).length;
+  const failedFiles = totalFiles - loadedFiles;
+
+  let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
+  if (failedFiles > 0) {
+    summary += `, ${failedFiles} not found`;
+  }
+  summary += ')';
+
+  return { items, summary };
+};
+
 const normalizeMissingOutputsPayload = (structured) => {
   if (!structured) return null;
 
@@ -213,14 +263,29 @@ const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  const edits = Array.isArray(parsed.edits)
+    ? parsed.edits
+    : Array.isArray(outputDetails.edits)
+      ? outputDetails.edits
+      : [];
+
+  const filesCandidate = Array.isArray(parsed.files)
+    ? parsed.files
+    : Array.isArray(outputDetails.files)
+      ? outputDetails.files
+      : edits
+          .map((entry) => (entry?.path ? { path: entry.path } : null))
+          .filter(Boolean);
+  const files = normalizeFileListEntries(filesCandidate) || [];
+
   return {
     parsed,
     toolName,
     summaryText,
     errorText,
     outputText,
-    diagnostics: parsed.diagnostics ?? outputDetails.diagnostics,
     input: parsed.input,
+    files,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
@@ -383,12 +448,7 @@ export class LogEntryFormatter {
         ),
       progressStatus: (message) =>
         this._safeFormat(
-          () =>
-            this._formatProgressStatus(
-              message.normalizedPayload,
-              message.id,
-              message.timestamp,
-            ),
+          () => this._formatProgressStatus(message),
           'progress status',
         ),
     };
@@ -663,8 +723,8 @@ export class LogEntryFormatter {
       summaryText,
       errorText,
       outputText,
-      diagnostics,
       input,
+      files,
     } = normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
@@ -695,6 +755,21 @@ export class LogEntryFormatter {
       `);
     }
 
+    if (files && files.length > 0) {
+      const renderData = buildFileListRender(files);
+      if (renderData?.items) {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Edited files:</span>
+              <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
+              <ul class="detail-list">${renderData.items}</ul>
+            </div>
+          </div>
+        `);
+      }
+    }
+
     if (errorText) {
       sections.push(`
         <div class="tool-use-section">
@@ -704,65 +779,15 @@ export class LogEntryFormatter {
           </div>
         </div>
       `);
-    }
-
-    if (outputText) {
-      const encodedOutput = encodeHtml(outputText);
-      const MAX_PREVIEW_CHARS = 240;
-      const isTruncated = outputText.length > MAX_PREVIEW_CHARS;
-      if (!summaryText && isTruncated) {
-        const preview = encodeHtml(
-          `${outputText.slice(0, MAX_PREVIEW_CHARS).trimEnd()}…`,
-        );
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Output:</span>
-              <details class="tool-output-details">
-                <summary class="details-summary">
-                  <pre class="tool-output-preview">${preview}</pre>
-                  <span class="details-summary-label">Show full output</span>
-                </summary>
-                <pre class="tool-output-full">${encodedOutput}</pre>
-              </details>
-            </div>
+    } else if (outputText) {
+      sections.push(`
+        <div class="tool-use-section">
+          <div class="tool-use-subsection">
+            <span class="tool-use-sublabel">Output:</span>
+            <pre class="tool-output-full">${encodeHtml(outputText)}</pre>
           </div>
-        `);
-      } else {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Output:</span>
-              <pre class="tool-output-full">${encodedOutput}</pre>
-            </div>
-          </div>
-        `);
-      }
-    }
-
-    if (diagnostics !== undefined) {
-      const diagnosticsText = stringifyForDisplay(diagnostics).trim();
-      const MAX_DIAGNOSTICS_LENGTH = 600;
-
-      if (diagnosticsText && diagnosticsText.length <= MAX_DIAGNOSTICS_LENGTH) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Diagnostics:</span>
-              <pre>${encodeHtml(diagnosticsText)}</pre>
-            </div>
-          </div>
-        `);
-      } else if (diagnosticsText) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Diagnostics:</span>
-              <div>Diagnostics omitted (too verbose for progress view).</div>
-            </div>
-          </div>
-        `);
-      }
+        </div>
+      `);
     }
 
     const fallbackYaml = stringifyForDisplay(parsed);
@@ -925,47 +950,9 @@ export class LogEntryFormatter {
       return element;
     }
 
-    const filesBySource = {};
-    parsed.forEach((file) => {
-      const source = file.source || 'unknown';
-      if (!filesBySource[source]) {
-        filesBySource[source] = [];
-      }
-      filesBySource[source].push(file);
-    });
-
-    let items = '';
-    Object.entries(filesBySource).forEach(([source, files]) => {
-      files.forEach((f) => {
-        const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-        const escaped = encodeHtml(f.filePath);
-        const fileNameEscaped = encodeHtml(f.fileName);
-
-        let metadata = '';
-        if (f.varName) {
-          metadata += `<span class="file-var">[${f.varName}]</span>`;
-        }
-        if (source && source !== 'unknown') {
-          if (f.internal) {
-            metadata += ` <span class="file-source">(${f.sourceDisplay}, internal)</span>`;
-          } else {
-            metadata += ` <span class="file-source">(${f.sourceDisplay})</span>`;
-          }
-        }
-
-        items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
-      });
-    });
-
-    const totalFiles = parsed.length;
-    const loadedFiles = parsed.filter((f) => f.ok).length;
-    const failedFiles = totalFiles - loadedFiles;
-
-    let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
-    if (failedFiles > 0) {
-      summary += `, ${failedFiles} not found`;
-    }
-    summary += ')';
+    const renderData = buildFileListRender(parsed);
+    const items = renderData?.items ?? '';
+    const summary = renderData?.summary ?? 'Files';
 
     if (summaryElem) summaryElem.textContent = summary;
     if (contentElem) {
@@ -1247,32 +1234,37 @@ export class LogEntryFormatter {
     return element;
   }
 
-  _formatProgressStatus(normalizedPayload, logId, timestamp) {
-    const element = createFromTemplate('nativeStatusTemplate');
-    if (!element) return null;
-
-    const date = new Date(timestamp ?? Date.now());
+  _formatProgressStatus(message) {
+    const normalizedPayload = message.normalizedPayload || {};
+    const severity = message.level || 'info';
+    const date = new Date(message.timestamp ?? Date.now());
     const { fullTimestamp, timeDisplay, tooltipTimestamp } =
       this._formatTimestamp(date);
 
-    element.dataset.fullTimestamp = fullTimestamp;
-    if (logId) {
-      element.dataset.logId = logId;
+    const summaryText =
+      (normalizedPayload.decodedText || message.text || '').trim() ||
+      'Status update';
+    const detailText = stringifyForDisplay(normalizedPayload.structured);
+    const emoji = EMOJI_BY_LEVEL[severity] || '•';
+
+    const container = document.createElement('div');
+    container.dataset.fullTimestamp = fullTimestamp;
+    if (message.id) container.dataset.logId = message.id;
+    if (message.groupId) container.dataset.groupId = message.groupId;
+
+    const summaryLine = document.createElement('div');
+    summaryLine.className = 'log-line';
+    summaryLine.innerHTML = `<span class="timestamp" title="${tooltipTimestamp}">${emoji} [${timeDisplay}]</span> <span class="message-${severity}">${encodeHtml(summaryText)}</span>`;
+    container.appendChild(summaryLine);
+
+    if (detailText) {
+      const detailLine = document.createElement('pre');
+      detailLine.className = `log-line message-${severity}`;
+      detailLine.textContent = detailText;
+      container.appendChild(detailLine);
     }
 
-    const timeElem = element.querySelector('.native-status-time');
-    if (timeElem) {
-      timeElem.textContent = timeDisplay;
-      timeElem.title = tooltipTimestamp;
-    }
-
-    const textElem = element.querySelector('.native-status-text');
-    if (textElem) {
-      const decodedContent = normalizedPayload?.decodedText || '';
-      textElem.textContent = decodedContent;
-    }
-
-    return element;
+    return container;
   }
 
   _formatUserMessage(normalizedPayload, logId, timestamp) {

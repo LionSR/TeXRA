@@ -15,9 +15,6 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
   description: 'Fixes for LaTeX equation spacing and formatting',
   isRegex: false,
   patterns: (() => {
-    // Initialize patterns object for auto-generated items
-    const patterns: { [key: string]: string } = {};
-
     // ====================================================================
     // Auto-generated replacements - for easily maintainable pattern groups
     // ====================================================================
@@ -39,7 +36,6 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     const linebreakFixesPatterns = generateEnvironmentLinebreakFixes(
       'align aligned'.split(' '),
     );
-    Object.assign(patterns, linebreakFixesPatterns);
 
     // ===== Reference formatting =====
     // Examples:
@@ -57,7 +53,6 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
       'eq.',
       'eqn.',
     ]);
-    Object.assign(patterns, referencePatterns);
 
     // ===== Grouped backslash fixes =====
     // Use the new grouped helper to organize the backslash fixes logically
@@ -76,7 +71,7 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
       integrals: 'int iint iiint oint ooint ooooint'.split(' '),
       dots: 'cdot dot ldots cdots vdots ddots iddots'.split(' '),
       formattingCommands: `
-        mathbf mathbb mathcal mathscr bm 
+        mathbf mathbb mathcal mathscr bm
         sum prod lim infty rightarrow leftarrow Rightarrow
         Leftarrow exists forall der partial Delta Gamma Lambda Sigma Omega
       `
@@ -89,7 +84,13 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
         .trim()
         .split(/\s+/),
     });
-    Object.assign(patterns, groupedBackslashPatterns);
+
+    // Initialize patterns object with generated patterns
+    const patterns: { [key: string]: string } = {
+      ...linebreakFixesPatterns,
+      ...referencePatterns,
+      ...groupedBackslashPatterns,
+    };
 
     // Greek letter notation fixes
     // Examples:

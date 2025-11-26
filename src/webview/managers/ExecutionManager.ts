@@ -32,7 +32,7 @@ export class ExecutionManager {
   constructor() {}
 
   async handleExecute(message: any): Promise<void> {
-    const isToolUseAgent = Boolean(message.isToolUseAgent);
+    const isToolUseAgent = !!message.isToolUseAgent;
     const config = isToolUseAgent
       ? this.buildToolUseCommandPayload(message)
       : await this.buildWorkflowCommandPayload(message);
@@ -77,8 +77,8 @@ export class ExecutionManager {
   ): AgentConfig {
     const baseConfig = this.composeBaseAgentConfig(message, session);
     const outputFiles = getFilesIfNotEmpty<string>(message.outputFiles);
-    const useMultipleOutputs = Boolean(
-      message.outputFilesActive || outputFiles.length > 1,
+    const useMultipleOutputs = !!(
+      message.outputFilesActive || outputFiles.length > 1
     );
 
     return {
