@@ -54,7 +54,14 @@ export class HistoryRenderer {
 
   _createHistoryItemElement(item) {
     const config = item.config;
+    const session = item.session;
     const date = new Date(item.timestamp).toLocaleString();
+
+    // Determine session kind display
+    const isToolUse = session?.agentCategory === 'toolUse';
+    const kindLabel = isToolUse ? 'Tool Use' : 'Workflow';
+    const kindIcon = isToolUse ? 'tools' : 'symbol-method';
+    const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
 
     const container = createFromTemplate('historyItemTemplate', {
       text: {
@@ -93,7 +100,13 @@ export class HistoryRenderer {
       ? encodeHtml(config.instruction)
       : 'None';
 
+    // Build session kind badge with icon
+    const kindIconEl = createCodicon(kindIcon);
+    const kindIconHtml = kindIconEl ? kindIconEl.outerHTML : '';
+
     let basicHTML = `
+      <span class="history-label">Kind:</span>
+      <span class="history-value"><span class="session-kind-badge ${kindClass}">${kindIconHtml} ${kindLabel}</span></span>
       <span class="history-label">Agent:</span>
       <span class="history-value">${encodedAgent}</span>
       <span class="history-label">Model:</span>
