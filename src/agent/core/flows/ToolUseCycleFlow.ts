@@ -343,7 +343,7 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     if (shouldAutoRetry(retryState)) {
       const delay = computeBackoffDelay(retryState);
       options.logger.warn(
-        `Retrying tool-use call after ${delay}ms (attempt ${retryState.attemptCount}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+        `Retrying tool-use call after ${delay}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${formatted.message}`,
         {
           messageType: MESSAGE_TYPES.PROGRESS_STATUS,
           data: {
@@ -682,19 +682,41 @@ class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     // Emit waiting status to UI
     bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
 
-    // Wait for external signal via callbacks
+    // Wait for external signal via callbacks with timeout
     return new Promise<'retry' | 'cancel'>((resolve) => {
+      let resolved = false;
+
+      // Timeout after 5 minutes
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          options.logger.warn('Manual retry wait timed out after 5 minutes');
+          resolve('cancel');
+        }
+      }, 5 * 60 * 1000);
+
       retryCallbacks.triggerRetry = () => {
-        clearManualRetry(streamId);
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('retry');
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('retry');
+        }
       };
       retryCallbacks.cancelRetry = () => {
-        clearManualRetry(streamId);
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('cancel');
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('cancel');
+        }
       };
 
       // Register with ManualRetryController for UI-triggered retries

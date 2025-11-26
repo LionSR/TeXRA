@@ -239,6 +239,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
       skip: true,
     });
 
+    const start = Date.now();
     try {
       const { response, responseTime } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
@@ -253,9 +254,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
             : undefined,
         });
 
-        const elapsed = state.startTime
-          ? (Date.now() - state.startTime) / 1000
-          : undefined;
+        const elapsed = (Date.now() - start) / 1000;
 
         return { response: modelResponse, responseTime: elapsed };
       });
@@ -315,7 +314,7 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
     if (shouldAutoRetry(retryState)) {
       const delay = computeBackoffDelay(retryState);
       options.logger.warn(
-        `Retrying model invocation after ${delay}ms (attempt ${retryState.attemptCount}/${retryState.maxAutoAttempts}): ${formatted.message}`,
+        `Retrying model invocation after ${delay}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${formatted.message}`,
         {
           messageType: MESSAGE_TYPES.PROGRESS_STATUS,
           data: {
@@ -801,19 +800,41 @@ class ResponseRetryWaitNode<C> extends BaseNode<ResponseCycleContext<C>> {
     // Emit waiting status to UI
     bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
 
-    // Wait for external signal via callbacks
+    // Wait for external signal via callbacks with timeout
     return new Promise<'retry' | 'cancel'>((resolve) => {
+      let resolved = false;
+
+      // Timeout after 5 minutes
+      const timeoutId = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          options.logger.warn('Manual retry wait timed out after 5 minutes');
+          resolve('cancel');
+        }
+      }, 5 * 60 * 1000);
+
       retryCallbacks.triggerRetry = () => {
-        clearManualRetry(streamId);
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('retry');
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('retry');
+        }
       };
       retryCallbacks.cancelRetry = () => {
-        clearManualRetry(streamId);
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('cancel');
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeoutId);
+          clearManualRetry(streamId);
+          retryCallbacks.triggerRetry = undefined;
+          retryCallbacks.cancelRetry = undefined;
+          resolve('cancel');
+        }
       };
 
       // Register with ManualRetryController for UI-triggered retries
