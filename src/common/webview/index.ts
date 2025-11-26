@@ -13,6 +13,7 @@ export {
   MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
   HISTORY_VIEW_COMMANDS,
+  PROFILE_VIEW_COMMANDS,
   WEBVIEW_COMMANDS,
 } from './commands';
 export { getSharedLocalResourceRoots } from './resourceRoots';
