@@ -46,17 +46,20 @@ export async function executeRequest<T>(
     return await request();
   } catch (error) {
     const formatted = formatProviderHttpError(error);
-    options.logger.error(`Error in ${options.operation}: ${formatted.message}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: {
-        ...formatted,
-        attempt: 1,
-        maxAttempts: 1,
-        model: options.model,
-        operation: options.operation,
-        error: getSdkErrorMessage(error),
+    options.logger.error(
+      `Error in ${options.operation}: ${formatted.message}`,
+      {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: {
+          ...formatted,
+          attempt: 1,
+          maxAttempts: 1,
+          model: options.model,
+          operation: options.operation,
+          error: getSdkErrorMessage(error),
+        },
       },
-    });
+    );
     throw error;
   }
 }
