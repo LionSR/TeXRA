@@ -53,8 +53,9 @@ export class HistoryRenderer {
   }
 
   _createHistoryItemElement(item) {
-    const config = item.config;
-    const session = item.session;
+    // Support both naming conventions for consistency with TaskState
+    const config = item.agentConfig || item.config;
+    const session = item.session || config?.session;
     const date = new Date(item.timestamp).toLocaleString();
 
     // Determine session kind display
@@ -94,11 +95,14 @@ export class HistoryRenderer {
       return document.createElement('div');
     }
 
-    const encodedAgent = encodeHtml(config.agent);
-    const encodedModel = encodeHtml(config.model);
-    const encodedInstruction = config.instruction
-      ? encodeHtml(config.instruction)
-      : 'None';
+    const encodedAgent = encodeHtml(config?.agent || 'Unknown');
+    const encodedModel = encodeHtml(config?.model || 'Unknown');
+    // Show instruction content or indicate it wasn't set
+    const instructionText = config?.instruction;
+    const encodedInstruction =
+      instructionText && instructionText.trim()
+        ? encodeHtml(instructionText)
+        : '<em class="history-none">Not set</em>';
 
     // Build session kind badge with icon
     const kindIconEl = createCodicon(kindIcon);
