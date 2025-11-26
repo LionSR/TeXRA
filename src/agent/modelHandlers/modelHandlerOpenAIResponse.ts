@@ -8,7 +8,7 @@ import OpenAI, { APIConnectionTimeoutError, toFile } from 'openai';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentSetting } from '@agent/core/AgentDataclass';
 // Internal imports
-import { hasEndTag } from '@agent/core/AgentDataclass';
+import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   ResponseUsageFactory,
@@ -144,14 +144,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * @returns true if background mode is eligible for this model and agent type
    */
   private isBackgroundModeEligible(): boolean {
-    const isGpt5 = this.config.name.startsWith('gpt5');
+    const isGpt5 = this.config.name.toLowerCase().startsWith('gpt5');
     if (!isGpt5) {
       return false;
     }
 
-    // Workflow agents are CoT or Direct - must explicitly match, not just exclude ToolUse
+    // Workflow agents are CoT or Direct - must explicitly match known types
     const agentType = this.getAgentType();
-    const isWorkflowAgent = agentType === 'CoT' || agentType === 'direct';
+    const isWorkflowAgent =
+      agentType === AgentType.CoT || agentType === AgentType.Direct;
     return isWorkflowAgent;
   }
 
