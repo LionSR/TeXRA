@@ -294,6 +294,26 @@ export interface IModelHandler<
   ): Promise<M[]>;
 
   /**
+   * Create provider-specific messages for MULTIPLE parallel tool calls.
+   *
+   * This is optional and primarily used by Google handlers to properly structure
+   * parallel function calls with thought signatures (required for Gemini 3 models).
+   *
+   * When implemented:
+   * - All function calls go in ONE model message (first call has thoughtSignature)
+   * - All function responses go in ONE user message
+   *
+   * @param calls - Array of tool calls (preserving original order from model response)
+   * @param results - Array of results corresponding to each call (same order)
+   * @param text - Optional text to include before function calls
+   */
+  createBatchedToolUseFollowUpMessages?(
+    calls: T[],
+    results: Record<string, unknown>[],
+    text?: string,
+  ): Promise<M[]>;
+
+  /**
    * Create provider-specific messages for a simple text follow-up.
    * Appends the user's message to the existing conversation array.
    */
