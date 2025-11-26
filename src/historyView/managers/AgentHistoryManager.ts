@@ -7,7 +7,6 @@ import * as vscode from 'vscode';
 // Local imports - agent metadata
 import { type AgentConfig, parseAgentConfig } from '@agent/core/AgentConfig';
 // Type imports
-import { type AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - workspace state
@@ -17,13 +16,15 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'AgentHistoryManager';
 
 /**
- * Represents a historical agent execution
+ * Represents a historical agent execution.
+ *
+ * Uses `agentConfig` field name for consistency with TaskState interface.
+ * Session metadata is accessed via `agentConfig.session` - single source of truth.
  */
 export interface AgentHistoryItem {
   id: ExecutionId;
   timestamp: string;
-  config: AgentConfig;
-  session: AgentSessionDescriptor;
+  agentConfig: AgentConfig;
 }
 
 /**
@@ -38,8 +39,7 @@ export class AgentHistoryManager {
    */
   public static async addToHistory(config: AgentConfig): Promise<string> {
     const normalizedConfig = parseAgentConfig(config);
-    const session = normalizedConfig.session;
-    if (!session) {
+    if (!normalizedConfig.session) {
       throw new Error(
         'Agent history cannot store configs without session metadata.',
       );
@@ -48,8 +48,7 @@ export class AgentHistoryManager {
     const historyItem: AgentHistoryItem = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
-      config: normalizedConfig,
-      session,
+      agentConfig: normalizedConfig,
     };
 
     // Get current workspace-specific history
@@ -92,6 +91,10 @@ export class AgentHistoryManager {
     await workspaceSM.update(storageKey, history);
   }
 
+  /**
+   * Sanitize and migrate history entries to current format.
+   * Handles legacy data with 'config' field and separate 'session' field.
+   */
   private static sanitizeHistoryEntries(entries: unknown[]): {
     normalized: AgentHistoryItem[];
     mutated: boolean;
@@ -105,18 +108,28 @@ export class AgentHistoryManager {
         continue;
       }
 
-      const candidate = rawEntry as Partial<AgentHistoryItem> & {
-        config?: AgentConfig;
+      // Support both new 'agentConfig' and legacy 'config' field names
+      const candidate = rawEntry as {
+        id?: ExecutionId;
+        timestamp?: string;
+        agentConfig?: AgentConfig;
+        config?: AgentConfig; // Legacy field name
       };
 
-      if (!candidate.id || !candidate.timestamp || !candidate.config) {
+      const rawConfig = candidate.agentConfig || candidate.config;
+      if (!candidate.id || !candidate.timestamp || !rawConfig) {
         mutated = true;
         continue;
       }
 
+      // Mark as mutated if we're migrating from legacy format
+      if (candidate.config && !candidate.agentConfig) {
+        mutated = true;
+      }
+
       let normalizedConfig: AgentConfig;
       try {
-        normalizedConfig = parseAgentConfig(candidate.config);
+        normalizedConfig = parseAgentConfig(rawConfig);
       } catch (error) {
         mutated = true;
         logger.warn(CHANNEL, 'Discarding malformed agent history entry', {
@@ -125,8 +138,7 @@ export class AgentHistoryManager {
         continue;
       }
 
-      const session = normalizedConfig.session;
-      if (!session) {
+      if (!normalizedConfig.session) {
         mutated = true;
         continue;
       }
@@ -134,8 +146,7 @@ export class AgentHistoryManager {
       normalized.push({
         id: candidate.id,
         timestamp: candidate.timestamp,
-        config: normalizedConfig,
-        session,
+        agentConfig: normalizedConfig,
       });
     }
 
