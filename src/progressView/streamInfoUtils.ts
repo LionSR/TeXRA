@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Local imports - progress view
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -81,6 +82,7 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
+    const isRemote = RemoteAgentRegistry.isRemote(agentName);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
@@ -95,6 +97,7 @@ export function buildStreamInfos(
         isToolAgent,
       },
       hasMultipleOutputs: outputs.length > 1,
+      isRemote,
       lastTimestamp,
       inputFile,
       creationTimestamp,
