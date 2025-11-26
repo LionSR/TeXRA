@@ -10,6 +10,9 @@ import * as authCommands from '@/auth/authCommands';
 export function registerAuthCommands(
   context: vscode.ExtensionContext,
 ): vscode.Disposable[] {
+  // Initialize the profile view provider
+  authCommands.initializeProfileViewProvider(context);
+
   const disposables = [
     vscode.commands.registerCommand('texra.auth.signIn', authCommands.signIn),
     vscode.commands.registerCommand('texra.auth.signOut', authCommands.signOut),
