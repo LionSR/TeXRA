@@ -150,6 +150,56 @@ const normalizeFileListEntries = (structured) => {
   });
 };
 
+const buildFileListRender = (files) => {
+  if (!Array.isArray(files)) {
+    return null;
+  }
+
+  const filesBySource = {};
+  files.forEach((file) => {
+    const source = file.source || 'unknown';
+    if (!filesBySource[source]) {
+      filesBySource[source] = [];
+    }
+    filesBySource[source].push(file);
+  });
+
+  let items = '';
+  Object.entries(filesBySource).forEach(([source, groupedFiles]) => {
+    groupedFiles.forEach((file) => {
+      const icon = file.ok ? 'codicon-check' : 'codicon-warning';
+      const escaped = encodeHtml(file.filePath);
+      const fileNameEscaped = encodeHtml(file.fileName);
+
+      let metadata = '';
+      if (file.varName) {
+        metadata += `<span class="file-var">[${file.varName}]</span>`;
+      }
+      if (source && source !== 'unknown') {
+        if (file.internal) {
+          metadata += ` <span class="file-source">(${file.sourceDisplay}, internal)</span>`;
+        } else {
+          metadata += ` <span class="file-source">(${file.sourceDisplay})</span>`;
+        }
+      }
+
+      items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
+    });
+  });
+
+  const totalFiles = files.length;
+  const loadedFiles = files.filter((file) => file.ok).length;
+  const failedFiles = totalFiles - loadedFiles;
+
+  let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
+  if (failedFiles > 0) {
+    summary += `, ${failedFiles} not found`;
+  }
+  summary += ')';
+
+  return { items, summary };
+};
+
 const normalizeMissingOutputsPayload = (structured) => {
   if (!structured) return null;
 
@@ -213,6 +263,21 @@ const normalizeToolUseLog = (structured) => {
         ? parsed.tool.trim()
         : '';
 
+  const edits = Array.isArray(parsed.edits)
+    ? parsed.edits
+    : Array.isArray(outputDetails.edits)
+      ? outputDetails.edits
+      : [];
+
+  const filesCandidate = Array.isArray(parsed.files)
+    ? parsed.files
+    : Array.isArray(outputDetails.files)
+      ? outputDetails.files
+      : edits
+          .map((entry) => (entry?.path ? { path: entry.path } : null))
+          .filter(Boolean);
+  const files = normalizeFileListEntries(filesCandidate) || [];
+
   return {
     parsed,
     toolName,
@@ -220,6 +285,7 @@ const normalizeToolUseLog = (structured) => {
     errorText,
     outputText,
     input: parsed.input,
+    files,
     isError: Boolean(
       parsed.isError || outputDetails.isError || errorText.length > 0,
     ),
@@ -651,8 +717,15 @@ export class LogEntryFormatter {
       return null;
     }
 
-    const { parsed, toolName, summaryText, errorText, outputText, input } =
-      normalizedToolLog;
+    const {
+      parsed,
+      toolName,
+      summaryText,
+      errorText,
+      outputText,
+      input,
+      files,
+    } = normalizedToolLog;
 
     const titlePrefix = normalizedToolLog.isError ? 'Tool Error' : 'Tool Use';
     const titleBase = toolName ? `${titlePrefix}: ${toolName}` : titlePrefix;
@@ -680,6 +753,21 @@ export class LogEntryFormatter {
           </div>
         </div>
       `);
+    }
+
+    if (files && files.length > 0) {
+      const renderData = buildFileListRender(files);
+      if (renderData?.items) {
+        sections.push(`
+          <div class="tool-use-section">
+            <div class="tool-use-subsection">
+              <span class="tool-use-sublabel">Edited files:</span>
+              <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
+              <ul class="detail-list">${renderData.items}</ul>
+            </div>
+          </div>
+        `);
+      }
     }
 
     if (errorText) {
@@ -862,47 +950,9 @@ export class LogEntryFormatter {
       return element;
     }
 
-    const filesBySource = {};
-    parsed.forEach((file) => {
-      const source = file.source || 'unknown';
-      if (!filesBySource[source]) {
-        filesBySource[source] = [];
-      }
-      filesBySource[source].push(file);
-    });
-
-    let items = '';
-    Object.entries(filesBySource).forEach(([source, files]) => {
-      files.forEach((f) => {
-        const icon = f.ok ? 'codicon-check' : 'codicon-warning';
-        const escaped = encodeHtml(f.filePath);
-        const fileNameEscaped = encodeHtml(f.fileName);
-
-        let metadata = '';
-        if (f.varName) {
-          metadata += `<span class="file-var">[${f.varName}]</span>`;
-        }
-        if (source && source !== 'unknown') {
-          if (f.internal) {
-            metadata += ` <span class="file-source">(${f.sourceDisplay}, internal)</span>`;
-          } else {
-            metadata += ` <span class="file-source">(${f.sourceDisplay})</span>`;
-          }
-        }
-
-        items += `<li class="detail-item" title="${escaped}"><i class="codicon ${icon}"></i> <span class="file-link clickable-link" data-file="${escaped}">${fileNameEscaped}</span> ${metadata}</li>`;
-      });
-    });
-
-    const totalFiles = parsed.length;
-    const loadedFiles = parsed.filter((f) => f.ok).length;
-    const failedFiles = totalFiles - loadedFiles;
-
-    let summary = `Files (${loadedFiles}/${totalFiles} loaded`;
-    if (failedFiles > 0) {
-      summary += `, ${failedFiles} not found`;
-    }
-    summary += ')';
+    const renderData = buildFileListRender(parsed);
+    const items = renderData?.items ?? '';
+    const summary = renderData?.summary ?? 'Files';
 
     if (summaryElem) summaryElem.textContent = summary;
     if (contentElem) {
