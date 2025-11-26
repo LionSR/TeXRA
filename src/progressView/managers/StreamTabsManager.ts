@@ -32,10 +32,19 @@ export class StreamTabsManager extends PersistentMapManager<
   async addMessage(
     stream: StreamTabId,
     message: LogMessageData,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const messages = this.ensureMessages(stream);
 
-    messages.push(message);
+    const existingIndex = messages.findIndex(
+      (entry) => entry.id === message.id,
+    );
+    if (existingIndex >= 0) {
+      messages[existingIndex] = message;
+      await this.save();
+      return false;
+    } else {
+      messages.push(message);
+    }
 
     // Limit message history to prevent memory issues
     if (messages.length > StreamTabsManager.MAX_MESSAGE_HISTORY) {
@@ -46,6 +55,7 @@ export class StreamTabsManager extends PersistentMapManager<
     }
 
     await this.save();
+    return true;
   }
 
   /**

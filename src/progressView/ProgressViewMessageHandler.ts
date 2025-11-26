@@ -15,6 +15,7 @@ import {
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
+import { triggerManualRetry } from '@agent/runtime/ManualRetryController';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -36,7 +37,6 @@ import {
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
 import { RecordingManager } from '@webview/managers/RecordingManager';
-
 // @ts-ignore - Import JavaScript module
 
 // Type imports
@@ -124,6 +124,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.SORT_STREAMS]: this.handleSortStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]:
         this.handleFilterStreams.bind(this),
+      [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]:
+        this.handleRetryStreamRequest.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
@@ -237,6 +239,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       await safeExecuteCommand('texra.execute', [taskState.agentConfig]);
     });
+  }
+
+  private async handleRetryStreamRequest(message: any): Promise<void> {
+    const success = await triggerManualRetry(message.stream);
+    if (!success) {
+      await vscode.window.showInformationMessage(
+        'No retryable request is available for this stream yet.',
+      );
+    }
   }
 
   private async handleDiffStream(message: any): Promise<void> {
@@ -492,7 +503,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleComparePrevious(message: CompareMessage): Promise<void> {
-    const previousFile = message.prev || message.base;
+    const previousFile = message.prev ?? message.base;
 
     if (previousFile) {
       await vscode.commands.executeCommand(

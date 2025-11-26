@@ -56,8 +56,8 @@ function mergeMessageContent(
     }
 
     if (
-      prevContent === undefined ||
       prevContent === null ||
+      prevContent === undefined ||
       (typeof prevContent === 'string' && prevContent.length === 0)
     ) {
       previous.content = clonedCurrent;
@@ -76,7 +76,7 @@ function mergeMessageContent(
     return;
   }
 
-  if (prevContent === undefined || prevContent === null) {
+  if (prevContent === null || prevContent === undefined) {
     previous.content = currContent;
   }
 }
