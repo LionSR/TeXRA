@@ -43,6 +43,7 @@ export const ELEMENT_IDS = {
   STOP_STREAM_BTN: 'stopStreamBtn',
   RUN_NEW_BTN: 'runNewBtn',
   RUN_AGAIN_BTN: 'runAgainBtn',
+  RETRY_REQUEST_BTN: 'retryRequestBtn',
   RESTORE_STATE_BTN: 'restoreStateBtn',
   DIFF_STREAM_BTN: 'diffStreamBtn',
   CLEAN_STREAM_BTN: 'cleanStreamBtn',
@@ -105,7 +106,34 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-const OUTPUT_ACTION_BUTTONS = [
+/** @type {ToolbarButtonDefinition[]} */
+const WORKFLOW_TOOLBAR = [
+  STOP_STREAM_BUTTON,
+  {
+    id: ELEMENT_IDS.RUN_NEW_BTN,
+    icon: 'debug-start',
+    command: COMMANDS.RUN_NEW,
+    title: 'Start a new run for this task',
+    className: 'run-button run-new-button',
+    disabled: true,
+  },
+  {
+    id: ELEMENT_IDS.RUN_AGAIN_BTN,
+    icon: 'debug-rerun',
+    command: COMMANDS.RUN_AGAIN,
+    title: 'Resume the last run from saved outputs',
+    className: 'run-button run-again-button toolbar-button--hidden',
+    disabled: true,
+  },
+  {
+    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
+    icon: 'refresh',
+    command: COMMANDS.RETRY_STREAM_REQUEST,
+    title: 'Retry the last failed request for this stream',
+    className: 'retry-button',
+    disabled: true,
+  },
+  RESTORE_STATE_BUTTON,
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
     icon: 'diff-multiple',
@@ -136,25 +164,17 @@ const SHARED_TOOLBAR_PREFIX = [STOP_STREAM_BUTTON, RESTORE_STATE_BUTTON];
 const BASE_TOOLBAR = [...SHARED_TOOLBAR_PREFIX];
 
 /** @type {ToolbarButtonDefinition[]} */
-const WORKFLOW_TOOLBAR = [
-  ...BASE_TOOLBAR,
+const TOOL_USE_TOOLBAR = [
+  STOP_STREAM_BUTTON,
   {
-    id: ELEMENT_IDS.RUN_NEW_BTN,
-    icon: 'debug-start',
-    command: COMMANDS.RUN_NEW,
-    title: 'Start a new run for this task',
-    className: 'run-button run-new-button',
+    id: ELEMENT_IDS.RETRY_REQUEST_BTN,
+    icon: 'refresh',
+    command: COMMANDS.RETRY_STREAM_REQUEST,
+    title: 'Retry the last failed request for this stream',
+    className: 'retry-button',
     disabled: true,
   },
-  {
-    id: ELEMENT_IDS.RUN_AGAIN_BTN,
-    icon: 'debug-rerun',
-    command: COMMANDS.RUN_AGAIN,
-    title: 'Resume the last run from saved outputs',
-    className: 'run-button run-again-button toolbar-button--hidden',
-    disabled: true,
-  },
-  ...OUTPUT_ACTION_BUTTONS,
+  RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
 ];
 

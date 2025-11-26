@@ -71,6 +71,10 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     followUp: string,
     messages: ProviderMessage[],
   ): Promise<ProviderMessage[]>;
+  persistCheckpoint(
+    messages: ProviderMessage[],
+    store: AgentSharedStore,
+  ): Promise<void>;
   logFinalizeWarning?(message: string, error: unknown): void;
 }
 
@@ -142,6 +146,8 @@ class ToolUseCycleNode<C> extends BaseNode<ToolUseRunShared<C>> {
             throw new Error('Tool-use store is not initialized.');
           }
           await hooks.runCycle(cycleOptions, state.conversation, state.store);
+          // Only persist successful cycles to avoid checkpointing failed state.
+          await hooks.persistCheckpoint(state.conversation, state.store);
         } else {
           state.shouldSkipCycle = false;
         }

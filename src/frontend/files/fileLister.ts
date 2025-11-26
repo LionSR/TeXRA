@@ -11,7 +11,7 @@ import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
-import { getFilesInDirectory, getFilesRecursively } from './listing';
+import { getFilesRecursively } from './listing';
 
 const CHANNEL = 'FileLister';
 logger.initialize(CHANNEL);
@@ -122,7 +122,8 @@ export class FileLister {
           this.ignoredInputFiles,
         );
       case 'auxiliary':
-        return getFilesInDirectory(
+        return getFilesRecursively(
+          workspace,
           workspace,
           getIncludedExtensions('auxiliary'),
           this.ignoredFileExtensions,
