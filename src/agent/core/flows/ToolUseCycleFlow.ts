@@ -25,7 +25,6 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -36,22 +35,17 @@ import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
-import { sleep } from '@utils/helpers';
-import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
 import {
-  RetryState,
-  createRetryState,
-  resetRetryState,
-  recordRetryError,
+  type RetryState,
+  type RetryCallbacks,
   clearRetryError,
-  shouldAutoRetry,
-  shouldOfferManualRetry,
-  computeBackoffDelay,
+  handleInvocationError,
+  executeRetryWait,
+  handleRetryWaitResult,
 } from './RetryState';
-import type { RetryCallbacks } from './RetryWaitNode';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -332,54 +326,19 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return undefined; // Continue to process node
     }
 
-    // Handle error - determine retry strategy
-    const formatted = formatProviderHttpError(execRes.error);
-    recordRetryError(retryState, formatted.message, formatted.statusCode);
-
-    // Auto-retry available?
-    if (shouldAutoRetry(retryState)) {
-      const delay = computeBackoffDelay(retryState);
-      options.logger.warn(
-        `Retrying tool-use call after ${delay}ms (attempt ${retryState.attemptCount}/${retryState.maxAutoAttempts}): ${formatted.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: {
-            attempt: retryState.attemptCount,
-            maxAttempts: retryState.maxAutoAttempts,
-            statusCode: formatted.statusCode,
-          },
-        },
-      );
-      await sleep(delay);
-      return FlowTransition.RETRY;
-    }
-
-    // Manual retry available?
-    if (shouldOfferManualRetry(retryState)) {
-      retryState.awaitingManualRetry = true;
-      options.logger.error(`Tool-use call failed: ${formatted.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: {
-          statusCode: formatted.statusCode,
-          retryable: true,
-        },
-      });
-      return FlowTransition.AWAIT_RETRY;
-    }
-
-    // Non-retryable error
-    options.logger.error(
-      `Tool-use call failed (not retryable): ${formatted.message}`,
-      {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: {
-          statusCode: formatted.statusCode,
-          retryable: false,
-        },
-      },
+    // Handle error - determine retry strategy using shared helper
+    const result = await handleInvocationError(
+      retryState,
+      execRes.error,
+      options.logger,
+      'Tool-use call',
     );
-    state.shouldStop = true;
-    return FlowTransition.COMPLETE;
+
+    if (result.shouldStop) {
+      state.shouldStop = true;
+    }
+
+    return result.transition;
   }
 }
 
@@ -665,7 +624,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 }
 /**
  * Specialized retry wait node for tool-use cycle.
- * Adapts the generic pattern to ToolUseCycleContext.
+ * Uses shared retry helpers for consistent behavior.
  */
 class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
   async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
@@ -674,35 +633,12 @@ class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
 
   async exec(context: ToolUseCycleContext<C>): Promise<'retry' | 'cancel'> {
     const { retryState, options, retryCallbacks } = context;
-
-    // Log that we're waiting for manual retry
-    options.logger.info('Waiting for manual retry', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: {
-        error: retryState.lastError,
-        awaitingManualRetry: true,
-      },
-    });
-
-    // Emit waiting status to UI
-    bus.emit('updateStreamStatus', {
-      stream: options.context.streamId,
-      status: 'waiting',
-    });
-
-    // Wait for external signal via callbacks
-    return new Promise<'retry' | 'cancel'>((resolve) => {
-      retryCallbacks.triggerRetry = () => {
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('retry');
-      };
-      retryCallbacks.cancelRetry = () => {
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-        resolve('cancel');
-      };
-    });
+    return executeRetryWait(
+      retryState,
+      retryCallbacks,
+      options.logger,
+      options.context.streamId,
+    );
   }
 
   async post(
@@ -710,37 +646,20 @@ class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     _prepRes: ToolUseCycleContext<C>,
     execRes: 'retry' | 'cancel',
   ): Promise<string | undefined> {
-    const { retryState, options } = shared;
+    const { retryState, options, state } = shared;
 
-    if (execRes === 'retry') {
-      // Reset attempt count for fresh retry cycle
-      resetRetryState(retryState);
+    const result = handleRetryWaitResult(
+      execRes,
+      retryState,
+      options.logger,
+      options.context.streamId,
+    );
 
-      options.logger.info('Manual retry triggered', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
-
-      // Update status back to running
-      bus.emit('updateStreamStatus', {
-        stream: options.context.streamId,
-        status: 'resuming',
-      });
-
-      return FlowTransition.RETRY;
+    if (result.shouldStop) {
+      state.shouldStop = true;
     }
 
-    // User cancelled
-    options.logger.info('Retry cancelled by user', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-
-    bus.emit('updateStreamStatus', {
-      stream: options.context.streamId,
-      status: 'stopped',
-    });
-
-    shared.state.shouldStop = true;
-    return FlowTransition.COMPLETE;
+    return result.transition;
   }
 }
 
