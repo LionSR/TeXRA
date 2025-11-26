@@ -16,6 +16,10 @@ import { sleep } from '@utils/helpers';
 import { bus } from '@eventBus/ProgressEventBus';
 import { FlowTransition } from './FlowTransitions';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  registerManualRetry,
+  clearManualRetry,
+} from '@agent/runtime/ManualRetryController';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
@@ -133,9 +137,11 @@ export function recordRetryError(
 }
 
 /**
- * Clears error state after successful operation.
+ * Clears error state and resets attempt counter after successful operation.
+ * This ensures the next invocation gets a fresh retry budget.
  */
 export function clearRetryError(state: RetryState): void {
+  state.attemptCount = 0;
   state.lastError = undefined;
   state.awaitingManualRetry = false;
 }
@@ -217,6 +223,7 @@ export async function handleInvocationError(
 
 /**
  * Executes the retry wait logic, emitting status and waiting for user action.
+ * Registers with ManualRetryController so the UI can trigger retry.
  * Returns 'retry' or 'cancel' based on user action.
  */
 export function executeRetryWait(
@@ -242,16 +249,28 @@ export function executeRetryWait(
 
   // Wait for external signal via callbacks
   return new Promise<'retry' | 'cancel'>((resolve) => {
+    // Set up callbacks for direct invocation
     retryCallbacks.triggerRetry = () => {
+      clearManualRetry(streamId);
       retryCallbacks.triggerRetry = undefined;
       retryCallbacks.cancelRetry = undefined;
       resolve('retry');
     };
     retryCallbacks.cancelRetry = () => {
+      clearManualRetry(streamId);
       retryCallbacks.triggerRetry = undefined;
       retryCallbacks.cancelRetry = undefined;
       resolve('cancel');
     };
+
+    // Register with ManualRetryController for UI-triggered retries
+    registerManualRetry(streamId, {
+      run: async () => {
+        retryCallbacks.triggerRetry?.();
+      },
+      logger,
+      operation: 'model invocation',
+    });
   });
 }
 
