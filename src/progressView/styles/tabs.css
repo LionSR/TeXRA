@@ -133,7 +133,6 @@
   border-radius: var(--border-radius-small);
 }
 
-
 .tab-delete:hover::part(control),
 .tab-delete:focus-within::part(control) {
   background-color: var(--vscode-toolbar-hoverBackground);
@@ -143,4 +142,3 @@
 .tab-delete:focus-within {
   color: var(--vscode-errorForeground);
 }
-
