@@ -1,6 +1,34 @@
 import * as vscode from 'vscode';
+import { ProfileViewProvider } from '@profileView/ProfileViewProvider';
 import { SupabaseClient } from './SupabaseClient';
 import { SupabaseAuthProvider } from './SupabaseAuthProvider';
+
+/**
+ * Command identifiers for auth-related commands.
+ */
+export const AUTH_COMMANDS = {
+  SIGN_IN: 'texra.auth.signIn',
+  SIGN_OUT: 'texra.auth.signOut',
+  VIEW_PROFILE: 'texra.auth.viewProfile',
+  ACCOUNT_MENU: 'texra.auth.accountMenu',
+  BROWSE_REMOTE_AGENTS: 'texra.remoteAgents.browse',
+} as const;
+
+// Singleton instance of ProfileViewProvider
+let profileViewProvider: ProfileViewProvider | null = null;
+
+/**
+ * Initialize the profile view provider.
+ * Must be called during extension activation.
+ */
+export function initializeProfileViewProvider(
+  context: vscode.ExtensionContext,
+): ProfileViewProvider {
+  if (!profileViewProvider) {
+    profileViewProvider = new ProfileViewProvider(context);
+  }
+  return profileViewProvider;
+}
 
 /**
  * Command to sign in to TeXRA account.
@@ -93,106 +121,18 @@ export async function signOut(): Promise<void> {
 
 /**
  * Command to view profile and account status.
+ * Uses the ProfileViewProvider for consistent webview architecture.
  */
 export async function viewProfile(): Promise<void> {
-  try {
-    const isAuth = await SupabaseClient.isAuthenticated();
-
-    if (!isAuth) {
-      const signIn = 'Sign In';
-      const choice = await vscode.window.showInformationMessage(
-        'You are not signed in to TeXRA',
-        signIn,
-      );
-
-      if (choice === signIn) {
-        await vscode.commands.executeCommand('texra.auth.signIn');
-      }
-      return;
-    }
-
-    const user = await SupabaseClient.getUser();
-    const tier = await SupabaseClient.getUserTier();
-
-    if (!user) {
-      void vscode.window.showErrorMessage('Failed to load user profile');
-      return;
-    }
-
-    // Show profile info in a message
-    const info = [
-      `**TeXRA Account**`,
-      ``,
-      `Email: ${user.email || 'N/A'}`,
-      `User ID: ${user.id}`,
-      `Tier: ${tier}`,
-      ``,
-      tier === 'free'
-        ? `Join the researcher access program to access remote agents`
-        : `You have access to remote agents via the researcher access program`,
-    ].join('\n');
-
-    // Create a simple webview or use QuickPick to show info
-    const panel = vscode.window.createWebviewPanel(
-      'texraProfile',
-      'TeXRA Profile',
-      vscode.ViewColumn.One,
-      {},
+  if (!profileViewProvider) {
+    void vscode.window.showErrorMessage(
+      'Profile view not initialized. Please reload the extension.',
     );
+    return;
+  }
 
-    panel.webview.html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body {
-              font-family: var(--vscode-font-family);
-              padding: 20px;
-              color: var(--vscode-foreground);
-            }
-            h1 {
-              color: var(--vscode-textLink-foreground);
-            }
-            .info-row {
-              margin: 10px 0;
-            }
-            .label {
-              font-weight: bold;
-              color: var(--vscode-textPreformat-foreground);
-            }
-            .tier-badge {
-              display: inline-block;
-              padding: 4px 8px;
-              border-radius: 4px;
-              background: ${tier === 'researcher' ? 'var(--vscode-badge-background)' : 'var(--vscode-inputValidation-warningBackground)'};
-              color: ${tier === 'researcher' ? 'var(--vscode-badge-foreground)' : 'var(--vscode-inputValidation-warningForeground)'};
-              text-transform: uppercase;
-              font-size: 0.9em;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>TeXRA Account</h1>
-          <div class="info-row">
-            <span class="label">Email:</span> ${user.email || 'N/A'}
-          </div>
-          <div class="info-row">
-            <span class="label">User ID:</span> ${user.id}
-          </div>
-          <div class="info-row">
-            <span class="label">Tier:</span> <span class="tier-badge">${tier}</span>
-          </div>
-          <div class="info-row" style="margin-top: 20px;">
-            ${
-              tier === 'free'
-                ? '<p>Join the researcher access program to access remote agents and advanced features.</p>'
-                : '<p>You have access to remote agents via the researcher access program.</p>'
-            }
-          </div>
-        </body>
-      </html>
-    `;
+  try {
+    await profileViewProvider.showProfileView();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     void vscode.window.showErrorMessage(`Failed to load profile: ${message}`);
@@ -246,7 +186,7 @@ export async function showAccountMenu(): Promise<void> {
       });
 
       if (choice?.action === 'signIn') {
-        await vscode.commands.executeCommand('texra.auth.signIn');
+        await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
       }
     } else {
       // Signed in - show profile, browse agents, and sign out options
@@ -275,13 +215,15 @@ export async function showAccountMenu(): Promise<void> {
       if (choice) {
         switch (choice.action) {
           case 'viewProfile':
-            await vscode.commands.executeCommand('texra.auth.viewProfile');
+            await vscode.commands.executeCommand(AUTH_COMMANDS.VIEW_PROFILE);
             break;
           case 'browseAgents':
-            await vscode.commands.executeCommand('texra.remoteAgents.browse');
+            await vscode.commands.executeCommand(
+              AUTH_COMMANDS.BROWSE_REMOTE_AGENTS,
+            );
             break;
           case 'signOut':
-            await vscode.commands.executeCommand('texra.auth.signOut');
+            await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
             break;
         }
       }

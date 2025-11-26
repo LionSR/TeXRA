@@ -47,10 +47,10 @@ import {
   registerWolframScriptCommands,
   registerWolframToolCommands,
 } from '@commands/wolfram';
+import { registerAuthCommands } from '@commands/auth';
 import { registerApiKeyCommands } from '@commands/api/apiKeyCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
 import { registerProgressViewCommands } from '@commands/progress/progressViewCommands';
-import { registerAuthCommands } from '@commands/auth';
 
 // Local file imports
 import { MainViewProvider } from './MainViewProvider';
