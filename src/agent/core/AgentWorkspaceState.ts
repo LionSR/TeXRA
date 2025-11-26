@@ -200,16 +200,22 @@ export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
     thinkingAdded: z.boolean(),
   }),
   document: z.strictObject({ texcountStats: z.string().nullable() }),
-  interactions: z.strictObject({
-    readFiles: z.array(z.string()),
-    edits: z.array(
-      z.strictObject({
-        path: z.string(),
-        added: z.number().optional(),
-        removed: z.number().optional(),
-      }),
-    ),
-  }),
+  interactions: z
+    .strictObject({
+      readFiles: z.array(z.string()),
+      edits: z.array(
+        z.strictObject({
+          path: z.string(),
+          added: z.number().optional(),
+          removed: z.number().optional(),
+        }),
+      ),
+    })
+    .optional()
+    .default({
+      readFiles: [],
+      edits: [],
+    }),
 });
 
 export type AgentWorkspaceSnapshot = z.infer<
