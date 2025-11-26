@@ -241,10 +241,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse } = this._readAgentOptionMetadata(opt);
+    const { label, isMultiple, isToolUse, description } =
+      this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
+
+    // Add description as the primary hint if available
+    if (description) {
+      hints.push(description);
+    }
 
     if (isMultiple) {
       displayLabel += ' ∶∶';
@@ -290,6 +296,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       label,
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
+      description: opt.dataset.description ?? '',
     };
   }
 

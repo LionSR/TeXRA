@@ -1,4 +1,5 @@
 name: merge
+description: Merges partial edits back into the full original document.
 
 settings:
   agentType: direct
