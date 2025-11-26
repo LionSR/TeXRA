@@ -68,7 +68,8 @@ export function createRetryState(config?: RetryStateConfig): RetryState {
 
   return {
     attemptCount: 0,
-    maxAutoAttempts: Math.max(1, configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS),
+    // Allow 0 for manual-only retry (no automatic retries after first failure)
+    maxAutoAttempts: Math.max(0, configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS),
     backoffMs: configuredBackoffMs ?? DEFAULT_MODEL_RETRY_BACKOFF_MS,
     lastError: undefined,
     awaitingManualRetry: false,
