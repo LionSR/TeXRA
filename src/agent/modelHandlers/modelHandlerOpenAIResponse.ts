@@ -542,7 +542,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         'Background mode toggle is enabled but this handler does not support background execution. Falling back to synchronous requests.',
       );
     }
-    if (backgroundToggleEnabled && this.backgroundModeSupported && !isEligible) {
+    if (
+      backgroundToggleEnabled &&
+      this.backgroundModeSupported &&
+      !isEligible
+    ) {
       this.logger.debug(
         'Background mode toggle is enabled but not eligible for this model/agent type (requires GPT 5 series with workflow agents). Falling back to synchronous requests.',
       );

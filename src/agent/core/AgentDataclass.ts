@@ -4,6 +4,9 @@ import { z } from 'zod';
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
 
+// Local imports - session schema (imported for local use, re-exported below)
+import type { AgentSessionDescriptor } from './AgentSessionSchema';
+
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
