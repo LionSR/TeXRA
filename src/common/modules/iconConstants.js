@@ -17,7 +17,7 @@ export const AGENT_DECORATORS = {
     multipleOutputs: {
       icon: 'files',
       label: 'Multiple outputs',
-      hint: 'Supports multi-file inputs.',
+      hint: 'Generates multiple output files',
     },
   },
 

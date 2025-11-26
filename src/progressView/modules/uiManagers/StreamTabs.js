@@ -122,7 +122,7 @@ export class StreamTabs {
     // Agent type icon (CoT, direct, toolUse)
     const agentIcon = tabEl.querySelector('.agent-type');
     if (agentIcon) {
-      const key = info.agentType || info.agent || 'unknown';
+      const key = info.agentType ?? info.agent ?? 'unknown';
       const decorator = getAgentTypeDecorator(key);
       applyCodiconClass(agentIcon, decorator.icon);
       agentIcon.title = `Agent type: ${decorator.label}`;
