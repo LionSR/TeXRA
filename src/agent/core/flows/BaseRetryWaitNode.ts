@@ -158,7 +158,7 @@ class RetryWaitNode<
 
   async post(
     shared: S,
-    _prepRes: unknown,
+    _prepRes: S,
     execRes: 'retry' | 'cancel',
   ): Promise<string | undefined> {
     const { retryState, state } = shared;
