@@ -9,7 +9,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@utils/config';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import { executeWithRequestRetry } from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 import { toOpenAITools } from './toolConversion';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
@@ -150,7 +150,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
         kwargs.stream = true;
         kwargs.stream_options = { include_usage: true };
 
-        const stream = await executeWithRequestRetry(
+        const stream = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -226,7 +226,7 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       }
 
       // Non-streaming request
-      return executeWithRequestRetry(
+      return executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
