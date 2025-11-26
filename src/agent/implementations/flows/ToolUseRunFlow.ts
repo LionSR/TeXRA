@@ -4,7 +4,10 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import { AgentRunState } from '@agent/core/AgentState';
 // Type imports
-import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
+import type {
+  ToolUseCycleOptions,
+  ToolUseCycleResult,
+} from '@agent/core/ToolUseCycle';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
@@ -60,7 +63,7 @@ export interface ToolUseRunHooks<C = unknown> extends AgentRunHooks {
     options: ToolUseCycleOptions<C>,
     messages: ProviderMessage[],
     store: AgentSharedStore,
-  ): Promise<void>;
+  ): Promise<ToolUseCycleResult>;
   checkInterruption(): boolean;
   hasQueuedFollowUp(): boolean;
   enterWaitingState(): Promise<void>;
