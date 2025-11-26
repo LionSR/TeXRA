@@ -1,12 +1,6 @@
-// Status constants
-export const STATUS = {
-  RUNNING: 'running',
-  ERROR: 'error',
-  STOPPED: 'stopped',
-  READY: 'ready',
-  WAITING: 'waiting',
-  RESUMING: 'resuming',
-};
+// Status constants - re-exported from common for backwards compatibility
+// Note: New code should import directly from '@common/constants/streamStatus'
+export { STATUS } from '@common/constants/streamStatus.js';
 
 /**
  * @typedef {Object} ToolbarButtonDefinition

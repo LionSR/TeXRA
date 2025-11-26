@@ -15,7 +15,7 @@ import * as path from 'path';
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
-import { normalizeRunId } from '@progressView/constants/runIds';
+import { normalizeRunId } from '@common/constants/runIds';
 import type { BaseTool } from '@tools/core/base';
 import { pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
