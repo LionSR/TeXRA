@@ -62,8 +62,12 @@ export class FileSelect {
 
     if (restoredValue) {
       safeSetElementValue(id, restoredValue);
-      // Sync state so mainViewState.restore() doesn't overwrite with stale value
-      mainViewState.update({ [id]: restoredValue });
+    }
+
+    // Sync state: update to restored value, or clear stale value if file no longer exists
+    const hasStaleState = storedValue && !sortedFiles.includes(storedValue);
+    if (restoredValue || hasStaleState) {
+      mainViewState.update({ [id]: restoredValue ?? '' });
     }
   }
 
