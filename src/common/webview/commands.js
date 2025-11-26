@@ -227,10 +227,21 @@ export const HISTORY_VIEW_COMMANDS = {
   DELETE_AGENT: 'deleteAgent',
 };
 
+// Profile view specific commands
+export const PROFILE_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  GET_PROFILE_DATA: 'getProfileData',
+  UPDATE_PROFILE: 'updateProfile',
+  SELECT_AGENT: 'selectAgent',
+  SIGN_IN: 'signIn',
+  SIGN_OUT: 'signOut',
+};
+
 // Export all commands in a single object for convenience
 export const WEBVIEW_COMMANDS = {
   COMMON: COMMON_COMMANDS,
   MAIN_VIEW: MAIN_VIEW_COMMANDS,
   PROGRESS_VIEW: PROGRESS_VIEW_COMMANDS,
   HISTORY_VIEW: HISTORY_VIEW_COMMANDS,
+  PROFILE_VIEW: PROFILE_VIEW_COMMANDS,
 };
