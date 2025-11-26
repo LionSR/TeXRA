@@ -11,10 +11,6 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
-import {
-  registerManualRetry,
-  clearManualRetry,
-} from '@agent/runtime/ManualRetryController';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
@@ -42,7 +38,6 @@ import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalCon
 import { WorkspaceFS } from '@utils/files';
 import { sleep } from '@utils/helpers';
 import xmlUtils from '@utils/text/xmlUtils';
-import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { FlowTransition } from './FlowTransitions';
@@ -50,12 +45,9 @@ import {
   type RetryState,
   type RetryCallbacks,
   clearRetryError,
-  resetRetryState,
-  recordRetryError,
-  shouldAutoRetry,
-  shouldOfferManualRetry,
-  computeBackoffDelay,
+  determineRetryStrategy,
 } from './RetryState';
+import { createRetryWaitNode } from './BaseRetryWaitNode';
 
 interface ToolValidationDiagnostics {
   type: 'validation_error';
@@ -342,48 +334,51 @@ class ToolUseCallNode<C> extends BaseNode<ToolUseCycleContext<C>> {
       return undefined; // Continue to process node
     }
 
-    // Handle error - determine retry strategy
+    // Handle error - use single source of truth for retry decision
     const formatted = formatProviderHttpError(execRes.error);
-    recordRetryError(retryState, formatted.message, formatted.statusCode);
-
-    // Auto-retry available?
-    if (shouldAutoRetry(retryState)) {
-      const delay = computeBackoffDelay(retryState);
-      options.logger.warn(
-        `Retrying tool-use call after ${delay}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${formatted.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: {
-            attempt: retryState.attemptCount,
-            maxAttempts: retryState.maxAutoAttempts,
-            statusCode: formatted.statusCode,
-          },
-        },
-      );
-      await sleep(delay);
-      return FlowTransition.RETRY;
-    }
-
-    // Manual retry available?
-    if (shouldOfferManualRetry(retryState)) {
-      retryState.awaitingManualRetry = true;
-      options.logger.error(`Tool-use call failed: ${formatted.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: { statusCode: formatted.statusCode, retryable: true },
-      });
-      return FlowTransition.AWAIT_RETRY;
-    }
-
-    // Non-retryable error
-    options.logger.error(
-      `Tool-use call failed (not retryable): ${formatted.message}`,
-      {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: { statusCode: formatted.statusCode, retryable: false },
-      },
+    const decision = determineRetryStrategy(
+      retryState,
+      formatted.message,
+      formatted.statusCode,
     );
-    state.shouldStop = true;
-    return FlowTransition.COMPLETE;
+
+    switch (decision.action) {
+      case 'auto_retry':
+        options.logger.warn(
+          `Retrying tool-use call after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: {
+              attempt: retryState.attemptCount,
+              maxAttempts: retryState.maxAutoAttempts,
+              statusCode: decision.error.statusCode,
+            },
+          },
+        );
+        await sleep(decision.delayMs!);
+        return FlowTransition.RETRY;
+
+      case 'manual_retry':
+        options.logger.error(
+          `Tool-use call failed: ${decision.error.message}`,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: { statusCode: decision.error.statusCode, retryable: true },
+          },
+        );
+        return FlowTransition.AWAIT_RETRY;
+
+      case 'fail':
+        options.logger.error(
+          `Tool-use call failed (not retryable): ${decision.error.message}`,
+          {
+            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+            data: { statusCode: decision.error.statusCode, retryable: false },
+          },
+        );
+        state.shouldStop = true;
+        return FlowTransition.COMPLETE;
+    }
   }
 }
 
@@ -696,105 +691,15 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
     return FlowTransition.CONTINUE;
   }
 }
-/**
- * Specialized retry wait node for tool-use cycle.
- * Handles manual retry by waiting for UI callback.
- */
-class ToolUseRetryWaitNode<C> extends BaseNode<ToolUseCycleContext<C>> {
-  async prep(shared: ToolUseCycleContext<C>): Promise<ToolUseCycleContext<C>> {
-    return shared;
-  }
-
-  async exec(context: ToolUseCycleContext<C>): Promise<'retry' | 'cancel'> {
-    const { retryState, options, retryCallbacks } = context;
-    const streamId = options.context.streamId;
-
-    // Log waiting status
-    options.logger.info('Waiting for manual retry', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: { error: retryState.lastError, awaitingManualRetry: true },
-    });
-
-    // Emit waiting status to UI
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
-
-    // Wait for external signal via callbacks with timeout
-    return new Promise<'retry' | 'cancel'>((resolve) => {
-      let resolved = false;
-
-      // Timeout after 5 minutes
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          clearManualRetry(streamId);
-          retryCallbacks.triggerRetry = undefined;
-          retryCallbacks.cancelRetry = undefined;
-          options.logger.warn('Manual retry wait timed out after 5 minutes');
-          resolve('cancel');
-        }
-      }, 5 * 60 * 1000);
-
-      retryCallbacks.triggerRetry = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          clearManualRetry(streamId);
-          retryCallbacks.triggerRetry = undefined;
-          retryCallbacks.cancelRetry = undefined;
-          resolve('retry');
-        }
-      };
-      retryCallbacks.cancelRetry = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          clearManualRetry(streamId);
-          retryCallbacks.triggerRetry = undefined;
-          retryCallbacks.cancelRetry = undefined;
-          resolve('cancel');
-        }
-      };
-
-      // Register with ManualRetryController for UI-triggered retries
-      registerManualRetry(streamId, {
-        run: async () => retryCallbacks.triggerRetry?.(),
-        logger: options.logger,
-        operation: 'Tool-use call',
-      });
-    });
-  }
-
-  async post(
-    shared: ToolUseCycleContext<C>,
-    _prepRes: ToolUseCycleContext<C>,
-    execRes: 'retry' | 'cancel',
-  ): Promise<string | undefined> {
-    const { retryState, options, state } = shared;
-    const streamId = options.context.streamId;
-
-    if (execRes === 'retry') {
-      resetRetryState(retryState);
-      options.logger.info('Manual retry triggered', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
-      bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
-      return FlowTransition.RETRY;
-    }
-
-    // User cancelled
-    options.logger.info('Retry cancelled by user', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    });
-    bus.emit('updateStreamStatus', { stream: streamId, status: 'stopped' });
-    state.shouldStop = true;
-    return FlowTransition.COMPLETE;
-  }
-}
-
 export function createToolUseCycleFlow<C>(): Flow<ToolUseCycleContext<C>> {
   const prepNode = new ToolUsePrepNode<C>();
   const callNode = new ToolUseCallNode<C>();
-  const retryWaitNode = new ToolUseRetryWaitNode<C>();
+  // Use shared retry wait node (single source of truth)
+  const retryWaitNode = createRetryWaitNode<ToolUseCycleContext<C>>({
+    getStreamId: (ctx) => ctx.options.context.streamId,
+    getLogger: (ctx) => ctx.options.logger,
+    operationName: 'Tool-use call',
+  });
   const processNode = new ToolUseProcessNode<C>();
   const dispatchNode = new ToolUseDispatchNode<C>();
 

@@ -1,44 +1,41 @@
 /**
- * @deprecated Retry logic has been moved to flow-based handling in RetryState.ts.
- * This module now just executes requests without retry; ResponseCycleFlow and
- * ToolUseCycleFlow own all retry behavior at the flow level.
+ * Request execution utilities for model handlers.
+ *
+ * NOTE: Retry logic is handled at the flow level (ResponseCycleFlow/ToolUseCycleFlow).
+ * These utilities provide consistent error logging and abort handling for model requests.
  */
 
-// Local imports - logging
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - error utilities
 import {
   formatProviderHttpError,
   getSdkErrorMessage,
 } from '@common/errors/sdkErrorUtils';
 
-interface RequestRetryOptions {
+/**
+ * Options for request execution.
+ */
+export interface RequestExecutionOptions {
+  /** Logger for error reporting */
   logger: AgentLogger;
+  /** Operation name for error messages (e.g., "model response", "file upload") */
   operation: string;
+  /** Model name for diagnostics */
   model?: string;
+  /** Abort signal for cancellation */
   signal?: AbortSignal;
-  /** @deprecated Ignored - retry handled at flow level */
-  maxAttempts?: number;
-  /** @deprecated Ignored - retry handled at flow level */
-  baseDelayMs?: number;
-  /** @deprecated Ignored - retry handled at flow level */
-  enableManualRetry?: boolean;
-  /** @deprecated Ignored - retry handled at flow level */
-  manualRetryKey?: string;
+  /** Callback when attempt starts (always called with 1) */
   onAttemptStart?: (attempt: number) => void;
 }
 
 /**
- * Executes a request without retry logic.
- * Retry is handled at the flow level by ResponseCycleFlow/ToolUseCycleFlow.
+ * Executes a request with consistent error logging and abort handling.
+ * Retry logic is handled at the flow level, not here.
  */
-export async function executeWithRequestRetry<T>(
-  options: RequestRetryOptions,
+export async function executeRequest<T>(
+  options: RequestExecutionOptions,
   request: () => Promise<T> | T,
 ): Promise<T> {
-  // Always report the first attempt for downstream diagnostics
   options.onAttemptStart?.(1);
 
   if (options.signal?.aborted) {
@@ -49,35 +46,53 @@ export async function executeWithRequestRetry<T>(
     return await request();
   } catch (error) {
     const formatted = formatProviderHttpError(error);
-    options.logger.error(
-      `Error in ${options.operation}: ${formatted.message}`,
-      {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: {
-          ...formatted,
-          attempt: 1,
-          maxAttempts: 1,
-          model: options.model,
-          operation: options.operation,
-          error: getSdkErrorMessage(error),
-        },
+    options.logger.error(`Error in ${options.operation}: ${formatted.message}`, {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: {
+        ...formatted,
+        attempt: 1,
+        maxAttempts: 1,
+        model: options.model,
+        operation: options.operation,
+        error: getSdkErrorMessage(error),
       },
-    );
+    });
     throw error;
   }
 }
 
-interface StreamingRetryOptions<T> extends RequestRetryOptions {
-  create: () => Promise<T>;
+// =============================================================================
+// Legacy aliases (for backward compatibility with existing model handlers)
+// =============================================================================
+
+/**
+ * @deprecated Use `executeRequest` instead. This alias exists for backward compatibility.
+ */
+export async function executeWithRequestRetry<T>(
+  options: RequestExecutionOptions & {
+    // Deprecated parameters - ignored but kept for API compatibility
+    maxAttempts?: number;
+    baseDelayMs?: number;
+    enableManualRetry?: boolean;
+    manualRetryKey?: string;
+  },
+  request: () => Promise<T> | T,
+): Promise<T> {
+  return executeRequest(options, request);
 }
 
 /**
- * Executes a streaming request without retry logic.
- * Retry is handled at the flow level by ResponseCycleFlow/ToolUseCycleFlow.
+ * @deprecated Use `executeRequest` instead. This alias exists for backward compatibility.
  */
 export async function executeStreamingWithRetry<T>(
-  options: StreamingRetryOptions<T>,
+  options: RequestExecutionOptions & {
+    create: () => Promise<T>;
+    // Deprecated parameters - ignored but kept for API compatibility
+    maxAttempts?: number;
+    baseDelayMs?: number;
+    enableManualRetry?: boolean;
+    manualRetryKey?: string;
+  },
 ): Promise<T> {
-  const { create, ...requestOptions } = options;
-  return executeWithRequestRetry(requestOptions, create);
+  return executeRequest(options, options.create);
 }

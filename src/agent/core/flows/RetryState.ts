@@ -161,3 +161,69 @@ export function recordRetryError(
     retryable: isRetryableStatusCode(statusCode),
   };
 }
+
+// ============================================================================
+// Retry decision (single source of truth for retry logic)
+// ============================================================================
+
+/**
+ * Result of retry strategy determination.
+ * The caller handles side effects (logging, sleeping, UI events).
+ */
+export interface RetryDecision {
+  /** The flow transition to take */
+  action: 'auto_retry' | 'manual_retry' | 'fail';
+  /** Backoff delay in ms (only for auto_retry) */
+  delayMs?: number;
+  /** Formatted error info for logging */
+  error: {
+    message: string;
+    statusCode?: number;
+    retryable: boolean;
+  };
+}
+
+/**
+ * Pure function to determine retry strategy after an error.
+ * This is the SINGLE SOURCE OF TRUTH for retry decision logic.
+ *
+ * Side effects (logging, sleeping, UI events) are handled by the caller.
+ */
+export function determineRetryStrategy(
+  state: RetryState,
+  errorMessage: string,
+  statusCode?: number,
+): RetryDecision {
+  // Record the error in state
+  recordRetryError(state, errorMessage, statusCode);
+
+  const error = {
+    message: errorMessage,
+    statusCode,
+    retryable: state.lastError?.retryable ?? false,
+  };
+
+  // Check auto-retry first
+  if (shouldAutoRetry(state)) {
+    return {
+      action: 'auto_retry',
+      delayMs: computeBackoffDelay(state),
+      error,
+    };
+  }
+
+  // Check manual retry
+  if (shouldOfferManualRetry(state)) {
+    state.awaitingManualRetry = true;
+    return {
+      action: 'manual_retry',
+      error,
+    };
+  }
+
+  // Non-retryable failure
+  return {
+    action: 'fail',
+    error,
+  };
+}
