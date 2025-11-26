@@ -28,31 +28,34 @@ export class FileSelect {
     return this._agentDefaults;
   }
 
-  update(id, files) {
+  /**
+   * Updates a file select dropdown with new options and restores selection if possible.
+   * @param {string} id - The DOM element ID
+   * @param {string[]} files - Array of file paths to populate
+   * @param {Object} [options] - Restoration options
+   * @param {string} [options.storedValue] - Value from saved state (highest priority)
+   * @param {string} [options.currentValue] - Current UI value (fallback priority)
+   */
+  update(id, files, options = {}) {
     const selectDiv = document.getElementById(id);
     if (!selectDiv) {
       console.warn(`[FileSelect] Element with id '${id}' not found`);
       return;
     }
-    const previousValue = selectDiv.value;
+
     const normalizedFiles = Array.isArray(files) ? files : [];
     const sortedFiles = [...normalizedFiles].sort((a, b) => a.localeCompare(b));
-    const shouldPreserveValue =
-      previousValue !== undefined &&
-      previousValue !== null &&
-      previousValue !== '';
 
     selectDiv.innerHTML = '';
     this.addOption(selectDiv, '', 'None');
     sortedFiles.forEach((f) => this.addOption(selectDiv, f, f));
 
-    if (shouldPreserveValue) {
-      const hasPreviousOption = sortedFiles.includes(previousValue);
-      if (!hasPreviousOption) {
-        this.addOption(selectDiv, previousValue, previousValue);
-      }
-      safeSetElementValue(id, previousValue);
-      mainViewState.update({ [id]: previousValue });
+    // Restore selection if file still exists, prioritizing stored state
+    const { storedValue, currentValue } = options;
+    if (storedValue && sortedFiles.includes(storedValue)) {
+      safeSetElementValue(id, storedValue);
+    } else if (currentValue && sortedFiles.includes(currentValue)) {
+      safeSetElementValue(id, currentValue);
     }
   }
 
