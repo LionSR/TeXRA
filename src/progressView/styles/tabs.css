@@ -53,8 +53,10 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: var(--spacing-small)
-    calc(var(--spacing-medium) + var(--height-control));
+  padding-top: var(--spacing-small);
+  padding-right: calc(var(--spacing-medium) + var(--height-control));
+  padding-bottom: var(--spacing-small);
+  padding-left: 0;
   cursor: pointer;
   border: none;
   background: none;

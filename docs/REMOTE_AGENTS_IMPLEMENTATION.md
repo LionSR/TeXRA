@@ -57,7 +57,7 @@ We've successfully implemented a complete authentication and remote agents syste
 - **`package.json`**
   - Added new configuration section: "Authentication & Remote Agents"
   - Added 6 new settings (Supabase URL, anon key, OAuth provider, etc.)
-  - Added 4 new commands (sign in/out, view profile, browse remote agents)
+  - Added 3 new commands (sign in/out, view profile)
 
 ---
 
@@ -82,8 +82,7 @@ We've successfully implemented a complete authentication and remote agents syste
 
 - `TeXRA: Sign In` - OAuth authentication flow
 - `TeXRA: Sign Out` - Clear session
-- `TeXRA: View Profile` - View user info and tier
-- `TeXRA: Browse Remote Agents` - List and select agents
+- `TeXRA: View Profile` - View user info, tier, and browse remote agents
 - Remote agents referenced as `remote://agent-name`
 
 ### 4. **Security**
@@ -114,11 +113,11 @@ We've successfully implemented a complete authentication and remote agents syste
 
 3. **Browse Remote Agents**:
    - Press `Cmd/Ctrl + Shift + P`
-   - Run `TeXRA: Browse Remote Agents`
-   - Select an agent (copies `remote://agent-name` to clipboard)
+   - Run `TeXRA: View Profile`
+   - Browse the Remote Agents table and click **Use** on any agent
 
 4. **Use Remote Agent**:
-   - In TeXRA's agent selector, paste `remote://agent-name`
+   - The agent is automatically added to your agent selector
    - Agent loads from Supabase (permissions checked automatically)
 
 ---

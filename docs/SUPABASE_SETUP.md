@@ -540,8 +540,8 @@ For end users, the process is simple:
 1. **No configuration needed** - credentials are hardcoded in the extension
 2. **Sign in**: Run `TeXRA: Sign In` command
 3. **Authenticate** via browser (GitHub/Google)
-4. **Browse remote agents**: Run `TeXRA: Browse Remote Agents`
-5. **Use agents**: Paste `remote://agent-name` in agent selector
+4. **View profile**: Run `TeXRA: View Profile` to browse remote agents
+5. **Use agents**: Click **Use** on any agent in the Remote Agents table
 
 That's it! No Supabase URLs, API keys, or other configuration.
 
