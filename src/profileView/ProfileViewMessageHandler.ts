@@ -13,6 +13,20 @@ import { PROFILE_VIEW_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview';
 // Local imports - auth
 import { SupabaseClient } from '@/auth/SupabaseClient';
 
+/**
+ * Message interfaces for type safety
+ */
+interface SelectAgentMessage {
+  command: string;
+  agentName: string;
+}
+
+interface ProfileDataMessage {
+  command: string;
+}
+
+type ProfileViewMessage = SelectAgentMessage | ProfileDataMessage;
+
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
 > {
@@ -28,6 +42,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       [PROFILE_VIEW_COMMANDS.GET_PROFILE_DATA]:
         this.handleGetProfileData.bind(this),
       [PROFILE_VIEW_COMMANDS.SELECT_AGENT]: this.handleSelectAgent.bind(this),
+      [PROFILE_VIEW_COMMANDS.SIGN_IN]: this.handleSignIn.bind(this),
       [PROFILE_VIEW_COMMANDS.SIGN_OUT]: this.handleSignOut.bind(this),
     };
   }
@@ -67,9 +82,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       }));
 
       // Register remote agents so they appear in the dropdown
+      // Only register agents that aren't already registered
       if (agents.length > 0) {
         const agentNames = agents.map((agent) => agent.name);
-        RemoteAgentRegistry.registerMultiple(agentNames);
+        const unregisteredAgents = agentNames.filter(
+          (name) => !RemoteAgentRegistry.isRemote(name),
+        );
+        if (unregisteredAgents.length > 0) {
+          RemoteAgentRegistry.registerMultiple(unregisteredAgents);
+        }
       }
     }
 
@@ -86,18 +107,21 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetProfileData(
-    _message: any,
+    _message: ProfileDataMessage,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.sendProfileData(view.webview);
   }
 
   private async handleSelectAgent(
-    message: any,
+    message: SelectAgentMessage,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const agentName: string | undefined = message.agentName;
-    if (!agentName) return;
+    const agentName = message.agentName;
+    if (!agentName) {
+      this.logger.warn(this.channel, 'SELECT_AGENT message missing agentName');
+      return;
+    }
 
     // Focus the main view and select the agent
     await vscode.commands.executeCommand('texra.mainView.focus');
@@ -118,19 +142,31 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
           `Remote agent "${agentName}" is now selected.`,
         );
       } else {
+        this.logger.warn(this.channel, 'Main webview not available');
         void vscode.window.showWarningMessage(
           `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
         );
       }
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        this.channel,
+        `Failed to select agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       void vscode.window.showWarningMessage(
         `Could not auto-select agent. Please manually select "${agentName}" in the agent dropdown.`,
       );
     }
   }
 
+  private async handleSignIn(
+    _message: ProfileDataMessage,
+    _view: vscode.WebviewView | vscode.WebviewPanel,
+  ): Promise<void> {
+    await vscode.commands.executeCommand('texra.auth.signIn');
+  }
+
   private async handleSignOut(
-    _message: any,
+    _message: ProfileDataMessage,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await vscode.commands.executeCommand('texra.auth.signOut');

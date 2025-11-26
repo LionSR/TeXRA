@@ -230,6 +230,7 @@ export const PROFILE_VIEW_COMMANDS = {
   GET_PROFILE_DATA: 'getProfileData',
   UPDATE_PROFILE: 'updateProfile',
   SELECT_AGENT: 'selectAgent',
+  SIGN_IN: 'signIn',
   SIGN_OUT: 'signOut',
 };
 
