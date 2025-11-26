@@ -559,7 +559,7 @@ class ToolUseDispatchNode<C> extends BaseNode<ToolUseCycleContext<C>> {
         toolName: call.name,
         input: parsedInput ?? call.raw,
         output: sanitizedOutput,
-        files: editedFiles,
+        ...(editedFiles.length > 0 && { files: editedFiles }),
         isError: Boolean(result.isError),
       };
       options.logger.info('', {
