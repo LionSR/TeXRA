@@ -243,7 +243,6 @@ export class TextEditorTool extends defineTool({
 
       // Read file contents
       let fileContent = await WorkspaceFS.read(filePath);
-      recordToolFileRead(filePath);
       let initLine = 1;
 
       // Handle view range if provided
@@ -287,6 +286,9 @@ export class TextEditorTool extends defineTool({
           fileContent = fileLines.slice(startLine - 1, endLine).join('\n');
         }
       }
+
+      // Record read only after successful validation
+      recordToolFileRead(filePath);
 
       let rangeSummary: string | undefined;
       if (viewRange) {
