@@ -3,8 +3,8 @@ import * as path from 'path';
 
 // Local imports - core flow primitives
 import { BaseNode, Flow } from '@agent/node';
-import { AgentSharedStore } from '@agent/core/AgentSharedStore';
 // Type imports
+import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
@@ -54,6 +54,10 @@ import {
   determineRetryStrategy,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
+import type {
+  ResponseCycleServices,
+  ResponseCycleParams,
+} from './CycleServices';
 
 export interface ResponseCycleInputState {
   /** Agent output location - always workspace or runStorage (never external) */
@@ -84,15 +88,32 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
   cycle.roundFinalized = false;
 }
 
-export interface ResponseCycleContext<C = unknown> {
-  options: ResponseCycleOptions<C>;
-  store: AgentSharedStore;
+/**
+ * Shared state for response cycle flows.
+ *
+ * This contains only MUTABLE state that flows through nodes.
+ * Services (options, store) are accessed via `_params.services`.
+ *
+ * ## Architecture
+ * - Mutable state: `shared` (this interface)
+ * - Immutable services: `_params.services` (ResponseCycleServices)
+ */
+export interface ResponseCycleShared<C = unknown> {
+  /** Runtime state for this cycle */
   state: ResponseCycleState;
-  /** Retry state for model invocation errors. */
+  /** Retry state for model invocation errors */
   retryState: RetryState;
-  /** Callbacks for manual retry control from UI. */
+  /** Callbacks for manual retry control from UI */
   retryCallbacks: RetryCallbacks;
 }
+
+/**
+ * @deprecated Use ResponseCycleShared instead. Kept for backward compatibility.
+ */
+export type ResponseCycleContext<C = unknown> = ResponseCycleShared<C> & {
+  options: ResponseCycleOptions<C>;
+  store: AgentSharedStore;
+};
 
 type InvocationNodeResult = SkippableNodeResult<{
   response: unknown;
@@ -107,9 +128,14 @@ type InvocationNodeResult = SkippableNodeResult<{
 /**
  * Prepares a response cycle by hydrating prompts, checking interruptions, and
  * establishing debug metadata before invoking the model.
+ *
+ * Services accessed via `_params.services`: options, store
  */
-class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(shared: ResponseCycleContext<C>): Promise<{
+class ResponsePrepNode<C> extends BaseNode<
+  ResponseCycleShared<C>,
+  ResponseCycleParams<C>
+> {
+  async prep(shared: ResponseCycleShared<C>): Promise<{
     interrupted: boolean;
     exists: boolean;
     systemPrompt?: string;
@@ -117,7 +143,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
     debugFileOptions?: CycleDebugFileOptions;
     outputLocation: AgentFileLocation;
   }> {
-    const { options, state, store } = shared;
+    const { options, store } = this._params.services;
+    const { state } = shared;
     const { agentPrompt, userVars, logger, agentConfig } = options;
     const interrupted = Boolean(await options.checkInterruption());
     const outputLocation = state.outputLocation;
@@ -154,7 +181,7 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 
   async post(
-    { state }: ResponseCycleContext<C>,
+    shared: ResponseCycleShared<C>,
     prepRes: {
       interrupted: boolean;
       exists: boolean;
@@ -164,6 +191,8 @@ class ResponsePrepNode<C> extends BaseNode<ResponseCycleContext<C>> {
       outputLocation: AgentFileLocation;
     },
   ): Promise<string | undefined> {
+    const { state } = shared;
+
     if (prepRes.interrupted) {
       resetResponseCycleState(state);
       state.shouldStop = true;
@@ -207,16 +236,20 @@ type InvocationExecResult =
  * - AWAIT_RETRY: Pause for manual retry (goes to RetryWaitNode)
  * - default: Continue to next node on success
  * - COMPLETE: Non-retryable error
+ *
+ * Services accessed via `_params.services`: options
  */
-class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(
-    shared: ResponseCycleContext<C>,
-  ): Promise<ResponseCycleContext<C>> {
+class ResponseModelInvocationNode<C> extends BaseNode<
+  ResponseCycleShared<C>,
+  ResponseCycleParams<C>
+> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(context: ResponseCycleContext<C>): Promise<InvocationExecResult> {
-    const { options, state, retryState } = context;
+  async exec(shared: ResponseCycleShared<C>): Promise<InvocationExecResult> {
+    const { options } = this._params.services;
+    const { state, retryState } = shared;
     if (state.shouldStop) {
       return { success: true, response: undefined };
     }
@@ -261,11 +294,12 @@ class ResponseModelInvocationNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 
   async post(
-    shared: ResponseCycleContext<C>,
-    prepRes: ResponseCycleContext<C>,
+    shared: ResponseCycleShared<C>,
+    _prepRes: ResponseCycleShared<C>,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
-    const { options, state, retryState } = shared;
+    const { options } = this._params.services;
+    const { state, retryState } = shared;
 
     // Handle successful invocation
     if (execRes.success) {
@@ -373,16 +407,20 @@ type ContinuationNodeResult = SkippableNodeResult<{
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
  * and persists incremental tool-state derived from the result.
+ *
+ * Services accessed via `_params.services`: options, store
  */
-class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(
-    shared: ResponseCycleContext<C>,
-  ): Promise<ResponseCycleContext<C>> {
+class ResponseProcessNode<C> extends BaseNode<
+  ResponseCycleShared<C>,
+  ResponseCycleParams<C>
+> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(context: ResponseCycleContext<C>): Promise<ProcessNodeResult> {
-    const { options, state, store } = context;
+  async exec(shared: ResponseCycleShared<C>): Promise<ProcessNodeResult> {
+    const { options, store } = this._params.services;
+    const { state } = shared;
     if (state.shouldStop || !state.responseObject) {
       return { skipped: true };
     }
@@ -513,11 +551,12 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 
   async post(
-    _shared: ResponseCycleContext<C>,
-    prepRes: ResponseCycleContext<C>,
+    shared: ResponseCycleShared<C>,
+    _prepRes: ResponseCycleShared<C>,
     execRes: ProcessNodeResult,
   ): Promise<string | undefined> {
-    const { options, state, store } = prepRes;
+    const { options, store } = this._params.services;
+    const { state } = shared;
 
     if (execRes.skipped) {
       state.endTurn = false;
@@ -634,18 +673,20 @@ class ResponseProcessNode<C> extends BaseNode<ResponseCycleContext<C>> {
 /**
  * Evaluates the processed response to decide whether the agent should end the turn,
  * stop entirely, or enqueue a continuation request.
+ *
+ * Services accessed via `_params.services`: options, store
  */
-class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
-  async prep(
-    shared: ResponseCycleContext<C>,
-  ): Promise<ResponseCycleContext<C>> {
+class ResponseContinuationNode<C> extends BaseNode<
+  ResponseCycleShared<C>,
+  ResponseCycleParams<C>
+> {
+  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
     return shared;
   }
 
-  async exec(
-    context: ResponseCycleContext<C>,
-  ): Promise<ContinuationNodeResult> {
-    const { options, state, store } = context;
+  async exec(shared: ResponseCycleShared<C>): Promise<ContinuationNodeResult> {
+    const { options, store } = this._params.services;
+    const { state } = shared;
     if (state.shouldStop || !state.stopReason || !state.processedResponse) {
       return { skipped: true };
     }
@@ -693,11 +734,12 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 
   async post(
-    _shared: ResponseCycleContext<C>,
-    prepRes: ResponseCycleContext<C>,
+    shared: ResponseCycleShared<C>,
+    _prepRes: ResponseCycleShared<C>,
     execRes: ContinuationNodeResult,
   ): Promise<string | undefined> {
-    const { options, state, store } = prepRes;
+    const { options, store } = this._params.services;
+    const { state } = shared;
 
     if (execRes.skipped) {
       state.endTurn = false;
@@ -772,13 +814,33 @@ class ResponseContinuationNode<C> extends BaseNode<ResponseCycleContext<C>> {
   }
 }
 
-export function createResponseCycleFlow<C>(): Flow<ResponseCycleContext<C>> {
+/**
+ * Creates a response cycle flow with services injected via params.
+ *
+ * The returned flow uses the services pattern:
+ * - Services (options, store) are passed via `setParams({ services })`
+ * - Only mutable state flows through the shared context
+ *
+ * @example
+ * ```typescript
+ * const flow = createResponseCycleFlow<MyContext>();
+ * flow.setParams({ services: { options, store } });
+ * await flow.run(sharedState);
+ * ```
+ */
+export function createResponseCycleFlow<C>(): Flow<
+  ResponseCycleShared<C>,
+  ResponseCycleParams<C>
+> {
   const prepNode = new ResponsePrepNode<C>();
   const invokeNode = new ResponseModelInvocationNode<C>();
   // Use shared retry wait node (single source of truth)
-  const retryWaitNode = createRetryWaitNode<ResponseCycleContext<C>>({
-    getStreamId: (ctx) => ctx.options.context.streamId,
-    getLogger: (ctx) => ctx.options.logger,
+  // Note: RetryWaitNode accesses services via its own accessor pattern
+  const retryWaitNode = createRetryWaitNode<ResponseCycleShared<C>>({
+    getStreamId: (_shared, params) =>
+      (params as ResponseCycleParams<C>).services.options.context.streamId,
+    getLogger: (_shared, params) =>
+      (params as ResponseCycleParams<C>).services.options.logger,
     operationName: 'Model invocation',
   });
   const processNode = new ResponseProcessNode<C>();
@@ -803,5 +865,5 @@ export function createResponseCycleFlow<C>(): Flow<ResponseCycleContext<C>> {
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);
 
-  return new Flow<ResponseCycleContext<C>>(prepNode);
+  return new Flow<ResponseCycleShared<C>, ResponseCycleParams<C>>(prepNode);
 }
