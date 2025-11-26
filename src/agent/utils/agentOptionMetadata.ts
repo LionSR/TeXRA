@@ -49,7 +49,9 @@ interface ParsedAgentDefinition {
   description?: string;
 }
 
-function readAgentDefinition(yamlPath?: string): ParsedAgentDefinition | undefined {
+function readAgentDefinition(
+  yamlPath?: string,
+): ParsedAgentDefinition | undefined {
   if (!yamlPath) {
     return undefined;
   }

@@ -11,7 +11,6 @@ export const AUTH_COMMANDS = {
   SIGN_OUT: 'texra.auth.signOut',
   VIEW_PROFILE: 'texra.auth.viewProfile',
   ACCOUNT_MENU: 'texra.auth.accountMenu',
-  BROWSE_REMOTE_AGENTS: 'texra.remoteAgents.browse',
 } as const;
 
 // Singleton instance of ProfileViewProvider
@@ -189,17 +188,12 @@ export async function showAccountMenu(): Promise<void> {
         await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
       }
     } else {
-      // Signed in - show profile, browse agents, and sign out options
+      // Signed in - show profile and sign out options
       const items = [
         {
           label: '$(account) View Profile',
           description: `Signed in as ${status.email || 'unknown'} (${status.tier} tier)`,
           action: 'viewProfile' as const,
-        },
-        {
-          label: '$(cloud) Browse Remote Agents',
-          description: 'Explore available remote agents',
-          action: 'browseAgents' as const,
         },
         {
           label: '$(sign-out) Sign Out',
@@ -216,11 +210,6 @@ export async function showAccountMenu(): Promise<void> {
         switch (choice.action) {
           case 'viewProfile':
             await vscode.commands.executeCommand(AUTH_COMMANDS.VIEW_PROFILE);
-            break;
-          case 'browseAgents':
-            await vscode.commands.executeCommand(
-              AUTH_COMMANDS.BROWSE_REMOTE_AGENTS,
-            );
             break;
           case 'signOut':
             await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
