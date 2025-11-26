@@ -13,6 +13,7 @@ import {
 } from '@common/domUtils.js';
 import { createFromTemplate, createCodicon } from '@common/templateUtils.js';
 import { encodeHtml, encodeListForHtml } from '@common/htmlEncoding.js';
+import { getSessionKindDecorator } from '@common/iconConstants.js';
 // Local imports
 import { vscode } from '@common/webviewContext.js';
 
@@ -65,10 +66,11 @@ export class HistoryRenderer {
     const session = config?.session;
     const date = new Date(item.timestamp).toLocaleString();
 
-    // Determine session kind display
+    // Determine session kind display using shared config
     const isToolUse = session?.agentCategory === AGENT_CATEGORY.TOOL_USE;
-    const kindLabel = isToolUse ? 'Tool Use' : 'Workflow';
-    const kindIcon = isToolUse ? 'tools' : 'symbol-method';
+    const sessionKind = isToolUse ? 'toolUse' : 'workflow';
+    const { icon: kindIcon, label: kindLabel } =
+      getSessionKindDecorator(sessionKind);
     const kindClass = isToolUse ? 'kind-tool-use' : 'kind-workflow';
 
     const container = createFromTemplate('historyItemTemplate', {

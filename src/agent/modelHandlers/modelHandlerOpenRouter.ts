@@ -10,7 +10,7 @@ import { K_SLICE } from '@utils/config';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
-import { executeWithRequestRetry } from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
@@ -64,7 +64,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
     if (useStreaming) {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
-      const stream = await executeWithRequestRetry(
+      const stream = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
@@ -94,7 +94,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       if (output) output.finalize(finalOutput);
       return response;
     } else {
-      return executeWithRequestRetry(
+      return executeRequest(
         {
           logger: this.logger,
           model: this.config.name,

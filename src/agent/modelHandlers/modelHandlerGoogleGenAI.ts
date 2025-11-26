@@ -74,7 +74,7 @@ import {
   extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
-import { executeWithRequestRetry } from './utils/requestExecutor';
+import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
 
 // Type imports
@@ -263,7 +263,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         this.logger.debug(
           `Uploading media entry ${fileName} via Google GenAI SDK from path ${uploadPath}`,
         );
-        const uploadResult: File = await executeWithRequestRetry(
+        const uploadResult: File = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -421,7 +421,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         // history, so append the final user message that will be sent next.
         countContents.push({ role: 'user', parts: [...lastMessageParts] });
 
-        const responseTokenCount = await executeWithRequestRetry(
+        const responseTokenCount = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -484,7 +484,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           message: [...lastMessageParts],
           config: { ...generationConfig, abortSignal: signal },
         };
-        const stream = await executeWithRequestRetry(
+        const stream = await executeRequest(
           {
             logger: this.logger,
             model: this.config.name,
@@ -614,7 +614,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         message: [...lastMessageParts],
         config: { ...generationConfig, abortSignal: signal },
       };
-      const result = await executeWithRequestRetry(
+      const result = await executeRequest(
         {
           logger: this.logger,
           model: this.config.name,
