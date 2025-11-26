@@ -14,6 +14,9 @@ import {
 
 const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
 
+// Timeout for manual retry wait (5 minutes)
+const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+
 // ============================================================================
 // Types
 // ============================================================================
