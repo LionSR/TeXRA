@@ -267,7 +267,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Add description (primary info about the agent)
     if (description) {
-      hints.push(`Description: ${description}`);
+      hints.push(description);
     }
 
     // Add multiple outputs icon (using shared config)

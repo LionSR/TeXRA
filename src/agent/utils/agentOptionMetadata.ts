@@ -94,6 +94,7 @@ export function getAgentOptionMetadata(
       isMultipleOutput: false,
       isToolUse: false, // Remote agents are workflow agents by default
       isRemote: true,
+      agentType: 'unknown', // Remote agent type is determined server-side
     };
   }
 
