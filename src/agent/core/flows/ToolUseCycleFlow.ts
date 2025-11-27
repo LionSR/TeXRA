@@ -603,7 +603,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     options: ToolUseCycleOptions<C>,
     tracker: FileInteractionState,
   ): Promise<ToolExecutionResult> {
-    const tool = options.toolRegistry[call.name];
+    const tool = options.toolRegistry.get(call.name);
     let result: ToolResult;
     const parsedInput = parseToolInput(call.input, call.callId, options.logger);
 
@@ -740,81 +740,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
-    for (const [index, call] of calls.entries()) {
-      const tool = options.toolRegistry.get(call.name);
-      let result: ToolResult;
-      const parsedInput = parseToolInput(
-        call.input,
-        call.callId,
-        options.logger,
-      );
-      if (!tool) {
-        result = toolResult({
-          error: `Unknown tool ${call.name}`,
-          isError: true,
-        });
-      } else {
-        try {
-          result = await withToolFileInteractionContext(
-            {
-              tracker,
-              streamId: options.logger.channelId,
-              executionId: options.context.executionId,
-              toolCallId: call.callId,
-            },
-            () =>
-              withToolEditApprovalContext(
-                {
-                  streamId: options.logger.channelId,
-                  executionId: options.context.executionId,
-                  toolCallId: call.callId,
-                },
-                () => tool.call(parsedInput),
-              ),
-          );
-        } catch (err) {
-          const { message, diagnostics } = normalizeToolCallError(
-            call.name,
-            err,
-          );
-          result = toolResult({
-            error: message,
-            isError: true,
-            diagnostics,
-          });
-        }
-      }
-
-      // recordEdits returns per-call line changes as the single source of truth
-      const trackedEdits = tracker.recordEdits(result.edits);
-      const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
-      const sanitizedOutput = sanitizeToolResultForLog(result);
-      if (lineChanges) {
-        sanitizedOutput.lineChanges = lineChanges;
-      }
-      const editedFiles = trackedEdits.edits.map((entry) => ({
-        path: entry.path,
-        ok: true,
-        source: 'tool',
-        sourceDisplay: 'Tool use',
-      }));
-
-      if (editedFiles.length > 0) {
-        sanitizedOutput.files = editedFiles;
-      }
-
-      const toolUseLog = {
-        toolName: call.name,
-        input: parsedInput ?? call.raw,
-        output: sanitizedOutput,
-        ...(editedFiles.length > 0 && { files: editedFiles }),
-        isError: Boolean(result.isError),
-      };
-      options.logger.info('', {
-        groupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: toolUseLog,
-      });
+    for (const call of calls) {
+      const execResult = await this.executeToolCall(call, options, tracker);
+      execResults.push(execResult);
 
       // Log each tool execution as it completes
       await this.logAndProcessMediaFiles(execResult, options, store, groupId);
@@ -834,12 +762,12 @@ class ToolUseDispatchNode<C> extends BaseNode<
       const resultPayloads = execResults.map((er) =>
         buildToolResultPayload(er.result, er.lineChanges),
       );
-      const followUpMsgs =
-        await options.modelHandler.createBatchedToolUseFollowUpMessages!(
-          calls,
-          resultPayloads,
-          assistantText.length > 0 ? assistantText : undefined,
-        );
+      const followUpMsgs = await options.modelHandler
+        .createBatchedToolUseFollowUpMessages!(
+        calls,
+        resultPayloads,
+        assistantText.length > 0 ? assistantText : undefined,
+      );
       state.messages.push(...followUpMsgs);
     } else {
       // Individual: Process each call separately (original behavior)
@@ -850,9 +778,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
             execResult.call,
             buildToolResultPayload(execResult.result, execResult.lineChanges),
             store.workspace,
-            index === 0 && assistantText.length > 0
-              ? assistantText
-              : undefined,
+            index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );
         state.messages.push(...followUpMsgs);
       }
