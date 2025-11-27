@@ -384,14 +384,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       ...(endTag && { stopSequences: [endTag] }),
     };
 
-    // Configure thinking for models that support it
-    const supportsThinking =
-      this.config.fullName.includes('gemini-3-pro') ||
-      this.config.fullName.includes('2.5-pro') ||
-      this.config.fullName.includes('2.5-flash') ||
-      this.config.fullName.includes('flash-latest');
-
-    if (supportsThinking) {
+    // Configure thinking for models that support it (defined in model registry)
+    if (this.capabilities.supportsReasoning) {
       const thinkingLevel = this.getThinkingLevel();
       generationConfig.thinkingConfig = {
         includeThoughts: true,
