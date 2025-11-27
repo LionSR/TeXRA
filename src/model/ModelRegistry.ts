@@ -38,3 +38,9 @@ export const MODEL_CONFIGS: Record<string, ModelConfig> = {
   ...DASHSCOPE_MODELS,
   ...COPILOT_MODELS,
 };
+
+/**
+ * List of all available model short names.
+ * Derived from MODEL_CONFIGS for single source of truth.
+ */
+export const MODELS = Object.keys(MODEL_CONFIGS);
