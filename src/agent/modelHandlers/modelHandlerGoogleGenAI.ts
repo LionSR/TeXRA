@@ -401,12 +401,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       model: this.config.fullName,
       history: chatHistory,
       config: generationConfig,
-      ...(systemPrompt && {
-        systemInstruction: {
-          role: 'system',
-          parts: [createPartFromText(systemPrompt)],
-        },
-      }),
+      ...(systemPrompt && { systemInstruction: systemPrompt }),
     };
 
     if (this.capabilities.supportsTokenCounting) {
