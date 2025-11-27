@@ -54,16 +54,14 @@ function nextGeneration(key: string): number {
 /**
  * Register a manual retry task for a stream.
  * Does NOT emit UI events - caller is responsible for emitting 'showRetryRequest'.
- * Returns the generation number for this registration.
  */
-export function registerManualRetry(key: string, task: ManualRetryTask): number {
-  const generation = nextGeneration(key);
+export function registerManualRetry(key: string, task: ManualRetryTask): void {
+  nextGeneration(key);
   pendingRetries.set(key, task);
   task.logger.info(`Manual retry available for ${task.operation}`, {
     messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     data: { model: task.model, operation: task.operation },
   });
-  return generation;
 }
 
 /**
@@ -103,12 +101,20 @@ export function cancelManualRetry(key: string): boolean {
     return false;
   }
 
-  // Remove from registry first
+  // Remove from registry first and clean up generation counter
   pendingRetries.delete(key);
+  taskGenerations.delete(key);
 
-  // Trigger cancel callback if provided
+  // Trigger cancel callback if provided (with error boundary)
   if (task.cancel) {
-    task.cancel();
+    try {
+      task.cancel();
+    } catch (error) {
+      task.logger.error(`Cancel callback failed for ${task.operation}`, {
+        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        data: { model: task.model, operation: task.operation, error },
+      });
+    }
   }
 
   task.logger.info(`Retry cancelled for ${task.operation}`, {
@@ -160,6 +166,8 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
     // Only emit resolve if no new task was registered during execution
     // This prevents stale completions from dismissing new retry UI
     if (getGeneration(key) === startGeneration) {
+      // Clean up generation counter to prevent memory leak
+      taskGenerations.delete(key);
       bus.emit('resolveRetryRequest', { streamId: key });
     }
   }
