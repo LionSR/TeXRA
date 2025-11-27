@@ -39,6 +39,10 @@ export interface ResponseCycleResult {
   endTurn: boolean;
   /** Callbacks for triggering manual retry from UI. */
   retryCallbacks: RetryCallbacks;
+  /** True if the cycle stopped due to an error (not user interruption). */
+  failedWithError: boolean;
+  /** Error message if failedWithError is true. */
+  errorMessage?: string;
 }
 
 /**
@@ -89,9 +93,14 @@ export async function runResponseCycle<C = unknown>(
   flow.setParams({ services: { options: input.options, store: input.store } });
   await flow.run(shared);
 
+  // Determine if the cycle failed due to an error (not just user interruption)
+  const failedWithError = shared.state.shouldStop && !!shared.retryState.lastError;
+
   return {
     store: input.store,
     endTurn: shared.state.endTurn,
     retryCallbacks,
+    failedWithError,
+    errorMessage: shared.retryState.lastError?.message,
   };
 }
