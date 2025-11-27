@@ -93,7 +93,7 @@ export function getAgentOptionMetadata(
       hasDefinition: true, // Remote agents always have definitions (on server)
       hasMultipleSibling: false,
       isMultipleOutput: false,
-      isToolUse: false, // Remote agents are workflow agents by default
+      isToolUse: false, // isToolUse defaults to false for remote agents
       isRemote: true,
       description: remoteMetadata?.description,
       agentType: remoteMetadata?.agentType,
