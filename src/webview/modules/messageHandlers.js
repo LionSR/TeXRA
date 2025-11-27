@@ -41,10 +41,7 @@ import {
   getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import {
-  AGENT_DECORATORS,
-  getCodiconClass,
-} from '@common/iconConstants.js';
+import { AGENT_DECORATORS, getCodiconClass } from '@common/iconConstants.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';

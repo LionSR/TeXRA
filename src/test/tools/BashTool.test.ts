@@ -24,6 +24,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
+import { createToolRegistry } from '@agent/core/ToolTypes';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   DEFAULT_MODEL_CAPABILITIES,
@@ -169,7 +170,7 @@ describe('BashTool', () => {
       },
       logger: new AgentLogger('BashToolTest', true),
       client: {} as OpenAI,
-      toolRegistry: { bash: bashTool },
+      toolRegistry: createToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
       workspaceState,
