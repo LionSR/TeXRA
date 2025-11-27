@@ -98,6 +98,7 @@ class RemoteAgentRegistryClass {
    */
   unregister(agentName: string): void {
     this.remoteAgents.delete(agentName);
+    this.agentMetadata.delete(agentName);
     void this.persist();
   }
 
