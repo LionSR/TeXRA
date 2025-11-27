@@ -563,11 +563,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           response = await stream.finalMessage();
           const finalReasoning = this.processThinkingBlock(response);
           thinking.finalize(finalReasoning ?? undefined);
-          const finalOutput =
-            response.content
-              ?.filter((c: any) => c.type === 'text')
-              ?.map((c: any) => c.text)
-              .join('') ?? '';
+          // Use SDK's finalText() method to extract concatenated text content
+          const finalOutput = await stream.finalText();
           if (output) output.finalize(finalOutput);
         } finally {
           cleanupAbortListener?.();
