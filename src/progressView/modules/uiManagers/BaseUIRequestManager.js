@@ -13,9 +13,13 @@ export class BaseUIRequestManager {
    * @param {string} config.containerId - DOM ID of the container element
    * @param {string} config.listSelector - CSS selector for the list within container
    * @param {string} config.idAttribute - Data attribute name for request ID (e.g., 'requestId', 'streamId')
+   * @param {boolean} [config.requireToolAgent=true] - Whether to only show for tool agent streams
    */
   constructor(config) {
-    this._config = config;
+    this._config = {
+      requireToolAgent: true, // Default: only show for tool agents
+      ...config,
+    };
     this.container = null;
     this.list = null;
     this.requests = new Map();
@@ -148,7 +152,11 @@ export class BaseUIRequestManager {
       return;
     }
     const hasVisibleEntries = this.list.children.length > 0;
-    const shouldShow = this.isToolAgentActive && hasVisibleEntries;
+    // Only require tool agent check if configured (default true for backward compat)
+    const agentCheck = this._config.requireToolAgent
+      ? this.isToolAgentActive
+      : true;
+    const shouldShow = agentCheck && hasVisibleEntries;
     this.container.classList.toggle('is-visible', shouldShow);
     this.container.toggleAttribute('hidden', !shouldShow);
   }

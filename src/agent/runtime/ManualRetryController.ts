@@ -77,7 +77,11 @@ export function hasManualRetry(key: string): boolean {
  * Does NOT emit UI events - caller should emit 'resolveRetryRequest' if needed.
  */
 export function removeRetryTask(key: string): boolean {
-  return pendingRetries.delete(key);
+  const deleted = pendingRetries.delete(key);
+  if (deleted) {
+    taskGenerations.delete(key); // Clean up generation counter
+  }
+  return deleted;
 }
 
 /**
