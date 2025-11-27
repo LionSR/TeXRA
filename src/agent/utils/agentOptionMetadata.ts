@@ -86,15 +86,17 @@ export function getAgentOptionMetadata(
   const isRemote = RemoteAgentRegistry.isRemote(agentName);
   const cleanName = RemoteAgentRegistry.getCleanName(agentName);
 
-  // Handle remote agents specially
+  // Handle remote agents specially - retrieve cached metadata from registry
   if (isRemote) {
+    const remoteMetadata = RemoteAgentRegistry.getMetadata(cleanName);
     return {
       hasDefinition: true, // Remote agents always have definitions (on server)
       hasMultipleSibling: false,
       isMultipleOutput: false,
       isToolUse: false, // Remote agents are workflow agents by default
       isRemote: true,
-      agentType: 'unknown', // Remote agent type is determined server-side
+      description: remoteMetadata?.description,
+      agentType: remoteMetadata?.agentType ?? 'unknown',
     };
   }
 

@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
 
+/** Metadata stored for each remote agent. */
+export interface RemoteAgentInfo {
+  description?: string;
+  agentType?: string;
+}
+
 /**
  * Registry tracking remote agent status without prefix markers.
  * State is persisted to ExtensionContext.globalState for resilience across VS Code reloads.
@@ -7,6 +13,7 @@ import * as vscode from 'vscode';
 class RemoteAgentRegistryClass {
   private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry';
   private remoteAgents = new Set<string>();
+  private agentMetadata = new Map<string, RemoteAgentInfo>();
   private context: vscode.ExtensionContext | null = null;
 
   /**
@@ -42,10 +49,17 @@ class RemoteAgentRegistryClass {
   }
 
   /**
-   * Register multiple agents as remote.
+   * Register multiple agents as remote with optional metadata.
    */
-  registerMultiple(agentNames: string[]): void {
-    agentNames.forEach((name) => this.remoteAgents.add(name));
+  registerMultiple(
+    agents: Array<{ name: string; description?: string; agentType?: string }>,
+  ): void {
+    agents.forEach(({ name, description, agentType }) => {
+      this.remoteAgents.add(name);
+      if (description || agentType) {
+        this.agentMetadata.set(name, { description, agentType });
+      }
+    });
     void this.persist();
   }
 
@@ -80,6 +94,7 @@ class RemoteAgentRegistryClass {
    */
   clear(): void {
     this.remoteAgents.clear();
+    this.agentMetadata.clear();
     void this.persist();
   }
 
@@ -88,6 +103,14 @@ class RemoteAgentRegistryClass {
    */
   getAll(): string[] {
     return Array.from(this.remoteAgents);
+  }
+
+  /**
+   * Get metadata for a remote agent.
+   */
+  getMetadata(agentName: string): RemoteAgentInfo | undefined {
+    const cleanName = this.getCleanName(agentName);
+    return this.agentMetadata.get(cleanName);
   }
 }
 
