@@ -122,6 +122,7 @@ export function beginAttempt(state: RetryState): void {
 
 /**
  * Determines if an HTTP status code is retryable (5xx or 408/429).
+ * @deprecated Use the `retryable` field from `formatProviderHttpError` instead.
  */
 export function isRetryableStatusCode(statusCode?: number): boolean {
   if (statusCode === undefined) {
@@ -131,44 +132,6 @@ export function isRetryableStatusCode(statusCode?: number): boolean {
     return true;
   }
   return RETRYABLE_NON_5XX_STATUS_CODES.has(statusCode);
-}
-
-/**
- * Determines if an error is retryable based on status code and message.
- * Errors without status codes (e.g., network/connection errors) are considered
- * retryable since they are typically transient issues that may resolve.
- */
-export function isRetryableError(
-  statusCode?: number,
-  message?: string,
-): boolean {
-  // Known retryable status codes
-  if (isRetryableStatusCode(statusCode)) {
-    return true;
-  }
-
-  // Errors without status codes are typically network/connection errors
-  // which are transient and should be retryable
-  if (statusCode === undefined) {
-    // Check for known non-retryable error patterns
-    const lowerMessage = message?.toLowerCase() ?? '';
-    const nonRetryablePatterns = [
-      'invalid api key',
-      'authentication',
-      'unauthorized',
-      'permission denied',
-      'forbidden',
-      'not found',
-      'bad request',
-      'invalid',
-    ];
-    const isNonRetryable = nonRetryablePatterns.some((pattern) =>
-      lowerMessage.includes(pattern),
-    );
-    return !isNonRetryable;
-  }
-
-  return false;
 }
 
 /**
@@ -203,16 +166,21 @@ export function computeBackoffDelay(state: RetryState): number {
 
 /**
  * Records an error in retry state.
+ * @param state - The retry state to update
+ * @param message - Error message
+ * @param statusCode - HTTP status code if available
+ * @param retryable - Whether the error is retryable (from formatProviderHttpError)
  */
 export function recordRetryError(
   state: RetryState,
   message: string,
-  statusCode?: number,
+  statusCode: number | undefined,
+  retryable: boolean,
 ): void {
   state.lastError = {
     message,
     statusCode,
-    retryable: isRetryableError(statusCode, message),
+    retryable,
   };
 }
 
@@ -242,21 +210,26 @@ export type RetryDecision =
  * Determines retry strategy after an error.
  * This is the SINGLE SOURCE OF TRUTH for retry decision logic.
  *
+ * @param state - The retry state to update
+ * @param errorMessage - Error message
+ * @param statusCode - HTTP status code if available
+ * @param retryable - Whether the error is retryable (from formatProviderHttpError)
  * @mutates state.lastError, state.awaitingManualRetry
  * Side effects (logging, sleeping, UI events) are handled by the caller.
  */
 export function determineRetryStrategy(
   state: RetryState,
   errorMessage: string,
-  statusCode?: number,
+  statusCode: number | undefined,
+  retryable: boolean,
 ): RetryDecision {
   // Record the error in state
-  recordRetryError(state, errorMessage, statusCode);
+  recordRetryError(state, errorMessage, statusCode, retryable);
 
   const error = {
     message: errorMessage,
     statusCode,
-    retryable: state.lastError?.retryable ?? false,
+    retryable,
   };
 
   // Check auto-retry first
