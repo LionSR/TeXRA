@@ -15,6 +15,7 @@ import {
 
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { IModelHandlerFactory } from './AgentExecutionServices';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -25,8 +26,30 @@ import { getConfig } from '@utils/config';
 const CHANNEL = 'ModelFactory';
 logger.initialize(CHANNEL);
 
-/** Factory class for instantiating appropriate model handlers based on configuration. */
-export class ModelFactory {
+/**
+ * Factory class for instantiating appropriate model handlers based on configuration.
+ *
+ * Now implements IModelHandlerFactory interface for dependency injection.
+ * The static createHandler method is retained for backward compatibility.
+ *
+ * ## PocketFlow Best Practices Applied:
+ *
+ * 1. **Interface-based**: Implements IModelHandlerFactory for testability
+ * 2. **Injectable**: Instance can be passed as dependency
+ * 3. **Backward Compatible**: Static method still works for gradual migration
+ *
+ * ## Usage
+ *
+ * ```typescript
+ * // New way: inject factory instance
+ * const factory = new ModelFactory();
+ * const handler = factory.createHandler(config);
+ *
+ * // Legacy way: static method (still works)
+ * const handler = ModelFactory.createHandler(config);
+ * ```
+ */
+export class ModelFactory implements IModelHandlerFactory {
   /**
    * Creates a model handler instance based on provider and routing configuration.
    * @param config Model configuration including provider and OpenRouter settings
@@ -90,5 +113,13 @@ export class ModelFactory {
 
     logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
     return new HandlerClass(config);
+  }
+
+  /**
+   * Instance method for IModelHandlerFactory interface.
+   * Delegates to the static createHandler method.
+   */
+  createHandler(config: ModelConfig): ModelHandler {
+    return ModelFactory.createHandler(config);
   }
 }

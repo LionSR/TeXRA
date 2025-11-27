@@ -54,4 +54,11 @@ export class StreamExecutionIndex<T> {
     this.byExecution.clear();
     this.byStream.clear();
   }
+
+  /**
+   * Get the number of entries in the index.
+   */
+  get size(): number {
+    return this.byExecution.size;
+  }
 }
