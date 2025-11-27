@@ -60,12 +60,6 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
-import {
-  hasReasoningContent,
-  extractReasoningText,
-  isFunctionToolCall,
-  isCustomToolCall,
-} from './utils/sdkTypeGuards';
 import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
@@ -77,12 +71,20 @@ import type {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
-import type { ReasoningDelta } from './utils/sdkTypeGuards';
 
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
   'stream' | 'stream_options'
 >;
+
+// Reasoning content type for DeepSeek, o1 models (not in SDK)
+type ReasoningContent = string | Array<{ type: string; text?: string }>;
+
+const extractReasoningText = (content: ReasoningContent | undefined): string => {
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  return content.map(item => item.text ?? '').join('');
+};
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
@@ -97,8 +99,8 @@ const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   const choice = chunk.choices[0];
   if (!choice) return '';
 
-  const delta = choice.delta;
-  if (!hasReasoningContent(delta)) return '';
+  const delta = choice.delta as { reasoning_content?: ReasoningContent };
+  if (!('reasoning_content' in delta)) return '';
 
   return extractReasoningText(delta.reasoning_content);
 };
@@ -1158,28 +1160,28 @@ export class ModelHandlerOpenAI<
     fallbackName: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
   ): ChatCompletionMessageToolCall {
-    // Modern function tool call format
-    if (isFunctionToolCall(call)) {
-      return {
-        id: call.id ?? id,
-        type: 'function',
-        function: {
-          name: call.function?.name ?? fallbackName,
-          arguments: this.ensureStringifiedArguments(call.function?.arguments),
-        },
-      };
-    }
-
-    // Modern custom tool call format
-    if (isCustomToolCall(call)) {
-      return {
-        id: call.id ?? id,
-        type: 'custom',
-        custom: {
-          name: call.custom?.name ?? fallbackName,
-          input: this.ensureStringifiedArguments(call.custom?.input),
-        },
-      };
+    // Modern format has 'type' discriminant
+    if ('type' in call) {
+      if (call.type === 'function') {
+        return {
+          id: call.id ?? id,
+          type: 'function',
+          function: {
+            name: call.function?.name ?? fallbackName,
+            arguments: this.ensureStringifiedArguments(call.function?.arguments),
+          },
+        };
+      }
+      if (call.type === 'custom') {
+        return {
+          id: call.id ?? id,
+          type: 'custom',
+          custom: {
+            name: call.custom?.name ?? fallbackName,
+            input: this.ensureStringifiedArguments(call.custom?.input),
+          },
+        };
+      }
     }
 
     // Legacy FunctionCall format (no 'type' discriminant)
