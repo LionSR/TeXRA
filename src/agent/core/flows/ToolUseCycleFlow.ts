@@ -20,18 +20,20 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
-// Internal imports
+
+// Internal imports - use core ToolTypes as single source of truth
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
+import type { ToolResult } from '@agent/core/ToolTypes';
+import { toolResult } from '@agent/core/ToolTypes';
+import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-// Internal imports
-import { ToolResult, toolResult } from '@tools/result';
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
@@ -738,9 +740,81 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 1: Execute all tool calls and collect results
     const execResults: ToolExecutionResult[] = [];
-    for (const call of calls) {
-      const execResult = await this.executeToolCall(call, options, tracker);
-      execResults.push(execResult);
+    for (const [index, call] of calls.entries()) {
+      const tool = options.toolRegistry.get(call.name);
+      let result: ToolResult;
+      const parsedInput = parseToolInput(
+        call.input,
+        call.callId,
+        options.logger,
+      );
+      if (!tool) {
+        result = toolResult({
+          error: `Unknown tool ${call.name}`,
+          isError: true,
+        });
+      } else {
+        try {
+          result = await withToolFileInteractionContext(
+            {
+              tracker,
+              streamId: options.logger.channelId,
+              executionId: options.context.executionId,
+              toolCallId: call.callId,
+            },
+            () =>
+              withToolEditApprovalContext(
+                {
+                  streamId: options.logger.channelId,
+                  executionId: options.context.executionId,
+                  toolCallId: call.callId,
+                },
+                () => tool.call(parsedInput),
+              ),
+          );
+        } catch (err) {
+          const { message, diagnostics } = normalizeToolCallError(
+            call.name,
+            err,
+          );
+          result = toolResult({
+            error: message,
+            isError: true,
+            diagnostics,
+          });
+        }
+      }
+
+      // recordEdits returns per-call line changes as the single source of truth
+      const trackedEdits = tracker.recordEdits(result.edits);
+      const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
+      const sanitizedOutput = sanitizeToolResultForLog(result);
+      if (lineChanges) {
+        sanitizedOutput.lineChanges = lineChanges;
+      }
+      const editedFiles = trackedEdits.edits.map((entry) => ({
+        path: entry.path,
+        ok: true,
+        source: 'tool',
+        sourceDisplay: 'Tool use',
+      }));
+
+      if (editedFiles.length > 0) {
+        sanitizedOutput.files = editedFiles;
+      }
+
+      const toolUseLog = {
+        toolName: call.name,
+        input: parsedInput ?? call.raw,
+        output: sanitizedOutput,
+        ...(editedFiles.length > 0 && { files: editedFiles }),
+        isError: Boolean(result.isError),
+      };
+      options.logger.info('', {
+        groupId,
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: toolUseLog,
+      });
 
       // Log each tool execution as it completes
       await this.logAndProcessMediaFiles(execResult, options, store, groupId);
