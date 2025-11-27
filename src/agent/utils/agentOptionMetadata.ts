@@ -26,6 +26,7 @@ export interface AgentOptionMetadata {
   isToolUse: boolean;
   isRemote: boolean;
   description?: string;
+  agentType?: string;
 }
 
 export interface AgentOptionsPayload {
@@ -118,6 +119,7 @@ export function getAgentOptionMetadata(
     isToolUse: parsed?.settings.agentType === TOOL_USE_AGENT_TYPE,
     isRemote: false,
     description: parsed?.description,
+    agentType: parsed?.settings.agentType,
   };
 }
 
@@ -164,6 +166,9 @@ export function createAgentOptionTag(
   }
   if (metadata.description) {
     attributes.push(`data-description="${encodeHtml(metadata.description)}"`);
+  }
+  if (metadata.agentType) {
+    attributes.push(`data-agent-type="${encodeHtml(metadata.agentType)}"`);
   }
   if (options.isSelected) {
     attributes.push('selected');
