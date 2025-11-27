@@ -10,6 +10,7 @@ import {
   Content,
   GenerateContentResponse,
   FinishReason,
+  ThinkingLevel,
   type FunctionCall,
   type FunctionResponsePart,
   File,
@@ -106,10 +107,6 @@ function findLastTextPart(
   return undefined;
 }
 
-type GoogleGenerationConfig = GenerateContentConfig & {
-  thinkingLevel?: 'low' | 'medium' | 'high';
-};
-
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
     return 'model';
@@ -186,28 +183,36 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
+  private getThinkingLevel(): ThinkingLevel | undefined {
     const requestedLevel = this.capabilities.reasoningEffort;
     const isGemini3 = this.config.fullName.includes('gemini-3-pro');
 
     if (requestedLevel === ReasoningEffort.NONE) {
       if (isGemini3) {
         this.logger.warn(
-          "Gemini 3 Pro can't disable thinking. Using thinking_level 'high'.",
+          "Gemini 3 Pro can't disable thinking. Using thinking_level 'HIGH'.",
         );
-        return 'high';
+        return ThinkingLevel.HIGH;
       }
       return undefined;
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
       this.logger.warn(
-        "Google models don't support thinking_level 'medium'. Falling back to 'high'.",
+        "Google models don't support thinking_level 'MEDIUM'. Falling back to 'HIGH'.",
       );
-      return 'high';
+      return ThinkingLevel.HIGH;
     }
 
-    return requestedLevel as 'low' | 'high';
+    if (requestedLevel === ReasoningEffort.LOW) {
+      return ThinkingLevel.LOW;
+    }
+
+    if (requestedLevel === ReasoningEffort.HIGH) {
+      return ThinkingLevel.HIGH;
+    }
+
+    return undefined;
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -373,24 +378,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GoogleGenerationConfig = {
+    const generationConfig: GenerateContentConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
     };
 
-    const thinkingLevel = this.getThinkingLevel();
-    if (thinkingLevel && this.config.fullName.includes('gemini-3-pro')) {
-      generationConfig.thinkingLevel = thinkingLevel;
-    }
-
-    if (
-      this.config.fullName.includes('gemini-3-pro-preview') ||
+    // Configure thinking for models that support it
+    const supportsThinking =
+      this.config.fullName.includes('gemini-3-pro') ||
       this.config.fullName.includes('2.5-pro') ||
       this.config.fullName.includes('2.5-flash') ||
-      this.config.fullName.includes('flash-latest')
-    ) {
-      generationConfig.thinkingConfig = { includeThoughts: true };
+      this.config.fullName.includes('flash-latest');
+
+    if (supportsThinking) {
+      const thinkingLevel = this.getThinkingLevel();
+      generationConfig.thinkingConfig = {
+        includeThoughts: true,
+        ...(thinkingLevel && { thinkingLevel }),
+      };
     }
 
     if (tools && tools.length > 0) {
