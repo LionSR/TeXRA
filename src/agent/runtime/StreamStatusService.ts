@@ -2,7 +2,7 @@
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
-import { STATUS } from '@progressView/modules/constants.js';
+import { STATUS } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 // Type imports
 import type { StreamStatusOrReady } from '@eventBus/ProgressEventBus';
