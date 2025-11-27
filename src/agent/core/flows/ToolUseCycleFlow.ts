@@ -20,7 +20,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
-// Internal imports
+// Internal imports - use core ToolTypes as single source of truth
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { ToolResult } from '@agent/core/ToolTypes';
@@ -31,7 +31,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 // Type imports
 import type { ToolDefinition } from '@model';
-// Internal imports - use core ToolTypes as single source of truth
 import { withToolEditApprovalContext } from '@tools/approval/toolEditApprovalContext';
 import { WorkspaceFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
