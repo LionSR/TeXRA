@@ -884,7 +884,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       prefillTokens,
     );
     this.logger.debug(`Adding continuation message.`);
-    messages.push(createUserContent(createPartFromText(userMessageContinuation)));
+    messages.push(
+      createUserContent(createPartFromText(userMessageContinuation)),
+    );
   }
 
   updateMessageContentWithPrefill(/* ... */): void {
