@@ -80,10 +80,12 @@ type ChatCompletionRequestBase = Omit<
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
 type ReasoningContent = string | Array<{ type: string; text?: string }>;
 
-const extractReasoningText = (content: ReasoningContent | undefined): string => {
+const extractReasoningText = (
+  content: ReasoningContent | undefined,
+): string => {
   if (!content) return '';
   if (typeof content === 'string') return content;
-  return content.map(item => item.text ?? '').join('');
+  return content.map((item) => item.text ?? '').join('');
 };
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
@@ -1168,7 +1170,9 @@ export class ModelHandlerOpenAI<
           type: 'function',
           function: {
             name: call.function?.name ?? fallbackName,
-            arguments: this.ensureStringifiedArguments(call.function?.arguments),
+            arguments: this.ensureStringifiedArguments(
+              call.function?.arguments,
+            ),
           },
         };
       }
