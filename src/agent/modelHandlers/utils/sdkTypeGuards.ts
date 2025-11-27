@@ -46,11 +46,17 @@ export function isCustomToolCall(
 // ============================================================================
 
 /**
+ * Reasoning content can be a string or an array of content parts.
+ * This is provider-specific (DeepSeek, o1 models).
+ */
+export type ReasoningContent = string | Array<{ type: string; text?: string }>;
+
+/**
  * Extended delta type for reasoning models (DeepSeek, o1, etc.).
  * The SDK's ChatCompletionChunk.Choice.Delta doesn't include reasoning_content.
  */
 export interface ReasoningDelta extends ChatCompletionChunk.Choice.Delta {
-  reasoning_content?: string | Array<{ type: string; text?: string }>;
+  reasoning_content?: ReasoningContent;
 }
 
 /**
@@ -62,13 +68,11 @@ export function hasReasoningContent(
   return 'reasoning_content' in delta;
 }
 
-// ============================================================================
-// Generic Utility
-// ============================================================================
-
 /**
- * Type guard for non-null objects.
+ * Extract text from reasoning content (handles both string and array formats).
  */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+export function extractReasoningText(content: ReasoningContent | undefined): string {
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  return content.map(item => item.text ?? '').join('');
 }
