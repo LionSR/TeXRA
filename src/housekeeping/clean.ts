@@ -11,15 +11,15 @@ import type { FileOpResult } from '@agent/types/ResultTypes';
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
-import { WorkspaceFS } from '@utils/files';
+import { MODELS } from '@model/ModelRegistry';
 import { getConfig } from '@utils/config';
+import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
 import {
   EXCLUDED_DIRS,
   TEMP_EXTENSIONS,
   PACK_EXTENSIONS,
-  MODELS,
   DEFAULT_MAX_ROUNDS,
 } from './constants';
 import {
