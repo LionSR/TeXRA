@@ -82,7 +82,6 @@ import type {
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
   ResponseOutputMessage,
-  ResponseOutputText,
   // Streaming event types
   ResponseTextDeltaEvent,
   ResponseReasoningTextDeltaEvent,
@@ -969,9 +968,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const finalStatus = current.status;
 
     const isTerminal =
-      !!finalStatus &&
+      finalStatus !== undefined &&
       ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES.includes(
-        finalStatus as ResponseStatus,
+        finalStatus,
       );
 
     if (!isTerminal) {

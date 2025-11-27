@@ -46,10 +46,6 @@ export async function sleepWithAbort(
     };
 
     const onAbort = () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
       cleanup();
       reject(new DOMException('The operation was aborted.', 'AbortError'));
     };
