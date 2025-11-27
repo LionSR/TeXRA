@@ -6,13 +6,17 @@ import { basename } from 'node:path';
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 
 /** Supported image media types from SDK's Base64ImageSource definition */
-const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<Base64ImageSource['media_type']> =
-  new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
 
 const isSupportedImageMediaType = (
   mediaType: string,
 ): mediaType is Base64ImageSource['media_type'] =>
-  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType as Base64ImageSource['media_type']);
+  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType);
 
 interface UploadedAnthropicAttachment {
   attachment: ToolFileAttachment;
@@ -1676,9 +1680,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
       workspaceState.reasoning.thinkingBlocks.length > 0
     ) {
       // Anthropic models expect thinking blocks before text
+      // Include thinking blocks from workspace state as SDK thinking params
       content.push(
         ...(workspaceState.reasoning
-          .thinkingBlocks as unknown as ContentBlockParam[]),
+          .thinkingBlocks as AnthropicThinkingContentParam[]),
       );
       // Clear cached thinking so the next response can store fresh blocks
       workspaceState.resetReasoning();
