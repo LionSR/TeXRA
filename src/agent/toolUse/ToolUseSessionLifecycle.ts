@@ -14,7 +14,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 // Internal imports
-import { STATUS } from '@progressView/modules/constants.js';
+import { STATUS } from '@common/constants/streamStatus';
 
 export class ToolUseSessionLifecycle<C = unknown> {
   private readonly followUps: FollowUpQueue;
