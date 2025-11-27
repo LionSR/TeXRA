@@ -37,7 +37,7 @@ import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { sleep } from '@utils/helpers';
+import { sleepWithAbort } from '@utils/helpers';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -60,7 +60,7 @@ import type {
   OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
-import type { Reasoning } from 'openai/resources/shared';
+import type { Reasoning, ReasoningEffort } from 'openai/resources/shared';
 import type {
   EasyInputMessage,
   Response,
@@ -78,6 +78,14 @@ import type {
   ResponseInputText,
   ResponseInputAudio,
   ResponseStreamEvent,
+  ResponseStatus,
+  ResponseFunctionCallOutputItemList,
+  ResponseOutputItem,
+  ResponseOutputMessage,
+  // Streaming event types
+  ResponseTextDeltaEvent,
+  ResponseReasoningTextDeltaEvent,
+  ResponseReasoningSummaryTextDeltaEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -159,16 +167,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
-  private static readonly BACKGROUND_PENDING_STATUSES = [
-    'queued',
-    'in_progress',
-  ] as const;
-  private static readonly BACKGROUND_TERMINAL_STATUSES = [
-    'completed',
-    'failed',
-    'cancelled',
-    'expired',
-  ] as const;
+  /** Statuses indicating the background response is still processing. */
+  private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
+    ['queued', 'in_progress'];
+  /** Statuses indicating the background response has finished (success or failure). */
+  private static readonly BACKGROUND_TERMINAL_STATUSES: readonly ResponseStatus[] =
+    ['completed', 'failed', 'cancelled', 'incomplete'];
   private previousResponseId: string | null = null;
   private sentMessages = 0;
 
@@ -611,7 +615,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         reasoning.summary = 'auto';
       }
       if (this.capabilities.supportsReasoningEffort) {
-        reasoning.effort = 'high';
+        const effort: ReasoningEffort = 'high';
+        reasoning.effort = effort;
       }
       params.reasoning = reasoning;
     }
@@ -632,20 +637,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;
-      const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
-      for await (const event of responseStream) {
-        switch (event.type) {
-          case 'response.reasoning_text.delta':
-          case 'response.reasoning_summary_text.delta': {
-            thinking.append(event.delta);
-            break;
-          }
-          case 'response.output_text.delta': {
-            output?.append(event.delta);
-            break;
-          }
-          default:
-            break;
+      for await (const event of stream) {
+        if (this.isReasoningDeltaEvent(event)) {
+          thinking.append(event.delta);
+        } else if (this.isTextDeltaEvent(event)) {
+          output?.append(event.delta);
         }
       }
 
@@ -738,20 +734,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const fallbackSegments: string[] = [];
 
       for (const item of responseObject.output) {
-        if (item.type !== 'message') {
+        if (!this.isOutputMessage(item)) {
           continue;
         }
 
-        const content = (item as { content?: unknown[] }).content;
-        if (!Array.isArray(content)) {
-          continue;
-        }
-
-        for (const part of content) {
-          const partType = (part as { type?: unknown }).type;
-          const partText = (part as { text?: unknown }).text;
-          if (partType === 'output_text' && typeof partText === 'string') {
-            fallbackSegments.push(partText);
+        for (const part of item.content) {
+          if (part.type === 'output_text') {
+            fallbackSegments.push(part.text);
           }
         }
       }
@@ -853,7 +842,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES.includes(
-      status as (typeof ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES)[number],
+      status,
     );
   }
 
@@ -898,7 +887,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
       try {
-        await this.waitWithAbort(pollInterval, signal);
+        await sleepWithAbort(pollInterval, signal);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
@@ -979,9 +968,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const finalStatus = current.status;
 
     const isTerminal =
-      !!finalStatus &&
+      finalStatus !== undefined &&
       ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES.includes(
-        finalStatus as (typeof ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES)[number],
+        finalStatus,
       );
 
     if (!isTerminal) {
@@ -1021,56 +1010,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return current;
-  }
-
-  private async waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
-    if (!signal) {
-      await sleep(ms);
-      return;
-    }
-
-    if (signal.aborted) {
-      throw new DOMException('The operation was aborted.', 'AbortError');
-    }
-
-    const supportsAbortTimeout = typeof AbortSignal.timeout === 'function';
-
-    await new Promise<void>((resolve, reject) => {
-      let timeoutId: NodeJS.Timeout | undefined;
-      let timeoutSignal: AbortSignal | undefined;
-
-      const cleanup = () => {
-        signal.removeEventListener('abort', onAbort);
-        timeoutSignal?.removeEventListener('abort', onTimeout);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-      };
-
-      const onAbort = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-        cleanup();
-        reject(new DOMException('The operation was aborted.', 'AbortError'));
-      };
-
-      const onTimeout = () => {
-        cleanup();
-        resolve();
-      };
-
-      signal.addEventListener('abort', onAbort, { once: true });
-
-      if (supportsAbortTimeout) {
-        timeoutSignal = AbortSignal.timeout(ms);
-        timeoutSignal.addEventListener('abort', onTimeout, { once: true });
-      } else {
-        timeoutId = setTimeout(onTimeout, ms);
-      }
-    });
   }
 
   /** Adds continuation instructions for models without prefill support. */
@@ -1404,14 +1343,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? `${primaryText}\n\n${summaryPayload}`
       : summaryPayload;
 
-    let outputPayload:
-      | string
-      | Array<ResponseInputText | ResponseInputImage | ResponseInputFile>;
+    let outputPayload: string | ResponseFunctionCallOutputItemList;
 
     if (uploadedAttachments.length > 0) {
-      const parts: Array<
-        ResponseInputText | ResponseInputImage | ResponseInputFile
-      > = [{ type: 'input_text', text: combinedText }];
+      const parts: ResponseFunctionCallOutputItemList = [
+        { type: 'input_text', text: combinedText },
+      ];
 
       for (const uploaded of uploadedAttachments) {
         if (supportsInlineImages && uploaded.isImage) {
@@ -1548,6 +1485,28 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const content = (item as { content?: unknown }).content;
     return typeof content === 'string' || Array.isArray(content);
+  }
+
+  /** Type guard for ResponseOutputMessage items from the SDK. */
+  private isOutputMessage(item: ResponseOutputItem): item is ResponseOutputMessage {
+    return item.type === 'message';
+  }
+
+  /** Type alias for reasoning delta events (both raw and summary). */
+  private isReasoningDeltaEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseReasoningTextDeltaEvent | ResponseReasoningSummaryTextDeltaEvent {
+    return (
+      event.type === 'response.reasoning_text.delta' ||
+      event.type === 'response.reasoning_summary_text.delta'
+    );
+  }
+
+  /** Type guard for text output delta events. */
+  private isTextDeltaEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseTextDeltaEvent {
+    return event.type === 'response.output_text.delta';
   }
 
   private getMessageContent(
