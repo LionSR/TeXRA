@@ -15,6 +15,7 @@ export class RetryRequests extends BaseUIRequestManager {
       containerId: 'retryRequests',
       listSelector: '.retry-requests__list',
       idAttribute: 'streamId',
+      requireToolAgent: false, // Show for all stream types (workflow, tool-use, etc.)
     });
   }
 
