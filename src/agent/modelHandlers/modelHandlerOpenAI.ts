@@ -97,7 +97,7 @@ export interface StreamingAggregator {
   finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
-const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
+export const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   const choice = chunk.choices[0];
   if (!choice) return '';
 
