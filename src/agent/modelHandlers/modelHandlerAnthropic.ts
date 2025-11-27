@@ -5,19 +5,14 @@ import { basename } from 'node:path';
 // Third-party imports
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 
+/** Supported image media types from SDK's Base64ImageSource definition */
+const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<Base64ImageSource['media_type']> =
+  new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
 const isSupportedImageMediaType = (
   mediaType: string,
-): mediaType is BetaBase64ImageSource['media_type'] => {
-  switch (mediaType) {
-    case 'image/jpeg':
-    case 'image/png':
-    case 'image/gif':
-    case 'image/webp':
-      return true;
-    default:
-      return false;
-  }
-};
+): mediaType is Base64ImageSource['media_type'] =>
+  SUPPORTED_IMAGE_MEDIA_TYPES.has(mediaType as Base64ImageSource['media_type']);
 
 interface UploadedAnthropicAttachment {
   attachment: ToolFileAttachment;
@@ -94,8 +89,6 @@ import type {
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
-  BetaBase64ImageSource,
-  BetaCacheControlEphemeral,
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
@@ -106,6 +99,8 @@ import type {
   BetaToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
+  Base64ImageSource,
+  CacheControlEphemeral,
   MessageParam,
   ContentBlock,
   ContentBlockParam,
@@ -132,7 +127,7 @@ type CacheControlEligibleBlock =
   | (ContentBlockParam & BetaTextBlockParam)
   | (ContentBlockParam & BetaToolResultBlockParam);
 
-const EPHEMERAL_CACHE_CONTROL: BetaCacheControlEphemeral = {
+const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
 
@@ -1013,7 +1008,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           return [descriptionBlock, documentBlock];
         }
 
-        let imageMediaType: BetaBase64ImageSource['media_type'];
+        let imageMediaType: Base64ImageSource['media_type'];
         if (isSupportedImageMediaType(resolvedMediaType)) {
           imageMediaType = resolvedMediaType;
         } else {
@@ -1706,7 +1701,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (uploaded.blockType === 'image') {
         if (supportsInlineImages && uploaded.base64Data) {
           const mediaType =
-            (uploaded.mediaType as BetaBase64ImageSource['media_type']) ??
+            (uploaded.mediaType as Base64ImageSource['media_type']) ??
             'image/png';
           toolResultContent.push({
             type: 'image',
