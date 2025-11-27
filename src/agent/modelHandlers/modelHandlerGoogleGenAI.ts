@@ -1307,9 +1307,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Validate all calls have IDs
-    for (const call of calls) {
+    for (const [index, call] of calls.entries()) {
       if (!call.callId) {
-        throw new Error('Function call id is required for follow-up messages');
+        throw new Error(
+          `Function call at index ${index} (${call.name ?? 'unknown'}) is missing callId`,
+        );
       }
     }
 
