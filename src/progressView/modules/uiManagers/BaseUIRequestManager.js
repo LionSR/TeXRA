@@ -172,8 +172,12 @@ export class BaseUIRequestManager {
     }
 
     const activeStream = this.activeStream;
+    // Only require tool agent check if configured (default true for backward compat)
+    const agentCheck = this._config.requireToolAgent
+      ? this.isToolAgentActive
+      : true;
     const shouldDisplay =
-      this.isToolAgentActive && Boolean(activeStream && activeStream.length);
+      agentCheck && Boolean(activeStream && activeStream.length);
 
     const fragment = document.createDocumentFragment();
     for (const entry of this.requests.values()) {
