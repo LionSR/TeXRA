@@ -37,7 +37,7 @@ import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { sleep } from '@utils/helpers';
+import { sleepWithAbort } from '@utils/helpers';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -888,7 +888,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
       );
       try {
-        await this.waitWithAbort(pollInterval, signal);
+        await sleepWithAbort(pollInterval, signal);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           this.logger.warn(
@@ -1011,56 +1011,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return current;
-  }
-
-  private async waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
-    if (!signal) {
-      await sleep(ms);
-      return;
-    }
-
-    if (signal.aborted) {
-      throw new DOMException('The operation was aborted.', 'AbortError');
-    }
-
-    const supportsAbortTimeout = typeof AbortSignal.timeout === 'function';
-
-    await new Promise<void>((resolve, reject) => {
-      let timeoutId: NodeJS.Timeout | undefined;
-      let timeoutSignal: AbortSignal | undefined;
-
-      const cleanup = () => {
-        signal.removeEventListener('abort', onAbort);
-        timeoutSignal?.removeEventListener('abort', onTimeout);
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-      };
-
-      const onAbort = () => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          timeoutId = undefined;
-        }
-        cleanup();
-        reject(new DOMException('The operation was aborted.', 'AbortError'));
-      };
-
-      const onTimeout = () => {
-        cleanup();
-        resolve();
-      };
-
-      signal.addEventListener('abort', onAbort, { once: true });
-
-      if (supportsAbortTimeout) {
-        timeoutSignal = AbortSignal.timeout(ms);
-        timeoutSignal.addEventListener('abort', onTimeout, { once: true });
-      } else {
-        timeoutId = setTimeout(onTimeout, ms);
-      }
-    });
   }
 
   /** Adds continuation instructions for models without prefill support. */
