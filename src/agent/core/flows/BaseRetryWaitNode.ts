@@ -153,6 +153,13 @@ class RetryWaitNode<
         logger,
         operation: this.accessors.operationName,
       });
+
+      // Emit event to show retry request in UI
+      bus.emit('showRetryRequest', {
+        streamId,
+        operation: this.accessors.operationName,
+        errorMessage: retryState.lastError?.message,
+      });
     });
   }
 

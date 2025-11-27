@@ -15,6 +15,7 @@ import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 import type {
   InstructionUpdate,
+  RetryRequestPrompt,
   StreamTabInfo,
   ToolEditApprovalPrompt,
 } from '@progressView/types';
@@ -197,6 +198,20 @@ export class WebviewUpdater {
     this.sendMessage({
       command: COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE,
       bypassActive,
+    });
+  }
+
+  showRetryRequest(request: RetryRequestPrompt): void {
+    this.sendMessage({
+      command: COMMANDS.SHOW_RETRY_REQUEST,
+      request,
+    });
+  }
+
+  resolveRetryRequest(streamId: string): void {
+    this.sendMessage({
+      command: COMMANDS.RESOLVE_RETRY_REQUEST,
+      streamId,
     });
   }
 
