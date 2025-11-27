@@ -33,7 +33,6 @@ import type { ToolUseCycleOptions } from './flows/CycleServices';
 export type { ToolUseCycleOptions };
 import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
-
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];

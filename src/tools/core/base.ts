@@ -2,15 +2,23 @@
 import { ZodError, type ZodType } from 'zod';
 
 // Local imports - common
+
+// Local imports - core tool types (single source of truth)
+import type { ITool, ToolDefinition, ToolResult } from '@agent/core/ToolTypes';
+import { toolResult } from '@agent/core/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
-// Local imports - model
-import type { ToolDefinition } from '@model';
-
-// Internal imports - tools
-import { ToolResult, toolResult } from '@tools/result';
-
-export abstract class BaseTool<T> {
+/**
+ * Abstract base class for tool implementations.
+ *
+ * Implements the ITool interface and provides:
+ * - Zod schema validation
+ * - Centralized error handling with diagnostics
+ * - Type-safe input parsing
+ *
+ * Subclasses must implement the execute() method.
+ */
+export abstract class BaseTool<T> implements ITool {
   readonly definition: ToolDefinition;
   readonly schema: ZodType<T>;
 
