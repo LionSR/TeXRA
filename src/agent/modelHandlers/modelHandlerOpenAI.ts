@@ -61,8 +61,8 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import {
-  isRecord,
   hasReasoningContent,
+  extractReasoningText,
   isFunctionToolCall,
   isCustomToolCall,
 } from './utils/sdkTypeGuards';
@@ -84,19 +84,6 @@ type ChatCompletionRequestBase = Omit<
   'stream' | 'stream_options'
 >;
 
-const collectTextFromUnknown = (value: unknown): string => {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(collectTextFromUnknown).join('');
-  }
-  if (isRecord(value) && typeof value.text === 'string') {
-    return value.text;
-  }
-  return '';
-};
-
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 export interface StreamingAggregator {
@@ -108,16 +95,12 @@ export interface StreamingAggregator {
 
 const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   const choice = chunk.choices[0];
-  if (!choice) {
-    return '';
-  }
+  if (!choice) return '';
 
   const delta = choice.delta;
-  if (!hasReasoningContent(delta)) {
-    return '';
-  }
+  if (!hasReasoningContent(delta)) return '';
 
-  return collectTextFromUnknown(delta.reasoning_content);
+  return extractReasoningText(delta.reasoning_content);
 };
 
 /**
