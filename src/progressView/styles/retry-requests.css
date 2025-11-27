@@ -1,0 +1,100 @@
+.retry-requests {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--vscode-inputValidation-warningBorder, #856404);
+  background: var(--vscode-inputValidation-warningBackground, #fff3cd);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: none;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.retry-requests.is-visible {
+  display: flex;
+}
+
+.retry-requests__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--vscode-editor-foreground);
+}
+
+.retry-requests__header .codicon {
+  color: var(--vscode-notificationsWarningIcon-foreground, #cca700);
+}
+
+.retry-requests__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.retry-request {
+  border-radius: 4px;
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  background: var(--vscode-editorHoverWidget-background);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.retry-request__details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.retry-request__operation {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85rem;
+  color: var(--vscode-editor-foreground);
+  font-weight: 500;
+}
+
+.retry-request__meta {
+  font-size: 0.8rem;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.retry-request__error {
+  font-size: 0.8rem;
+  color: var(--vscode-errorForeground, #f14c4c);
+  word-break: break-word;
+  max-height: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.retry-request__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.retry-request__actions::part(container) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.retry-request__actions vscode-toolbar-button {
+  min-width: auto;
+  flex: 1 1 8rem;
+}
+
+.retry-request__actions vscode-toolbar-button::part(control) {
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.retry-request__actions [hidden] {
+  display: none !important;
+}
