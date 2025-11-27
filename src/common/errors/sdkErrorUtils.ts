@@ -256,10 +256,14 @@ function matchNativeHttpError(
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
+    // Known SDK error types without status codes are unusual (SDK errors typically
+    // have status codes). Be conservative and don't retry.
+    // Note: This differs from formatProviderHttpError's fallback which treats
+    // unrecognized errors without status codes as retryable (likely network errors).
     return {
       message: finalMessage,
       provider: entry.provider,
-      retryable: false, // Unknown errors without status codes are not retryable by default
+      retryable: false,
     };
   }
 
@@ -405,8 +409,10 @@ export function formatProviderHttpError(
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
-    // Unknown errors without status codes are likely network/connection errors
-    // which should be retryable
+    // Unrecognized errors without status codes reached the fallback path.
+    // These are likely network/connection errors (not SDK-typed) and should
+    // be retryable. Note: This differs from matchNativeHttpError which is
+    // conservative for known SDK types missing status codes.
     return {
       message: finalMessage,
       provider,

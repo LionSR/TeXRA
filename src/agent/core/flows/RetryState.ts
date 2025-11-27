@@ -18,8 +18,6 @@ import { sleep } from '@utils/helpers';
 
 import { FlowTransition } from './FlowTransitions';
 
-const RETRYABLE_NON_5XX_STATUS_CODES = new Set([408, 429]);
-
 /** Timeout for manual retry wait (5 minutes) - exported for BaseRetryWaitNode */
 export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -119,20 +117,6 @@ export function beginAttempt(state: RetryState): void {
 // ============================================================================
 // Pure predicates
 // ============================================================================
-
-/**
- * Determines if an HTTP status code is retryable (5xx or 408/429).
- * @deprecated Use the `retryable` field from `formatProviderHttpError` instead.
- */
-export function isRetryableStatusCode(statusCode?: number): boolean {
-  if (statusCode === undefined) {
-    return false;
-  }
-  if (statusCode >= 500) {
-    return true;
-  }
-  return RETRYABLE_NON_5XX_STATUS_CODES.has(statusCode);
-}
 
 /**
  * Determines if automatic retry should be attempted based on current state.
