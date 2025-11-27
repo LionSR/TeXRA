@@ -554,6 +554,85 @@ For each change:
 
 ---
 
+## 6. Further Simplification Opportunities
+
+### Reduce Abstraction Layers
+
+The current architecture has several normalization/wrapper layers that could be simplified:
+
+#### `SdkToolCall` Wrapper Type
+
+**Current:** Each tool call is wrapped with a provider discriminant and extracted fields:
+```typescript
+export type OpenAIToolCall = {
+  provider: 'openai';
+  callId: string;      // extracted from raw.id
+  name: string;        // extracted from raw.function.name
+  input: unknown;      // parsed from raw.function.arguments
+  raw: ChatCompletionMessageToolCall;  // original SDK type
+};
+```
+
+**Issue:** This duplicates data already in `raw` and adds an abstraction layer.
+
+**Potential Simplification:** Use the SDK type directly with a provider tag:
+```typescript
+export type OpenAIToolCall = ChatCompletionMessageToolCall & {
+  provider: 'openai';
+};
+```
+
+#### `normalizeToolCall` Method
+
+**Current:** Reconstructs SDK types with fallbacks:
+```typescript
+protected normalizeToolCall(id, fallbackName, call) {
+  return {
+    id: call.id ?? id,  // fallback rarely needed
+    type: 'function',
+    function: { name: call.function?.name ?? fallbackName, ... }
+  };
+}
+```
+
+**Issue:** The SDK already returns valid data; fallbacks may be unnecessary defensive coding.
+
+**Potential Simplification:** Use `call.raw` directly if it's already a valid `ChatCompletionMessageToolCall`:
+```typescript
+async createToolUseFollowUpMessages(client, call, result) {
+  // Use raw SDK type directly instead of normalizing
+  const callMsg: ChatCompletionAssistantMessageParam = {
+    role: 'assistant',
+    tool_calls: [call.raw],  // Direct use
+  };
+  // ...
+}
+```
+
+#### Inline Type Guards vs Utility Functions
+
+**Current:** Separate type guard functions:
+```typescript
+if (isFunctionToolCall(call)) { ... }
+```
+
+**Alternative:** TypeScript discriminated unions work directly:
+```typescript
+if ('type' in call && call.type === 'function') { ... }
+```
+
+The SDK's `ChatCompletionMessageToolCall` is already a discriminated union on `type`. TypeScript narrows automatically.
+
+### Recommendation
+
+Consider these simplifications in Phase 3 after stabilizing the Phase 1-2 type improvements:
+
+1. **Audit `normalizeToolCall` usage** - determine if fallbacks are ever triggered
+2. **Flatten `SdkToolCall`** - extend SDK types instead of wrapping
+3. **Remove unnecessary type guards** - use inline discriminant checks where TypeScript inference works
+
+---
+
 ## Summary of Benefits
 
 | Improvement | Benefit |
