@@ -109,7 +109,13 @@ class StubOpenAIResponsesHandler extends ModelHandlerOpenAIResponse {
   override extractResponse() {
     return {
       response: '<doc>Final</doc>',
-      usage: { totalInputTokens: 5, totalOutputTokens: 7 },
+      usage: {
+        input_tokens: 5,
+        output_tokens: 7,
+        total_tokens: 12,
+        input_tokens_details: { cached_tokens: 0 },
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
       stopReason: OPENAI_CHAT_FINISH.STOP,
     };
   }
