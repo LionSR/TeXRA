@@ -642,7 +642,13 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
 
     // recordEdits returns per-call line changes as the single source of truth
+    options.logger.debug(
+      `executeToolCall ${call.name}: result.edits=${JSON.stringify(result.edits)}`,
+    );
     const trackedEdits = tracker.recordEdits(result.edits);
+    options.logger.debug(
+      `executeToolCall ${call.name}: trackedEdits=${JSON.stringify(trackedEdits.edits)}`,
+    );
     const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
     const sanitizedOutput = sanitizeToolResultForLog(result);
     if (lineChanges) {

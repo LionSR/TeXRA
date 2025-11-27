@@ -105,7 +105,12 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
   const interactions = store.workspace.interactions.toJSON();
 
+  options.logger.debug(
+    `emitEditedFiles called: ${interactions.edits.length} edits tracked, ${interactions.readFiles.length} files read`,
+  );
+
   if (interactions.edits.length === 0) {
+    options.logger.debug('emitEditedFiles: no edits to emit, returning early');
     return;
   }
 
