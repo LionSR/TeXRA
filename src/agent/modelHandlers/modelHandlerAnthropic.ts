@@ -89,14 +89,15 @@ import type {
 } from './types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
+  BetaContentBlock,
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
+  BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
-  BetaTextBlockParam,
+  BetaThinkingBlock,
   MessageCountTokensParams,
   MessageCreateParams,
-  BetaToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   Base64ImageSource,
@@ -108,7 +109,46 @@ import type {
   TextBlockParam,
   ImageBlockParam,
   DocumentBlockParam,
+  ThinkingBlockParam,
+  RedactedThinkingBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
+
+/**
+ * Union type for thinking content blocks from Anthropic Beta API responses.
+ * These blocks contain the model's internal reasoning process.
+ * Uses Beta types since BetaMessage.content returns BetaContentBlock[].
+ */
+type BetaThinkingContent = BetaThinkingBlock | BetaRedactedThinkingBlock;
+
+/**
+ * Union type for thinking block params used in API requests.
+ * Used when including thinking blocks in follow-up messages.
+ */
+type AnthropicThinkingContentParam = ThinkingBlockParam | RedactedThinkingBlockParam;
+
+/** Type guard for Anthropic thinking blocks in Beta API responses */
+const isBetaThinkingBlock = (block: BetaContentBlock): block is BetaThinkingBlock =>
+  block.type === 'thinking';
+
+/** Type guard for Anthropic redacted thinking blocks in Beta API responses */
+const isBetaRedactedThinkingBlock = (block: BetaContentBlock): block is BetaRedactedThinkingBlock =>
+  block.type === 'redacted_thinking';
+
+/** Type guard for any thinking-related content block in Beta API responses */
+const isAnyBetaThinkingBlock = (block: BetaContentBlock): block is BetaThinkingContent =>
+  isBetaThinkingBlock(block) || isBetaRedactedThinkingBlock(block);
+
+/** Type guard for thinking block params in message content */
+const isThinkingBlockParam = (block: ContentBlockParam): block is ThinkingBlockParam =>
+  block.type === 'thinking';
+
+/** Type guard for redacted thinking block params in message content */
+const isRedactedThinkingBlockParam = (block: ContentBlockParam): block is RedactedThinkingBlockParam =>
+  block.type === 'redacted_thinking';
+
+/** Type guard for any thinking-related content block param */
+const isAnyThinkingBlockParam = (block: ContentBlockParam): block is AnthropicThinkingContentParam =>
+  isThinkingBlockParam(block) || isRedactedThinkingBlockParam(block);
 
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
@@ -123,9 +163,14 @@ const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
 
 const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 
-type CacheControlEligibleBlock =
-  | (ContentBlockParam & BetaTextBlockParam)
-  | (ContentBlockParam & BetaToolResultBlockParam);
+/**
+ * Block types that support cache_control for prompt caching.
+ * Uses SDK's ContentBlockParam with Extract to get text and tool_result types.
+ */
+type CacheControlEligibleBlock = Extract<
+  ContentBlockParam,
+  { type: 'text' | 'tool_result' }
+>;
 
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
@@ -993,7 +1038,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           type: 'text',
           text: `${isPdf ? 'Document' : 'Image'}: ${media.file_name}`,
           citations: null,
-        } satisfies BetaTextBlockParam;
+        } satisfies TextBlockParam;
 
         if (isPdf) {
           const documentBlock = {
@@ -1390,10 +1435,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (secondLastMessage && secondLastMessage.role === 'assistant') {
         // Preserve any thinking blocks that might exist in the content array
         const thinkingBlocks = Array.isArray(secondLastMessage.content)
-          ? secondLastMessage.content.filter(
-              (item) =>
-                item.type === 'thinking' || item.type === 'redacted_thinking',
-            )
+          ? secondLastMessage.content.filter(isAnyThinkingBlockParam)
           : [];
 
         // Text blocks filtering removed - was unused
@@ -1452,9 +1494,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
           `Adding ${workspaceState.reasoning.thinkingBlocks.length} thinking blocks to new assistant message`,
         );
         if (Array.isArray(assistantMessage.content)) {
+          // Include thinking blocks from workspace state in the message content
           assistantMessage.content.push(
             ...(workspaceState.reasoning
-              .thinkingBlocks as unknown as ContentBlockParam[]),
+              .thinkingBlocks as AnthropicThinkingContentParam[]),
           );
         }
         // Clear cached thinking so the next response can store fresh blocks
@@ -1534,21 +1577,21 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return null;
     }
 
-    // Extract all thinking blocks from the response
-    const thinkingBlocks = [];
-    let regularThinkingContent = null;
+    // Extract all thinking blocks from the response using SDK type guards
+    const thinkingBlocks: BetaThinkingContent[] = [];
+    let regularThinkingContent: string | null = null;
 
     try {
       if (responseObject.content && Array.isArray(responseObject.content)) {
-        // Collect all thinking and redacted_thinking blocks
+        // Collect all thinking and redacted_thinking blocks using type guards
         for (const item of responseObject.content) {
-          if (item.type === 'thinking' && item.thinking) {
+          if (isBetaThinkingBlock(item) && item.thinking) {
             thinkingBlocks.push(item);
             // Save the first regular thinking content for returning
             if (regularThinkingContent === null) {
               regularThinkingContent = item.thinking;
             }
-          } else if (item.type === 'redacted_thinking' && item.data) {
+          } else if (isBetaRedactedThinkingBlock(item) && item.data) {
             thinkingBlocks.push(item);
           }
         }
@@ -1574,8 +1617,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         regularThinkingContent &&
         !this.containCutOffMessage(regularThinkingContent)
       ) {
+        // Store SDK thinking blocks in workspace state for conversation continuation
         workspaceState.reasoning.thinkingBlocks =
-          thinkingBlocks as unknown as ThinkingBlock[];
+          thinkingBlocks as ThinkingBlock[];
         // thinkingBlock is now a getter that returns thinkingBlocks[0]
         workspaceState.reasoning.thinkingAdded = true;
         this.logger.debug(
