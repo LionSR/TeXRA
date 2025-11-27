@@ -1,5 +1,6 @@
 // Third-party imports
 import { FinishReason } from '@google/genai';
+import type { StopReason as AnthropicSDKStopReason } from '@anthropic-ai/sdk/resources/messages';
 
 /**
  * Finish reasons returned by the OpenAI Chat Completion API.
@@ -59,7 +60,10 @@ export const MCP_STOP = {
 export const MCP_STOP_REASONS = Object.values(MCP_STOP);
 export type MCPStopReason = (typeof MCP_STOP_REASONS)[number];
 
-/** Stop reasons for Anthropic models. */
+/**
+ * Stop reasons for Anthropic models.
+ * Runtime constants for comparison - values match SDK's StopReason type.
+ */
 export const ANTHROPIC_STOP = {
   END_TURN: 'end_turn',
   MAX_TOKENS: 'max_tokens',
@@ -67,9 +71,10 @@ export const ANTHROPIC_STOP = {
   TOOL_USE: 'tool_use',
   PAUSE_TURN: 'pause_turn',
   REFUSAL: 'refusal',
-} as const;
+} as const satisfies Record<string, AnthropicSDKStopReason>;
 export const ANTHROPIC_STOP_REASONS = Object.values(ANTHROPIC_STOP);
-export type AnthropicStopReason = (typeof ANTHROPIC_STOP_REASONS)[number];
+/** Anthropic stop reason type - derived from SDK's StopReason */
+export type AnthropicStopReason = AnthropicSDKStopReason;
 
 /** Finish reasons returned by Google's API. */
 export const GOOGLE_FINISH_REASONS = [
