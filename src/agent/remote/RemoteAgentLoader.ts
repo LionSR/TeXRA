@@ -22,6 +22,7 @@ export interface RemoteAgentMetadata {
   description: string;
   tags: string[];
   visibility: 'public' | 'researcher' | 'whitelist';
+  agentType?: string;
 }
 
 export interface RemoteAgentConfig {
@@ -252,7 +253,7 @@ export class RemoteAgentLoader {
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, tags, visibility')
+        .select('id, name, description, tags, visibility, agent_type')
         .order('name');
 
       if (error) {
@@ -260,7 +261,15 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      return (data || []) as RemoteAgentMetadata[];
+      // Map snake_case DB columns to camelCase interface
+      return (data || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        tags: row.tags,
+        visibility: row.visibility,
+        agentType: row.agent_type,
+      })) as RemoteAgentMetadata[];
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
