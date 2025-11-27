@@ -1,12 +1,25 @@
 import * as vscode from 'vscode';
 
+/** Metadata stored for each remote agent. */
+export interface RemoteAgentInfo {
+  description?: string;
+  agentType?: string;
+}
+
+/** Persisted state structure for remote agent registry. */
+interface PersistedState {
+  agents: string[];
+  metadata: Record<string, RemoteAgentInfo>;
+}
+
 /**
  * Registry tracking remote agent status without prefix markers.
  * State is persisted to ExtensionContext.globalState for resilience across VS Code reloads.
  */
 class RemoteAgentRegistryClass {
-  private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry';
+  private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry.v2';
   private remoteAgents = new Set<string>();
+  private agentMetadata = new Map<string, RemoteAgentInfo>();
   private context: vscode.ExtensionContext | null = null;
 
   /**
@@ -14,11 +27,13 @@ class RemoteAgentRegistryClass {
    */
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    const persisted = context.globalState.get<string[]>(
+    const persisted = context.globalState.get<PersistedState>(
       RemoteAgentRegistryClass.STORAGE_KEY,
-      [],
     );
-    this.remoteAgents = new Set(persisted);
+    if (persisted) {
+      this.remoteAgents = new Set(persisted.agents);
+      this.agentMetadata = new Map(Object.entries(persisted.metadata || {}));
+    }
   }
 
   /**
@@ -26,9 +41,13 @@ class RemoteAgentRegistryClass {
    */
   private async persist(): Promise<void> {
     if (this.context) {
+      const state: PersistedState = {
+        agents: Array.from(this.remoteAgents),
+        metadata: Object.fromEntries(this.agentMetadata),
+      };
       await this.context.globalState.update(
         RemoteAgentRegistryClass.STORAGE_KEY,
-        Array.from(this.remoteAgents),
+        state,
       );
     }
   }
@@ -42,10 +61,17 @@ class RemoteAgentRegistryClass {
   }
 
   /**
-   * Register multiple agents as remote.
+   * Register multiple agents as remote with optional metadata.
    */
-  registerMultiple(agentNames: string[]): void {
-    agentNames.forEach((name) => this.remoteAgents.add(name));
+  registerMultiple(
+    agents: Array<{ name: string; description?: string; agentType?: string }>,
+  ): void {
+    agents.forEach(({ name, description, agentType }) => {
+      this.remoteAgents.add(name);
+      if (description || agentType) {
+        this.agentMetadata.set(name, { description, agentType });
+      }
+    });
     void this.persist();
   }
 
@@ -72,6 +98,7 @@ class RemoteAgentRegistryClass {
    */
   unregister(agentName: string): void {
     this.remoteAgents.delete(agentName);
+    this.agentMetadata.delete(agentName);
     void this.persist();
   }
 
@@ -80,6 +107,7 @@ class RemoteAgentRegistryClass {
    */
   clear(): void {
     this.remoteAgents.clear();
+    this.agentMetadata.clear();
     void this.persist();
   }
 
@@ -88,6 +116,14 @@ class RemoteAgentRegistryClass {
    */
   getAll(): string[] {
     return Array.from(this.remoteAgents);
+  }
+
+  /**
+   * Get metadata for a remote agent.
+   */
+  getMetadata(agentName: string): RemoteAgentInfo | undefined {
+    const cleanName = this.getCleanName(agentName);
+    return this.agentMetadata.get(cleanName);
   }
 }
 
