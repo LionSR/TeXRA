@@ -13,7 +13,6 @@ import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {
-  ChatCompletionMessage,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
@@ -74,10 +73,8 @@ export type OpenAIToolCall = {
   provider: 'openai';
   callId: string;
   name: string;
-  input:
-    | ChatCompletionMessageFunctionToolCall['function']['arguments']
-    | ChatCompletionMessage.FunctionCall['arguments'];
-  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+  input: ChatCompletionMessageFunctionToolCall['function']['arguments'];
+  raw: ChatCompletionMessageToolCall;
 };
 
 export type DeepSeekToolCall = {
@@ -85,7 +82,7 @@ export type DeepSeekToolCall = {
   callId: string;
   name: string;
   input: unknown;
-  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+  raw: ChatCompletionMessageToolCall;
 };
 
 export type OpenAIResponseToolCall = {
