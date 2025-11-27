@@ -26,6 +26,7 @@ import {
   createTaskGroupEvents,
   type TaskGroupEventsModule,
 } from './TaskGroupEvents';
+import { createRetryEventsModule, type RetryEventsModule } from './RetryEvents';
 
 // Local imports - events
 import type {
@@ -47,6 +48,7 @@ export class ProgressEventHandler {
   private readonly logEvents: LogEventsModule;
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
+  private readonly retryEvents: RetryEventsModule;
 
   constructor(
     private state: ProgressViewState,
@@ -78,6 +80,9 @@ export class ProgressEventHandler {
       initializeStreamForTaskGroup: (stream) =>
         this.initializeStreamForTaskGroup(stream),
     });
+    this.retryEvents = createRetryEventsModule({
+      logger: this.logger,
+    });
   }
 
   /**
@@ -103,21 +108,8 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
-
-    // Retry request events
     disposables.push(
-      new vscode.Disposable(
-        bus.on('showRetryRequest', (payload) => {
-          this.webviewUpdater.showRetryRequest(payload);
-        }),
-      ),
-    );
-    disposables.push(
-      new vscode.Disposable(
-        bus.on('resolveRetryRequest', (payload) => {
-          this.webviewUpdater.resolveRetryRequest(payload.streamId);
-        }),
-      ),
+      ...this.retryEvents.register(bus, this.state, this.webviewUpdater),
     );
 
     return disposables;
