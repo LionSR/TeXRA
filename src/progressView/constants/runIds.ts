@@ -1,10 +1,5 @@
 /**
- * Sentinel run identifier retained for legacy sessions that predate
- * per-run scoping. Persisted state may still reference this ID when no
- * explicit task group identifier was available at the time.
+ * @deprecated Import from '@common/constants/runIds' instead.
+ * This module re-exports for backwards compatibility.
  */
-export const DEFAULT_RUN_ID = '__default__';
-
-export function normalizeRunId(runId: string | null | undefined): string {
-  return runId ?? DEFAULT_RUN_ID;
-}
+export { DEFAULT_RUN_ID, normalizeRunId } from '@common/constants/runIds';
