@@ -8,7 +8,10 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { K_SLICE } from '@utils/config';
 
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import {
+  ModelHandlerOpenAI,
+  extractReasoningDelta,
+} from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
@@ -78,8 +81,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         ? this.createOutputStream()
         : undefined;
       for await (const chunk of stream) {
-        const reasoningDelta =
-          (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+        const reasoningDelta = extractReasoningDelta(chunk);
         const contentDelta = chunk.choices[0]?.delta?.content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
         if (contentDelta) output?.append(contentDelta);
