@@ -11,12 +11,14 @@ import {
   GenerateContentResponse,
   FinishReason,
   type FunctionCall,
+  type FunctionResponsePart,
   File,
   createPartFromText,
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
   createPartFromBase64,
+  createFunctionResponsePartFromBase64,
   createUserContent,
   createModelContent,
   GenerateContentConfig,
@@ -1137,9 +1139,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }));
   }
 
-  private async buildAttachmentPart(
+  /**
+   * Build a FunctionResponsePart for an attachment using SDK's native type.
+   * FunctionResponsePart is the proper way to attach media to function responses
+   * per the Google GenAI SDK design.
+   */
+  private async buildFunctionResponseAttachment(
     attachment: ToolFileAttachment,
-  ): Promise<Part | null> {
+  ): Promise<FunctionResponsePart | null> {
     try {
       const buffer = await loadAttachmentBuffer(attachment);
       if (!buffer || buffer.length === 0) {
@@ -1155,7 +1162,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ? attachment.mimeType
           : DEFAULT_ATTACHMENT_MIME_TYPE;
 
-      return createPartFromBase64(buffer.toString('base64'), mimeType);
+      // Use SDK's native FunctionResponsePart for function response attachments
+      return createFunctionResponsePartFromBase64(
+        buffer.toString('base64'),
+        mimeType,
+      );
     } catch (attachmentError) {
       const message =
         attachmentError instanceof Error
@@ -1192,13 +1203,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /**
    * Build a function response part with attachments for a single tool call result.
+   * Uses SDK's native FunctionResponsePart for attachments, passed to createPartFromFunctionResponse.
    */
   private async buildFunctionResponsePart(
     call: GoogleToolCall,
     result: Record<string, unknown>,
-  ): Promise<Part[]> {
+  ): Promise<Part> {
     const { attachments, sanitizedResult } = extractToolAttachments(result);
-    const parts: Part[] = [];
+    let attachmentParts: FunctionResponsePart[] = [];
 
     if (attachments.length > 0) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
@@ -1207,29 +1219,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         ).join('\n')}`;
 
       const encodedParts = await Promise.all(
-        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
+        attachments.map((attachment) =>
+          this.buildFunctionResponseAttachment(attachment),
+        ),
       );
 
-      const validParts = encodedParts.filter(
-        (part): part is Part => part !== null,
+      attachmentParts = encodedParts.filter(
+        (part): part is FunctionResponsePart => part !== null,
       );
 
-      if (validParts.length === 0 && attachments.length > 0) {
+      if (attachmentParts.length === 0 && attachments.length > 0) {
         this.logger.warn(
           `All attachments for Google function response '${call.name}' failed to encode.`,
         );
       }
-
-      parts.push(...validParts);
     }
 
-    const resultPart = createPartFromFunctionResponse(
+    // Use SDK's createPartFromFunctionResponse with native attachment support
+    // The 4th parameter accepts FunctionResponsePart[] for media attachments
+    return createPartFromFunctionResponse(
       call.callId,
       call.name,
       sanitizedResult,
+      attachmentParts.length > 0 ? attachmentParts : undefined,
     );
-    // Result part should come first, then attachments
-    return [resultPart, ...parts];
   }
 
   /**
@@ -1253,7 +1266,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const callPart = this.buildFunctionCallPart(call);
-    const responseParts = await this.buildFunctionResponsePart(call, result);
+    const responsePart = await this.buildFunctionResponsePart(call, result);
 
     const callParts: Part[] = [];
     if (text) {
@@ -1263,7 +1276,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Use SDK helpers for Content creation (single source of truth)
     const callMsg = createModelContent(callParts);
-    const resultMsg = createUserContent(responseParts);
+    const resultMsg = createUserContent(responsePart);
     return [callMsg, resultMsg];
   }
 
@@ -1317,8 +1330,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Build all function response parts
     const responseParts: Part[] = [];
     for (let i = 0; i < calls.length; i++) {
-      const parts = await this.buildFunctionResponsePart(calls[i], results[i]);
-      responseParts.push(...parts);
+      const part = await this.buildFunctionResponsePart(calls[i], results[i]);
+      responseParts.push(part);
     }
 
     // Use SDK helpers for Content creation (single source of truth)
