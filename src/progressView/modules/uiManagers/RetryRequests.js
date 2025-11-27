@@ -1,95 +1,25 @@
 // Local imports - progress view
 import { COMMANDS } from '../constants.js';
+import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
-import { addEventListenerSafely } from '@common/domUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
-export class RetryRequests {
+/**
+ * Manages retry request popups for failed API calls.
+ * @extends BaseUIRequestManager
+ */
+export class RetryRequests extends BaseUIRequestManager {
   constructor() {
-    this.container = null;
-    this.list = null;
-    this.requests = new Map();
-    this.activeStream = '';
-    this.isToolAgentActive = false;
-    this._handleAction = this._handleAction.bind(this);
+    super({
+      containerId: 'retryRequests',
+      listSelector: '.retry-requests__list',
+      requestClass: 'retry-request',
+      idAttribute: 'streamId',
+    });
   }
 
-  setup() {
-    if (this.container && this.list) {
-      return;
-    }
-
-    this.container = document.getElementById('retryRequests');
-    this.list =
-      this.container?.querySelector('.retry-requests__list') ?? null;
-
-    if (!this.container || !this.list) {
-      return;
-    }
-
-    addEventListenerSafely(this.container, 'click', this._handleAction, true);
-  }
-
-  show(request) {
-    if (!request || !request.streamId) {
-      return;
-    }
-
-    if (!this.container || !this.list) {
-      this.setup();
-      if (!this.container || !this.list) {
-        return;
-      }
-    }
-
-    let entry = this.requests.get(request.streamId);
-    if (!entry) {
-      const element = this._createRequestElement(request);
-      entry = { element, data: { ...request } };
-      this.requests.set(request.streamId, entry);
-    } else {
-      entry.data = { ...entry.data, ...request };
-    }
-
-    this._updateRequestElement(entry.element, entry.data);
-    this._syncVisibleEntries();
-  }
-
-  resolve(streamId) {
-    if (!streamId) {
-      return;
-    }
-
-    const entry = this.requests.get(streamId);
-    this.requests.delete(streamId);
-    if (entry?.element?.parentElement) {
-      entry.element.parentElement.removeChild(entry.element);
-    }
-    this._syncVisibleEntries();
-  }
-
-  cleanup() {
-    if (this.container) {
-      this.container.removeEventListener('click', this._handleAction, true);
-    }
-    this.requests.clear();
-    this.container = null;
-    this.list = null;
-    this.activeStream = '';
-    this.isToolAgentActive = false;
-  }
-
-  _toggleVisibility() {
-    if (!this.container || !this.list) {
-      return;
-    }
-    const hasVisibleEntries = this.list.children.length > 0;
-    const shouldShow = this.isToolAgentActive && hasVisibleEntries;
-    this.container.classList.toggle('is-visible', shouldShow);
-    this.container.toggleAttribute('hidden', !shouldShow);
-  }
-
+  /** @override */
   _createRequestElement(request) {
     const element = document.createElement('div');
     element.className = 'retry-request';
@@ -119,6 +49,7 @@ export class RetryRequests {
     return element;
   }
 
+  /** @override */
   _updateRequestElement(element, request) {
     const operationElem = element.querySelector('.retry-request__operation');
     const metaElem = element.querySelector('.retry-request__meta');
@@ -130,6 +61,7 @@ export class RetryRequests {
         ? `Failed: ${request.operation}`
         : 'Request failed';
     }
+
     if (metaElem) {
       const parts = [];
       if (request.model) {
@@ -137,6 +69,7 @@ export class RetryRequests {
       }
       metaElem.textContent = parts.join(' \u2022 ');
     }
+
     if (errorElem) {
       if (request.errorMessage) {
         errorElem.textContent = request.errorMessage;
@@ -149,37 +82,7 @@ export class RetryRequests {
     }
   }
 
-  setActiveStream(streamId, isToolAgent) {
-    this.activeStream = streamId || '';
-    this.isToolAgentActive = Boolean(isToolAgent);
-    this._syncVisibleEntries();
-  }
-
-  _syncVisibleEntries() {
-    if (!this.list) {
-      return;
-    }
-
-    const activeStream = this.activeStream;
-    const shouldDisplay =
-      this.isToolAgentActive && Boolean(activeStream && activeStream.length);
-
-    const fragment = document.createDocumentFragment();
-    for (const entry of this.requests.values()) {
-      const { element, data } = entry;
-      if (element.parentElement) {
-        element.parentElement.removeChild(element);
-      }
-
-      if (shouldDisplay && (data.streamId || '') === activeStream) {
-        fragment.appendChild(element);
-      }
-    }
-
-    this.list.appendChild(fragment);
-    this._toggleVisibility();
-  }
-
+  /** @override */
   _handleAction(event) {
     if (!(event.target instanceof Element)) {
       return;
