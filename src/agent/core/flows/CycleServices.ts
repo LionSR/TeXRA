@@ -34,7 +34,7 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { AgentCycleBaseOptions } from '@agent/core/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { BaseTool } from '@tools/core/base';
+import type { IToolRegistry } from '@agent/core/ToolTypes';
 import type { TaskRunFileService } from '@utils/files';
 
 // ============================================================================
@@ -57,7 +57,7 @@ export interface ResponseCycleOptions<C = unknown>
  */
 export interface ToolUseCycleOptions<C = unknown>
   extends AgentCycleBaseOptions<C> {
-  toolRegistry: Record<string, BaseTool<any>>;
+  toolRegistry: IToolRegistry;
   workspaceState: AgentWorkspaceState;
   modelName?: string;
   agentName?: string;
