@@ -83,6 +83,10 @@ import type {
   ResponseOutputItem,
   ResponseOutputMessage,
   ResponseOutputText,
+  // Streaming event types
+  ResponseTextDeltaEvent,
+  ResponseReasoningTextDeltaEvent,
+  ResponseReasoningSummaryTextDeltaEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -634,20 +638,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;
-      const responseStream: AsyncIterable<ResponseStreamEvent> = stream;
-      for await (const event of responseStream) {
-        switch (event.type) {
-          case 'response.reasoning_text.delta':
-          case 'response.reasoning_summary_text.delta': {
-            thinking.append(event.delta);
-            break;
-          }
-          case 'response.output_text.delta': {
-            output?.append(event.delta);
-            break;
-          }
-          default:
-            break;
+      for await (const event of stream) {
+        if (this.isReasoningDeltaEvent(event)) {
+          thinking.append(event.delta);
+        } else if (this.isTextDeltaEvent(event)) {
+          output?.append(event.delta);
         }
       }
 
@@ -1546,6 +1541,23 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /** Type guard for ResponseOutputMessage items from the SDK. */
   private isOutputMessage(item: ResponseOutputItem): item is ResponseOutputMessage {
     return item.type === 'message';
+  }
+
+  /** Type alias for reasoning delta events (both raw and summary). */
+  private isReasoningDeltaEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseReasoningTextDeltaEvent | ResponseReasoningSummaryTextDeltaEvent {
+    return (
+      event.type === 'response.reasoning_text.delta' ||
+      event.type === 'response.reasoning_summary_text.delta'
+    );
+  }
+
+  /** Type guard for text output delta events. */
+  private isTextDeltaEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseTextDeltaEvent {
+    return event.type === 'response.output_text.delta';
   }
 
   private getMessageContent(
