@@ -1,23 +1,8 @@
-// (none needed)
-
 // Third-party imports
 import OpenAI from 'openai';
 
-// Local imports - agent
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-
-// Local imports - agent components
-import type { ToolDefinition } from '@model';
-
-// Internal imports
-import { K_SLICE } from '@utils/config';
-
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import {
-  describeAttachments,
-  extractToolAttachments,
-} from './utils/toolAttachmentUtils';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
 
 // Type imports
@@ -27,10 +12,6 @@ import type {
 } from './types/IModelHandler';
 import type {
   ChatCompletion,
-  ChatCompletionAssistantMessageParam,
-  ChatCompletionChunk,
-  ChatCompletionToolMessageParam,
-  ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
@@ -70,145 +51,19 @@ import type {
  * Handler for DeepSeek models using OpenAI-compatible API.
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
-  protected createStreamingAggregator(): BaseReasoningStreamAggregator | null {
-    return new BaseReasoningStreamAggregator();
+  protected override get toolCallProvider(): string {
+    return 'deepseek';
   }
 
   /**
-   * Process thinking blocks for DeepSeek models
-   * @param responseObject The raw response object from the model
-   * @param workspaceState Optional workspaceState to update with the thinking block
-   * @returns The extracted reasoning_content or null if none
+   * DeepSeek expects string content format instead of array format.
    */
-  processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
-  ): string | null {
-    if (!responseObject) {
-      return null;
-    }
-
-    // Extract reasoning content from DeepSeek response
-    let reasoningContent = null;
-
-    // Check for reasoning_content based on DeepSeek API structure
-    // Example from their site: response.choices[0].message.reasoning_content
-    if (
-      responseObject.choices &&
-      responseObject.choices.length > 0 &&
-      responseObject.choices[0].message
-    ) {
-      const message = responseObject.choices[0].message;
-
-      // Primary location according to DeepSeek docs
-      if (message.reasoning_content) {
-        reasoningContent = message.reasoning_content;
-        this.logger.debug(
-          'Found reasoning_content in choices[0].message.reasoning_content',
-        );
-
-        // If workspaceState is provided and we have reasoning content,
-        // store it in the workspaceState for future use (similar to Anthropic thinking blocks)
-        if (workspaceState && !workspaceState.reasoning.thinkingAdded) {
-          // Create a thinking block in the same format as Anthropic for consistency
-          const thinkingBlock = {
-            type: 'thinking',
-            thinking: reasoningContent,
-          };
-
-          workspaceState.reasoning.thinkingBlocks = [thinkingBlock];
-          workspaceState.reasoning.thinkingAdded = true;
-          // this.logger.debug('Added reasoning content to workspaceState');
-        }
-        // For deepseek mode thinking content should not be attached back to the message as a content item.
-        // Nevertheless one can include one in a bare way...
-      }
-    }
-    if (!reasoningContent) {
-      return null;
-    }
-
-    // Log preview of thinking content (assuming it's a string)
-    this.logger.debug(
-      `DeepSeek reasoning content preview: ${reasoningContent.substring(0, K_SLICE)}...`,
-    );
-
-    // Return the reasoning content (already a string for DeepSeek)
-    return reasoningContent;
+  protected override formatAssistantContent(text: string): string {
+    return text;
   }
 
-  protected override parseArguments(raw: unknown): unknown {
-    if (typeof raw !== 'string') {
-      return raw;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch (error) {
-      this.logger.warn(
-        'DeepSeek tool call arguments could not be parsed as JSON; using raw string.',
-        { data: error },
-      );
-      return raw;
-    }
-  }
-
-  extractToolUse(responseObject: ChatCompletion): DeepSeekToolCall[] {
-    const toolCalls = responseObject?.choices?.[0]?.message?.tool_calls;
-    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-      return toolCalls
-        .filter(
-          (
-            call,
-          ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
-            Boolean(
-              call &&
-                typeof call === 'object' &&
-                (call as ChatCompletionMessageFunctionToolCall).function
-                  ?.name &&
-                call.id,
-            ),
-        )
-        .map((call) => ({
-          provider: 'deepseek',
-          callId: call.id,
-          name: call.function!.name,
-          input: this.parseArguments(call.function!.arguments),
-          raw: call,
-        }));
-    }
-
-    return [];
-  }
-
-  async createToolUseFollowUpMessages(
-    _client: OpenAI | undefined,
-    call: DeepSeekToolCall,
-    result: Record<string, unknown>,
-    _workspaceState?: AgentWorkspaceState,
-    text?: string,
-  ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(call.raw);
-    const callMsg: ChatCompletionAssistantMessageParam = {
-      role: 'assistant',
-      tool_calls: [toolCall],
-    };
-    if (text) {
-      callMsg.content = text;
-    }
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to download them.`;
-    }
-    const resultMsg: ChatCompletionToolMessageParam = {
-      role: 'tool',
-      tool_call_id: toolCall.id,
-      content: JSON.stringify(sanitizedResult),
-    };
-    return [callMsg, resultMsg];
+  protected createStreamingAggregator(): BaseReasoningStreamAggregator | null {
+    return new BaseReasoningStreamAggregator();
   }
 
   /**
