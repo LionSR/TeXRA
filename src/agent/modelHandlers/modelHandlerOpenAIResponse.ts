@@ -1488,14 +1488,18 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /** Type guard for ResponseOutputMessage items from the SDK. */
-  private isOutputMessage(item: ResponseOutputItem): item is ResponseOutputMessage {
+  private isOutputMessage(
+    item: ResponseOutputItem,
+  ): item is ResponseOutputMessage {
     return item.type === 'message';
   }
 
   /** Type alias for reasoning delta events (both raw and summary). */
   private isReasoningDeltaEvent(
     event: ResponseStreamEvent,
-  ): event is ResponseReasoningTextDeltaEvent | ResponseReasoningSummaryTextDeltaEvent {
+  ): event is
+    | ResponseReasoningTextDeltaEvent
+    | ResponseReasoningSummaryTextDeltaEvent {
     return (
       event.type === 'response.reasoning_text.delta' ||
       event.type === 'response.reasoning_summary_text.delta'
