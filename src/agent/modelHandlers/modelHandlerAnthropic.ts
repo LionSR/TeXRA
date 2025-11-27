@@ -154,6 +154,10 @@ const isRedactedThinkingBlockParam = (block: ContentBlockParam): block is Redact
 const isAnyThinkingBlockParam = (block: ContentBlockParam): block is AnthropicThinkingContentParam =>
   isThinkingBlockParam(block) || isRedactedThinkingBlockParam(block);
 
+/** Type guard for tool use blocks in Beta API responses */
+const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
+  block.type === 'tool_use';
+
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
@@ -1642,9 +1646,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       return [];
     }
 
-    const toolUseBlocks = responseObject.content.filter(
-      (block): block is ToolUseBlock => block?.type === 'tool_use',
-    );
+    const toolUseBlocks = responseObject.content.filter(isBetaToolUseBlock);
 
     if (toolUseBlocks.length === 0) {
       return [];
