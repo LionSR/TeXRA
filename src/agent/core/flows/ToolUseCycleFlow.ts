@@ -369,6 +369,7 @@ class ToolUseCallNode<C> extends BaseNode<
       retryState,
       formatted.message,
       formatted.statusCode,
+      formatted.retryable,
     );
 
     // Apply retry decision (logging, sleeping) via shared helper
