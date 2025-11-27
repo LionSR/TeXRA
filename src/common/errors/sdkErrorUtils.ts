@@ -44,6 +44,13 @@ export interface ProviderHttpErrorDetails {
   statusText?: string;
   /** Identifier for the provider that produced the error, when known. */
   provider?: string;
+  /**
+   * Whether the error is retryable. Based on native SDK error types:
+   * - Connection errors (timeout, network) → retryable
+   * - Server errors (5xx) and rate limits (429) → retryable
+   * - User abort, auth errors, bad requests → NOT retryable
+   */
+  retryable: boolean;
 }
 
 const STATUS_TITLES: Record<number, string> = {
@@ -84,6 +91,8 @@ interface NativeMessageErrorEntry {
   ctor: ErrorConstructor;
   provider: string;
   message?: string;
+  /** Whether this error type is retryable (e.g., connection errors are, user aborts are not) */
+  retryable: boolean;
 }
 
 interface NativeHttpErrorEntry {
@@ -97,31 +106,37 @@ const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
     ctor: OpenAIConnectionTimeoutError,
     provider: 'openai',
     message: 'Connection timed out',
+    retryable: true,
   },
   {
     ctor: AnthropicConnectionTimeoutError,
     provider: 'anthropic',
     message: 'Connection timed out',
+    retryable: true,
   },
   {
     ctor: OpenAIConnectionError,
     provider: 'openai',
     message: 'Connection error',
+    retryable: true,
   },
   {
     ctor: AnthropicConnectionError,
     provider: 'anthropic',
     message: 'Connection error',
+    retryable: true,
   },
   {
     ctor: OpenAIUserAbortError,
     provider: 'openai',
     message: 'Request aborted',
+    retryable: false,
   },
   {
     ctor: AnthropicUserAbortError,
     provider: 'anthropic',
     message: 'Request aborted',
+    retryable: false,
   },
 ];
 
@@ -206,7 +221,22 @@ function matchNativeMessageError(
   return {
     message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
+    retryable: entry.retryable,
   };
+}
+
+/** Status codes that are retryable (5xx server errors, rate limits, timeouts) */
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+
+function isRetryableStatusCode(statusCode?: number): boolean {
+  if (statusCode === undefined) {
+    return false;
+  }
+  // All 5xx errors are retryable
+  if (statusCode >= 500) {
+    return true;
+  }
+  return RETRYABLE_STATUS_CODES.has(statusCode);
 }
 
 function matchNativeHttpError(
@@ -229,6 +259,7 @@ function matchNativeHttpError(
     return {
       message: finalMessage,
       provider: entry.provider,
+      retryable: false, // Unknown errors without status codes are not retryable by default
     };
   }
 
@@ -238,6 +269,7 @@ function matchNativeHttpError(
     statusCode,
     statusText,
     provider: entry.provider,
+    retryable: isRetryableStatusCode(statusCode),
   };
 }
 
@@ -373,9 +405,12 @@ export function formatProviderHttpError(
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
+    // Unknown errors without status codes are likely network/connection errors
+    // which should be retryable
     return {
       message: finalMessage,
       provider,
+      retryable: true,
     };
   }
 
@@ -385,6 +420,7 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
+    retryable: isRetryableStatusCode(statusCode),
   };
 }
 
