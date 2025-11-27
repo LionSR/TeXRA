@@ -419,7 +419,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         countContents.push(...chatHistory);
         // The token count API expects the upcoming message as part of the
         // history, so append the final user message that will be sent next.
-        countContents.push({ role: 'user', parts: [...lastMessageParts] });
+        countContents.push(createUserContent([...lastMessageParts]));
 
         const responseTokenCount = await executeRequest(
           {
@@ -678,7 +678,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     userContentParts.push(createPartFromText(`\n${userRequest}`));
 
-    return [{ role: 'user', parts: userContentParts }];
+    return [createUserContent(userContentParts)];
   }
 
   /** Creates message array for subsequent rounds, managing image content and message structure. */
@@ -707,7 +707,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     roundParts.push(createPartFromText(userMessage));
 
-    messages.push({ role: 'user', parts: roundParts });
+    messages.push(createUserContent(roundParts));
     return messages;
   }
 
@@ -715,16 +715,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     userMessage: string,
   ): Promise<Content[]> {
-    messages.push({
-      role: 'user',
-      parts: [createPartFromText(userMessage)],
-    });
+    messages.push(createUserContent(createPartFromText(userMessage)));
     return messages;
   }
 
   createAssistantMessage(text: string): Content {
     // Note: Method name retained for interface compatibility, but returns 'model' role per Google SDK
-    return { role: 'model', parts: [createPartFromText(text)] };
+    return createModelContent(createPartFromText(text));
   }
 
   override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
@@ -890,10 +887,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       prefillTokens,
     );
     this.logger.debug(`Adding continuation message.`);
-    messages.push({
-      role: 'user',
-      parts: [createPartFromText(userMessageContinuation)],
-    });
+    messages.push(createUserContent(createPartFromText(userMessageContinuation)));
   }
 
   updateMessageContentWithPrefill(/* ... */): void {
@@ -940,10 +934,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     } else {
       this.logger.debug('Adding new model message for the response.');
-      messages.push({
-        role: 'model',
-        parts: [createPartFromText(workspaceState.assembly.accumulatedOutput)],
-      });
+      messages.push(
+        createModelContent(
+          createPartFromText(workspaceState.assembly.accumulatedOutput),
+        ),
+      );
     }
   }
 
@@ -974,10 +969,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const parts = (lastMessage.parts ??= []);
         parts.push(createPartFromText(pseudoPrefillMsg));
       } else {
-        messages.push({
-          role: 'model',
-          parts: [createPartFromText(pseudoPrefillMsg)],
-        });
+        messages.push(createModelContent(createPartFromText(pseudoPrefillMsg)));
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
@@ -1003,10 +995,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Cleaned and saved existing content to ${outputLocation.absolutePath}.`,
     );
-    messages.push({
-      role: 'model',
-      parts: [createPartFromText(fileContent)],
-    });
+    messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
       `Added existing file content to messages as 'model' role.`,
     );
@@ -1181,7 +1170,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
   /**
    * Build a single function call part with optional thought signature.
-   * This is used internally to create properly structured function call parts.
+   * Uses SDK's createPartFromFunctionCall and preserves thoughtSignature
+   * which is a native property of the Part interface.
    */
   private buildFunctionCallPart(call: GoogleToolCall): Part {
     const args = call.raw.args ?? {};
@@ -1192,9 +1182,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     // Preserve thought signature if present (required for Gemini 3 models)
+    // Note: thoughtSignature is a native property of the Part interface
     if (call.thoughtSignature) {
-      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
-        call.thoughtSignature;
+      callPart.thoughtSignature = call.thoughtSignature;
     }
 
     return callPart;
@@ -1271,11 +1261,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
     callParts.push(callPart);
 
-    const callMsg: Content = {
-      role: 'model',
-      parts: callParts,
-    };
-    const resultMsg: Content = { role: 'user', parts: responseParts };
+    // Use SDK helpers for Content creation (single source of truth)
+    const callMsg = createModelContent(callParts);
+    const resultMsg = createUserContent(responseParts);
     return [callMsg, resultMsg];
   }
 
@@ -1333,14 +1321,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       responseParts.push(...parts);
     }
 
-    // Create single model message with all function calls
-    const callMsg: Content = {
-      role: 'model',
-      parts: callParts,
-    };
-
-    // Create single user message with all function responses
-    const resultMsg: Content = { role: 'user', parts: responseParts };
+    // Use SDK helpers for Content creation (single source of truth)
+    const callMsg = createModelContent(callParts);
+    const resultMsg = createUserContent(responseParts);
 
     return [callMsg, resultMsg];
   }
