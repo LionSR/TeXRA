@@ -484,6 +484,18 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         );
       }
 
+      // If the user cancelled, stop gracefully without throwing
+      if (cycleResult.userCancelled) {
+        return {
+          roundState: store.round,
+          runState: store.run,
+          messages: updatedMessages,
+          shouldContinue: false,
+          workspaceState: store.workspace,
+          output: null,
+        };
+      }
+
       const artifacts = await this.handleRoundCompletion(
         roundIndex,
         store.round,
