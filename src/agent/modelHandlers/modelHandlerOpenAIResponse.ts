@@ -78,6 +78,7 @@ import type {
   ResponseInputText,
   ResponseInputAudio,
   ResponseStreamEvent,
+  ResponseStatus,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -159,16 +160,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
   private static readonly BACKGROUND_RETRIEVE_MAX_RETRIES = 3;
   private static readonly BACKGROUND_MAX_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
-  private static readonly BACKGROUND_PENDING_STATUSES = [
-    'queued',
-    'in_progress',
-  ] as const;
-  private static readonly BACKGROUND_TERMINAL_STATUSES = [
-    'completed',
-    'failed',
-    'cancelled',
-    'expired',
-  ] as const;
+  /** Statuses indicating the background response is still processing. */
+  private static readonly BACKGROUND_PENDING_STATUSES: readonly ResponseStatus[] =
+    ['queued', 'in_progress'];
+  /** Statuses indicating the background response has finished (success or failure). */
+  private static readonly BACKGROUND_TERMINAL_STATUSES: readonly ResponseStatus[] =
+    ['completed', 'failed', 'cancelled', 'incomplete'];
   private previousResponseId: string | null = null;
   private sentMessages = 0;
 
@@ -853,7 +850,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES.includes(
-      status as (typeof ModelHandlerOpenAIResponse.BACKGROUND_PENDING_STATUSES)[number],
+      status,
     );
   }
 
@@ -981,7 +978,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const isTerminal =
       !!finalStatus &&
       ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES.includes(
-        finalStatus as (typeof ModelHandlerOpenAIResponse.BACKGROUND_TERMINAL_STATUSES)[number],
+        finalStatus as ResponseStatus,
       );
 
     if (!isTerminal) {
