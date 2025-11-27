@@ -185,6 +185,7 @@ export const PROGRESS_VIEW_COMMANDS = {
   RUN_AGAIN: 'runAgain',
   RUN_NEW: 'runNew',
   RETRY_STREAM_REQUEST: 'retryStreamRequest',
+  CANCEL_RETRY_REQUEST: 'cancelRetryRequest',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   SORT_STREAMS: 'sortStreams',
