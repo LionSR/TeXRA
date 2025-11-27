@@ -26,12 +26,16 @@ The SDK provides built-in type guards that are not being utilized:
 
 ```typescript
 // Available in: openai/lib/chatCompletionUtils
-import { isAssistantMessage, isToolMessage, isPresent } from 'openai/lib/chatCompletionUtils';
+import {
+  isAssistantMessage,
+  isToolMessage,
+  isPresent,
+} from 'openai/lib/chatCompletionUtils';
 
 // Type guards:
-isAssistantMessage(message)  // → message is ChatCompletionAssistantMessageParam
-isToolMessage(message)       // → message is ChatCompletionToolMessageParam
-isPresent<T>(obj)            // → obj is T (null/undefined check)
+isAssistantMessage(message); // → message is ChatCompletionAssistantMessageParam
+isToolMessage(message); // → message is ChatCompletionToolMessageParam
+isPresent<T>(obj); // → obj is T (null/undefined check)
 ```
 
 ### 1.2 Parser Utilities (from `openai/lib/parser`)
@@ -43,14 +47,14 @@ import {
   shouldParseToolCall,
   hasAutoParseableInput,
   assertToolCallsAreChatCompletionFunctionToolCalls,
-  validateInputTools
+  validateInputTools,
 } from 'openai/lib/parser';
 
 // Type guard for tools:
-isChatCompletionFunctionTool(tool)  // → tool is ChatCompletionFunctionTool
+isChatCompletionFunctionTool(tool); // → tool is ChatCompletionFunctionTool
 
 // Assertion helper:
-assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls)  // → asserts type
+assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls); // → asserts type
 ```
 
 ### 1.3 CompletionUsage Type Details
@@ -74,7 +78,7 @@ interface CompletionUsage {
 
   prompt_tokens_details?: {
     audio_tokens?: number;
-    cached_tokens?: number;  // ← This is what ExtendedCompletionUsage adds
+    cached_tokens?: number; // ← This is what ExtendedCompletionUsage adds
   };
 }
 ```
@@ -87,7 +91,7 @@ The SDK now natively supports `parallel_tool_calls`:
 // From: openai/resources/chat/completions/completions.d.ts (line 1316)
 interface ChatCompletionCreateParamsBase {
   // ...
-  parallel_tool_calls?: boolean;  // ← Native support!
+  parallel_tool_calls?: boolean; // ← Native support!
   // ...
 }
 ```
@@ -103,14 +107,14 @@ type ChatCompletionMessageToolCall =
 // Each has a discriminant 'type' field:
 interface ChatCompletionMessageFunctionToolCall {
   id: string;
-  type: 'function';  // ← discriminant
-  function: { name: string; arguments: string; };
+  type: 'function'; // ← discriminant
+  function: { name: string; arguments: string };
 }
 
 interface ChatCompletionMessageCustomToolCall {
   id: string;
-  type: 'custom';  // ← discriminant
-  custom: { name: string; input: string; };
+  type: 'custom'; // ← discriminant
+  custom: { name: string; input: string };
 }
 ```
 
@@ -125,7 +129,7 @@ interface ChatCompletionMessageCustomToolCall {
 ```typescript
 // Current implementation
 export interface ExtendedCompletionUsage extends CompletionUsage {
-  prompt_cache_hit_tokens?: number;  // DeepSeek-specific
+  prompt_cache_hit_tokens?: number; // DeepSeek-specific
 }
 ```
 
@@ -153,7 +157,7 @@ export type OpenAICompletionUsage = CompletionUsage;
 ```typescript
 // Current: Uses 'as any' to bypass type checking
 if (tools && tools.length > 0) {
-  (baseParams as any).parallel_tool_calls = false;  // ❌ Type unsafety
+  (baseParams as any).parallel_tool_calls = false; // ❌ Type unsafety
   baseParams.tools = toOpenAITools(tools);
 }
 ```
@@ -165,7 +169,7 @@ if (tools && tools.length > 0) {
 ```typescript
 // Proposed: Use native SDK support
 if (tools && tools.length > 0) {
-  baseParams.parallel_tool_calls = false;  // ✅ Type safe
+  baseParams.parallel_tool_calls = false; // ✅ Type safe
   baseParams.tools = toOpenAITools(tools);
 }
 ```
@@ -187,6 +191,7 @@ private isFunctionToolCall(
 ```
 
 **Issue:**
+
 1. Multiple redundant type assertions
 2. Doesn't leverage discriminated union pattern
 3. Duplicated in multiple handlers
@@ -207,7 +212,10 @@ import type {
  * Works with both ChatCompletionMessageToolCall and legacy FunctionCall.
  */
 export function isFunctionToolCall(
-  call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall | unknown
+  call:
+    | ChatCompletionMessageToolCall
+    | ChatCompletionMessage.FunctionCall
+    | unknown,
 ): call is ChatCompletionMessageFunctionToolCall {
   if (typeof call !== 'object' || call === null) return false;
 
@@ -230,7 +238,7 @@ export function isFunctionToolCall(
  * Type guard for custom tool calls.
  */
 export function isCustomToolCall(
-  call: ChatCompletionMessageToolCall | unknown
+  call: ChatCompletionMessageToolCall | unknown,
 ): call is ChatCompletionMessageCustomToolCall {
   if (typeof call !== 'object' || call === null) return false;
   const typed = call as Record<string, unknown>;
@@ -241,7 +249,7 @@ export function isCustomToolCall(
  * Check if a tool call has valid function data for extraction.
  */
 export function hasValidFunctionCall(
-  call: ChatCompletionMessageToolCall
+  call: ChatCompletionMessageToolCall,
 ): call is ChatCompletionMessageFunctionToolCall & { id: string } {
   return (
     call.type === 'function' &&
@@ -277,7 +285,7 @@ export function isNonEmptyString(value: unknown): value is string {
 
 export function hasProperty<K extends string>(
   obj: unknown,
-  key: K
+  key: K,
 ): obj is Record<K, unknown> {
   return isRecord(obj) && key in obj;
 }
@@ -293,7 +301,7 @@ const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   const choice = chunk.choices[0];
   if (!choice) return '';
 
-  const delta = choice.delta as unknown;  // ← Loses type info
+  const delta = choice.delta as unknown; // ← Loses type info
   if (!isRecord(delta) || !('reasoning_content' in delta)) {
     return '';
   }
@@ -315,7 +323,7 @@ interface ReasoningDelta extends ChatCompletionChunk.Choice.Delta {
 }
 
 function hasReasoningContent(
-  delta: ChatCompletionChunk.Choice.Delta
+  delta: ChatCompletionChunk.Choice.Delta,
 ): delta is ReasoningDelta {
   return 'reasoning_content' in delta;
 }
@@ -355,11 +363,15 @@ export function isOpenAIToolCall(call: SdkToolCall): call is OpenAIToolCall {
   return call.provider === 'openai';
 }
 
-export function isDeepSeekToolCall(call: SdkToolCall): call is DeepSeekToolCall {
+export function isDeepSeekToolCall(
+  call: SdkToolCall,
+): call is DeepSeekToolCall {
   return call.provider === 'deepseek';
 }
 
-export function isOpenAIResponseToolCall(call: SdkToolCall): call is OpenAIResponseToolCall {
+export function isOpenAIResponseToolCall(
+  call: SdkToolCall,
+): call is OpenAIResponseToolCall {
   return call.provider === 'openai-response';
 }
 
@@ -367,7 +379,9 @@ export function isGoogleToolCall(call: SdkToolCall): call is GoogleToolCall {
   return call.provider === 'google';
 }
 
-export function isAnthropicToolCall(call: SdkToolCall): call is AnthropicToolCall {
+export function isAnthropicToolCall(
+  call: SdkToolCall,
+): call is AnthropicToolCall {
   return call.provider === 'anthropic';
 }
 ```
@@ -380,14 +394,14 @@ export function isAnthropicToolCall(call: SdkToolCall): call is AnthropicToolCal
 // Current: Uses 'any' in multiple places
 export interface ExtractResponseResult {
   response: string;
-  usage: any;  // ← Should be typed
+  usage: any; // ← Should be typed
   stopReason: ProviderStopReason;
 }
 
 export interface IModelHandler<
   M extends ProviderMessage = ProviderMessage,
-  U = any,  // ← Should be constrained
-  R = any,  // ← Should be constrained
+  U = any, // ← Should be constrained
+  R = any, // ← Should be constrained
   // ...
 > {
   // ...
@@ -430,7 +444,11 @@ Create a new file: `src/agent/modelHandlers/utils/sdkTypeGuards.ts`
  */
 
 // Re-export SDK type guards
-export { isAssistantMessage, isToolMessage, isPresent } from 'openai/lib/chatCompletionUtils';
+export {
+  isAssistantMessage,
+  isToolMessage,
+  isPresent,
+} from 'openai/lib/chatCompletionUtils';
 export { isChatCompletionFunctionTool } from 'openai/lib/parser';
 
 // Custom type guards for extended functionality
@@ -535,6 +553,7 @@ try {
 ### Testing Requirements
 
 For each change:
+
 1. Run existing unit tests
 2. Test with all supported providers (OpenAI, DeepSeek, OpenRouter, etc.)
 3. Test both streaming and non-streaming modes
@@ -563,19 +582,21 @@ The current architecture has several normalization/wrapper layers that could be 
 #### `SdkToolCall` Wrapper Type
 
 **Current:** Each tool call is wrapped with a provider discriminant and extracted fields:
+
 ```typescript
 export type OpenAIToolCall = {
   provider: 'openai';
-  callId: string;      // extracted from raw.id
-  name: string;        // extracted from raw.function.name
-  input: unknown;      // parsed from raw.function.arguments
-  raw: ChatCompletionMessageToolCall;  // original SDK type
+  callId: string; // extracted from raw.id
+  name: string; // extracted from raw.function.name
+  input: unknown; // parsed from raw.function.arguments
+  raw: ChatCompletionMessageToolCall; // original SDK type
 };
 ```
 
 **Issue:** This duplicates data already in `raw` and adds an abstraction layer.
 
 **Potential Simplification:** Use the SDK type directly with a provider tag:
+
 ```typescript
 export type OpenAIToolCall = ChatCompletionMessageToolCall & {
   provider: 'openai';
@@ -585,6 +606,7 @@ export type OpenAIToolCall = ChatCompletionMessageToolCall & {
 #### `normalizeToolCall` Method
 
 **Current:** Reconstructs SDK types with fallbacks:
+
 ```typescript
 protected normalizeToolCall(id, fallbackName, call) {
   return {
@@ -598,6 +620,7 @@ protected normalizeToolCall(id, fallbackName, call) {
 **Issue:** The SDK already returns valid data; fallbacks may be unnecessary defensive coding.
 
 **Potential Simplification:** Use `call.raw` directly if it's already a valid `ChatCompletionMessageToolCall`:
+
 ```typescript
 async createToolUseFollowUpMessages(client, call, result) {
   // Use raw SDK type directly instead of normalizing
@@ -612,11 +635,13 @@ async createToolUseFollowUpMessages(client, call, result) {
 #### Inline Type Guards vs Utility Functions
 
 **Current:** Separate type guard functions:
+
 ```typescript
 if (isFunctionToolCall(call)) { ... }
 ```
 
 **Alternative:** TypeScript discriminated unions work directly:
+
 ```typescript
 if ('type' in call && call.type === 'function') { ... }
 ```
@@ -635,25 +660,25 @@ Consider these simplifications in Phase 3 after stabilizing the Phase 1-2 type i
 
 ## Summary of Benefits
 
-| Improvement | Benefit |
-|-------------|---------|
-| Use SDK type guards | Reduced code duplication, SDK-maintained |
-| Remove `as any` casts | Type safety, IDE support |
-| Centralized type guards | Single source of truth, easier maintenance |
-| Provider usage union | Type-safe usage handling |
-| Discriminated union guards | Runtime safety, better error messages |
+| Improvement                | Benefit                                    |
+| -------------------------- | ------------------------------------------ |
+| Use SDK type guards        | Reduced code duplication, SDK-maintained   |
+| Remove `as any` casts      | Type safety, IDE support                   |
+| Centralized type guards    | Single source of truth, easier maintenance |
+| Provider usage union       | Type-safe usage handling                   |
+| Discriminated union guards | Runtime safety, better error messages      |
 
 ---
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `src/agent/core/ResponseUsage.ts` | Refactor `ExtendedCompletionUsage` |
-| `src/agent/modelHandlers/modelHandlerOpenAI.ts` | Remove `as any`, use SDK guards |
-| `src/agent/modelHandlers/types/IModelHandler.ts` | Add type guards, fix `any` types |
-| `src/agent/modelHandlers/utils/sdkTypeGuards.ts` | New file - centralized guards |
-| `src/utils/typeGuards.ts` | New file - generic type guards |
+| File                                             | Changes                            |
+| ------------------------------------------------ | ---------------------------------- |
+| `src/agent/core/ResponseUsage.ts`                | Refactor `ExtendedCompletionUsage` |
+| `src/agent/modelHandlers/modelHandlerOpenAI.ts`  | Remove `as any`, use SDK guards    |
+| `src/agent/modelHandlers/types/IModelHandler.ts` | Add type guards, fix `any` types   |
+| `src/agent/modelHandlers/utils/sdkTypeGuards.ts` | New file - centralized guards      |
+| `src/utils/typeGuards.ts`                        | New file - generic type guards     |
 
 ---
 
@@ -678,9 +703,19 @@ import type {
 import type { CompletionUsage } from 'openai/resources/completions';
 
 // Type Guards
-import { isAssistantMessage, isToolMessage, isPresent } from 'openai/lib/chatCompletionUtils';
-import { isChatCompletionFunctionTool, shouldParseToolCall } from 'openai/lib/parser';
+import {
+  isAssistantMessage,
+  isToolMessage,
+  isPresent,
+} from 'openai/lib/chatCompletionUtils';
+import {
+  isChatCompletionFunctionTool,
+  shouldParseToolCall,
+} from 'openai/lib/parser';
 
 // Streaming
-import type { ChatCompletionStream, ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
+import type {
+  ChatCompletionStream,
+  ContentDeltaEvent,
+} from 'openai/lib/ChatCompletionStream';
 ```

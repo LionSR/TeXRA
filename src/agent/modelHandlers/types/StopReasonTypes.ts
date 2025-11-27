@@ -49,7 +49,10 @@ export const OPENAI_RESPONSE_STATUS = {
   CANCELLED: 'cancelled',
   QUEUED: 'queued',
   INCOMPLETE: 'incomplete',
-} as const satisfies Record<string, import('openai/resources/responses/responses').ResponseStatus>;
+} as const satisfies Record<
+  string,
+  import('openai/resources/responses/responses').ResponseStatus
+>;
 
 /** Stop reasons defined in the Model Context Protocol SDK. */
 export const MCP_STOP = {
