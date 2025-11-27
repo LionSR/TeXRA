@@ -1,3 +1,14 @@
+/**
+ * In-memory cache for tool-use session snapshots.
+ *
+ * Manages session snapshots used for lazy resume when the user returns to
+ * a tool-use session. Snapshots are indexed by both stream ID and execution ID
+ * for efficient lookup and cleanup.
+ *
+ * @see ToolUseSessionPersistence for disk persistence
+ * @see ToolUseSnapshotStore for the persistent storage layer
+ */
+
 // Local imports - agent types
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 // Local imports - core indexing
@@ -7,10 +18,18 @@ import { AgentLogger } from '@logger/AgentLogger';
 // Local file imports - tool-use snapshots
 import type { ToolUseSessionSnapshot } from './ToolUseSnapshotTypes';
 
-const CHANNEL = 'ToolUseSnapshotCache';
+const CHANNEL = 'ToolUseSessionManager';
 const logger = new AgentLogger(CHANNEL);
 
-export class ToolUseSnapshotCache {
+/**
+ * Manages in-memory caching of tool-use session snapshots for resume capability.
+ *
+ * This class provides:
+ * - Dual-indexed storage (by stream ID and execution ID)
+ * - Lazy registration from persisted snapshots on startup
+ * - Consume-on-read pattern for single-use resume operations
+ */
+export class ToolUseSessionManager {
   private static readonly index =
     new StreamExecutionIndex<ToolUseSessionSnapshot>();
 
@@ -86,3 +105,8 @@ export class ToolUseSnapshotCache {
     logger.debug('Cleared all pending tool-use snapshots.');
   }
 }
+
+/**
+ * @deprecated Use ToolUseSessionManager instead. This alias will be removed in a future version.
+ */
+export const ToolUseSnapshotCache = ToolUseSessionManager;
