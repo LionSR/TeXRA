@@ -5,9 +5,6 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
-// Internal imports
-import { K_SLICE } from '@utils/config';
-
 // Local file imports
 import {
   ModelHandlerOpenAI,
@@ -109,42 +106,23 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
   }
 
-  // Implementation for processing thinking blocks in OpenRouter responses
-  processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
+  /**
+   * OpenRouter uses 'reasoning' field instead of 'reasoning_content'.
+   * Also handles object values by converting to JSON.
+   */
+  protected override extractReasoningFromMessage(
+    message: Record<string, unknown> | undefined,
   ): string | null {
-    if (!responseObject) {
+    const reasoning = message?.reasoning;
+    if (!reasoning) {
       return null;
     }
-
-    // According to OpenRouter docs, reasoning is available at choices[0].message.reasoning
-    if (
-      responseObject.choices &&
-      responseObject.choices.length > 0 &&
-      responseObject.choices[0].message &&
-      responseObject.choices[0].message.reasoning
-    ) {
-      const reasoning = responseObject.choices[0].message.reasoning;
-      this.logger.debug(`OpenRouter reasoning found`);
-
-      // Log preview of reasoning content
-      if (typeof reasoning === 'string') {
-        this.logger.debug(
-          `Reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
-        );
-        return reasoning;
-      } else {
-        // If reasoning is an object, convert to string
-        const reasoningStr = JSON.stringify(reasoning);
-        this.logger.debug(
-          `Reasoning preview: ${reasoningStr.substring(0, K_SLICE)}...`,
-        );
-        return reasoningStr;
-      }
+    if (typeof reasoning === 'string' && reasoning.trim()) {
+      return reasoning;
     }
-
-    return null;
+    // If reasoning is an object, convert to string
+    const reasoningStr = JSON.stringify(reasoning);
+    return reasoningStr.trim() || null;
   }
 }
 
