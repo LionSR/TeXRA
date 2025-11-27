@@ -2,25 +2,11 @@
 import type {
   AnthropicAPIResponseUsage,
   OpenAIAPIResponseUsage,
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
+  NativeUsagePayload,
 } from './ResponseUsage';
-import type { ResponseUsage } from 'openai/resources/responses/responses';
 
-/**
- * Union of native usage payloads from different providers.
- * Includes:
- * - ExtendedCompletionUsage: OpenAI Chat Completions API
- * - ResponseUsage: OpenAI Responses API
- * - AnthropicUsage: Anthropic Messages API
- * - GenerateContentResponseUsageMetadata: Google Gemini API
- */
-export type NativeUsagePayload =
-  | ExtendedCompletionUsage
-  | ResponseUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
+// Re-export for backwards compatibility
+export type { NativeUsagePayload };
 
 export type UsageSummary =
   | OpenAIAPIResponseUsage
