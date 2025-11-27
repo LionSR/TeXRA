@@ -6,6 +6,8 @@ export * from './AgentSharedStoreRegistry';
 export * from './ToolConfig';
 export * from './AgentWorkspaceState';
 export * from './ResponseUsage';
+export * from './RunUsageAccumulator';
+export * from './ToolTypes';
 export * from './IAgent';
 export * from './ResponseCycle';
 export * from './ToolUseCycle';
