@@ -4,6 +4,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { ProviderUsage } from '@agent/core/ResponseUsage';
 // Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -16,31 +17,12 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
-import type { CompletionUsage } from 'openai/resources/completions';
-import type {
-  ResponseFunctionToolCallItem,
-  ResponseUsage,
-} from 'openai/resources/responses/responses';
+import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
-import type { GenerateContentResponseUsageMetadata } from '@google/genai';
-import type { ToolUseBlock, Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
+import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
 
-/**
- * Union of all provider usage types for type-safe usage handling.
- * Each provider returns slightly different usage statistics.
- *
- * - CompletionUsage: OpenAI Chat Completions API
- * - ResponseUsage: OpenAI Responses API
- * - AnthropicUsage: Anthropic Messages API
- * - GenerateContentResponseUsageMetadata: Google Gemini API
- */
-export type ProviderUsage =
-  | CompletionUsage
-  | ResponseUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata
-  | null
-  | undefined;
+// Re-export for backwards compatibility
+export type { ProviderUsage };
 
 /**
  * Options for creating a model response.
