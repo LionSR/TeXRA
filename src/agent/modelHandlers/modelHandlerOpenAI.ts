@@ -1110,17 +1110,32 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
-   * @param responseObject The response object from the OpenAI API
+   * Extracts reasoning content from an API response message.
+   * Subclasses can override to look at different fields (e.g., OpenRouter uses 'reasoning').
+   */
+  protected extractReasoningFromMessage(
+    message: Record<string, unknown> | undefined,
+  ): string | null {
+    const reasoning = message?.reasoning_content;
+    if (typeof reasoning === 'string' && reasoning.trim()) {
+      return reasoning;
+    }
+    return null;
+  }
+
+  /**
+   * Processes thinking blocks from API response.
+   * @param responseObject The response object from the API
    * @param workspaceState Optional workspaceState to update with thinking blocks
-   * @returns Always returns null as OpenAI doesn't support thinking blocks
+   * @returns The extracted reasoning content or null if none found
    */
   processThinkingBlock(
     responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
-    if (typeof reasoning !== 'string' || !reasoning.trim()) {
+    const message = responseObject?.choices?.[0]?.message;
+    const reasoning = this.extractReasoningFromMessage(message);
+    if (!reasoning) {
       return null;
     }
 
@@ -1132,7 +1147,7 @@ export class ModelHandlerOpenAI<
     }
 
     this.logger.debug(
-      `OpenAI reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
+      `Reasoning content preview: ${reasoning.substring(0, K_SLICE)}...`,
     );
     return reasoning;
   }
@@ -1181,6 +1196,14 @@ export class ModelHandlerOpenAI<
     return call;
   }
 
+  /**
+   * Provider name used when extracting tool calls.
+   * Subclasses can override to customize the provider identifier.
+   */
+  protected get toolCallProvider(): string {
+    return 'openai';
+  }
+
   protected parseArguments(raw: unknown): unknown {
     if (typeof raw !== 'string') {
       return raw;
@@ -1190,7 +1213,7 @@ export class ModelHandlerOpenAI<
       return JSON.parse(raw);
     } catch (error) {
       this.logger.warn(
-        'OpenAI tool call arguments could not be parsed as JSON; using raw string.',
+        'Tool call arguments could not be parsed as JSON; using raw string.',
         { data: error },
       );
       return raw;
@@ -1214,7 +1237,7 @@ export class ModelHandlerOpenAI<
             ),
         )
         .map((call) => ({
-          provider: 'openai',
+          provider: this.toolCallProvider,
           callId: call.id,
           name: call.function!.name,
           input: this.parseArguments(call.function!.arguments),
@@ -1223,6 +1246,16 @@ export class ModelHandlerOpenAI<
     }
 
     return [];
+  }
+
+  /**
+   * Formats text content for assistant messages in tool call follow-ups.
+   * Subclasses can override to use string format instead of array format.
+   */
+  protected formatAssistantContent(
+    text: string,
+  ): ChatCompletionAssistantMessageParam['content'] {
+    return [{ type: 'text', text }];
   }
 
   async createToolUseFollowUpMessages(
@@ -1238,7 +1271,7 @@ export class ModelHandlerOpenAI<
       tool_calls: [toolCall],
     };
     if (text) {
-      callMsg.content = [{ type: 'text', text }];
+      callMsg.content = this.formatAssistantContent(text);
     }
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
@@ -1253,8 +1286,7 @@ export class ModelHandlerOpenAI<
       tool_call_id: toolCall.id,
       content: JSON.stringify(sanitizedResult),
     };
-    const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];
-    return messages;
+    return [callMsg, resultMsg];
   }
 
   /**
