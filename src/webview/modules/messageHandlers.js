@@ -41,7 +41,11 @@ import {
   getSelectedOptionElement,
 } from '@common/domUtils.js';
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
-import { AGENT_DECORATORS, getCodiconClass } from '@common/iconConstants.js';
+import {
+  AGENT_DECORATORS,
+  getCodiconClass,
+  getAgentTypeDecorator,
+} from '@common/iconConstants.js';
 
 // Import standardized commands
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands.js';
@@ -240,12 +244,19 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse, isRemote, description } =
+    const { label, isMultiple, isToolUse, isRemote, description, agentType } =
       this._readAgentOptionMetadata(opt);
 
     const hints = [];
     const prefixIcons = [];
     const suffixIcons = [];
+
+    // Add agent type icon (CoT, direct, toolUse)
+    if (agentType) {
+      const decorator = getAgentTypeDecorator(agentType);
+      prefixIcons.push(this._createCodiconHtml(decorator.icon));
+      hints.push(`${decorator.label} agent`);
+    }
 
     // Add cloud icon for remote agents (using shared config)
     if (isRemote) {
@@ -331,6 +342,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       isToolUse: opt.dataset.toolUse === 'true',
       isRemote: opt.dataset.remote === 'true',
       description: opt.dataset.description ?? '',
+      agentType: opt.dataset.agentType ?? '',
     };
   }
 
