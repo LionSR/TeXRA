@@ -134,6 +134,44 @@ export function isRetryableStatusCode(statusCode?: number): boolean {
 }
 
 /**
+ * Determines if an error is retryable based on status code and message.
+ * Errors without status codes (e.g., network/connection errors) are considered
+ * retryable since they are typically transient issues that may resolve.
+ */
+export function isRetryableError(
+  statusCode?: number,
+  message?: string,
+): boolean {
+  // Known retryable status codes
+  if (isRetryableStatusCode(statusCode)) {
+    return true;
+  }
+
+  // Errors without status codes are typically network/connection errors
+  // which are transient and should be retryable
+  if (statusCode === undefined) {
+    // Check for known non-retryable error patterns
+    const lowerMessage = message?.toLowerCase() ?? '';
+    const nonRetryablePatterns = [
+      'invalid api key',
+      'authentication',
+      'unauthorized',
+      'permission denied',
+      'forbidden',
+      'not found',
+      'bad request',
+      'invalid',
+    ];
+    const isNonRetryable = nonRetryablePatterns.some((pattern) =>
+      lowerMessage.includes(pattern),
+    );
+    return !isNonRetryable;
+  }
+
+  return false;
+}
+
+/**
  * Determines if automatic retry should be attempted based on current state.
  * Uses <= so maxAutoAttempts represents the number of retry attempts allowed,
  * not total attempts (initial attempt + maxAutoAttempts retries).
@@ -174,7 +212,7 @@ export function recordRetryError(
   state.lastError = {
     message,
     statusCode,
-    retryable: isRetryableStatusCode(statusCode),
+    retryable: isRetryableError(statusCode, message),
   };
 }
 
