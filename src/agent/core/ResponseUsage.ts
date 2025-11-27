@@ -1,5 +1,9 @@
 // Third-party imports
-import type { Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  Usage as AnthropicUsage,
+  CacheCreation,
+  ServerToolUsage,
+} from '@anthropic-ai/sdk/resources/messages';
 import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 import type { CompletionUsage } from 'openai/resources/completions';
 
@@ -23,6 +27,8 @@ export interface ExtendedCompletionUsage extends CompletionUsage {
 export type {
   CompletionUsage,
   AnthropicUsage,
+  CacheCreation,
+  ServerToolUsage,
   GenerateContentResponseUsageMetadata,
 };
 
@@ -61,6 +67,12 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   output_tokens: number;
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
+  /** Breakdown of cache creation tokens by TTL (5m vs 1h) */
+  cache_creation: CacheCreation | null;
+  /** Server tool usage statistics (e.g., web search requests) */
+  server_tool_use: ServerToolUsage | null;
+  /** Service tier used for the request (standard, priority, or batch) */
+  service_tier: 'standard' | 'priority' | 'batch' | null;
   // Optional field surfaced by compatibility layers that expose tool-use costs.
   tool_use_tokens?: number;
 }
@@ -146,11 +158,14 @@ export class ResponseUsageFactory {
       percentageCached,
       cost,
       responseTime,
-      // Anthropic specific fields (keeping snake_case)
+      // Anthropic specific fields (keeping snake_case to match SDK)
       input_tokens: responseUsage.input_tokens,
       output_tokens: responseUsage.output_tokens,
       cache_read_input_tokens: cacheReadInputTokens,
       cache_creation_input_tokens: cacheCreationInputTokens,
+      cache_creation: responseUsage.cache_creation ?? null,
+      server_tool_use: responseUsage.server_tool_use ?? null,
+      service_tier: responseUsage.service_tier ?? null,
     };
   }
 }
