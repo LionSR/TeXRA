@@ -80,11 +80,12 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
       const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
       remoteAgentNames = remoteAgents.map((agent) => agent.name);
 
-      // Register remote agents with their metadata (description from DB)
+      // Register remote agents with their metadata from DB
       RemoteAgentRegistry.registerMultiple(
         remoteAgents.map((agent) => ({
           name: agent.name,
           description: agent.description,
+          agentType: agent.agentType,
         })),
       );
     } catch (error) {
