@@ -255,7 +255,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (agentType) {
       const decorator = getAgentTypeDecorator(agentType);
       prefixIcons.push(this._createCodiconHtml(decorator.icon));
-      hints.push(`${decorator.label} agent`);
+      hints.push(`Type: ${decorator.label}`);
     }
 
     // Add cloud icon for remote agents (using shared config)
@@ -265,9 +265,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(hint);
     }
 
-    // Add description as the primary hint if available
+    // Add description (primary info about the agent)
     if (description) {
-      hints.push(description);
+      hints.push(`Description: ${description}`);
     }
 
     // Add multiple outputs icon (using shared config)
