@@ -8,8 +8,10 @@ import {
   OutputHandler,
   IOutputHandler,
   getOutputFileName,
+  runOutputProcessing,
   type RoundOutput,
   type OutputFileInfo,
+  type OutputProcessingServices,
 } from '@agent/output';
 
 // Type imports
@@ -46,6 +48,7 @@ import { writePromptToXml } from '@agent/utils/promptUtils';
 // Type imports
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import { replaceInputCommands } from '@utils/files';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
@@ -426,6 +429,91 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     }
 
     return this.outputHandler.ensureRound(currRound);
+  }
+
+  /**
+   * Determines whether XML validation should be performed for this agent type.
+   * Override in subclasses to customize validation behavior.
+   *
+   * - CoTAgent: Always validates (returns true)
+   * - DirectAgent: Only validates when using scratchpad (returns this.useScratchpad)
+   *
+   * @returns true if XML validation should be performed
+   */
+  protected shouldValidateXml(): boolean {
+    // Default: validate when scratchpad is used (DirectAgent behavior)
+    // Subclasses can override to always validate (CoTAgent behavior)
+    return this.useScratchpad;
+  }
+
+  /**
+   * Creates the services object for output processing flow.
+   * This provides the required dependencies for flow nodes.
+   */
+  protected createOutputProcessingServices(): OutputProcessingServices {
+    return {
+      xmlManager: this.outputHandler.xmlManager,
+      logger: this.logger,
+      fileService: this.fileService,
+      indentLatexFile: (location) => this.outputHandler.indentLatexFile(location),
+      replaceInputCommands: async (baseFiles, outputFiles) => {
+        await replaceInputCommands(
+          baseFiles as FileLocation[],
+          outputFiles,
+          this.logger,
+        );
+      },
+    };
+  }
+
+  /**
+   * Processes output using the pocketflow-based processing flow.
+   *
+   * This method provides a cleaner, more composable approach to output processing
+   * following the pocketflow architecture pattern. Each step is handled by a
+   * dedicated node with clear prep -> exec -> post separation.
+   *
+   * @param currRound - Current round index
+   * @param outputFile - Output file location (must be workspace or run-storage, not external)
+   * @param endTurn - Whether the turn has ended
+   * @param stage - Optional log stage for nested logging
+   * @returns Processed output files
+   */
+  protected async processOutputWithFlow(
+    currRound: number,
+    outputFile: FileLocation,
+    endTurn: boolean,
+    stage?: AgentLogStage,
+  ): Promise<OutputFileInfo[]> {
+    // Output files from agents are always workspace or run-storage locations
+    const agentOutputFile = outputFile as AgentFileLocation;
+    const result = await runOutputProcessing(
+      {
+        outputLocation: agentOutputFile,
+        currRound,
+        baseFiles: this.baseFiles,
+        agentSetting: this.agentSetting,
+        agentConfig: this.agentConfig,
+        endTurn,
+        shouldValidateXml: this.shouldValidateXml(),
+        documentTag: this.agentSetting.documentTag,
+        parentStage: stage,
+      },
+      this.createOutputProcessingServices(),
+    );
+
+    if (!result.success && result.error) {
+      this.logger.error(`Output processing failed: ${result.error.message}`);
+    }
+
+    // Update outputHandler state to maintain compatibility
+    if (result.files.length > 0) {
+      const roundOutputs = this.outputHandler.ensureRound(currRound);
+      roundOutputs.length = 0;
+      roundOutputs.push(...result.files);
+    }
+
+    return result.files;
   }
 
   /**

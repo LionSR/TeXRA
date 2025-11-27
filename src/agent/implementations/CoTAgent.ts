@@ -8,14 +8,24 @@ import { BaseReflectionAgent, RoundOutputOptions } from './BaseReflectionAgent';
 /**
  * Chain of Thought (CoT) agent implementation that extends BaseReflectionAgent.
  * Adds XML structure validation and specialized output handling for multi-step reasoning.
+ *
+ * Uses the pocketflow-based output processing flow for cleaner separation of concerns.
  */
 export class CoTAgent extends BaseReflectionAgent {
   /**
-   * Processes output for the current round with XML validation.
-   * Ensures proper sequencing of XML processing, file processing, and logging.
+   * CoT agents always validate XML structure for proper document extraction.
+   */
+  protected override shouldValidateXml(): boolean {
+    return true;
+  }
+
+  /**
+   * Processes output for the current round using the pocketflow-based processing flow.
+   * XML validation is always performed for CoT agents.
+   *
    * @returns Array of processed output file paths
    */
-  protected async handleOutput(
+  protected override async handleOutput(
     currRound: number,
     stateRound: ConversationRoundState,
     stateGlobal: AgentRunState,
@@ -24,23 +34,14 @@ export class CoTAgent extends BaseReflectionAgent {
     const { outputFile, endTurn, stage } = options;
 
     try {
-      this.outputHandler.ensureRound(currRound);
-
       if (endTurn) {
         this.logger.debug(`Processing output for round ${currRound}`);
 
-        await this.outputHandler.xmlManager.ensureCorrectXmlStructure(
-          outputFile,
-          this.agentSetting.documentTag,
-        );
-
-        await this.outputHandler.processOutputFiles(
-          outputFile,
-          currRound,
-          stage,
-        );
+        // Use pocketflow-based processing
+        await this.processOutputWithFlow(currRound, outputFile, endTurn, stage);
       }
 
+      // Call base for latexdiff handling
       return super.handleOutput(currRound, stateRound, stateGlobal, options);
     } catch (error) {
       this.logger.error(

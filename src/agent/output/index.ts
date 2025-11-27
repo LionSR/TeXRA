@@ -17,3 +17,12 @@ export {
   getDisplayDir,
   getDisplayPath,
 } from './displayUtils';
+
+// Pocketflow-based output processing
+export {
+  runOutputProcessing,
+  createOutputProcessingFlow,
+  type OutputProcessingResult,
+  type OutputProcessingServices,
+  type OutputProcessingInput,
+} from './flows';

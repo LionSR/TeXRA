@@ -16,11 +16,11 @@ import {
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
+import { normalizeRunId } from '@common/constants/runIds';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { normalizeRunId } from '@common/constants/runIds';
 import {
   replaceInputCommands,
   createFileMapping,
