@@ -60,6 +60,12 @@ import {
   extractToolAttachments,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
+import {
+  isRecord,
+  hasReasoningContent,
+  isFunctionToolCall,
+  isCustomToolCall,
+} from './utils/sdkTypeGuards';
 import { ModelHandler } from './ModelHandler';
 import type {
   CreateResponseOptions,
@@ -71,14 +77,12 @@ import type {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
+import type { ReasoningDelta } from './utils/sdkTypeGuards';
 
 type ChatCompletionRequestBase = Omit<
   ChatCompletionCreateParamsStreaming,
   'stream' | 'stream_options'
 >;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
 
 const collectTextFromUnknown = (value: unknown): string => {
   if (typeof value === 'string') {
@@ -108,14 +112,12 @@ const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
     return '';
   }
 
-  const delta = choice.delta as unknown;
-  if (!isRecord(delta) || !('reasoning_content' in delta)) {
+  const delta = choice.delta;
+  if (!hasReasoningContent(delta)) {
     return '';
   }
 
-  return collectTextFromUnknown(
-    (delta as { reasoning_content?: unknown }).reasoning_content,
-  );
+  return collectTextFromUnknown(delta.reasoning_content);
 };
 
 /**
@@ -191,7 +193,7 @@ export class ModelHandlerOpenAI<
     }
 
     if (tools && tools.length > 0) {
-      (baseParams as any).parallel_tool_calls = false;
+      baseParams.parallel_tool_calls = false;
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
@@ -1168,30 +1170,13 @@ export class ModelHandlerOpenAI<
     }
   }
 
-  private isFunctionToolCall(
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  ): call is ChatCompletionMessageFunctionToolCall {
-    return (
-      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
-      (call as ChatCompletionMessageToolCall).type === 'function'
-    );
-  }
-
-  private isCustomToolCall(
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  ): call is ChatCompletionMessageCustomToolCall {
-    return (
-      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
-      (call as ChatCompletionMessageToolCall).type === 'custom'
-    );
-  }
-
   protected normalizeToolCall(
     id: string,
     fallbackName: string,
     call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
   ): ChatCompletionMessageToolCall {
-    if (this.isFunctionToolCall(call)) {
+    // Modern function tool call format
+    if (isFunctionToolCall(call)) {
       return {
         id: call.id ?? id,
         type: 'function',
@@ -1202,7 +1187,8 @@ export class ModelHandlerOpenAI<
       };
     }
 
-    if (this.isCustomToolCall(call)) {
+    // Modern custom tool call format
+    if (isCustomToolCall(call)) {
       return {
         id: call.id ?? id,
         type: 'custom',
@@ -1213,6 +1199,7 @@ export class ModelHandlerOpenAI<
       };
     }
 
+    // Legacy FunctionCall format (no 'type' discriminant)
     return {
       id,
       type: 'function',

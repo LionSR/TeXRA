@@ -16,9 +16,31 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
-import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
+import type { CompletionUsage } from 'openai/resources/completions';
+import type {
+  ResponseFunctionToolCallItem,
+  ResponseUsage,
+} from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
-import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
+import type { GenerateContentResponseUsageMetadata } from '@google/genai';
+import type { ToolUseBlock, Usage as AnthropicUsage } from '@anthropic-ai/sdk/resources/messages';
+
+/**
+ * Union of all provider usage types for type-safe usage handling.
+ * Each provider returns slightly different usage statistics.
+ *
+ * - CompletionUsage: OpenAI Chat Completions API
+ * - ResponseUsage: OpenAI Responses API
+ * - AnthropicUsage: Anthropic Messages API
+ * - GenerateContentResponseUsageMetadata: Google Gemini API
+ */
+export type ProviderUsage =
+  | CompletionUsage
+  | ResponseUsage
+  | AnthropicUsage
+  | GenerateContentResponseUsageMetadata
+  | null
+  | undefined;
 
 /**
  * Options for creating a model response.
@@ -51,7 +73,7 @@ export interface ExtractResponseResult {
   /** Extracted response text */
   response: string;
   /** Usage/token statistics from the provider */
-  usage: any;
+  usage: ProviderUsage;
   /** Reason why the model stopped generating */
   stopReason: ProviderStopReason;
 }
@@ -115,6 +137,59 @@ export type SdkToolCall =
   | OpenAIResponseToolCall
   | GoogleToolCall
   | AnthropicToolCall;
+
+// ============================================================================
+// Type Guards for SdkToolCall Union
+// ============================================================================
+
+/**
+ * Type guard to check if a tool call is from the OpenAI Chat Completions API.
+ */
+export function isOpenAIToolCall(call: SdkToolCall): call is OpenAIToolCall {
+  return call.provider === 'openai';
+}
+
+/**
+ * Type guard to check if a tool call is from DeepSeek.
+ */
+export function isDeepSeekToolCall(call: SdkToolCall): call is DeepSeekToolCall {
+  return call.provider === 'deepseek';
+}
+
+/**
+ * Type guard to check if a tool call is from the OpenAI Responses API.
+ */
+export function isOpenAIResponseToolCall(
+  call: SdkToolCall,
+): call is OpenAIResponseToolCall {
+  return call.provider === 'openai-response';
+}
+
+/**
+ * Type guard to check if a tool call is from Google/Gemini.
+ */
+export function isGoogleToolCall(call: SdkToolCall): call is GoogleToolCall {
+  return call.provider === 'google';
+}
+
+/**
+ * Type guard to check if a tool call is from Anthropic.
+ */
+export function isAnthropicToolCall(
+  call: SdkToolCall,
+): call is AnthropicToolCall {
+  return call.provider === 'anthropic';
+}
+
+/**
+ * Type guard to check if a tool call is from any OpenAI-compatible provider.
+ * This includes OpenAI, DeepSeek, and other providers using the OpenAI API format.
+ */
+export function isOpenAICompatibleToolCall(
+  call: SdkToolCall,
+): call is OpenAIToolCall | DeepSeekToolCall {
+  return call.provider === 'openai' || call.provider === 'deepseek';
+}
 
 /**
  * Common interface implemented by all model handlers.
@@ -195,10 +270,10 @@ export interface IModelHandler<
   ): Promise<M[]>;
 
   /** Format media content for provider APIs. */
-  createMediaContent(mediaMessage: MediaEntry[]): any[];
+  createMediaContent(mediaMessage: MediaEntry[]): unknown[];
 
   /** Extract the response text and usage from the provider response. */
-  extractResponse(responseObject: any, endTag: string): ExtractResponseResult;
+  extractResponse(responseObject: Resp, endTag: string): ExtractResponseResult;
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
@@ -271,7 +346,7 @@ export interface IModelHandler<
 
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
-    responseObject: any,
+    responseObject: Resp,
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
