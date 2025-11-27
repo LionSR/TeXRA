@@ -6,12 +6,18 @@ export interface RemoteAgentInfo {
   agentType?: string;
 }
 
+/** Persisted state structure for remote agent registry. */
+interface PersistedState {
+  agents: string[];
+  metadata: Record<string, RemoteAgentInfo>;
+}
+
 /**
  * Registry tracking remote agent status without prefix markers.
  * State is persisted to ExtensionContext.globalState for resilience across VS Code reloads.
  */
 class RemoteAgentRegistryClass {
-  private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry';
+  private static readonly STORAGE_KEY = 'texra.remoteAgentRegistry.v2';
   private remoteAgents = new Set<string>();
   private agentMetadata = new Map<string, RemoteAgentInfo>();
   private context: vscode.ExtensionContext | null = null;
@@ -21,11 +27,13 @@ class RemoteAgentRegistryClass {
    */
   initialize(context: vscode.ExtensionContext): void {
     this.context = context;
-    const persisted = context.globalState.get<string[]>(
+    const persisted = context.globalState.get<PersistedState>(
       RemoteAgentRegistryClass.STORAGE_KEY,
-      [],
     );
-    this.remoteAgents = new Set(persisted);
+    if (persisted) {
+      this.remoteAgents = new Set(persisted.agents);
+      this.agentMetadata = new Map(Object.entries(persisted.metadata || {}));
+    }
   }
 
   /**
@@ -33,9 +41,13 @@ class RemoteAgentRegistryClass {
    */
   private async persist(): Promise<void> {
     if (this.context) {
+      const state: PersistedState = {
+        agents: Array.from(this.remoteAgents),
+        metadata: Object.fromEntries(this.agentMetadata),
+      };
       await this.context.globalState.update(
         RemoteAgentRegistryClass.STORAGE_KEY,
-        Array.from(this.remoteAgents),
+        state,
       );
     }
   }
