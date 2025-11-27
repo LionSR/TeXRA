@@ -1,6 +1,9 @@
+// Local imports - core types
+import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
+import { createToolRegistry } from '@agent/core/ToolTypes';
+
 // Local imports - tools
 import { BashTool } from './bash';
-import { BaseTool } from './core/base';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { ApplyPathTool } from './applyPath';
 import { EditFileTool } from './EditTool';
@@ -23,7 +26,11 @@ import { WolframTool } from './wolfram';
 import { TexcountTool } from './texcount';
 import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
 
-export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
+/**
+ * Default tool instances as a plain Record.
+ * @deprecated Use getDefaultToolRegistry() for IToolRegistry interface.
+ */
+const DEFAULT_TOOLS: Record<string, ITool> = {
   str_replace_editor: new TextEditorTool(),
   diagnostics: new DiagnosticsTool(),
   bash: new BashTool(),
@@ -48,3 +55,31 @@ export const DEFAULT_TOOL_REGISTRY: Record<string, BaseTool<any>> = {
   web_fetch: new WebFetchTool(),
   web_search: new WebSearchTool(),
 };
+
+/** Singleton IToolRegistry instance for the default tools. */
+let defaultRegistryInstance: IToolRegistry | null = null;
+
+/**
+ * Get the default tool registry as an IToolRegistry.
+ * Uses lazy initialization and singleton pattern.
+ */
+export function getDefaultToolRegistry(): IToolRegistry {
+  if (!defaultRegistryInstance) {
+    defaultRegistryInstance = createToolRegistry(DEFAULT_TOOLS);
+  }
+  return defaultRegistryInstance;
+}
+
+/**
+ * Reset the default tool registry singleton.
+ * @internal For testing only - prevents state leakage between tests.
+ */
+export function resetDefaultToolRegistry(): void {
+  defaultRegistryInstance = null;
+}
+
+/**
+ * Default tool registry as a Record.
+ * @deprecated Prefer getDefaultToolRegistry() for IToolRegistry interface.
+ */
+export const DEFAULT_TOOL_REGISTRY: Record<string, ITool> = DEFAULT_TOOLS;
