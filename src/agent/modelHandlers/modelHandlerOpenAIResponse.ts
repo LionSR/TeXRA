@@ -60,7 +60,7 @@ import type {
   OpenAIResponseToolCall,
 } from './types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
-import type { Reasoning } from 'openai/resources/shared';
+import type { Reasoning, ReasoningEffort } from 'openai/resources/shared';
 import type {
   EasyInputMessage,
   Response,
@@ -79,6 +79,7 @@ import type {
   ResponseInputAudio,
   ResponseStreamEvent,
   ResponseStatus,
+  ResponseFunctionCallOutputItemList,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -608,7 +609,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         reasoning.summary = 'auto';
       }
       if (this.capabilities.supportsReasoningEffort) {
-        reasoning.effort = 'high';
+        const effort: ReasoningEffort = 'high';
+        reasoning.effort = effort;
       }
       params.reasoning = reasoning;
     }
@@ -1401,14 +1403,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? `${primaryText}\n\n${summaryPayload}`
       : summaryPayload;
 
-    let outputPayload:
-      | string
-      | Array<ResponseInputText | ResponseInputImage | ResponseInputFile>;
+    let outputPayload: string | ResponseFunctionCallOutputItemList;
 
     if (uploadedAttachments.length > 0) {
-      const parts: Array<
-        ResponseInputText | ResponseInputImage | ResponseInputFile
-      > = [{ type: 'input_text', text: combinedText }];
+      const parts: ResponseFunctionCallOutputItemList = [
+        { type: 'input_text', text: combinedText },
+      ];
 
       for (const uploaded of uploadedAttachments) {
         if (supportsInlineImages && uploaded.isImage) {
