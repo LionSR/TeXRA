@@ -14,7 +14,6 @@ export class RetryRequests extends BaseUIRequestManager {
     super({
       containerId: 'retryRequests',
       listSelector: '.retry-requests__list',
-      requestClass: 'retry-request',
       idAttribute: 'streamId',
     });
   }
@@ -108,6 +107,11 @@ export class RetryRequests extends BaseUIRequestManager {
     }
 
     if (action === 'dismiss') {
+      // Notify backend to cancel the pending retry
+      vscode.postMessage({
+        command: COMMANDS.CANCEL_RETRY_REQUEST,
+        stream: streamId,
+      });
       this.resolve(streamId);
     }
   }

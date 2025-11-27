@@ -12,7 +12,6 @@ export class BaseUIRequestManager {
    * @param {Object} config
    * @param {string} config.containerId - DOM ID of the container element
    * @param {string} config.listSelector - CSS selector for the list within container
-   * @param {string} config.requestClass - CSS class for individual request elements
    * @param {string} config.idAttribute - Data attribute name for request ID (e.g., 'requestId', 'streamId')
    */
   constructor(config) {
