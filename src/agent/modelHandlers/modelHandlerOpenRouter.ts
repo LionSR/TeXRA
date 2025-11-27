@@ -1,5 +1,6 @@
 // Third-party imports
 import OpenAI from 'openai';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -159,10 +160,13 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   ): void {
     const lastMessage = messages.at(-1);
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
-    if (lastMessage.role === 'assistant') {
+    if (isAssistantMessage(lastMessage)) {
       if (Array.isArray(lastMessage.content)) {
         // is this correct? it looks like we should attach previous response too.
-        lastMessage.content.at(-1).text = bestConnector + newResponse;
+        const lastPart = lastMessage.content.at(-1);
+        if (lastPart && 'text' in lastPart) {
+          lastPart.text = bestConnector + newResponse;
+        }
       } else if (typeof lastMessage.content === 'string') {
         lastMessage.content = [
           {
@@ -177,12 +181,12 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   /** Updates message content for models with prefill support. */
   updateMessageContentWithoutPrefill(
     messages: any[],
-    bestConnector: string,
-    newResponse: string,
+    _bestConnector: string,
+    _newResponse: string,
     workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
-    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       messages.push({
         role: 'assistant',
         content: [

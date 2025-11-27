@@ -15,6 +15,7 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -1000,13 +1001,12 @@ export class ModelHandlerOpenAI<
 
     const lastMessage = messages.at(-1);
 
-    if (lastMessage.role === 'assistant') {
+    if (isAssistantMessage(lastMessage)) {
       if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
+        lastMessage.content.push({
           type: 'text',
           text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
+        });
       } else {
         lastMessage.content = [
           {
@@ -1015,7 +1015,7 @@ export class ModelHandlerOpenAI<
           },
         ];
       }
-    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    } else if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       this.logger.debug(
         ' Last message is a user or system message - unexpected format',
       );
@@ -1059,14 +1059,12 @@ export class ModelHandlerOpenAI<
       );
       // Then the last message is a user message
       // So the second last message must be an assistant message
-      if (secondLastMessage && secondLastMessage.role === 'assistant') {
-        // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
-        // but why do the following two differ?
+      if (isAssistantMessage(secondLastMessage)) {
         if (Array.isArray(secondLastMessage.content)) {
           secondLastMessage.content.push({
             type: 'text',
             text: bestConnector + newResponse,
-          } as any);
+          });
         } else {
           this.logger.error('Second last message content is not a list');
           secondLastMessage.content = [
