@@ -1,6 +1,7 @@
 // Local imports - logging
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { bus } from '@eventBus/ProgressEventBus';
 
 interface ManualRetryTask {
   run: () => Promise<unknown>;
@@ -20,7 +21,11 @@ export function registerManualRetry(key: string, task: ManualRetryTask): void {
 }
 
 export function clearManualRetry(key: string): void {
+  const hadEntry = pendingRetries.has(key);
   pendingRetries.delete(key);
+  if (hadEntry) {
+    bus.emit('resolveRetryRequest', { streamId: key });
+  }
 }
 
 export async function triggerManualRetry(key: string): Promise<boolean> {

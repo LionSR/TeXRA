@@ -103,6 +103,23 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
+
+    // Retry request events
+    disposables.push(
+      new vscode.Disposable(
+        bus.on('showRetryRequest', (payload) => {
+          this.webviewUpdater.showRetryRequest(payload);
+        }),
+      ),
+    );
+    disposables.push(
+      new vscode.Disposable(
+        bus.on('resolveRetryRequest', (payload) => {
+          this.webviewUpdater.resolveRetryRequest(payload.streamId);
+        }),
+      ),
+    );
+
     return disposables;
   }
 
