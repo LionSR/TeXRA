@@ -4,7 +4,14 @@ import * as path from 'path';
 // Internal imports
 import { getConfig } from '@utils/config';
 
-export type FileType =
+/**
+ * File categories for extension configuration lookups.
+ * These map to VS Code settings keys for allowed file extensions.
+ *
+ * Note: This is distinct from FileType in utils/config/constants.ts
+ * which defines UI file input field types.
+ */
+export type ExtensionCategory =
   | 'input'
   | 'reference'
   | 'auxiliary'
@@ -12,7 +19,13 @@ export type FileType =
   | 'audio'
   | 'edited';
 
-const INCLUDED_EXTENSION_KEYS: Record<FileType, string> = {
+/**
+ * @deprecated Use ExtensionCategory instead. This alias exists for
+ * backwards compatibility during migration.
+ */
+export type FileType = ExtensionCategory;
+
+const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   input: 'texra.files.included.inputExtensions',
   reference: 'texra.files.included.referenceExtensions',
   auxiliary: 'texra.files.included.auxiliaryExtensions',
@@ -22,13 +35,16 @@ const INCLUDED_EXTENSION_KEYS: Record<FileType, string> = {
 };
 
 /**
- * Retrieve included extensions for the given file type.
+ * Retrieve included extensions for the given extension category.
  */
 export function getIncludedExtensions(
-  type: FileType,
+  category: ExtensionCategory,
   defaultExtensions: string[] = [],
 ): string[] {
-  return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[type], defaultExtensions);
+  return getConfig<string[]>(
+    INCLUDED_EXTENSION_KEYS[category],
+    defaultExtensions,
+  );
 }
 
 /**
