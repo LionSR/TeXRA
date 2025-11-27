@@ -80,6 +80,9 @@ import type {
   ResponseStreamEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
+  ResponseOutputItem,
+  ResponseOutputMessage,
+  ResponseOutputText,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -737,20 +740,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const fallbackSegments: string[] = [];
 
       for (const item of responseObject.output) {
-        if (item.type !== 'message') {
+        if (!this.isOutputMessage(item)) {
           continue;
         }
 
-        const content = (item as { content?: unknown[] }).content;
-        if (!Array.isArray(content)) {
-          continue;
-        }
-
-        for (const part of content) {
-          const partType = (part as { type?: unknown }).type;
-          const partText = (part as { text?: unknown }).text;
-          if (partType === 'output_text' && typeof partText === 'string') {
-            fallbackSegments.push(partText);
+        for (const part of item.content) {
+          if (part.type === 'output_text') {
+            fallbackSegments.push(part.text);
           }
         }
       }
@@ -1545,6 +1541,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const content = (item as { content?: unknown }).content;
     return typeof content === 'string' || Array.isArray(content);
+  }
+
+  /** Type guard for ResponseOutputMessage items from the SDK. */
+  private isOutputMessage(item: ResponseOutputItem): item is ResponseOutputMessage {
+    return item.type === 'message';
   }
 
   private getMessageContent(
