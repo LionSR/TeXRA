@@ -8,7 +8,6 @@ import {
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessage,
   ChatCompletionMessageCustomToolCall,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
@@ -1158,45 +1157,30 @@ export class ModelHandlerOpenAI<
   }
 
   protected normalizeToolCall(
-    id: string,
-    fallbackName: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ChatCompletionMessageToolCall,
   ): ChatCompletionMessageToolCall {
-    // Modern format has 'type' discriminant
-    if ('type' in call) {
-      if (call.type === 'function') {
-        return {
-          id: call.id ?? id,
-          type: 'function',
-          function: {
-            name: call.function?.name ?? fallbackName,
-            arguments: this.ensureStringifiedArguments(
-              call.function?.arguments,
-            ),
-          },
-        };
-      }
-      if (call.type === 'custom') {
-        return {
-          id: call.id ?? id,
-          type: 'custom',
-          custom: {
-            name: call.custom?.name ?? fallbackName,
-            input: this.ensureStringifiedArguments(call.custom?.input),
-          },
-        };
-      }
+    if (call.type === 'function') {
+      return {
+        id: call.id,
+        type: 'function',
+        function: {
+          name: call.function.name,
+          arguments: this.ensureStringifiedArguments(call.function.arguments),
+        },
+      };
     }
-
-    // Legacy FunctionCall format (no 'type' discriminant)
-    return {
-      id,
-      type: 'function',
-      function: {
-        name: call.name ?? fallbackName,
-        arguments: this.ensureStringifiedArguments(call.arguments),
-      },
-    };
+    if (call.type === 'custom') {
+      return {
+        id: call.id,
+        type: 'custom',
+        custom: {
+          name: call.custom.name,
+          input: this.ensureStringifiedArguments(call.custom.input),
+        },
+      };
+    }
+    // Type should be exhaustive, but return as-is for safety
+    return call;
   }
 
   protected parseArguments(raw: unknown): unknown {
@@ -1250,7 +1234,7 @@ export class ModelHandlerOpenAI<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
+    const toolCall = this.normalizeToolCall(call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -1268,7 +1252,7 @@ export class ModelHandlerOpenAI<
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? call.callId,
+      tool_call_id: toolCall.id,
       content: JSON.stringify(sanitizedResult),
     };
     const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];

@@ -30,8 +30,6 @@ import type {
   ChatCompletionAssistantMessageParam,
   ChatCompletionChunk,
   ChatCompletionToolMessageParam,
-  ChatCompletionMessageToolCall,
-  ChatCompletionMessage,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
@@ -180,20 +178,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
         }));
     }
 
-    const func = responseObject?.choices?.[0]?.message?.function_call as
-      | ChatCompletionMessage.FunctionCall
-      | undefined;
-    if (func && func.name) {
-      return [
-        {
-          provider: 'deepseek',
-          callId: func.name,
-          name: func.name,
-          input: this.parseArguments(func.arguments),
-          raw: func,
-        },
-      ];
-    }
     return [];
   }
 
@@ -204,7 +188,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
+    const toolCall = this.normalizeToolCall(call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
@@ -221,7 +205,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     }
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? call.callId,
+      tool_call_id: toolCall.id,
       content: JSON.stringify(sanitizedResult),
     };
     return [callMsg, resultMsg];
