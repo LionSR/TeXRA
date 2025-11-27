@@ -15,7 +15,6 @@ export class ApprovalRequests extends BaseUIRequestManager {
     super({
       containerId: 'approvalRequests',
       listSelector: '.approval-requests__list',
-      requestClass: 'approval-request',
       idAttribute: 'requestId',
     });
     this.isBypassActive = false;
