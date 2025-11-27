@@ -34,7 +34,8 @@ export class BaseUIRequestManager {
     }
 
     this.container = document.getElementById(this._config.containerId);
-    this.list = this.container?.querySelector(this._config.listSelector) ?? null;
+    this.list =
+      this.container?.querySelector(this._config.listSelector) ?? null;
 
     if (!this.container || !this.list) {
       return;

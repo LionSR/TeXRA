@@ -24,7 +24,12 @@ export class ApprovalRequests extends BaseUIRequestManager {
   /** @override */
   _setupAdditionalListeners() {
     if (this.container) {
-      addEventListenerSafely(this.container, 'change', this._handleToggle, true);
+      addEventListenerSafely(
+        this.container,
+        'change',
+        this._handleToggle,
+        true,
+      );
     }
   }
 
