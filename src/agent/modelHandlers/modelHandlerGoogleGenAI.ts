@@ -10,13 +10,16 @@ import {
   Content,
   GenerateContentResponse,
   FinishReason,
+  ThinkingLevel,
   type FunctionCall,
+  type FunctionResponsePart,
   File,
   createPartFromText,
   createPartFromUri,
   createPartFromFunctionCall,
   createPartFromFunctionResponse,
   createPartFromBase64,
+  createFunctionResponsePartFromBase64,
   createUserContent,
   createModelContent,
   GenerateContentConfig,
@@ -104,10 +107,6 @@ function findLastTextPart(
   return undefined;
 }
 
-type GoogleGenerationConfig = GenerateContentConfig & {
-  thinkingLevel?: 'low' | 'medium' | 'high';
-};
-
 function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
   if (role === 'assistant' || role === 'model') {
     return 'model';
@@ -184,28 +183,36 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  private getThinkingLevel(): GoogleGenerationConfig['thinkingLevel'] {
+  private getThinkingLevel(): ThinkingLevel | undefined {
     const requestedLevel = this.capabilities.reasoningEffort;
     const isGemini3 = this.config.fullName.includes('gemini-3-pro');
 
     if (requestedLevel === ReasoningEffort.NONE) {
       if (isGemini3) {
         this.logger.warn(
-          "Gemini 3 Pro can't disable thinking. Using thinking_level 'high'.",
+          "Gemini 3 Pro can't disable thinking. Using thinking_level 'HIGH'.",
         );
-        return 'high';
+        return ThinkingLevel.HIGH;
       }
       return undefined;
     }
 
     if (requestedLevel === ReasoningEffort.MEDIUM) {
       this.logger.warn(
-        "Google models don't support thinking_level 'medium'. Falling back to 'high'.",
+        "Google models don't support thinking_level 'MEDIUM'. Falling back to 'HIGH'.",
       );
-      return 'high';
+      return ThinkingLevel.HIGH;
     }
 
-    return requestedLevel as 'low' | 'high';
+    if (requestedLevel === ReasoningEffort.LOW) {
+      return ThinkingLevel.LOW;
+    }
+
+    if (requestedLevel === ReasoningEffort.HIGH) {
+      return ThinkingLevel.HIGH;
+    }
+
+    return undefined;
   }
 
   protected getInlineUploadLimitBytes(): number {
@@ -371,24 +378,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Last message conversion resulted in empty parts.');
     }
 
-    const generationConfig: GoogleGenerationConfig = {
+    const generationConfig: GenerateContentConfig = {
       temperature: temperature,
       maxOutputTokens: this.config.maxOutputTokens ?? 8192,
       ...(endTag && { stopSequences: [endTag] }),
     };
 
-    const thinkingLevel = this.getThinkingLevel();
-    if (thinkingLevel && this.config.fullName.includes('gemini-3-pro')) {
-      generationConfig.thinkingLevel = thinkingLevel;
-    }
-
-    if (
-      this.config.fullName.includes('gemini-3-pro-preview') ||
-      this.config.fullName.includes('2.5-pro') ||
-      this.config.fullName.includes('2.5-flash') ||
-      this.config.fullName.includes('flash-latest')
-    ) {
-      generationConfig.thinkingConfig = { includeThoughts: true };
+    // Configure thinking for models that support it (defined in model registry)
+    if (this.capabilities.supportsReasoning) {
+      const thinkingLevel = this.getThinkingLevel();
+      generationConfig.thinkingConfig = {
+        includeThoughts: true,
+        ...(thinkingLevel && { thinkingLevel }),
+      };
     }
 
     if (tools && tools.length > 0) {
@@ -399,12 +401,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       model: this.config.fullName,
       history: chatHistory,
       config: generationConfig,
-      ...(systemPrompt && {
-        systemInstruction: {
-          role: 'system',
-          parts: [createPartFromText(systemPrompt)],
-        },
-      }),
+      ...(systemPrompt && { systemInstruction: systemPrompt }),
     };
 
     if (this.capabilities.supportsTokenCounting) {
@@ -419,7 +416,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         countContents.push(...chatHistory);
         // The token count API expects the upcoming message as part of the
         // history, so append the final user message that will be sent next.
-        countContents.push({ role: 'user', parts: [...lastMessageParts] });
+        countContents.push(createUserContent([...lastMessageParts]));
 
         const responseTokenCount = await executeRequest(
           {
@@ -678,7 +675,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     userContentParts.push(createPartFromText(`\n${userRequest}`));
 
-    return [{ role: 'user', parts: userContentParts }];
+    return [createUserContent(userContentParts)];
   }
 
   /** Creates message array for subsequent rounds, managing image content and message structure. */
@@ -707,7 +704,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     roundParts.push(createPartFromText(userMessage));
 
-    messages.push({ role: 'user', parts: roundParts });
+    messages.push(createUserContent(roundParts));
     return messages;
   }
 
@@ -715,16 +712,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     userMessage: string,
   ): Promise<Content[]> {
-    messages.push({
-      role: 'user',
-      parts: [createPartFromText(userMessage)],
-    });
+    messages.push(createUserContent(createPartFromText(userMessage)));
     return messages;
   }
 
   createAssistantMessage(text: string): Content {
     // Note: Method name retained for interface compatibility, but returns 'model' role per Google SDK
-    return { role: 'model', parts: [createPartFromText(text)] };
+    return createModelContent(createPartFromText(text));
   }
 
   override async createMediaMessage(mediaFiles: string[]): Promise<Part[]> {
@@ -890,10 +884,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       prefillTokens,
     );
     this.logger.debug(`Adding continuation message.`);
-    messages.push({
-      role: 'user',
-      parts: [createPartFromText(userMessageContinuation)],
-    });
+    messages.push(createUserContent(createPartFromText(userMessageContinuation)));
   }
 
   updateMessageContentWithPrefill(/* ... */): void {
@@ -940,10 +931,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       }
     } else {
       this.logger.debug('Adding new model message for the response.');
-      messages.push({
-        role: 'model',
-        parts: [createPartFromText(workspaceState.assembly.accumulatedOutput)],
-      });
+      messages.push(
+        createModelContent(
+          createPartFromText(workspaceState.assembly.accumulatedOutput),
+        ),
+      );
     }
   }
 
@@ -974,10 +966,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const parts = (lastMessage.parts ??= []);
         parts.push(createPartFromText(pseudoPrefillMsg));
       } else {
-        messages.push({
-          role: 'model',
-          parts: [createPartFromText(pseudoPrefillMsg)],
-        });
+        messages.push(createModelContent(createPartFromText(pseudoPrefillMsg)));
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
@@ -1003,10 +992,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     this.logger.debug(
       `Cleaned and saved existing content to ${outputLocation.absolutePath}.`,
     );
-    messages.push({
-      role: 'model',
-      parts: [createPartFromText(fileContent)],
-    });
+    messages.push(createModelContent(createPartFromText(fileContent)));
     this.logger.debug(
       `Added existing file content to messages as 'model' role.`,
     );
@@ -1148,9 +1134,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }));
   }
 
-  private async buildAttachmentPart(
+  /**
+   * Build a FunctionResponsePart for an attachment using SDK's native type.
+   * FunctionResponsePart is the proper way to attach media to function responses
+   * per the Google GenAI SDK design.
+   */
+  private async buildFunctionResponseAttachment(
     attachment: ToolFileAttachment,
-  ): Promise<Part | null> {
+  ): Promise<FunctionResponsePart | null> {
     try {
       const buffer = await loadAttachmentBuffer(attachment);
       if (!buffer || buffer.length === 0) {
@@ -1166,7 +1157,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ? attachment.mimeType
           : DEFAULT_ATTACHMENT_MIME_TYPE;
 
-      return createPartFromBase64(buffer.toString('base64'), mimeType);
+      // Use SDK's native FunctionResponsePart for function response attachments
+      return createFunctionResponsePartFromBase64(
+        buffer.toString('base64'),
+        mimeType,
+      );
     } catch (attachmentError) {
       const message =
         attachmentError instanceof Error
@@ -1179,6 +1174,81 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
   }
 
+  /**
+   * Build a single function call part with optional thought signature.
+   * Uses SDK's createPartFromFunctionCall and preserves thoughtSignature
+   * which is a native property of the Part interface.
+   */
+  private buildFunctionCallPart(call: GoogleToolCall): Part {
+    const args = call.raw.args ?? {};
+    const callPart = createPartFromFunctionCall(call.name, args);
+
+    if (callPart.functionCall) {
+      callPart.functionCall.id = call.callId;
+    }
+
+    // Preserve thought signature if present (required for Gemini 3 models)
+    // Note: thoughtSignature is a native property of the Part interface
+    if (call.thoughtSignature) {
+      callPart.thoughtSignature = call.thoughtSignature;
+    }
+
+    return callPart;
+  }
+
+  /**
+   * Build a function response part with attachments for a single tool call result.
+   * Uses SDK's native FunctionResponsePart for attachments, passed to createPartFromFunctionResponse.
+   */
+  private async buildFunctionResponsePart(
+    call: GoogleToolCall,
+    result: Record<string, unknown>,
+  ): Promise<Part> {
+    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    let attachmentParts: FunctionResponsePart[] = [];
+
+    if (attachments.length > 0) {
+      (sanitizedResult as Record<string, unknown>).attachmentSummary =
+        `Attachments included in this response:\n${describeAttachments(
+          attachments,
+        ).join('\n')}`;
+
+      const encodedParts = await Promise.all(
+        attachments.map((attachment) =>
+          this.buildFunctionResponseAttachment(attachment),
+        ),
+      );
+
+      attachmentParts = encodedParts.filter(
+        (part): part is FunctionResponsePart => part !== null,
+      );
+
+      if (attachmentParts.length === 0 && attachments.length > 0) {
+        this.logger.warn(
+          `All attachments for Google function response '${call.name}' failed to encode.`,
+        );
+      }
+    }
+
+    // Use SDK's createPartFromFunctionResponse with native attachment support
+    // The 4th parameter accepts FunctionResponsePart[] for media attachments
+    return createPartFromFunctionResponse(
+      call.callId,
+      call.name,
+      sanitizedResult,
+      attachmentParts.length > 0 ? attachmentParts : undefined,
+    );
+  }
+
+  /**
+   * Create follow-up messages for a SINGLE tool call.
+   *
+   * IMPORTANT: For Gemini 3 models with parallel tool calls, use
+   * `createBatchedToolUseFollowUpMessages` instead to properly handle
+   * thought signatures. This method creates separate model/user message
+   * pairs which can cause validation errors when multiple parallel calls
+   * are processed individually.
+   */
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
@@ -1190,61 +1260,81 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Function call id is required for follow-up messages');
     }
 
-    const args = call.raw.args ?? {};
+    const callPart = this.buildFunctionCallPart(call);
+    const responsePart = await this.buildFunctionResponsePart(call, result);
 
-    const functionName = call.name;
-
-    // Create the call part with the function name and arguments
-    const callPart = createPartFromFunctionCall(functionName, args);
-
-    if (callPart.functionCall) {
-      callPart.functionCall.id = call.callId;
-    }
-
-    if (call.thoughtSignature) {
-      (callPart as Part & { thoughtSignature: string }).thoughtSignature =
-        call.thoughtSignature;
-    }
-
-    // Use the same ID for the result to maintain correlation
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    let attachmentParts: Part[] = [];
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments included in this response:\n${describeAttachments(
-          attachments,
-        ).join('\n')}`;
-
-      const encodedParts = await Promise.all(
-        attachments.map((attachment) => this.buildAttachmentPart(attachment)),
-      );
-
-      attachmentParts = encodedParts.filter(
-        (part): part is Part => part !== null,
-      );
-
-      if (attachmentParts.length === 0) {
-        this.logger.warn(
-          `All attachments for Google function response '${functionName}' failed to encode.`,
-        );
-      }
-    }
-    const resultPart = createPartFromFunctionResponse(
-      call.callId,
-      functionName,
-      sanitizedResult,
-    );
     const callParts: Part[] = [];
     if (text) {
       callParts.push(createPartFromText(text));
     }
     callParts.push(callPart);
-    const callMsg: Content = {
-      role: 'model',
-      parts: callParts,
-    };
-    const resultParts: Part[] = [resultPart, ...attachmentParts];
-    const resultMsg: Content = { role: 'user', parts: resultParts };
+
+    // Use SDK helpers for Content creation (single source of truth)
+    const callMsg = createModelContent(callParts);
+    const resultMsg = createUserContent(responsePart);
+    return [callMsg, resultMsg];
+  }
+
+  /**
+   * Create follow-up messages for MULTIPLE parallel tool calls.
+   *
+   * For Gemini 3 models with thinking enabled, parallel function calls must be
+   * structured correctly to preserve thought signatures:
+   * - All function calls go in ONE model message (first call has thoughtSignature)
+   * - All function responses go in ONE user message
+   *
+   * This is required because Gemini 3 validates that the first functionCall part
+   * in each "step" has a thought_signature. If calls are split into separate
+   * model messages, each becomes a new step requiring its own signature.
+   *
+   * @param calls - Array of tool calls (should preserve original order from model response)
+   * @param results - Array of results corresponding to each call (same order as calls)
+   * @param text - Optional text to include before function calls
+   */
+  async createBatchedToolUseFollowUpMessages(
+    calls: GoogleToolCall[],
+    results: Record<string, unknown>[],
+    text?: string,
+  ): Promise<Content[]> {
+    if (calls.length === 0) {
+      return [];
+    }
+
+    if (calls.length !== results.length) {
+      throw new Error(
+        `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
+      );
+    }
+
+    // Validate all calls have IDs
+    for (const [index, call] of calls.entries()) {
+      if (!call.callId) {
+        throw new Error(
+          `Function call at index ${index} (${call.name ?? 'unknown'}) is missing callId`,
+        );
+      }
+    }
+
+    // Build all function call parts (preserving thought signature on first call)
+    const callParts: Part[] = [];
+    if (text) {
+      callParts.push(createPartFromText(text));
+    }
+    for (const call of calls) {
+      callParts.push(this.buildFunctionCallPart(call));
+    }
+
+    // Build all function response parts
+    const responseParts: Part[] = [];
+    for (let i = 0; i < calls.length; i++) {
+      const part = await this.buildFunctionResponsePart(calls[i], results[i]);
+      responseParts.push(part);
+    }
+
+    // Use SDK helpers for Content creation (single source of truth)
+    const callMsg = createModelContent(callParts);
+    const resultMsg = createUserContent(responseParts);
+
     return [callMsg, resultMsg];
   }
 
