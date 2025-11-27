@@ -17,4 +17,6 @@ export const AgentSessionDescriptorSchema = z.strictObject({
  * Shared metadata describing how an agent session should be classified.
  * Derived from AgentSessionDescriptorSchema (single source of truth).
  */
-export type AgentSessionDescriptor = z.infer<typeof AgentSessionDescriptorSchema>;
+export type AgentSessionDescriptor = z.infer<
+  typeof AgentSessionDescriptorSchema
+>;
