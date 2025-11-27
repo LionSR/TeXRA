@@ -40,20 +40,26 @@ export async function loadAndRegisterRemoteAgents(): Promise<LoadedRemoteAgents>
     }
 
     // Register only unregistered agents
-    const agentNames = agents.map((agent) => agent.name);
-    const unregisteredAgents = agentNames.filter(
-      (name) => !RemoteAgentRegistry.isRemote(name),
+    const unregisteredAgents = agents.filter(
+      (agent) => !RemoteAgentRegistry.isRemote(agent.name),
     );
 
     if (unregisteredAgents.length > 0) {
-      RemoteAgentRegistry.registerMultiple(unregisteredAgents);
+      RemoteAgentRegistry.registerMultiple(
+        unregisteredAgents.map((agent) => ({
+          name: agent.name,
+          description: agent.description,
+          agentType: agent.agentType,
+        })),
+      );
       logger.debug(
         CHANNEL,
         `Registered ${unregisteredAgents.length} new remote agents`,
       );
     }
 
-    return { agents, newlyRegistered: unregisteredAgents };
+    const newlyRegistered = unregisteredAgents.map((agent) => agent.name);
+    return { agents, newlyRegistered };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logger.error(CHANNEL, `Failed to load remote agents: ${message}`);
