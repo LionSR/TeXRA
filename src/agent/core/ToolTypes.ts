@@ -14,6 +14,10 @@
  * - Testability (mock registries can be injected)
  */
 
+// Import types for local use in interfaces
+import type { ToolResult as ToolResultType } from '@tools/result';
+import type { ToolDefinition as ToolDefinitionType } from '@model/ToolDefinition';
+
 // Re-export tool result types from canonical location
 export type {
   ToolResult,
@@ -34,7 +38,7 @@ export type { ToolDefinition } from '@model/ToolDefinition';
  */
 export interface ITool {
   /** Tool definition containing name, description, and parameter schema */
-  readonly definition: import('@model/ToolDefinition').ToolDefinition;
+  readonly definition: ToolDefinitionType;
 
   /**
    * Execute the tool with the given input.
@@ -47,7 +51,7 @@ export interface ITool {
    * @param rawInput - The raw input to validate and process
    * @returns Promise resolving to a ToolResult
    */
-  call(rawInput: unknown): Promise<import('@tools/result').ToolResult>;
+  call(rawInput: unknown): Promise<ToolResultType>;
 }
 
 /**
@@ -59,6 +63,9 @@ export interface ITool {
  * - Testing with mock tools
  */
 export interface IToolRegistry {
+  /** Number of tools in the registry */
+  readonly size: number;
+
   /**
    * Get a tool by name.
    * @param name - The tool name
@@ -81,6 +88,12 @@ export interface IToolRegistry {
 
   /**
    * Get all tools in the registry.
+   * @returns Iterator of tool values
+   */
+  values(): IterableIterator<ITool>;
+
+  /**
+   * Get all tools in the registry.
    * @returns Iterator of [name, tool] pairs
    */
   entries(): IterableIterator<[string, ITool]>;
@@ -98,6 +111,10 @@ export class MapToolRegistry implements IToolRegistry {
     this.tools = tools instanceof Map ? tools : new Map(Object.entries(tools));
   }
 
+  get size(): number {
+    return this.tools.size;
+  }
+
   get(name: string): ITool | undefined {
     return this.tools.get(name);
   }
@@ -108,6 +125,10 @@ export class MapToolRegistry implements IToolRegistry {
 
   keys(): IterableIterator<string> {
     return this.tools.keys();
+  }
+
+  values(): IterableIterator<ITool> {
+    return this.tools.values();
   }
 
   entries(): IterableIterator<[string, ITool]> {

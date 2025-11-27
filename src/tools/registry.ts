@@ -71,6 +71,14 @@ export function getDefaultToolRegistry(): IToolRegistry {
 }
 
 /**
+ * Reset the default tool registry singleton.
+ * @internal For testing only - prevents state leakage between tests.
+ */
+export function resetDefaultToolRegistry(): void {
+  defaultRegistryInstance = null;
+}
+
+/**
  * Default tool registry as a Record.
  * @deprecated Prefer getDefaultToolRegistry() for IToolRegistry interface.
  */
