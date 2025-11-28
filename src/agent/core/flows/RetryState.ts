@@ -2,12 +2,12 @@
  * Retry state management for manual retry handling.
  *
  * Auto-retry is handled by PocketFlow's Node class (maxRetries, wait, execFallback).
- * This module only manages state for manual retry (when auto-retries are exhausted).
+ * This module only manages error state for manual retry UI integration.
  *
  * Architecture:
  * - PocketFlow Node handles auto-retry internally via _exec() loop
  * - execFallback() is called when all auto-retries exhausted
- * - This module tracks error state for manual retry UI integration
+ * - This module tracks the last error for UI display and caller reporting
  */
 
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -37,6 +37,9 @@ export interface RetryCallbacks {
   cancelRetry?: () => void;
 }
 
+/**
+ * Error information for retry handling.
+ */
 export interface RetryErrorInfo {
   message: string;
   statusCode?: number;
@@ -44,14 +47,12 @@ export interface RetryErrorInfo {
 }
 
 /**
- * Retry state for manual retry handling.
- * Auto-retry state is managed by PocketFlow Node (maxRetries, wait, currentRetry).
+ * Retry state for tracking errors across the retry flow.
+ * Used to communicate error details to callers and UI.
  */
 export interface RetryState {
   /** Information about the last error, if any. */
   lastError?: RetryErrorInfo;
-  /** Whether the flow is paused awaiting manual retry from user. */
-  awaitingManualRetry: boolean;
 }
 
 // ============================================================================
@@ -96,16 +97,15 @@ export function getNodeRetryConfig(): NodeRetryConfig {
 }
 
 // ============================================================================
-// State creation and reset
+// State management
 // ============================================================================
 
 /**
- * Creates initial retry state for manual retry tracking.
+ * Creates initial retry state.
  */
 export function createRetryState(): RetryState {
   return {
     lastError: undefined,
-    awaitingManualRetry: false,
   };
 }
 
@@ -114,7 +114,6 @@ export function createRetryState(): RetryState {
  */
 export function resetRetryState(state: RetryState): void {
   state.lastError = undefined;
-  state.awaitingManualRetry = false;
 }
 
 /**
@@ -123,7 +122,6 @@ export function resetRetryState(state: RetryState): void {
  */
 export function clearRetryError(state: RetryState): void {
   state.lastError = undefined;
-  state.awaitingManualRetry = false;
 }
 
 /**
@@ -131,37 +129,22 @@ export function clearRetryError(state: RetryState): void {
  */
 export function recordRetryError(
   state: RetryState,
-  message: string,
-  statusCode: number | undefined,
-  retryable: boolean,
+  error: RetryErrorInfo,
 ): void {
-  state.lastError = {
-    message,
-    statusCode,
-    retryable,
-  };
+  state.lastError = error;
 }
 
 // ============================================================================
-// Fallback decision (called from Node.execFallback)
+// Fallback handling (called from Node.execFallback via post())
 // ============================================================================
-
-/**
- * Error info for fallback decisions.
- */
-export interface FallbackError {
-  message: string;
-  statusCode?: number;
-  retryable: boolean;
-}
 
 /**
  * Result from execFallback that post() uses to determine flow transition.
  * Discriminated union ensures type-safe handling.
  */
 export type FallbackResult =
-  | { outcome: 'manual_retry'; error: FallbackError }
-  | { outcome: 'fail'; error: FallbackError };
+  | { outcome: 'manual_retry'; error: RetryErrorInfo }
+  | { outcome: 'fail'; error: RetryErrorInfo };
 
 /**
  * Determines fallback action after all auto-retries are exhausted.
@@ -177,7 +160,7 @@ export function determineFallbackAction(
   message: string,
   statusCode?: number,
 ): FallbackResult {
-  const error: FallbackError = { message, statusCode, retryable };
+  const error: RetryErrorInfo = { message, statusCode, retryable };
 
   if (retryable) {
     // Error is retryable but auto-retries exhausted → offer manual retry
@@ -189,7 +172,7 @@ export function determineFallbackAction(
 }
 
 /**
- * Applies fallback result by updating state and returning flow transition.
+ * Applies fallback result: records error, logs, and returns flow transition.
  * Called from post() after receiving FallbackResult from execFallback.
  *
  * @param result - The fallback result from determineFallbackAction
@@ -204,17 +187,11 @@ export function applyFallbackResult(
   logger: AgentLogger,
   operationName: string,
 ): string {
-  // Record error in state
-  recordRetryError(
-    state,
-    result.error.message,
-    result.error.statusCode,
-    result.error.retryable,
-  );
+  // Record error in state for caller/UI access
+  recordRetryError(state, result.error);
 
   switch (result.outcome) {
     case 'manual_retry':
-      state.awaitingManualRetry = true;
       logger.error(`${operationName} failed: ${result.error.message}`, {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
         data: { statusCode: result.error.statusCode, retryable: true },
@@ -227,74 +204,6 @@ export function applyFallbackResult(
         {
           messageType: MESSAGE_TYPES.PROGRESS_STATUS,
           data: { statusCode: result.error.statusCode, retryable: false },
-        },
-      );
-      return FlowTransition.COMPLETE;
-  }
-}
-
-// ============================================================================
-// Legacy exports for backward compatibility during migration
-// ============================================================================
-
-/**
- * @deprecated Use determineFallbackAction + applyFallbackResult instead.
- * Kept for backward compatibility during migration.
- */
-export type RetryDecision =
-  | { action: 'manual_retry'; error: FallbackError }
-  | { action: 'fail'; error: FallbackError };
-
-/**
- * @deprecated Use determineFallbackAction instead.
- * This simplified version only handles manual retry vs fail (no auto_retry).
- */
-export function determineRetryStrategy(
-  state: RetryState,
-  errorMessage: string,
-  statusCode: number | undefined,
-  retryable: boolean,
-): RetryDecision {
-  recordRetryError(state, errorMessage, statusCode, retryable);
-
-  const error: FallbackError = {
-    message: errorMessage,
-    statusCode,
-    retryable,
-  };
-
-  if (retryable) {
-    state.awaitingManualRetry = true;
-    return { action: 'manual_retry', error };
-  }
-
-  return { action: 'fail', error };
-}
-
-/**
- * @deprecated Use applyFallbackResult instead.
- * This simplified version only handles manual_retry and fail (no auto_retry).
- */
-export async function applyRetryDecision(
-  decision: RetryDecision,
-  logger: AgentLogger,
-  _retryState: RetryState,
-  operationName: string,
-): Promise<string> {
-  switch (decision.action) {
-    case 'manual_retry':
-      logger.error(`${operationName} failed: ${decision.error.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: { statusCode: decision.error.statusCode, retryable: true },
-      });
-      return FlowTransition.AWAIT_RETRY;
-
-    case 'fail':
-      logger.error(
-        `${operationName} failed (not retryable): ${decision.error.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: { statusCode: decision.error.statusCode, retryable: false },
         },
       );
       return FlowTransition.COMPLETE;
