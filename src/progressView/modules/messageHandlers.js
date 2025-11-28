@@ -40,7 +40,6 @@ function scrollToBottom(element) {
 export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   constructor() {
     super();
-    this._hasStreams = false;
     this._entryFormatter = getSharedLogEntryFormatter();
     this._handlers = {
       ...createThemeHandlers(),
@@ -65,28 +64,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
-  /**
-   * Toggle the placeholder based on active stream and log content
-   */
   _updatePlaceholderVisibility() {
-    if (this._hasStreams) {
+    if (state.hasStreams()) {
       dom.placeholder.hide();
-      return;
-    }
-
-    const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (!logContent) {
-      return;
-    }
-
-    const hasContent = Array.from(logContent.children).some(
-      (child) => child.id !== ELEMENT_IDS.LOG_PLACEHOLDER,
-    );
-
-    if (!hasContent) {
-      dom.placeholder.show();
     } else {
-      dom.placeholder.hide();
+      dom.placeholder.show();
     }
   }
 
@@ -171,9 +153,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreams(message) {
     try {
       state.activeStream = message.activeStream;
-      this._hasStreams = Array.isArray(message.streams)
-        ? message.streams.length > 0
-        : false;
       if (
         !state.pendingFilterUpdate &&
         message.agentFilter !== undefined &&
@@ -198,6 +177,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setExecutionIdAvailable(s.name, Boolean(s.executionId));
       return { ...s, status };
     });
+
+    state.setStreams(streams.map((s) => s.name));
 
     dom.streamTabs.update(streams, message.activeStream);
 
@@ -671,7 +652,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
   handleDeleteStream(message) {
     if (message.stream) {
+      const deletingActiveStream = message.stream === state.activeStream;
       pendingLogUpdates.clear();
+      state.removeStream(message.stream);
       state.streamStatuses.delete(message.stream);
       state.clearExecutionIdAvailability(message.stream);
       state.clearActiveRun(message.stream);
@@ -679,20 +662,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearRunFiles(message.stream);
       state.clearRunMissingOutputs(message.stream);
       state.clearRunUsage(message.stream);
-      if (message.stream === state.activeStream) {
+      if (deletingActiveStream) {
+        state.activeStream = '';
         const groupIds = Array.from(state.taskGroups.getGroupMap().keys());
         state.toggleStates.clearSelection(groupIds);
         dom.instructionPanel.hide();
         dom.runSelector.clear();
       }
     }
+
+    this._updatePlaceholderVisibility();
   }
 
   handleDeleteAll() {
     pendingLogUpdates.clear();
-    this._hasStreams = false;
     state.toggleStates.clearAll();
     state.resetExecutionIdAvailability();
+    state.clearStreams();
+    state.activeStream = '';
     dom.instructionPanel.hide();
     state.clearRunInstructions();
     state.clearRunFiles();
