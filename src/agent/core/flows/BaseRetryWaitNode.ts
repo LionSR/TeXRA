@@ -150,8 +150,16 @@ class RetryWaitNode<
       // Register with ManualRetryController for UI-triggered retries
       registerManualRetry(streamId, {
         run: async () => retryCallbacks.triggerRetry?.(),
+        cancel: () => retryCallbacks.cancelRetry?.(),
         logger,
         operation: this.accessors.operationName,
+      });
+
+      // Emit event to show retry request in UI
+      bus.emit('showRetryRequest', {
+        streamId,
+        operation: this.accessors.operationName,
+        errorMessage: retryState.lastError?.message,
       });
     });
   }

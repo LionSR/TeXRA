@@ -12,6 +12,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 
 // Local file imports
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
@@ -55,6 +56,10 @@ export class ProgressViewProvider
     string,
     ToolEditApprovalPrompt
   >();
+  private readonly pendingRetryRequests = new Map<
+    string,
+    ProgressEventPayloads['showRetryRequest']
+  >();
   private approvalBypassActive = false;
 
   constructor(
@@ -72,6 +77,10 @@ export class ProgressViewProvider
     this.eventHandler = new ProgressEventHandler(
       this.state,
       this.webviewUpdater,
+      {
+        showRetryRequest: (payload) => this.showRetryRequest(payload),
+        resolveRetryRequest: (streamId) => this.resolveRetryRequest(streamId),
+      },
     );
 
     // Initialize existing components
@@ -190,12 +199,18 @@ export class ProgressViewProvider
     this.updateWebview();
 
     if (this.webviewUpdater.isAvailable()) {
+      // Replay pending approval prompts
       for (const prompt of this.pendingApprovalPrompts.values()) {
         this.webviewUpdater.showToolEditApprovalPrompt(prompt);
       }
       this.webviewUpdater.updateToolEditApprovalState(
         this.approvalBypassActive,
       );
+
+      // Replay pending retry requests
+      for (const payload of this.pendingRetryRequests.values()) {
+        this.webviewUpdater.showRetryRequest(payload);
+      }
     }
   }
 
@@ -220,6 +235,24 @@ export class ProgressViewProvider
 
     if (this._webviewReady && this.webviewUpdater.isAvailable()) {
       this.webviewUpdater.updateToolEditApprovalState(bypassActive);
+    }
+  }
+
+  public showRetryRequest(
+    payload: ProgressEventPayloads['showRetryRequest'],
+  ): void {
+    this.pendingRetryRequests.set(payload.streamId, payload);
+
+    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.showRetryRequest(payload);
+    }
+  }
+
+  public resolveRetryRequest(streamId: string): void {
+    this.pendingRetryRequests.delete(streamId);
+
+    if (this._webviewReady && this.webviewUpdater.isAvailable()) {
+      this.webviewUpdater.resolveRetryRequest(streamId);
     }
   }
 
