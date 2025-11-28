@@ -128,30 +128,40 @@ type BetaThinkingContent = BetaThinkingBlock | BetaRedactedThinkingBlock;
  * Union type for thinking block params used in API requests.
  * Used when including thinking blocks in follow-up messages.
  */
-type AnthropicThinkingContentParam = ThinkingBlockParam | RedactedThinkingBlockParam;
+type AnthropicThinkingContentParam =
+  | ThinkingBlockParam
+  | RedactedThinkingBlockParam;
 
 /** Type guard for Anthropic thinking blocks in Beta API responses */
-const isBetaThinkingBlock = (block: BetaContentBlock): block is BetaThinkingBlock =>
-  block.type === 'thinking';
+const isBetaThinkingBlock = (
+  block: BetaContentBlock,
+): block is BetaThinkingBlock => block.type === 'thinking';
 
 /** Type guard for Anthropic redacted thinking blocks in Beta API responses */
-const isBetaRedactedThinkingBlock = (block: BetaContentBlock): block is BetaRedactedThinkingBlock =>
-  block.type === 'redacted_thinking';
+const isBetaRedactedThinkingBlock = (
+  block: BetaContentBlock,
+): block is BetaRedactedThinkingBlock => block.type === 'redacted_thinking';
 
 /** Type guard for any thinking-related content block in Beta API responses */
-const isAnyBetaThinkingBlock = (block: BetaContentBlock): block is BetaThinkingContent =>
+const isAnyBetaThinkingBlock = (
+  block: BetaContentBlock,
+): block is BetaThinkingContent =>
   isBetaThinkingBlock(block) || isBetaRedactedThinkingBlock(block);
 
 /** Type guard for thinking block params in message content */
-const isThinkingBlockParam = (block: ContentBlockParam): block is ThinkingBlockParam =>
-  block.type === 'thinking';
+const isThinkingBlockParam = (
+  block: ContentBlockParam,
+): block is ThinkingBlockParam => block.type === 'thinking';
 
 /** Type guard for redacted thinking block params in message content */
-const isRedactedThinkingBlockParam = (block: ContentBlockParam): block is RedactedThinkingBlockParam =>
-  block.type === 'redacted_thinking';
+const isRedactedThinkingBlockParam = (
+  block: ContentBlockParam,
+): block is RedactedThinkingBlockParam => block.type === 'redacted_thinking';
 
 /** Type guard for any thinking-related content block param */
-const isAnyThinkingBlockParam = (block: ContentBlockParam): block is AnthropicThinkingContentParam =>
+const isAnyThinkingBlockParam = (
+  block: ContentBlockParam,
+): block is AnthropicThinkingContentParam =>
   isThinkingBlockParam(block) || isRedactedThinkingBlockParam(block);
 
 /** Type guard for tool use blocks in Beta API responses */
