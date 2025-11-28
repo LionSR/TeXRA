@@ -76,23 +76,3 @@ export const THINKING_BUDGET_NON_STREAMING = 4096;
 
 /** Multiplier applied for cache creation cost calculations */
 export const CACHE_CREATION_COST_MULTIPLIER = 1.25;
-
-// =============================================================================
-// Proxy Configuration
-// =============================================================================
-
-/** Default proxy domain for improved connection */
-export const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
-
-// =============================================================================
-// Agent Configuration Defaults
-// =============================================================================
-
-/** Suffix for agent definitions supporting multiple outputs */
-export const AGENT_MULTIPLE_SUFFIX = '_multiple';
-
-/** Default workflow agent name */
-export const DEFAULT_WORKFLOW_AGENT = 'correct';
-
-/** Default tool-use agent name */
-export const DEFAULT_TOOL_USE_AGENT = 'chat';

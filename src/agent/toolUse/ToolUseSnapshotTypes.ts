@@ -8,10 +8,8 @@ import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
-import { TOOL_USE_SNAPSHOT_VERSION } from '@common/constants';
 
-// Re-export for backward compatibility
-export { TOOL_USE_SNAPSHOT_VERSION };
+export const TOOL_USE_SNAPSHOT_VERSION = 1;
 
 const ProviderMessageSchema = z.custom<ProviderMessage>(
   (value): value is ProviderMessage =>

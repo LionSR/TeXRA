@@ -16,16 +16,8 @@ import {
 } from '@agent/utils/agentPathResolver';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import { AbsoluteFS } from '@utils/files';
-import {
-  AGENT_MULTIPLE_SUFFIX,
-  DEFAULT_WORKFLOW_AGENT,
-  DEFAULT_TOOL_USE_AGENT,
-} from '@common/constants';
 
 export type { AgentDirectoryMap } from '@agent/utils/agentPathResolver';
-
-// Re-export for backward compatibility
-export { DEFAULT_WORKFLOW_AGENT, DEFAULT_TOOL_USE_AGENT };
 
 export interface AgentOptionMetadata {
   hasDefinition: boolean;
@@ -47,7 +39,10 @@ export interface AgentOptionDefaults {
   toolUseAgent?: string;
 }
 
-const MULTIPLE_SUFFIX = AGENT_MULTIPLE_SUFFIX;
+export const DEFAULT_WORKFLOW_AGENT = 'correct';
+export const DEFAULT_TOOL_USE_AGENT = 'chat';
+
+const MULTIPLE_SUFFIX = '_multiple';
 const TOOL_USE_AGENT_TYPE = AgentType.ToolUse;
 
 interface ParsedAgentDefinition {

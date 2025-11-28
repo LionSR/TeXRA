@@ -1,7 +1,8 @@
 import { ModelProvider } from '@model/ModelConfig';
-import { DEFAULT_PROXY_DOMAIN } from '@common/constants';
 import { getConfig } from '@utils/config';
 import { normalizeUrl } from '@utils/urlUtils';
+
+const DEFAULT_PROXY_DOMAIN = 'proxy.texra.ai';
 
 const PROXY_PATHS: Partial<Record<ModelProvider, string>> = {
   [ModelProvider.GOOGLE]: 'generativelanguage',

@@ -31,11 +31,6 @@ import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import {
-  DEEPSEEK_MAX_OUTPUT_TOKENS,
-  MODEL_TOKEN_BUFFER,
-  MODEL_MIN_COMPLETION_TOKENS,
-} from '@common/constants';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
@@ -88,6 +83,8 @@ const extractReasoningText = (
   if (typeof content === 'string') return content;
   return content.map((item) => item.text ?? '').join('');
 };
+
+const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 export interface StreamingAggregator {
   appendContent(delta: string): void;
@@ -189,9 +186,9 @@ export class ModelHandlerOpenAI<
       !this.config.capabilities.supportsReasoning
     ) {
       this.logger.debug(
-        `Setting max_tokens to ${DEEPSEEK_MAX_OUTPUT_TOKENS} for DeepSeek-chat models from the official api`,
+        `Setting max_tokens to ${DEEPSEEK_OFFICIAL_API_MAX_TOKENS} for DeepSeek-chat models from the official api`,
       );
-      baseParams.max_tokens = DEEPSEEK_MAX_OUTPUT_TOKENS;
+      baseParams.max_tokens = DEEPSEEK_OFFICIAL_API_MAX_TOKENS;
     }
 
     this.applyTokenHeuristics(baseParams, messages, systemPrompt);
@@ -228,6 +225,9 @@ export class ModelHandlerOpenAI<
         this.config.contextWindow - approximateInputTokens;
       const currentMax = baseParams[maxOutputKey];
       if (typeof currentMax === 'number' && availableTokens < currentMax) {
+        const TOKEN_BUFFER = 5000;
+        const MIN_COMPLETION_TOKENS = 100;
+
         if (availableTokens <= 0) {
           baseParams[maxOutputKey] = 1;
           this.logger.warn(
@@ -235,8 +235,8 @@ export class ModelHandlerOpenAI<
           );
         } else {
           const adjustedWithBuffer = Math.max(
-            MODEL_MIN_COMPLETION_TOKENS,
-            availableTokens - MODEL_TOKEN_BUFFER,
+            MIN_COMPLETION_TOKENS,
+            availableTokens - TOKEN_BUFFER,
           );
           const adjusted = Math.min(availableTokens, adjustedWithBuffer);
           baseParams[maxOutputKey] = adjusted;
