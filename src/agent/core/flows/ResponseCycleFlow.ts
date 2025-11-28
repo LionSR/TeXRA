@@ -201,6 +201,19 @@ class ResponsePrepNode<C> extends BaseNode<
 }
 
 /**
+ * Data extracted by prep() for model invocation.
+ * This is the ONLY data exec() should use (PocketFlow compliance).
+ *
+ * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
+ * which is the correct PocketFlow pattern for immutable configuration.
+ */
+interface InvocationPrepResult {
+  shouldStop: boolean;
+  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  systemPrompt?: string;
+}
+
+/**
  * Result type for model invocation.
  * - Success: Contains response from model
  * - Fallback: From execFallback when all auto-retries exhausted
@@ -235,15 +248,34 @@ class ResponseModelInvocationNode<C> extends Node<
     super(config.maxRetries, config.wait);
   }
 
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: exec() should only use prepRes, not shared.
+   */
+  async prep(shared: ResponseCycleShared<C>): Promise<InvocationPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      messages: state.messages,
+      systemPrompt: state.systemPrompt,
+    };
   }
 
-  async exec(shared: ResponseCycleShared<C>): Promise<InvocationExecResult> {
-    const { options } = this._params.services;
-    const { state } = shared;
+  /**
+   * Read fresh retry config before each execution.
+   * This ensures config changes take effect without rebuilding the flow.
+   */
+  async _exec(prepRes: unknown): Promise<unknown> {
+    const config = getNodeRetryConfig();
+    this.maxRetries = config.maxRetries;
+    this.wait = config.wait;
+    return super._exec(prepRes);
+  }
 
-    if (state.shouldStop) {
+  async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
+    const { options } = this._params.services;
+
+    if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
 
@@ -260,9 +292,9 @@ class ResponseModelInvocationNode<C> extends Node<
       const { response, responseTime } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
           client: options.client,
-          messages: state.messages,
+          messages: prepRes.messages,
           temperature: options.agentSetting.temperature || 0.0,
-          systemPrompt: state.systemPrompt,
+          systemPrompt: prepRes.systemPrompt,
           endTag: options.agentSetting.endTag,
           signal: abortController.signal,
           tools: options.modelHandler.capabilities.supportsFunctionCalling
@@ -279,7 +311,8 @@ class ResponseModelInvocationNode<C> extends Node<
     } finally {
       options.setAbortController(null);
     }
-    // Errors thrown here → PocketFlow Node retries automatically
+    // Note: Errors from createResponse() are caught by PocketFlow Node's
+    // retry loop in _exec(), which calls execFallback() when exhausted.
   }
 
   /**
@@ -287,7 +320,7 @@ class ResponseModelInvocationNode<C> extends Node<
    * Determines whether to offer manual retry or fail.
    */
   async execFallback(
-    _prepRes: ResponseCycleShared<C>,
+    _prepRes: InvocationPrepResult,
     error: Error,
   ): Promise<InvocationExecResult> {
     const formatted = formatProviderHttpError(error);
@@ -301,14 +334,15 @@ class ResponseModelInvocationNode<C> extends Node<
 
   async post(
     shared: ResponseCycleShared<C>,
-    _prepRes: ResponseCycleShared<C>,
+    _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle skipped (shouldStop was true)
+    // Handle skipped (shouldStop was true before invocation)
     if (execRes.kind === 'skipped') {
+      options.logger.debug('Model invocation skipped: shouldStop was already true');
       return FlowTransition.COMPLETE;
     }
 
