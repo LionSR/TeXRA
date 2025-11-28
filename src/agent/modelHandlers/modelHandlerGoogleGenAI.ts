@@ -880,7 +880,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const inputTokens =
-      (rawUsage.promptTokenCount ?? 0) + (rawUsage.toolUsePromptTokenCount ?? 0);
+      (rawUsage.promptTokenCount ?? 0) +
+      (rawUsage.toolUsePromptTokenCount ?? 0);
     const outputTokens = rawUsage.candidatesTokenCount ?? 0;
     const reasoningTokens = rawUsage.thoughtsTokenCount ?? 0;
     const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
