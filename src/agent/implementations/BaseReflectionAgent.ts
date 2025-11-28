@@ -14,7 +14,6 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Internal imports
 import {
@@ -43,6 +42,7 @@ import { createLifecycleState } from '@agent/implementations/flows/common/lifecy
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
+import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
