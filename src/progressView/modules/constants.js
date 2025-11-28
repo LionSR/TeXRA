@@ -54,6 +54,7 @@ export const ELEMENT_IDS = {
   FILTER_ALL_BTN: 'filterAllBtn',
   FILTER_WORKFLOW_BTN: 'filterWorkflowBtn',
   FILTER_TOOL_BTN: 'filterToolBtn',
+  OPEN_PROFILE_BTN: 'openProfileBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({
@@ -98,6 +99,15 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   title: 'Open the workspace storage folder for this run',
   className: 'storage-button toolbar-button--hidden',
   disabled: true,
+});
+
+const OPEN_PROFILE_BUTTON = Object.freeze({
+  id: ELEMENT_IDS.OPEN_PROFILE_BTN,
+  icon: 'account',
+  command: COMMANDS.OPEN_PROFILE,
+  title: 'Open profile view',
+  className: 'profile-button',
+  disabled: false,
 });
 
 /** @type {ToolbarButtonDefinition[]} */
@@ -152,6 +162,7 @@ const WORKFLOW_TOOLBAR = [
     className: 'pack-button',
     disabled: true,
   },
+  OPEN_PROFILE_BUTTON,
 ];
 
 /** @type {ToolbarButtonDefinition[]} */
@@ -167,6 +178,7 @@ const TOOL_USE_TOOLBAR = [
   },
   RESTORE_STATE_BUTTON,
   { ...OPEN_TASK_STORAGE_BUTTON },
+  OPEN_PROFILE_BUTTON,
 ];
 
 /** @type {Record<'workflow' | 'toolUse', ToolbarButtonDefinition[]>} */
