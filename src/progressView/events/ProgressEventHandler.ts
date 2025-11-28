@@ -7,11 +7,11 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { STATUS } from '@progressView/modules/constants.js';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -187,7 +187,7 @@ export class ProgressEventHandler {
       this.webviewUpdater.updateFiles('', { reset: true });
       this.webviewUpdater.updateMissingOutputs('', { reset: true });
       this.webviewUpdater.updateUsage('', {});
-      this.webviewUpdater.updateStatus(STATUS.READY);
+      this.webviewUpdater.updateStatus(STREAM_STATUS.READY);
       if (updateInstruction) {
         this.webviewUpdater.clearInstruction('');
       }
@@ -239,7 +239,7 @@ export class ProgressEventHandler {
     });
 
     // Update status for current stream - default to STOPPED when stream exists but no status is set
-    const status = this._streamStatus.get(stream) || STATUS.STOPPED;
+    const status = this._streamStatus.get(stream) || STREAM_STATUS.STOPPED;
     this.webviewUpdater.updateStatus(status);
 
     if (updateInstruction) {
@@ -258,7 +258,7 @@ export class ProgressEventHandler {
    * Set the status for a specific stream synchronously.
    */
   setStreamStatus(stream: string, status: StreamStatusOrReadyType): void {
-    if (status === STATUS.READY) {
+    if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
       const nextStatus: StreamStatusType = status;
@@ -320,7 +320,7 @@ export class ProgressEventHandler {
     await this.state.streamTabs.ensureStream(stream);
 
     if (!existingStatus) {
-      this.setStreamStatus(stream, STATUS.RUNNING);
+      this.setStreamStatus(stream, STREAM_STATUS.RUNNING);
     }
 
     this.state.setSessionKindHint(stream, AgentCategory.Workflow);
@@ -332,7 +332,7 @@ export class ProgressEventHandler {
 
     this.state.activeStream = stream;
 
-    const status = this._streamStatus.get(stream) ?? STATUS.RUNNING;
+    const status = this._streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
@@ -346,8 +346,8 @@ export class ProgressEventHandler {
    */
   markAllRunningTasksAsCancelled(): void {
     for (const [stream, status] of this._streamStatus.entries()) {
-      if (status === STATUS.RUNNING) {
-        this._streamStatus.set(stream, STATUS.STOPPED);
+      if (status === STREAM_STATUS.RUNNING) {
+        this._streamStatus.set(stream, STREAM_STATUS.STOPPED);
       }
     }
   }
@@ -361,14 +361,14 @@ export class ProgressEventHandler {
     const waitingSet = waitingStreams ?? new Set<string>();
 
     for (const [stream, status] of this._streamStatus.entries()) {
-      if (status === STATUS.RUNNING) {
+      if (status === STREAM_STATUS.RUNNING) {
         if (waitingSet.has(stream)) {
-          this._streamStatus.set(stream, STATUS.WAITING);
+          this._streamStatus.set(stream, STREAM_STATUS.WAITING);
           this.logger.debug(
             `Stream ${stream} restored to WAITING after reload`,
           );
         } else {
-          this._streamStatus.set(stream, STATUS.ERROR);
+          this._streamStatus.set(stream, STREAM_STATUS.ERROR);
           affectedStreams.push(stream);
           this.logger.debug(
             `Stream ${stream} set to ERROR due to webview reload`,

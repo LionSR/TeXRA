@@ -3,13 +3,13 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskGroup } from '@logger/LogTypes';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { STATUS } from '@progressView/modules/constants.js';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;
@@ -85,8 +85,8 @@ export class TaskGroupManager extends PersistentMapManager<
       let updated = false;
 
       for (const group of groups.values()) {
-        if (group.status === STATUS.RUNNING) {
-          group.status = STATUS.ERROR;
+        if (group.status === STREAM_STATUS.RUNNING) {
+          group.status = STREAM_STATUS.ERROR;
           group.endTime = now;
           updated = true;
         }
