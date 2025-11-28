@@ -149,6 +149,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       [PROGRESS_VIEW_COMMANDS.RESET_TOOL_EDIT_APPROVAL_BYPASS]:
         this.handleResetToolEditApprovalBypass.bind(this),
 
+      // Profile
+      [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: this.handleOpenProfile.bind(this),
+
       // File operations
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: this.handleOpenFile.bind(this),
       [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]:
@@ -588,6 +591,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
 
   private async handleOpenLabel(message: any): Promise<void> {
     await vscode.commands.executeCommand('texra.openLabel', message.label);
+  }
+
+  private async handleOpenProfile(): Promise<void> {
+    await vscode.commands.executeCommand('texra.auth.viewProfile');
   }
 
   private async handleFileOperation(

@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
+import { ELEMENT_IDS, LABELS, CLASS_NAMES, DEFAULTS } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -124,6 +124,7 @@ export class AgentsTable {
     thead.innerHTML = `
       <tr>
         <th>Agent</th>
+        <th>Type</th>
         <th>Description</th>
         <th>Visibility</th>
         <th>Tags</th>
@@ -167,6 +168,12 @@ export class AgentsTable {
     // Set agent name
     const agentName = row.querySelector('.agent-name');
     if (agentName) agentName.textContent = agent.name;
+
+    // Set agent type badge
+    const typeBadge = row.querySelector('.type-badge');
+    if (typeBadge) {
+      typeBadge.textContent = agent.agentType || DEFAULTS.AGENT_TYPE;
+    }
 
     // Set description
     const description = row.querySelector('.agent-description');
