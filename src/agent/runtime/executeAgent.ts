@@ -35,6 +35,7 @@ import {
   type AgentDefinitionSearchOptions,
   type AgentDirectoryCandidate,
 } from '@agent/utils/agentPathResolver';
+import { STATUS } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -44,7 +45,6 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { STATUS } from '@common/constants/streamStatus';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';

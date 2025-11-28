@@ -15,8 +15,8 @@
  */
 
 // Import types for local use in interfaces
-import type { ToolResult as ToolResultType } from '@tools/result';
 import type { ToolDefinition as ToolDefinitionType } from '@model/ToolDefinition';
+import type { ToolResult as ToolResultType } from '@tools/result';
 
 // Re-export tool result types from canonical location
 export type {

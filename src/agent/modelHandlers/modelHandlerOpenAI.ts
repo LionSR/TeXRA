@@ -1240,10 +1240,9 @@ export class ModelHandlerOpenAI<
           ): call is ChatCompletionMessageFunctionToolCall & { id: string } =>
             Boolean(
               call &&
-                typeof call === 'object' &&
-                (call as ChatCompletionMessageFunctionToolCall).function
-                  ?.name &&
-                call.id,
+              typeof call === 'object' &&
+              (call as ChatCompletionMessageFunctionToolCall).function?.name &&
+              call.id,
             ),
         )
         .map((call) => ({
