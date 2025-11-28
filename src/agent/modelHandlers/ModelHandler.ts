@@ -8,6 +8,7 @@ import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -525,8 +526,21 @@ export abstract class ModelHandler<
   /**
    * Computes detailed usage metrics from model response.
    * @returns Provider-specific response usage object
+   * @deprecated Use normalizeUsage() instead for unified usage tracking
    */
   abstract computeResponseUsage(responseUsage: U, responseTime: number): R;
+
+  /**
+   * Normalizes provider-specific usage data into a unified format.
+   * This is the single source of truth for usage statistics.
+   *
+   * Cost is computed once here and should never be recomputed elsewhere.
+   *
+   * @param rawUsage - Raw usage data from the provider's API response
+   * @param responseTimeMs - Response time in milliseconds
+   * @returns Normalized usage with all metrics in a consistent format
+   */
+  abstract normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
 
   /**
    * Updates model message content with response for models with prefill support.
