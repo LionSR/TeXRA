@@ -87,7 +87,18 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
       // Note that there is no second consumption problem
       // But i am not sure about openrouter's stream api, whether it works for every model.
-      const response = await stream.finalChatCompletion();
+      let response = await stream.finalChatCompletion();
+
+      // Ensure usage is captured - use SDK's totalUsage() as fallback
+      if (!response.usage) {
+        try {
+          const totalUsage = await stream.totalUsage();
+          response = { ...response, usage: totalUsage };
+        } catch {
+          // totalUsage() may fail if stream ended abnormally
+        }
+      }
+
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
       const finalOutput = response.choices?.[0]?.message?.content ?? '';
