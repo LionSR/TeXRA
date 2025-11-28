@@ -24,6 +24,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { FlowTransition } from './FlowTransitions';
 import {
   resetRetryState,
+  clearRetryError,
   MANUAL_RETRY_TIMEOUT_MS,
   type RetryState,
   type RetryCallbacks,
@@ -182,7 +183,11 @@ class RetryWaitNode<
       return FlowTransition.RETRY;
     }
 
-    // User cancelled
+    // User cancelled - clear the error since the user chose to stop
+    // This distinguishes user cancellation from error failure:
+    // - User cancelled: shouldStop=true, lastError=undefined
+    // - Error failure: shouldStop=true, lastError exists
+    clearRetryError(retryState);
     logger.info('Retry cancelled by user', {
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });

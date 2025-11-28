@@ -44,6 +44,13 @@ export interface ProviderHttpErrorDetails {
   statusText?: string;
   /** Identifier for the provider that produced the error, when known. */
   provider?: string;
+  /**
+   * Whether the error is retryable. Based on native SDK error types:
+   * - Connection errors (timeout, network) → retryable
+   * - Server errors (5xx) and rate limits (429) → retryable
+   * - User abort, auth errors, bad requests → NOT retryable
+   */
+  retryable: boolean;
   /** Request ID from the provider, useful for debugging with support. */
   requestId?: string;
 }
@@ -86,6 +93,8 @@ interface NativeMessageErrorEntry {
   ctor: ErrorConstructor;
   provider: string;
   message?: string;
+  /** Whether this error type is retryable (e.g., connection errors are, user aborts are not) */
+  retryable: boolean;
 }
 
 interface NativeHttpErrorEntry {
@@ -99,31 +108,37 @@ const NATIVE_MESSAGE_ERRORS: NativeMessageErrorEntry[] = [
     ctor: OpenAIConnectionTimeoutError,
     provider: 'openai',
     message: 'Connection timed out',
+    retryable: true,
   },
   {
     ctor: AnthropicConnectionTimeoutError,
     provider: 'anthropic',
     message: 'Connection timed out',
+    retryable: true,
   },
   {
     ctor: OpenAIConnectionError,
     provider: 'openai',
     message: 'Connection error',
+    retryable: true,
   },
   {
     ctor: AnthropicConnectionError,
     provider: 'anthropic',
     message: 'Connection error',
+    retryable: true,
   },
   {
     ctor: OpenAIUserAbortError,
     provider: 'openai',
     message: 'Request aborted',
+    retryable: false,
   },
   {
     ctor: AnthropicUserAbortError,
     provider: 'anthropic',
     message: 'Request aborted',
+    retryable: false,
   },
 ];
 
@@ -208,7 +223,22 @@ function matchNativeMessageError(
   return {
     message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
+    retryable: entry.retryable,
   };
+}
+
+/** Status codes that are retryable (5xx server errors, rate limits, timeouts) */
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+
+function isRetryableStatusCode(statusCode?: number): boolean {
+  if (statusCode === undefined) {
+    return false;
+  }
+  // All 5xx errors are retryable
+  if (statusCode >= 500) {
+    return true;
+  }
+  return RETRYABLE_STATUS_CODES.has(statusCode);
 }
 
 function matchNativeHttpError(
@@ -229,9 +259,14 @@ function matchNativeHttpError(
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
+    // Known SDK error types without status codes are unusual (SDK errors typically
+    // have status codes). Be conservative and don't retry.
+    // Note: This differs from formatProviderHttpError's fallback which treats
+    // unrecognized errors without status codes as retryable (likely network errors).
     return {
       message: finalMessage,
       provider: entry.provider,
+      retryable: false,
       requestId,
     };
   }
@@ -242,6 +277,7 @@ function matchNativeHttpError(
     statusCode,
     statusText,
     provider: entry.provider,
+    retryable: isRetryableStatusCode(statusCode),
     requestId,
   };
 }
@@ -383,6 +419,34 @@ function extractMessage(err: unknown): string | undefined {
 }
 
 /**
+ * Detects if an error is an abort/cancellation error.
+ * These are NOT retryable since the user intentionally cancelled.
+ * Handles:
+ * - DOM AbortError (from AbortController)
+ * - Errors with 'abort' or 'cancel' in name/message
+ */
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+
+  const errorObj = err as { name?: string; message?: string };
+
+  // Check for DOM AbortError (DOMException with name 'AbortError')
+  if (errorObj.name === 'AbortError') {
+    return true;
+  }
+
+  // Check for abort-related patterns in error name
+  const name = errorObj.name?.toLowerCase() ?? '';
+  if (name.includes('abort') || name.includes('cancel')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Formats SDK errors from model providers into a consistent message so agent logs
  * can surface status codes alongside concise descriptions.
  *
@@ -405,6 +469,16 @@ export function formatProviderHttpError(
     return nativeHttp;
   }
 
+  // Check for abort/cancellation errors (e.g., DOM AbortError from cancelled fetch)
+  // These are NOT retryable since the user intentionally cancelled.
+  if (isAbortError(err)) {
+    return {
+      message: extractMessage(err) ?? 'Request aborted',
+      provider: detectProvider(err),
+      retryable: false,
+    };
+  }
+
   const statusCode = detectStatusCode(err);
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
@@ -417,9 +491,14 @@ export function formatProviderHttpError(
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
+    // Unrecognized errors without status codes reached the fallback path.
+    // These are likely network/connection errors (not SDK-typed) and should
+    // be retryable. Note: This differs from matchNativeHttpError which is
+    // conservative for known SDK types missing status codes.
     return {
       message: finalMessage,
       provider,
+      retryable: true,
       requestId,
     };
   }
@@ -430,6 +509,7 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
+    retryable: isRetryableStatusCode(statusCode),
     requestId,
   };
 }
