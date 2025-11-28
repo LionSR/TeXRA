@@ -9,6 +9,7 @@ import {
   type UsageSummary,
   type NativeUsagePayload,
 } from './RunUsageAccumulator';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Type imports
 import type {
@@ -18,8 +19,6 @@ import type {
   AnthropicUsage,
   GenerateContentResponseUsageMetadata,
 } from './ResponseUsage';
-
-// Local imports - usage accumulator
 
 export type NativeResponseUsage =
   | ExtendedCompletionUsage
@@ -31,9 +30,12 @@ export const ConversationRoundStateSnapshotSchema = z.strictObject({
   continuationCount: z.number().int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
-  usageSummary: z.custom<UsageSummary>().nullable(),
-  nativeUsage: z.custom<NativeUsagePayload>().nullable(),
-  provider: z.custom<UsageProvider>().nullable(),
+  // New: store normalized usage directly
+  normalizedUsage: z.custom<NormalizedUsage>().nullable(),
+  // Legacy fields for backward compatibility (deprecated)
+  usageSummary: z.custom<UsageSummary>().nullable().optional(),
+  nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
+  provider: z.custom<UsageProvider>().nullable().optional(),
 });
 
 export type ConversationRoundStateSnapshot = z.infer<
@@ -45,9 +47,11 @@ export interface ConversationRoundStateJSON {
   continuationCount: number;
   responseTimeMs: number;
   outputFile: string;
-  usageSummary: UsageSummary;
-  nativeUsage: NativeUsagePayload | null;
-  provider: UsageProvider | null;
+  normalizedUsage: NormalizedUsage | null;
+  // Legacy fields for backward compatibility
+  usageSummary?: UsageSummary;
+  nativeUsage?: NativeUsagePayload | null;
+  provider?: UsageProvider | null;
 }
 
 export class ConversationRoundState {
@@ -55,18 +59,15 @@ export class ConversationRoundState {
   public continuationCount: number;
   public responseTimeMs: number;
   public outputFile: string;
-  public usageSummary: UsageSummary;
-  public nativeUsage: NativeUsagePayload | null;
-  public provider: UsageProvider | null;
+  /** Normalized usage data - the single source of truth */
+  public normalizedUsage: NormalizedUsage | null;
 
   constructor(roundIndex: number) {
     this.roundIndex = roundIndex;
     this.continuationCount = 0;
     this.responseTimeMs = 0;
     this.outputFile = '';
-    this.usageSummary = null;
-    this.nativeUsage = null;
-    this.provider = null;
+    this.normalizedUsage = null;
   }
 
   incrementContinuation(): void {
@@ -77,20 +78,56 @@ export class ConversationRoundState {
     this.responseTimeMs += durationMs;
   }
 
+  /**
+   * Sets the normalized usage for this round.
+   * This is the preferred method - use normalizeUsage() from the model handler.
+   */
+  setNormalizedUsage(usage: NormalizedUsage): void {
+    this.normalizedUsage = usage;
+  }
+
+  /**
+   * @deprecated Use setNormalizedUsage() instead.
+   * Legacy method for backward compatibility.
+   */
   setUsage(params: {
     summary: UsageSummary;
     nativeUsage?: NativeUsagePayload | null;
     provider: UsageProvider;
   }): void {
-    this.usageSummary = params.summary;
-    this.nativeUsage = params.nativeUsage ?? null;
-    this.provider = params.provider;
+    // Convert to normalized format
+    if (params.summary) {
+      this.normalizedUsage = {
+        inputTokens: params.summary.totalInputTokens,
+        outputTokens: params.summary.totalOutputTokens,
+        cost: params.summary.cost,
+        responseTimeMs: params.summary.responseTime,
+        provider: params.provider,
+        _native: params.nativeUsage ?? undefined,
+      };
+    } else {
+      this.normalizedUsage = null;
+    }
   }
 
   clearUsage(): void {
-    this.usageSummary = null;
-    this.nativeUsage = null;
-    this.provider = null;
+    this.normalizedUsage = null;
+  }
+
+  // Legacy getters for backward compatibility
+  /** @deprecated Use normalizedUsage instead */
+  get usageSummary(): UsageSummary {
+    return null; // No longer storing provider-specific types
+  }
+
+  /** @deprecated Use normalizedUsage._native instead */
+  get nativeUsage(): NativeUsagePayload | null {
+    return (this.normalizedUsage?._native as NativeUsagePayload) ?? null;
+  }
+
+  /** @deprecated Use normalizedUsage.provider instead */
+  get provider(): UsageProvider | null {
+    return this.normalizedUsage?.provider ?? null;
   }
 
   toJSON(): ConversationRoundStateJSON {
@@ -99,9 +136,7 @@ export class ConversationRoundState {
       continuationCount: this.continuationCount,
       responseTimeMs: this.responseTimeMs,
       outputFile: this.outputFile,
-      usageSummary: this.usageSummary,
-      nativeUsage: this.nativeUsage,
-      provider: this.provider,
+      normalizedUsage: this.normalizedUsage,
     };
   }
 
@@ -110,9 +145,23 @@ export class ConversationRoundState {
     state.continuationCount = json.continuationCount;
     state.responseTimeMs = json.responseTimeMs;
     state.outputFile = json.outputFile;
-    state.usageSummary = json.usageSummary;
-    state.nativeUsage = json.nativeUsage;
-    state.provider = json.provider;
+
+    // Load normalized usage if available
+    if (json.normalizedUsage) {
+      state.normalizedUsage = json.normalizedUsage;
+    }
+    // Legacy: convert old format if present (for backward compatibility)
+    else if (json.usageSummary && json.provider) {
+      state.normalizedUsage = {
+        inputTokens: json.usageSummary.totalInputTokens,
+        outputTokens: json.usageSummary.totalOutputTokens,
+        cost: json.usageSummary.cost,
+        responseTimeMs: json.usageSummary.responseTime,
+        provider: json.provider,
+        _native: json.nativeUsage ?? undefined,
+      };
+    }
+
     return state;
   }
 }
@@ -150,13 +199,16 @@ export class AgentRunState {
     this.totalResponseTimeMs += durationMs;
   }
 
+  /**
+   * Records usage from a completed round using normalized usage.
+   */
   recordRound(roundState: ConversationRoundState): void {
-    this.usageAccumulator.recordRoundUsage({
-      round: roundState.roundIndex,
-      provider: roundState.provider ?? 'unknown',
-      summary: roundState.usageSummary,
-      nativeUsage: roundState.nativeUsage ?? undefined,
-    });
+    if (roundState.normalizedUsage) {
+      this.usageAccumulator.recordNormalizedUsage(
+        roundState.roundIndex,
+        roundState.normalizedUsage,
+      );
+    }
     this.addResponseTime(roundState.responseTimeMs);
   }
 
