@@ -48,6 +48,7 @@ import {
   ThinkingBlock,
 } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -1383,6 +1384,46 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.computePrice(responseUsage),
       responseTime,
     );
+  }
+
+  /** Normalizes Anthropic usage data into a unified format. */
+  normalizeUsage(
+    rawUsage: AnthropicUsage,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    if (!rawUsage) {
+      return {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+        responseTimeMs,
+        provider: 'anthropic',
+      };
+    }
+
+    const inputTokens = rawUsage.input_tokens ?? 0;
+    const outputTokens = rawUsage.output_tokens ?? 0;
+    const cacheReadTokens = rawUsage.cache_read_input_tokens ?? 0;
+    const cacheCreationTokens = rawUsage.cache_creation_input_tokens ?? 0;
+
+    // Calculate percentage cached
+    const totalCacheTokens = cacheReadTokens + cacheCreationTokens;
+    const percentageCached =
+      inputTokens > 0 ? (totalCacheTokens / inputTokens) * 100 : 0;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost: this.computePrice(rawUsage),
+      responseTimeMs,
+      provider: 'anthropic',
+      cachedInputTokens: cacheReadTokens || undefined,
+      cacheCreationTokens: cacheCreationTokens || undefined,
+      percentageCached: percentageCached > 0 ? percentageCached : undefined,
+      serverToolRequests:
+        rawUsage.server_tool_use?.web_search_requests || undefined,
+      _native: rawUsage,
+    };
   }
 
   updateMessageContentWithPrefill(

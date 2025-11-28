@@ -47,11 +47,13 @@ describe('AgentUsageReporter', () => {
 
       assert.equal(groupEvents.length, 0);
       assert.equal(streamEvents.length, 1);
+      // inputTokens is passed through unchanged - cacheCreationInputTokens
+      // is tracked separately in the normalized usage system
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         runId,
         usage: {
-          inputTokens: 14,
+          inputTokens: 10,
           outputTokens: 5,
           cost: 0.25,
         },
@@ -100,7 +102,7 @@ describe('AgentUsageReporter', () => {
         stream: streamId,
         runId,
         usage: {
-          inputTokens: 7,
+          inputTokens: 6,
           outputTokens: 2,
           cost: 0.1,
         },
