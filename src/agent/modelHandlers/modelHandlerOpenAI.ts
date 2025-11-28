@@ -341,9 +341,19 @@ export class ModelHandlerOpenAI<
 
         try {
           const sdkFinalResponse = await stream.finalChatCompletion();
-          const finalResponse = streamingAggregator
+          let finalResponse = streamingAggregator
             ? streamingAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
+
+          // Ensure usage is captured - use SDK's totalUsage() as fallback
+          if (!finalResponse.usage) {
+            try {
+              const totalUsage = await stream.totalUsage();
+              finalResponse = { ...finalResponse, usage: totalUsage };
+            } catch {
+              // totalUsage() may fail if stream ended abnormally
+            }
+          }
 
           this.finalizeStreams(thinking, output ?? undefined, finalResponse);
           return finalResponse;
