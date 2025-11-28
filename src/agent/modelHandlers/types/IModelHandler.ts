@@ -4,6 +4,7 @@ import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { ProviderUsage } from '@agent/core/ResponseUsage';
 // Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -12,13 +13,15 @@ import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {
-  ChatCompletionMessage,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageToolCall,
 } from 'openai/resources/chat/completions';
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
+
+// Re-export for backwards compatibility
+export type { ProviderUsage };
 
 /**
  * Options for creating a model response.
@@ -51,7 +54,7 @@ export interface ExtractResponseResult {
   /** Extracted response text */
   response: string;
   /** Usage/token statistics from the provider */
-  usage: any;
+  usage: ProviderUsage;
   /** Reason why the model stopped generating */
   stopReason: ProviderStopReason;
 }
@@ -70,10 +73,8 @@ export type OpenAIToolCall = {
   provider: 'openai';
   callId: string;
   name: string;
-  input:
-    | ChatCompletionMessageFunctionToolCall['function']['arguments']
-    | ChatCompletionMessage.FunctionCall['arguments'];
-  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+  input: ChatCompletionMessageFunctionToolCall['function']['arguments'];
+  raw: ChatCompletionMessageToolCall;
 };
 
 export type DeepSeekToolCall = {
@@ -81,7 +82,7 @@ export type DeepSeekToolCall = {
   callId: string;
   name: string;
   input: unknown;
-  raw: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall;
+  raw: ChatCompletionMessageToolCall;
 };
 
 export type OpenAIResponseToolCall = {
@@ -115,6 +116,10 @@ export type SdkToolCall =
   | OpenAIResponseToolCall
   | GoogleToolCall
   | AnthropicToolCall;
+
+// Note: SdkToolCall is a discriminated union on 'provider'.
+// Use `call.provider === 'openai'` directly for type narrowing instead of
+// separate type guard functions.
 
 /**
  * Common interface implemented by all model handlers.
@@ -195,10 +200,10 @@ export interface IModelHandler<
   ): Promise<M[]>;
 
   /** Format media content for provider APIs. */
-  createMediaContent(mediaMessage: MediaEntry[]): any[];
+  createMediaContent(mediaMessage: MediaEntry[]): unknown[];
 
   /** Extract the response text and usage from the provider response. */
-  extractResponse(responseObject: any, endTag: string): ExtractResponseResult;
+  extractResponse(responseObject: Resp, endTag: string): ExtractResponseResult;
 
   /** Handle continuation for models supporting prefill. */
   addContinueMessageWithPrefill(
@@ -271,7 +276,7 @@ export interface IModelHandler<
 
   /** Extract intermediate "thinking" content from a response. */
   processThinkingBlock(
-    responseObject: any,
+    responseObject: Resp,
     workspaceState?: AgentWorkspaceState,
   ): string | null;
 
@@ -290,6 +295,26 @@ export interface IModelHandler<
     call: T,
     result: Record<string, unknown>,
     workspaceState?: AgentWorkspaceState,
+    text?: string,
+  ): Promise<M[]>;
+
+  /**
+   * Create provider-specific messages for MULTIPLE parallel tool calls.
+   *
+   * This is optional and primarily used by Google handlers to properly structure
+   * parallel function calls with thought signatures (required for Gemini 3 models).
+   *
+   * When implemented:
+   * - All function calls go in ONE model message (first call has thoughtSignature)
+   * - All function responses go in ONE user message
+   *
+   * @param calls - Array of tool calls (preserving original order from model response)
+   * @param results - Array of results corresponding to each call (same order)
+   * @param text - Optional text to include before function calls
+   */
+  createBatchedToolUseFollowUpMessages?(
+    calls: T[],
+    results: Record<string, unknown>[],
     text?: string,
   ): Promise<M[]>;
 

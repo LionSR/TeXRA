@@ -15,7 +15,10 @@ import {
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
-import { triggerManualRetry } from '@agent/runtime/ManualRetryController';
+import {
+  triggerManualRetry,
+  cancelManualRetry,
+} from '@agent/runtime/ManualRetryController';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
@@ -126,6 +129,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         this.handleFilterStreams.bind(this),
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]:
         this.handleRetryStreamRequest.bind(this),
+      [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]:
+        this.handleCancelRetryRequest.bind(this),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]:
         this.handleRestoreState.bind(this),
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]:
@@ -248,6 +253,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         'No retryable request is available for this stream yet.',
       );
     }
+  }
+
+  private async handleCancelRetryRequest(message: any): Promise<void> {
+    cancelManualRetry(message.stream);
   }
 
   private async handleDiffStream(message: any): Promise<void> {

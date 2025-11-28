@@ -26,6 +26,11 @@ import {
   createTaskGroupEvents,
   type TaskGroupEventsModule,
 } from './TaskGroupEvents';
+import {
+  createRetryEventsModule,
+  type RetryEventsModule,
+  type RetryEventsShared,
+} from './RetryEvents';
 
 // Local imports - events
 import type {
@@ -47,10 +52,12 @@ export class ProgressEventHandler {
   private readonly logEvents: LogEventsModule;
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
+  private readonly retryEvents: RetryEventsModule;
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
+    retryCallbacks: Pick<RetryEventsShared, 'showRetryRequest' | 'resolveRetryRequest'>,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
     this.streamStatusEvents = createStreamStatusEvents({
@@ -78,6 +85,11 @@ export class ProgressEventHandler {
       initializeStreamForTaskGroup: (stream) =>
         this.initializeStreamForTaskGroup(stream),
     });
+    this.retryEvents = createRetryEventsModule({
+      logger: this.logger,
+      showRetryRequest: retryCallbacks.showRetryRequest,
+      resolveRetryRequest: retryCallbacks.resolveRetryRequest,
+    });
   }
 
   /**
@@ -103,6 +115,10 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
+    disposables.push(
+      ...this.retryEvents.register(bus, this.state),
+    );
+
     return disposables;
   }
 
