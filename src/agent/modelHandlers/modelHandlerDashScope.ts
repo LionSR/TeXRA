@@ -8,6 +8,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
@@ -18,6 +19,10 @@ import type {
  * Handler for DashScope Qwen models using OpenAI-compatible API.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
+  protected override get usageProvider(): NormalizedUsage['provider'] {
+    return 'dashscope';
+  }
+
   /** Thinking blocks are handled by the base OpenAI handler. */
   /**
    * Override createResponse to preprocess messages for DashScope models
