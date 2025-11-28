@@ -10,7 +10,7 @@ import type { StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 // Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { STATUS } from '@progressView/modules/constants.js';
+import { STREAM_STATUS } from '@progressView/modules/constants.js';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Internal imports
@@ -82,7 +82,7 @@ export function createStreamStatusEvents(
     state.activeStream = stream;
 
     const status: StreamStatusOrReadyType =
-      shared.streamStatus.get(stream) ?? STATUS.RUNNING;
+      shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
