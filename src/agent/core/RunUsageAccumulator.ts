@@ -1,10 +1,7 @@
 // Local imports - types
-import type {
-  NormalizedUsage,
-  UsageProvider,
-} from '@agent/types/NormalizedUsage';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
-// Re-export for backwards compatibility (used in AgentState schema)
+// Re-export for backwards compatibility (used in AgentState legacy schema)
 import type {
   AnthropicAPIResponseUsage,
   OpenAIAPIResponseUsage,
@@ -12,7 +9,6 @@ import type {
 } from './ResponseUsage';
 
 export type { NativeUsagePayload };
-export type { UsageProvider };
 
 /**
  * @deprecated Used only for legacy JSON deserialization
