@@ -12,20 +12,16 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { normalizeRunId } from '@common/constants/runIds';
 import { workspaceSM, WorkspaceStateKey } from '@common/state/stateManager';
+import { AgentLogger } from '@logger/AgentLogger';
+import type { TaskGroup } from '@logger/LogTypes';
 import {
   TaskState,
   isToolUseTaskState,
   isWorkflowTaskState,
 } from '@logger/TaskState';
-// Type imports
-import type { TaskGroup } from '@logger/LogTypes';
-// Internal imports
-import { AgentLogger } from '@logger/AgentLogger';
-
-// Local imports - progress view managers
 import type { AgentFilter } from '@progressView/types';
-// Internal imports
 import {
   StreamTabsManager,
   TaskGroupManager,
@@ -33,10 +29,7 @@ import {
   UsageStatsManager,
   RunInstructionManager,
 } from '@progressView/managers';
-// Type imports
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
-// Internal imports
-import { normalizeRunId } from '@common/constants/runIds';
 import { getConfig } from '@utils/config';
 
 /**
