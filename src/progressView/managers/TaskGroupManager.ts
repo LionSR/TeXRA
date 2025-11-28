@@ -9,7 +9,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { STREAM_STATUS } from '@progressView/modules/constants.js';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;
