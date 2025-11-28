@@ -39,7 +39,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
   url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
 
   // Production public key - safe to include in client code
-  publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw?',
+  publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
 
   // Edge function URL
   edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
