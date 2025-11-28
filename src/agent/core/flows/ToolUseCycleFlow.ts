@@ -857,9 +857,9 @@ export function createToolUseCycleFlow<C>(): Flow<
   callNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
 
   // Retry wait node transitions:
-  // - RETRY: Loop back to call node after user triggers retry
+  // - MANUAL_RETRY: Loop back to call node after user triggers retry
   // - COMPLETE: Exit flow if user cancels
-  retryWaitNode.on(FlowTransition.RETRY, callNode);
+  retryWaitNode.on(FlowTransition.MANUAL_RETRY, callNode);
 
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);
