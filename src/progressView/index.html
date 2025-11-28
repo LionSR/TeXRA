@@ -406,6 +406,59 @@
               </span>
             </summary>
           </template>
+          <template id="retryRequestTemplate">
+            <div class="retry-request">
+              <div class="retry-request__details">
+                <div class="retry-request__operation"></div>
+                <div class="retry-request__meta"></div>
+                <div class="retry-request__error"></div>
+              </div>
+              <vscode-toolbar-container class="retry-request__actions">
+                <vscode-toolbar-button
+                  icon="refresh"
+                  label="Retry"
+                  data-action="retry"
+                >Retry</vscode-toolbar-button>
+                <vscode-toolbar-button
+                  icon="close"
+                  label="Dismiss"
+                  data-action="dismiss"
+                >Dismiss</vscode-toolbar-button>
+              </vscode-toolbar-container>
+            </div>
+          </template>
+          <template id="approvalRequestTemplate">
+            <div class="approval-request">
+              <div class="approval-request__details">
+                <div class="approval-request__path"></div>
+                <div class="approval-request__meta"></div>
+              </div>
+              <vscode-toolbar-container class="approval-request__actions">
+                <vscode-toolbar-button
+                  icon="diff"
+                  label="Open diff"
+                  data-action="open"
+                >Open diff</vscode-toolbar-button>
+                <vscode-toolbar-button
+                  icon="check"
+                  label="Approve"
+                  data-action="approve"
+                >Approve</vscode-toolbar-button>
+                <vscode-toolbar-button
+                  icon="close"
+                  label="Reject"
+                  data-action="reject"
+                >Reject</vscode-toolbar-button>
+                <vscode-toolbar-button
+                  icon="shield"
+                  label="Approve &amp; Yolo this session"
+                  data-action="approveAll"
+                  data-toggle-action="resumeApprovals"
+                  toggleable
+                >Appr. &amp; Yolo</vscode-toolbar-button>
+              </vscode-toolbar-container>
+            </div>
+          </template>
         </div>
         <div slot="end" class="tabs">
           <div id="streamTabs" class="tabs-content">
