@@ -178,12 +178,12 @@ h2 {
 
 .type-badge.type-direct {
   background: var(--vscode-testing-iconPassed);
-  color: white;
+  color: var(--vscode-badge-foreground);
 }
 
 .type-badge.type-tooluse {
   background: var(--vscode-charts-purple);
-  color: white;
+  color: var(--vscode-badge-foreground);
 }
 
 /* Tags */
