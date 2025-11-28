@@ -348,7 +348,9 @@ class ResponseModelInvocationNode<C> extends Node<
 
     // Handle skipped (shouldStop was true before invocation)
     if (execRes.kind === 'skipped') {
-      options.logger.debug('Model invocation skipped: shouldStop was already true');
+      options.logger.debug(
+        'Model invocation skipped: shouldStop was already true',
+      );
       return FlowTransition.COMPLETE;
     }
 
