@@ -1,6 +1,6 @@
 // Status constants - re-exported from common for backwards compatibility
 // Note: New code should import directly from '@common/constants/streamStatus'
-export { STATUS } from '@common/constants/streamStatus';
+export { STREAM_STATUS } from '@common/constants/streamStatus';
 
 /**
  * @typedef {Object} ToolbarButtonDefinition

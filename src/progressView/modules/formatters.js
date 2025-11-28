@@ -19,7 +19,7 @@ import MarkdownIt from 'markdown-it';
 import highlight from 'markdown-it-highlightjs';
 
 // Local imports - progress view
-import { STATUS, GROUP_DOM_IDS } from './constants.js';
+import { STREAM_STATUS, GROUP_DOM_IDS } from './constants.js';
 
 // Local imports
 import { katexMacros } from './katexMacros.js';
@@ -1389,11 +1389,11 @@ export class TaskGroupHeaderFormatter {
 
   _getStatusIcon(status) {
     switch (status) {
-      case STATUS.RUNNING:
+      case STREAM_STATUS.RUNNING:
         return '<i class="codicon codicon-sync spin"></i>';
-      case STATUS.ERROR:
+      case STREAM_STATUS.ERROR:
         return '<i class="codicon codicon-error"></i>';
-      case STATUS.STOPPED:
+      case STREAM_STATUS.STOPPED:
         return '<i class="codicon codicon-check"></i>';
       default:
         return '<i class="codicon codicon-circle-outline"></i>';
