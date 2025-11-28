@@ -80,8 +80,14 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
       const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
       remoteAgentNames = remoteAgents.map((agent) => agent.name);
 
-      // Register remote agents in the registry (no more remote:// prefix!)
-      RemoteAgentRegistry.registerMultiple(remoteAgentNames);
+      // Register remote agents with their metadata from DB
+      RemoteAgentRegistry.registerMultiple(
+        remoteAgents.map((agent) => ({
+          name: agent.name,
+          description: agent.description,
+          agentType: agent.agentType,
+        })),
+      );
     } catch (error) {
       // Silently fail - user can still use local agents even if remote agent loading fails
       // The listRemoteAgents method already handles logging

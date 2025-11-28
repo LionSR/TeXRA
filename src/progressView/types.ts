@@ -51,3 +51,10 @@ export interface ToolEditApprovalPrompt {
   addedLines: number;
   removedLines: number;
 }
+
+export interface RetryRequestPrompt {
+  streamId: string;
+  operation: string;
+  model?: string;
+  errorMessage?: string;
+}

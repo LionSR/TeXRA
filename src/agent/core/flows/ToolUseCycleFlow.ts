@@ -20,12 +20,15 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Type imports
 import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
+
 // Internal imports - use core ToolTypes as single source of truth
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
+import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -539,7 +542,29 @@ class ToolUseProcessNode<C> extends BaseNode<
 }
 
 /**
+ * Result of executing a single tool call, capturing everything needed
+ * for logging and message creation.
+ */
+interface ToolExecutionResult {
+  call: SdkToolCall;
+  result: ToolResult;
+  parsedInput: unknown;
+  lineChanges?: { added: number; removed: number };
+  sanitizedOutput: Record<string, unknown>;
+  editedFiles: Array<{
+    path: string;
+    ok: boolean;
+    source: string;
+    sourceDisplay: string;
+  }>;
+}
+
+/**
  * Dispatches tool calls and processes their results.
+ *
+ * For Google handlers with multiple parallel calls, this node batches all
+ * function calls into a single model message to properly preserve thought
+ * signatures (required for Gemini 3 models).
  *
  * Services accessed via `_params.services`: options, store
  */
@@ -571,6 +596,131 @@ class ToolUseDispatchNode<C> extends BaseNode<
     };
   }
 
+  /**
+   * Execute a single tool call and return the result with metadata.
+   */
+  private async executeToolCall(
+    call: SdkToolCall,
+    options: ToolUseCycleOptions<C>,
+    tracker: FileInteractionState,
+  ): Promise<ToolExecutionResult> {
+    const tool = options.toolRegistry.get(call.name);
+    let result: ToolResult;
+    const parsedInput = parseToolInput(call.input, call.callId, options.logger);
+
+    if (!tool) {
+      result = toolResult({
+        error: `Unknown tool ${call.name}`,
+        isError: true,
+      });
+    } else {
+      try {
+        result = await withToolFileInteractionContext(
+          {
+            tracker,
+            streamId: options.logger.channelId,
+            executionId: options.context.executionId,
+            toolCallId: call.callId,
+          },
+          () =>
+            withToolEditApprovalContext(
+              {
+                streamId: options.logger.channelId,
+                executionId: options.context.executionId,
+                toolCallId: call.callId,
+              },
+              () => tool.call(parsedInput),
+            ),
+        );
+      } catch (err) {
+        const { message, diagnostics } = normalizeToolCallError(call.name, err);
+        result = toolResult({
+          error: message,
+          isError: true,
+          diagnostics,
+        });
+      }
+    }
+
+    // recordEdits returns per-call line changes as the single source of truth
+    const trackedEdits = tracker.recordEdits(result.edits);
+    const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
+    const sanitizedOutput = sanitizeToolResultForLog(result);
+    if (lineChanges) {
+      sanitizedOutput.lineChanges = lineChanges;
+    }
+    const editedFiles = trackedEdits.edits.map((entry) => ({
+      path: entry.path,
+      ok: true,
+      source: 'tool',
+      sourceDisplay: 'Tool use',
+    }));
+
+    if (editedFiles.length > 0) {
+      sanitizedOutput.files = editedFiles;
+    }
+
+    return {
+      call,
+      result,
+      parsedInput,
+      lineChanges,
+      sanitizedOutput,
+      editedFiles,
+    };
+  }
+
+  /**
+   * Log tool execution and handle media file attachments.
+   */
+  private async logAndProcessMediaFiles(
+    execResult: ToolExecutionResult,
+    options: ToolUseCycleOptions<C>,
+    store: ToolUseCycleServices<C>['store'],
+    groupId: string | undefined,
+  ): Promise<void> {
+    const { call, result, parsedInput, sanitizedOutput, editedFiles } =
+      execResult;
+
+    const toolUseLog = {
+      toolName: call.name,
+      input: parsedInput ?? call.raw,
+      output: sanitizedOutput,
+      ...(editedFiles.length > 0 && { files: editedFiles }),
+      isError: Boolean(result.isError),
+    };
+    options.logger.info('', {
+      groupId,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: toolUseLog,
+    });
+
+    if (result.files && result.files.length > 0) {
+      const existing = store.workspace.media.files;
+      const toAdd: string[] = [];
+      for (const attachment of result.files) {
+        const candidate = attachment.path;
+        if (typeof candidate !== 'string' || candidate.trim() === '') {
+          continue;
+        }
+        if (existing.includes(candidate) || toAdd.includes(candidate)) {
+          continue;
+        }
+        try {
+          const exists = await WorkspaceFS.exists(candidate);
+          if (exists) {
+            toAdd.push(candidate);
+          }
+        } catch {
+          // Ignore errors when checking existence
+        }
+      }
+      if (toAdd.length > 0) {
+        store.workspace.media.addMediaFiles(toAdd);
+      }
+    }
+  }
+
   async post(
     shared: ToolUseCycleShared<C>,
     _prepRes: ToolUseCycleShared<C>,
@@ -586,128 +736,64 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
 
     const { calls } = execRes.value;
-
     const assistantText = state.text ?? '';
     const tracker = store.workspace.interactions;
 
-    for (const [index, call] of calls.entries()) {
-      const tool = options.toolRegistry.get(call.name);
-      let result: ToolResult;
-      const parsedInput = parseToolInput(
-        call.input,
-        call.callId,
-        options.logger,
+    // Step 1: Execute all tool calls and collect results
+    const execResults: ToolExecutionResult[] = [];
+    for (const call of calls) {
+      const execResult = await this.executeToolCall(call, options, tracker);
+      execResults.push(execResult);
+
+      // Log each tool execution as it completes
+      await this.logAndProcessMediaFiles(execResult, options, store, groupId);
+    }
+
+    // Step 2: Create follow-up messages
+    // For Google handlers with multiple parallel calls, use batched method
+    // to properly preserve thought signatures (required for Gemini 3 models)
+    const shouldBatch =
+      options.modelHandler.isGoogle &&
+      calls.length > 1 &&
+      typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
+        'function';
+
+    if (shouldBatch) {
+      // Batched: All function calls in one model message, all responses in one user message
+      const resultPayloads = execResults.map((er) =>
+        buildToolResultPayload(er.result, er.lineChanges),
       );
-      if (!tool) {
-        result = toolResult({
-          error: `Unknown tool ${call.name}`,
-          isError: true,
-        });
-      } else {
-        try {
-          result = await withToolFileInteractionContext(
-            {
-              tracker,
-              streamId: options.logger.channelId,
-              executionId: options.context.executionId,
-              toolCallId: call.callId,
-            },
-            () =>
-              withToolEditApprovalContext(
-                {
-                  streamId: options.logger.channelId,
-                  executionId: options.context.executionId,
-                  toolCallId: call.callId,
-                },
-                () => tool.call(parsedInput),
-              ),
-          );
-        } catch (err) {
-          const { message, diagnostics } = normalizeToolCallError(
-            call.name,
-            err,
-          );
-          result = toolResult({
-            error: message,
-            isError: true,
-            diagnostics,
-          });
-        }
-      }
-
-      // recordEdits returns per-call line changes as the single source of truth
-      const trackedEdits = tracker.recordEdits(result.edits);
-      const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
-      const sanitizedOutput = sanitizeToolResultForLog(result);
-      if (lineChanges) {
-        sanitizedOutput.lineChanges = lineChanges;
-      }
-      const editedFiles = trackedEdits.edits.map((entry) => ({
-        path: entry.path,
-        ok: true,
-        source: 'tool',
-        sourceDisplay: 'Tool use',
-      }));
-
-      if (editedFiles.length > 0) {
-        sanitizedOutput.files = editedFiles;
-      }
-
-      const toolUseLog = {
-        toolName: call.name,
-        input: parsedInput ?? call.raw,
-        output: sanitizedOutput,
-        ...(editedFiles.length > 0 && { files: editedFiles }),
-        isError: Boolean(result.isError),
-      };
-      options.logger.info('', {
-        groupId,
-        messageType: MESSAGE_TYPES.TOOL_USE,
-        data: toolUseLog,
-      });
-
-      if (result.files && result.files.length > 0) {
-        const existing = store.workspace.media.files;
-        const toAdd: string[] = [];
-        for (const attachment of result.files) {
-          const candidate = attachment.path;
-          if (typeof candidate !== 'string' || candidate.trim() === '') {
-            continue;
-          }
-          if (existing.includes(candidate) || toAdd.includes(candidate)) {
-            continue;
-          }
-          try {
-            const exists = await WorkspaceFS.exists(candidate);
-            if (exists) {
-              toAdd.push(candidate);
-            }
-          } catch {
-            // Ignore errors when checking existence
-          }
-        }
-        if (toAdd.length > 0) {
-          store.workspace.media.addMediaFiles(toAdd);
-        }
-      }
-
-      const followUpMsgs =
-        await options.modelHandler.createToolUseFollowUpMessages(
-          options.client,
-          call,
-          buildToolResultPayload(result, lineChanges),
-          store.workspace,
-          index === 0 && assistantText.length > 0 ? assistantText : undefined,
-        );
-
+      const followUpMsgs = await options.modelHandler
+        .createBatchedToolUseFollowUpMessages!(
+        calls,
+        resultPayloads,
+        assistantText.length > 0 ? assistantText : undefined,
+      );
       state.messages.push(...followUpMsgs);
+    } else {
+      // Individual: Process each call separately (original behavior)
+      for (const [index, execResult] of execResults.entries()) {
+        const followUpMsgs =
+          await options.modelHandler.createToolUseFollowUpMessages(
+            options.client,
+            execResult.call,
+            buildToolResultPayload(execResult.result, execResult.lineChanges),
+            store.workspace,
+            index === 0 && assistantText.length > 0 ? assistantText : undefined,
+          );
+        state.messages.push(...followUpMsgs);
+      }
+    }
+
+    // Step 3: Handle user instructions from tool results
+    for (const execResult of execResults) {
       if (
-        typeof result.userInstruction === 'string' &&
-        result.userInstruction.trim().length > 0
+        typeof execResult.result.userInstruction === 'string' &&
+        execResult.result.userInstruction.trim().length > 0
       ) {
         await options.modelHandler.createUserFollowUpMessages(
           state.messages,
-          result.userInstruction,
+          execResult.result.userInstruction,
         );
       }
     }

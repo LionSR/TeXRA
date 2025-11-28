@@ -20,7 +20,7 @@ import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { normalizeRunId } from '@progressView/constants/runIds';
+import { normalizeRunId } from '@common/constants/runIds';
 import {
   replaceInputCommands,
   createFileMapping,

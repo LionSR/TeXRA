@@ -26,6 +26,7 @@ export interface AgentOptionMetadata {
   isToolUse: boolean;
   isRemote: boolean;
   description?: string;
+  agentType?: string;
 }
 
 export interface AgentOptionsPayload {
@@ -85,14 +86,17 @@ export function getAgentOptionMetadata(
   const isRemote = RemoteAgentRegistry.isRemote(agentName);
   const cleanName = RemoteAgentRegistry.getCleanName(agentName);
 
-  // Handle remote agents specially
+  // Handle remote agents specially - retrieve cached metadata from registry
   if (isRemote) {
+    const remoteMetadata = RemoteAgentRegistry.getMetadata(cleanName);
     return {
       hasDefinition: true, // Remote agents always have definitions (on server)
       hasMultipleSibling: false,
       isMultipleOutput: false,
-      isToolUse: false, // Remote agents are workflow agents by default
+      isToolUse: false, // isToolUse defaults to false for remote agents
       isRemote: true,
+      description: remoteMetadata?.description,
+      agentType: remoteMetadata?.agentType,
     };
   }
 
@@ -118,6 +122,7 @@ export function getAgentOptionMetadata(
     isToolUse: parsed?.settings.agentType === TOOL_USE_AGENT_TYPE,
     isRemote: false,
     description: parsed?.description,
+    agentType: parsed?.settings.agentType,
   };
 }
 
@@ -164,6 +169,9 @@ export function createAgentOptionTag(
   }
   if (metadata.description) {
     attributes.push(`data-description="${encodeHtml(metadata.description)}"`);
+  }
+  if (metadata.agentType) {
+    attributes.push(`data-agent-type="${encodeHtml(metadata.agentType)}"`);
   }
   if (options.isSelected) {
     attributes.push('selected');

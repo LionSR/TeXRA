@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'statisticsDetailsTemplate',
     'groupHeaderTemplate',
     'groupDetailsTemplate',
+    'retryRequestTemplate',
+    'approvalRequestTemplate',
   ]);
   progressViewDomHandler.toolbar.render('workflow');
   progressViewDomHandler.placeholder.show();
@@ -41,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   progressViewDomHandler.events.setupEventListeners();
   progressViewDomHandler.followUpInput.setup();
   progressViewDomHandler.approvalRequests.setup();
+  progressViewDomHandler.retryRequests.setup();
 
   // Apply saved group toggle states to any groups already in the DOM
   progressViewDomHandler.events.applyToggleStates();
