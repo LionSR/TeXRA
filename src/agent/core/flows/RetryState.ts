@@ -64,7 +64,11 @@ export interface RetryState {
  * Use these values when constructing invocation nodes.
  */
 export interface NodeRetryConfig {
-  /** Total attempts (initial + retries). Pass to Node constructor as maxRetries. */
+  /**
+   * Total number of attempts, NOT the number of retries.
+   * For example, maxRetries=3 means: 1 initial attempt + 2 retries.
+   * Pass directly to Node constructor as maxRetries.
+   */
   maxRetries: number;
   /** Wait time between retries in seconds. Pass to Node constructor as wait. */
   wait: number;
