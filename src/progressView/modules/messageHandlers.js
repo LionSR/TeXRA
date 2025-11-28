@@ -137,6 +137,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         this.handleResolveToolEditApproval(m),
       [COMMANDS.UPDATE_TOOL_EDIT_APPROVAL_STATE]: (m) =>
         this.handleUpdateToolEditApprovalState(m),
+      [COMMANDS.SHOW_RETRY_REQUEST]: (m) => this.handleShowRetryRequest(m),
+      [COMMANDS.RESOLVE_RETRY_REQUEST]: (m) =>
+        this.handleResolveRetryRequest(m),
       [COMMANDS.UPDATE_INSTRUCTION]: (m) => this.handleUpdateInstruction(m),
       [COMMANDS.DELETE_STREAM]: (m) => this.handleDeleteStream(m),
       [COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
@@ -222,6 +225,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.followUpInput.setContainerVisibility(Boolean(isToolAgent && container));
 
     dom.approvalRequests.setActiveStream(message.activeStream, isToolAgent);
+    dom.retryRequests.setActiveStream(message.activeStream, isToolAgent);
 
     dom.toolbar.render(sessionKind);
 
@@ -541,6 +545,20 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.approvalBypassActive = bypassActive;
     dom.approvalRequests.setSessionBypassActive(bypassActive);
     dom.followUpInput.setApprovalBypassState(bypassActive);
+  }
+
+  handleShowRetryRequest(message) {
+    if (!message || !message.request) {
+      return;
+    }
+    dom.retryRequests.show(message.request);
+  }
+
+  handleResolveRetryRequest(message) {
+    if (!message || !message.streamId) {
+      return;
+    }
+    dom.retryRequests.resolve(message.streamId);
   }
 
   /**
