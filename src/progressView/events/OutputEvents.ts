@@ -6,8 +6,7 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { normalizeRunId } from '@progressView/constants/runIds';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { normalizeRunId } from '@common/constants/runIds';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';

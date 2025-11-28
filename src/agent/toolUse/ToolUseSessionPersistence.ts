@@ -22,7 +22,7 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 import { getToolUsePersistenceEnabled } from '@utils/config';
@@ -207,14 +207,14 @@ export const ToolUseSessionPersistence = {
     const existingStatus = StreamStatusService.get(streamId);
 
     if (
-      existingStatus === STATUS.RUNNING ||
-      existingStatus === STATUS.RESUMING
+      existingStatus === STREAM_STATUS.RUNNING ||
+      existingStatus === STREAM_STATUS.RESUMING
     ) {
       return { success: false };
     }
 
     ToolUseFollowUpQueue.markResuming(streamId);
-    StreamStatusService.set(streamId, STATUS.RESUMING);
+    StreamStatusService.set(streamId, STREAM_STATUS.RESUMING);
 
     let queuedFollowUps: string[] = [];
     try {
@@ -266,8 +266,8 @@ export const ToolUseSessionPersistence = {
     } finally {
       ToolUseFollowUpQueue.clearResuming(streamId);
       const status = StreamStatusService.get(streamId);
-      if (status === STATUS.RESUMING) {
-        StreamStatusService.set(streamId, STATUS.WAITING);
+      if (status === STREAM_STATUS.RESUMING) {
+        StreamStatusService.set(streamId, STREAM_STATUS.WAITING);
       }
     }
   },

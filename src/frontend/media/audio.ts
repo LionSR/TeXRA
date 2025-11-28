@@ -3,7 +3,6 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
-import OpenAI from 'openai';
 import { execa, type Subprocess } from 'execa';
 
 // Local imports - log
@@ -19,10 +18,6 @@ import {
   extendEnvPath,
   findToolInCommonPaths,
 } from '@utils/system/platformPaths';
-
-// Local imports - agent handlers
-
-// Local imports - model configs
 
 const CHANNEL = 'AudioUtils';
 logger.initialize(CHANNEL);

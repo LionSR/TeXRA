@@ -36,7 +36,7 @@ import {
 // Type imports
 import type { StateStorage } from '@progressView/persistence/PersistentMapManager';
 // Internal imports
-import { normalizeRunId } from '@progressView/constants/runIds';
+import { normalizeRunId } from '@common/constants/runIds';
 import { getConfig } from '@utils/config';
 
 /**

@@ -16,7 +16,6 @@ import {
 } from '@agent/utils/promptUtils';
 import { setVarFromFile } from '@frontend/files/vars';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { getConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 

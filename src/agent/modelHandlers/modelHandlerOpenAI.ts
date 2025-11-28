@@ -8,7 +8,6 @@ import {
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessageCustomToolCall,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
@@ -31,20 +30,17 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
-import type { ModelConfig, ToolDefinition } from '@model';
+import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
-import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 

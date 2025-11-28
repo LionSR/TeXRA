@@ -8,18 +8,13 @@ import {
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
-// Type imports
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-// Type imports
-import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
 import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
@@ -127,15 +122,6 @@ function normalizeToolCallError(
   return { message: fallbackMessage };
 }
 
-type ToolDispatchErrorResult = {
-  handledError: true;
-  toolCallId?: string;
-  toolName: string;
-  result: ToolResult;
-  raw?: unknown;
-  fallbackMessage?: string;
-};
-
 export interface ToolUseCycleState extends BaseCycleState {
   response?: unknown;
   toolCalls?: SdkToolCall[];
@@ -159,7 +145,7 @@ function resetToolUseState(state: ToolUseCycleState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ToolUseCycleServices)
  */
-export interface ToolUseCycleShared<C = unknown> {
+export interface ToolUseCycleShared<_C = unknown> {
   /** Runtime state for this cycle */
   state: ToolUseCycleState;
   /** Retry state for model invocation errors */
@@ -177,7 +163,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   ToolUseCycleShared<C>,
   ToolUseCycleParams<C>
 > {
-  async prep(shared: ToolUseCycleShared<C>): Promise<{
+  async prep(_shared: ToolUseCycleShared<C>): Promise<{
     interrupted: boolean;
     debugContext: CycleDebugContext;
     debugFileOptions: CycleDebugFileOptions;
