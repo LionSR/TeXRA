@@ -37,12 +37,56 @@ TeXRA uses Supabase for:
 
 Once your project is ready:
 
-1. Go to **Settings** → **API**
+1. Go to **Settings** → **API** (or **Settings** → **API Keys** for newer dashboard)
 2. **IMPORTANT**: Copy these values:
    - **Project URL**: `https://your-project-id.supabase.co`
-   - **anon public key**: Long string starting with `eyJ...`
+   - **Publishable key** (recommended): Starts with `sb_publishable_...`
+   - **OR anon key** (legacy): JWT starting with `eyJ...`
 
 **These will be hardcoded in the extension (see Part 6).**
+
+---
+
+## Understanding API Keys
+
+Supabase provides two types of public keys for client-side applications:
+
+### Publishable Key (Recommended)
+
+- **Format**: `sb_publishable_...`
+- **Advantages**:
+  - Easy rotation without downtime
+  - Shorter, simpler format
+  - Independent of JWT secret
+  - Browser-use detection for secret keys
+- **Use**: New projects should use publishable keys
+
+### Anon Key (Legacy)
+
+- **Format**: JWT starting with `eyJ...`
+- **Disadvantages**:
+  - Rotating requires JWT secret rotation (causes downtime)
+  - 10-year expiry embedded in token
+  - Large, complex format
+- **Use**: Still works, but consider migrating to publishable keys
+
+### Both Keys Are Safe for Client Code
+
+Both the publishable and anon keys are designed to be embedded in client-side code. They do **not** protect your data directly. Instead, Row Level Security (RLS) policies on your database tables control actual data access.
+
+**Important**:
+- Never expose `service_role` or secret keys (`sb_secret_...`) in client code
+- These elevated keys bypass RLS and should only be used in server-side code (Edge Functions)
+
+### Migrating from Anon to Publishable Key
+
+1. Go to **Settings** → **API Keys** in Supabase dashboard
+2. Create a new publishable key
+3. Replace the `anonKey` value in `src/auth/config.ts` with your publishable key
+4. Build and test the extension
+5. (Optional) Deactivate the old anon key once migration is complete
+
+The Supabase client initialization code remains identical - just swap the key value.
 
 ---
 
@@ -447,19 +491,10 @@ Edit `src/auth/config.ts`:
 ```typescript
 export const SUPABASE_CONFIG: SupabaseConfig = {
   url: 'https://your-actual-project-id.supabase.co', // Replace with your project URL
-  anonKey: 'your-actual-anon-key-here', // Replace with your anon key
+  anonKey: 'your-actual-anon-key-here', // Replace with your anon/publishable key
   edgeFunctionUrl:
     'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
 };
-```
-
-**OR** use environment variables:
-
-```bash
-# .env (for development)
-TEXRA_SUPABASE_URL=https://your-project-id.supabase.co
-TEXRA_SUPABASE_ANON_KEY=your-anon-key
-TEXRA_SUPABASE_EDGE_FUNCTION_URL=https://your-project-id.supabase.co/functions/v1/get-agent-config
 ```
 
 ### 2. Build Extension
