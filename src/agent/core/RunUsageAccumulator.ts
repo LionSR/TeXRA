@@ -56,7 +56,10 @@ export interface RunUsageTotals {
   totalCacheReadInputTokens: number;
   totalCacheCreationInputTokens: number;
   totalReasoningTokens: number;
-  totalToolUseTokens: number;
+  /** Tool use prompt tokens (Google) */
+  totalToolUsePromptTokens: number;
+  /** Server-side tool requests (Anthropic) */
+  totalServerToolRequests: number;
 }
 
 export interface RunUsageAccumulatorJSON {
@@ -75,7 +78,8 @@ export class RunUsageAccumulator {
     totalCacheReadInputTokens: 0,
     totalCacheCreationInputTokens: 0,
     totalReasoningTokens: 0,
-    totalToolUseTokens: 0,
+    totalToolUsePromptTokens: 0,
+    totalServerToolRequests: 0,
   };
 
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
@@ -95,18 +99,25 @@ export class RunUsageAccumulator {
     this.totals.totalOutputTokens += usage.outputTokens;
     this.totals.totalCost += usage.cost;
 
-    // Accumulate optional metrics
+    // Accumulate caching metrics
     if (usage.cachedInputTokens) {
       this.totals.totalCacheReadInputTokens += usage.cachedInputTokens;
     }
     if (usage.cacheCreationTokens) {
       this.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens;
     }
+
+    // Accumulate reasoning metrics
     if (usage.reasoningTokens) {
       this.totals.totalReasoningTokens += usage.reasoningTokens;
     }
-    if (usage.toolUseTokens) {
-      this.totals.totalToolUseTokens += usage.toolUseTokens;
+
+    // Accumulate tool usage metrics
+    if (usage.toolUsePromptTokens) {
+      this.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens;
+    }
+    if (usage.serverToolRequests) {
+      this.totals.totalServerToolRequests += usage.serverToolRequests;
     }
 
     // Store snapshot
@@ -139,11 +150,6 @@ export class RunUsageAccumulator {
         const cacheCreation = summary.cache_creation_input_tokens ?? 0;
         this.totals.totalCacheReadInputTokens += cacheRead;
         this.totals.totalCacheCreationInputTokens += cacheCreation;
-
-        const toolUseTokens = summary.tool_use_tokens ?? 0;
-        if (toolUseTokens) {
-          this.totals.totalToolUseTokens += toolUseTokens;
-        }
       } else if ('prompt_tokens' in summary) {
         const promptDetails = summary.prompt_tokens_details;
         const cachedTokens = promptDetails?.cached_tokens ?? 0;
@@ -155,11 +161,6 @@ export class RunUsageAccumulator {
           0;
         if (reasoningTokens) {
           this.totals.totalReasoningTokens += reasoningTokens;
-        }
-
-        const toolUseTokens = summary.tool_use_tokens ?? 0;
-        if (toolUseTokens) {
-          this.totals.totalToolUseTokens += toolUseTokens;
         }
       }
     }
@@ -193,7 +194,10 @@ export class RunUsageAccumulator {
     this.totals.totalCacheCreationInputTokens +=
       otherTotals.totalCacheCreationInputTokens;
     this.totals.totalReasoningTokens += otherTotals.totalReasoningTokens;
-    this.totals.totalToolUseTokens += otherTotals.totalToolUseTokens;
+    this.totals.totalToolUsePromptTokens +=
+      otherTotals.totalToolUsePromptTokens;
+    this.totals.totalServerToolRequests +=
+      otherTotals.totalServerToolRequests;
 
     for (const snapshot of accumulator.getNormalizedSnapshots()) {
       this.normalizedSnapshots.push(snapshot);
@@ -238,7 +242,23 @@ export class RunUsageAccumulator {
       return accumulator;
     }
 
-    Object.assign(accumulator.totals, json.totals);
+    // Handle both old and new field names for backward compatibility
+    const totals = json.totals;
+    accumulator.totals.firstInputTokens = totals.firstInputTokens ?? 0;
+    accumulator.totals.totalInputTokens = totals.totalInputTokens ?? 0;
+    accumulator.totals.totalOutputTokens = totals.totalOutputTokens ?? 0;
+    accumulator.totals.totalCost = totals.totalCost ?? 0;
+    accumulator.totals.totalCacheReadInputTokens =
+      totals.totalCacheReadInputTokens ?? 0;
+    accumulator.totals.totalCacheCreationInputTokens =
+      totals.totalCacheCreationInputTokens ?? 0;
+    accumulator.totals.totalReasoningTokens = totals.totalReasoningTokens ?? 0;
+    accumulator.totals.totalToolUsePromptTokens =
+      totals.totalToolUsePromptTokens ??
+      (totals as any).totalToolUseTokens ?? // Legacy field name
+      0;
+    accumulator.totals.totalServerToolRequests =
+      totals.totalServerToolRequests ?? 0;
 
     // Load normalized snapshots if available
     if (json.normalizedSnapshots) {
