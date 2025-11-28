@@ -3,6 +3,7 @@ import { COMMANDS } from '../constants.js';
 import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
+import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -21,30 +22,18 @@ export class RetryRequests extends BaseUIRequestManager {
 
   /** @override */
   _createRequestElement(request) {
-    const element = document.createElement('div');
-    element.className = 'retry-request';
+    const element = createFromTemplate('retryRequestTemplate');
+    if (!element) {
+      console.error('RetryRequests: retryRequestTemplate not found');
+      return document.createElement('div');
+    }
+
+    // Set stream ID on element and all action buttons
     element.dataset.streamId = request.streamId;
-    element.innerHTML = `
-      <div class="retry-request__details">
-        <div class="retry-request__operation"></div>
-        <div class="retry-request__meta"></div>
-        <div class="retry-request__error"></div>
-      </div>
-      <vscode-toolbar-container class="retry-request__actions">
-        <vscode-toolbar-button
-          icon="refresh"
-          label="Retry"
-          data-action="retry"
-          data-stream-id="${request.streamId}"
-        >Retry</vscode-toolbar-button>
-        <vscode-toolbar-button
-          icon="close"
-          label="Dismiss"
-          data-action="dismiss"
-          data-stream-id="${request.streamId}"
-        >Dismiss</vscode-toolbar-button>
-      </vscode-toolbar-container>
-    `;
+    element.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.dataset.streamId = request.streamId;
+    });
+
     this._updateRequestElement(element, request);
     return element;
   }
