@@ -162,6 +162,30 @@ h2 {
   color: var(--vscode-inputValidation-warningForeground);
 }
 
+/* Type badges */
+.type-badge {
+  display: inline-block;
+  padding: 2px var(--spacing-small);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.type-badge.type-cot {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.type-badge.type-direct {
+  background: var(--vscode-testing-iconPassed);
+  color: white;
+}
+
+.type-badge.type-tooluse {
+  background: var(--vscode-charts-purple);
+  color: white;
+}
+
 /* Tags */
 .agent-tags {
   display: flex;

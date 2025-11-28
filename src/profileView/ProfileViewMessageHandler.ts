@@ -73,6 +73,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       description: string;
       tags: string[];
       visibility: string;
+      agentType?: string;
     }> = [];
 
     if (tier === 'researcher') {
@@ -84,6 +85,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
           description: agent.description,
           tags: agent.tags,
           visibility: agent.visibility,
+          agentType: agent.agentType,
         }));
       } catch (error) {
         // Log error but continue - show profile without agents
