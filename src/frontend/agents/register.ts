@@ -164,7 +164,7 @@ export async function validateYamlAndPromptAdd(
     const hasMultipleDefaults = defaultOutputs.length > 1;
     const isMultipleOutput = Boolean(
       workflowSettings?.isMultipleOutput ??
-        (workflowSettings ? hasMultipleDefaults : false),
+      (workflowSettings ? hasMultipleDefaults : false),
     );
     const metadata: AgentVariantMetadata = {
       isMultipleOutput,

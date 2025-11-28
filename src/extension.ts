@@ -101,9 +101,8 @@ export async function activate(context: vscode.ExtensionContext) {
   FileLister.initialize(context);
 
   // Initialize remote agent registry
-  const { RemoteAgentRegistry } = await import(
-    '@agent/remote/RemoteAgentRegistry'
-  );
+  const { RemoteAgentRegistry } =
+    await import('@agent/remote/RemoteAgentRegistry');
   RemoteAgentRegistry.initialize(context);
 
   // Initialize Supabase authentication if enabled
@@ -112,9 +111,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (authEnabled) {
     try {
-      const { SupabaseAuthProvider } = await import(
-        '@/auth/SupabaseAuthProvider'
-      );
+      const { SupabaseAuthProvider } =
+        await import('@/auth/SupabaseAuthProvider');
       const { isSupabaseConfigured } = await import('@/auth/config');
 
       // Check if Supabase credentials are configured

@@ -80,8 +80,7 @@ export abstract class ModelHandler<
   T extends SdkToolCall = SdkToolCall,
   C = unknown,
   Resp = unknown,
-> implements IModelHandler<M, U, R, T, C, Resp>
-{
+> implements IModelHandler<M, U, R, T, C, Resp> {
   public config: ModelConfig;
   public capabilities: ModelCapabilities;
   public continueLimit: number;

@@ -54,8 +54,9 @@ export interface LogMessageData {
   data?: unknown;
 }
 
-export interface LogMessageUpdate
-  extends Partial<Omit<LogMessageData, 'id' | 'level' | 'timestamp'>> {
+export interface LogMessageUpdate extends Partial<
+  Omit<LogMessageData, 'id' | 'level' | 'timestamp'>
+> {
   /** Identifier of the log entry being updated */
   id: LogMessageId;
   /** Optional severity updates for completeness */
