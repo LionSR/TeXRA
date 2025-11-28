@@ -240,6 +240,18 @@ function buildToolResultPayload(
 }
 
 /**
+ * Data extracted by prep() for tool-use call.
+ * This is the ONLY data exec() should use (PocketFlow compliance).
+ *
+ * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
+ * which is the correct PocketFlow pattern for immutable configuration.
+ */
+interface ToolUseCallPrepResult {
+  shouldStop: boolean;
+  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+}
+
+/**
  * Result type for tool-use call.
  * - Success: Contains response from model
  * - Fallback: From execFallback when all auto-retries exhausted
@@ -280,15 +292,33 @@ class ToolUseCallNode<C> extends Node<
     super(config.maxRetries, config.wait);
   }
 
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
-    return shared;
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: exec() should only use prepRes, not shared.
+   */
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCallPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      messages: state.messages,
+    };
   }
 
-  async exec(shared: ToolUseCycleShared<C>): Promise<ToolUseCallResult> {
-    const { options, store } = this._params.services;
-    const { state } = shared;
+  /**
+   * Read fresh retry config before each execution.
+   * This ensures config changes take effect without rebuilding the flow.
+   */
+  async _exec(prepRes: unknown): Promise<unknown> {
+    const config = getNodeRetryConfig();
+    this.maxRetries = config.maxRetries;
+    this.wait = config.wait;
+    return super._exec(prepRes);
+  }
 
-    if (state.shouldStop) {
+  async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
+    const { options, store } = this._params.services;
+
+    if (prepRes.shouldStop) {
       return { kind: 'skipped' };
     }
 
@@ -313,7 +343,7 @@ class ToolUseCallNode<C> extends Node<
       options.modelHandler.setOutputStreaming(true);
       const response = await options.modelHandler.createResponse({
         client: options.client,
-        messages: state.messages,
+        messages: prepRes.messages,
         temperature: options.agentSetting.temperature ?? 0,
         signal: abortController.signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
@@ -331,7 +361,8 @@ class ToolUseCallNode<C> extends Node<
     } finally {
       options.setAbortController(null);
     }
-    // Errors thrown here → PocketFlow Node retries automatically
+    // Note: Errors from createResponse() are caught by PocketFlow Node's
+    // retry loop in _exec(), which calls execFallback() when exhausted.
   }
 
   /**
@@ -339,7 +370,7 @@ class ToolUseCallNode<C> extends Node<
    * Determines whether to offer manual retry or fail.
    */
   async execFallback(
-    _prepRes: ToolUseCycleShared<C>,
+    _prepRes: ToolUseCallPrepResult,
     error: Error,
   ): Promise<ToolUseCallResult> {
     const formatted = formatProviderHttpError(error);
@@ -353,14 +384,15 @@ class ToolUseCallNode<C> extends Node<
 
   async post(
     shared: ToolUseCycleShared<C>,
-    _prepRes: ToolUseCycleShared<C>,
+    _prepRes: ToolUseCallPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle skipped (shouldStop was true)
+    // Handle skipped (shouldStop was true before invocation)
     if (execRes.kind === 'skipped') {
+      options.logger.debug('Tool-use call skipped: shouldStop was already true');
       return FlowTransition.COMPLETE;
     }
 

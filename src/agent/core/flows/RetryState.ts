@@ -110,15 +110,10 @@ export function createRetryState(): RetryState {
 }
 
 /**
- * Resets retry state for a fresh operation.
- */
-export function resetRetryState(state: RetryState): void {
-  state.lastError = undefined;
-}
-
-/**
- * Clears error state after successful operation.
- * Call this after a successful invocation to reset for next operation.
+ * Clears error state. Used for:
+ * - After successful invocation (to reset for next operation)
+ * - After manual retry triggered (to start fresh)
+ * - After user cancellation (to distinguish from error failure)
  */
 export function clearRetryError(state: RetryState): void {
   state.lastError = undefined;
@@ -207,5 +202,13 @@ export function applyFallbackResult(
         },
       );
       return FlowTransition.COMPLETE;
+
+    default: {
+      // Exhaustiveness check: ensure all FallbackResult outcomes are handled
+      const _exhaustive: never = result;
+      throw new Error(
+        `Unhandled fallback outcome: ${(_exhaustive as FallbackResult).outcome}`,
+      );
+    }
   }
 }
