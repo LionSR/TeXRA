@@ -1566,7 +1566,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (!hasEndTag(agentSetting, newResponse)) {
         return true;
       } else {
-        this.logger.debug('Should not continue - end tag found');
+        this.logger.debug('Response complete (end tag found)');
         return false;
       }
     }
