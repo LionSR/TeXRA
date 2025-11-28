@@ -40,3 +40,8 @@ export const LABELS = {
     'No remote agents available. Contact support@texra.ai for assistance.',
   NOT_AUTHENTICATED_MESSAGE: 'You are not signed in to TeXRA.',
 };
+
+// Default values
+export const DEFAULTS = {
+  AGENT_TYPE: 'CoT',
+};
