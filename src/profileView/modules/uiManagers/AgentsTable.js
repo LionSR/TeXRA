@@ -124,6 +124,7 @@ export class AgentsTable {
     thead.innerHTML = `
       <tr>
         <th>Agent</th>
+        <th>Type</th>
         <th>Description</th>
         <th>Visibility</th>
         <th>Tags</th>
@@ -167,6 +168,14 @@ export class AgentsTable {
     // Set agent name
     const agentName = row.querySelector('.agent-name');
     if (agentName) agentName.textContent = agent.name;
+
+    // Set agent type badge
+    const typeBadge = row.querySelector('.type-badge');
+    if (typeBadge) {
+      const typeValue = agent.agentType || 'CoT';
+      typeBadge.textContent = typeValue;
+      typeBadge.classList.add(`type-${typeValue.toLowerCase()}`);
+    }
 
     // Set description
     const description = row.querySelector('.agent-description');
