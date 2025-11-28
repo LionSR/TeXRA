@@ -2,11 +2,13 @@
 import { z } from 'zod';
 
 // Local imports - response usage types
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type {
+  NormalizedUsage,
+  UsageProvider,
+} from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
   type RunUsageAccumulatorJSON,
-  type UsageProvider,
   type UsageSummary,
   type NativeUsagePayload,
 } from './RunUsageAccumulator';
