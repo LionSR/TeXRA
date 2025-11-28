@@ -3,10 +3,10 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { normalizeRunId } from '@common/constants/runIds';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';
