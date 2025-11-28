@@ -8,13 +8,13 @@ import {
   OutputFileInfoListSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
+import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { normalizeRunId } from '@common/constants/runIds';
 
 // Local imports
 
