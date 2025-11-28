@@ -1,6 +1,6 @@
 /* global document, console */
 // Local imports - profile view
-import { ELEMENT_IDS, LABELS, CLASS_NAMES } from '../constants.js';
+import { ELEMENT_IDS, LABELS, CLASS_NAMES, DEFAULTS } from '../constants.js';
 import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands.js';
 import { vscode } from '@common/webviewContext.js';
 import { safeGetElementById } from '@common/domUtils.js';
@@ -172,9 +172,7 @@ export class AgentsTable {
     // Set agent type badge
     const typeBadge = row.querySelector('.type-badge');
     if (typeBadge) {
-      const typeValue = agent.agentType || 'CoT';
-      typeBadge.textContent = typeValue;
-      typeBadge.classList.add(`type-${typeValue.toLowerCase()}`);
+      typeBadge.textContent = agent.agentType || DEFAULTS.AGENT_TYPE;
     }
 
     // Set description

@@ -169,20 +169,7 @@ h2 {
   border-radius: var(--border-radius-small);
   font-size: var(--font-size-sm);
   font-weight: 500;
-}
-
-.type-badge.type-cot {
   background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-}
-
-.type-badge.type-direct {
-  background: var(--vscode-testing-iconPassed);
-  color: var(--vscode-badge-foreground);
-}
-
-.type-badge.type-tooluse {
-  background: var(--vscode-charts-purple);
   color: var(--vscode-badge-foreground);
 }
 
