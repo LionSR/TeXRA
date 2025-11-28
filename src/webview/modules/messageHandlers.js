@@ -43,7 +43,6 @@ import {
 import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
-  getCodiconClass,
   getAgentTypeDecorator,
 } from '@common/iconConstants.js';
 
@@ -248,20 +247,20 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._readAgentOptionMetadata(opt);
 
     const hints = [];
-    const prefixIcons = [];
-    const suffixIcons = [];
+    let displayLabel = label;
 
-    // Add agent type icon (CoT, direct, toolUse)
+    // Add agent type indicator (CoT, direct, toolUse)
+    // Uses unicode since vscode-option only supports text content
     if (agentType) {
       const decorator = getAgentTypeDecorator(agentType);
-      prefixIcons.push(this._createCodiconHtml(decorator.icon));
+      displayLabel = `${decorator.unicode} ${displayLabel}`;
       hints.push(`Type: ${decorator.label}`);
     }
 
     // Add cloud icon for remote agents (using shared config)
     if (isRemote) {
-      const { icon, hint } = AGENT_DECORATORS.properties.remote;
-      prefixIcons.push(this._createCodiconHtml(icon));
+      const { unicode, hint } = AGENT_DECORATORS.properties.remote;
+      displayLabel = `${unicode} ${displayLabel}`;
       hints.push(hint);
     }
 
@@ -270,10 +269,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(description);
     }
 
-    // Add multiple outputs icon (using shared config)
+    // Add multiple outputs indicator (using shared config)
     if (isMultiple) {
-      const { icon, hint } = AGENT_DECORATORS.properties.multipleOutputs;
-      suffixIcons.push(this._createCodiconHtml(icon));
+      const { unicode, hint } = AGENT_DECORATORS.properties.multipleOutputs;
+      displayLabel = `${displayLabel} ${unicode}`;
       hints.push(hint);
       opt.style.opacity = '0.9';
     } else {
@@ -284,11 +283,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push('Uses tools for actions.');
     }
 
-    // Build display with codicons
-    const escapedLabel = this._escapeHtml(label);
-    const prefix = prefixIcons.length > 0 ? prefixIcons.join('') + ' ' : '';
-    const suffix = suffixIcons.length > 0 ? ' ' + suffixIcons.join('') : '';
-    opt.innerHTML = `${prefix}${escapedLabel}${suffix}`;
+    // Set text content (vscode-option doesn't support HTML)
+    opt.textContent = displayLabel;
 
     if (hints.length > 0) {
       opt.title = hints.join('\n');
@@ -299,26 +295,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       opt.setAttribute('aria-label', label);
       opt.removeAttribute('aria-description');
     }
-  }
-
-  /**
-   * Create a codicon HTML string for inline use.
-   * @param {string} iconName - Icon name (e.g., 'cloud', 'files')
-   * @returns {string} HTML string for the codicon
-   */
-  _createCodiconHtml(iconName) {
-    return `<i class="${getCodiconClass(iconName)}"></i>`;
-  }
-
-  /**
-   * Escape HTML special characters in a string.
-   * @param {string} text - Text to escape
-   * @returns {string} Escaped text
-   */
-  _escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   _readAgentOptionMetadata(opt) {
