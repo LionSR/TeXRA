@@ -6,6 +6,7 @@ import { toolResult, type ToolFileAttachment } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
+import { EXTRACT_TIKZ_MAX_FILES } from '@common/constants';
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import {
   buildLimitedAttachments,
@@ -24,8 +25,6 @@ const ExtractTikzInputSchema = z.strictObject({
 });
 
 export type ExtractTikzInput = z.infer<typeof ExtractTikzInputSchema>;
-
-const DEFAULT_TIKZ_MAX_FILES = 12;
 
 export class ExtractTikzFiguresTool extends defineTool({
   name: 'extract_tikz_figures',
@@ -77,7 +76,7 @@ export class ExtractTikzFiguresTool extends defineTool({
           limitedPaths,
           limitReached,
         } = await buildLimitedAttachments(compiledPathStrings, {
-          limit: DEFAULT_TIKZ_MAX_FILES,
+          limit: EXTRACT_TIKZ_MAX_FILES,
           describe: () => `Standalone TikZ figure derived from ${display}`,
           mimeType: 'application/pdf',
         });

@@ -6,6 +6,7 @@ import { ToolError, toolResult } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { WorkspaceFS } from '@utils/files';
+import { EXTRACT_BIBLIOGRAPHY_MAX_ENTRIES } from '@common/constants';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,
@@ -29,8 +30,6 @@ const ExtractBibliographyInputSchema = z.strictObject({
 export type ExtractBibliographyInput = z.infer<
   typeof ExtractBibliographyInputSchema
 >;
-
-const DEFAULT_MAX_ENTRIES = 25;
 
 export class ExtractBibliographyTool extends defineTool({
   name: 'extract_bib_entries',
@@ -97,7 +96,7 @@ export class ExtractBibliographyTool extends defineTool({
 
     const entryLines = summarizeBibliographyEntries(
       entries,
-      DEFAULT_MAX_ENTRIES,
+      EXTRACT_BIBLIOGRAPHY_MAX_ENTRIES,
     );
     const output = formatToolOutput(
       `BibTeX entries cited in ${display}`,
@@ -139,8 +138,10 @@ export class ExtractBibliographyTool extends defineTool({
           .join(', ')}.`,
       );
     }
-    if (entries.size > DEFAULT_MAX_ENTRIES) {
-      instructions.push(`Limited output to ${DEFAULT_MAX_ENTRIES} entries.`);
+    if (entries.size > EXTRACT_BIBLIOGRAPHY_MAX_ENTRIES) {
+      instructions.push(
+        `Limited output to ${EXTRACT_BIBLIOGRAPHY_MAX_ENTRIES} entries.`,
+      );
     }
 
     if (instructions.length > 0) {

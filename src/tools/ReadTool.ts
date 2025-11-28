@@ -9,11 +9,13 @@ import { ToolResult, toolResult } from '@tools/result';
 import { buildFileAttachment } from '@tools/utils';
 import { recordToolFileRead } from '@tools/fileInteractions';
 import { WorkspaceFS, getMimeType } from '@utils/files';
+import { READ_FILE_MAX_LINES } from '@common/constants';
 
 // Local file imports
 import { defineTool } from './core/define';
 
-export const READ_FILE_MAX_LINES = 2000;
+// Re-export for backward compatibility
+export { READ_FILE_MAX_LINES };
 
 const ReadInputSchema = z.strictObject({
   path: z.string(),

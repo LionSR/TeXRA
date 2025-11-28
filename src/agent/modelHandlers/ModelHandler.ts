@@ -18,6 +18,11 @@ import {
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
+import {
+  DEFAULT_CONTINUE_LIMIT,
+  DEFAULT_INPUT_TOKEN_LIMIT,
+  DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR,
+} from '@common/constants';
 import { getConfig } from '@utils/config';
 
 // Local file imports
@@ -40,13 +45,6 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
-
-// Default continuation limits
-const DEFAULT_CONTINUE_LIMIT = 10;
-
-// Default token limits
-const DEFAULT_INPUT_TOKEN_LIMIT = 1500000;
-const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
 /** Flags for token-based stop conditions. */
 interface TokenFlags {

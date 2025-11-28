@@ -6,6 +6,7 @@ import { toolResult } from '@tools/result';
 import { formatToolOutput, resolveAndFormat } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
+import { EXTRACT_FIGURES_MAX_FILES } from '@common/constants';
 import { extractFigurePathsFromLatex } from '@latex/extractFigure';
 import {
   buildLimitedAttachments,
@@ -20,8 +21,6 @@ const ExtractFiguresInputSchema = z.strictObject({
 });
 
 export type ExtractFiguresInput = z.infer<typeof ExtractFiguresInputSchema>;
-
-const DEFAULT_MAX_FILES = 20;
 
 export class ExtractLatexFiguresTool extends defineTool({
   name: 'extract_figures',
@@ -47,7 +46,7 @@ export class ExtractLatexFiguresTool extends defineTool({
 
     const { attachments, limitedPaths, limitReached } =
       await buildLimitedAttachments(uniqueFigures, {
-        limit: DEFAULT_MAX_FILES,
+        limit: EXTRACT_FIGURES_MAX_FILES,
         describe: () => `Figure referenced by ${display}`,
       });
 

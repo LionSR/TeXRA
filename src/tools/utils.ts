@@ -6,6 +6,7 @@ import { Minimatch } from 'minimatch';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
+import { DEFAULT_ATTACHMENT_MAX_BYTES } from '@common/constants';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 import { toPosixPath } from '@tools/pathUtils';
 import { WorkspaceFS, getMimeType } from '@utils/files';
@@ -144,8 +145,6 @@ export interface BuildFileAttachmentOptions {
   /** Maximum allowed file size in bytes */
   maxBytes?: number;
 }
-
-const DEFAULT_ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024; // 15 MiB
 
 /**
  * Build a tool attachment by reading a workspace file and packaging metadata.

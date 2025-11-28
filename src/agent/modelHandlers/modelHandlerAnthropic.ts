@@ -5,13 +5,17 @@ import { basename } from 'node:path';
 // Third-party imports
 import { Anthropic, toFile } from '@anthropic-ai/sdk';
 
-/** Supported image media types from SDK's Base64ImageSource definition */
-const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
+// Local imports - constants
+import {
+  SUPPORTED_IMAGE_MEDIA_TYPES,
+  ANTHROPIC_CONTEXT_1M_BETA,
+  ANTHROPIC_FILES_API_BETA,
+  ANTHROPIC_SONNET_37_OUTPUT_BETA,
+  ANTHROPIC_INTERLEAVED_THINKING_BETA,
+  ANTHROPIC_CONTEXT_MANAGEMENT_BETA,
+  ANTHROPIC_1M_CONTEXT_WINDOW,
+  ANTHROPIC_MAX_CACHE_CONTROLLED_BLOCKS,
+} from '@common/constants';
 
 const isSupportedImageMediaType = (
   mediaType: string,
@@ -169,15 +173,6 @@ const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
 
-const CONTEXT_1M_BETA: AnthropicBeta = 'context-1m-2025-08-07';
-const FILES_API_BETA: AnthropicBeta = 'files-api-2025-04-14';
-const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
-const INTERLEAVED_THINKING_BETA: AnthropicBeta =
-  'interleaved-thinking-2025-05-14';
-const CONTEXT_MANAGEMENT_BETA: AnthropicBeta = 'context-management-2025-06-27';
-
-const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
-
 /**
  * Block types that support cache_control for prompt caching.
  * Uses SDK's ContentBlockParam with Extract to get text and tool_result types.
@@ -190,8 +185,6 @@ type CacheControlEligibleBlock = Extract<
 const EPHEMERAL_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
 };
-
-const MAX_CACHE_CONTROLLED_BLOCKS = 4;
 
 const isCacheControlEligibleBlock = (
   block: ContentBlockParam | ContentBlock | undefined,
@@ -353,7 +346,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       if (this.config.capabilities.supportsInterleavedThinking) {
-        this.appendBeta(options, INTERLEAVED_THINKING_BETA);
+        this.appendBeta(options, ANTHROPIC_INTERLEAVED_THINKING_BETA);
       }
     }
 
@@ -397,7 +390,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
       const sonnetBetas = this.getMutableBetas(options);
       sonnetBetas.length = 0;
-      sonnetBetas.push(SONNET_37_OUTPUT_BETA);
+      sonnetBetas.push(ANTHROPIC_SONNET_37_OUTPUT_BETA);
       // Update max tokens to use the higher limit when streaming
       options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
       // The thinking configuration is now handled above for all reasoning models
@@ -405,7 +398,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Opt-in beta for 1M context window on Claude Sonnet 4 family
     if (isAnthropic1MBetaActive) {
-      this.appendBeta(options, CONTEXT_1M_BETA);
+      this.appendBeta(options, ANTHROPIC_CONTEXT_1M_BETA);
     }
 
     if (this.capabilities.supportsTokenCounting) {
@@ -430,7 +423,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Strip betas that only apply to message creation (e.g., output length)
         // while keeping context headers needed for accurate token counting.
         const countTokenBetas = options.betas?.filter(
-          (beta) => beta === CONTEXT_1M_BETA,
+          (beta) => beta === ANTHROPIC_CONTEXT_1M_BETA,
         );
         if (countTokenBetas && countTokenBetas.length > 0) {
           countTokensParams.betas = countTokenBetas;
@@ -496,11 +489,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (hasFileReference) {
-      this.appendBeta(options, FILES_API_BETA);
+      this.appendBeta(options, ANTHROPIC_FILES_API_BETA);
     }
 
     if (this.agentType === AgentType.ToolUse) {
-      this.appendBeta(options, CONTEXT_MANAGEMENT_BETA);
+      this.appendBeta(options, ANTHROPIC_CONTEXT_MANAGEMENT_BETA);
 
       const contextManagementEdits = [
         ...(options.context_management?.edits ?? []),
@@ -639,12 +632,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
     }
 
-    if (cacheControlledBlocks.length <= MAX_CACHE_CONTROLLED_BLOCKS) {
+    if (cacheControlledBlocks.length <= ANTHROPIC_MAX_CACHE_CONTROLLED_BLOCKS) {
       this.cacheControlledBlock = cacheControlledBlocks.at(-1);
       return;
     }
 
-    const excess = cacheControlledBlocks.length - MAX_CACHE_CONTROLLED_BLOCKS;
+    const excess = cacheControlledBlocks.length - ANTHROPIC_MAX_CACHE_CONTROLLED_BLOCKS;
     for (let idx = 0; idx < excess; idx += 1) {
       const block = cacheControlledBlocks[idx];
       delete block.cache_control;
@@ -719,7 +712,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 file: await toFile(buffer!, sanitizedFilename, {
                   type: mediaType,
                 }),
-                betas: [FILES_API_BETA],
+                betas: [ANTHROPIC_FILES_API_BETA],
               }),
           );
 
@@ -838,7 +831,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           async () =>
             client.beta.files.upload({
               file: await toFile(buffer!, filename, { type: mimeType }),
-              betas: [FILES_API_BETA],
+              betas: [ANTHROPIC_FILES_API_BETA],
             }),
         );
 

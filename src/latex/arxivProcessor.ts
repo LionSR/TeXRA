@@ -9,6 +9,7 @@ import * as tar from 'tar';
 
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
+import { HTTP_TIMEOUT_ARXIV_MS } from '@common/constants';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
@@ -48,7 +49,7 @@ export class ArxivSourceProcessor {
   public async downloadFile(
     url: string,
     destBasePath: string,
-    timeout = 30000,
+    timeout = HTTP_TIMEOUT_ARXIV_MS,
   ): Promise<string> {
     let destPath = destBasePath;
     try {
@@ -203,7 +204,7 @@ export class ArxivSourceProcessor {
       const extractResult = await this.extractTarFile(
         downloadedPath,
         paperDirFull,
-        { timeout: 30000 },
+        { timeout: HTTP_TIMEOUT_ARXIV_MS },
       );
 
       if (!extractResult.success) {
