@@ -1,14 +1,15 @@
 // Third-party imports
 import OpenAI from 'openai';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
-// Internal imports
-import { K_SLICE } from '@utils/config';
-
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import {
+  ModelHandlerOpenAI,
+  extractReasoningDelta,
+} from './modelHandlerOpenAI';
 import { toOpenAITools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import type { CreateResponseOptions } from './types/IModelHandler';
@@ -78,8 +79,7 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
         ? this.createOutputStream()
         : undefined;
       for await (const chunk of stream) {
-        const reasoningDelta =
-          (chunk.choices[0]?.delta as any)?.reasoning_content ?? '';
+        const reasoningDelta = extractReasoningDelta(chunk);
         const contentDelta = chunk.choices[0]?.delta?.content ?? '';
         if (reasoningDelta) thinking.append(reasoningDelta);
         if (contentDelta) output?.append(contentDelta);
@@ -87,7 +87,18 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
 
       // Note that there is no second consumption problem
       // But i am not sure about openrouter's stream api, whether it works for every model.
-      const response = await stream.finalChatCompletion();
+      let response = await stream.finalChatCompletion();
+
+      // Ensure usage is captured - use SDK's totalUsage() as fallback
+      if (!response.usage) {
+        try {
+          const totalUsage = await stream.totalUsage();
+          response = { ...response, usage: totalUsage };
+        } catch {
+          // totalUsage() may fail if stream ended abnormally
+        }
+      }
+
       const finalReasoning = this.processThinkingBlock(response);
       thinking.finalize(finalReasoning ?? undefined);
       const finalOutput = response.choices?.[0]?.message?.content ?? '';
@@ -106,42 +117,23 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     }
   }
 
-  // Implementation for processing thinking blocks in OpenRouter responses
-  processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
+  /**
+   * OpenRouter uses 'reasoning' field instead of 'reasoning_content'.
+   * Also handles object values by converting to JSON.
+   */
+  protected override extractReasoningFromMessage(
+    message: Record<string, unknown> | undefined,
   ): string | null {
-    if (!responseObject) {
+    const reasoning = message?.reasoning;
+    if (!reasoning) {
       return null;
     }
-
-    // According to OpenRouter docs, reasoning is available at choices[0].message.reasoning
-    if (
-      responseObject.choices &&
-      responseObject.choices.length > 0 &&
-      responseObject.choices[0].message &&
-      responseObject.choices[0].message.reasoning
-    ) {
-      const reasoning = responseObject.choices[0].message.reasoning;
-      this.logger.debug(`OpenRouter reasoning found`);
-
-      // Log preview of reasoning content
-      if (typeof reasoning === 'string') {
-        this.logger.debug(
-          `Reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
-        );
-        return reasoning;
-      } else {
-        // If reasoning is an object, convert to string
-        const reasoningStr = JSON.stringify(reasoning);
-        this.logger.debug(
-          `Reasoning preview: ${reasoningStr.substring(0, K_SLICE)}...`,
-        );
-        return reasoningStr;
-      }
+    if (typeof reasoning === 'string' && reasoning.trim()) {
+      return reasoning;
     }
-
-    return null;
+    // If reasoning is an object, convert to string
+    const reasoningStr = JSON.stringify(reasoning);
+    return reasoningStr.trim() || null;
   }
 }
 
@@ -157,10 +149,13 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   ): void {
     const lastMessage = messages.at(-1);
     // although OpenAI models do not support assistant prefill, some models (such as Anthropic/DeepSeek perhaps?) via OpenRouter might do
-    if (lastMessage.role === 'assistant') {
+    if (isAssistantMessage(lastMessage)) {
       if (Array.isArray(lastMessage.content)) {
         // is this correct? it looks like we should attach previous response too.
-        lastMessage.content.at(-1).text = bestConnector + newResponse;
+        const lastPart = lastMessage.content.at(-1);
+        if (lastPart && 'text' in lastPart) {
+          lastPart.text = bestConnector + newResponse;
+        }
       } else if (typeof lastMessage.content === 'string') {
         lastMessage.content = [
           {
@@ -175,12 +170,12 @@ export class ModelHandlerAnthropicViaOpenRouter extends ModelHandlerOpenRouter {
   /** Updates message content for models with prefill support. */
   updateMessageContentWithoutPrefill(
     messages: any[],
-    bestConnector: string,
-    newResponse: string,
+    _bestConnector: string,
+    _newResponse: string,
     workspaceState: AgentWorkspaceState,
   ): void {
     const lastMessage = messages.at(-1);
-    if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       messages.push({
         role: 'assistant',
         content: [

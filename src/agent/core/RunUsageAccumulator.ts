@@ -2,15 +2,11 @@
 import type {
   AnthropicAPIResponseUsage,
   OpenAIAPIResponseUsage,
-  ExtendedCompletionUsage,
-  AnthropicUsage,
-  GenerateContentResponseUsageMetadata,
+  NativeUsagePayload,
 } from './ResponseUsage';
 
-export type NativeUsagePayload =
-  | ExtendedCompletionUsage
-  | AnthropicUsage
-  | GenerateContentResponseUsageMetadata;
+// Re-export for backwards compatibility
+export type { NativeUsagePayload };
 
 export type UsageSummary =
   | OpenAIAPIResponseUsage
