@@ -100,7 +100,6 @@ const OPEN_TASK_STORAGE_BUTTON = Object.freeze({
   disabled: true,
 });
 
-
 /** @type {ToolbarButtonDefinition[]} */
 const WORKFLOW_TOOLBAR = [
   STOP_STREAM_BUTTON,
