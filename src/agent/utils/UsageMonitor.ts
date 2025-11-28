@@ -76,8 +76,9 @@ export class UsageMonitor {
         ...(this.modelHandler.capabilities.supportsReasoning && {
           reasoningTokens: totals.totalReasoningTokens,
         }),
-        ...(totals.totalToolUseTokens > 0 && {
-          toolUseTokens: totals.totalToolUseTokens,
+        // Include tool usage if any is present
+        ...(totals.totalToolUsePromptTokens > 0 && {
+          toolUseTokens: totals.totalToolUsePromptTokens,
         }),
       };
 
