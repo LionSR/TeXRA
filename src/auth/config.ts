@@ -34,15 +34,18 @@ export interface SupabaseConfig {
 
 export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
 
+/** Custom domain for Supabase (remote agent access) */
+export const SUPABASE_CUSTOM_DOMAIN = 'remote.texra.ai';
+
 export const SUPABASE_CONFIG: SupabaseConfig = {
-  // Production Supabase project URL
-  url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
+  // Production Supabase URL via custom domain
+  url: `https://${SUPABASE_CUSTOM_DOMAIN}`,
 
   // Production public key - safe to include in client code
   publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
 
-  // Edge function URL
-  edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
+  // Edge function URL via custom domain
+  edgeFunctionUrl: `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/get-agent-config`,
 };
 
 /**
