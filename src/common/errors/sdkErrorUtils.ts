@@ -44,6 +44,8 @@ export interface ProviderHttpErrorDetails {
   statusText?: string;
   /** Identifier for the provider that produced the error, when known. */
   provider?: string;
+  /** Request ID from the provider, useful for debugging with support. */
+  requestId?: string;
 }
 
 const STATUS_TITLES: Record<number, string> = {
@@ -219,6 +221,7 @@ function matchNativeHttpError(
 
   const statusCode = detectStatusCode(err) ?? entry.fallbackStatusCode;
   const statusText = detectStatusText(err, statusCode);
+  const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
     ? STATUS_DESCRIPTIONS[statusCode]
     : undefined;
@@ -229,6 +232,7 @@ function matchNativeHttpError(
     return {
       message: finalMessage,
       provider: entry.provider,
+      requestId,
     };
   }
 
@@ -238,6 +242,7 @@ function matchNativeHttpError(
     statusCode,
     statusText,
     provider: entry.provider,
+    requestId,
   };
 }
 
@@ -327,6 +332,42 @@ function detectProvider(err: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extracts request ID from SDK errors for debugging with provider support.
+ * OpenAI uses 'request_id', Anthropic uses 'request_id' in headers.
+ */
+function detectRequestId(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') {
+    return undefined;
+  }
+
+  const candidate = err as {
+    request_id?: string;
+    requestId?: string;
+    headers?: { get?: (key: string) => string | null };
+  };
+
+  // OpenAI SDK: request_id property
+  if (typeof candidate.request_id === 'string' && candidate.request_id) {
+    return candidate.request_id;
+  }
+
+  // Alternative casing
+  if (typeof candidate.requestId === 'string' && candidate.requestId) {
+    return candidate.requestId;
+  }
+
+  // Try headers (x-request-id is common)
+  if (candidate.headers?.get) {
+    const headerRequestId = candidate.headers.get('x-request-id');
+    if (headerRequestId) {
+      return headerRequestId;
+    }
+  }
+
+  return undefined;
+}
+
 function extractMessage(err: unknown): string | undefined {
   if (err instanceof Error && typeof err.message === 'string') {
     const trimmed = err.message.trim();
@@ -354,7 +395,9 @@ export function formatProviderHttpError(
 ): ProviderHttpErrorDetails {
   const nativeMessage = matchNativeMessageError(err);
   if (nativeMessage) {
-    return nativeMessage;
+    // Add requestId even for message-only errors
+    const requestId = detectRequestId(err);
+    return requestId ? { ...nativeMessage, requestId } : nativeMessage;
   }
 
   const nativeHttp = matchNativeHttpError(err);
@@ -365,6 +408,7 @@ export function formatProviderHttpError(
   const statusCode = detectStatusCode(err);
   const statusText = detectStatusText(err, statusCode);
   const provider = detectProvider(err);
+  const requestId = detectRequestId(err);
 
   const fallbackMessage = statusCode
     ? STATUS_DESCRIPTIONS[statusCode]
@@ -376,6 +420,7 @@ export function formatProviderHttpError(
     return {
       message: finalMessage,
       provider,
+      requestId,
     };
   }
 
@@ -385,6 +430,7 @@ export function formatProviderHttpError(
     statusCode,
     statusText,
     provider,
+    requestId,
   };
 }
 
