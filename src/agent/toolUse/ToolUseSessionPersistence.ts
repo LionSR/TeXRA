@@ -22,9 +22,9 @@ import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Local imports - logging
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { STATUS } from '@common/constants/streamStatus';
 import { logErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import { STATUS } from '@common/constants/streamStatus';
 import { getToolUsePersistenceEnabled } from '@utils/config';
 
 // Local imports - persistence helpers

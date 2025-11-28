@@ -15,12 +15,12 @@ import {
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
+import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
-import { normalizeRunId } from '@common/constants/runIds';
 import {
   replaceInputCommands,
   createFileMapping,

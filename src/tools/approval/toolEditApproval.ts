@@ -91,9 +91,8 @@ async function notifyProgressViewApprovalBypassState(): Promise<void> {
     return;
   }
   try {
-    const { ProgressViewProvider } = await import(
-      '@progressView/ProgressViewProvider'
-    );
+    const { ProgressViewProvider } =
+      await import('@progressView/ProgressViewProvider');
     ProgressViewProvider.getInstance()?.updateToolEditApprovalBypassState(
       approvalsBypassedForSession,
     );
@@ -200,9 +199,8 @@ async function showProgressViewApprovalPrompt(
   await safeExecuteCommand('texra.showProgressView');
 
   try {
-    const { ProgressViewProvider } = await import(
-      '@progressView/ProgressViewProvider'
-    );
+    const { ProgressViewProvider } =
+      await import('@progressView/ProgressViewProvider');
     const provider = ProgressViewProvider.getInstance();
     provider?.showToolEditApprovalPrompt({
       requestId,
@@ -223,9 +221,8 @@ async function resolveProgressViewApprovalPrompt(
   requestId: string,
 ): Promise<void> {
   try {
-    const { ProgressViewProvider } = await import(
-      '@progressView/ProgressViewProvider'
-    );
+    const { ProgressViewProvider } =
+      await import('@progressView/ProgressViewProvider');
     ProgressViewProvider.getInstance()?.resolveToolEditApprovalPrompt(
       requestId,
     );
