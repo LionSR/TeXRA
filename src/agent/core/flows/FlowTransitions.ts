@@ -15,8 +15,8 @@ export const FlowTransition = {
   SKIP: 'skip',
   /** Execute the next actionable node immediately. */
   EXECUTE: 'execute',
-  /** Retry the current operation after backoff delay. */
-  RETRY: 'retry',
+  /** Loop back to invocation node after user triggers manual retry. */
+  MANUAL_RETRY: 'manual_retry',
   /** Pause flow and await manual retry trigger from user. */
   AWAIT_RETRY: 'await_retry',
 } as const;
