@@ -57,9 +57,6 @@ import {
 } from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
-// Type imports
-import type { ToolDefinition } from '@model';
-
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
 import replacementEngine from '@replacement/engine';
@@ -70,7 +67,7 @@ import type { FileLocation } from '@utils/files';
 
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
-import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
 import xmlUtils from '@utils/text/xmlUtils';
 
@@ -143,7 +140,7 @@ const isBetaRedactedThinkingBlock = (
 ): block is BetaRedactedThinkingBlock => block.type === 'redacted_thinking';
 
 /** Type guard for any thinking-related content block in Beta API responses */
-const isAnyBetaThinkingBlock = (
+const _isAnyBetaThinkingBlock = (
   block: BetaContentBlock,
 ): block is BetaThinkingContent =>
   isBetaThinkingBlock(block) || isBetaRedactedThinkingBlock(block);
@@ -886,7 +883,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     userPrefix: string,
     userRequest: string,
     mediaFiles?: string[],
-    systemPrompt?: string,
+    _systemPrompt?: string,
   ): Promise<MessageParam[]> {
     const trimmedPrefix = userPrefix.trim();
     const trimmedRequest = userRequest.trim();

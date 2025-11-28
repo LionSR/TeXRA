@@ -7,10 +7,7 @@
  * - Type exports for snapshot payloads
  */
 
-export {
-  ToolUseSessionManager,
-  ToolUseSnapshotCache,
-} from './ToolUseSnapshotCache';
+export { ToolUseSessionManager } from './ToolUseSnapshotCache';
 
 export type {
   ToolUseSessionSnapshot,

@@ -14,7 +14,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
 
 // Internal imports
-import { STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 
 export class ToolUseSessionLifecycle<C = unknown> {
   private readonly followUps: FollowUpQueue;
@@ -72,7 +72,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
     });
 
     // Always set waiting status regardless of persistence result
-    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.WAITING);
+    StreamStatusService.set(this.agent.getStreamTabId(), STREAM_STATUS.WAITING);
   }
 
   async persistCheckpoint(messages: ProviderMessage[]): Promise<void> {
@@ -93,7 +93,7 @@ export class ToolUseSessionLifecycle<C = unknown> {
   }
 
   async markRunning(): Promise<void> {
-    StreamStatusService.set(this.agent.getStreamTabId(), STATUS.RUNNING);
+    StreamStatusService.set(this.agent.getStreamTabId(), STREAM_STATUS.RUNNING);
   }
 
   async clearPersistedSnapshot(): Promise<void> {

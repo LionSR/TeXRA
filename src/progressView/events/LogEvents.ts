@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { LogMessageUpdate } from '@logger/LogTypes';
 // Type imports
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';

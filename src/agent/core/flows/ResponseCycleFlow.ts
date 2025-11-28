@@ -15,19 +15,15 @@ import {
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
-// Type imports
-import type { DebugObjectType } from '@agent/utils/debugMessageSaver';
 // Internal imports
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { getSystemPromptWithRules } from '@agent/utils/promptHelpers';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 
 // Local imports - logging
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
@@ -35,8 +31,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import type { AgentFileLocation } from '@utils/files';
 import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@utils/config';
-import { AbsoluteFS, TaskRunFileService, flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
+import { AbsoluteFS, flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 import { bestConnectionMethod } from '@latex';
 
@@ -53,7 +48,6 @@ import {
 import { createRetryWaitNode } from './BaseRetryWaitNode';
 import type {
   ResponseCycleOptions,
-  ResponseCycleServices,
   ResponseCycleParams,
 } from './CycleServices';
 
@@ -96,7 +90,7 @@ function resetResponseCycleState(cycle: ResponseCycleRuntimeState): void {
  * - Mutable state: `shared` (this interface)
  * - Immutable services: `_params.services` (ResponseCycleServices)
  */
-export interface ResponseCycleShared<C = unknown> {
+export interface ResponseCycleShared<_C = unknown> {
   /** Runtime state for this cycle */
   state: ResponseCycleState;
   /** Retry state for model invocation errors */
@@ -104,11 +98,6 @@ export interface ResponseCycleShared<C = unknown> {
   /** Callbacks for manual retry control from UI */
   retryCallbacks: RetryCallbacks;
 }
-
-type InvocationNodeResult = SkippableNodeResult<{
-  response: unknown;
-  responseTime?: number;
-}>;
 
 // Each node in the response cycle progressively hydrates the shared cycle
 // object. Mutations performed in `prep`, `exec`, and `post` stages are

@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import {
-  AgentSharedStoreSnapshotSchema,
-  type AgentSharedStoreSnapshot,
-} from '@agent/core/AgentSharedStore';
+import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
 // Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';

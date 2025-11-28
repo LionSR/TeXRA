@@ -12,9 +12,7 @@ import { checkToolInstalled } from '@utils/system';
 import {
   TaskRunFileService,
   flexibleFS,
-  WorkspaceFS,
   type FileLocation,
-  type AgentFileLocation,
 } from '@utils/files';
 
 // Internal imports

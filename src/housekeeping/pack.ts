@@ -1,9 +1,6 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - result types
 import type { FileOpResult } from '@agent/types/ResultTypes';
 
