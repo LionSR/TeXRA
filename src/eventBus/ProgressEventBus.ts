@@ -86,6 +86,13 @@ export interface ProgressEventPayloads {
     usage: TokenUsageStats;
     runId: string;
   };
+  showRetryRequest: {
+    streamId: StreamTabId;
+    operation: string;
+    model?: string;
+    errorMessage?: string;
+  };
+  resolveRetryRequest: { streamId: StreamTabId };
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;
