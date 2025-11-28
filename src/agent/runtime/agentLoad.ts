@@ -146,9 +146,8 @@ export async function loadAgentSettingAndPrompts(
 
     // Handle remote agents
     if (resolution.source === AgentDirectorySource.Remote) {
-      const { RemoteAgentLoader } = await import(
-        '@agent/remote/RemoteAgentLoader'
-      );
+      const { RemoteAgentLoader } =
+        await import('@agent/remote/RemoteAgentLoader');
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
         resolution.resolvedName,
         { preferMultiple: options?.preferMultiple },

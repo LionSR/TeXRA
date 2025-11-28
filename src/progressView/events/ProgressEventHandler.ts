@@ -57,7 +57,10 @@ export class ProgressEventHandler {
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    retryCallbacks: Pick<RetryEventsShared, 'showRetryRequest' | 'resolveRetryRequest'>,
+    retryCallbacks: Pick<
+      RetryEventsShared,
+      'showRetryRequest' | 'resolveRetryRequest'
+    >,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
     this.streamStatusEvents = createStreamStatusEvents({
@@ -115,9 +118,7 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
-    disposables.push(
-      ...this.retryEvents.register(bus, this.state),
-    );
+    disposables.push(...this.retryEvents.register(bus, this.state));
 
     return disposables;
   }

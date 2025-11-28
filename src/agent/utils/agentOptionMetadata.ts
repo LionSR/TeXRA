@@ -112,8 +112,8 @@ export function getAgentOptionMetadata(
   const isMultipleOutput = getMultipleOutputFlag(parsed);
   const hasMultipleSibling = Boolean(
     multipleResolution &&
-      !multipleResolution.usedFallback &&
-      multipleResolution.resolvedName.endsWith(MULTIPLE_SUFFIX),
+    !multipleResolution.usedFallback &&
+    multipleResolution.resolvedName.endsWith(MULTIPLE_SUFFIX),
   );
   return {
     hasDefinition: Boolean(definitionResolution),
