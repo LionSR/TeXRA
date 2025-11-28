@@ -4,7 +4,7 @@ import * as path from 'path';
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
 // Internal imports
-import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
   resetCycleState,
@@ -408,9 +408,8 @@ interface ProcessResult {
   thinkingContent?: string | null;
   useStreaming: boolean;
   responseUsage: any;
-  apiUsage: ReturnType<
-    ResponseCycleOptions['modelHandler']['computeResponseUsage']
-  >;
+  /** Normalized usage - single source of truth */
+  normalizedUsage: NormalizedUsage;
   repetitionDetected: boolean;
 }
 
@@ -503,15 +502,12 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      const apiUsage = options.modelHandler.computeResponseUsage(
+      // Normalize usage once - this is the single source of truth
+      const normalizedUsage = options.modelHandler.normalizeUsage(
         responseUsage,
         state.responseTime ?? 0,
       );
-      store.round.setUsage({
-        summary: apiUsage,
-        nativeUsage: responseUsage,
-        provider: resolveUsageProvider(options.modelHandler),
-      });
+      store.round.setNormalizedUsage(normalizedUsage);
 
       const repetitionResult = checkForMassiveRepetition(
         store.workspace.assembly.lastResponse,
@@ -561,7 +557,7 @@ class ResponseProcessNode<C> extends BaseNode<
           thinkingContent,
           useStreaming,
           responseUsage,
-          apiUsage,
+          normalizedUsage,
           repetitionDetected: repetitionResult.massiveRepetitionDetected,
         },
       };
@@ -640,15 +636,11 @@ class ResponseProcessNode<C> extends BaseNode<
       messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
 
-    if (result.apiUsage) {
-      store.round.setUsage({
-        summary: result.apiUsage,
-        nativeUsage: result.responseUsage,
-        provider: resolveUsageProvider(options.modelHandler),
-      });
+    if (result.normalizedUsage) {
+      store.round.setNormalizedUsage(result.normalizedUsage);
 
       options.logger.debug(
-        `API usage summary: ${JSON.stringify(result.apiUsage)}`,
+        `Normalized usage: ${JSON.stringify(result.normalizedUsage)}`,
       );
     }
 
