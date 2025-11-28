@@ -33,11 +33,7 @@ import {
 } from './RetryEvents';
 
 // Local imports - events
-import type {
-  StatusType,
-  StreamStatusOrReadyType,
-  StreamStatusType,
-} from './types';
+import type { StreamStatusOrReadyType, StreamStatusType } from './types';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
