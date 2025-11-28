@@ -26,10 +26,10 @@ import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
 // Internal imports
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { COMMANDS, STATUS } from '@progressView/modules/constants.js';
+import { COMMANDS, STREAM_STATUS } from '@progressView/modules/constants.js';
 
 // Type aliases for status values
-type StatusType = (typeof STATUS)[keyof typeof STATUS];
+type StatusType = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
 
 /**
  * Manages webview updates for the progress view.
