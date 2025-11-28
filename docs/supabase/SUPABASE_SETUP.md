@@ -82,7 +82,7 @@ Both the publishable and anon keys are designed to be embedded in client-side co
 
 1. Go to **Settings** → **API Keys** in Supabase dashboard
 2. Create a new publishable key
-3. Replace the `anonKey` value in `src/auth/config.ts` with your publishable key
+3. Replace the `publicKey` value in `src/auth/config.ts` with your publishable key
 4. Build and test the extension
 5. (Optional) Deactivate the old anon key once migration is complete
 
@@ -491,7 +491,7 @@ Edit `src/auth/config.ts`:
 ```typescript
 export const SUPABASE_CONFIG: SupabaseConfig = {
   url: 'https://your-actual-project-id.supabase.co', // Replace with your project URL
-  anonKey: 'your-actual-anon-key-here', // Replace with your anon/publishable key
+  publicKey: 'sb_publishable_...', // Replace with your publishable key (or anon JWT)
   edgeFunctionUrl:
     'https://your-actual-project-id.supabase.co/functions/v1/get-agent-config',
 };

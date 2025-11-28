@@ -11,7 +11,7 @@ import * as logger from '@logger/logUtils';
  */
 export class SupabaseClient {
   private static instance: Client | null = null;
-  private static config: { url: string; anonKey: string } | null = null;
+  private static config: { url: string; publicKey: string } | null = null;
   private static context: vscode.ExtensionContext | null = null;
   private static readonly SESSION_KEY = 'texra.supabase.session';
 
@@ -20,19 +20,19 @@ export class SupabaseClient {
    */
   static initialize(
     url: string,
-    anonKey: string,
+    publicKey: string,
     context?: vscode.ExtensionContext,
   ): void {
-    if (!url || !anonKey) {
+    if (!url || !publicKey) {
       throw new Error(
         'Supabase credentials missing. Check extension configuration.',
       );
     }
-    this.config = { url, anonKey };
+    this.config = { url, publicKey };
     if (context) {
       this.context = context;
     }
-    this.instance = createClient(url, anonKey, {
+    this.instance = createClient(url, publicKey, {
       auth: {
         persistSession: false, // VS Code manages session storage
         autoRefreshToken: false, // Manual refresh via auth provider
@@ -179,7 +179,7 @@ export class SupabaseClient {
   }
 
   /** Get configuration for re-initialization. */
-  static getConfig(): { url: string; anonKey: string } | null {
+  static getConfig(): { url: string; publicKey: string } | null {
     return this.config;
   }
 }
