@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Type imports
 import type {
@@ -52,6 +53,10 @@ import type {
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   protected override get toolCallProvider(): string {
+    return 'deepseek';
+  }
+
+  protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'deepseek';
   }
 

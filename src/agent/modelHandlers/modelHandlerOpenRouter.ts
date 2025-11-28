@@ -4,6 +4,7 @@ import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Local file imports
 import {
@@ -22,6 +23,10 @@ import type {
  * Handler for models accessed through OpenRouter.
  */
 export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
+  protected override get usageProvider(): NormalizedUsage['provider'] {
+    return 'openrouter';
+  }
+
   /** Creates a response using OpenRouter's API with model-specific configuration. */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,

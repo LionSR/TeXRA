@@ -1,21 +1,23 @@
 // Local imports - agent
 import type { IModelHandler } from '@agent/modelHandlers';
 
-// Local imports - common
-
 // Internal imports
 import { AgentRunState } from '@agent/core/AgentState';
+
 // Type imports
 import type {
   TokenUsageStats,
   ExtendedTokenUsageStats,
 } from '@agent/types/UsageTypes';
+
 // Internal imports
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 
 /**
  * Handles recording usage statistics to the log and progress view.
+ *
+ * Cost is computed once during normalization and stored in the accumulator.
+ * This class simply reads the pre-computed totals - no cost recomputation needed.
  */
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
@@ -34,24 +36,9 @@ export class UsageMonitor {
 
     try {
       const totals = stateGlobal.usageAccumulator.getTotals();
-      const nativeSnapshots =
-        stateGlobal.usageAccumulator.getNativeUsageSnapshots();
 
-      const cost = nativeSnapshots.reduce((runningTotal, snapshot) => {
-        try {
-          return (
-            runningTotal +
-            this.modelHandler.computePrice(snapshot.payload as any)
-          );
-        } catch (error) {
-          logger.debug(
-            `Failed to compute ${runKind} cost for round ${snapshot.round}: ${toErrorMessage(
-              error,
-            )}`,
-          );
-          return runningTotal;
-        }
-      }, 0);
+      // Cost is already computed and stored in totals - no need to recompute!
+      const cost = totals.totalCost;
 
       const cachingStats =
         this.modelHandler.capabilities.supportsPromptCaching ||
@@ -97,7 +84,7 @@ export class UsageMonitor {
       const runId = this.context.executionId ?? this.context.streamId;
       usageReporter.report(payload, runId);
     } catch (error) {
-      logger.error(`Error printing statistics: ${error}`);
+      logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
   }
 }
