@@ -9,7 +9,7 @@ import { z } from 'zod';
 // Local imports - core
 import { toErrorMessage } from '@common/errors';
 import {
-  HTTP_TIMEOUT_WEB_FETCH_MS,
+  TIMEOUT_WEB_FETCH_MS,
   HTTP_MAX_REDIRECTS,
   HTTP_MAX_CONTENT_LENGTH_BYTES,
 } from '@common/constants';
@@ -84,7 +84,7 @@ export class WebFetchTool extends defineTool({
     try {
       response = await axios.get(url, {
         responseType: 'text',
-        timeout: HTTP_TIMEOUT_WEB_FETCH_MS,
+        timeout: TIMEOUT_WEB_FETCH_MS,
         maxRedirects: HTTP_MAX_REDIRECTS,
         maxContentLength: HTTP_MAX_CONTENT_LENGTH_BYTES,
         maxBodyLength: HTTP_MAX_CONTENT_LENGTH_BYTES,

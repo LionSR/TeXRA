@@ -39,9 +39,6 @@ export const ANTHROPIC_1M_CONTEXT_WINDOW = 1_000_000;
 /** Maximum blocks that can have cache control applied */
 export const ANTHROPIC_MAX_CACHE_CONTROLLED_BLOCKS = 4;
 
-/** DeepSeek official API maximum output tokens */
-export const DEEPSEEK_MAX_OUTPUT_TOKENS = 8192;
-
 // =============================================================================
 // Default Model Handler Limits
 // =============================================================================
@@ -56,23 +53,13 @@ export const DEFAULT_INPUT_TOKEN_LIMIT = 1_500_000;
 export const DEFAULT_OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
 // =============================================================================
-// Token Buffer and Calculation Constants
+// Anthropic API Media Types
 // =============================================================================
 
-/** Buffer reserved for token calculations */
-export const MODEL_TOKEN_BUFFER = 5000;
-
-/** Minimum tokens reserved for completion */
-export const MODEL_MIN_COMPLETION_TOKENS = 100;
-
-/** Factor applied for thinking budget calculations (50% of max output) */
-export const THINKING_BUDGET_FACTOR = 0.5;
-
-/** Default thinking budget for streaming requests */
-export const THINKING_BUDGET_STREAMING = 32768;
-
-/** Default thinking budget for non-streaming requests */
-export const THINKING_BUDGET_NON_STREAMING = 4096;
-
-/** Multiplier applied for cache creation cost calculations */
-export const CACHE_CREATION_COST_MULTIPLIER = 1.25;
+/** Supported image media types for Anthropic API */
+export const SUPPORTED_IMAGE_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);

@@ -60,9 +60,3 @@ export const TASK_RUNS_DIR = 'taskRuns';
 
 /** Directory name for storing history */
 export const HISTORY_DIR = 'History';
-
-/** Default directory name for custom agents */
-export const DEFAULT_CUSTOM_AGENTS_DIR = 'custom_agents';
-
-/** Directory name for storing audio recordings */
-export const RECORDINGS_DIR = 'recordings';
