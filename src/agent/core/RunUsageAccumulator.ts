@@ -1,5 +1,8 @@
 // Local imports - types
-import type { NormalizedUsage, UsageProvider } from '@agent/types/NormalizedUsage';
+import type {
+  NormalizedUsage,
+  UsageProvider,
+} from '@agent/types/NormalizedUsage';
 
 // Re-export for backwards compatibility
 import type {
@@ -66,7 +69,10 @@ export interface RunUsageTotals {
  * Legacy totals format for backward compatibility with old saved states.
  * @deprecated Use RunUsageTotals instead
  */
-interface LegacyRunUsageTotals extends Omit<RunUsageTotals, 'totalToolUsePromptTokens' | 'totalServerToolRequests'> {
+interface LegacyRunUsageTotals extends Omit<
+  RunUsageTotals,
+  'totalToolUsePromptTokens' | 'totalServerToolRequests'
+> {
   /** @deprecated Use totalToolUsePromptTokens instead */
   totalToolUseTokens?: number;
   totalToolUsePromptTokens?: number;
@@ -207,8 +213,7 @@ export class RunUsageAccumulator {
     this.totals.totalReasoningTokens += otherTotals.totalReasoningTokens;
     this.totals.totalToolUsePromptTokens +=
       otherTotals.totalToolUsePromptTokens;
-    this.totals.totalServerToolRequests +=
-      otherTotals.totalServerToolRequests;
+    this.totals.totalServerToolRequests += otherTotals.totalServerToolRequests;
 
     for (const snapshot of accumulator.getNormalizedSnapshots()) {
       this.normalizedSnapshots.push(snapshot);
@@ -274,6 +279,22 @@ export class RunUsageAccumulator {
     // Load normalized snapshots if available
     if (json.normalizedSnapshots) {
       accumulator.normalizedSnapshots.push(...json.normalizedSnapshots);
+    }
+    // Fallback: convert legacy snapshots to normalized format
+    else if (json.snapshots) {
+      for (const snap of json.snapshots) {
+        accumulator.normalizedSnapshots.push({
+          round: snap.round,
+          usage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            cost: 0,
+            responseTimeMs: 0,
+            provider: snap.provider,
+            _native: snap.payload,
+          },
+        });
+      }
     }
 
     return accumulator;

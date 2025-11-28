@@ -87,48 +87,8 @@ export class ConversationRoundState {
     this.normalizedUsage = usage;
   }
 
-  /**
-   * @deprecated Use setNormalizedUsage() instead.
-   * Legacy method for backward compatibility.
-   */
-  setUsage(params: {
-    summary: UsageSummary;
-    nativeUsage?: NativeUsagePayload | null;
-    provider: UsageProvider;
-  }): void {
-    // Convert to normalized format
-    if (params.summary) {
-      this.normalizedUsage = {
-        inputTokens: params.summary.totalInputTokens,
-        outputTokens: params.summary.totalOutputTokens,
-        cost: params.summary.cost,
-        responseTimeMs: params.summary.responseTime,
-        provider: params.provider,
-        _native: params.nativeUsage ?? undefined,
-      };
-    } else {
-      this.normalizedUsage = null;
-    }
-  }
-
   clearUsage(): void {
     this.normalizedUsage = null;
-  }
-
-  // Legacy getters for backward compatibility
-  /** @deprecated Use normalizedUsage instead */
-  get usageSummary(): UsageSummary {
-    return null; // No longer storing provider-specific types
-  }
-
-  /** @deprecated Use normalizedUsage._native instead */
-  get nativeUsage(): NativeUsagePayload | null {
-    return (this.normalizedUsage?._native as NativeUsagePayload) ?? null;
-  }
-
-  /** @deprecated Use normalizedUsage.provider instead */
-  get provider(): UsageProvider | null {
-    return this.normalizedUsage?.provider ?? null;
   }
 
   toJSON(): ConversationRoundStateJSON {

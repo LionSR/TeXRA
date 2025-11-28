@@ -1387,7 +1387,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   }
 
   /** Normalizes Anthropic usage data into a unified format. */
-  normalizeUsage(rawUsage: AnthropicUsage, responseTimeMs: number): NormalizedUsage {
+  normalizeUsage(
+    rawUsage: AnthropicUsage,
+    responseTimeMs: number,
+  ): NormalizedUsage {
     if (!rawUsage) {
       return {
         inputTokens: 0,
@@ -1417,8 +1420,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       cachedInputTokens: cacheReadTokens || undefined,
       cacheCreationTokens: cacheCreationTokens || undefined,
       percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      serverToolRequests: rawUsage.server_tool_use?.web_search_requests || undefined,
-      serviceTier: rawUsage.service_tier ?? undefined,
+      serverToolRequests:
+        rawUsage.server_tool_use?.web_search_requests || undefined,
       _native: rawUsage,
     };
   }

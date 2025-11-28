@@ -840,7 +840,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const inputTokens = rawUsage.input_tokens ?? 0;
     const outputTokens = rawUsage.output_tokens ?? 0;
     const cachedTokens = rawUsage.input_tokens_details?.cached_tokens ?? 0;
-    const reasoningTokens = rawUsage.output_tokens_details?.reasoning_tokens ?? 0;
+    const reasoningTokens =
+      rawUsage.output_tokens_details?.reasoning_tokens ?? 0;
 
     // Calculate percentage cached
     const percentageCached =
