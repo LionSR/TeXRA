@@ -13,8 +13,13 @@
 export interface SupabaseConfig {
   /** Supabase project URL */
   url: string;
-  /** Supabase anonymous (public) key - safe to include in client code */
-  anonKey: string;
+  /**
+   * Supabase public key - safe to include in client code.
+   * Can be either:
+   * - Publishable key (recommended): starts with `sb_publishable_...`
+   * - Anon key (legacy): JWT starting with `eyJ...`
+   */
+  publicKey: string;
   /** Edge function URL for fetching remote agent configurations */
   edgeFunctionUrl: string;
 }
@@ -23,7 +28,8 @@ export interface SupabaseConfig {
  * Official TeXRA Supabase configuration.
  *
  * These are the production credentials for TeXRA's official Supabase backend.
- * The anon key is public and safe to include in client code (required for Supabase client initialization).
+ * The public key (anon or publishable) is safe to include in client code.
+ * Row Level Security (RLS) policies protect data access, not the key.
  */
 
 export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
@@ -32,9 +38,8 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
   // Production Supabase project URL
   url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
 
-  // Production anon key - safe to include in client code, required for Supabase client
-  anonKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpudHVibWNnYmh3dGNrdHViZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDI5ODksImV4cCI6MjA3NDg3ODk4OX0.67InRy428t3zSBelbC92wo1nj5Llo4Jfb3A0yWNSzFo',
+  // Production public key - safe to include in client code
+  publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw',
 
   // Edge function URL
   edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
@@ -47,7 +52,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 export function isSupabaseConfigured(): boolean {
   return (
     SUPABASE_CONFIG.url !== `placeholder-url` &&
-    SUPABASE_CONFIG.anonKey !== 'placeholder-anon-key' &&
+    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key' &&
     !SUPABASE_CONFIG.url.includes('placeholder')
   );
 }

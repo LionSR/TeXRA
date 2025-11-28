@@ -214,6 +214,9 @@ export const PROGRESS_VIEW_COMMANDS = {
   MERGE_FILE: 'mergeFile',
   LATEXDIFF_FILE: 'latexdiffFile',
   OPEN_LABEL: 'openLabel',
+
+  // Profile
+  OPEN_PROFILE: 'openProfile',
 };
 
 // History view specific commands

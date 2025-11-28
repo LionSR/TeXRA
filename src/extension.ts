@@ -119,7 +119,7 @@ export async function activate(context: vscode.ExtensionContext) {
       if (!isSupabaseConfigured()) {
         logger.warn(
           'extension',
-          'Supabase authentication is enabled but credentials are not configured. Please set TEXRA_SUPABASE_URL and TEXRA_SUPABASE_ANON_KEY environment variables or hardcode them in src/auth/config.ts before building.',
+          'Supabase authentication is enabled but credentials are not configured. Please configure credentials in src/auth/config.ts before building.',
         );
       } else {
         // Register authentication provider

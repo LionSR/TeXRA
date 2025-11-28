@@ -39,7 +39,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   constructor(private context: vscode.ExtensionContext) {
     SupabaseClient.initialize(
       SUPABASE_CONFIG.url,
-      SUPABASE_CONFIG.anonKey,
+      SUPABASE_CONFIG.publicKey,
       context,
     );
     SupabaseAuthProvider.instance = this;
