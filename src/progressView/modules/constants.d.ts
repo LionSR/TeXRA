@@ -1,4 +1,4 @@
-export declare const STATUS: {
+export declare const STREAM_STATUS: {
   readonly RUNNING: 'running';
   readonly ERROR: 'error';
   readonly STOPPED: 'stopped';
