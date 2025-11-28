@@ -75,6 +75,7 @@ Supabase provides two types of public keys for client-side applications:
 Both the publishable and anon keys are designed to be embedded in client-side code. They do **not** protect your data directly. Instead, Row Level Security (RLS) policies on your database tables control actual data access.
 
 **Important**:
+
 - Never expose `service_role` or secret keys (`sb_secret_...`) in client code
 - These elevated keys bypass RLS and should only be used in server-side code (Edge Functions)
 
