@@ -1417,9 +1417,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       cachedInputTokens: cacheReadTokens || undefined,
       cacheCreationTokens: cacheCreationTokens || undefined,
       percentageCached: percentageCached > 0 ? percentageCached : undefined,
-      toolUseTokens: rawUsage.server_tool_use?.web_search_requests
-        ? rawUsage.server_tool_use.web_search_requests
-        : undefined,
+      serverToolRequests: rawUsage.server_tool_use?.web_search_requests || undefined,
+      serviceTier: rawUsage.service_tier ?? undefined,
       _native: rawUsage,
     };
   }

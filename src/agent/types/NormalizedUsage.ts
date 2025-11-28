@@ -21,6 +21,11 @@ export type UsageProvider =
   | 'unknown';
 
 /**
+ * Anthropic service tier for request prioritization.
+ */
+export type ServiceTier = 'standard' | 'priority' | 'batch';
+
+/**
  * Normalized usage statistics from any model provider.
  * Cost is computed once during normalization and never recomputed.
  */
@@ -47,11 +52,27 @@ export interface NormalizedUsage {
   /** Percentage of input tokens served from cache */
   percentageCached?: number;
 
-  // ─── Advanced metrics (when available) ───────────────────────────────────
+  // ─── Reasoning metrics (when available) ──────────────────────────────────
   /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
   reasoningTokens?: number;
-  /** Tokens consumed by server-side tool execution */
-  toolUseTokens?: number;
+
+  // ─── Tool usage metrics ──────────────────────────────────────────────────
+  /**
+   * Tokens consumed by tool use prompts (Google).
+   * Note: This is the token count for tool descriptions/prompts.
+   */
+  toolUsePromptTokens?: number;
+
+  /**
+   * Number of server-side tool executions (Anthropic).
+   * E.g., web search requests performed by Claude.
+   * Note: This is a request count, not a token count.
+   */
+  serverToolRequests?: number;
+
+  // ─── Service metadata ────────────────────────────────────────────────────
+  /** Service tier used for the request (Anthropic only) */
+  serviceTier?: ServiceTier;
 
   // ─── Raw payload for debugging ───────────────────────────────────────────
   /** Original API response payload (optional, for debugging) */
@@ -101,4 +122,64 @@ export function toUsageDisplay(usage: NormalizedUsage): UsageDisplay {
 export function toUsageExtended(usage: NormalizedUsage): UsageExtended {
   const { _native, ...extended } = usage;
   return extended;
+}
+
+/**
+ * Aggregates multiple usage objects into one.
+ * Useful for combining usage across rounds or sub-agents.
+ */
+export function aggregateUsage(
+  usages: NormalizedUsage[],
+  provider: UsageProvider = 'unknown',
+): NormalizedUsage {
+  if (usages.length === 0) {
+    return createEmptyUsage(provider);
+  }
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCost = 0;
+  let totalResponseTimeMs = 0;
+  let totalCachedInputTokens = 0;
+  let totalCacheCreationTokens = 0;
+  let totalReasoningTokens = 0;
+  let totalToolUsePromptTokens = 0;
+  let totalServerToolRequests = 0;
+
+  for (const usage of usages) {
+    totalInputTokens += usage.inputTokens;
+    totalOutputTokens += usage.outputTokens;
+    totalCost += usage.cost;
+    totalResponseTimeMs += usage.responseTimeMs;
+    totalCachedInputTokens += usage.cachedInputTokens ?? 0;
+    totalCacheCreationTokens += usage.cacheCreationTokens ?? 0;
+    totalReasoningTokens += usage.reasoningTokens ?? 0;
+    totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
+    totalServerToolRequests += usage.serverToolRequests ?? 0;
+  }
+
+  // Use the first usage's provider if all are the same, otherwise 'unknown'
+  const firstProvider = usages[0].provider;
+  const allSameProvider = usages.every((u) => u.provider === firstProvider);
+  const resultProvider = allSameProvider ? firstProvider : provider;
+
+  const totalCacheableTokens = totalCachedInputTokens + totalCacheCreationTokens;
+  const percentageCached =
+    totalInputTokens > 0
+      ? (totalCachedInputTokens / totalInputTokens) * 100
+      : 0;
+
+  return {
+    inputTokens: totalInputTokens,
+    outputTokens: totalOutputTokens,
+    cost: totalCost,
+    responseTimeMs: totalResponseTimeMs,
+    provider: resultProvider,
+    cachedInputTokens: totalCachedInputTokens || undefined,
+    cacheCreationTokens: totalCacheCreationTokens || undefined,
+    percentageCached: percentageCached > 0 ? percentageCached : undefined,
+    reasoningTokens: totalReasoningTokens || undefined,
+    toolUsePromptTokens: totalToolUsePromptTokens || undefined,
+    serverToolRequests: totalServerToolRequests || undefined,
+  };
 }

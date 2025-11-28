@@ -2,9 +2,9 @@
 import OpenAI from 'openai';
 
 // Local file imports
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Type imports
 import type {

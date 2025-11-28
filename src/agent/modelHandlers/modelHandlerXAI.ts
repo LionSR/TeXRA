@@ -2,11 +2,11 @@
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@utils/config';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Type imports
 import type { ExtractResponseResult } from './types/IModelHandler';
