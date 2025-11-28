@@ -38,6 +38,18 @@ export class ProgressViewContentProvider extends BaseViewContentProvider {
       key: 'followUpInputManagerUri',
       path: 'modules/uiManagers/FollowUpInputManager.js',
     },
+    {
+      key: 'approvalRequestsUri',
+      path: 'modules/uiManagers/ApprovalRequests.js',
+    },
+    {
+      key: 'retryRequestsUri',
+      path: 'modules/uiManagers/RetryRequests.js',
+    },
+    {
+      key: 'baseUIRequestManagerUri',
+      path: 'modules/uiManagers/BaseUIRequestManager.js',
+    },
   ];
 
   protected getModuleUris(webview: vscode.Webview): Record<string, vscode.Uri> {
