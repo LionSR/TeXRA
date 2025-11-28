@@ -12,7 +12,6 @@ import {
   generateCommandShortcuts,
   generateArrowRelationShortcuts,
   generateBackslashFixes,
-  generateTextCommandNormalization,
   generateLegacyTextCommandNormalization,
   GREEK_LETTERS,
 } from './helpers';

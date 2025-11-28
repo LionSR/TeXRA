@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import type { FileLocation } from '@agent/output/types';
 
 // Local imports - log
-import { logErrorMessage, formatError, toErrorMessage } from '@common/errors';
+import { formatError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { flexibleFS, pathToLocation } from '@utils/files';

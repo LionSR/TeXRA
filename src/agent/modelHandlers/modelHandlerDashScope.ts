@@ -6,9 +6,6 @@ import OpenAI from 'openai';
 // Local imports - agent components
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
-// Local imports - utilities
-import type { ToolDefinition } from '@model';
-
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';

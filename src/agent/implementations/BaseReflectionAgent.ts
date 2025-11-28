@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Local imports - agent components
 import type { IModelHandler } from '@agent/modelHandlers';
 // Internal imports
@@ -14,6 +11,11 @@ import {
 
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
+import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { AgentLogStage } from '@logger/AgentLogger';
+
 // Internal imports
 import {
   AgentSetting,
@@ -24,8 +26,7 @@ import {
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { createSharedStore } from '@agent/core/AgentSharedStore';
 import { runResponseCycle } from '@agent/core/ResponseCycle';
-// Type imports
-import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
+
 // Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { BaseAgent } from '@agent/implementations/BaseAgent';
@@ -36,23 +37,18 @@ import {
   type ReflectionRunState,
   type ReflectionRunPhase,
 } from '@agent/implementations/flows/ReflectionRunFlow';
-// Type imports
-import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
+
 // Internal imports
 import { createLifecycleState } from '@agent/implementations/flows/common/lifecycle';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
-// Type imports
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
 import { getConfig } from '@utils/config';
 import {
   WorkspaceFS,
   TaskRunFileService,
-  pathToLocation,
   createWorkspaceLocation,
   flexibleFS,
   type FileLocation,
@@ -399,11 +395,11 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    */
   protected async handleOutput(
     currRound: number,
-    stateRound: ConversationRoundState,
+    _stateRound: ConversationRoundState,
     _runState: AgentRunState,
     options: RoundOutputOptions,
   ): Promise<OutputFileInfo[]> {
-    const { outputFile, endTurn, stage } = options;
+    const { endTurn, stage } = options;
     // If this is the end of a turn, handle latexdiff operations as a separate step
     if (endTurn && this.outputHandler.hasRoundOutputs(currRound)) {
       const existingBase = await Promise.all(

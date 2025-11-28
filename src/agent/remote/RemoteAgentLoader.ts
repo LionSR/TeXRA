@@ -11,7 +11,6 @@ import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
-import { RemoteAgentRegistry } from './RemoteAgentRegistry';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
@@ -138,7 +137,7 @@ export class RemoteAgentLoader {
         }
 
         const responseData = await response.json();
-        const { config: yamlContent, name, description } = responseData;
+        const { config: yamlContent, name: _name, description } = responseData;
 
         if (!yamlContent) {
           throw new Error(

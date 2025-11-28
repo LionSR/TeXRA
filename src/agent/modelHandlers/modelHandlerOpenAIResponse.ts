@@ -26,7 +26,7 @@ import {
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
-import type { ModelConfig, ToolDefinition } from '@model';
+import type { ModelConfig } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
@@ -38,7 +38,7 @@ import type { FileLocation } from '@utils/files';
 // Internal imports
 import { K_SLICE, getConfig } from '@utils/config';
 import { sleepWithAbort } from '@utils/helpers';
-import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -74,9 +74,6 @@ import type {
   ResponseInputContent,
   ResponseInputMessageContentList,
   ResponseInputFile,
-  ResponseInputImage,
-  ResponseInputText,
-  ResponseInputAudio,
   ResponseStreamEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
@@ -858,7 +855,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let current = initialResponse;
     const responseId = initialResponse.id;
     const pollInterval = ModelHandlerOpenAIResponse.BACKGROUND_POLL_INTERVAL_MS;
-    const maxRetries =
+    const _maxRetries =
       ModelHandlerOpenAIResponse.BACKGROUND_RETRIEVE_MAX_RETRIES;
     const startTime = Date.now();
     let pollCount = 0;

@@ -105,8 +105,3 @@ export class ToolUseSessionManager {
     logger.debug('Cleared all pending tool-use snapshots.');
   }
 }
-
-/**
- * @deprecated Use ToolUseSessionManager instead. This alias will be removed in a future version.
- */
-export const ToolUseSnapshotCache = ToolUseSessionManager;

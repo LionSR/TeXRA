@@ -8,11 +8,7 @@ import { K_SLICE } from '@utils/config';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 
 // Type imports
-import type { ProviderStopReason } from './types/StopReasonTypes';
-import type {
-  CreateResponseOptions,
-  ExtractResponseResult,
-} from './types/IModelHandler';
+import type { ExtractResponseResult } from './types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
