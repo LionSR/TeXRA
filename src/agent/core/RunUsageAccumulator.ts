@@ -62,8 +62,19 @@ export interface RunUsageTotals {
   totalServerToolRequests: number;
 }
 
+/**
+ * Legacy totals format for backward compatibility with old saved states.
+ * @deprecated Use RunUsageTotals instead
+ */
+interface LegacyRunUsageTotals extends Omit<RunUsageTotals, 'totalToolUsePromptTokens' | 'totalServerToolRequests'> {
+  /** @deprecated Use totalToolUsePromptTokens instead */
+  totalToolUseTokens?: number;
+  totalToolUsePromptTokens?: number;
+  totalServerToolRequests?: number;
+}
+
 export interface RunUsageAccumulatorJSON {
-  totals: RunUsageTotals;
+  totals: RunUsageTotals | LegacyRunUsageTotals;
   /** @deprecated Use normalizedSnapshots instead */
   snapshots?: NativeUsageSnapshot[];
   normalizedSnapshots?: NormalizedUsageSnapshot[];
@@ -253,10 +264,10 @@ export class RunUsageAccumulator {
     accumulator.totals.totalCacheCreationInputTokens =
       totals.totalCacheCreationInputTokens ?? 0;
     accumulator.totals.totalReasoningTokens = totals.totalReasoningTokens ?? 0;
+    // Handle legacy field name (totalToolUseTokens -> totalToolUsePromptTokens)
+    const legacyTotals = totals as LegacyRunUsageTotals;
     accumulator.totals.totalToolUsePromptTokens =
-      totals.totalToolUsePromptTokens ??
-      (totals as any).totalToolUseTokens ?? // Legacy field name
-      0;
+      totals.totalToolUsePromptTokens ?? legacyTotals.totalToolUseTokens ?? 0;
     accumulator.totals.totalServerToolRequests =
       totals.totalServerToolRequests ?? 0;
 
