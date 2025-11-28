@@ -86,8 +86,6 @@ import type {
   GoogleToolCall,
 } from './types/IModelHandler';
 
-type GoogleRole = 'user' | 'model';
-
 function isTextPart(part: Part): part is Part & { text: string } {
   return typeof (part as { text?: unknown }).text === 'string';
 }
@@ -342,14 +340,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       throw new Error('Messages array cannot be empty.');
     }
 
-    const historyMessages = messages.slice(0, -1);
+    // History excludes the final user message - we send it separately via sendMessage
+    const history = messages.slice(0, -1);
     const lastMessage = messages.at(-1);
 
-    // chatHistory intentionally excludes the final user message because
-    // we send it separately with `chat.sendMessage` below
     // Messages should already be properly formatted with alternating turns
-    validateGoogleMessageHistory(historyMessages, this.logger);
-    const chatHistory = historyMessages;
+    validateGoogleMessageHistory(history, this.logger);
 
     const lastMessageParts = Array.isArray(lastMessage?.parts)
       ? lastMessage.parts
@@ -380,7 +376,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     const chatParams: CreateChatParameters = {
       model: this.config.fullName,
-      history: chatHistory,
+      history,
       config: generationConfig,
       ...(systemPrompt && { systemInstruction: systemPrompt }),
     };
@@ -394,7 +390,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             parts: [createPartFromText(systemPrompt)],
           });
         }
-        countContents.push(...chatHistory);
+        countContents.push(...history);
         // The token count API expects the upcoming message as part of the
         // history, so append the final user message that will be sent next.
         countContents.push(createUserContent([...lastMessageParts]));
@@ -449,7 +445,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     try {
       this.logger.debug(
-        `Creating chat session with history length: ${chatHistory.length}`,
+        `Creating chat session with history length: ${history.length}`,
       );
       const chat = client.chats.create(chatParams);
 
