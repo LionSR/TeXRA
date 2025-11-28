@@ -22,9 +22,3 @@ export const STREAM_STATUS = {
 } as const;
 
 export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
-
-/**
- * @deprecated Use STREAM_STATUS instead. This alias exists for backwards
- * compatibility during migration from progressView constants.
- */
-export const STATUS = STREAM_STATUS;

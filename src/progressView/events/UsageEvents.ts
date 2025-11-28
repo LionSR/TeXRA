@@ -10,7 +10,6 @@ import type {
   WebviewUpdater,
 } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';

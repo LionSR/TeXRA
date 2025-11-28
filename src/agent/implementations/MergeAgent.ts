@@ -10,8 +10,7 @@ import { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import type { OutputFileInfo } from '@agent/output/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
-import { WorkspaceFS } from '@utils/files';
-import type { FileLocation, AgentFileLocation } from '@utils/files';
+import type { AgentFileLocation } from '@utils/files';
 
 // Local file imports
 import { RoundOutputOptions } from './BaseReflectionAgent';
@@ -50,7 +49,7 @@ export class MergeAgent extends DirectAgent {
    * @returns Path to output file for merged content - always workspace or runStorage
    * @throws Error if editedFile is not specified
    */
-  public override getOutputFileLocation(currRound: number): AgentFileLocation {
+  public override getOutputFileLocation(_currRound: number): AgentFileLocation {
     const inputFile = this.agentConfig.inputFile;
     const editedFile = this.agentConfig.editedFile;
 

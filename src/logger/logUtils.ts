@@ -6,9 +6,8 @@ import { randomUUID } from 'crypto';
 import { registry } from './LogChannelRegistry';
 
 // Type imports
-import type { MessageType } from './messageTypes';
 import type { VSCodeTransport } from './transports/VSCodeTransport';
-import type { LogOptions, LogUtilsOptions } from './logOptions';
+import type { LogUtilsOptions } from './logOptions';
 
 // Re-export for convenience
 export type { LogOptions } from './logOptions';

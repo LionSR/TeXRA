@@ -1,9 +1,6 @@
 // Standard library imports
 import * as path from 'path';
 
-// Third-party imports
-import * as vscode from 'vscode';
-
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
@@ -14,7 +11,6 @@ import {
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
-import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -27,14 +23,12 @@ import {
   TaskRunFileService,
   flexibleFS,
   WorkspaceFS,
-  AbsoluteFS,
   pathToLocation,
   getComparablePath,
 } from '@utils/files';
 // Type imports
 
 // Internal imports
-import { getEffectiveBaseFile } from '@utils/files/baseFileUtils';
 import {
   extractMultipleTextFromTag,
   extractTextFromTag,

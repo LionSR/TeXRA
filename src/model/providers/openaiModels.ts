@@ -4,7 +4,6 @@ import {
   ModelCapabilities,
   ModelConfig,
   ModelProvider,
-  ReasoningEffort,
 } from '@model/ModelConfig';
 
 // Common capabilities for OpenAI models

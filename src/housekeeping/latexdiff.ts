@@ -5,11 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import {
-  showLoggedErrorMessage,
-  showLoggedMessage,
-  toErrorMessage,
-} from '@common/errors';
+import { showLoggedMessage, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 

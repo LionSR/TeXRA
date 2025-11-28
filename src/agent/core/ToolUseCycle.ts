@@ -15,8 +15,6 @@ import * as path from 'path';
 // Local imports - agent components
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { OutputFileInfo } from '@agent/output/types';
-import { normalizeRunId } from '@common/constants/runIds';
-import type { BaseTool } from '@tools/core/base';
 import { pathToLocation } from '@utils/files';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -32,7 +30,6 @@ import { createRetryState, type RetryCallbacks } from './flows/RetryState';
 // Import and re-export from single source of truth
 import type { ToolUseCycleOptions } from './flows/CycleServices';
 export type { ToolUseCycleOptions };
-import type { AgentCycleBaseOptions } from './AgentCycleOptions';
 
 export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;

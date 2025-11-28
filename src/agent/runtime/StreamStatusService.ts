@@ -2,7 +2,7 @@
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
-import { STATUS } from '@common/constants/streamStatus';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 // Type imports
 import type { StreamStatusOrReady } from '@eventBus/ProgressEventBus';
@@ -11,11 +11,11 @@ const statusMemory = new Map<StreamTabId, StreamStatusOrReady>();
 
 export const StreamStatusService = {
   get(stream: StreamTabId): StreamStatusOrReady {
-    return statusMemory.get(stream) ?? STATUS.READY;
+    return statusMemory.get(stream) ?? STREAM_STATUS.READY;
   },
 
   set(stream: StreamTabId, status: StreamStatusOrReady): void {
-    if (status === STATUS.READY) {
+    if (status === STREAM_STATUS.READY) {
       statusMemory.delete(stream);
     } else {
       statusMemory.set(stream, status);
@@ -25,6 +25,6 @@ export const StreamStatusService = {
   },
 
   clear(stream: StreamTabId): void {
-    this.set(stream, STATUS.READY);
+    this.set(stream, STREAM_STATUS.READY);
   },
 };
