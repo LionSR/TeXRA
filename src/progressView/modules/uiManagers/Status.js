@@ -1,5 +1,9 @@
 // Local imports - progress view
-import { STATUS, ALL_TOOLBAR_BUTTON_IDS, ELEMENT_IDS } from '../constants.js';
+import {
+  STREAM_STATUS,
+  ALL_TOOLBAR_BUTTON_IDS,
+  ELEMENT_IDS,
+} from '../constants.js';
 // Local imports
 import { progressViewState } from '../progressViewState.js';
 import { setElementsDisabled } from '@common/domUtils.js';
@@ -10,7 +14,7 @@ import { setElementsDisabled } from '@common/domUtils.js';
 export class Status {
   constructor() {
     this.STATUS_MAP = {
-      [STATUS.RUNNING]: {
+      [STREAM_STATUS.RUNNING]: {
         className: 'running',
         label: 'Running',
         enable: [
@@ -19,7 +23,7 @@ export class Status {
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
-      [STATUS.ERROR]: {
+      [STREAM_STATUS.ERROR]: {
         className: 'error',
         label: 'Error',
         enable: [
@@ -33,7 +37,7 @@ export class Status {
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
-      [STATUS.STOPPED]: {
+      [STREAM_STATUS.STOPPED]: {
         className: 'stopped',
         label: 'Stopped',
         enable: [
@@ -47,7 +51,7 @@ export class Status {
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
-      [STATUS.READY]: {
+      [STREAM_STATUS.READY]: {
         className: 'ready',
         label: 'Ready',
         enable: [
@@ -56,7 +60,7 @@ export class Status {
           ELEMENT_IDS.OPEN_TASK_STORAGE_BTN,
         ],
       },
-      [STATUS.WAITING]: {
+      [STREAM_STATUS.WAITING]: {
         className: 'waiting',
         label: 'Waiting for follow-up',
         enable: [
@@ -136,11 +140,11 @@ export class Status {
       }
 
       statusIndicator.classList.remove(
-        STATUS.RUNNING,
-        STATUS.ERROR,
-        STATUS.STOPPED,
-        STATUS.READY,
-        STATUS.WAITING,
+        STREAM_STATUS.RUNNING,
+        STREAM_STATUS.ERROR,
+        STREAM_STATUS.STOPPED,
+        STREAM_STATUS.READY,
+        STREAM_STATUS.WAITING,
       );
 
       const cfg = this.STATUS_MAP[status] || {
@@ -177,7 +181,7 @@ export class Status {
       }
 
       const activeStream = progressViewState.activeStream;
-      if (activeStream && status !== STATUS.READY) {
+      if (activeStream && status !== STREAM_STATUS.READY) {
         progressViewState.streamStatuses.set(activeStream, status);
       }
     }

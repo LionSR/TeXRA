@@ -1,5 +1,10 @@
 // Local imports - progress view
-import { COMMANDS, STATUS, ELEMENT_IDS, GROUP_DOM_IDS } from './constants.js';
+import {
+  COMMANDS,
+  STREAM_STATUS,
+  ELEMENT_IDS,
+  GROUP_DOM_IDS,
+} from './constants.js';
 import { progressViewDomHandler } from './domHandlers.js';
 import { createThemeHandlers } from './handlers/themeHandlers.js';
 import { appendFormatted } from './utils.js';
@@ -234,7 +239,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Update status based on whether there's an active stream
     if (!message.activeStream) {
-      dom.status.update(STATUS.READY);
+      dom.status.update(STREAM_STATUS.READY);
       dom.instructionPanel.hide();
       dom.runSelector.clear();
       state.clearRunInstructions();
@@ -242,7 +247,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.clearAllPendingInstructions();
     } else {
       const streamStatus = state.streamStatuses.get(message.activeStream);
-      dom.status.update(streamStatus || STATUS.STOPPED);
+      dom.status.update(streamStatus || STREAM_STATUS.STOPPED);
     }
 
     this._refreshInstructionForActiveRun();
@@ -439,7 +444,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    if (message.status === STATUS.WAITING) {
+    if (message.status === STREAM_STATUS.WAITING) {
       dom.followUpInput.focus({ scrollIntoView: true });
     }
   }
