@@ -11,7 +11,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { STREAM_STATUS } from '@progressView/modules/constants.js';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports

@@ -8,11 +8,6 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
-// Internal imports
-import { AgentLogger } from '@logger/AgentLogger';
-import { LogMessageData } from '@logger/LogTypes';
-// Type imports
-import type { TaskState } from '@logger/TaskState';
 import type {
   InstructionUpdate,
   RetryRequestPrompt,
@@ -26,7 +21,14 @@ import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupManager';
 // Internal imports
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { COMMANDS, STREAM_STATUS } from '@progressView/modules/constants.js';
+import { COMMANDS } from '@progressView/modules/constants.js';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
+
+// Logger imports
+import { AgentLogger } from '@logger/AgentLogger';
+import { LogMessageData } from '@logger/LogTypes';
+// Type imports
+import type { TaskState } from '@logger/TaskState';
 
 // Type aliases for status values
 type StatusType = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
