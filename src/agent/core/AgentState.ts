@@ -30,8 +30,8 @@ export const ConversationRoundStateSnapshotSchema = z.strictObject({
   continuationCount: z.number().int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
-  // New: store normalized usage directly
-  normalizedUsage: z.custom<NormalizedUsage>().nullable(),
+  // New: store normalized usage directly (nullish for backward compat with old saved states)
+  normalizedUsage: z.custom<NormalizedUsage>().nullish(),
   // Legacy fields for backward compatibility (deprecated)
   usageSummary: z.custom<UsageSummary>().nullable().optional(),
   nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
@@ -47,7 +47,8 @@ export interface ConversationRoundStateJSON {
   continuationCount: number;
   responseTimeMs: number;
   outputFile: string;
-  normalizedUsage: NormalizedUsage | null;
+  // nullish for backward compatibility with old saved states that lack this field
+  normalizedUsage?: NormalizedUsage | null;
   // Legacy fields for backward compatibility
   usageSummary?: UsageSummary;
   nativeUsage?: NativeUsagePayload | null;
