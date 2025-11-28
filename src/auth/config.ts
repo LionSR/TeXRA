@@ -19,7 +19,7 @@ export interface SupabaseConfig {
    * - Publishable key (recommended): starts with `sb_publishable_...`
    * - Anon key (legacy): JWT starting with `eyJ...`
    */
-  anonKey: string;
+  publicKey: string;
   /** Edge function URL for fetching remote agent configurations */
   edgeFunctionUrl: string;
 }
@@ -38,9 +38,8 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
   // Production Supabase project URL
   url: `https://${SUPABASE_PROJECT_ID}.supabase.co`,
 
-  // Production public key - safe to include in client code (anon JWT or publishable key)
-  anonKey:
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpudHVibWNnYmh3dGNrdHViZWx2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkzMDI5ODksImV4cCI6MjA3NDg3ODk4OX0.67InRy428t3zSBelbC92wo1nj5Llo4Jfb3A0yWNSzFo',
+  // Production public key - safe to include in client code
+  publicKey: 'sb_publishable_DUIDjtxk12ZYYncrVUfwOw_xWQYsSvw?',
 
   // Edge function URL
   edgeFunctionUrl: `https://${SUPABASE_PROJECT_ID}.supabase.co/functions/v1/get-agent-config`,
@@ -53,7 +52,7 @@ export const SUPABASE_CONFIG: SupabaseConfig = {
 export function isSupabaseConfigured(): boolean {
   return (
     SUPABASE_CONFIG.url !== `placeholder-url` &&
-    SUPABASE_CONFIG.anonKey !== 'placeholder-anon-key' &&
+    SUPABASE_CONFIG.publicKey !== 'placeholder-public-key' &&
     !SUPABASE_CONFIG.url.includes('placeholder')
   );
 }
