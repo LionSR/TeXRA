@@ -18,6 +18,21 @@ export const HTTP_TIMEOUT_ARXIV_MS = 30_000;
 /** Timeout for LaTeXdiff command execution */
 export const TIMEOUT_LATEXDIFF_MS = 10_000;
 
+/** Timeout for Wolfram code execution */
+export const TIMEOUT_WOLFRAM_CODE_MS = 30_000;
+
+/** Timeout for Wolfram file execution */
+export const TIMEOUT_WOLFRAM_FILE_MS = 60_000;
+
+/** Timeout for Wolfram script commands (2 minutes) */
+export const TIMEOUT_WOLFRAM_SCRIPT_MS = 120_000;
+
+/** Timeout for OAuth callback operations */
+export const TIMEOUT_OAUTH_CALLBACK_MS = 120_000;
+
+/** Timeout for manual retry wait (5 minutes) */
+export const TIMEOUT_MANUAL_RETRY_MS = 5 * 60 * 1000;
+
 // =============================================================================
 // HTTP Limits
 // =============================================================================

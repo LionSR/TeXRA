@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
+import { MAX_ERROR_LENGTH } from '@common/constants';
 
 /**
  * Valid documentation identifiers for error messages.
@@ -26,9 +27,6 @@ export type DocId =
   | 'custom-agents'
   | 'tool-integration'
   | 'latex-diff';
-
-/** Maximum length for error details before truncation */
-const MAX_ERROR_LENGTH = 500;
 
 /**
  * Format an error with a prefix for logging or user messages.

@@ -12,9 +12,7 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-
-// Maximum number of events to buffer when no listeners are registered
-const MAX_BUFFER_SIZE = 1000;
+import { MAX_EVENT_BUFFER_SIZE } from '@common/constants';
 
 export type StreamStatus =
   | 'running'
@@ -110,7 +108,7 @@ class ProgressEventBus {
   ): void {
     if (this.emitter.listenerCount(event) === 0) {
       this.buffer.push({ event, payload });
-      if (this.buffer.length > MAX_BUFFER_SIZE) {
+      if (this.buffer.length > MAX_EVENT_BUFFER_SIZE) {
         this.buffer.shift();
       }
     } else {

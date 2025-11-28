@@ -1,5 +1,9 @@
 // Local imports
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
+import { HISTORY_DIR } from '@common/constants';
+
+// Re-export for backward compatibility
+export { HISTORY_DIR };
 
 export const EXCLUDED_DIRS = new Set([
   'figs',
@@ -38,8 +42,6 @@ export const TEMP_EXTENSIONS = [
 ];
 
 export const MODELS = Object.keys(MODEL_CONFIGS);
-
-export const HISTORY_DIR = 'History';
 
 // Default maximum number of reflection rounds for housekeeping operations
 export const DEFAULT_MAX_ROUNDS = 5;

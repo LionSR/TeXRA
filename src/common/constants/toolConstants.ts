@@ -2,7 +2,7 @@
  * Tool-specific configuration constants.
  *
  * Single source of truth for file limits, extraction limits,
- * and other tool-related configuration across the codebase.
+ * buffer sizes, and other tool-related configuration across the codebase.
  */
 
 // =============================================================================
@@ -31,3 +31,38 @@ export const EXTRACT_TIKZ_MAX_FILES = 12;
 
 /** Maximum number of figure files to return from extraction */
 export const EXTRACT_FIGURES_MAX_FILES = 20;
+
+// =============================================================================
+// Buffer and Output Size Limits
+// =============================================================================
+
+/** Maximum number of events to buffer when no listeners are registered */
+export const MAX_EVENT_BUFFER_SIZE = 1000;
+
+/** Maximum length for command output truncation */
+export const MAX_OUTPUT_LENGTH = 150;
+
+/** Maximum length for error details before truncation */
+export const MAX_ERROR_LENGTH = 500;
+
+// =============================================================================
+// Path/Directory Constants
+// =============================================================================
+
+/** Prefix for pasted image filenames */
+export const PASTED_PREFIX = 'pasted_';
+
+/** Directory name for storing pasted images */
+export const PASTED_DIR = 'pasted';
+
+/** Directory name for storing task run artifacts */
+export const TASK_RUNS_DIR = 'taskRuns';
+
+/** Directory name for storing history */
+export const HISTORY_DIR = 'History';
+
+/** Default directory name for custom agents */
+export const DEFAULT_CUSTOM_AGENTS_DIR = 'custom_agents';
+
+/** Directory name for storing audio recordings */
+export const RECORDINGS_DIR = 'recordings';

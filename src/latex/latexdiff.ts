@@ -9,6 +9,7 @@ import type { FileLocation } from '@agent/output/types';
 
 // Local imports - log
 import { formatError, toErrorMessage } from '@common/errors';
+import { TIMEOUT_LATEXDIFF_MS } from '@common/constants';
 import * as logger from '@logger/logUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { flexibleFS, pathToLocation } from '@utils/files';
@@ -41,8 +42,6 @@ export interface LaTeXdiffMultipleResult {
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-const DEFAULT_LATEXDIFF_TIMEOUT_MS = 10000;
-
 export class LaTeXdiffService {
   private readonly fileNameManager: DiffFileNameManager;
   private readonly fileProcessor: DiffFileProcessor;
@@ -58,10 +57,7 @@ export class LaTeXdiffService {
   }
 
   private getLatexdiffTimeout(): number {
-    return getConfig<number>(
-      'texra.latexdiff.timeoutMs',
-      DEFAULT_LATEXDIFF_TIMEOUT_MS,
-    );
+    return getConfig<number>('texra.latexdiff.timeoutMs', TIMEOUT_LATEXDIFF_MS);
   }
 
   async runDiff(

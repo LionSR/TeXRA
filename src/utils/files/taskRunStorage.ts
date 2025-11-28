@@ -7,6 +7,7 @@ import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { TASK_RUNS_DIR } from '@common/constants';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
@@ -21,12 +22,8 @@ import { flexibleFS } from './flexibleFS';
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
 
-/**
- * Directory name for storing task run artifacts.
- * All task execution files (debug JSONs, logs, etc.) are organized
- * in subdirectories under this parent directory.
- */
-export const TASK_RUNS_DIR = 'taskRuns';
+// Re-export for backward compatibility
+export { TASK_RUNS_DIR };
 
 /**
  * File location in workspace with relative path.

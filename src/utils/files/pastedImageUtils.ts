@@ -6,9 +6,10 @@ import { nanoid } from 'nanoid';
 
 // Local imports
 import { StorageFS } from './storageFS';
+import { PASTED_PREFIX, PASTED_DIR } from '@common/constants';
 
-export const PASTED_PREFIX = 'pasted_';
-export const PASTED_DIR = 'pasted';
+// Re-export for backward compatibility
+export { PASTED_PREFIX, PASTED_DIR };
 
 /**
  * Check if a filename is a pasted image

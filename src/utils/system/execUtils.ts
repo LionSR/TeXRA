@@ -7,6 +7,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import { MAX_OUTPUT_LENGTH } from '@common/constants';
 
 // Internal imports
 import * as logger from '@logger/logUtils';
@@ -15,8 +16,6 @@ import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'execUtils';
 logger.initialize(CHANNEL);
-
-const MAX_OUTPUT_LENGTH = 150;
 
 /**
  * Truncate text to maxChars by keeping the end portion.
