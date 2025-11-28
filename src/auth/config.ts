@@ -32,8 +32,6 @@ export interface SupabaseConfig {
  * Row Level Security (RLS) policies protect data access, not the key.
  */
 
-export const SUPABASE_PROJECT_ID = 'jntubmcgbhwtcktubelv';
-
 /** Custom domain for Supabase (remote agent access) */
 export const SUPABASE_CUSTOM_DOMAIN = 'remote.texra.ai';
 
