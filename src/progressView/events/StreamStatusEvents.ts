@@ -10,7 +10,7 @@ import type { StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 // Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { STREAM_STATUS } from '@progressView/modules/constants.js';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Internal imports
