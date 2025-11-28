@@ -4,7 +4,7 @@ import type {
   UsageProvider,
 } from '@agent/types/NormalizedUsage';
 
-// Re-export for backwards compatibility
+// Re-export for backwards compatibility (used in AgentState schema)
 import type {
   AnthropicAPIResponseUsage,
   OpenAIAPIResponseUsage,
@@ -12,36 +12,15 @@ import type {
 } from './ResponseUsage';
 
 export type { NativeUsagePayload };
-
-// Re-export UsageProvider for backward compatibility
 export type { UsageProvider };
 
 /**
- * @deprecated Use NormalizedUsage instead
+ * @deprecated Used only for legacy JSON deserialization
  */
 export type UsageSummary =
   | OpenAIAPIResponseUsage
   | AnthropicAPIResponseUsage
   | null;
-
-/**
- * @deprecated Use UsageProvider from NormalizedUsage instead
- */
-export type LegacyUsageProvider =
-  | 'openai'
-  | 'anthropic'
-  | 'google'
-  | 'deepseek'
-  | 'unknown';
-
-/**
- * @deprecated Use NormalizedUsage[] instead
- */
-export interface NativeUsageSnapshot {
-  round: number;
-  provider: LegacyUsageProvider;
-  payload: NativeUsagePayload;
-}
 
 /**
  * Snapshot of normalized usage for a single round.
@@ -59,150 +38,62 @@ export interface RunUsageTotals {
   totalCacheReadInputTokens: number;
   totalCacheCreationInputTokens: number;
   totalReasoningTokens: number;
-  /** Tool use prompt tokens (Google) */
   totalToolUsePromptTokens: number;
-  /** Server-side tool requests (Anthropic) */
   totalServerToolRequests: number;
 }
 
-/**
- * Legacy totals format for backward compatibility with old saved states.
- * @deprecated Use RunUsageTotals instead
- */
-interface LegacyRunUsageTotals extends Omit<
-  RunUsageTotals,
-  'totalToolUsePromptTokens' | 'totalServerToolRequests'
-> {
-  /** @deprecated Use totalToolUsePromptTokens instead */
-  totalToolUseTokens?: number;
-  totalToolUsePromptTokens?: number;
-  totalServerToolRequests?: number;
+export interface RunUsageAccumulatorJSON {
+  totals: Partial<RunUsageTotals> & {
+    /** @deprecated Legacy field name */
+    totalToolUseTokens?: number;
+  };
+  normalizedSnapshots?: NormalizedUsageSnapshot[];
+  /** @deprecated Legacy format - ignored on load */
+  snapshots?: unknown[];
 }
 
-export interface RunUsageAccumulatorJSON {
-  totals: RunUsageTotals | LegacyRunUsageTotals;
-  /** @deprecated Use normalizedSnapshots instead */
-  snapshots?: NativeUsageSnapshot[];
-  normalizedSnapshots?: NormalizedUsageSnapshot[];
-}
+const DEFAULT_TOTALS: RunUsageTotals = {
+  firstInputTokens: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCost: 0,
+  totalCacheReadInputTokens: 0,
+  totalCacheCreationInputTokens: 0,
+  totalReasoningTokens: 0,
+  totalToolUsePromptTokens: 0,
+  totalServerToolRequests: 0,
+};
 
 export class RunUsageAccumulator {
-  private totals: RunUsageTotals = {
-    firstInputTokens: 0,
-    totalInputTokens: 0,
-    totalOutputTokens: 0,
-    totalCost: 0,
-    totalCacheReadInputTokens: 0,
-    totalCacheCreationInputTokens: 0,
-    totalReasoningTokens: 0,
-    totalToolUsePromptTokens: 0,
-    totalServerToolRequests: 0,
-  };
-
+  private totals: RunUsageTotals = { ...DEFAULT_TOTALS };
   private readonly normalizedSnapshots: NormalizedUsageSnapshot[] = [];
 
   /**
    * Records normalized usage from a model response.
-   * This is the preferred method - cost is already computed in the usage.
    */
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
-    // Track first round's input tokens
     if (this.totals.firstInputTokens === 0) {
       this.totals.firstInputTokens = usage.inputTokens;
     }
 
-    // Accumulate core metrics
     this.totals.totalInputTokens += usage.inputTokens;
     this.totals.totalOutputTokens += usage.outputTokens;
     this.totals.totalCost += usage.cost;
+    this.totals.totalCacheReadInputTokens += usage.cachedInputTokens ?? 0;
+    this.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens ?? 0;
+    this.totals.totalReasoningTokens += usage.reasoningTokens ?? 0;
+    this.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens ?? 0;
+    this.totals.totalServerToolRequests += usage.serverToolRequests ?? 0;
 
-    // Accumulate caching metrics
-    if (usage.cachedInputTokens) {
-      this.totals.totalCacheReadInputTokens += usage.cachedInputTokens;
-    }
-    if (usage.cacheCreationTokens) {
-      this.totals.totalCacheCreationInputTokens += usage.cacheCreationTokens;
-    }
-
-    // Accumulate reasoning metrics
-    if (usage.reasoningTokens) {
-      this.totals.totalReasoningTokens += usage.reasoningTokens;
-    }
-
-    // Accumulate tool usage metrics
-    if (usage.toolUsePromptTokens) {
-      this.totals.totalToolUsePromptTokens += usage.toolUsePromptTokens;
-    }
-    if (usage.serverToolRequests) {
-      this.totals.totalServerToolRequests += usage.serverToolRequests;
-    }
-
-    // Store snapshot
     this.normalizedSnapshots.push({ round, usage });
   }
 
-  /**
-   * @deprecated Use recordNormalizedUsage() instead.
-   * Records usage from provider-specific types (legacy method).
-   */
-  recordRoundUsage(params: {
-    round: number;
-    provider: UsageProvider;
-    summary: UsageSummary;
-    nativeUsage?: NativeUsagePayload | null;
-  }): void {
-    const { summary } = params;
-
-    if (summary) {
-      if (this.totals.firstInputTokens === 0) {
-        this.totals.firstInputTokens = summary.totalInputTokens;
-      }
-
-      this.totals.totalInputTokens += summary.totalInputTokens;
-      this.totals.totalOutputTokens += summary.totalOutputTokens;
-      this.totals.totalCost += summary.cost;
-
-      if ('cache_read_input_tokens' in summary) {
-        const cacheRead = summary.cache_read_input_tokens ?? 0;
-        const cacheCreation = summary.cache_creation_input_tokens ?? 0;
-        this.totals.totalCacheReadInputTokens += cacheRead;
-        this.totals.totalCacheCreationInputTokens += cacheCreation;
-      } else if ('prompt_tokens' in summary) {
-        const promptDetails = summary.prompt_tokens_details;
-        const cachedTokens = promptDetails?.cached_tokens ?? 0;
-        this.totals.totalCacheReadInputTokens += cachedTokens;
-
-        const reasoningTokens =
-          summary.completion_tokens_details?.reasoning_tokens ??
-          summary.reasoning_tokens ??
-          0;
-        if (reasoningTokens) {
-          this.totals.totalReasoningTokens += reasoningTokens;
-        }
-      }
-    }
-
-    // Convert to normalized format if we have summary
-    if (summary) {
-      this.normalizedSnapshots.push({
-        round: params.round,
-        usage: {
-          inputTokens: summary.totalInputTokens,
-          outputTokens: summary.totalOutputTokens,
-          cost: summary.cost,
-          responseTimeMs: summary.responseTime,
-          provider: params.provider,
-          _native: params.nativeUsage ?? undefined,
-        },
-      });
-    }
-  }
-
-  merge(accumulator: RunUsageAccumulator): void {
-    const otherTotals = accumulator.getTotals();
+  merge(other: RunUsageAccumulator): void {
+    const otherTotals = other.getTotals();
     if (this.totals.firstInputTokens === 0) {
       this.totals.firstInputTokens = otherTotals.firstInputTokens;
     }
+
     this.totals.totalInputTokens += otherTotals.totalInputTokens;
     this.totals.totalOutputTokens += otherTotals.totalOutputTokens;
     this.totals.totalCost += otherTotals.totalCost;
@@ -215,32 +106,15 @@ export class RunUsageAccumulator {
       otherTotals.totalToolUsePromptTokens;
     this.totals.totalServerToolRequests += otherTotals.totalServerToolRequests;
 
-    for (const snapshot of accumulator.getNormalizedSnapshots()) {
-      this.normalizedSnapshots.push(snapshot);
-    }
+    this.normalizedSnapshots.push(...other.getNormalizedSnapshots());
   }
 
   getTotals(): RunUsageTotals {
     return { ...this.totals };
   }
 
-  /**
-   * Returns normalized usage snapshots.
-   */
   getNormalizedSnapshots(): NormalizedUsageSnapshot[] {
     return [...this.normalizedSnapshots];
-  }
-
-  /**
-   * @deprecated Use getNormalizedSnapshots() instead.
-   * Returns legacy native usage snapshots for backward compatibility.
-   */
-  getNativeUsageSnapshots(): NativeUsageSnapshot[] {
-    return this.normalizedSnapshots.map((snap) => ({
-      round: snap.round,
-      provider: snap.usage.provider as LegacyUsageProvider,
-      payload: snap.usage._native as NativeUsagePayload,
-    }));
   }
 
   toJSON(): RunUsageAccumulatorJSON {
@@ -253,50 +127,29 @@ export class RunUsageAccumulator {
   static fromJSON(
     json: RunUsageAccumulatorJSON | null | undefined,
   ): RunUsageAccumulator {
-    const accumulator = new RunUsageAccumulator();
-    if (!json) {
-      return accumulator;
-    }
+    const acc = new RunUsageAccumulator();
+    if (!json) return acc;
 
-    // Handle both old and new field names for backward compatibility
-    const totals = json.totals;
-    accumulator.totals.firstInputTokens = totals.firstInputTokens ?? 0;
-    accumulator.totals.totalInputTokens = totals.totalInputTokens ?? 0;
-    accumulator.totals.totalOutputTokens = totals.totalOutputTokens ?? 0;
-    accumulator.totals.totalCost = totals.totalCost ?? 0;
-    accumulator.totals.totalCacheReadInputTokens =
-      totals.totalCacheReadInputTokens ?? 0;
-    accumulator.totals.totalCacheCreationInputTokens =
-      totals.totalCacheCreationInputTokens ?? 0;
-    accumulator.totals.totalReasoningTokens = totals.totalReasoningTokens ?? 0;
-    // Handle legacy field name (totalToolUseTokens -> totalToolUsePromptTokens)
-    const legacyTotals = totals as LegacyRunUsageTotals;
-    accumulator.totals.totalToolUsePromptTokens =
-      totals.totalToolUsePromptTokens ?? legacyTotals.totalToolUseTokens ?? 0;
-    accumulator.totals.totalServerToolRequests =
-      totals.totalServerToolRequests ?? 0;
+    const t = json.totals;
+    acc.totals = {
+      firstInputTokens: t.firstInputTokens ?? 0,
+      totalInputTokens: t.totalInputTokens ?? 0,
+      totalOutputTokens: t.totalOutputTokens ?? 0,
+      totalCost: t.totalCost ?? 0,
+      totalCacheReadInputTokens: t.totalCacheReadInputTokens ?? 0,
+      totalCacheCreationInputTokens: t.totalCacheCreationInputTokens ?? 0,
+      totalReasoningTokens: t.totalReasoningTokens ?? 0,
+      // Handle legacy field name
+      totalToolUsePromptTokens:
+        t.totalToolUsePromptTokens ?? t.totalToolUseTokens ?? 0,
+      totalServerToolRequests: t.totalServerToolRequests ?? 0,
+    };
 
-    // Load normalized snapshots if available
     if (json.normalizedSnapshots) {
-      accumulator.normalizedSnapshots.push(...json.normalizedSnapshots);
+      acc.normalizedSnapshots.push(...json.normalizedSnapshots);
     }
-    // Fallback: convert legacy snapshots to normalized format
-    else if (json.snapshots) {
-      for (const snap of json.snapshots) {
-        accumulator.normalizedSnapshots.push({
-          round: snap.round,
-          usage: {
-            inputTokens: 0,
-            outputTokens: 0,
-            cost: 0,
-            responseTimeMs: 0,
-            provider: snap.provider,
-            _native: snap.payload,
-          },
-        });
-      }
-    }
+    // Note: Legacy `snapshots` field is ignored - totals are already aggregated
 
-    return accumulator;
+    return acc;
   }
 }
