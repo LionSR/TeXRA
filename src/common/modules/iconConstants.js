@@ -5,17 +5,25 @@ export const CHEVRON_RIGHT_CLASS = 'codicon codicon-chevron-right';
 /**
  * Agent decorator configuration - single source of truth for all agent indicators.
  * Used across dropdown, stream tabs, and history view.
+ *
+ * Each decorator has:
+ * - icon: codicon name for use in places that support HTML (stream tabs, etc.)
+ * - unicode: unicode character for use in dropdowns (vscode-option only supports text)
+ * - label: human-readable label
+ * - hint: tooltip text (optional)
  */
 export const AGENT_DECORATORS = {
   // Agent properties (remote, multiple outputs)
   properties: {
     remote: {
       icon: 'cloud',
+      unicode: '☁',
       label: 'Remote',
       hint: 'Agent prompts loaded from remote',
     },
     multipleOutputs: {
       icon: 'files',
+      unicode: '∶∶',
       label: 'Multiple outputs',
       hint: 'Generates multiple output files',
     },
@@ -23,16 +31,16 @@ export const AGENT_DECORATORS = {
 
   // Agent types (reasoning strategy)
   types: {
-    CoT: { icon: 'list-tree', label: 'Chain of Thought' },
-    direct: { icon: 'lightbulb', label: 'Direct' },
-    toolUse: { icon: 'tools', label: 'Tool Use' },
-    unknown: { icon: 'question', label: 'Unknown' },
+    CoT: { icon: 'list-tree', unicode: '⊢', label: 'Chain of Thought' },
+    direct: { icon: 'lightbulb', unicode: '◈', label: 'Direct' },
+    toolUse: { icon: 'tools', unicode: '⚙', label: 'Tool Use' },
+    unknown: { icon: 'question', unicode: '?', label: 'Unknown' },
   },
 
   // Session kinds (workflow vs tool-use category)
   sessionKinds: {
-    workflow: { icon: 'symbol-method', label: 'Workflow' },
-    toolUse: { icon: 'tools', label: 'Tool Use' },
+    workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
+    toolUse: { icon: 'tools', unicode: '⚙', label: 'Tool Use' },
   },
 };
 
