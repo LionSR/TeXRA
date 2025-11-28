@@ -898,7 +898,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       cachedInputTokens: cachedTokens || undefined,
       percentageCached: percentageCached > 0 ? percentageCached : undefined,
       reasoningTokens: reasoningTokens || undefined,
-      toolUseTokens: rawUsage.toolUsePromptTokenCount || undefined,
+      toolUsePromptTokens: rawUsage.toolUsePromptTokenCount || undefined,
       _native: rawUsage,
     };
   }

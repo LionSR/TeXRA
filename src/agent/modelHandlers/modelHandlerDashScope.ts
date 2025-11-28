@@ -7,8 +7,8 @@ import OpenAI from 'openai';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
   ChatCompletion,
