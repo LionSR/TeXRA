@@ -3,13 +3,13 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { TaskGroup } from '@logger/LogTypes';
 import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 
 export interface TaskGroupUpdatePayload {
   stream: StreamTabId;

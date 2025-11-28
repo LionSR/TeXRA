@@ -2,10 +2,13 @@
 import { z } from 'zod';
 
 // Local imports - response usage types
+import type {
+  NormalizedUsage,
+  UsageProvider,
+} from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
   type RunUsageAccumulatorJSON,
-  type UsageProvider,
   type UsageSummary,
   type NativeUsagePayload,
 } from './RunUsageAccumulator';
@@ -19,8 +22,6 @@ import type {
   GenerateContentResponseUsageMetadata,
 } from './ResponseUsage';
 
-// Local imports - usage accumulator
-
 export type NativeResponseUsage =
   | ExtendedCompletionUsage
   | AnthropicUsage
@@ -31,9 +32,12 @@ export const ConversationRoundStateSnapshotSchema = z.strictObject({
   continuationCount: z.number().int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
-  usageSummary: z.custom<UsageSummary>().nullable(),
-  nativeUsage: z.custom<NativeUsagePayload>().nullable(),
-  provider: z.custom<UsageProvider>().nullable(),
+  // New: store normalized usage directly (nullish for backward compat with old saved states)
+  normalizedUsage: z.custom<NormalizedUsage>().nullish(),
+  // Legacy fields for backward compatibility (deprecated)
+  usageSummary: z.custom<UsageSummary>().nullable().optional(),
+  nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
+  provider: z.custom<UsageProvider>().nullable().optional(),
 });
 
 export type ConversationRoundStateSnapshot = z.infer<
@@ -45,9 +49,12 @@ export interface ConversationRoundStateJSON {
   continuationCount: number;
   responseTimeMs: number;
   outputFile: string;
-  usageSummary: UsageSummary;
-  nativeUsage: NativeUsagePayload | null;
-  provider: UsageProvider | null;
+  // nullish for backward compatibility with old saved states that lack this field
+  normalizedUsage?: NormalizedUsage | null;
+  // Legacy fields for backward compatibility
+  usageSummary?: UsageSummary;
+  nativeUsage?: NativeUsagePayload | null;
+  provider?: UsageProvider | null;
 }
 
 export class ConversationRoundState {
@@ -55,18 +62,15 @@ export class ConversationRoundState {
   public continuationCount: number;
   public responseTimeMs: number;
   public outputFile: string;
-  public usageSummary: UsageSummary;
-  public nativeUsage: NativeUsagePayload | null;
-  public provider: UsageProvider | null;
+  /** Normalized usage data - the single source of truth */
+  public normalizedUsage: NormalizedUsage | null;
 
   constructor(roundIndex: number) {
     this.roundIndex = roundIndex;
     this.continuationCount = 0;
     this.responseTimeMs = 0;
     this.outputFile = '';
-    this.usageSummary = null;
-    this.nativeUsage = null;
-    this.provider = null;
+    this.normalizedUsage = null;
   }
 
   incrementContinuation(): void {
@@ -77,20 +81,16 @@ export class ConversationRoundState {
     this.responseTimeMs += durationMs;
   }
 
-  setUsage(params: {
-    summary: UsageSummary;
-    nativeUsage?: NativeUsagePayload | null;
-    provider: UsageProvider;
-  }): void {
-    this.usageSummary = params.summary;
-    this.nativeUsage = params.nativeUsage ?? null;
-    this.provider = params.provider;
+  /**
+   * Sets the normalized usage for this round.
+   * This is the preferred method - use normalizeUsage() from the model handler.
+   */
+  setNormalizedUsage(usage: NormalizedUsage): void {
+    this.normalizedUsage = usage;
   }
 
   clearUsage(): void {
-    this.usageSummary = null;
-    this.nativeUsage = null;
-    this.provider = null;
+    this.normalizedUsage = null;
   }
 
   toJSON(): ConversationRoundStateJSON {
@@ -99,9 +99,7 @@ export class ConversationRoundState {
       continuationCount: this.continuationCount,
       responseTimeMs: this.responseTimeMs,
       outputFile: this.outputFile,
-      usageSummary: this.usageSummary,
-      nativeUsage: this.nativeUsage,
-      provider: this.provider,
+      normalizedUsage: this.normalizedUsage,
     };
   }
 
@@ -110,9 +108,23 @@ export class ConversationRoundState {
     state.continuationCount = json.continuationCount;
     state.responseTimeMs = json.responseTimeMs;
     state.outputFile = json.outputFile;
-    state.usageSummary = json.usageSummary;
-    state.nativeUsage = json.nativeUsage;
-    state.provider = json.provider;
+
+    // Load normalized usage if available
+    if (json.normalizedUsage) {
+      state.normalizedUsage = json.normalizedUsage;
+    }
+    // Legacy: convert old format if present (for backward compatibility)
+    else if (json.usageSummary && json.provider) {
+      state.normalizedUsage = {
+        inputTokens: json.usageSummary.totalInputTokens,
+        outputTokens: json.usageSummary.totalOutputTokens,
+        cost: json.usageSummary.cost,
+        responseTimeMs: json.usageSummary.responseTime,
+        provider: json.provider,
+        _native: json.nativeUsage ?? undefined,
+      };
+    }
+
     return state;
   }
 }
@@ -150,13 +162,16 @@ export class AgentRunState {
     this.totalResponseTimeMs += durationMs;
   }
 
+  /**
+   * Records usage from a completed round using normalized usage.
+   */
   recordRound(roundState: ConversationRoundState): void {
-    this.usageAccumulator.recordRoundUsage({
-      round: roundState.roundIndex,
-      provider: roundState.provider ?? 'unknown',
-      summary: roundState.usageSummary,
-      nativeUsage: roundState.nativeUsage ?? undefined,
-    });
+    if (roundState.normalizedUsage) {
+      this.usageAccumulator.recordNormalizedUsage(
+        roundState.roundIndex,
+        roundState.normalizedUsage,
+      );
+    }
     this.addResponseTime(roundState.responseTimeMs);
   }
 

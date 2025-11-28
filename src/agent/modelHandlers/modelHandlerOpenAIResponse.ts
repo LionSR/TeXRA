@@ -16,6 +16,7 @@ import {
   type ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -819,6 +820,44 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.computePrice(responseUsage),
       responseTime,
     );
+  }
+
+  /** Normalizes OpenAI Responses API usage data into a unified format. */
+  normalizeUsage(
+    rawUsage: ResponseUsage,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    if (!rawUsage) {
+      return {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+        responseTimeMs,
+        provider: 'openai-response',
+      };
+    }
+
+    const inputTokens = rawUsage.input_tokens ?? 0;
+    const outputTokens = rawUsage.output_tokens ?? 0;
+    const cachedTokens = rawUsage.input_tokens_details?.cached_tokens ?? 0;
+    const reasoningTokens =
+      rawUsage.output_tokens_details?.reasoning_tokens ?? 0;
+
+    // Calculate percentage cached
+    const percentageCached =
+      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost: this.computePrice(rawUsage),
+      responseTimeMs,
+      provider: 'openai-response',
+      cachedInputTokens: cachedTokens || undefined,
+      percentageCached: percentageCached > 0 ? percentageCached : undefined,
+      reasoningTokens: reasoningTokens || undefined,
+      _native: rawUsage,
+    };
   }
 
   /** Models with prefill support do not require additional continuation messages. */
