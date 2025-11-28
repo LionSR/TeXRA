@@ -163,7 +163,6 @@ export function aggregateUsage(
   const allSameProvider = usages.every((u) => u.provider === firstProvider);
   const resultProvider = allSameProvider ? firstProvider : provider;
 
-  const totalCacheableTokens = totalCachedInputTokens + totalCacheCreationTokens;
   const percentageCached =
     totalInputTokens > 0
       ? (totalCachedInputTokens / totalInputTokens) * 100
