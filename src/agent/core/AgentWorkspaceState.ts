@@ -4,12 +4,17 @@ import { z } from 'zod';
 /**
  * Thinking block from reasoning models.
  * This represents the internal reasoning/thinking output from models like Claude Sonnet 4.
- * Uses a flexible structure to accommodate different provider formats.
+ * Supports both regular thinking blocks and redacted thinking blocks from Anthropic.
  */
 export interface ThinkingBlock {
+  /** Block type: 'thinking' for regular, 'redacted_thinking' for redacted */
   type: string;
-  thinking?: unknown;
-  [key: string]: unknown;
+  /** Thinking content (for regular thinking blocks) */
+  thinking?: string;
+  /** Signature for verification (for regular thinking blocks from Anthropic) */
+  signature?: string;
+  /** Encrypted data (for redacted thinking blocks from Anthropic) */
+  data?: string;
 }
 
 /**
@@ -184,12 +189,12 @@ export class DocumentStatsState {
   }
 }
 
-export const ThinkingBlockSchema = z
-  .object({
-    type: z.string(),
-    thinking: z.unknown().optional(),
-  })
-  .passthrough();
+export const ThinkingBlockSchema = z.object({
+  type: z.string(),
+  thinking: z.string().optional(),
+  signature: z.string().optional(),
+  data: z.string().optional(),
+});
 
 export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
   assembly: z.strictObject({

@@ -8,7 +8,6 @@ import {
   ChatCompletionContentPartInputAudio,
   ChatCompletionAssistantMessageParam,
   ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessage,
   ChatCompletionMessageCustomToolCall,
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
@@ -16,6 +15,7 @@ import {
   ChatCompletionToolMessageParam,
   ChatCompletionStreamParams,
 } from 'openai/resources/chat/completions';
+import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
@@ -77,20 +77,15 @@ type ChatCompletionRequestBase = Omit<
   'stream' | 'stream_options'
 >;
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+// Reasoning content type for DeepSeek, o1 models (not in SDK)
+type ReasoningContent = string | Array<{ type: string; text?: string }>;
 
-const collectTextFromUnknown = (value: unknown): string => {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(collectTextFromUnknown).join('');
-  }
-  if (isRecord(value) && typeof value.text === 'string') {
-    return value.text;
-  }
-  return '';
+const extractReasoningText = (
+  content: ReasoningContent | undefined,
+): string => {
+  if (!content) return '';
+  if (typeof content === 'string') return content;
+  return content.map((item) => item.text ?? '').join('');
 };
 
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
@@ -102,20 +97,14 @@ export interface StreamingAggregator {
   finalize(fallback?: ChatCompletion): ChatCompletion;
 }
 
-const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
+export const extractReasoningDelta = (chunk: ChatCompletionChunk): string => {
   const choice = chunk.choices[0];
-  if (!choice) {
-    return '';
-  }
+  if (!choice) return '';
 
-  const delta = choice.delta as unknown;
-  if (!isRecord(delta) || !('reasoning_content' in delta)) {
-    return '';
-  }
+  const delta = choice.delta as { reasoning_content?: ReasoningContent };
+  if (!('reasoning_content' in delta)) return '';
 
-  return collectTextFromUnknown(
-    (delta as { reasoning_content?: unknown }).reasoning_content,
-  );
+  return extractReasoningText(delta.reasoning_content);
 };
 
 /**
@@ -191,7 +180,7 @@ export class ModelHandlerOpenAI<
     }
 
     if (tools && tools.length > 0) {
-      (baseParams as any).parallel_tool_calls = false;
+      baseParams.parallel_tool_calls = false;
       baseParams.tools = toOpenAITools(tools);
       baseParams.tool_choice = 'auto';
     }
@@ -352,9 +341,19 @@ export class ModelHandlerOpenAI<
 
         try {
           const sdkFinalResponse = await stream.finalChatCompletion();
-          const finalResponse = streamingAggregator
+          let finalResponse = streamingAggregator
             ? streamingAggregator.finalize(sdkFinalResponse)
             : sdkFinalResponse;
+
+          // Ensure usage is captured - use SDK's totalUsage() as fallback
+          if (!finalResponse.usage) {
+            try {
+              const totalUsage = await stream.totalUsage();
+              finalResponse = { ...finalResponse, usage: totalUsage };
+            } catch {
+              // totalUsage() may fail if stream ended abnormally
+            }
+          }
 
           this.finalizeStreams(thinking, output ?? undefined, finalResponse);
           return finalResponse;
@@ -1012,13 +1011,12 @@ export class ModelHandlerOpenAI<
 
     const lastMessage = messages.at(-1);
 
-    if (lastMessage.role === 'assistant') {
+    if (isAssistantMessage(lastMessage)) {
       if (Array.isArray(lastMessage.content)) {
-        const newMessage = {
+        lastMessage.content.push({
           type: 'text',
           text: bestConnector + newResponse,
-        };
-        lastMessage.content.push(newMessage);
+        });
       } else {
         lastMessage.content = [
           {
@@ -1027,7 +1025,7 @@ export class ModelHandlerOpenAI<
           },
         ];
       }
-    } else if (lastMessage.role === 'user' || lastMessage.role === 'system') {
+    } else if (lastMessage?.role === 'user' || lastMessage?.role === 'system') {
       this.logger.debug(
         ' Last message is a user or system message - unexpected format',
       );
@@ -1071,14 +1069,12 @@ export class ModelHandlerOpenAI<
       );
       // Then the last message is a user message
       // So the second last message must be an assistant message
-      if (secondLastMessage && secondLastMessage.role === 'assistant') {
-        // we get gradually get rid if this kind of isArray conditioning since now we are consistently using the content array
-        // but why do the following two differ?
+      if (isAssistantMessage(secondLastMessage)) {
         if (Array.isArray(secondLastMessage.content)) {
           secondLastMessage.content.push({
             type: 'text',
             text: bestConnector + newResponse,
-          } as any);
+          });
         } else {
           this.logger.error('Second last message content is not a list');
           secondLastMessage.content = [
@@ -1124,17 +1120,32 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Processes thinking blocks from API response. OpenAI models do not support thinking blocks.
-   * @param responseObject The response object from the OpenAI API
+   * Extracts reasoning content from an API response message.
+   * Subclasses can override to look at different fields (e.g., OpenRouter uses 'reasoning').
+   */
+  protected extractReasoningFromMessage(
+    message: Record<string, unknown> | undefined,
+  ): string | null {
+    const reasoning = message?.reasoning_content;
+    if (typeof reasoning === 'string' && reasoning.trim()) {
+      return reasoning;
+    }
+    return null;
+  }
+
+  /**
+   * Processes thinking blocks from API response.
+   * @param responseObject The response object from the API
    * @param workspaceState Optional workspaceState to update with thinking blocks
-   * @returns Always returns null as OpenAI doesn't support thinking blocks
+   * @returns The extracted reasoning content or null if none found
    */
   processThinkingBlock(
     responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const reasoning = responseObject?.choices?.[0]?.message?.reasoning_content;
-    if (typeof reasoning !== 'string' || !reasoning.trim()) {
+    const message = responseObject?.choices?.[0]?.message;
+    const reasoning = this.extractReasoningFromMessage(message);
+    if (!reasoning) {
       return null;
     }
 
@@ -1146,7 +1157,7 @@ export class ModelHandlerOpenAI<
     }
 
     this.logger.debug(
-      `OpenAI reasoning preview: ${reasoning.substring(0, K_SLICE)}...`,
+      `Reasoning content preview: ${reasoning.substring(0, K_SLICE)}...`,
     );
     return reasoning;
   }
@@ -1168,59 +1179,39 @@ export class ModelHandlerOpenAI<
     }
   }
 
-  private isFunctionToolCall(
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  ): call is ChatCompletionMessageFunctionToolCall {
-    return (
-      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
-      (call as ChatCompletionMessageToolCall).type === 'function'
-    );
-  }
-
-  private isCustomToolCall(
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
-  ): call is ChatCompletionMessageCustomToolCall {
-    return (
-      typeof (call as ChatCompletionMessageToolCall)?.type === 'string' &&
-      (call as ChatCompletionMessageToolCall).type === 'custom'
-    );
-  }
-
   protected normalizeToolCall(
-    id: string,
-    fallbackName: string,
-    call: ChatCompletionMessageToolCall | ChatCompletionMessage.FunctionCall,
+    call: ChatCompletionMessageToolCall,
   ): ChatCompletionMessageToolCall {
-    if (this.isFunctionToolCall(call)) {
+    if (call.type === 'function') {
       return {
-        id: call.id ?? id,
+        id: call.id,
         type: 'function',
         function: {
-          name: call.function?.name ?? fallbackName,
-          arguments: this.ensureStringifiedArguments(call.function?.arguments),
+          name: call.function.name,
+          arguments: this.ensureStringifiedArguments(call.function.arguments),
         },
       };
     }
-
-    if (this.isCustomToolCall(call)) {
+    if (call.type === 'custom') {
       return {
-        id: call.id ?? id,
+        id: call.id,
         type: 'custom',
         custom: {
-          name: call.custom?.name ?? fallbackName,
-          input: this.ensureStringifiedArguments(call.custom?.input),
+          name: call.custom.name,
+          input: this.ensureStringifiedArguments(call.custom.input),
         },
       };
     }
+    // Type should be exhaustive, but return as-is for safety
+    return call;
+  }
 
-    return {
-      id,
-      type: 'function',
-      function: {
-        name: call.name ?? fallbackName,
-        arguments: this.ensureStringifiedArguments(call.arguments),
-      },
-    };
+  /**
+   * Provider name used when extracting tool calls.
+   * Subclasses can override to customize the provider identifier.
+   */
+  protected get toolCallProvider(): string {
+    return 'openai';
   }
 
   protected parseArguments(raw: unknown): unknown {
@@ -1232,7 +1223,7 @@ export class ModelHandlerOpenAI<
       return JSON.parse(raw);
     } catch (error) {
       this.logger.warn(
-        'OpenAI tool call arguments could not be parsed as JSON; using raw string.',
+        'Tool call arguments could not be parsed as JSON; using raw string.',
         { data: error },
       );
       return raw;
@@ -1256,7 +1247,7 @@ export class ModelHandlerOpenAI<
             ),
         )
         .map((call) => ({
-          provider: 'openai',
+          provider: this.toolCallProvider,
           callId: call.id,
           name: call.function!.name,
           input: this.parseArguments(call.function!.arguments),
@@ -1267,6 +1258,16 @@ export class ModelHandlerOpenAI<
     return [];
   }
 
+  /**
+   * Formats text content for assistant messages in tool call follow-ups.
+   * Subclasses can override to use string format instead of array format.
+   */
+  protected formatAssistantContent(
+    text: string,
+  ): ChatCompletionAssistantMessageParam['content'] {
+    return [{ type: 'text', text }];
+  }
+
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: TCall,
@@ -1274,13 +1275,13 @@ export class ModelHandlerOpenAI<
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    const toolCall = this.normalizeToolCall(call.callId, call.name, call.raw);
+    const toolCall = this.normalizeToolCall(call.raw);
     const callMsg: ChatCompletionAssistantMessageParam = {
       role: 'assistant',
       tool_calls: [toolCall],
     };
     if (text) {
-      callMsg.content = [{ type: 'text', text }];
+      callMsg.content = this.formatAssistantContent(text);
     }
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     if (attachments.length > 0) {
@@ -1292,11 +1293,10 @@ export class ModelHandlerOpenAI<
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
-      tool_call_id: toolCall.id ?? call.callId,
+      tool_call_id: toolCall.id,
       content: JSON.stringify(sanitizedResult),
     };
-    const messages: ChatCompletionMessageParam[] = [callMsg, resultMsg];
-    return messages;
+    return [callMsg, resultMsg];
   }
 
   /**

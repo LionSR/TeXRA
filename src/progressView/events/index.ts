@@ -4,6 +4,11 @@ export { LogEventsModule, createLogEvents } from './LogEvents';
 export { OutputEventsModule, createOutputEvents } from './OutputEvents';
 export { ProgressEventHandler } from './ProgressEventHandler';
 export {
+  RetryEventsModule,
+  RetryEventsShared,
+  createRetryEventsModule,
+} from './RetryEvents';
+export {
   StreamStatusEventShared,
   StreamStatusEventModule,
   createStreamStatusEvents,
