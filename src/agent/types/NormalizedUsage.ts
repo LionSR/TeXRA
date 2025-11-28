@@ -21,11 +21,6 @@ export type UsageProvider =
   | 'unknown';
 
 /**
- * Anthropic service tier for request prioritization.
- */
-export type ServiceTier = 'standard' | 'priority' | 'batch';
-
-/**
  * Normalized usage statistics from any model provider.
  * Cost is computed once during normalization and never recomputed.
  */
@@ -69,10 +64,6 @@ export interface NormalizedUsage {
    * Note: This is a request count, not a token count.
    */
   serverToolRequests?: number;
-
-  // ─── Service metadata ────────────────────────────────────────────────────
-  /** Service tier used for the request (Anthropic only) */
-  serviceTier?: ServiceTier;
 
   // ─── Raw payload for debugging ───────────────────────────────────────────
   /** Original API response payload (optional, for debugging) */
