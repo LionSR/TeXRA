@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { BaseNode, Node, Flow } from '@agent/node';
 // Internal imports
 import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 import {
@@ -40,10 +40,11 @@ import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
   type RetryCallbacks,
+  type FallbackResult,
   clearRetryError,
-  beginAttempt,
-  determineRetryStrategy,
-  applyRetryDecision,
+  getNodeRetryConfig,
+  determineFallbackAction,
+  applyFallbackResult,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
 import type {
@@ -200,41 +201,89 @@ class ResponsePrepNode<C> extends BaseNode<
 }
 
 /**
- * Result type for model invocation that captures both success and error cases.
+ * Data extracted by prep() for model invocation.
+ * This is the ONLY data exec() should use (PocketFlow compliance).
+ *
+ * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
+ * which is the correct PocketFlow pattern for immutable configuration.
  */
-type InvocationExecResult =
-  | { success: true; response: unknown; responseTime?: number }
-  | { success: false; error: unknown };
+interface InvocationPrepResult {
+  shouldStop: boolean;
+  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+  systemPrompt?: string;
+}
 
 /**
- * Handles the actual model invocation step with integrated retry support.
+ * Result type for model invocation.
+ * - Success: Contains response from model
+ * - Fallback: From execFallback when all auto-retries exhausted
+ * - Skipped: When shouldStop is true
+ */
+type InvocationExecResult =
+  | { kind: 'success'; response: unknown; responseTime?: number }
+  | { kind: 'fallback'; result: FallbackResult }
+  | { kind: 'skipped' };
+
+/**
+ * Handles model invocation with PocketFlow's built-in retry.
  *
- * Instead of throwing errors and relying on external retry logic, this node
- * uses flow transitions to handle retry:
- * - RETRY: Auto-retry with backoff (loops back to self)
- * - AWAIT_RETRY: Pause for manual retry (goes to RetryWaitNode)
+ * Uses PocketFlow Node for auto-retry:
+ * - maxRetries and wait configured from user settings
+ * - exec() throws on error, Node retries automatically
+ * - execFallback() called when all auto-retries exhausted
+ *
+ * Flow transitions:
+ * - AWAIT_RETRY: Manual retry (goes to RetryWaitNode)
  * - default: Continue to next node on success
- * - COMPLETE: Non-retryable error
+ * - COMPLETE: Non-retryable error or user abort
  *
  * Services accessed via `_params.services`: options
  */
-class ResponseModelInvocationNode<C> extends BaseNode<
+class ResponseModelInvocationNode<C> extends Node<
   ResponseCycleShared<C>,
   ResponseCycleParams<C>
 > {
-  async prep(shared: ResponseCycleShared<C>): Promise<ResponseCycleShared<C>> {
-    return shared;
+  constructor() {
+    const config = getNodeRetryConfig();
+    super(config.maxRetries, config.wait);
   }
 
-  async exec(shared: ResponseCycleShared<C>): Promise<InvocationExecResult> {
-    const { options } = this._params.services;
-    const { state, retryState } = shared;
-    if (state.shouldStop) {
-      return { success: true, response: undefined };
-    }
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: exec() should only use prepRes, not shared.
+   */
+  async prep(shared: ResponseCycleShared<C>): Promise<InvocationPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      messages: state.messages,
+      systemPrompt: state.systemPrompt,
+    };
+  }
 
-    // Increment attempt counter (single source of truth)
-    beginAttempt(retryState);
+  /**
+   * Read fresh retry config before starting the retry loop.
+   *
+   * This enables config changes to take effect without rebuilding the flow.
+   * Config is read once at the start of _exec(), before any retries begin,
+   * so the same config applies to all retry attempts within a single execution.
+   *
+   * Note: PocketFlow flows are single-threaded per request, so concurrent
+   * mutation is not a concern here.
+   */
+  async _exec(prepRes: unknown): Promise<unknown> {
+    const config = getNodeRetryConfig();
+    this.maxRetries = config.maxRetries;
+    this.wait = config.wait;
+    return super._exec(prepRes);
+  }
+
+  async exec(prepRes: InvocationPrepResult): Promise<InvocationExecResult> {
+    const { options } = this._params.services;
+
+    if (prepRes.shouldStop) {
+      return { kind: 'skipped' };
+    }
 
     const abortController = new AbortController();
     options.setAbortController(abortController);
@@ -249,9 +298,9 @@ class ResponseModelInvocationNode<C> extends BaseNode<
       const { response, responseTime } = await stage.run(async () => {
         const modelResponse = await options.modelHandler.createResponse({
           client: options.client,
-          messages: state.messages,
+          messages: prepRes.messages,
           temperature: options.agentSetting.temperature || 0.0,
-          systemPrompt: state.systemPrompt,
+          systemPrompt: prepRes.systemPrompt,
           endTag: options.agentSetting.endTag,
           signal: abortController.signal,
           tools: options.modelHandler.capabilities.supportsFunctionCalling
@@ -264,78 +313,88 @@ class ResponseModelInvocationNode<C> extends BaseNode<
         return { response: modelResponse, responseTime: elapsed };
       });
 
-      return { success: true, response, responseTime };
-    } catch (error) {
-      return { success: false, error };
+      return { kind: 'success', response, responseTime };
     } finally {
       options.setAbortController(null);
     }
+    // Note: Errors from createResponse() are caught by PocketFlow Node's
+    // retry loop in _exec(), which calls execFallback() when exhausted.
+  }
+
+  /**
+   * Called by PocketFlow Node when all auto-retries are exhausted.
+   * Determines whether to offer manual retry or fail.
+   */
+  async execFallback(
+    _prepRes: InvocationPrepResult,
+    error: Error,
+  ): Promise<InvocationExecResult> {
+    const formatted = formatProviderHttpError(error);
+    const fallbackResult = determineFallbackAction(
+      formatted.retryable,
+      formatted.message,
+      formatted.statusCode,
+    );
+    return { kind: 'fallback', result: fallbackResult };
   }
 
   async post(
     shared: ResponseCycleShared<C>,
-    _prepRes: ResponseCycleShared<C>,
+    _prepRes: InvocationPrepResult,
     execRes: InvocationExecResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle successful invocation
-    if (execRes.success) {
-      clearRetryError(retryState);
+    // Handle skipped (shouldStop was true before invocation)
+    if (execRes.kind === 'skipped') {
+      options.logger.debug('Model invocation skipped: shouldStop was already true');
+      return FlowTransition.COMPLETE;
+    }
 
-      if (!execRes.response) {
-        // Skipped or aborted
-        state.endTurn = false;
-        if (state.shouldStop) {
-          return FlowTransition.COMPLETE;
-        }
-        options.logger.warn(
-          'Model response was aborted or returned no data; output may be incomplete.',
-        );
+    // Handle fallback (all auto-retries exhausted)
+    if (execRes.kind === 'fallback') {
+      const transition = applyFallbackResult(
+        execRes.result,
+        retryState,
+        options.logger,
+        'Model invocation',
+      );
+
+      // Set state flags on failure
+      if (execRes.result.outcome === 'fail') {
         state.shouldStop = true;
-        return FlowTransition.COMPLETE;
+        state.endTurn = false;
       }
 
-      state.responseObject = execRes.response;
-      state.responseTime = execRes.responseTime;
-
-      if (state.debugContext && state.debugFileOptions) {
-        await maybeSaveDebugObject({
-          object: execRes.response,
-          objectType: 'response',
-          context: state.debugContext,
-          fileOptions: state.debugFileOptions,
-        });
-      }
-
-      return undefined; // Continue to process node
+      return transition;
     }
 
-    // Handle error - use single source of truth for retry decision and side-effects
-    const formatted = formatProviderHttpError(execRes.error);
-    const decision = determineRetryStrategy(
-      retryState,
-      formatted.message,
-      formatted.statusCode,
-      formatted.retryable,
-    );
+    // Handle success
+    clearRetryError(retryState);
 
-    // Apply retry decision (logging, sleeping) via shared helper
-    const transition = await applyRetryDecision(
-      decision,
-      options.logger,
-      retryState,
-      'Model invocation',
-    );
-
-    // Set state flags on failure (response-cycle specific)
-    if (decision.action === 'fail') {
+    if (!execRes.response) {
+      // Response was empty (shouldn't happen normally)
+      options.logger.warn(
+        'Model response was aborted or returned no data; output may be incomplete.',
+      );
       state.shouldStop = true;
-      state.endTurn = false;
+      return FlowTransition.COMPLETE;
     }
 
-    return transition;
+    state.responseObject = execRes.response;
+    state.responseTime = execRes.responseTime;
+
+    if (state.debugContext && state.debugFileOptions) {
+      await maybeSaveDebugObject({
+        object: execRes.response,
+        objectType: 'response',
+        context: state.debugContext,
+        fileOptions: state.debugFileOptions,
+      });
+    }
+
+    return undefined; // Continue to process node
   }
 }
 
@@ -808,16 +867,15 @@ export function createResponseCycleFlow<C>(): Flow<
   invokeNode.next(processNode);
   processNode.next(continuationNode);
 
-  // Retry transitions from invoke node:
-  // - RETRY: Loop back to invoke for auto-retry
+  // Retry transition from invoke node:
   // - AWAIT_RETRY: Go to retry wait node for manual retry
-  invokeNode.on(FlowTransition.RETRY, invokeNode);
+  // Note: Auto-retry is handled internally by PocketFlow Node (maxRetries, wait)
   invokeNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
 
   // Retry wait node transitions:
-  // - RETRY: Loop back to invoke node after user triggers retry
+  // - MANUAL_RETRY: Loop back to invoke node after user triggers retry
   // - COMPLETE: Exit flow if user cancels
-  retryWaitNode.on(FlowTransition.RETRY, invokeNode);
+  retryWaitNode.on(FlowTransition.MANUAL_RETRY, invokeNode);
 
   // Continuation can loop back to prep
   continuationNode.on(FlowTransition.CONTINUE, prepNode);

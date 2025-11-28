@@ -1,5 +1,5 @@
 // Local imports - core flow primitives
-import { BaseNode, Flow } from '@agent/node';
+import { BaseNode, Node, Flow } from '@agent/node';
 import {
   BaseCycleState,
   resetCycleState,
@@ -38,10 +38,11 @@ import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
   type RetryCallbacks,
+  type FallbackResult,
   clearRetryError,
-  beginAttempt,
-  determineRetryStrategy,
-  applyRetryDecision,
+  getNodeRetryConfig,
+  determineFallbackAction,
+  applyFallbackResult,
 } from './RetryState';
 import { createRetryWaitNode } from './BaseRetryWaitNode';
 import type {
@@ -239,45 +240,93 @@ function buildToolResultPayload(
 }
 
 /**
- * Result type for tool-use call that captures both success and error cases.
+ * Data extracted by prep() for tool-use call.
+ * This is the ONLY data exec() should use (PocketFlow compliance).
+ *
+ * Note: Services (modelHandler, client, etc.) are accessed via this._params.services,
+ * which is the correct PocketFlow pattern for immutable configuration.
+ */
+interface ToolUseCallPrepResult {
+  shouldStop: boolean;
+  messages: import('@agent/modelHandlers/types/ProviderMessage').ProviderMessage[];
+}
+
+/**
+ * Result type for tool-use call.
+ * - Success: Contains response from model
+ * - Fallback: From execFallback when all auto-retries exhausted
+ * - Skipped: When shouldStop is true
  */
 type ToolUseCallResult =
   | {
-      success: true;
+      kind: 'success';
       response: unknown;
       responseTime?: number;
       debugContext: CycleDebugContext;
       debugFileOptions: CycleDebugFileOptions;
     }
-  | { success: false; error: unknown };
+  | { kind: 'fallback'; result: FallbackResult }
+  | { kind: 'skipped' };
 
 /**
- * Handles model invocation for tool-use cycles with integrated retry support.
+ * Handles model invocation for tool-use cycles with PocketFlow's built-in retry.
+ *
+ * Uses PocketFlow Node for auto-retry:
+ * - maxRetries and wait configured from user settings
+ * - exec() throws on error, Node retries automatically
+ * - execFallback() called when all auto-retries exhausted
+ *
+ * Flow transitions:
+ * - AWAIT_RETRY: Manual retry (goes to RetryWaitNode)
+ * - default: Continue to next node on success
+ * - COMPLETE: Non-retryable error or user abort
  *
  * Services accessed via `_params.services`: options, store
  */
-class ToolUseCallNode<C> extends BaseNode<
+class ToolUseCallNode<C> extends Node<
   ToolUseCycleShared<C>,
   ToolUseCycleParams<C>
 > {
-  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCycleShared<C>> {
-    return shared;
+  constructor() {
+    const config = getNodeRetryConfig();
+    super(config.maxRetries, config.wait);
   }
 
-  async exec(shared: ToolUseCycleShared<C>): Promise<ToolUseCallResult> {
-    const { options, store } = this._params.services;
-    const { state, retryState } = shared;
-    if (state.shouldStop) {
-      return {
-        success: true,
-        response: undefined,
-        debugContext: {} as CycleDebugContext,
-        debugFileOptions: {} as CycleDebugFileOptions,
-      };
-    }
+  /**
+   * Extract data from shared for exec().
+   * PocketFlow compliance: exec() should only use prepRes, not shared.
+   */
+  async prep(shared: ToolUseCycleShared<C>): Promise<ToolUseCallPrepResult> {
+    const { state } = shared;
+    return {
+      shouldStop: state.shouldStop,
+      messages: state.messages,
+    };
+  }
 
-    // Increment attempt counter (single source of truth)
-    beginAttempt(retryState);
+  /**
+   * Read fresh retry config before starting the retry loop.
+   *
+   * This enables config changes to take effect without rebuilding the flow.
+   * Config is read once at the start of _exec(), before any retries begin,
+   * so the same config applies to all retry attempts within a single execution.
+   *
+   * Note: PocketFlow flows are single-threaded per request, so concurrent
+   * mutation is not a concern here.
+   */
+  async _exec(prepRes: unknown): Promise<unknown> {
+    const config = getNodeRetryConfig();
+    this.maxRetries = config.maxRetries;
+    this.wait = config.wait;
+    return super._exec(prepRes);
+  }
+
+  async exec(prepRes: ToolUseCallPrepResult): Promise<ToolUseCallResult> {
+    const { options, store } = this._params.services;
+
+    if (prepRes.shouldStop) {
+      return { kind: 'skipped' };
+    }
 
     const debugContext: CycleDebugContext = {
       logger: options.logger,
@@ -300,7 +349,7 @@ class ToolUseCallNode<C> extends BaseNode<
       options.modelHandler.setOutputStreaming(true);
       const response = await options.modelHandler.createResponse({
         client: options.client,
-        messages: state.messages,
+        messages: prepRes.messages,
         temperature: options.agentSetting.temperature ?? 0,
         signal: abortController.signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
@@ -309,72 +358,86 @@ class ToolUseCallNode<C> extends BaseNode<
       const responseTime = (Date.now() - start) / 1000;
 
       return {
-        success: true,
+        kind: 'success',
         response,
         responseTime,
         debugContext,
         debugFileOptions,
       };
-    } catch (error) {
-      return { success: false, error };
     } finally {
       options.setAbortController(null);
     }
+    // Note: Errors from createResponse() are caught by PocketFlow Node's
+    // retry loop in _exec(), which calls execFallback() when exhausted.
+  }
+
+  /**
+   * Called by PocketFlow Node when all auto-retries are exhausted.
+   * Determines whether to offer manual retry or fail.
+   */
+  async execFallback(
+    _prepRes: ToolUseCallPrepResult,
+    error: Error,
+  ): Promise<ToolUseCallResult> {
+    const formatted = formatProviderHttpError(error);
+    const fallbackResult = determineFallbackAction(
+      formatted.retryable,
+      formatted.message,
+      formatted.statusCode,
+    );
+    return { kind: 'fallback', result: fallbackResult };
   }
 
   async post(
     shared: ToolUseCycleShared<C>,
-    _prepRes: ToolUseCycleShared<C>,
+    _prepRes: ToolUseCallPrepResult,
     execRes: ToolUseCallResult,
   ): Promise<string | undefined> {
     const { options } = this._params.services;
     const { state, retryState } = shared;
 
-    // Handle successful invocation
-    if (execRes.success) {
-      clearRetryError(retryState);
+    // Handle skipped (shouldStop was true before invocation)
+    if (execRes.kind === 'skipped') {
+      options.logger.debug('Tool-use call skipped: shouldStop was already true');
+      return FlowTransition.COMPLETE;
+    }
 
-      if (!execRes.response) {
+    // Handle fallback (all auto-retries exhausted)
+    if (execRes.kind === 'fallback') {
+      const transition = applyFallbackResult(
+        execRes.result,
+        retryState,
+        options.logger,
+        'Tool-use call',
+      );
+
+      // Set state flags on failure
+      if (execRes.result.outcome === 'fail') {
         state.shouldStop = true;
-        return FlowTransition.COMPLETE;
       }
 
-      state.response = execRes.response;
-      state.responseTime = execRes.responseTime;
-
-      await maybeSaveDebugObject({
-        context: execRes.debugContext,
-        fileOptions: execRes.debugFileOptions,
-        object: execRes.response,
-        objectType: 'response',
-      });
-
-      return undefined; // Continue to process node
+      return transition;
     }
 
-    // Handle error - use single source of truth for retry decision and side-effects
-    const formatted = formatProviderHttpError(execRes.error);
-    const decision = determineRetryStrategy(
-      retryState,
-      formatted.message,
-      formatted.statusCode,
-      formatted.retryable,
-    );
+    // Handle success
+    clearRetryError(retryState);
 
-    // Apply retry decision (logging, sleeping) via shared helper
-    const transition = await applyRetryDecision(
-      decision,
-      options.logger,
-      retryState,
-      'Tool-use call',
-    );
-
-    // Set state flags on failure
-    if (decision.action === 'fail') {
+    if (!execRes.response) {
       state.shouldStop = true;
+      return FlowTransition.COMPLETE;
     }
 
-    return transition;
+    state.response = execRes.response;
+    state.responseTime = execRes.responseTime;
+
+    await maybeSaveDebugObject({
+      context: execRes.debugContext,
+      fileOptions: execRes.debugFileOptions,
+      object: execRes.response,
+      objectType: 'response',
+    });
+
+    return undefined; // Continue to process node
   }
 }
 
@@ -826,16 +889,15 @@ export function createToolUseCycleFlow<C>(): Flow<
   callNode.next(processNode);
   processNode.next(dispatchNode);
 
-  // Retry transitions from call node:
-  // - RETRY: Loop back to call for auto-retry
+  // Retry transition from call node:
   // - AWAIT_RETRY: Go to retry wait node for manual retry
-  callNode.on(FlowTransition.RETRY, callNode);
+  // Note: Auto-retry is handled internally by PocketFlow Node (maxRetries, wait)
   callNode.on(FlowTransition.AWAIT_RETRY, retryWaitNode);
 
   // Retry wait node transitions:
-  // - RETRY: Loop back to call node after user triggers retry
+  // - MANUAL_RETRY: Loop back to call node after user triggers retry
   // - COMPLETE: Exit flow if user cancels
-  retryWaitNode.on(FlowTransition.RETRY, callNode);
+  retryWaitNode.on(FlowTransition.MANUAL_RETRY, callNode);
 
   // Dispatch can loop back to prep for next tool cycle
   dispatchNode.on(FlowTransition.CONTINUE, prepNode);

@@ -1,9 +1,13 @@
 /**
- * Retry state management for flow-based retry handling.
+ * Retry state management for manual retry handling.
  *
- * This module centralizes retry state management AND side-effect handling.
- * - Pure functions: createRetryState, resetRetryState, determineRetryStrategy
- * - Side-effect helper: applyRetryDecision (logging, sleeping)
+ * Auto-retry is handled by PocketFlow's Node class (maxRetries, wait, execFallback).
+ * This module only manages error state for manual retry UI integration.
+ *
+ * Architecture:
+ * - PocketFlow Node handles auto-retry internally via _exec() loop
+ * - execFallback() is called when all auto-retries exhausted
+ * - This module tracks the last error for UI display and caller reporting
  */
 
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -11,10 +15,7 @@ import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
-  DEFAULT_MODEL_RETRY_ATTEMPTS,
-  DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
-import { sleep } from '@utils/helpers';
 
 import { FlowTransition } from './FlowTransitions';
 
@@ -36,265 +37,182 @@ export interface RetryCallbacks {
   cancelRetry?: () => void;
 }
 
+/**
+ * Error information for retry handling.
+ */
 export interface RetryErrorInfo {
   message: string;
   statusCode?: number;
   retryable: boolean;
 }
 
+/**
+ * Retry state for tracking errors across the retry flow.
+ * Used to communicate error details to callers and UI.
+ */
 export interface RetryState {
-  /** Current attempt number (1-indexed, incremented before each attempt). */
-  attemptCount: number;
-  /** Maximum automatic retry attempts before requiring manual intervention. */
-  maxAutoAttempts: number;
-  /** Base backoff delay in milliseconds (multiplied by attempt number). */
-  backoffMs: number;
   /** Information about the last error, if any. */
   lastError?: RetryErrorInfo;
-  /** Whether the flow is paused awaiting manual retry from user. */
-  awaitingManualRetry: boolean;
-}
-
-export interface RetryStateConfig {
-  maxAutoAttempts?: number;
-  backoffMs?: number;
 }
 
 // ============================================================================
-// Pure state creation and reset
+// PocketFlow Node Configuration
 // ============================================================================
 
 /**
- * Creates initial retry state with sensible defaults from configuration.
+ * Configuration for PocketFlow Node retry behavior.
+ * Use these values when constructing invocation nodes.
  */
-export function createRetryState(config?: RetryStateConfig): RetryState {
-  const configuredMaxAttempts =
-    config?.maxAutoAttempts ?? getModelRetryMaxAttempts();
-  const configuredBackoffMs = config?.backoffMs ?? getModelRetryBackoffMs();
+export interface NodeRetryConfig {
+  /**
+   * Total number of attempts, NOT the number of retries.
+   * For example, maxRetries=3 means: 1 initial attempt + 2 retries.
+   * Pass directly to Node constructor as maxRetries.
+   */
+  maxRetries: number;
+  /** Wait time between retries in seconds. Pass to Node constructor as wait. */
+  wait: number;
+}
+
+/**
+ * Gets PocketFlow Node retry configuration from user settings.
+ * Returns values suitable for passing to Node constructor.
+ *
+ * @example
+ * ```typescript
+ * class MyInvocationNode extends Node<S, P> {
+ *   constructor() {
+ *     const config = getNodeRetryConfig();
+ *     super(config.maxRetries, config.wait);
+ *   }
+ * }
+ * ```
+ */
+export function getNodeRetryConfig(): NodeRetryConfig {
+  const maxAutoAttempts = getModelRetryMaxAttempts() ?? 0;
+  const backoffMs = getModelRetryBackoffMs() ?? 1000;
 
   return {
-    attemptCount: 0,
-    // Allow 0 for manual-only retry (no automatic retries after first failure)
-    maxAutoAttempts: Math.max(
-      0,
-      configuredMaxAttempts ?? DEFAULT_MODEL_RETRY_ATTEMPTS,
-    ),
-    backoffMs: configuredBackoffMs ?? DEFAULT_MODEL_RETRY_BACKOFF_MS,
+    // maxRetries = initial attempt (1) + auto-retry attempts
+    maxRetries: 1 + Math.max(0, maxAutoAttempts),
+    // Convert milliseconds to seconds for PocketFlow Node
+    wait: backoffMs / 1000,
+  };
+}
+
+// ============================================================================
+// State management
+// ============================================================================
+
+/**
+ * Creates initial retry state.
+ */
+export function createRetryState(): RetryState {
+  return {
     lastError: undefined,
-    awaitingManualRetry: false,
   };
 }
 
 /**
- * Resets retry state for a fresh operation (keeps config, clears attempt state).
- */
-export function resetRetryState(state: RetryState): void {
-  state.attemptCount = 0;
-  state.lastError = undefined;
-  state.awaitingManualRetry = false;
-}
-
-/**
- * Clears error state and resets attempt counter after successful operation.
- * This ensures the next invocation gets a fresh retry budget.
- * @mutates state.attemptCount, state.lastError, state.awaitingManualRetry
+ * Clears error state. Used for:
+ * - After successful invocation (to reset for next operation)
+ * - After manual retry triggered (to start fresh)
+ * - After user cancellation (to distinguish from error failure)
  */
 export function clearRetryError(state: RetryState): void {
-  state.attemptCount = 0;
   state.lastError = undefined;
-  state.awaitingManualRetry = false;
-}
-
-/**
- * Increments the attempt counter before each invocation attempt.
- * Call this at the start of exec() in invocation nodes.
- * @mutates state.attemptCount
- */
-export function beginAttempt(state: RetryState): void {
-  state.attemptCount++;
-}
-
-// ============================================================================
-// Pure predicates
-// ============================================================================
-
-/**
- * Determines if automatic retry should be attempted based on current state.
- * Uses <= so maxAutoAttempts represents the number of retry attempts allowed,
- * not total attempts (initial attempt + maxAutoAttempts retries).
- */
-export function shouldAutoRetry(state: RetryState): boolean {
-  if (!state.lastError?.retryable) {
-    return false;
-  }
-  return state.attemptCount <= state.maxAutoAttempts;
-}
-
-/**
- * Determines if manual retry should be offered to the user.
- */
-export function shouldOfferManualRetry(state: RetryState): boolean {
-  return Boolean(state.lastError?.retryable) && !shouldAutoRetry(state);
-}
-
-// ============================================================================
-// Pure computations
-// ============================================================================
-
-/**
- * Computes the backoff delay for the current attempt.
- */
-export function computeBackoffDelay(state: RetryState): number {
-  return state.backoffMs * state.attemptCount;
 }
 
 /**
  * Records an error in retry state.
- * @param state - The retry state to update
- * @param message - Error message
- * @param statusCode - HTTP status code if available
- * @param retryable - Whether the error is retryable (from formatProviderHttpError)
  */
 export function recordRetryError(
   state: RetryState,
-  message: string,
-  statusCode: number | undefined,
-  retryable: boolean,
+  error: RetryErrorInfo,
 ): void {
-  state.lastError = {
-    message,
-    statusCode,
-    retryable,
-  };
+  state.lastError = error;
 }
 
 // ============================================================================
-// Retry decision (single source of truth for retry logic)
+// Fallback handling (called from Node.execFallback via post())
 // ============================================================================
 
 /**
- * Error info included in retry decisions.
+ * Result from execFallback that post() uses to determine flow transition.
+ * Discriminated union ensures type-safe handling.
  */
-export interface RetryDecisionError {
-  message: string;
-  statusCode?: number;
-  retryable: boolean;
-}
+export type FallbackResult =
+  | { outcome: 'manual_retry'; error: RetryErrorInfo }
+  | { outcome: 'fail'; error: RetryErrorInfo };
 
 /**
- * Result of retry strategy determination.
- * Uses discriminated union to make delayMs type-safe (required for auto_retry only).
- */
-export type RetryDecision =
-  | { action: 'auto_retry'; delayMs: number; error: RetryDecisionError }
-  | { action: 'manual_retry'; error: RetryDecisionError }
-  | { action: 'fail'; error: RetryDecisionError };
-
-/**
- * Determines retry strategy after an error.
- * This is the SINGLE SOURCE OF TRUTH for retry decision logic.
+ * Determines fallback action after all auto-retries are exhausted.
+ * Called from Node.execFallback() to decide between manual retry and failure.
  *
- * @param state - The retry state to update
- * @param errorMessage - Error message
- * @param statusCode - HTTP status code if available
  * @param retryable - Whether the error is retryable (from formatProviderHttpError)
- * @mutates state.lastError, state.awaitingManualRetry
- * Side effects (logging, sleeping, UI events) are handled by the caller.
+ * @param message - Error message
+ * @param statusCode - HTTP status code if available
+ * @returns FallbackResult for post() to handle
  */
-export function determineRetryStrategy(
-  state: RetryState,
-  errorMessage: string,
-  statusCode: number | undefined,
+export function determineFallbackAction(
   retryable: boolean,
-): RetryDecision {
-  // Record the error in state
-  recordRetryError(state, errorMessage, statusCode, retryable);
+  message: string,
+  statusCode?: number,
+): FallbackResult {
+  const error: RetryErrorInfo = { message, statusCode, retryable };
 
-  const error = {
-    message: errorMessage,
-    statusCode,
-    retryable,
-  };
-
-  // Check auto-retry first
-  if (shouldAutoRetry(state)) {
-    return {
-      action: 'auto_retry',
-      delayMs: computeBackoffDelay(state),
-      error,
-    };
+  if (retryable) {
+    // Error is retryable but auto-retries exhausted → offer manual retry
+    return { outcome: 'manual_retry', error };
   }
 
-  // Check manual retry
-  if (shouldOfferManualRetry(state)) {
-    state.awaitingManualRetry = true;
-    return {
-      action: 'manual_retry',
-      error,
-    };
-  }
-
-  // Non-retryable failure
-  return {
-    action: 'fail',
-    error,
-  };
+  // Non-retryable error → fail immediately
+  return { outcome: 'fail', error };
 }
 
-// ============================================================================
-// Retry side-effects (single source of truth for retry handling)
-// ============================================================================
-
 /**
- * Applies a retry decision by performing side effects (logging, sleeping).
- * Returns the flow transition to take.
+ * Applies fallback result: records error, logs, and returns flow transition.
+ * Called from post() after receiving FallbackResult from execFallback.
  *
- * This is the SINGLE SOURCE OF TRUTH for retry side-effect handling.
- * Call this in flow node post() methods instead of duplicating switch logic.
- *
- * @param decision - The retry decision from determineRetryStrategy
+ * @param result - The fallback result from determineFallbackAction
+ * @param state - The retry state to update
  * @param logger - Logger for status messages
- * @param retryState - Current retry state (for logging attempt counts)
- * @param operationName - Name of the operation for log messages (e.g., "Model invocation")
- * @returns The flow transition string, or undefined to continue to next node
+ * @param operationName - Name of the operation for log messages
+ * @returns Flow transition string
  */
-export async function applyRetryDecision(
-  decision: RetryDecision,
+export function applyFallbackResult(
+  result: FallbackResult,
+  state: RetryState,
   logger: AgentLogger,
-  retryState: RetryState,
   operationName: string,
-): Promise<string | undefined> {
-  switch (decision.action) {
-    case 'auto_retry':
-      logger.warn(
-        `Retrying ${operationName.toLowerCase()} after ${decision.delayMs}ms (retry ${retryState.attemptCount - 1}/${retryState.maxAutoAttempts}): ${decision.error.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: {
-            attempt: retryState.attemptCount,
-            maxAttempts: retryState.maxAutoAttempts,
-            statusCode: decision.error.statusCode,
-          },
-        },
-      );
-      await sleep(decision.delayMs);
-      return FlowTransition.RETRY;
+): string {
+  // Record error in state for caller/UI access
+  recordRetryError(state, result.error);
 
+  switch (result.outcome) {
     case 'manual_retry':
-      logger.error(`${operationName} failed: ${decision.error.message}`, {
+      logger.error(`${operationName} failed: ${result.error.message}`, {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: { statusCode: decision.error.statusCode, retryable: true },
+        data: { statusCode: result.error.statusCode, retryable: true },
       });
       return FlowTransition.AWAIT_RETRY;
 
     case 'fail':
       logger.error(
-        `${operationName} failed (not retryable): ${decision.error.message}`,
+        `${operationName} failed (not retryable): ${result.error.message}`,
         {
           messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: { statusCode: decision.error.statusCode, retryable: false },
+          data: { statusCode: result.error.statusCode, retryable: false },
         },
       );
       return FlowTransition.COMPLETE;
+
+    default: {
+      // Exhaustiveness check: ensure all FallbackResult outcomes are handled
+      const _exhaustive: never = result;
+      throw new Error(
+        `Unhandled fallback outcome: ${(_exhaustive as FallbackResult).outcome}`,
+      );
+    }
   }
 }
