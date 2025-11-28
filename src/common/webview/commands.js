@@ -177,6 +177,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
   RESOLVE_TOOL_EDIT_APPROVAL: 'resolveToolEditApproval',
   UPDATE_TOOL_EDIT_APPROVAL_STATE: 'updateToolEditApprovalState',
+  SHOW_RETRY_REQUEST: 'showRetryRequest',
+  RESOLVE_RETRY_REQUEST: 'resolveRetryRequest',
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
@@ -185,6 +187,8 @@ export const PROGRESS_VIEW_COMMANDS = {
   // Actions
   RUN_AGAIN: 'runAgain',
   RUN_NEW: 'runNew',
+  RETRY_STREAM_REQUEST: 'retryStreamRequest',
+  CANCEL_RETRY_REQUEST: 'cancelRetryRequest',
   DIFF_STREAM: 'diffStream',
   PACK_STREAM: 'packStream',
   SORT_STREAMS: 'sortStreams',
