@@ -6,6 +6,7 @@ import { K_SLICE } from '@utils/config';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Type imports
 import type { ExtractResponseResult } from './types/IModelHandler';
@@ -14,6 +15,10 @@ import type { ExtractResponseResult } from './types/IModelHandler';
  * Handler for xAI models using OpenAI-compatible API.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
+  protected override get usageProvider(): NormalizedUsage['provider'] {
+    return 'xai';
+  }
+
   /**
    * Process thinking blocks for xAI models
    * @param responseObject The raw response object from the model
