@@ -1,35 +1,25 @@
 /**
  * Output processing nodes following pocketflow architecture.
  *
- * Each node follows the prep -> exec -> post pattern:
- * - prep: Read from shared store, prepare data for computation
- * - exec: Pure computation (no shared store access)
- * - post: Write results to shared store, return action for transition
+ * This module provides a thin orchestration layer over OutputHandler,
+ * following pocketflow's prep -> exec -> post pattern while delegating
+ * the actual processing to the battle-tested OutputHandler implementation.
  *
- * This separation ensures clear data flow and testability.
+ * Single source of truth: OutputHandler contains all processing logic.
  */
-
-// Standard library imports
-import * as path from 'path';
 
 // Local imports - core flow primitives
 import { Node } from '@agent/node';
-import type { OutputFileInfo, OutputXmlSummary, FileLocation } from '@agent/output/types';
-import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import type { AgentLogger } from '@logger/AgentLogger';
-import { AbsoluteFS } from '@utils/files';
-import type { TaskRunFileService } from '@utils/files';
+import type { OutputFileInfo, FileLocation } from '@agent/output/types';
+import type { IOutputHandler } from '@agent/output/IOutputHandler';
+import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - types
 import {
   OutputProcessingAction,
   type OutputProcessingActionType,
 } from './OutputProcessingTypes';
-import type {
-  OutputProcessingShared,
-  XmlValidationResult,
-  FileProcessingResult,
-} from './OutputProcessingTypes';
+import type { OutputProcessingShared } from './OutputProcessingTypes';
 
 // ============================================================================
 // SERVICE PARAMS - Injected dependencies for nodes
@@ -37,16 +27,15 @@ import type {
 
 /**
  * Services required by output processing nodes.
- * Passed via node params to maintain pocketflow's separation of concerns.
+ * OutputHandler is the single source of truth for processing logic.
  */
 export interface OutputProcessingServices {
-  xmlManager: XmlOutputManager;
-  logger: AgentLogger;
-  fileService: TaskRunFileService;
-  indentLatexFile: (location: FileLocation) => Promise<void>;
-  replaceInputCommands: (
-    baseFiles: readonly FileLocation[],
-    outputFiles: FileLocation[],
+  /** OutputHandler instance - contains all processing logic */
+  outputHandler: IOutputHandler;
+  /** Callback to run XML validation before processing */
+  ensureXmlStructure: (
+    outputLocation: FileLocation,
+    documentTag: string,
   ) => Promise<void>;
 }
 
@@ -61,426 +50,104 @@ export interface OutputProcessingParams {
 }
 
 // ============================================================================
-// PREPARE NODE - Reads output file and determines processing mode
+// PROCESS OUTPUT NODE - Delegates to OutputHandler
 // ============================================================================
 
-interface PreparePrep {
-  outputPath: string;
-  isMultipleOutputs: boolean;
-  shouldValidateXml: boolean;
-}
-
-interface PrepareExec {
-  content: string | null;
-  exists: boolean;
-}
-
-/**
- * Prepares output processing by reading the raw output file
- * and determining the processing mode (single vs multiple outputs).
- */
-export class PrepareOutputNode extends Node<
-  OutputProcessingShared,
-  OutputProcessingParams
-> {
-  async prep(shared: OutputProcessingShared): Promise<PreparePrep> {
-    const { input } = shared;
-    const isMultipleOutputs =
-      Array.isArray(input.agentConfig.outputFiles) &&
-      input.agentConfig.outputFiles.length > 0;
-
-    return {
-      outputPath: input.outputLocation.absolutePath,
-      isMultipleOutputs,
-      shouldValidateXml: input.shouldValidateXml,
-    };
-  }
-
-  async exec(prepRes: PreparePrep): Promise<PrepareExec> {
-    const exists = await AbsoluteFS.exists(prepRes.outputPath);
-    if (!exists) {
-      return { content: null, exists: false };
-    }
-
-    const content = await AbsoluteFS.read(prepRes.outputPath);
-    return { content, exists: true };
-  }
-
-  async post(
-    shared: OutputProcessingShared,
-    prepRes: PreparePrep,
-    execRes: PrepareExec,
-  ): Promise<OutputProcessingActionType> {
-    const { services } = this._params;
-
-    if (!execRes.exists || execRes.content === null) {
-      services.logger.debug(
-        `Output file does not exist: ${prepRes.outputPath}`,
-      );
-      shared.state.shouldContinue = false;
-      shared.state.error = new Error(
-        `Output file not found: ${prepRes.outputPath}`,
-      );
-      return OutputProcessingAction.ERROR;
-    }
-
-    shared.state.rawContent = execRes.content;
-    services.logger.debug(
-      `Read ${execRes.content.length} chars from ${prepRes.outputPath}`,
-    );
-
-    // Determine next action based on processing mode
-    if (!prepRes.shouldValidateXml) {
-      return OutputProcessingAction.SKIP_VALIDATION;
-    }
-
-    return OutputProcessingAction.DEFAULT;
-  }
-}
-
-// ============================================================================
-// XML VALIDATION NODE - Validates and repairs XML structure
-// ============================================================================
-
-interface XmlValidationPrep {
-  content: string;
-  documentTag: string;
+interface ProcessOutputPrep {
   outputLocation: FileLocation;
-}
-
-/**
- * Validates XML structure and repairs if necessary.
- * Only runs if shouldValidateXml is true.
- */
-export class XmlValidationNode extends Node<
-  OutputProcessingShared,
-  OutputProcessingParams
-> {
-  async prep(shared: OutputProcessingShared): Promise<XmlValidationPrep | null> {
-    const { input, state } = shared;
-    if (!state.rawContent) {
-      return null;
-    }
-
-    return {
-      content: state.rawContent,
-      documentTag: input.documentTag,
-      outputLocation: input.outputLocation,
-    };
-  }
-
-  async exec(
-    prepRes: XmlValidationPrep | null,
-  ): Promise<XmlValidationResult | null> {
-    if (!prepRes) {
-      return null;
-    }
-
-    const { services } = this._params;
-
-    // Use xmlManager to validate/repair structure
-    try {
-      await services.xmlManager.ensureCorrectXmlStructure(
-        prepRes.outputLocation,
-        prepRes.documentTag,
-      );
-
-      // Re-read content after potential repair
-      const repairedContent = await AbsoluteFS.read(
-        prepRes.outputLocation.absolutePath,
-      );
-
-      return {
-        isValid: true,
-        content: repairedContent,
-        repairAttempted: repairedContent !== prepRes.content,
-      };
-    } catch (error) {
-      // If repair fails, continue with original content
-      return {
-        isValid: false,
-        content: prepRes.content,
-        repairAttempted: true,
-      };
-    }
-  }
-
-  async post(
-    shared: OutputProcessingShared,
-    _prepRes: XmlValidationPrep | null,
-    execRes: XmlValidationResult | null,
-  ): Promise<OutputProcessingActionType> {
-    const { services } = this._params;
-
-    if (!execRes) {
-      return OutputProcessingAction.ERROR;
-    }
-
-    shared.state.validatedContent = execRes.content;
-
-    if (execRes.repairAttempted) {
-      services.logger.debug(
-        `XML validation: repair attempted, valid=${execRes.isValid}`,
-      );
-    }
-
-    return OutputProcessingAction.DEFAULT;
-  }
-}
-
-// ============================================================================
-// PROCESS FILES NODE - Extracts output files from XML content
-// ============================================================================
-
-interface ProcessFilesPrep {
-  outputLocation: FileLocation;
-  isMultipleOutputs: boolean;
-  shouldProcessXml: boolean;
-}
-
-/**
- * Processes output content to extract individual files.
- * Handles both single and multiple output scenarios.
- */
-export class ProcessFilesNode extends Node<
-  OutputProcessingShared,
-  OutputProcessingParams
-> {
-  async prep(shared: OutputProcessingShared): Promise<ProcessFilesPrep> {
-    const { input } = shared;
-    const isMultipleOutputs =
-      Array.isArray(input.agentConfig.outputFiles) &&
-      input.agentConfig.outputFiles.length > 0;
-
-    return {
-      outputLocation: input.outputLocation,
-      isMultipleOutputs,
-      shouldProcessXml: input.shouldValidateXml,
-    };
-  }
-
-  async exec(prepRes: ProcessFilesPrep): Promise<FileProcessingResult> {
-    const { services } = this._params;
-
-    try {
-      if (prepRes.isMultipleOutputs) {
-        // Process multiple outputs from XML
-        const processedPairs = await services.xmlManager.processMultipleXmlOutputs(
-          prepRes.outputLocation,
-        );
-
-        return {
-          files: processedPairs || [],
-          xmlSummary: null, // Will be captured later
-        };
-      }
-
-      // Process single output
-      if (prepRes.shouldProcessXml) {
-        const processed = await services.xmlManager.processSingleXmlOutput(
-          prepRes.outputLocation,
-        );
-        return {
-          files: processed ? [processed] : [],
-          xmlSummary: null,
-        };
-      }
-
-      // No XML processing - use raw file
-      const fileInfo: OutputFileInfo = {
-        source: path.basename(prepRes.outputLocation.absolutePath),
-        location: prepRes.outputLocation,
-        lineage: null,
-        diff: null,
-      };
-      return {
-        files: [fileInfo],
-        xmlSummary: null,
-      };
-    } catch (error) {
-      services.logger.debug(`Error processing files: ${error}`);
-      return { files: [], xmlSummary: null };
-    }
-  }
-
-  async post(
-    shared: OutputProcessingShared,
-    _prepRes: ProcessFilesPrep,
-    execRes: FileProcessingResult,
-  ): Promise<OutputProcessingActionType> {
-    const { services } = this._params;
-
-    shared.state.processedFiles = execRes.files;
-    shared.state.xmlSummary = execRes.xmlSummary;
-
-    services.logger.debug(`Processed ${execRes.files.length} output files`);
-
-    if (execRes.files.length === 0) {
-      shared.state.shouldContinue = false;
-      return OutputProcessingAction.COMPLETE;
-    }
-
-    return OutputProcessingAction.DEFAULT;
-  }
-}
-
-// ============================================================================
-// INDENT FILES NODE - Formats LaTeX files
-// ============================================================================
-
-interface IndentFilesPrep {
-  files: OutputFileInfo[];
-}
-
-interface IndentFilesExec {
-  indentedCount: number;
-}
-
-/**
- * Indents/formats LaTeX output files for better readability.
- */
-export class IndentFilesNode extends Node<
-  OutputProcessingShared,
-  OutputProcessingParams
-> {
-  async prep(shared: OutputProcessingShared): Promise<IndentFilesPrep> {
-    return {
-      files: shared.state.processedFiles,
-    };
-  }
-
-  async exec(prepRes: IndentFilesPrep): Promise<IndentFilesExec> {
-    const { services } = this._params;
-    let indentedCount = 0;
-
-    for (const file of prepRes.files) {
-      if (file.location.absolutePath.endsWith('.tex')) {
-        await services.indentLatexFile(file.location);
-        indentedCount++;
-      }
-    }
-
-    return { indentedCount };
-  }
-
-  async post(
-    shared: OutputProcessingShared,
-    _prepRes: IndentFilesPrep,
-    execRes: IndentFilesExec,
-  ): Promise<OutputProcessingActionType> {
-    const { services } = this._params;
-
-    if (execRes.indentedCount > 0) {
-      services.logger.debug(`Indented ${execRes.indentedCount} LaTeX files`);
-    }
-
-    return OutputProcessingAction.DEFAULT;
-  }
-}
-
-// ============================================================================
-// REPLACE INPUT COMMANDS NODE - Updates \input references
-// ============================================================================
-
-interface ReplaceInputsPrep {
-  baseFiles: readonly FileLocation[];
-  outputFiles: FileLocation[];
-  hasBaseFiles: boolean;
-}
-
-/**
- * Replaces \input commands in base files to reference new outputs.
- */
-export class ReplaceInputCommandsNode extends Node<
-  OutputProcessingShared,
-  OutputProcessingParams
-> {
-  async prep(shared: OutputProcessingShared): Promise<ReplaceInputsPrep> {
-    const { input, state } = shared;
-    const outputFiles = state.processedFiles.map((f) => f.location);
-    const hasBaseFiles = input.baseFiles.length > 0;
-
-    return {
-      baseFiles: input.baseFiles,
-      outputFiles,
-      hasBaseFiles,
-    };
-  }
-
-  async exec(prepRes: ReplaceInputsPrep): Promise<boolean> {
-    if (!prepRes.hasBaseFiles || prepRes.outputFiles.length === 0) {
-      return false;
-    }
-
-    const { services } = this._params;
-    await services.replaceInputCommands(prepRes.baseFiles, prepRes.outputFiles);
-    return true;
-  }
-
-  async post(
-    shared: OutputProcessingShared,
-    prepRes: ReplaceInputsPrep,
-    execRes: boolean,
-  ): Promise<OutputProcessingActionType> {
-    const { services } = this._params;
-
-    if (execRes) {
-      services.logger.debug(
-        `Replaced input commands in ${prepRes.baseFiles.length} base files`,
-      );
-    }
-
-    // Check if we should skip diff generation
-    if (!shared.input.endTurn) {
-      return OutputProcessingAction.SKIP_DIFF;
-    }
-
-    return OutputProcessingAction.DEFAULT;
-  }
-}
-
-// ============================================================================
-// FINALIZE NODE - Completes processing and returns result
-// ============================================================================
-
-interface FinalizePrep {
-  processedFiles: OutputFileInfo[];
-  xmlSummary: OutputXmlSummary | null;
   currRound: number;
+  shouldValidateXml: boolean;
+  documentTag: string;
+  stage?: AgentLogStage;
+}
+
+interface ProcessOutputExec {
+  success: boolean;
+  error?: Error;
 }
 
 /**
- * Finalizes output processing and prepares the result.
+ * Processes output by delegating to OutputHandler.
+ *
+ * This node follows pocketflow pattern but delegates all actual processing
+ * to OutputHandler.processOutputFiles(), keeping a single source of truth.
  */
-export class FinalizeOutputNode extends Node<
+export class ProcessOutputNode extends Node<
   OutputProcessingShared,
   OutputProcessingParams
 > {
-  async prep(shared: OutputProcessingShared): Promise<FinalizePrep> {
+  async prep(shared: OutputProcessingShared): Promise<ProcessOutputPrep> {
+    const { input } = shared;
     return {
-      processedFiles: shared.state.processedFiles,
-      xmlSummary: shared.state.xmlSummary,
-      currRound: shared.input.currRound,
+      outputLocation: input.outputLocation,
+      currRound: input.currRound,
+      shouldValidateXml: input.shouldValidateXml,
+      documentTag: input.documentTag,
+      stage: input.parentStage,
     };
   }
 
-  async exec(prepRes: FinalizePrep): Promise<void> {
-    // No computation needed - just finalize
-    return;
+  async exec(prepRes: ProcessOutputPrep): Promise<ProcessOutputExec> {
+    const { services } = this._params;
+
+    try {
+      // Step 1: XML validation (if needed)
+      if (prepRes.shouldValidateXml) {
+        await services.ensureXmlStructure(
+          prepRes.outputLocation,
+          prepRes.documentTag,
+        );
+      }
+
+      // Step 2: Delegate all processing to OutputHandler (single source of truth)
+      await services.outputHandler.processOutputFiles(
+        prepRes.outputLocation,
+        prepRes.currRound,
+        prepRes.stage,
+      );
+
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   async post(
     shared: OutputProcessingShared,
-    prepRes: FinalizePrep,
-    _execRes: void,
+    prepRes: ProcessOutputPrep,
+    execRes: ProcessOutputExec,
   ): Promise<OutputProcessingActionType> {
     const { services } = this._params;
 
-    services.logger.debug(
-      `Output processing complete for round ${prepRes.currRound}: ${prepRes.processedFiles.length} files`,
-    );
+    if (!execRes.success) {
+      shared.state.error = execRes.error ?? new Error('Processing failed');
+      shared.state.shouldContinue = false;
+      return OutputProcessingAction.ERROR;
+    }
 
+    // Get processed files from OutputHandler
+    const files = services.outputHandler.ensureRound(prepRes.currRound);
+    shared.state.processedFiles = files;
     shared.state.shouldContinue = false;
+
     return OutputProcessingAction.COMPLETE;
   }
 }
+
+// ============================================================================
+// RE-EXPORTS for backward compatibility
+// ============================================================================
+
+// These are no longer separate nodes - all processing is done in ProcessOutputNode
+// Keeping exports for any external code that might reference them
+export {
+  ProcessOutputNode as PrepareOutputNode,
+  ProcessOutputNode as XmlValidationNode,
+  ProcessOutputNode as ProcessFilesNode,
+  ProcessOutputNode as IndentFilesNode,
+  ProcessOutputNode as ReplaceInputCommandsNode,
+  ProcessOutputNode as FinalizeOutputNode,
+};

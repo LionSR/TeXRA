@@ -448,30 +448,24 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   /**
    * Creates the services object for output processing flow.
-   * This provides the required dependencies for flow nodes.
+   * OutputHandler is the single source of truth for processing logic.
    */
   protected createOutputProcessingServices(): OutputProcessingServices {
     return {
-      xmlManager: this.outputHandler.xmlManager,
-      logger: this.logger,
-      fileService: this.fileService,
-      indentLatexFile: (location) => this.outputHandler.indentLatexFile(location),
-      replaceInputCommands: async (baseFiles, outputFiles) => {
-        await replaceInputCommands(
-          baseFiles as FileLocation[],
-          outputFiles,
-          this.logger,
-        );
-      },
+      outputHandler: this.outputHandler,
+      ensureXmlStructure: (outputLocation, documentTag) =>
+        this.outputHandler.xmlManager.ensureCorrectXmlStructure(
+          outputLocation,
+          documentTag,
+        ),
     };
   }
 
   /**
    * Processes output using the pocketflow-based processing flow.
    *
-   * This method provides a cleaner, more composable approach to output processing
-   * following the pocketflow architecture pattern. Each step is handled by a
-   * dedicated node with clear prep -> exec -> post separation.
+   * This method delegates to OutputHandler.processOutputFiles() as the
+   * single source of truth, wrapped in a pocketflow orchestration layer.
    *
    * @param currRound - Current round index
    * @param outputFile - Output file location (must be workspace or run-storage, not external)
@@ -506,13 +500,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.logger.error(`Output processing failed: ${result.error.message}`);
     }
 
-    // Update outputHandler state to maintain compatibility
-    if (result.files.length > 0) {
-      const roundOutputs = this.outputHandler.ensureRound(currRound);
-      roundOutputs.length = 0;
-      roundOutputs.push(...result.files);
-    }
-
+    // OutputHandler.processOutputFiles() already updates its internal state,
+    // so result.files reflects the current state
     return result.files;
   }
 

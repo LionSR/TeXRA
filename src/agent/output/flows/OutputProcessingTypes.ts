@@ -1,8 +1,8 @@
 /**
  * Types for the output processing flow following pocketflow architecture.
  *
- * This module defines the shared store and related types for output processing,
- * keeping data schema separate from compute logic per pocketflow philosophy.
+ * This module defines the shared store for output processing.
+ * The flow delegates to OutputHandler as the single source of truth.
  */
 
 // Local imports
@@ -12,13 +12,11 @@ import type {
   FileLocation,
   AgentFileLocation,
   OutputFileInfo,
-  OutputXmlSummary,
-  RoundFileMapping,
 } from '@agent/output/types';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // ============================================================================
-// SHARED STORE - Single source of truth for output processing state
+// SHARED STORE
 // ============================================================================
 
 /**
@@ -46,19 +44,11 @@ export interface OutputProcessingInput {
 }
 
 /**
- * Mutable state that flows through nodes during output processing.
+ * Mutable state during output processing.
  */
 export interface OutputProcessingState {
-  /** Raw content read from the output file */
-  rawContent: string | null;
-  /** Content after XML validation/repair */
-  validatedContent: string | null;
   /** Processed output files with metadata */
   processedFiles: OutputFileInfo[];
-  /** XML summary extracted from the output */
-  xmlSummary: OutputXmlSummary | null;
-  /** File mapping for diff generation */
-  fileMapping: RoundFileMapping | null;
   /** Whether processing should continue */
   shouldContinue: boolean;
   /** Error encountered during processing (if any) */
@@ -67,10 +57,6 @@ export interface OutputProcessingState {
 
 /**
  * Combined shared store for output processing flow.
- *
- * Following pocketflow philosophy:
- * - `input` contains immutable configuration (read in prep)
- * - `state` contains mutable processing state (written in post)
  */
 export interface OutputProcessingShared {
   /** Immutable input configuration */
@@ -80,26 +66,13 @@ export interface OutputProcessingShared {
 }
 
 // ============================================================================
-// FLOW TRANSITIONS - Action strings for node transitions
+// FLOW TRANSITIONS
 // ============================================================================
 
 /**
  * Flow transition actions for output processing.
- * Using const object instead of enum for better tree-shaking.
  */
 export const OutputProcessingAction = {
-  /** Continue to next node in sequence */
-  DEFAULT: 'default',
-  /** Skip XML validation (direct processing) */
-  SKIP_VALIDATION: 'skip_validation',
-  /** XML needs repair, loop back */
-  REPAIR: 'repair',
-  /** Processing multiple output files */
-  MULTIPLE: 'multiple',
-  /** Processing single output file */
-  SINGLE: 'single',
-  /** Skip diff generation */
-  SKIP_DIFF: 'skip_diff',
   /** Flow completed successfully */
   COMPLETE: 'complete',
   /** Flow failed with error */
@@ -110,35 +83,6 @@ export type OutputProcessingActionType =
   (typeof OutputProcessingAction)[keyof typeof OutputProcessingAction];
 
 // ============================================================================
-// RESULT TYPES - For node exec results
-// ============================================================================
-
-/**
- * Result of XML validation step.
- */
-export interface XmlValidationResult {
-  isValid: boolean;
-  content: string;
-  repairAttempted: boolean;
-}
-
-/**
- * Result of file processing step.
- */
-export interface FileProcessingResult {
-  files: OutputFileInfo[];
-  xmlSummary: OutputXmlSummary | null;
-}
-
-/**
- * Result of diff generation step.
- */
-export interface DiffGenerationResult {
-  filesWithDiff: OutputFileInfo[];
-  diffGenerated: boolean;
-}
-
-// ============================================================================
 // FACTORY FUNCTIONS
 // ============================================================================
 
@@ -147,11 +91,7 @@ export interface DiffGenerationResult {
  */
 export function createInitialState(): OutputProcessingState {
   return {
-    rawContent: null,
-    validatedContent: null,
     processedFiles: [],
-    xmlSummary: null,
-    fileMapping: null,
     shouldContinue: true,
     error: null,
   };

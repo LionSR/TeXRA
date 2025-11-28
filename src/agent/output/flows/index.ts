@@ -2,8 +2,8 @@
  * Output processing flows module.
  *
  * This module provides pocketflow-based output processing for agents.
- * The main entry point is `runOutputProcessing()` which orchestrates
- * the entire output processing pipeline.
+ * The main entry point is `runOutputProcessing()` which delegates to
+ * OutputHandler as the single source of truth.
  */
 
 // Main flow and runner
@@ -24,17 +24,7 @@ export {
   createOutputProcessingShared,
   type OutputProcessingState,
   type OutputProcessingActionType,
-  type XmlValidationResult,
-  type FileProcessingResult,
-  type DiffGenerationResult,
 } from './OutputProcessingTypes';
 
-// Individual nodes for testing or custom flows
-export {
-  PrepareOutputNode,
-  XmlValidationNode,
-  ProcessFilesNode,
-  IndentFilesNode,
-  ReplaceInputCommandsNode,
-  FinalizeOutputNode,
-} from './OutputProcessingNodes';
+// Node for testing or custom flows
+export { ProcessOutputNode } from './OutputProcessingNodes';
