@@ -39,6 +39,12 @@ export interface ResponseCycleResult {
   endTurn: boolean;
   /** Callbacks for triggering manual retry from UI. */
   retryCallbacks: RetryCallbacks;
+  /** True if the cycle stopped due to an error (not user cancellation). */
+  failedWithError: boolean;
+  /** Error message if failedWithError is true. */
+  errorMessage?: string;
+  /** True if the user cancelled the retry wait (should stop gracefully). */
+  userCancelled: boolean;
 }
 
 /**
@@ -89,9 +95,19 @@ export async function runResponseCycle<C = unknown>(
   flow.setParams({ services: { options: input.options, store: input.store } });
   await flow.run(shared);
 
+  // Determine if the cycle failed due to an error (not user cancellation).
+  // User cancellation clears lastError in BaseRetryWaitNode, so:
+  // - Error failure: shouldStop=true, lastError exists → failedWithError=true
+  // - User cancelled: shouldStop=true, lastError=undefined → failedWithError=false
+  const failedWithError = shared.state.shouldStop && !!shared.retryState.lastError;
+  const userCancelled = shared.state.shouldStop && !shared.retryState.lastError;
+
   return {
     store: input.store,
     endTurn: shared.state.endTurn,
     retryCallbacks,
+    failedWithError,
+    errorMessage: shared.retryState.lastError?.message,
+    userCancelled,
   };
 }

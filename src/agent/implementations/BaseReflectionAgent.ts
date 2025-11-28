@@ -477,6 +477,25 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
         store,
       });
 
+      // If the response cycle failed with an error, throw to stop round progression
+      if (cycleResult.failedWithError) {
+        throw new Error(
+          cycleResult.errorMessage ?? 'Response cycle failed with an error',
+        );
+      }
+
+      // If the user cancelled, stop gracefully without throwing
+      if (cycleResult.userCancelled) {
+        return {
+          roundState: store.round,
+          runState: store.run,
+          messages: updatedMessages,
+          shouldContinue: false,
+          workspaceState: store.workspace,
+          output: null,
+        };
+      }
+
       const artifacts = await this.handleRoundCompletion(
         roundIndex,
         store.round,
