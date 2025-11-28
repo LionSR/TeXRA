@@ -14,12 +14,13 @@ import {
   DEFAULT_MODEL_RETRY_ATTEMPTS,
   DEFAULT_MODEL_RETRY_BACKOFF_MS,
 } from '@utils/config';
+import { TIMEOUT_MANUAL_RETRY_MS } from '@common/constants';
 import { sleep } from '@utils/helpers';
 
 import { FlowTransition } from './FlowTransitions';
 
-/** Timeout for manual retry wait (5 minutes) - exported for BaseRetryWaitNode */
-export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
+// Re-export for backward compatibility
+export { TIMEOUT_MANUAL_RETRY_MS as MANUAL_RETRY_TIMEOUT_MS };
 
 // ============================================================================
 // Types

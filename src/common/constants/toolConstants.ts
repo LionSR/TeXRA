@@ -66,3 +66,13 @@ export const DEFAULT_CUSTOM_AGENTS_DIR = 'custom_agents';
 
 /** Directory name for storing audio recordings */
 export const RECORDINGS_DIR = 'recordings';
+
+/** Directory name for storing tool-use session snapshots */
+export const TOOL_USE_SESSIONS_DIR = 'toolUseSessions';
+
+// =============================================================================
+// Tool Snapshot Constants
+// =============================================================================
+
+/** Current version of tool-use snapshot format */
+export const TOOL_USE_SNAPSHOT_VERSION = 1;

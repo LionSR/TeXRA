@@ -15,6 +15,7 @@ import {
   getToolUsePersistenceEnabled,
   getToolUsePersistenceTtlHours,
 } from '@utils/config';
+import { TOOL_USE_SESSIONS_DIR } from '@common/constants';
 
 // Local file imports
 import {
@@ -31,7 +32,7 @@ import {
 const CHANNEL = 'ToolUseSnapshotStore';
 const logger = new AgentLogger(CHANNEL);
 
-const STORAGE_DIR = 'toolUseSessions';
+const STORAGE_DIR = TOOL_USE_SESSIONS_DIR;
 
 async function cleanupExpiredSnapshots(): Promise<void> {
   const hours = getToolUsePersistenceTtlHours();
