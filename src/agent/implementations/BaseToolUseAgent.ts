@@ -8,11 +8,7 @@ import type { ToolUseCycleOptions } from '@agent/core/ToolUseCycle';
 // Internal imports
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { AgentRunState } from '@agent/core/AgentState';
-import {
-  AgentPrompt,
-  AgentSetting,
-  AgentType,
-} from '@agent/core/AgentDataclass';
+import { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 // Type imports
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';

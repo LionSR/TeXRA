@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { toErrorMessage } from '@common/errors';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import * as logger from '@logger/logUtils';
-import { flexibleFS, WorkspaceFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { DIFF_REGISTRATION_DELAY_MS } from '@utils/config';
 

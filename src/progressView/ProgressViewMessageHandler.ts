@@ -12,8 +12,7 @@ import {
   isAgentTypeFilter,
 } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
-import type { OutputFileInfo } from '@agent/output/types';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   triggerManualRetry,

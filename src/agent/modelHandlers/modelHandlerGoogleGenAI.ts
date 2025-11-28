@@ -25,14 +25,13 @@ import {
   GenerateContentConfig,
   type CreateChatParameters,
   type SendMessageParameters,
-  type UploadFileParameters,
 } from '@google/genai';
 
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
 import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
-import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
+import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
   ResponseUsageFactory,
@@ -51,8 +50,6 @@ import {
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
-// Type imports
-import type { ToolDefinition } from '@model';
 import { ReasoningEffort } from '@model/ModelConfig';
 
 // Internal imports
@@ -67,7 +64,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local constant
 import { K_SLICE } from '@utils/config';
-import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
+import { flexibleFS } from '@utils/files';
 import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
@@ -323,6 +320,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
     return DEFAULT_ATTACHMENT_MIME_TYPE;
   }
+
   async getClient(): Promise<GoogleGenAI> {
     if (!this.googleClient) {
       const apiKey = await this.getApiKey();

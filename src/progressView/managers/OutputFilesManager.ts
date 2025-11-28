@@ -1,6 +1,3 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -17,7 +14,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { normalizeRunId } from '@progressView/constants/runIds';
+import { normalizeRunId } from '@common/constants/runIds';
 
 // Local imports
 

@@ -11,7 +11,6 @@ import {
 import {
   AgentWorkspaceState,
   AgentWorkspaceStateSnapshotSchema,
-  type AgentWorkspaceSnapshot,
 } from './AgentWorkspaceState';
 import {
   UserVariableChannelsSchema,

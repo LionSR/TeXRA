@@ -6,7 +6,7 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
-import { normalizeRunId } from '@progressView/constants/runIds';
+import { normalizeRunId } from '@common/constants/runIds';
 import {
   PersistentMapManager,
   type StateStorage,
