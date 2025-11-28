@@ -11,7 +11,7 @@ import {
 // Local imports - agent
 import {
   ModelHandlerGoogleGenAI,
-  convertMessagesToGoogleContentHistory,
+  validateGoogleMessageHistory,
 } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
@@ -306,30 +306,96 @@ describe('ModelHandlerGoogleGenAI media uploads', () => {
   });
 });
 
-describe('convertMessagesToGoogleContentHistory', () => {
-  it('groups consecutive turns using SDK helpers', () => {
-    const { logger } = createLoggerStub();
+describe('validateGoogleMessageHistory', () => {
+  it('logs warning for consecutive same-role messages', () => {
+    const warnings: string[] = [];
+    const logger = {
+      warn: (msg: string) => warnings.push(msg),
+      debug: () => {},
+    } as unknown as AgentLogger;
+
     const messages: Content[] = [
       { role: 'user', parts: [createPartFromText('first')] },
-      { role: 'user', parts: [createPartFromText('second')] },
-      { role: 'model', parts: [createPartFromText('reply one')] },
-      { role: 'model', parts: [createPartFromText('reply two')] },
+      { role: 'user', parts: [createPartFromText('second')] }, // consecutive
     ];
 
-    const history = convertMessagesToGoogleContentHistory(messages, logger);
+    validateGoogleMessageHistory(messages, logger);
 
-    assert.equal(history.length, 2, 'user and model messages should merge');
-    assert.equal(history[0].role, 'user');
-    const userParts = history[0].parts ?? [];
-    assert.equal(userParts.length, 2);
-    assert.equal((userParts[0] as Part & { text: string }).text, 'first');
-    assert.equal((userParts[1] as Part & { text: string }).text, 'second');
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes('Consecutive user messages'));
+  });
 
-    assert.equal(history[1].role, 'model');
-    const modelParts = history[1].parts ?? [];
-    assert.equal(modelParts.length, 2);
-    assert.equal((modelParts[0] as Part & { text: string }).text, 'reply one');
-    assert.equal((modelParts[1] as Part & { text: string }).text, 'reply two');
+  it('does not warn for properly alternating messages', () => {
+    const warnings: string[] = [];
+    const logger = {
+      warn: (msg: string) => warnings.push(msg),
+      debug: () => {},
+    } as unknown as AgentLogger;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('hello')] },
+      { role: 'model', parts: [createPartFromText('hi')] },
+      { role: 'user', parts: [createPartFromText('bye')] },
+    ];
+
+    validateGoogleMessageHistory(messages, logger);
+
+    assert.equal(warnings.length, 0, 'should not warn for valid history');
+  });
+});
+
+describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
+  it('merges with existing user message to maintain alternating turns', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    // Start with messages ending in user (simulating after tool response)
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('initial')] },
+      { role: 'model', parts: [createPartFromText('model reply')] },
+      { role: 'user', parts: [createPartFromText('tool response')] },
+    ];
+
+    await handler.createUserFollowUpMessages(messages, 'user instruction');
+
+    // Should merge into existing user message, not create a new one
+    assert.equal(messages.length, 3, 'should not add a new message');
+    assert.equal(messages[2].role, 'user');
+    const userParts = messages[2].parts ?? [];
+    assert.equal(userParts.length, 2, 'should have merged parts');
+    assert.equal(
+      (userParts[0] as Part & { text: string }).text,
+      'tool response',
+    );
+    assert.equal(
+      (userParts[1] as Part & { text: string }).text,
+      'user instruction',
+    );
+  });
+
+  it('adds new user message when last message is model', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    // Start with messages ending in model
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('initial')] },
+      { role: 'model', parts: [createPartFromText('model reply')] },
+    ];
+
+    await handler.createUserFollowUpMessages(messages, 'new user message');
+
+    // Should add a new user message
+    assert.equal(messages.length, 3, 'should add a new message');
+    assert.equal(messages[2].role, 'user');
+    const userParts = messages[2].parts ?? [];
+    assert.equal(userParts.length, 1);
+    assert.equal(
+      (userParts[0] as Part & { text: string }).text,
+      'new user message',
+    );
   });
 });
 

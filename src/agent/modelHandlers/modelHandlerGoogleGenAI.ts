@@ -104,58 +104,43 @@ function findLastTextPart(
   return undefined;
 }
 
-function toGoogleRole(role?: string, logger?: AgentLogger): GoogleRole | null {
-  if (role === 'assistant' || role === 'model') {
-    return 'model';
-  }
-  if (role === 'user') {
-    return 'user';
-  }
-  if (role === 'system') {
-    logger?.debug(
-      `Converting system role to user role for Google API compatibility`,
-    );
-    return 'user';
-  }
-  return null;
-}
-
-export function convertMessagesToGoogleContentHistory(
+/**
+ * Validates that messages have proper alternating user/model turns.
+ * All message creation should enforce this natively, so this is a safety check.
+ * Logs warnings for any issues found but returns messages unchanged.
+ */
+export function validateGoogleMessageHistory(
   messages: Content[],
   logger: AgentLogger,
-): Content[] {
-  const history: Content[] = [];
-  messages.forEach((message) => {
-    const role = toGoogleRole(message.role, logger);
-    if (!role) {
+): void {
+  let lastRole: string | undefined;
+
+  for (const message of messages) {
+    const role = message.role;
+
+    // Check for unsupported roles
+    if (role !== 'user' && role !== 'model') {
       logger.warn(
-        `Skipping message with unsupported role during history conversion: ${message.role}`,
+        `Unexpected role in Google message history: ${role}. Expected 'user' or 'model'.`,
       );
-      return;
     }
 
-    const parts = Array.isArray(message.parts) ? message.parts : [];
-    if (parts.length === 0) {
-      return;
+    // Check for consecutive same-role messages
+    if (lastRole && role === lastRole) {
+      logger.warn(
+        `Consecutive ${role} messages detected in Google history. This may cause API errors.`,
+      );
     }
 
-    const normalized =
-      role === 'user' ? createUserContent(parts) : createModelContent(parts);
-    const normalizedParts = normalized.parts ?? [];
-
-    const last = history.at(-1);
-    if (last && last.role === normalized.role) {
-      const existingParts = Array.isArray(last.parts) ? last.parts : [];
-      last.parts = [...existingParts, ...normalizedParts];
-    } else {
-      history.push({ ...normalized, parts: normalizedParts });
+    // Check for empty parts
+    if (!Array.isArray(message.parts) || message.parts.length === 0) {
+      logger.warn(`Message with role ${role} has no parts.`);
     }
-  });
 
-  logger.debug(
-    `Converted message history length for chat init: ${history.length}`,
-  );
-  return history;
+    lastRole = role;
+  }
+
+  logger.debug(`Validated message history length: ${messages.length}`);
 }
 
 /**
@@ -362,11 +347,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // chatHistory intentionally excludes the final user message because
     // we send it separately with `chat.sendMessage` below
-
-    const chatHistory = convertMessagesToGoogleContentHistory(
-      historyMessages,
-      this.logger,
-    );
+    // Messages should already be properly formatted with alternating turns
+    validateGoogleMessageHistory(historyMessages, this.logger);
+    const chatHistory = historyMessages;
 
     const lastMessageParts = Array.isArray(lastMessage?.parts)
       ? lastMessage.parts
@@ -710,7 +693,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     messages: Content[],
     userMessage: string,
   ): Promise<Content[]> {
-    messages.push(createUserContent(createPartFromText(userMessage)));
+    const newPart = createPartFromText(userMessage);
+    const last = messages.at(-1);
+
+    // Merge with existing user message to maintain alternating user/model turns
+    // (Google's Chat API requires strict alternation)
+    if (last?.role === 'user') {
+      const parts = (last.parts ??= []);
+      parts.push(newPart);
+    } else {
+      messages.push(createUserContent(newPart));
+    }
+
     return messages;
   }
 
@@ -958,15 +952,17 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       );
       workspaceState.assembly.updateAccumulatedOutput(prefill);
 
-      // Add pseudo-prefill instruction instead of skipping it
+      // Add pseudo-prefill instruction to user message
+      // (Google's Chat API requires alternating user/model turns)
       const lastMessage = messages.at(-1);
       const pseudoPrefillMsg = `Organize your response with XML tags. Start your response with:\n${prefill}`;
 
-      if (lastMessage) {
+      if (lastMessage?.role === 'user') {
         const parts = (lastMessage.parts ??= []);
         parts.push(createPartFromText(pseudoPrefillMsg));
       } else {
-        messages.push(createModelContent(createPartFromText(pseudoPrefillMsg)));
+        // Either no message or last is model - add new user message
+        messages.push(createUserContent(createPartFromText(pseudoPrefillMsg)));
       }
 
       this.logger.debug(`Added pseudo-prefill message: "${pseudoPrefillMsg}"`);
