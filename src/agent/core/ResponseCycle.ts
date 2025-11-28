@@ -98,10 +98,14 @@ export async function runResponseCycle<C = unknown>(
   // Determine if the cycle failed due to an error (not user cancellation).
   // User cancellation clears lastError in BaseRetryWaitNode, so:
   // - Error failure: shouldStop=true, lastError exists → failedWithError=true
-  // - User cancelled: shouldStop=true, lastError=undefined → failedWithError=false
+  // - User cancelled: shouldStop=true, lastError=undefined, endTurn=false → userCancelled=true
+  // - Successful completion: shouldStop=true, lastError=undefined, endTurn=true → neither
   const failedWithError =
     shared.state.shouldStop && !!shared.retryState.lastError;
-  const userCancelled = shared.state.shouldStop && !shared.retryState.lastError;
+  const userCancelled =
+    shared.state.shouldStop &&
+    !shared.retryState.lastError &&
+    !shared.state.endTurn;
 
   return {
     store: input.store,
