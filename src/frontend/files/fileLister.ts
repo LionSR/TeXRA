@@ -5,7 +5,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports - log
-import { getIncludedExtensions, FileType } from '@common/files/fileTypeUtils';
+import {
+  getIncludedExtensions,
+  ExtensionCategory,
+} from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import { getConfig, watchConfig } from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
@@ -16,7 +19,7 @@ import { getFilesRecursively } from './listing';
 const CHANNEL = 'FileLister';
 logger.initialize(CHANNEL);
 
-export type ListableFileType = Exclude<FileType, 'audio'>;
+export type ListableFileType = Exclude<ExtensionCategory, 'audio'>;
 
 export class FileLister {
   private static instance: FileLister | null = null;
