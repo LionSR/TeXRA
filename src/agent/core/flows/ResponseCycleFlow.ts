@@ -262,8 +262,14 @@ class ResponseModelInvocationNode<C> extends Node<
   }
 
   /**
-   * Read fresh retry config before each execution.
-   * This ensures config changes take effect without rebuilding the flow.
+   * Read fresh retry config before starting the retry loop.
+   *
+   * This enables config changes to take effect without rebuilding the flow.
+   * Config is read once at the start of _exec(), before any retries begin,
+   * so the same config applies to all retry attempts within a single execution.
+   *
+   * Note: PocketFlow flows are single-threaded per request, so concurrent
+   * mutation is not a concern here.
    */
   async _exec(prepRes: unknown): Promise<unknown> {
     const config = getNodeRetryConfig();
