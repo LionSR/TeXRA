@@ -4,6 +4,7 @@ import { BaseUIRequestManager } from './BaseUIRequestManager.js';
 
 // Local imports - common helpers
 import { addEventListenerSafely } from '@common/domUtils.js';
+import { createFromTemplate } from '@common/templateUtils.js';
 import { vscode } from '@common/webviewContext.js';
 
 /**
@@ -60,43 +61,18 @@ export class ApprovalRequests extends BaseUIRequestManager {
 
   /** @override */
   _createRequestElement(request) {
-    const element = document.createElement('div');
-    element.className = 'approval-request';
+    const element = createFromTemplate('approvalRequestTemplate');
+    if (!element) {
+      console.error('ApprovalRequests: approvalRequestTemplate not found');
+      return document.createElement('div');
+    }
+
+    // Set request ID on element and all action buttons
     element.dataset.requestId = request.requestId;
-    element.innerHTML = `
-      <div class="approval-request__details">
-        <div class="approval-request__path"></div>
-        <div class="approval-request__meta"></div>
-      </div>
-      <vscode-toolbar-container class="approval-request__actions">
-        <vscode-toolbar-button
-          icon="diff"
-          label="Open diff"
-          data-action="open"
-          data-request-id="${request.requestId}"
-        >Open diff</vscode-toolbar-button>
-        <vscode-toolbar-button
-          icon="check"
-          label="Approve"
-          data-action="approve"
-          data-request-id="${request.requestId}"
-        >Approve</vscode-toolbar-button>
-        <vscode-toolbar-button
-          icon="close"
-          label="Reject"
-          data-action="reject"
-          data-request-id="${request.requestId}"
-        >Reject</vscode-toolbar-button>
-        <vscode-toolbar-button
-          icon="shield"
-          label="Approve &amp; Yolo this session"
-          data-action="approveAll"
-          data-request-id="${request.requestId}"
-          data-toggle-action="resumeApprovals"
-          toggleable
-        >Appr. &amp; Yolo</vscode-toolbar-button>
-      </vscode-toolbar-container>
-    `;
+    element.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.dataset.requestId = request.requestId;
+    });
+
     this._updateRequestElement(element, request);
     return element;
   }
