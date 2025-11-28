@@ -1441,6 +1441,11 @@
           "group": "navigation@5"
         },
         {
+          "command": "texra.auth.accountMenu",
+          "when": "view == texra.progressView",
+          "group": "navigation@6"
+        },
+        {
           "command": "texra.folderExplorer.newFile",
           "when": "view == texra.folderExplorer",
           "group": "navigation"
