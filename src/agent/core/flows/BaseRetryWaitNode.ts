@@ -23,7 +23,6 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 import { FlowTransition } from './FlowTransitions';
 import {
-  resetRetryState,
   clearRetryError,
   MANUAL_RETRY_TIMEOUT_MS,
   type RetryState,
@@ -175,7 +174,7 @@ class RetryWaitNode<
     const logger = this.accessors.getLogger(shared, this._params);
 
     if (execRes === 'retry') {
-      resetRetryState(retryState);
+      clearRetryError(retryState);
       logger.info('Manual retry triggered', {
         messageType: MESSAGE_TYPES.PROGRESS_STATUS,
       });
