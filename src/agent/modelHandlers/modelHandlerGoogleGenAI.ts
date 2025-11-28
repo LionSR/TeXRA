@@ -40,6 +40,7 @@ import {
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -861,6 +862,45 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       this.computePrice(responseUsage),
       responseTime,
     );
+  }
+
+  /** Normalizes Google GenAI usage data into a unified format. */
+  normalizeUsage(
+    rawUsage: GenerateContentResponseUsageMetadata | null,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    if (!rawUsage) {
+      return {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+        responseTimeMs,
+        provider: 'google',
+      };
+    }
+
+    const inputTokens =
+      (rawUsage.promptTokenCount ?? 0) + (rawUsage.toolUsePromptTokenCount ?? 0);
+    const outputTokens = rawUsage.candidatesTokenCount ?? 0;
+    const reasoningTokens = rawUsage.thoughtsTokenCount ?? 0;
+    const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
+
+    // Calculate percentage cached
+    const percentageCached =
+      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost: this.computePrice(rawUsage),
+      responseTimeMs,
+      provider: 'google',
+      cachedInputTokens: cachedTokens || undefined,
+      percentageCached: percentageCached > 0 ? percentageCached : undefined,
+      reasoningTokens: reasoningTokens || undefined,
+      toolUseTokens: rawUsage.toolUsePromptTokenCount || undefined,
+      _native: rawUsage,
+    };
   }
 
   addContinueMessageWithPrefill(/* ... */): void {

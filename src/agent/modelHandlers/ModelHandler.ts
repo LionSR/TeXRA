@@ -40,6 +40,7 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -525,8 +526,21 @@ export abstract class ModelHandler<
   /**
    * Computes detailed usage metrics from model response.
    * @returns Provider-specific response usage object
+   * @deprecated Use normalizeUsage() instead for unified usage tracking
    */
   abstract computeResponseUsage(responseUsage: U, responseTime: number): R;
+
+  /**
+   * Normalizes provider-specific usage data into a unified format.
+   * This is the single source of truth for usage statistics.
+   *
+   * Cost is computed once here and should never be recomputed elsewhere.
+   *
+   * @param rawUsage - Raw usage data from the provider's API response
+   * @param responseTimeMs - Response time in milliseconds
+   * @returns Normalized usage with all metrics in a consistent format
+   */
+  abstract normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
 
   /**
    * Updates model message content with response for models with prefill support.

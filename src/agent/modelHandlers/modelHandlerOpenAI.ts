@@ -27,6 +27,7 @@ import {
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -992,6 +993,56 @@ export class ModelHandlerOpenAI<
       this.computePrice(responseUsage),
       responseTime,
     );
+  }
+
+  /** Returns the provider identifier for usage tracking. Subclasses can override. */
+  protected get usageProvider(): NormalizedUsage['provider'] {
+    return 'openai';
+  }
+
+  /** Normalizes OpenAI usage data into a unified format. */
+  normalizeUsage(
+    rawUsage: ExtendedCompletionUsage | null,
+    responseTimeMs: number,
+  ): NormalizedUsage {
+    if (!rawUsage) {
+      return {
+        inputTokens: 0,
+        outputTokens: 0,
+        cost: 0,
+        responseTimeMs,
+        provider: this.usageProvider,
+      };
+    }
+
+    const inputTokens = rawUsage.prompt_tokens ?? 0;
+    const outputTokens = rawUsage.completion_tokens ?? 0;
+
+    // Extract cached tokens (OpenAI style or DeepSeek style)
+    const cachedTokens =
+      rawUsage.prompt_tokens_details?.cached_tokens ??
+      rawUsage.prompt_cache_hit_tokens ?? // DeepSeek
+      0;
+
+    // Extract reasoning tokens
+    const reasoningTokens =
+      rawUsage.completion_tokens_details?.reasoning_tokens ?? 0;
+
+    // Calculate percentage cached
+    const percentageCached =
+      inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
+
+    return {
+      inputTokens,
+      outputTokens,
+      cost: this.computePrice(rawUsage),
+      responseTimeMs,
+      provider: this.usageProvider,
+      cachedInputTokens: cachedTokens || undefined,
+      percentageCached: percentageCached > 0 ? percentageCached : undefined,
+      reasoningTokens: reasoningTokens || undefined,
+      _native: rawUsage,
+    };
   }
 
   /** Updates message content for models with prefill support. */
