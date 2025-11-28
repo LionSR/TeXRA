@@ -8,6 +8,7 @@ import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -40,7 +41,6 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
