@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Internal imports
+import { getBaseName, getMultipleName } from '@agent/index';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import {
   AgentType,
@@ -171,11 +172,9 @@ export async function validateYamlAndPromptAdd(
     };
 
     if (isMultipleOutput) {
-      metadata.baseAgentName = internalName.includes('_multiple')
-        ? internalName.replace(/_multiple$/, '')
-        : undefined;
+      metadata.baseAgentName = getBaseName(internalName);
     } else {
-      metadata.multipleAgentName = `${internalName}_multiple`;
+      metadata.multipleAgentName = getMultipleName(internalName);
     }
 
     await promptToAddAgentToConfig(filenameBase, !prompt, metadata);

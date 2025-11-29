@@ -58,6 +58,14 @@ import { MainViewProvider } from './MainViewProvider';
 const CHANNEL = 'Registration';
 logger.initialize(CHANNEL);
 
+// Store MainViewProvider instance for external access (e.g., auth state changes)
+let mainViewProviderInstance: MainViewProvider | null = null;
+
+/** Get the MainViewProvider instance (available after registerCommands is called). */
+export function getMainViewProvider(): MainViewProvider | null {
+  return mainViewProviderInstance;
+}
+
 /**
  * Register all extension commands
  * Commands are organized into logical groups in separate modules
@@ -101,11 +109,12 @@ export function registerCommands(context: vscode.ExtensionContext) {
     walkthrough: registerWalkthroughCommands(context),
   };
 
-  // Register webview provider
+  // Register webview provider and store instance for external access
+  mainViewProviderInstance = new MainViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'texra.mainView',
-      new MainViewProvider(context),
+      mainViewProviderInstance,
       {
         webviewOptions: {
           retainContextWhenHidden: true,

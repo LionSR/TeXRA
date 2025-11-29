@@ -619,6 +619,12 @@
             "default": true,
             "description": "Allow loading remote agents from TeXRA cloud",
             "scope": "resource"
+          },
+          "texra.remoteAgents.autoShow": {
+            "type": "boolean",
+            "default": true,
+            "description": "Automatically show remote agents in dropdown without needing to add them to texra.agents list",
+            "scope": "resource"
           }
         }
       },

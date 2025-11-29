@@ -13,7 +13,6 @@ export class AgentsTable {
     this.state = state;
     this._container = null;
     this._template = null;
-    this._tagTemplate = null;
   }
 
   get container() {
@@ -28,13 +27,6 @@ export class AgentsTable {
       this._template = safeGetElementById('agentRowTemplate');
     }
     return this._template;
-  }
-
-  get tagTemplate() {
-    if (!this._tagTemplate) {
-      this._tagTemplate = safeGetElementById('tagTemplate');
-    }
-    return this._tagTemplate;
   }
 
   /**
@@ -127,7 +119,6 @@ export class AgentsTable {
         <th>Type</th>
         <th>Description</th>
         <th>Visibility</th>
-        <th>Tags</th>
         <th>Action</th>
       </tr>
     `;
@@ -184,21 +175,6 @@ export class AgentsTable {
     if (visibilityBadge) {
       visibilityBadge.textContent = agent.visibility;
       visibilityBadge.classList.add(agent.visibility);
-    }
-
-    // Set tags
-    const tagsContainer = row.querySelector('.agent-tags');
-    if (tagsContainer && agent.tags && agent.tags.length > 0) {
-      agent.tags.forEach((tag) => {
-        if (!this.tagTemplate) return;
-        const tagEl = this.tagTemplate.content
-          .cloneNode(true)
-          .querySelector('.tag');
-        if (tagEl) {
-          tagEl.textContent = tag;
-          tagsContainer.appendChild(tagEl);
-        }
-      });
     }
 
     // Set up select button

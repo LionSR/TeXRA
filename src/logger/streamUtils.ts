@@ -3,8 +3,8 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
+import { parseKey, getMultipleName } from '@agent/index';
 import { AgentType } from '@agent/core/AgentDataclass';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
@@ -13,6 +13,15 @@ type StreamTabIdOptions = {
   executionId?: ExecutionId;
   useMultipleOutputs?: boolean;
 };
+
+/**
+ * Extract the clean agent name from an identifier.
+ * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ */
+function getCleanAgentName(agentIdentifier: string): string {
+  const parsed = parseKey(agentIdentifier);
+  return parsed ? parsed.name : agentIdentifier;
+}
 
 function formatToolUseStreamId(
   agent: string,
@@ -34,17 +43,15 @@ export function getStreamTabId(
   inputFile: string,
   options: StreamTabIdOptions = {},
 ): StreamTabId {
-  // Sanitize agent name by removing remote:// prefix to avoid file path issues
-  const cleanAgent = RemoteAgentRegistry.getCleanName(agent);
+  // Sanitize agent name by extracting clean name from source:name format
+  const cleanAgent = getCleanAgentName(agent);
 
   if (options.agentType === AgentType.ToolUse) {
     return formatToolUseStreamId(cleanAgent, model, options.executionId);
   }
 
   const agentName = options.useMultipleOutputs
-    ? cleanAgent.endsWith('_multiple')
-      ? cleanAgent
-      : `${cleanAgent}_multiple`
+    ? getMultipleName(cleanAgent)
     : cleanAgent;
   const baseName = inputFile ? path.basename(inputFile) : '';
   return `${agentName}@${model}: ${baseName}`;

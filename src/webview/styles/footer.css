@@ -31,8 +31,8 @@
   align-items: center;
   gap: var(--spacing-small);
   flex: 0 1 auto;
-  min-width: 8rem;
-  max-width: 12rem;
+  min-width: 10rem;
+  max-width: 14rem;
 }
 
 .agent-select-dropdowns {
@@ -47,8 +47,8 @@
 
 .model-selection-footer .select-group select,
 .model-selection-footer .select-group vscode-single-select {
-  min-width: 5rem;
-  max-width: 8rem;
+  min-width: 6rem;
+  max-width: 10rem;
 }
 
 .agent-select--hidden {
@@ -60,4 +60,13 @@
 
 .agent-select--active {
   position: relative;
+}
+
+/* Make footer dropdowns open upward to avoid clipping at bottom of webview */
+.model-selection-footer vscode-single-select::part(listbox),
+#workflowAgent::part(listbox),
+#toolUseAgent::part(listbox),
+#model::part(listbox) {
+  bottom: 100%;
+  top: auto;
 }
