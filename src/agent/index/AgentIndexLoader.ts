@@ -14,7 +14,6 @@ import {
   AgentCategory,
   AgentDefinitionSchema,
   AgentType,
-  parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -275,6 +274,7 @@ export class AgentIndexLoader {
 
   /**
    * Create an AgentIndexEntry from a YAML file.
+   * Uses lightweight metadata extraction - full validation happens at load time.
    */
   private static async createEntryFromYaml(
     source: AgentDirectorySource,
@@ -286,22 +286,24 @@ export class AgentIndexLoader {
     const parsed = yaml.parse(content);
     const validated = AgentDefinitionSchema.parse(parsed);
 
-    // Parse settings to get metadata
-    const settings = parseAgentSetting(validated.settings || {});
+    // Extract only the metadata we need from settings (skip strict validation)
+    // Full schema validation happens at execution time in agentLoad.ts
+    const rawSettings = (validated.settings || {}) as Record<string, unknown>;
+    const agentType = rawSettings.agentType as string | undefined;
+    const defaultOutputFiles = rawSettings.defaultOutputFiles as
+      | string[]
+      | undefined;
+    const isMultipleOutput = rawSettings.isMultipleOutput as boolean | undefined;
 
     // Determine category from source and settings
     let category: AgentCategory;
     if (source === AgentDirectorySource.BuiltInToolUse) {
       category = AgentCategory.ToolUse;
-    } else if (settings.agentType === AgentType.ToolUse) {
+    } else if (agentType === AgentType.ToolUse) {
       category = AgentCategory.ToolUse;
     } else {
       category = AgentCategory.Workflow;
     }
-
-    // Check if this is a multiple output agent
-    const isMultipleOutput =
-      'isMultipleOutput' in settings ? settings.isMultipleOutput : false;
 
     return {
       name,
@@ -311,11 +313,11 @@ export class AgentIndexLoader {
       multipleVariantPath,
       hasDefinition: true,
       hasMultipleSibling: Boolean(multipleVariantPath),
-      isMultipleOutput,
+      isMultipleOutput: isMultipleOutput ?? false,
       description: validated.description,
       defaultOutputFiles:
-        settings.defaultOutputFiles.length > 0
-          ? settings.defaultOutputFiles
+        defaultOutputFiles && defaultOutputFiles.length > 0
+          ? defaultOutputFiles
           : undefined,
     };
   }
