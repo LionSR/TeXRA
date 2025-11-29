@@ -19,7 +19,11 @@ const ProviderMessageSchema = z.custom<ProviderMessage>(
   },
 );
 
-export const ToolUseSessionSnapshotSchema = z.strictObject({
+/**
+ * We use z.object() instead of z.strictObject() to remain backward compatible
+ * with legacy snapshots that may contain removed or renamed fields.
+ */
+export const ToolUseSessionSnapshotSchema = z.object({
   version: z.literal(TOOL_USE_SNAPSHOT_VERSION),
   executionId: z.string(),
   streamId: z.string(),
