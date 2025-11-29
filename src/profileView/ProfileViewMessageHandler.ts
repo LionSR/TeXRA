@@ -126,10 +126,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }
 
     // Use shared utility for agent selection
-    await selectAgentInMainView(agentName, {
-      showSuccessMessage: true,
-      copyToClipboardOnFailure: false,
-    });
+    await selectAgentInMainView(agentName);
   }
 
   private async handleSignIn(

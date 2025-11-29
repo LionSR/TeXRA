@@ -120,12 +120,10 @@ async function handleSelectionFallback(
 export async function selectAgentInMainView(
   agentName: string,
   options: {
-    showSuccessMessage?: boolean;
     copyToClipboardOnFailure?: boolean;
   } = {},
 ): Promise<SelectAgentResult> {
-  const { showSuccessMessage = true, copyToClipboardOnFailure = false } =
-    options;
+  const { copyToClipboardOnFailure = false } = options;
 
   // Focus the main view first
   await vscode.commands.executeCommand('texra.mainView.focus');
@@ -143,12 +141,6 @@ export async function selectAgentInMainView(
           workflowAgent: agentName,
         },
       });
-
-      if (showSuccessMessage) {
-        void vscode.window.showInformationMessage(
-          `Remote agent "${agentName}" is now selected.`,
-        );
-      }
 
       return {
         success: true,
