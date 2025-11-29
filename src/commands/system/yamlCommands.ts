@@ -52,7 +52,10 @@ export async function handleTestAgentLoading(
     // Load the YAML directly
     logger.info(CHANNEL, `Loading from: ${resolution.definitionPath}`);
     const rawYaml = await loadYaml(resolution.definitionPath);
-    logger.info(CHANNEL, `Raw YAML loaded: ${JSON.stringify(rawYaml, null, 2)}`);
+    logger.info(
+      CHANNEL,
+      `Raw YAML loaded: ${JSON.stringify(rawYaml, null, 2)}`,
+    );
 
     // Load with settings and prompts processing
     const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);

@@ -310,9 +310,7 @@ function groupByBaseName(
   for (const file of files) {
     const name = path.basename(file, '.yaml');
     const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
-    const baseName = isMultiple
-      ? name.slice(0, -MULTIPLE_SUFFIX.length)
-      : name;
+    const baseName = isMultiple ? name.slice(0, -MULTIPLE_SUFFIX.length) : name;
 
     const group = groups.get(baseName) || {};
     if (isMultiple) {
@@ -531,8 +529,15 @@ function filterVisible(
   defaultName: string,
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
+
+  // Add default by name (for backwards compatibility)
   configured.add(defaultName);
-  return entries.filter((e) => configured.has(e.name));
+
+  return entries.filter((e) => {
+    const key = createKey(e.source, e.name);
+    // Match by full key (e.g., "custom:correct") OR by name only (e.g., "correct")
+    return configured.has(key) || configured.has(e.name);
+  });
 }
 
 function renderOptions(
@@ -544,15 +549,40 @@ function renderOptions(
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // Sort: selected first, then alphabetically
+  // Find the default entry - only ONE should be selected
+  // Priority: exact name match for first entry found (custom > builtIn > etc.)
+  let selectedKey: string | null = null;
+  const priorities: AgentSource[] = [
+    'custom',
+    'builtIn',
+    'builtInToolUse',
+    'remote',
+  ];
+
+  for (const source of priorities) {
+    const match = entries.find(
+      (e) => e.source === source && e.name === defaultName,
+    );
+    if (match) {
+      selectedKey = createKey(match.source, match.name);
+      break;
+    }
+  }
+
+  // Sort: selected first, then alphabetically by name
   const sorted = [...entries].sort((a, b) => {
-    if (a.name === defaultName) return -1;
-    if (b.name === defaultName) return 1;
+    const aKey = createKey(a.source, a.name);
+    const bKey = createKey(b.source, b.name);
+    if (aKey === selectedKey) return -1;
+    if (bKey === selectedKey) return 1;
     return a.name.localeCompare(b.name);
   });
 
   return sorted
-    .map((entry) => renderOption(entry, entry.name === defaultName))
+    .map((entry) => {
+      const key = createKey(entry.source, entry.name);
+      return renderOption(entry, key === selectedKey);
+    })
     .join('\n');
 }
 
