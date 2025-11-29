@@ -82,7 +82,9 @@ export class AgentDirectoryManager {
    * Get all local agent directories (excludes Remote).
    * Returns directories in priority order: Custom, BuiltIn, BuiltInToolUse.
    */
-  async getAllLocal(): Promise<Array<{ directory: string; source: AgentDirectorySource }>> {
+  async getAllLocal(): Promise<
+    Array<{ directory: string; source: AgentDirectorySource }>
+  > {
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
       this.custom(),
       this.builtIn(),
@@ -92,7 +94,10 @@ export class AgentDirectoryManager {
     return [
       { directory: customDir, source: AgentDirectorySource.Custom },
       { directory: builtInDir, source: AgentDirectorySource.BuiltIn },
-      { directory: builtInToolUseDir, source: AgentDirectorySource.BuiltInToolUse },
+      {
+        directory: builtInToolUseDir,
+        source: AgentDirectorySource.BuiltInToolUse,
+      },
     ];
   }
 
