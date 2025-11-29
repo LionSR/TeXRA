@@ -233,7 +233,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
         // Find the best matching option
         let targetValue = agentValue;
-        const options = Array.from(selectElement.children);
+        const options = getSelectOptionElements(selectElement);
 
         // First try exact match
         let matchingOption = options.find((opt) => opt.value === agentValue);
@@ -273,8 +273,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         mainViewState.applySessionType(targetSessionType);
 
         // Decorate the placeholder option if it was just created
-        // Re-query children since _setAgentValue may have added a new option
-        const currentOptions = Array.from(selectElement.children);
+        // Re-query options since _setAgentValue may have added a new option
+        const currentOptions = getSelectOptionElements(selectElement);
         const option = currentOptions.find((opt) => opt.value === targetValue);
         if (option && !option.dataset.decorated) {
           this._decorateAgentOption(option);
