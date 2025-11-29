@@ -97,11 +97,29 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
           }
         }
       }
+      // Clean up indent.log in the file's directory (relative path for workspace)
+      const relativeDir = path.relative(workspacePath, fileDir);
+      const relativeIndentLog = path.join(relativeDir, 'indent.log');
+      try {
+        await WorkspaceFS.delete(relativeIndentLog);
+        logger.debug(CHANNEL, `Removed ${relativeIndentLog}`);
+      } catch (err) {
+        logger.debug(CHANNEL, `No indent.log to remove in ${relativeDir}`);
+      }
     } else {
       logger.debug(
         CHANNEL,
         `Skipping workspace backup cleanup for ${filePath} (outside workspace)`,
       );
+
+      // Clean up indent.log for non-workspace files (absolute path)
+      const indentLogPath = path.join(fileDir, 'indent.log');
+      try {
+        await AbsoluteFS.delete(indentLogPath);
+        logger.debug(CHANNEL, `Removed ${indentLogPath}`);
+      } catch (err) {
+        logger.debug(CHANNEL, `No indent.log to remove at ${indentLogPath}`);
+      }
     }
 
     logger.info(CHANNEL, `Indented ${filePath}`);
