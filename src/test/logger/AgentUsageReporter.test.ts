@@ -9,16 +9,12 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
 
 describe('AgentUsageReporter', () => {
-  it('emits updateStreamUsage when no group is active', () => {
+  it('falls back to passed runId when groupId is not available', () => {
     const streamId = 'stream:test';
     const runId = 'run-123';
     const streamEvents: unknown[] = [];
-    const groupEvents: unknown[] = [];
     const disposeStream = bus.on('updateStreamUsage', (payload) => {
       streamEvents.push(payload);
-    });
-    const disposeGroup = bus.on('updateGroupUsage', (payload) => {
-      groupEvents.push(payload);
     });
 
     let recordedStats: ExtendedTokenUsageStats | undefined;
@@ -45,7 +41,6 @@ describe('AgentUsageReporter', () => {
     try {
       reporter.report(stats, runId);
 
-      assert.equal(groupEvents.length, 0);
       assert.equal(streamEvents.length, 1);
       // inputTokens is passed through unchanged - cacheCreationInputTokens
       // is tracked separately in the normalized usage system
@@ -61,7 +56,51 @@ describe('AgentUsageReporter', () => {
       assert.strictEqual(recordedStats, stats);
     } finally {
       disposeStream();
-      disposeGroup();
+    }
+  });
+
+  it('uses groupId from logger instead of passed runId when available', () => {
+    const streamId = 'stream:test';
+    const passedRunId = 'execution-id-123';
+    const groupId = 'task-group-id-456';
+    const streamEvents: unknown[] = [];
+    const disposeStream = bus.on('updateStreamUsage', (payload) => {
+      streamEvents.push(payload);
+    });
+
+    const loggerStub = {
+      withCurrentGroup: <T>(fn: (groupId: string) => T): T | undefined =>
+        fn(groupId),
+      statistics: () => {},
+    } as unknown as AgentLogger;
+
+    const reporter = new AgentUsageReporter(
+      loggerStub,
+      streamId,
+      AgentCategory.Workflow,
+    );
+    const stats: ExtendedTokenUsageStats = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cost: 0.25,
+    };
+
+    try {
+      reporter.report(stats, passedRunId);
+
+      assert.equal(streamEvents.length, 1);
+      // groupId should be used instead of passedRunId
+      assert.deepEqual(streamEvents[0], {
+        stream: streamId,
+        runId: groupId, // NOT passedRunId!
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          cost: 0.25,
+        },
+      });
+    } finally {
+      disposeStream();
     }
   });
 
