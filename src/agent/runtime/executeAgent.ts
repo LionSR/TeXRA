@@ -12,6 +12,7 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
+import { AgentIndex, parseAgentIndexKey } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -25,7 +26,6 @@ import {
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
@@ -79,29 +79,75 @@ type AgentConstructor = {
 };
 
 /**
+ * Parse an agent identifier which can be either:
+ * - New format: "source:name" (e.g., "custom:summarize", "remote:chat")
+ * - Legacy format: just the name (e.g., "summarize", "chat")
+ *
+ * Returns the source and clean name.
+ */
+function parseAgentIdentifier(
+  agentIdentifier: string,
+): { source: AgentDirectorySource | null; name: string } {
+  // Try parsing as source:name format
+  const parsed = parseAgentIndexKey(agentIdentifier);
+  if (parsed) {
+    return { source: parsed.source, name: parsed.name };
+  }
+
+  // Legacy format - just the agent name, source will be determined by search
+  return { source: null, name: agentIdentifier };
+}
+
+/**
  * Find and return the path to agent's yaml configuration file.
- * Supports remote agents using the RemoteAgentRegistry.
+ *
+ * Supports two agent identifier formats:
+ * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
+ * - Legacy format: just name (e.g., "summarize") - searches directories in order
  */
 export async function getAgentPath(
-  agentName: string,
+  agentIdentifier: string,
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
-    // Get clean agent name (strip legacy remote:// prefix if present)
-    const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+    const { source: explicitSource, name: agentName } =
+      parseAgentIdentifier(agentIdentifier);
 
-    // Check if this is a remote agent using the registry
-    if (RemoteAgentRegistry.isRemote(agentName)) {
-      // Return a special resolution for remote agents
+    // If source is explicitly specified, use it directly
+    if (explicitSource === AgentDirectorySource.Remote) {
       return {
-        directory: '', // No directory for remote agents
+        directory: '',
         source: AgentDirectorySource.Remote,
-        definitionPath: '', // No local path for remote agents
-        resolvedName: cleanName,
+        definitionPath: '',
+        resolvedName: agentName,
         usedFallback: false,
       };
     }
 
+    // For local agents with explicit source, search only that directory
+    if (explicitSource) {
+      const directory = await getDirectoryForSource(explicitSource);
+      if (!directory) {
+        throw new Error(`Directory for source "${explicitSource}" not available`);
+      }
+
+      const candidates = [createCandidate(directory, explicitSource)];
+      const resolution = await resolveAgentDefinition(
+        agentName,
+        candidates,
+        options,
+      );
+
+      if (resolution) {
+        return resolution;
+      }
+
+      throw new Error(
+        `Could not find yaml file for agent: ${agentName} in ${explicitSource}`,
+      );
+    }
+
+    // Legacy behavior: search all directories in order
     const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
       agentDirectories.custom(),
       agentDirectories.builtIn(),
@@ -149,6 +195,24 @@ export async function getAgentPath(
       vscode.window.showErrorMessage(errorMsg);
     }
     throw new Error(errorMsg);
+  }
+}
+
+/**
+ * Get the directory path for a given source.
+ */
+async function getDirectoryForSource(
+  source: AgentDirectorySource,
+): Promise<string | undefined> {
+  switch (source) {
+    case AgentDirectorySource.Custom:
+      return agentDirectories.custom();
+    case AgentDirectorySource.BuiltIn:
+      return agentDirectories.builtIn();
+    case AgentDirectorySource.BuiltInToolUse:
+      return agentDirectories.builtInToolUse();
+    case AgentDirectorySource.Remote:
+      return undefined; // Remote agents don't have local directories
   }
 }
 
