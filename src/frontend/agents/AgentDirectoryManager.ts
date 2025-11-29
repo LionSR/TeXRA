@@ -4,6 +4,9 @@ import * as path from 'path';
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - agent
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+
 // Local imports - log
 import { showLoggedMessageWithDocs, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -54,6 +57,43 @@ export class AgentDirectoryManager {
 
   async builtInToolUse(): Promise<string> {
     return this.ensureBuiltInDir('tool_use_agents');
+  }
+
+  /**
+   * Get the directory for a given source type.
+   * Returns undefined for Remote sources (which have no local directory).
+   */
+  async getDirectory(
+    source: AgentDirectorySource,
+  ): Promise<string | undefined> {
+    switch (source) {
+      case AgentDirectorySource.Custom:
+        return this.custom();
+      case AgentDirectorySource.BuiltIn:
+        return this.builtIn();
+      case AgentDirectorySource.BuiltInToolUse:
+        return this.builtInToolUse();
+      case AgentDirectorySource.Remote:
+        return undefined;
+    }
+  }
+
+  /**
+   * Get all local agent directories (excludes Remote).
+   * Returns directories in priority order: Custom, BuiltIn, BuiltInToolUse.
+   */
+  async getAllLocal(): Promise<Array<{ directory: string; source: AgentDirectorySource }>> {
+    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
+      this.custom(),
+      this.builtIn(),
+      this.builtInToolUse(),
+    ]);
+
+    return [
+      { directory: customDir, source: AgentDirectorySource.Custom },
+      { directory: builtInDir, source: AgentDirectorySource.BuiltIn },
+      { directory: builtInToolUseDir, source: AgentDirectorySource.BuiltInToolUse },
+    ];
   }
 
   private async ensureDefaultCustomDir(): Promise<string> {
