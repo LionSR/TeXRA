@@ -4,7 +4,7 @@
  */
 
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 
 /** Remote agent visibility levels. */
 export type RemoteAgentVisibility = 'public' | 'researcher' | 'whitelist';
@@ -50,6 +50,9 @@ export interface AgentIndexEntry {
 
   /** Tags for remote agents (only set for Remote source). */
   tags?: string[];
+
+  /** Original agent type from YAML or remote DB (CoT, direct, toolUse). */
+  agentType?: AgentType;
 }
 
 /**

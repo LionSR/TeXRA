@@ -83,7 +83,7 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
         description: entry.description || '',
         tags: entry.tags || [],
         visibility: entry.visibility || 'researcher',
-        agentType: entry.category,
+        agentType: entry.agentType || 'CoT',
       }));
     }
 
