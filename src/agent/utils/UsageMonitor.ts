@@ -18,6 +18,12 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
  *
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
+ *
+ * ## RunId Resolution
+ * - Workflow agents: Uses task group ID from logger hierarchy (via usageReporter)
+ * - Tool-use agents: Uses executionId as the runId (no task groups exist)
+ *
+ * @see IdentifierTypes.ts for the full execution model documentation
  */
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
@@ -82,6 +88,8 @@ export class UsageMonitor {
         }),
       };
 
+      // For tool-use agents: ExecutionId IS the RunId (no task groups exist).
+      // Fallback to streamId only for legacy sessions without executionId.
       const runId = this.context.executionId ?? this.context.streamId;
       usageReporter.report(payload, runId);
     } catch (error) {
