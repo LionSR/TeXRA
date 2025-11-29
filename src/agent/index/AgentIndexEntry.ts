@@ -48,9 +48,6 @@ export interface AgentIndexEntry {
   /** Visibility level for remote agents (only set for Remote source). */
   visibility?: RemoteAgentVisibility;
 
-  /** Tags for remote agents (only set for Remote source). */
-  tags?: string[];
-
   /** Original agent type from YAML or remote DB (CoT, direct, toolUse). */
   agentType?: AgentType;
 }

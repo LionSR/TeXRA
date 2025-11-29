@@ -104,15 +104,6 @@ class AgentIndexClass {
   }
 
   /**
-   * Register a single agent entry.
-   */
-  register(entry: AgentIndexEntry): void {
-    const key = createAgentIndexKey(entry.source, entry.name);
-    this.entries.set(key, entry);
-    this.rebuildIndexes();
-  }
-
-  /**
    * Register multiple agent entries at once.
    */
   registerMultiple(entries: AgentIndexEntry[]): void {
@@ -181,13 +172,6 @@ class AgentIndexClass {
   }
 
   /**
-   * Get all entries.
-   */
-  getAllEntries(): AgentIndexEntry[] {
-    return Array.from(this.entries.values());
-  }
-
-  /**
    * Get all entries from a specific source.
    */
   getBySource(source: AgentDirectorySource): AgentIndexEntry[] {
@@ -197,45 +181,19 @@ class AgentIndexClass {
   }
 
   /**
-   * Get the total number of entries.
+   * Get an entry by identifier string.
+   * Handles both "source:name" and legacy "name" formats.
+   *
+   * @param identifier - Either "source:name" format or just "name"
+   * @returns The entry or undefined if not found
    */
-  size(): number {
-    return this.entries.size;
-  }
-
-  /**
-   * Check if any agent exists with the given name (from any source).
-   */
-  hasName(name: string): boolean {
-    return this.byName.has(name);
-  }
-
-  /**
-   * Get default output files for an agent.
-   * Returns from cache if available, undefined otherwise.
-   */
-  getDefaultOutputFiles(
-    source: AgentDirectorySource,
-    name: string,
-  ): string[] | undefined {
-    return this.getEntry(source, name)?.defaultOutputFiles;
-  }
-
-  /**
-   * Check if an agent is from a remote source.
-   */
-  isRemote(source: AgentDirectorySource, name: string): boolean {
-    const entry = this.getEntry(source, name);
-    return entry?.source === AgentDirectorySource.Remote;
-  }
-
-  /**
-   * Legacy compatibility: Check if name exists in remote agents.
-   * Prefer using explicit source when possible.
-   */
-  isRemoteByName(name: string): boolean {
-    const entries = this.getEntriesByName(name);
-    return entries.some((e) => e.source === AgentDirectorySource.Remote);
+  getEntryByIdentifier(identifier: string): AgentIndexEntry | undefined {
+    const parsed = parseAgentIndexKey(identifier);
+    if (parsed) {
+      return this.getEntry(parsed.source, parsed.name);
+    }
+    // Legacy format: return first matching entry
+    return this.getEntriesByName(identifier)[0];
   }
 
   /**
