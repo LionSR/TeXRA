@@ -1,3 +1,13 @@
+/**
+ * Agent path resolution utilities for glob-based agent discovery.
+ *
+ * This module provides fallback path resolution when agents are not found
+ * in the AgentIndex cache. The primary path resolution should use AgentIndex
+ * for fast lookups; these functions are used when:
+ * - An agent was just added and the index hasn't refreshed yet
+ * - The index needs to be bypassed for some reason
+ */
+
 // Standard library imports
 import * as path from 'path';
 
@@ -10,12 +20,6 @@ import {
   type AgentPathResolution,
 } from '@agent/runtime/AgentPathTypes';
 
-export interface AgentDirectoryMap {
-  custom?: string;
-  builtIn?: string;
-  builtInToolUse?: string;
-}
-
 export interface AgentDirectoryCandidate {
   directory: string;
   source: AgentDirectorySource;
@@ -26,11 +30,6 @@ export interface AgentDefinitionSearchOptions {
 }
 
 const YAML_EXTENSION = '.yaml';
-const DIRECTORY_ORDER: ReadonlyArray<keyof AgentDirectoryMap> = [
-  'custom',
-  'builtIn',
-  'builtInToolUse',
-];
 
 const BASE_GLOB_OPTIONS: GlobOptionsWithFileTypesFalse = {
   absolute: true,
@@ -42,39 +41,6 @@ type AsyncFetcher = (
   pattern: string,
   options: GlobOptionsWithFileTypesFalse,
 ) => Promise<string[]>;
-
-function cleanDirectory(value?: string): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function sourceForKey(key: keyof AgentDirectoryMap): AgentDirectorySource {
-  switch (key) {
-    case 'custom':
-      return AgentDirectorySource.Custom;
-    case 'builtIn':
-      return AgentDirectorySource.BuiltIn;
-    case 'builtInToolUse':
-      return AgentDirectorySource.BuiltInToolUse;
-    default:
-      return AgentDirectorySource.Custom;
-  }
-}
-
-export function mapToCandidates(
-  map: AgentDirectoryMap,
-): AgentDirectoryCandidate[] {
-  return DIRECTORY_ORDER.reduce<AgentDirectoryCandidate[]>((acc, key) => {
-    const directory = cleanDirectory(map[key]);
-    if (directory) {
-      acc.push({ directory, source: sourceForKey(key) });
-    }
-    return acc;
-  }, []);
-}
 
 export function createCandidate(
   directory: string,
