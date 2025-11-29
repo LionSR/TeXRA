@@ -79,34 +79,6 @@ export async function loadYaml(absolutePath: string): Promise<object> {
   return yaml.parse(yamlContent);
 }
 
-export function notifyYamlLoadFailure(
-  absolutePath: string,
-  error: unknown,
-): void {
-  const moreInfo = 'More Info';
-  const openFile = 'Open File';
-
-  void vscode.window
-    .showErrorMessage(
-      `Error loading YAML file ${absolutePath}: ${toErrorMessage(error)}`,
-      moreInfo,
-      openFile,
-    )
-    .then(async (selection) => {
-      if (selection === moreInfo) {
-        void vscode.commands.executeCommand('texra.openDoc', 'custom-agents');
-        return;
-      }
-
-      if (selection === openFile) {
-        const document = await vscode.workspace.openTextDocument(
-          vscode.Uri.file(absolutePath),
-        );
-        await vscode.window.showTextDocument(document);
-      }
-    });
-}
-
 /**
  * Loads agent settings and prompts with inheritance support.
  * Merges with parent configurations if specified in the inherits field.
