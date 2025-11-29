@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - identifiers
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { StreamTabInfo } from '@progressView/types';
@@ -10,7 +11,6 @@ import type { StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 // Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Internal imports

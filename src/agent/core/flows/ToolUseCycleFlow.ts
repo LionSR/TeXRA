@@ -10,8 +10,6 @@ import {
 import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-// Internal imports
-import { resolveUsageProvider } from '@agent/core/UsageProviderUtils';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -512,16 +510,12 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     if (usage) {
-      const provider = resolveUsageProvider(options.modelHandler);
-      const summary = options.modelHandler.computeResponseUsage(
+      // Normalize usage once - this is the single source of truth
+      const normalizedUsage = options.modelHandler.normalizeUsage(
         usage,
         state.responseTime ?? 0,
       );
-      store.round.setUsage({
-        summary,
-        nativeUsage: usage,
-        provider,
-      });
+      store.round.setNormalizedUsage(normalizedUsage);
     } else {
       store.round.clearUsage();
     }
