@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { createKey, type AgentSource } from '@agent/index';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -69,13 +68,13 @@ export async function selectAgentInMainView(
   options: {
     showSuccessMessage?: boolean;
     copyToClipboardOnFailure?: boolean;
-    source?: AgentDirectorySource;
+    source?: AgentSource;
   } = {},
 ): Promise<SelectAgentResult> {
   const {
     showSuccessMessage = true,
     copyToClipboardOnFailure = false,
-    source = AgentDirectorySource.Remote,
+    source = 'remote' as AgentSource,
   } = options;
 
   // Format agent value as source:name for dropdown selection
