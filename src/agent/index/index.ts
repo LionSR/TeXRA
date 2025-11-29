@@ -6,6 +6,7 @@ export {
   // Types
   type AgentEntry,
   type AgentSource,
+  type ResolvedAgent,
   type RemoteVisibility,
   type AgentOptionsPayload,
   // Core functions
