@@ -3,8 +3,9 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports - agent runtime
+import type { ResolvedAgent } from '@agent/index';
+import { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { AbsoluteFS } from '@utils/files';
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -46,13 +47,19 @@ describe('loadAgentSettingAndPrompts', () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'polish.yaml');
     const multipleDefinitionPath = path.join(agentPath, 'polish_multiple.yaml');
-    const multipleResolution = {
-      directory: agentPath,
-      source: AgentDirectorySource.Custom,
+    const multipleResolution: ResolvedAgent = {
+      entry: {
+        source: 'custom',
+        name: 'polish',
+        path: baseDefinitionPath,
+        multiplePath: multipleDefinitionPath,
+        category: AgentCategory.Workflow,
+        agentType: AgentType.Direct,
+      },
       definitionPath: multipleDefinitionPath,
       resolvedName: 'polish_multiple',
       usedFallback: false,
-    } as const;
+    };
 
     fileContents.set(
       normalize(multipleDefinitionPath),
@@ -88,13 +95,18 @@ describe('loadAgentSettingAndPrompts', () => {
   it('falls back to the base definition when _multiple is missing', async () => {
     const agentPath = path.join('/', 'tmp', 'agents');
     const baseDefinitionPath = path.join(agentPath, 'summarize.yaml');
-    const fallbackResolution = {
-      directory: agentPath,
-      source: AgentDirectorySource.Custom,
+    const fallbackResolution: ResolvedAgent = {
+      entry: {
+        source: 'custom',
+        name: 'summarize',
+        path: baseDefinitionPath,
+        category: AgentCategory.Workflow,
+        agentType: AgentType.Direct,
+      },
       definitionPath: baseDefinitionPath,
       resolvedName: 'summarize',
       usedFallback: true,
-    } as const;
+    };
 
     fileContents.set(
       normalize(baseDefinitionPath),

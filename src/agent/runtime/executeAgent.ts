@@ -12,6 +12,11 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
+import {
+  resolveAgent,
+  getMultipleName,
+  type ResolvedAgent,
+} from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -25,21 +30,13 @@ import {
   ensureAgentTypeForSource,
 } from '@agent/runtime/agentLoad';
 import { ModelFactory } from '@agent/runtime/ModelFactory';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
 // Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
-import {
-  createCandidate,
-  resolveAgentDefinition,
-  type AgentDefinitionSearchOptions,
-  type AgentDirectoryCandidate,
-} from '@agent/utils/agentPathResolver';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -56,10 +53,6 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
-import {
-  AgentDirectorySource,
-  type AgentPathResolution,
-} from './AgentPathTypes';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -78,78 +71,41 @@ type AgentConstructor = {
   ): IAgent;
 };
 
+/** Options for agent resolution. */
+export interface AgentResolveOptions {
+  preferMultiple?: boolean;
+}
+
 /**
- * Find and return the path to agent's yaml configuration file.
- * Supports remote agents using the RemoteAgentRegistry.
+ * Find and return the resolved agent from the registry.
+ *
+ * Supports two agent identifier formats:
+ * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
+ * - Legacy format: just name (e.g., "summarize") - searches sources in priority order
+ *
+ * The registry is the single source of truth for agent metadata.
  */
 export async function getAgentPath(
-  agentName: string,
-  options?: AgentDefinitionSearchOptions,
-): Promise<AgentPathResolution> {
-  try {
-    // Get clean agent name (strip legacy remote:// prefix if present)
-    const cleanName = RemoteAgentRegistry.getCleanName(agentName);
+  agentIdentifier: string,
+  options?: AgentResolveOptions,
+): Promise<ResolvedAgent> {
+  const result = resolveAgent(agentIdentifier, options?.preferMultiple);
 
-    // Check if this is a remote agent using the registry
-    if (RemoteAgentRegistry.isRemote(agentName)) {
-      // Return a special resolution for remote agents
-      return {
-        directory: '', // No directory for remote agents
-        source: AgentDirectorySource.Remote,
-        definitionPath: '', // No local path for remote agents
-        resolvedName: cleanName,
-        usedFallback: false,
-      };
-    }
-
-    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-      agentDirectories.custom(),
-      agentDirectories.builtIn(),
-      agentDirectories.builtInToolUse(),
-    ]);
-
-    const candidates = [
-      customDir && createCandidate(customDir, AgentDirectorySource.Custom),
-      builtInDir && createCandidate(builtInDir, AgentDirectorySource.BuiltIn),
-      builtInToolUseDir &&
-        createCandidate(builtInToolUseDir, AgentDirectorySource.BuiltInToolUse),
-    ].filter(Boolean) as AgentDirectoryCandidate[];
-
-    if (candidates.length === 0) {
-      throw new Error('No agent directories available for lookup');
-    }
-
-    const resolution = await resolveAgentDefinition(
-      agentName,
-      candidates,
-      options,
-    );
-    if (resolution) {
-      return resolution;
-    }
-
-    const customDirSet = candidates.some(
-      (candidate) => candidate.source === AgentDirectorySource.Custom,
-    );
-
-    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-      'texra.getWebviewView',
-    );
-    view?.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-      agentName,
-      customDirSet,
-    });
-    const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-    throw new Error(errorMsg);
-  } catch (err) {
-    const errorMsg = `Error finding agent path: ${toErrorMessage(err)}`;
-    // Don't show error notification for missing YAML files - we handle it with banner
-    if (!err?.toString().includes('Could not find yaml file for agent')) {
-      vscode.window.showErrorMessage(errorMsg);
-    }
-    throw new Error(errorMsg);
+  if (result) {
+    return result;
   }
+
+  // Agent not found - show banner and throw
+  const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+    'texra.getWebviewView',
+  );
+  view?.webview.postMessage({
+    command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+    agentName: agentIdentifier,
+    customDirSet: true,
+  });
+
+  throw new Error(`Could not find agent: ${agentIdentifier}`);
 }
 
 /**
@@ -171,13 +127,7 @@ function getAgentName(
   baseAgent: string,
   useMultipleOutputs: boolean | undefined,
 ): string {
-  if (useMultipleOutputs) {
-    // logger.info(CHANNEL, `Switching to multiple output mode`);
-    return baseAgent.endsWith('_multiple')
-      ? baseAgent
-      : `${baseAgent}_multiple`;
-  }
-  return baseAgent;
+  return useMultipleOutputs ? getMultipleName(baseAgent) : baseAgent;
 }
 
 /**
@@ -263,7 +213,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const agentSetting = ensureAgentTypeForSource(
     loadedAgentSetting,
-    resolution.source,
+    resolution.entry.source,
   );
 
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
@@ -333,7 +283,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     agentConfig,
     agentSetting,
     agentPrompt,
-    resolution.directory,
+    path.dirname(resolution.definitionPath),
     context,
   );
 

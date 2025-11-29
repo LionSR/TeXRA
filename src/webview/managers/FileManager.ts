@@ -6,8 +6,7 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - webview
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { getAgentPath } from '@agent/runtime/executeAgent';
+import { getAgent } from '@agent/index';
 import { showLoggedMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
@@ -183,8 +182,8 @@ export class FileManager {
     if (!webviewView) {
       return;
     }
-    const agent = message.agent;
-    if (!agent) {
+    const agentIdentifier = message.agent;
+    if (!agentIdentifier) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
@@ -193,11 +192,8 @@ export class FileManager {
     }
 
     try {
-      const agentPath = await getAgentPath(agent);
-      const [settings] = await loadAgentSettingAndPrompts(agentPath);
-      const files = Array.isArray(settings?.defaultOutputFiles)
-        ? settings.defaultOutputFiles
-        : [];
+      const entry = getAgent(agentIdentifier);
+      const files = entry?.defaultOutputFiles ?? [];
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files,
