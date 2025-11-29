@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { createKey, type AgentSource } from '@agent/index';
+import { createKey, getAgent, type AgentSource } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -89,12 +90,17 @@ export async function selectAgentInMainView(
     >('texra.getWebviewView');
 
     if (webviewView) {
+      // Determine session type based on agent category
+      const entry = getAgent(agentValue);
+      const sessionType =
+        entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
+
       // Send SET_SELECTED_AGENT message to set just the agent selector value
       // This avoids triggering full state restoration which would clear other fields
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
         agentValue,
-        sessionType: 'workflow', // Remote agents are typically workflow agents
+        sessionType,
       });
 
       if (showSuccessMessage) {
