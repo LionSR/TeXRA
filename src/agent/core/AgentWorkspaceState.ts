@@ -196,22 +196,26 @@ export const ThinkingBlockSchema = z.object({
   data: z.string().optional(),
 });
 
-export const AgentWorkspaceStateSnapshotSchema = z.strictObject({
-  assembly: z.strictObject({
+/**
+ * We use z.object() instead of z.strictObject() to remain backward compatible
+ * with legacy workspace snapshots that may contain removed or renamed fields.
+ */
+export const AgentWorkspaceStateSnapshotSchema = z.object({
+  assembly: z.object({
     lastResponse: z.string(),
     accumulatedOutput: z.string(),
   }),
-  media: z.strictObject({ files: z.array(z.string()) }),
-  reasoning: z.strictObject({
+  media: z.object({ files: z.array(z.string()) }),
+  reasoning: z.object({
     thinkingBlocks: z.array(ThinkingBlockSchema),
     thinkingAdded: z.boolean(),
   }),
-  document: z.strictObject({ texcountStats: z.string().nullable() }),
+  document: z.object({ texcountStats: z.string().nullable() }),
   interactions: z
-    .strictObject({
+    .object({
       readFiles: z.array(z.string()),
       edits: z.array(
-        z.strictObject({
+        z.object({
           path: z.string(),
           added: z.number().optional(),
           removed: z.number().optional(),
