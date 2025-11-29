@@ -6,11 +6,9 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - utilities
+import { resolveAgent, getWorkflowAgents } from '@agent/index';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
-import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 import { getAgentPath } from '@agent/runtime/executeAgent';
-import { AgentType } from '@agent/core/AgentDataclass';
 import { toErrorMessage } from '@common/errors';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import * as logger from '@logger/logUtils';
@@ -31,116 +29,49 @@ export const yamlCommands = {
 };
 
 export async function handleTestAgentLoading(
-  context: vscode.ExtensionContext,
+  _context: vscode.ExtensionContext,
 ): Promise<void> {
   try {
-    // Initialize StorageFS with the context
-    StorageFS.initialize(context);
+    logger.info(CHANNEL, 'Testing agent loading from registry:');
 
-    logger.info(CHANNEL, 'Testing YAML loading:');
-
-    // Test basic YAML loading
-    const testYaml = {
-      settings: {
-        agentType: AgentType.Direct,
-        documentTag: 'test_doc',
-        temperature: 0.7,
-        prefills: ['test prefill'],
-        outputExt: 'tex',
-        endTag: '</test_doc>',
-        requiredFiles: {},
-        requiredFilesInternal: {},
-        defaultOutputFiles: [],
-        filePatternsContain: [],
-      },
-      prompts: {
-        systemPrompt: 'Test system prompt',
-        userPrefix: 'Test prefix',
-        userRequest: ['Test request', 'Test reflect'],
-      },
-    };
-
-    // Create a temporary test YAML file
-    await GlobalStorageFS.createDir('test_agents');
-    const testDir = GlobalStorageFS.fullPath('test_agents');
-
-    // Create base agent
-    const baseYamlPath = path.join(testDir, 'base.yaml');
-    await GlobalStorageFS.writeJson('test_agents/base.yaml', testYaml);
-
-    // Create child agent that inherits from base
-    const childYaml = {
-      inherits: 'base',
-      settings: {
-        documentTag: 'child_doc',
-        temperature: 0.5,
-      },
-      prompts: {
-        systemPrompt: 'Child system prompt',
-      },
-    };
-
-    const childYamlPath = path.join(testDir, 'child.yaml');
-    await GlobalStorageFS.writeJson('test_agents/child.yaml', childYaml);
-
-    // Test loading base agent
-    logger.info(CHANNEL, '\nTesting base agent loading:');
-    const baseYaml = await loadYaml(baseYamlPath);
-    logger.info(
-      CHANNEL,
-      `Base YAML loaded: ${JSON.stringify(baseYaml, null, 2)}`,
-    );
-
-    const baseResolution = await resolveAgentDefinitionInDirectory(
-      testDir,
-      AgentDirectorySource.Custom,
-      'base',
-    );
-    if (!baseResolution) {
-      throw new Error('Base agent definition not found for testing.');
+    // Get first two workflow agents from registry to test loading
+    const agents = getWorkflowAgents();
+    if (agents.length === 0) {
+      throw new Error('No workflow agents found in registry');
     }
-    const [baseSettings, basePrompts] =
-      await loadAgentSettingAndPrompts(baseResolution);
-    logger.info(CHANNEL, 'Base agent settings loaded:');
-    logger.info(CHANNEL, JSON.stringify(baseSettings, null, 2));
-    logger.info(CHANNEL, 'Base agent prompts loaded:');
-    logger.info(CHANNEL, JSON.stringify(basePrompts, null, 2));
 
-    // Test loading child agent with inheritance
-    logger.info(CHANNEL, '\nTesting child agent loading with inheritance:');
-    const childYamlContent = await loadYaml(childYamlPath);
-    logger.info(
-      CHANNEL,
-      `Child YAML loaded: ${JSON.stringify(childYamlContent, null, 2)}`,
-    );
+    const testAgent = agents[0];
+    logger.info(CHANNEL, `\nTesting agent: ${testAgent.name}`);
 
-    const childResolution = await resolveAgentDefinitionInDirectory(
-      testDir,
-      AgentDirectorySource.Custom,
-      'child',
-    );
-    if (!childResolution) {
-      throw new Error('Child agent definition not found for testing.');
+    // Resolve the agent
+    const resolution = resolveAgent(testAgent.name);
+    if (!resolution) {
+      throw new Error(`Agent "${testAgent.name}" not found in registry`);
     }
-    const [childSettings, childPrompts] =
-      await loadAgentSettingAndPrompts(childResolution);
-    logger.info(
-      CHANNEL,
-      'Child agent settings loaded (should inherit from base):',
-    );
-    logger.info(CHANNEL, JSON.stringify(childSettings, null, 2));
-    logger.info(
-      CHANNEL,
-      'Child agent prompts loaded (should inherit from base):',
-    );
-    logger.info(CHANNEL, JSON.stringify(childPrompts, null, 2));
 
-    // Cleanup test files
-    await GlobalStorageFS.delete('test_agents/base.yaml');
-    await GlobalStorageFS.delete('test_agents/child.yaml');
-    await GlobalStorageFS.delete('test_agents', {
-      recursive: true,
-    });
+    // Load the YAML directly
+    logger.info(CHANNEL, `Loading from: ${resolution.definitionPath}`);
+    const rawYaml = await loadYaml(resolution.definitionPath);
+    logger.info(
+      CHANNEL,
+      `Raw YAML loaded: ${JSON.stringify(rawYaml, null, 2)}`,
+    );
+
+    // Load with settings and prompts processing
+    const [settings, prompts] = await loadAgentSettingAndPrompts(resolution);
+    logger.info(CHANNEL, '\nProcessed settings:');
+    logger.info(CHANNEL, JSON.stringify(settings, null, 2));
+    logger.info(CHANNEL, '\nProcessed prompts:');
+    logger.info(CHANNEL, JSON.stringify(prompts, null, 2));
+
+    // Check if this agent has inheritance
+    const config = rawYaml as { inherits?: string };
+    if (config?.inherits) {
+      logger.info(
+        CHANNEL,
+        `\nInheritance chain: ${testAgent.name} -> ${config.inherits}`,
+      );
+    }
 
     vscode.window.showInformationMessage(
       'Agent loading tests completed. Check Debug Console for results.',
@@ -174,9 +105,12 @@ export async function handleLoadSpecificAgent(
 
     logger.info(CHANNEL, `Testing loading of agent: ${agentName}`);
 
-    // Use getAgentPath to find the agent's directory
+    // Use getAgentPath to resolve the agent
     const agentPath = await getAgentPath(agentName);
-    logger.info(CHANNEL, `Loading from path: ${agentPath.directory}`);
+    logger.info(
+      CHANNEL,
+      `Loading from path: ${path.dirname(agentPath.definitionPath)}`,
+    );
 
     // Load and display the agent configuration
     const [settings, prompts] = await loadAgentSettingAndPrompts(agentPath);
