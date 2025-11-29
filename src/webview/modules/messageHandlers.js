@@ -536,8 +536,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       selectElement.appendChild(option);
     }
 
-    // Set the value
+    // Set the value and dispatch change event to update the component's display
     safeSetElementValue(selectId, value);
+    selectElement.dispatchEvent(new Event('change'));
   }
 
   _getSessionTypeValue() {
