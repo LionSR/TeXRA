@@ -7,10 +7,7 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
-import {
-  isMultipleVariant,
-  getMultipleName,
-} from '@agent/index/agentRegistry';
+import { isMultipleVariant, getMultipleName } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';

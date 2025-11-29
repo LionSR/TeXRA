@@ -398,11 +398,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(decorator.hint || `Type: ${decorator.label}`);
     }
 
-    // Add cloud icon for remote agents (visible indicator)
+    // Add cloud icon for remote agents (visible indicator, at end)
     if (isRemote) {
-      const { unicode, hint } = AGENT_DECORATORS.properties.remote;
-      displayLabel = `${unicode} ${displayLabel}`;
-      hints.push(hint);
+      hints.push(AGENT_DECORATORS.properties.remote.hint);
     }
 
     // Add custom hint to tooltip (no unicode icon - too confusing)
@@ -416,7 +414,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(description);
     }
 
-    // Add multiple outputs indicator (visible indicator)
+    // Add multiple outputs indicator (visible indicator, at end)
     if (isMultiple) {
       const { unicode, hint } = AGENT_DECORATORS.properties.multipleOutputs;
       displayLabel = `${displayLabel} ${unicode}`;
@@ -426,7 +424,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       opt.style.opacity = '';
     }
 
-    if (isToolUse) {
+    // Add cloud icon for remote agents (visible indicator, at end after multiple)
+    if (isRemote) {
+      const { unicode } = AGENT_DECORATORS.properties.remote;
+      displayLabel = `${displayLabel} ${unicode}`;
+    }
+
+    // Add tool-use hint only if not already covered by agentType
+    // (avoid duplicate "Can execute tools and code" when agentType is toolUse)
+    if (isToolUse && agentType !== 'toolUse') {
       hints.push('Can execute tools and code');
     }
 
