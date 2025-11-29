@@ -104,18 +104,6 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       );
     }
 
-    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
-    try {
-      if (isWorkspaceFile) {
-        await WorkspaceFS.delete(indentLogPath);
-      } else {
-        await AbsoluteFS.delete(indentLogPath);
-      }
-      logger.debug(CHANNEL, 'Removed indent.log');
-    } catch (err) {
-      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
-    }
-
     logger.info(CHANNEL, `Indented ${filePath}`);
     return true;
   } catch (err) {
