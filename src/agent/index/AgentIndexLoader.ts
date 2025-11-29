@@ -77,22 +77,26 @@ export class AgentIndexLoader {
     AgentIndex.clear();
 
     // Load from all sources in parallel
-    const [customEntries, builtInEntries, builtInToolUseEntries, remoteEntries] =
-      await Promise.all([
-        this.loadFromDirectory(
-          AgentDirectorySource.Custom,
-          await agentDirectories.custom(),
-        ),
-        this.loadFromDirectory(
-          AgentDirectorySource.BuiltIn,
-          await agentDirectories.builtIn(),
-        ),
-        this.loadFromDirectory(
-          AgentDirectorySource.BuiltInToolUse,
-          await agentDirectories.builtInToolUse(),
-        ),
-        this.loadRemoteAgents(),
-      ]);
+    const [
+      customEntries,
+      builtInEntries,
+      builtInToolUseEntries,
+      remoteEntries,
+    ] = await Promise.all([
+      this.loadFromDirectory(
+        AgentDirectorySource.Custom,
+        await agentDirectories.custom(),
+      ),
+      this.loadFromDirectory(
+        AgentDirectorySource.BuiltIn,
+        await agentDirectories.builtIn(),
+      ),
+      this.loadFromDirectory(
+        AgentDirectorySource.BuiltInToolUse,
+        await agentDirectories.builtInToolUse(),
+      ),
+      this.loadRemoteAgents(),
+    ]);
 
     const allEntries = this.applyConfiguredCategoryOverrides([
       ...customEntries,
@@ -219,10 +223,7 @@ export class AgentIndexLoader {
       );
       return entries;
     } catch (error) {
-      logger.error(
-        CHANNEL,
-        `Failed to scan directory ${directory}: ${error}`,
-      );
+      logger.error(CHANNEL, `Failed to scan directory ${directory}: ${error}`);
       return [];
     }
   }
@@ -307,7 +308,9 @@ export class AgentIndexLoader {
     const defaultOutputFiles = rawSettings.defaultOutputFiles as
       | string[]
       | undefined;
-    const isMultipleOutput = rawSettings.isMultipleOutput as boolean | undefined;
+    const isMultipleOutput = rawSettings.isMultipleOutput as
+      | boolean
+      | undefined;
 
     // Determine category from source and settings
     let category: AgentCategory;
@@ -342,7 +345,10 @@ export class AgentIndexLoader {
    * Load remote agents from Supabase.
    */
   private static async loadRemoteAgents(): Promise<AgentIndexEntry[]> {
-    const remoteEnabled = getConfig<boolean>('texra.remoteAgents.enabled', true);
+    const remoteEnabled = getConfig<boolean>(
+      'texra.remoteAgents.enabled',
+      true,
+    );
     if (!remoteEnabled) {
       return [];
     }

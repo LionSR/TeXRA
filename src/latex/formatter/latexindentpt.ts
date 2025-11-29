@@ -133,10 +133,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
 
       // Clean up indent.log for non-workspace files
       const indentLogPath = path.join(fileDir, 'indent.log');
-      await cleanupIndentLog(
-        AbsoluteFS.delete.bind(AbsoluteFS),
-        indentLogPath,
-      );
+      await cleanupIndentLog(AbsoluteFS.delete.bind(AbsoluteFS), indentLogPath);
     }
 
     logger.info(CHANNEL, `Indented ${filePath}`);
