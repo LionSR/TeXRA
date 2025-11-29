@@ -1,6 +1,6 @@
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
-import { parseAgentIndexKey } from '@agent/index';
+import { isRemoteAgent } from '@agent/index';
 import {
   BaseCycleState,
   resetCycleState,
@@ -8,18 +8,8 @@ import {
   CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-
-/**
- * Check if an agent identifier refers to a remote agent.
- */
-function isRemoteAgent(agentIdentifier: string | undefined): boolean {
-  if (!agentIdentifier) return false;
-  const parsed = parseAgentIndexKey(agentIdentifier);
-  return parsed?.source === AgentDirectorySource.Remote;
-}
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';

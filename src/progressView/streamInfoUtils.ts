@@ -2,17 +2,8 @@
 import * as path from 'path';
 
 // Local imports - progress view
-import { parseAgentIndexKey } from '@agent/index';
+import { isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
-
-/**
- * Check if an agent identifier refers to a remote agent.
- */
-function isRemoteAgent(agentIdentifier: string): boolean {
-  const parsed = parseAgentIndexKey(agentIdentifier);
-  return parsed?.source === AgentDirectorySource.Remote;
-}
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';

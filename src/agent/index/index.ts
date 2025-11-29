@@ -6,9 +6,11 @@ export { AgentIndex } from './AgentIndex';
 export {
   type AgentIndexEntry,
   type AgentIndexKey,
+  type RemoteAgentVisibility,
   createAgentIndexKey,
   parseAgentIndexKey,
   isAgentIndexKey,
+  isRemoteAgent,
   getSourceDisplayLabel,
   shouldShowSourceIndicator,
 } from './AgentIndexEntry';
