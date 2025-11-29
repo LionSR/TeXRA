@@ -81,13 +81,19 @@ export function getModelProviderDecorator(provider) {
 }
 
 export const AGENT_DECORATORS = {
-  // Agent properties (remote, multiple outputs)
+  // Agent properties (remote, custom, multiple outputs)
   properties: {
     remote: {
       icon: 'cloud',
       unicode: '☁',
       label: 'Remote',
       hint: 'Agent prompts loaded from remote',
+    },
+    custom: {
+      icon: 'account',
+      unicode: '✦',
+      label: 'Custom',
+      hint: 'User-defined agent',
     },
     multipleOutputs: {
       icon: 'files',
