@@ -229,7 +229,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   _decorateModelOption(opt) {
     const { provider, context, cost } = opt.dataset;
-    const modelName = opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
+    const modelName =
+      opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
 
     // Get provider decorator for the icon
     const decorator = getModelProviderDecorator(provider);
@@ -472,8 +473,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       if (candidate.includes(':')) continue;
 
       const suffixMatch = options.find(
-        (option) =>
-          option.value.endsWith(`:${candidate}`) && !option.disabled,
+        (option) => option.value.endsWith(`:${candidate}`) && !option.disabled,
       );
       if (suffixMatch) {
         selectElement.value = suffixMatch.value;

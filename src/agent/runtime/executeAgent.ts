@@ -95,7 +95,11 @@ async function resolveAgentPathViaGlob(
     }
 
     const candidates = [createCandidate(directory, explicitSource)];
-    const resolution = await resolveAgentDefinition(agentName, candidates, options);
+    const resolution = await resolveAgentDefinition(
+      agentName,
+      candidates,
+      options,
+    );
 
     if (resolution) {
       return resolution;
@@ -116,7 +120,11 @@ async function resolveAgentPathViaGlob(
     throw new Error('No agent directories available for lookup');
   }
 
-  const resolution = await resolveAgentDefinition(agentName, candidates, options);
+  const resolution = await resolveAgentDefinition(
+    agentName,
+    candidates,
+    options,
+  );
   if (resolution) {
     return resolution;
   }
@@ -171,7 +179,6 @@ export async function getAgentPath(
     throw new Error(errorMsg);
   }
 }
-
 
 /**
  * Get agent class based on settings.
