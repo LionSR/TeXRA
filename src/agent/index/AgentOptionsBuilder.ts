@@ -50,7 +50,10 @@ export function buildAgentOptionsFromIndex(
 
   // Get configured agents to determine visibility
   const configuredWorkflowAgents = getConfig<string[]>('texra.agents', []);
-  const configuredToolUseAgents = getConfig<string[]>('texra.toolUseAgents', []);
+  const configuredToolUseAgents = getConfig<string[]>(
+    'texra.toolUseAgents',
+    [],
+  );
 
   // Filter to only show configured agents (or all if none configured)
   const visibleWorkflowEntries = filterVisibleEntries(
