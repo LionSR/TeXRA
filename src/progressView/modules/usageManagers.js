@@ -62,7 +62,8 @@ export class UsageSummary {
   }
 
   /**
-   * Compute total usage from all groups
+   * Compute total usage for the active session in the active stream.
+   * Each stream tab can have multiple sessions; this returns the current session's total.
    * @returns {Object} Total usage with inputTokens, outputTokens, and cost
    */
   computeTotal() {
