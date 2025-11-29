@@ -70,7 +70,8 @@ function migrateLegacyUsageSummary(
       base.cacheCreationTokens = usageSummary.cache_creation_input_tokens;
     }
     if (usageSummary.server_tool_use?.web_search_requests) {
-      base.serverToolRequests = usageSummary.server_tool_use.web_search_requests;
+      base.serverToolRequests =
+        usageSummary.server_tool_use.web_search_requests;
     }
   } else if (isOpenAIUsage(usageSummary)) {
     if (usageSummary.cached_tokens > 0) {
@@ -97,7 +98,7 @@ function isOpenAIUsage(usage: UsageSummary): usage is OpenAIAPIResponseUsage {
   return usage !== null && 'prompt_tokens' in usage;
 }
 
-export const ConversationRoundStateSnapshotSchema = z.strictObject({
+export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.number().int().nonnegative(),
   continuationCount: z.number().int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
@@ -110,22 +111,13 @@ export const ConversationRoundStateSnapshotSchema = z.strictObject({
   provider: z.custom<UsageProvider>().nullable().optional(),
 });
 
+/**
+ * Single source of truth for ConversationRoundState serialization format.
+ * Derived from the Zod schema - do not duplicate this definition.
+ */
 export type ConversationRoundStateSnapshot = z.infer<
   typeof ConversationRoundStateSnapshotSchema
 >;
-
-export interface ConversationRoundStateJSON {
-  roundIndex: number;
-  continuationCount: number;
-  responseTimeMs: number;
-  outputFile: string;
-  // nullish for backward compatibility with old saved states that lack this field
-  normalizedUsage?: NormalizedUsage | null;
-  // Legacy fields for backward compatibility
-  usageSummary?: UsageSummary;
-  nativeUsage?: NativeUsagePayload | null;
-  provider?: UsageProvider | null;
-}
 
 export class ConversationRoundState {
   public roundIndex: number;
@@ -163,7 +155,7 @@ export class ConversationRoundState {
     this.normalizedUsage = null;
   }
 
-  toJSON(): ConversationRoundStateJSON {
+  toJSON(): ConversationRoundStateSnapshot {
     return {
       roundIndex: this.roundIndex,
       continuationCount: this.continuationCount,
@@ -173,7 +165,9 @@ export class ConversationRoundState {
     };
   }
 
-  static fromJSON(json: ConversationRoundStateJSON): ConversationRoundState {
+  static fromJSON(
+    json: ConversationRoundStateSnapshot,
+  ): ConversationRoundState {
     const state = new ConversationRoundState(json.roundIndex);
     state.continuationCount = json.continuationCount;
     state.responseTimeMs = json.responseTimeMs;
@@ -197,18 +191,16 @@ export class ConversationRoundState {
   }
 }
 
-export interface AgentRunStateJSON {
-  totalRounds: number;
-  totalResponseTimeMs: number;
-  usageAccumulator: RunUsageAccumulatorJSON;
-}
-
-export const AgentRunStateSnapshotSchema = z.strictObject({
+export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.number().int().nonnegative(),
   totalResponseTimeMs: z.number().nonnegative(),
   usageAccumulator: z.custom<RunUsageAccumulatorJSON>(),
 });
 
+/**
+ * Single source of truth for AgentRunState serialization format.
+ * Derived from the Zod schema - do not duplicate this definition.
+ */
 export type AgentRunStateSnapshot = z.infer<typeof AgentRunStateSnapshotSchema>;
 
 export class AgentRunState {
@@ -243,7 +235,7 @@ export class AgentRunState {
     this.addResponseTime(roundState.responseTimeMs);
   }
 
-  toJSON(): AgentRunStateJSON {
+  toJSON(): AgentRunStateSnapshot {
     return {
       totalRounds: this.totalRounds,
       totalResponseTimeMs: this.totalResponseTimeMs,
@@ -251,7 +243,9 @@ export class AgentRunState {
     };
   }
 
-  static fromJSON(json: AgentRunStateJSON | null | undefined): AgentRunState {
+  static fromJSON(
+    json: AgentRunStateSnapshot | null | undefined,
+  ): AgentRunState {
     if (!json) {
       return new AgentRunState();
     }
