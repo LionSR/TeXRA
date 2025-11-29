@@ -79,65 +79,6 @@ type AgentConstructor = {
 };
 
 /**
- * Try to resolve agent path from the AgentIndex cache.
- * Returns undefined if agent is not in the index.
- */
-function resolveFromAgentIndex(
-  agentName: string,
-  explicitSource: AgentDirectorySource | null,
-  preferMultiple: boolean,
-): AgentPathResolution | undefined {
-  let entry;
-
-  if (explicitSource) {
-    // Explicit source: look up directly
-    entry = AgentIndex.getEntry(explicitSource, agentName);
-  } else {
-    // Legacy format: find first matching entry (priority: custom > builtin > builtinToolUse > remote)
-    const entries = AgentIndex.getEntriesByName(agentName);
-    entry = entries[0];
-  }
-
-  if (!entry) {
-    return undefined;
-  }
-
-  // Remote agents don't have local paths - handle them specially
-  if (entry.source === AgentDirectorySource.Remote) {
-    return {
-      directory: '',
-      source: AgentDirectorySource.Remote,
-      definitionPath: '',
-      resolvedName: entry.name,
-      usedFallback: false,
-    };
-  }
-
-  // Local agents must have a definition path
-  if (!entry.definitionPath) {
-    return undefined;
-  }
-
-  // Determine which path to use based on preferMultiple flag
-  let definitionPath = entry.definitionPath;
-  let resolvedName = entry.name;
-  const usedFallback = preferMultiple && !entry.hasMultipleSibling;
-
-  if (preferMultiple && entry.multipleVariantPath) {
-    definitionPath = entry.multipleVariantPath;
-    resolvedName = `${entry.name}_multiple`;
-  }
-
-  return {
-    directory: path.dirname(definitionPath),
-    source: entry.source,
-    definitionPath,
-    resolvedName,
-    usedFallback,
-  };
-}
-
-/**
  * Slow path: Resolve agent path via glob-based directory scanning.
  * Used as fallback when agent is not in the index.
  */
@@ -200,41 +141,26 @@ async function resolveAgentPathViaGlob(
  * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
  * - Legacy format: just name (e.g., "summarize") - searches directories in order
  *
- * Uses AgentIndex for fast path resolution (avoids glob operations).
- * Falls back to glob-based resolution only if agent is not in the index.
+ * Uses AgentIndex.resolve() for fast lookups. Falls back to glob-based
+ * resolution only if agent is not in the index.
  */
 export async function getAgentPath(
   agentIdentifier: string,
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
-    // Parse agent identifier: "source:name" format or just "name" (legacy)
-    const parsed = parseAgentIndexKey(agentIdentifier);
-    const explicitSource = parsed?.source ?? null;
-    const agentName = parsed?.name ?? agentIdentifier;
-
-    // If source is explicitly specified, use it directly
-    if (explicitSource === AgentDirectorySource.Remote) {
-      return {
-        directory: '',
-        source: AgentDirectorySource.Remote,
-        definitionPath: '',
-        resolvedName: agentName,
-        usedFallback: false,
-      };
-    }
-
-    // Fast path: Try to resolve from AgentIndex cache first
-    const indexResolution = resolveFromAgentIndex(
-      agentName,
-      explicitSource,
-      options?.preferMultiple ?? false,
-    );
+    // Fast path: Use AgentIndex.resolve() which handles source:name parsing
+    const indexResolution = AgentIndex.resolve(agentIdentifier, {
+      preferMultiple: options?.preferMultiple,
+    });
     if (indexResolution) {
       return indexResolution;
     }
 
     // Slow path: Fall back to glob-based resolution for agents not in index
+    const parsed = parseAgentIndexKey(agentIdentifier);
+    const explicitSource = parsed?.source ?? null;
+    const agentName = parsed?.name ?? agentIdentifier;
     return await resolveAgentPathViaGlob(agentName, explicitSource, options);
   } catch (err) {
     const errorMsg = `Error finding agent path: ${toErrorMessage(err)}`;
