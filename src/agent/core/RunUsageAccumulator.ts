@@ -1,5 +1,8 @@
 // Local imports - types
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type {
+  NormalizedUsage,
+  UsageProvider,
+} from '@agent/types/NormalizedUsage';
 
 // Re-export for backwards compatibility (used in AgentState legacy schema)
 import type {
@@ -17,6 +20,15 @@ export type UsageSummary =
   | OpenAIAPIResponseUsage
   | AnthropicAPIResponseUsage
   | null;
+
+/**
+ * @deprecated Legacy snapshot format - used only for migration
+ */
+interface LegacyNativeUsageSnapshot {
+  round: number;
+  provider: string;
+  payload: unknown;
+}
 
 /**
  * Snapshot of normalized usage for a single round.
@@ -144,8 +156,99 @@ export class RunUsageAccumulator {
     if (json.normalizedSnapshots) {
       acc.normalizedSnapshots.push(...json.normalizedSnapshots);
     }
-    // Note: Legacy `snapshots` field is ignored - totals are already aggregated
+    // Migrate legacy snapshots format to normalized format
+    else if (json.snapshots && Array.isArray(json.snapshots)) {
+      for (const snap of json.snapshots as LegacyNativeUsageSnapshot[]) {
+        const migrated = migrateLegacySnapshot(snap);
+        if (migrated) {
+          acc.normalizedSnapshots.push(migrated);
+        }
+      }
+    }
 
     return acc;
   }
+}
+
+/**
+ * Migrates a legacy native usage snapshot to normalized format.
+ * Extracts tokens from native payload; cost cannot be recovered (depends on pricing).
+ */
+function migrateLegacySnapshot(
+  legacy: LegacyNativeUsageSnapshot,
+): NormalizedUsageSnapshot | null {
+  if (!legacy.payload || typeof legacy.payload !== 'object') {
+    return null;
+  }
+
+  const payload = legacy.payload as Record<string, unknown>;
+  const provider = (legacy.provider || 'unknown') as UsageProvider;
+
+  // Try to detect payload format and extract tokens
+  // Anthropic format: input_tokens, output_tokens
+  if ('input_tokens' in payload) {
+    return {
+      round: legacy.round,
+      usage: {
+        inputTokens: (payload.input_tokens as number) ?? 0,
+        outputTokens: (payload.output_tokens as number) ?? 0,
+        cost: 0, // Cannot recover - depends on pricing at time of request
+        responseTimeMs: 0,
+        provider,
+        cachedInputTokens: (payload.cache_read_input_tokens as number) ?? undefined,
+        cacheCreationTokens: (payload.cache_creation_input_tokens as number) ?? undefined,
+        _native: payload,
+      },
+    };
+  }
+
+  // OpenAI format: prompt_tokens, completion_tokens
+  if ('prompt_tokens' in payload) {
+    const details = payload.prompt_tokens_details as Record<string, unknown> | undefined;
+    const completionDetails = payload.completion_tokens_details as Record<string, unknown> | undefined;
+    return {
+      round: legacy.round,
+      usage: {
+        inputTokens: (payload.prompt_tokens as number) ?? 0,
+        outputTokens: (payload.completion_tokens as number) ?? 0,
+        cost: 0, // Cannot recover - depends on pricing at time of request
+        responseTimeMs: 0,
+        provider,
+        cachedInputTokens: (details?.cached_tokens as number) ?? undefined,
+        reasoningTokens: (completionDetails?.reasoning_tokens as number) ?? undefined,
+        _native: payload,
+      },
+    };
+  }
+
+  // Google format: promptTokenCount, candidatesTokenCount
+  if ('promptTokenCount' in payload) {
+    return {
+      round: legacy.round,
+      usage: {
+        inputTokens: (payload.promptTokenCount as number) ?? 0,
+        outputTokens: (payload.candidatesTokenCount as number) ?? 0,
+        cost: 0, // Cannot recover - depends on pricing at time of request
+        responseTimeMs: 0,
+        provider,
+        cachedInputTokens: (payload.cachedContentTokenCount as number) ?? undefined,
+        reasoningTokens: (payload.thoughtsTokenCount as number) ?? undefined,
+        toolUsePromptTokens: (payload.toolUsePromptTokenCount as number) ?? undefined,
+        _native: payload,
+      },
+    };
+  }
+
+  // Unknown format - create minimal entry preserving native payload
+  return {
+    round: legacy.round,
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+      responseTimeMs: 0,
+      provider,
+      _native: payload,
+    },
+  };
 }
