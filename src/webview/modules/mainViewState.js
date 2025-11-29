@@ -27,7 +27,8 @@ import {
 import { capitalize } from '@common/stringUtils.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
-const DEFAULT_WORKFLOW_AGENT = 'generic';
+// Note: These defaults must match the values in AgentOptionsBuilder.ts
+const DEFAULT_WORKFLOW_AGENT = 'correct';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
 function getSessionDefaultAgent(sessionType) {

@@ -103,8 +103,9 @@ export function isAgentIndexKey(value: string): value is AgentIndexKey {
 }
 
 /**
- * Check if an agent identifier refers to a remote agent.
- * Works with both source:name format and raw identifiers.
+ * Check if an agent identifier in source:name format refers to a remote agent.
+ * Returns false for identifiers without a source prefix (use AgentIndex.isRemoteByName
+ * for legacy format lookups that need to query the index).
  */
 export function isRemoteAgent(agentIdentifier: string | undefined): boolean {
   if (!agentIdentifier) return false;
