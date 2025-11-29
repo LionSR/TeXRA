@@ -430,6 +430,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * Attempts to restore from a list of candidate values in order, falling back
    * to the first enabled option if no candidate matches.
    *
+   * Also handles backwards compatibility for agent values that were saved without
+   * the source: prefix (e.g., "summarize" → "custom:summarize").
+   *
    * @param {HTMLElement} selectElement - The select element to restore
    * @param {string[]} candidates - Array of candidate values to try, in priority order
    */
@@ -437,13 +440,30 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const filteredCandidates = candidates.filter(Boolean);
     const options = getSelectOptionElements(selectElement);
 
-    const match = filteredCandidates.find((value) =>
+    // First try exact match
+    const exactMatch = filteredCandidates.find((value) =>
       options.some((option) => option.value === value),
     );
 
-    if (match) {
-      selectElement.value = match;
+    if (exactMatch) {
+      selectElement.value = exactMatch;
       return;
+    }
+
+    // Migration: try matching by name suffix for old format values
+    // (e.g., "summarize" matches "custom:summarize" or "builtin:summarize")
+    for (const candidate of filteredCandidates) {
+      // Skip if already in source:name format
+      if (candidate.includes(':')) continue;
+
+      const suffixMatch = options.find(
+        (option) =>
+          option.value.endsWith(`:${candidate}`) && !option.disabled,
+      );
+      if (suffixMatch) {
+        selectElement.value = suffixMatch.value;
+        return;
+      }
     }
 
     const fallbackOption =
