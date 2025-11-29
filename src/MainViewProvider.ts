@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { AgentIndexLoader } from '@agent/index';
+import { refresh } from '@agent/index';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
@@ -77,7 +77,7 @@ export class MainViewProvider
     }
     // Refresh the agent index to pick up any configuration changes
     // (e.g., texra.toolUseAgents overrides)
-    await AgentIndexLoader.refreshAll();
+    await refresh();
 
     // Send delta messages instead of regenerating entire HTML
     // This preserves webview state and avoids unnecessary DOM recreation
@@ -114,7 +114,7 @@ export class MainViewProvider
         clearTimeout(refreshTimeout);
       }
       refreshTimeout = setTimeout(() => {
-        // refreshOptionsAndView already calls AgentIndexLoader.refreshAll()
+        // refreshOptionsAndView already calls refresh()
         void this.refreshOptionsAndView();
         refreshTimeout = undefined;
       }, 500);

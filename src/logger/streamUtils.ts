@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
-import { parseAgentIndexKey } from '@agent/index';
+import { parseKey } from '@agent/index';
 import { AgentType } from '@agent/core/AgentDataclass';
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -19,7 +19,7 @@ type StreamTabIdOptions = {
  * Handles source:name format (e.g., "custom:summarize" → "summarize").
  */
 function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseAgentIndexKey(agentIdentifier);
+  const parsed = parseKey(agentIdentifier);
   return parsed ? parsed.name : agentIdentifier;
 }
 
