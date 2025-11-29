@@ -32,7 +32,7 @@ export interface AgentHistoryItem {
  */
 export class AgentHistoryManager {
   private static readonly HISTORY_STORAGE_KEY = 'texra.agentHistory';
-  private static readonly MAX_HISTORY_ITEMS = 100;
+  private static readonly MAX_HISTORY_ITEMS = 500;
 
   /**
    * Add a new agent execution to history
