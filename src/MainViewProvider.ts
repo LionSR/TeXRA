@@ -3,12 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { refresh } from '@agent/index';
-import { agentDirectories } from '@frontend/agents';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
