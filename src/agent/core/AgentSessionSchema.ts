@@ -8,7 +8,11 @@ import { AgentCategory, AgentType } from './AgentDataclass';
  * Canonical schema for agent session descriptors shared across agent modules.
  * This is the SINGLE SOURCE OF TRUTH - the type is derived from this schema.
  */
-export const AgentSessionDescriptorSchema = z.strictObject({
+/**
+ * We use z.object() instead of z.strictObject() to remain backward compatible
+ * with legacy session descriptors that may contain removed or renamed fields.
+ */
+export const AgentSessionDescriptorSchema = z.object({
   agentType: z.enum(AgentType).optional(),
   agentCategory: z.enum(AgentCategory),
 });
