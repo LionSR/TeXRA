@@ -99,11 +99,124 @@ function parseAgentIdentifier(
 }
 
 /**
+ * Try to resolve agent path from the AgentIndex cache.
+ * Returns undefined if agent is not in the index.
+ */
+function resolveFromAgentIndex(
+  agentName: string,
+  explicitSource: AgentDirectorySource | null,
+  preferMultiple: boolean,
+): AgentPathResolution | undefined {
+  let entry;
+
+  if (explicitSource) {
+    // Explicit source: look up directly
+    entry = AgentIndex.getEntry(explicitSource, agentName);
+  } else {
+    // Legacy format: find first matching entry (priority: custom > builtin > builtinToolUse)
+    const entries = AgentIndex.getEntriesByName(agentName);
+    entry = entries[0];
+  }
+
+  if (!entry || !entry.definitionPath) {
+    return undefined;
+  }
+
+  // Determine which path to use based on preferMultiple flag
+  let definitionPath = entry.definitionPath;
+  let resolvedName = entry.name;
+  const usedFallback = preferMultiple && !entry.hasMultipleSibling;
+
+  if (preferMultiple && entry.multipleVariantPath) {
+    definitionPath = entry.multipleVariantPath;
+    resolvedName = `${entry.name}_multiple`;
+  }
+
+  return {
+    directory: path.dirname(definitionPath),
+    source: entry.source,
+    definitionPath,
+    resolvedName,
+    usedFallback,
+  };
+}
+
+/**
+ * Slow path: Resolve agent path via glob-based directory scanning.
+ * Used as fallback when agent is not in the index.
+ */
+async function resolveAgentPathViaGlob(
+  agentName: string,
+  explicitSource: AgentDirectorySource | null,
+  options?: AgentDefinitionSearchOptions,
+): Promise<AgentPathResolution> {
+  // For local agents with explicit source, search only that directory
+  if (explicitSource) {
+    const directory = await getDirectoryForSource(explicitSource);
+    if (!directory) {
+      throw new Error(`Directory for source "${explicitSource}" not available`);
+    }
+
+    const candidates = [createCandidate(directory, explicitSource)];
+    const resolution = await resolveAgentDefinition(agentName, candidates, options);
+
+    if (resolution) {
+      return resolution;
+    }
+
+    throw new Error(
+      `Could not find yaml file for agent: ${agentName} in ${explicitSource}`,
+    );
+  }
+
+  // Legacy behavior: search all directories in order
+  const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
+    agentDirectories.custom(),
+    agentDirectories.builtIn(),
+    agentDirectories.builtInToolUse(),
+  ]);
+
+  const candidates = [
+    customDir && createCandidate(customDir, AgentDirectorySource.Custom),
+    builtInDir && createCandidate(builtInDir, AgentDirectorySource.BuiltIn),
+    builtInToolUseDir &&
+      createCandidate(builtInToolUseDir, AgentDirectorySource.BuiltInToolUse),
+  ].filter(Boolean) as AgentDirectoryCandidate[];
+
+  if (candidates.length === 0) {
+    throw new Error('No agent directories available for lookup');
+  }
+
+  const resolution = await resolveAgentDefinition(agentName, candidates, options);
+  if (resolution) {
+    return resolution;
+  }
+
+  const customDirSet = candidates.some(
+    (candidate) => candidate.source === AgentDirectorySource.Custom,
+  );
+
+  const view = await vscode.commands.executeCommand<vscode.WebviewView>(
+    'texra.getWebviewView',
+  );
+  view?.webview.postMessage({
+    command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
+    agentName,
+    customDirSet,
+  });
+
+  throw new Error(`Could not find yaml file for agent: ${agentName}`);
+}
+
+/**
  * Find and return the path to agent's yaml configuration file.
  *
  * Supports two agent identifier formats:
  * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
  * - Legacy format: just name (e.g., "summarize") - searches directories in order
+ *
+ * Uses AgentIndex for fast path resolution (avoids glob operations).
+ * Falls back to glob-based resolution only if agent is not in the index.
  */
 export async function getAgentPath(
   agentIdentifier: string,
@@ -124,70 +237,18 @@ export async function getAgentPath(
       };
     }
 
-    // For local agents with explicit source, search only that directory
-    if (explicitSource) {
-      const directory = await getDirectoryForSource(explicitSource);
-      if (!directory) {
-        throw new Error(`Directory for source "${explicitSource}" not available`);
-      }
-
-      const candidates = [createCandidate(directory, explicitSource)];
-      const resolution = await resolveAgentDefinition(
-        agentName,
-        candidates,
-        options,
-      );
-
-      if (resolution) {
-        return resolution;
-      }
-
-      throw new Error(
-        `Could not find yaml file for agent: ${agentName} in ${explicitSource}`,
-      );
-    }
-
-    // Legacy behavior: search all directories in order
-    const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-      agentDirectories.custom(),
-      agentDirectories.builtIn(),
-      agentDirectories.builtInToolUse(),
-    ]);
-
-    const candidates = [
-      customDir && createCandidate(customDir, AgentDirectorySource.Custom),
-      builtInDir && createCandidate(builtInDir, AgentDirectorySource.BuiltIn),
-      builtInToolUseDir &&
-        createCandidate(builtInToolUseDir, AgentDirectorySource.BuiltInToolUse),
-    ].filter(Boolean) as AgentDirectoryCandidate[];
-
-    if (candidates.length === 0) {
-      throw new Error('No agent directories available for lookup');
-    }
-
-    const resolution = await resolveAgentDefinition(
+    // Fast path: Try to resolve from AgentIndex cache first
+    const indexResolution = resolveFromAgentIndex(
       agentName,
-      candidates,
-      options,
+      explicitSource,
+      options?.preferMultiple ?? false,
     );
-    if (resolution) {
-      return resolution;
+    if (indexResolution) {
+      return indexResolution;
     }
 
-    const customDirSet = candidates.some(
-      (candidate) => candidate.source === AgentDirectorySource.Custom,
-    );
-
-    const view = await vscode.commands.executeCommand<vscode.WebviewView>(
-      'texra.getWebviewView',
-    );
-    view?.webview.postMessage({
-      command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-      agentName,
-      customDirSet,
-    });
-    const errorMsg = `Could not find yaml file for agent: ${agentName}`;
-    throw new Error(errorMsg);
+    // Slow path: Fall back to glob-based resolution for agents not in index
+    return await resolveAgentPathViaGlob(agentName, explicitSource, options);
   } catch (err) {
     const errorMsg = `Error finding agent path: ${toErrorMessage(err)}`;
     // Don't show error notification for missing YAML files - we handle it with banner
