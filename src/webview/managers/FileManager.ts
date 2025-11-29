@@ -6,9 +6,11 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - webview
-import { AgentIndex, parseAgentIndexKey } from '@agent/index';
-import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { getAgentPath } from '@agent/runtime/executeAgent';
+import {
+  AgentIndex,
+  parseAgentIndexKey,
+  type AgentIndexEntry,
+} from '@agent/index';
 import { showLoggedMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
@@ -194,25 +196,21 @@ export class FileManager {
     }
 
     try {
-      // First, try to get from the cached index (fast path)
+      // Try to get from the cached index
       const parsed = parseAgentIndexKey(agentIdentifier);
+      let entry: AgentIndexEntry | undefined;
+
       if (parsed) {
-        const entry = AgentIndex.getEntry(parsed.source, parsed.name);
-        if (entry?.defaultOutputFiles) {
-          webviewView.webview.postMessage({
-            command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
-            files: entry.defaultOutputFiles,
-          });
-          return;
-        }
+        // New format: source:name
+        entry = AgentIndex.getEntry(parsed.source, parsed.name);
+      } else {
+        // Legacy format: just name - look up by name and use first match
+        const entries = AgentIndex.getEntriesByName(agentIdentifier);
+        entry = entries[0]; // Priority order: custom, builtin, builtinToolUse, remote
       }
 
-      // Fallback: load from YAML (for legacy format or if not in cache)
-      const agentPath = await getAgentPath(agentIdentifier);
-      const [settings] = await loadAgentSettingAndPrompts(agentPath);
-      const files = Array.isArray(settings?.defaultOutputFiles)
-        ? settings.defaultOutputFiles
-        : [];
+      // Use cached defaultOutputFiles (may be undefined if agent has none)
+      const files = entry?.defaultOutputFiles ?? [];
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files,
