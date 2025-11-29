@@ -8,6 +8,12 @@ import * as yaml from 'yaml';
 
 // Local imports - agent components
 import {
+  resolveAgent,
+  getBaseName,
+  type AgentSource,
+  type ResolvedAgent,
+} from '@agent/index';
+import {
   AgentSetting,
   AgentPrompt,
   AgentPromptSchema,
@@ -15,7 +21,6 @@ import {
   AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
-import { resolveAgentDefinitionInDirectory } from '@agent/utils/agentPathResolver';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
@@ -24,12 +29,6 @@ import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { AbsoluteFS } from '@utils/files';
-
-// Local file imports
-import { AgentDirectorySource } from './AgentPathTypes';
-
-// Type imports
-import type { AgentPathResolution } from './AgentPathTypes';
 
 const CHANNEL = 'agentLoad';
 logger.initialize(CHANNEL);
@@ -93,31 +92,30 @@ interface LoadAgentOptions {
 
 export function ensureAgentTypeForSource<T extends { agentType?: AgentType }>(
   settings: T,
-  source: AgentDirectorySource,
+  source: AgentSource,
 ): T {
-  if (
-    source === AgentDirectorySource.BuiltInToolUse &&
-    settings.agentType === undefined
-  ) {
+  if (source === 'builtInToolUse' && settings.agentType === undefined) {
     settings.agentType = AgentType.ToolUse;
   }
   return settings;
 }
 
 export async function loadAgentSettingAndPrompts(
-  resolution: AgentPathResolution,
+  resolution: ResolvedAgent,
   options?: LoadAgentOptions,
 ): Promise<[AgentSetting, AgentPrompt]> {
   try {
     if (options?.preferMultiple && resolution.usedFallback) {
       logger.warn(
         CHANNEL,
-        `Requested multiple outputs for agent "${resolution.resolvedName.replace(/_multiple$/, '')}" but no _multiple definition was found. Falling back to base definition.`,
+        `Requested multiple outputs for agent "${getBaseName(resolution.resolvedName)}" but no _multiple definition was found. Falling back to base definition.`,
       );
     }
 
+    const { entry } = resolution;
+
     // Handle remote agents
-    if (resolution.source === AgentDirectorySource.Remote) {
+    if (entry.source === 'remote') {
       const { RemoteAgentLoader } =
         await import('@agent/remote/RemoteAgentLoader');
       const remoteConfig = await RemoteAgentLoader.loadRemoteAgent(
@@ -132,42 +130,27 @@ export async function loadAgentSettingAndPrompts(
     const rawConfig = await loadYaml(resolution.definitionPath);
     const config = AgentDefinitionSchema.parse(rawConfig);
 
-    // Extract the agent's declared name from the root of the YAML, if present.
-    // This is the authoritative name for this specific agent definition.
-    // It's used for context or can be returned if needed, but not part of AgentSetting object.
-    const declaredAgentName = config.name;
-    // logger.debug(CHANNEL, `Declared agent name: ${declaredAgentName}`); // Optional: for debugging
-
     const parent = config.inherits;
 
     let settings: Partial<AgentSetting> = {};
     let prompts: Partial<AgentPrompt> = {};
 
     if (parent) {
-      // Load parent settings and prompts recursively
-      // Note: The 'name' of the parent agent isn't directly used to override the current agent's settings block structure.
-      const parentResolution = await resolveAgentDefinitionInDirectory(
-        resolution.directory,
-        resolution.source,
-        parent,
-      );
+      // Load parent settings and prompts recursively using the registry
+      const parentResolution = resolveAgent(`${entry.source}:${parent}`);
       if (!parentResolution) {
         throw new Error(
-          `Unable to locate parent agent "${parent}" in ${resolution.directory}.`,
+          `Unable to locate parent agent "${parent}" in source "${entry.source}".`,
         );
       }
       const [parentSettings, parentPrompts] =
         await loadAgentSettingAndPrompts(parentResolution);
 
-      // Get current agent's specific settings and prompts from its YAML
-      const agentOwnSettings = config.settings;
-      const agentOwnPrompts = config.prompts;
-
       // Merge with parent settings and prompts
-      settings = deepmerge(parentSettings, agentOwnSettings, {
+      settings = deepmerge(parentSettings, config.settings, {
         arrayMerge: (_d, s) => s,
       });
-      prompts = deepmerge(parentPrompts, agentOwnPrompts, {
+      prompts = deepmerge(parentPrompts, config.prompts, {
         arrayMerge: (_d, s) => s,
       });
     } else {
@@ -180,7 +163,7 @@ export async function loadAgentSettingAndPrompts(
       });
     }
 
-    ensureAgentTypeForSource(settings, resolution.source);
+    ensureAgentTypeForSource(settings, entry.source);
 
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {

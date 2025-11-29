@@ -12,7 +12,11 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import { resolveAgent, parseKey, getMultipleName } from '@agent/index';
+import {
+  resolveAgent,
+  getMultipleName,
+  type ResolvedAgent,
+} from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -29,17 +33,10 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 // Type imports
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
-import {
-  createCandidate,
-  resolveAgentDefinition,
-  type AgentDefinitionSearchOptions,
-  type AgentDirectoryCandidate,
-} from '@agent/utils/agentPathResolver';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
@@ -56,10 +53,6 @@ import {
   AgentExecutionContext,
   type AgentExecutionContextInit,
 } from './AgentExecutionContext';
-import {
-  AgentDirectorySource,
-  type AgentPathResolution,
-} from './AgentPathTypes';
 
 const CHANNEL = 'executeAgent';
 const logger = new AgentLogger(CHANNEL);
@@ -78,114 +71,41 @@ type AgentConstructor = {
   ): IAgent;
 };
 
+/** Options for agent resolution. */
+export interface AgentResolveOptions {
+  preferMultiple?: boolean;
+}
+
 /**
- * Slow path: Resolve agent path via glob-based directory scanning.
- * Used as fallback when agent is not in the index.
+ * Find and return the resolved agent from the registry.
+ *
+ * Supports two agent identifier formats:
+ * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
+ * - Legacy format: just name (e.g., "summarize") - searches sources in priority order
+ *
+ * The registry is the single source of truth for agent metadata.
  */
-async function resolveAgentPathViaGlob(
-  agentName: string,
-  explicitSource: AgentDirectorySource | null,
-  options?: AgentDefinitionSearchOptions,
-): Promise<AgentPathResolution> {
-  // For local agents with explicit source, search only that directory
-  if (explicitSource) {
-    const directory = await agentDirectories.getDirectory(explicitSource);
-    if (!directory) {
-      throw new Error(`Directory for source "${explicitSource}" not available`);
-    }
+export async function getAgentPath(
+  agentIdentifier: string,
+  options?: AgentResolveOptions,
+): Promise<ResolvedAgent> {
+  const result = resolveAgent(agentIdentifier, options?.preferMultiple);
 
-    const candidates = [createCandidate(directory, explicitSource)];
-    const resolution = await resolveAgentDefinition(
-      agentName,
-      candidates,
-      options,
-    );
-
-    if (resolution) {
-      return resolution;
-    }
-
-    throw new Error(
-      `Could not find yaml file for agent: ${agentName} in ${explicitSource}`,
-    );
+  if (result) {
+    return result;
   }
 
-  // Legacy behavior: search all directories in order
-  const allDirs = await agentDirectories.getAllLocal();
-  const candidates = allDirs.map(({ directory, source }) =>
-    createCandidate(directory, source),
-  );
-
-  if (candidates.length === 0) {
-    throw new Error('No agent directories available for lookup');
-  }
-
-  const resolution = await resolveAgentDefinition(
-    agentName,
-    candidates,
-    options,
-  );
-  if (resolution) {
-    return resolution;
-  }
-
-  // Custom directory is always available via getAllLocal()
+  // Agent not found - show banner and throw
   const view = await vscode.commands.executeCommand<vscode.WebviewView>(
     'texra.getWebviewView',
   );
   view?.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
-    agentName,
+    agentName: agentIdentifier,
     customDirSet: true,
   });
 
-  throw new Error(`Could not find yaml file for agent: ${agentName}`);
-}
-
-/**
- * Find and return the path to agent's yaml configuration file.
- *
- * Supports two agent identifier formats:
- * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
- * - Legacy format: just name (e.g., "summarize") - searches directories in order
- *
- * Uses resolveAgent() for fast lookups. Falls back to glob-based
- * resolution only if agent is not in the index.
- */
-export async function getAgentPath(
-  agentIdentifier: string,
-  options?: AgentDefinitionSearchOptions,
-): Promise<AgentPathResolution> {
-  try {
-    // Fast path: Use resolveAgent() which handles source:name parsing
-    const result = resolveAgent(agentIdentifier, options?.preferMultiple);
-    if (result) {
-      // Convert to AgentPathResolution format
-      const { entry, resolvedPath, resolvedName } = result;
-      return {
-        directory: resolvedPath ? path.dirname(resolvedPath) : '',
-        source: entry.source as unknown as AgentDirectorySource,
-        definitionPath: resolvedPath,
-        resolvedName,
-        usedFallback: options?.preferMultiple === true && !entry.multiplePath,
-      };
-    }
-
-    // Slow path: Fall back to glob-based resolution for agents not in index
-    const parsed = parseKey(agentIdentifier);
-    const explicitSource = parsed
-      ? (parsed.source as unknown as AgentDirectorySource)
-      : null;
-    const agentName = parsed?.name ?? agentIdentifier;
-    return await resolveAgentPathViaGlob(agentName, explicitSource, options);
-  } catch (err) {
-    const errorMsg = `Error finding agent path: ${toErrorMessage(err)}`;
-    // Don't show error notification for missing YAML files - we handle it with banner
-    if (!err?.toString().includes('Could not find yaml file for agent')) {
-      vscode.window.showErrorMessage(errorMsg);
-    }
-    throw new Error(errorMsg);
-  }
+  throw new Error(`Could not find agent: ${agentIdentifier}`);
 }
 
 /**
@@ -293,7 +213,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
 
   const agentSetting = ensureAgentTypeForSource(
     loadedAgentSetting,
-    resolution.source,
+    resolution.entry.source,
   );
 
   const sessionDescriptor = getAgentSessionDescriptor(agentSetting);
@@ -363,7 +283,7 @@ export async function prepareAgentInstance<T extends IAgent = IAgent>(
     agentConfig,
     agentSetting,
     agentPrompt,
-    resolution.directory,
+    path.dirname(resolution.definitionPath),
     context,
   );
 
