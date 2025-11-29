@@ -38,7 +38,11 @@ interface AgentSharedStoreOptions extends AgentSharedStoreSlices {
   onRoundFinalized?: AgentRoundFinalizedCallback;
 }
 
-export const AgentSharedStoreSnapshotSchema = z.strictObject({
+/**
+ * We use z.object() instead of z.strictObject() to remain backward compatible
+ * with legacy store snapshots that may contain removed or renamed fields.
+ */
+export const AgentSharedStoreSnapshotSchema = z.object({
   round: ConversationRoundStateSnapshotSchema,
   run: AgentRunStateSnapshotSchema,
   workspace: AgentWorkspaceStateSnapshotSchema,
