@@ -213,6 +213,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           sessionType === SESSION_TYPES.TOOL_USE
             ? SESSION_TYPES.TOOL_USE
             : SESSION_TYPES.WORKFLOW;
+
+        // Switch session type UI if needed (shows correct dropdown, updates radio buttons)
+        mainViewState.applySessionType(targetSessionType);
+
         const selectId = AGENT_SELECT_IDS[targetSessionType];
 
         if (!selectId) {
