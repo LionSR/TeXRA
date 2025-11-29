@@ -67,6 +67,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Track pending model option updates until the select element is ready
     this._disposeModelWaiter = null;
     this._isDisposed = false;
+    // Track tooltip listeners for cleanup
+    this._tooltipListeners = [];
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -660,18 +662,28 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
   /** Setup change listeners for agent selects to update tooltips. */
   _setupAgentSelectListeners() {
+    // Clean up any existing listeners first
+    this._cleanupTooltipListeners();
+
     // Update tooltip when agent selection changes
     AGENT_SELECT_LIST.forEach((selectId) => {
       const selectElement = document.getElementById(selectId);
-      if (selectElement && !selectElement._tooltipListenerAdded) {
-        selectElement.addEventListener('change', () => {
-          this._updateAgentSelectTooltip(selectElement);
-        });
-        selectElement._tooltipListenerAdded = true;
-        // Also set initial tooltip
+      if (selectElement) {
+        const handler = () => this._updateAgentSelectTooltip(selectElement);
+        selectElement.addEventListener('change', handler);
+        this._tooltipListeners.push({ element: selectElement, handler });
+        // Set initial tooltip
         this._updateAgentSelectTooltip(selectElement);
       }
     });
+  }
+
+  /** Remove tooltip listeners to prevent memory leaks. */
+  _cleanupTooltipListeners() {
+    this._tooltipListeners.forEach(({ element, handler }) => {
+      element.removeEventListener('change', handler);
+    });
+    this._tooltipListeners = [];
   }
 
   cleanup() {
@@ -681,6 +693,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._disposeModelWaiter = null;
     }
 
+    this._cleanupTooltipListeners();
     super.cleanup();
     this._instructionEl = null;
     this._elementCache.clear();
