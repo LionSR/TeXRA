@@ -19,7 +19,6 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  tags: string[];
   visibility: 'public' | 'researcher' | 'whitelist';
   agentType?: string;
 }
@@ -195,7 +194,6 @@ export class RemoteAgentLoader {
             id: '',
             name: agentName,
             description: description || '',
-            tags: [],
             visibility: 'researcher',
           },
         };
@@ -252,7 +250,7 @@ export class RemoteAgentLoader {
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, tags, visibility, agent_type')
+        .select('id, name, description, visibility, agent_type')
         .order('name');
 
       if (error) {
@@ -265,7 +263,6 @@ export class RemoteAgentLoader {
         id: row.id,
         name: row.name,
         description: row.description,
-        tags: row.tags,
         visibility: row.visibility,
         agentType: row.agent_type,
       })) as RemoteAgentMetadata[];
@@ -299,7 +296,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, tags, visibility')
+        .select('id, name, description, visibility')
         .eq('name', agentName)
         .single();
 
