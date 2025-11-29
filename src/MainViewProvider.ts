@@ -1,6 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - agent
+import { AgentIndexLoader } from '@agent/index';
+
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
@@ -20,6 +23,7 @@ export class MainViewProvider
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
+  private agentWatcher: vscode.FileSystemWatcher | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
@@ -29,6 +33,7 @@ export class MainViewProvider
     this.messageHandler = new MainViewMessageHandler(context);
     this.contentProvider = new MainViewContentProvider(context);
     this.setupFileWatcher();
+    this.setupAgentWatcher();
     this.setupConfigurationWatcher();
     this.registerCommandHandlers();
   }
@@ -70,6 +75,10 @@ export class MainViewProvider
     if (!this._view) {
       return;
     }
+    // Refresh the agent index to pick up any configuration changes
+    // (e.g., texra.toolUseAgents overrides)
+    await AgentIndexLoader.refreshAll();
+
     // Send delta messages instead of regenerating entire HTML
     // This preserves webview state and avoids unnecessary DOM recreation
     await this.messageHandler.handleMessage(
@@ -90,6 +99,32 @@ export class MainViewProvider
 
     // Dispose watcher when extension is deactivated
     this.context.subscriptions.push(this.fileWatcher);
+  }
+
+  private setupAgentWatcher() {
+    // Watch for YAML changes in agent directories (custom agents)
+    // This refreshes the agent dropdown when agents are added/removed/modified
+    const agentPattern = '**/*.yaml';
+    this.agentWatcher = vscode.workspace.createFileSystemWatcher(agentPattern);
+
+    // Debounce agent refresh to avoid rapid reloads during file saves
+    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+    const debouncedRefresh = () => {
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      refreshTimeout = setTimeout(() => {
+        // refreshOptionsAndView already calls AgentIndexLoader.refreshAll()
+        void this.refreshOptionsAndView();
+        refreshTimeout = undefined;
+      }, 500);
+    };
+
+    this.agentWatcher.onDidCreate(debouncedRefresh);
+    this.agentWatcher.onDidChange(debouncedRefresh);
+    this.agentWatcher.onDidDelete(debouncedRefresh);
+
+    this.context.subscriptions.push(this.agentWatcher);
   }
 
   private async refreshFiles() {

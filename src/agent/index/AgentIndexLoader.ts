@@ -12,8 +12,8 @@ import * as yaml from 'yaml';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import {
   AgentCategory,
-  AgentType,
   AgentDefinitionSchema,
+  AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
@@ -58,6 +58,10 @@ export class AgentIndexLoader {
     logger.info(CHANNEL, 'Loading agent index from all sources...');
 
     const startTime = Date.now();
+
+    // Clear any existing/stale entries before loading fresh data
+    // This ensures deleted agents don't persist from previous sessions
+    AgentIndex.clear();
 
     // Load from all sources in parallel
     const [customEntries, builtInEntries, builtInToolUseEntries, remoteEntries] =
@@ -335,6 +339,14 @@ export class AgentIndexLoader {
             ? AgentCategory.ToolUse
             : AgentCategory.Workflow;
 
+        // Map remote agentType string to AgentType enum
+        const agentType =
+          agent.agentType === 'toolUse'
+            ? AgentType.ToolUse
+            : agent.agentType === 'direct'
+              ? AgentType.Direct
+              : AgentType.CoT; // Default to CoT for workflow agents
+
         return {
           name: agent.name,
           source: AgentDirectorySource.Remote,
@@ -346,6 +358,7 @@ export class AgentIndexLoader {
           description: agent.description,
           visibility: agent.visibility,
           tags: agent.tags,
+          agentType,
         };
       });
     } catch (error) {
