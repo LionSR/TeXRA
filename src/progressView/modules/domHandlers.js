@@ -13,7 +13,7 @@ import { FollowUpInputManager } from './uiManagers/FollowUpInputManager.js';
 import { ApprovalRequests } from './uiManagers/ApprovalRequests.js';
 import { RetryRequests } from './uiManagers/RetryRequests.js';
 import { Toolbar } from './uiManagers/Toolbar.js';
-import { UsageSummary, UsageGroupManager } from './usageManagers.js';
+import { UsageSummary } from './usageManagers.js';
 import { BaseDomHandler } from '@common/BaseDomHandler.js';
 import { vscode } from '@common/webviewContext.js';
 
@@ -29,7 +29,6 @@ class ProgressViewDomHandler extends BaseDomHandler {
       toolbar: new Toolbar(),
       status: new Status(),
       usageSummary,
-      usageGroup: new UsageGroupManager(usageSummary),
       fileList: new FileList(),
       runSelector,
       taskGroups: new TaskGroupDomManager(runSelector),
