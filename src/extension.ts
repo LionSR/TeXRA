@@ -28,7 +28,7 @@ import { FolderExplorer } from './FolderExplorer';
 import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
-import { registerCommands } from './commands';
+import { registerCommands, getMainViewProvider } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -153,6 +153,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Connect URI handler to auth provider
         authProvider.setUriHandler(uriHandler);
+
+        // Subscribe to auth state changes to refresh agent list on login/logout
+        context.subscriptions.push(
+          authProvider.onDidChangeSessions(async (event) => {
+            // Refresh agent options when user logs in or out
+            // This will fetch/clear remote agents and update dropdown
+            const mainView = getMainViewProvider();
+            if (mainView) {
+              logger.info(
+                'extension',
+                `Auth state changed (added: ${event.added?.length ?? 0}, removed: ${event.removed?.length ?? 0}), refreshing agents`,
+              );
+              await mainView.refreshOptionsAndView();
+            }
+          }),
+        );
 
         logger.info('extension', 'Supabase authentication provider registered');
       }
