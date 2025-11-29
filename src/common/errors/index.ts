@@ -2,6 +2,7 @@
 export {
   DocId,
   formatError,
+  isFileNotFoundError,
   toErrorMessage,
   logErrorMessage,
   showLoggedErrorMessage,
