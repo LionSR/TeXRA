@@ -253,6 +253,15 @@ class AgentIndexClass {
   }
 
   /**
+   * Get all entries from a specific source.
+   */
+  getBySource(source: AgentDirectorySource): AgentIndexEntry[] {
+    return Array.from(this.entries.values()).filter(
+      (entry) => entry.source === source,
+    );
+  }
+
+  /**
    * Get the total number of entries.
    */
   size(): number {

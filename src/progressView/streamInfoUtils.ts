@@ -2,8 +2,17 @@
 import * as path from 'path';
 
 // Local imports - progress view
+import { parseAgentIndexKey } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+
+/**
+ * Check if an agent identifier refers to a remote agent.
+ */
+function isRemoteAgent(agentIdentifier: string): boolean {
+  const parsed = parseAgentIndexKey(agentIdentifier);
+  return parsed?.source === AgentDirectorySource.Remote;
+}
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -82,7 +91,7 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    const isRemote = RemoteAgentRegistry.isRemote(agentName);
+    const isRemote = isRemoteAgent(agentName);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({

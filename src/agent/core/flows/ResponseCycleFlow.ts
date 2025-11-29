@@ -4,6 +4,7 @@ import * as path from 'path';
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
 // Internal imports
+import { parseAgentIndexKey } from '@agent/index';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleState,
@@ -12,9 +13,18 @@ import {
   CycleDebugFileOptions,
   SkippableNodeResult,
 } from '@agent/core/flows/CommonCycleTypes';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 // Type imports
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+
+/**
+ * Check if an agent identifier refers to a remote agent.
+ */
+function isRemoteAgent(agentIdentifier: string | undefined): boolean {
+  if (!agentIdentifier) return false;
+  const parsed = parseAgentIndexKey(agentIdentifier);
+  return parsed?.source === AgentDirectorySource.Remote;
+}
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -139,7 +149,7 @@ class ResponsePrepNode<C> extends BaseNode<
           logger,
           modelName: agentConfig.model,
           executionId: options.context.executionId,
-          isRemote: RemoteAgentRegistry.isRemote(agentConfig.agent),
+          isRemote: isRemoteAgent(agentConfig.agent),
         };
 
     const debugFileOptions: CycleDebugFileOptions | undefined = interrupted
