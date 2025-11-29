@@ -15,12 +15,16 @@
 import * as vscode from 'vscode';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import * as logger from '@logger/logUtils';
 import {
   AgentIndexEntry,
   AgentIndexKey,
   createAgentIndexKey,
   parseAgentIndexKey,
 } from './AgentIndexEntry';
+
+const CHANNEL = 'AgentIndex';
+logger.initialize(CHANNEL);
 
 /** Persisted state structure for the agent index. */
 interface PersistedIndexState {
@@ -98,6 +102,19 @@ class AgentIndexClass {
   }
 
   /**
+   * Persist with error logging.
+   * Use this instead of void this.persist() to avoid silent failures.
+   */
+  private persistWithLogging(): void {
+    this.persist().catch((err) => {
+      logger.error(
+        CHANNEL,
+        `Failed to persist agent index: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+  }
+
+  /**
    * Rebuild the byName and byCategory indexes from entries.
    */
   private rebuildIndexes(): void {
@@ -141,10 +158,19 @@ class AgentIndexClass {
    */
   setInitPromise(promise: Promise<void>): void {
     this.initPromise = promise;
-    promise.then(() => {
-      this.initialized = true;
-      this.initPromise = null;
-    });
+    promise
+      .then(() => {
+        this.initialized = true;
+      })
+      .catch((err) => {
+        logger.error(
+          CHANNEL,
+          `Index initialization failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      })
+      .finally(() => {
+        this.initPromise = null;
+      });
   }
 
   /**
@@ -154,7 +180,7 @@ class AgentIndexClass {
     const key = createAgentIndexKey(entry.source, entry.name);
     this.entries.set(key, entry);
     this.rebuildIndexes();
-    void this.persist();
+    this.persistWithLogging();
   }
 
   /**
@@ -166,7 +192,7 @@ class AgentIndexClass {
       this.entries.set(key, entry);
     }
     this.rebuildIndexes();
-    void this.persist();
+    this.persistWithLogging();
   }
 
   /**
@@ -184,7 +210,7 @@ class AgentIndexClass {
       this.entries.delete(key);
     }
     this.rebuildIndexes();
-    void this.persist();
+    this.persistWithLogging();
   }
 
   /**
@@ -193,7 +219,7 @@ class AgentIndexClass {
   clear(): void {
     this.entries.clear();
     this.rebuildIndexes();
-    void this.persist();
+    this.persistWithLogging();
   }
 
   /**
