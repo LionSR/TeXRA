@@ -109,13 +109,13 @@ export const AGENT_DECORATORS = {
       icon: 'list-tree',
       unicode: '⛓',
       label: 'Chain of Thought',
-      hint: 'Reasons step-by-step before responding',
+      hint: 'Shows reasoning in scratchpad before final response',
     },
     direct: {
       icon: 'lightbulb',
       unicode: '⚡',
       label: 'Direct',
-      hint: 'Responds immediately without showing reasoning',
+      hint: 'Responds directly without scratchpad',
     },
     toolUse: {
       icon: 'tools',

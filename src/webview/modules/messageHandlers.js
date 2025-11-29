@@ -263,11 +263,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
         mainViewState.update({ [stateKey]: targetValue });
 
         // Decorate the placeholder option if it was just created
-        const option = options.find((opt) => opt.value === targetValue);
+        // Re-query children since _setAgentValue may have added a new option
+        const currentOptions = Array.from(selectElement.children);
+        const option = currentOptions.find((opt) => opt.value === targetValue);
         if (option && !option.dataset.decorated) {
           this._decorateAgentOption(option);
           option.dataset.decorated = 'true';
         }
+
+        // Update the select's tooltip
+        this._updateAgentSelectTooltip(selectElement);
       },
     };
   }
@@ -382,26 +387,22 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const hints = [];
     let displayLabel = label;
 
-    // Add agent type indicator (CoT, direct, toolUse)
-    // Uses unicode since vscode-option only supports text content
+    // Add agent type hint to tooltip (no unicode icon - too confusing)
     if (agentType) {
       const decorator = getAgentTypeDecorator(agentType);
-      displayLabel = `${decorator.unicode} ${displayLabel}`;
-      // Use hint if available, otherwise fall back to label
       hints.push(decorator.hint || `Type: ${decorator.label}`);
     }
 
-    // Add cloud icon for remote agents (using shared config)
+    // Add cloud icon for remote agents (visible indicator)
     if (isRemote) {
       const { unicode, hint } = AGENT_DECORATORS.properties.remote;
       displayLabel = `${unicode} ${displayLabel}`;
       hints.push(hint);
     }
 
-    // Add star icon for custom agents (using shared config)
+    // Add custom hint to tooltip (no unicode icon - too confusing)
     if (isCustom) {
-      const { unicode, hint } = AGENT_DECORATORS.properties.custom;
-      displayLabel = `${unicode} ${displayLabel}`;
+      const { hint } = AGENT_DECORATORS.properties.custom;
       hints.push(hint);
     }
 
@@ -410,7 +411,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(description);
     }
 
-    // Add multiple outputs indicator (using shared config)
+    // Add multiple outputs indicator (visible indicator)
     if (isMultiple) {
       const { unicode, hint } = AGENT_DECORATORS.properties.multipleOutputs;
       displayLabel = `${displayLabel} ${unicode}`;
