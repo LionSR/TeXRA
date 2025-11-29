@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import { sync as globSync } from 'glob';
+import * as vscode from 'vscode';
 
 // Local imports - log
 import { toErrorMessage } from '@common/errors';
@@ -14,6 +15,16 @@ import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
+
+function isFileNotFound(err: unknown): boolean {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code: string }).code;
+    if (code === 'ENOENT' || code === 'FileNotFound') {
+      return true;
+    }
+  }
+  return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
+}
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
@@ -104,7 +115,11 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
         await WorkspaceFS.delete(relativeIndentLog);
         logger.debug(CHANNEL, `Removed ${relativeIndentLog}`);
       } catch (err) {
-        logger.debug(CHANNEL, `No indent.log to remove in ${relativeDir}`);
+        if (isFileNotFound(err)) {
+          logger.debug(CHANNEL, `No indent.log to remove in ${relativeDir}`);
+        } else {
+          logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+        }
       }
     } else {
       logger.debug(
@@ -118,7 +133,11 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
         await AbsoluteFS.delete(indentLogPath);
         logger.debug(CHANNEL, `Removed ${indentLogPath}`);
       } catch (err) {
-        logger.debug(CHANNEL, `No indent.log to remove at ${indentLogPath}`);
+        if (isFileNotFound(err)) {
+          logger.debug(CHANNEL, `No indent.log to remove at ${indentLogPath}`);
+        } else {
+          logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+        }
       }
     }
 
