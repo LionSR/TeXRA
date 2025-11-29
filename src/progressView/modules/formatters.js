@@ -1342,36 +1342,6 @@ export class TaskGroupHeaderFormatter {
       }
     }
 
-    // Add usage information if available
-    if (group.usage) {
-      const { inputTokens = 0, outputTokens = 0, cost = 0 } = group.usage;
-      const usageDisplay =
-        `<span class="group-usage"><i class="codicon codicon-arrow-up"></i> ${formatTokens(inputTokens)}, ` +
-        `<i class="codicon codicon-arrow-down"></i> ${formatTokens(outputTokens)}, ` +
-        `$${cost.toFixed(3)}</span>`;
-
-      const bulletMarkup =
-        '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
-
-      // Add usage and bullet based on level
-      const timeSpan = header.querySelector('.group-time');
-      if (timeSpan) {
-        if (level.headerOrder === 'time-first') {
-          // For root level: time → bullet → usage
-          timeSpan.insertAdjacentHTML(
-            'afterend',
-            usageDisplay ? `${bulletMarkup}${usageDisplay}` : '',
-          );
-        } else {
-          // For nested level: usage → bullet → time
-          timeSpan.insertAdjacentHTML(
-            'beforebegin',
-            usageDisplay ? `${usageDisplay}${bulletMarkup}` : '',
-          );
-        }
-      }
-    }
-
     return header;
   }
 

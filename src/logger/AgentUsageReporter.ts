@@ -25,45 +25,41 @@ export class AgentUsageReporter {
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    *
-   * Note: Usage stats are passed through without modification.
-   * Cost is computed once in model handlers and should not be altered here.
+   * Usage flows to a single source of truth (UsageStatsManager) via updateStreamUsage.
+   * Detailed statistics are logged separately for display in the progress view.
+   *
+   * The groupId from the logger is the authoritative run identifier - it matches
+   * the TaskGroup ID that the frontend uses for activeRunId. The passed runId
+   * (executionId) is only used as a fallback when no group context exists.
    */
   public report(stats: ExtendedTokenUsageStats, runId?: string): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
 
+    // Get the current task group ID - this is what the frontend uses as activeRunId
+    const groupId = this.logger.withCurrentGroup((id) => id);
+
     // Pass through usage without modification
-    // Note: cacheCreationInputTokens is no longer added to inputTokens here
-    // as it's already handled correctly in the normalized usage computation
     const usage = {
       inputTokens: stats.inputTokens,
       outputTokens: stats.outputTokens,
       cost: stats.cost,
     };
 
-    const groupId = this.logger.withCurrentGroup((id) => id);
+    // Use groupId as the authoritative run identifier, fall back to passed runId
+    const targetRunId = groupId ?? runId;
 
-    if (groupId) {
-      bus.emit('updateGroupUsage', {
-        stream: this.streamId,
-        groupId,
-        usage,
-      });
-      if (logStatistics) {
-        this.logger.statistics(stats, groupId);
-      }
-      return;
-    }
-
-    if (runId) {
+    // Always emit to the single source of truth (UsageStatsManager)
+    if (targetRunId) {
       bus.emit('updateStreamUsage', {
         stream: this.streamId,
-        runId,
+        runId: targetRunId,
         usage,
       });
     }
 
+    // Log detailed statistics for display in the progress view
     if (logStatistics) {
-      this.logger.statistics(stats);
+      this.logger.statistics(stats, groupId);
     }
   }
 }

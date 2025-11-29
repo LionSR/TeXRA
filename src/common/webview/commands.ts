@@ -177,7 +177,6 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
-  UPDATE_GROUP_USAGE: 'updateGroupUsage',
 
   // Actions
   RUN_AGAIN: 'runAgain',
