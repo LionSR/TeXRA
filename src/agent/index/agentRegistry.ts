@@ -497,16 +497,12 @@ export function buildAgentOptions(): AgentOptionsPayload {
     getConfig<string[]>('texra.toolUseAgents', []),
   );
 
-  // Filter visible entries
-  const visibleWorkflow = filterVisible(
-    workflowEntries,
-    configuredWorkflow,
-    DEFAULT_WORKFLOW_AGENT,
+  // Filter visible entries and deduplicate by name (priority: custom > builtIn > remote)
+  const visibleWorkflow = deduplicateByName(
+    filterVisible(workflowEntries, configuredWorkflow, DEFAULT_WORKFLOW_AGENT),
   );
-  const visibleToolUse = filterVisible(
-    toolUseEntries,
-    configuredToolUse,
-    DEFAULT_TOOL_USE_AGENT,
+  const visibleToolUse = deduplicateByName(
+    filterVisible(toolUseEntries, configuredToolUse, DEFAULT_TOOL_USE_AGENT),
   );
 
   return {
@@ -521,6 +517,39 @@ export function buildAgentOptions(): AgentOptionsPayload {
       'No tool-use agents',
     ),
   };
+}
+
+/** Source priority for deduplication (lower index = higher priority). */
+const SOURCE_PRIORITY: AgentSource[] = [
+  'custom',
+  'builtIn',
+  'builtInToolUse',
+  'remote',
+];
+
+/**
+ * Deduplicate agents by name, keeping only the highest priority source.
+ * When multiple agents share the same name, custom takes precedence over built-in.
+ */
+function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
+  const byName = new Map<string, AgentEntry>();
+
+  for (const entry of entries) {
+    const existing = byName.get(entry.name);
+    if (!existing) {
+      byName.set(entry.name, entry);
+      continue;
+    }
+
+    // Keep the one with higher priority (lower index in SOURCE_PRIORITY)
+    const existingPriority = SOURCE_PRIORITY.indexOf(existing.source);
+    const entryPriority = SOURCE_PRIORITY.indexOf(entry.source);
+    if (entryPriority < existingPriority) {
+      byName.set(entry.name, entry);
+    }
+  }
+
+  return [...byName.values()];
 }
 
 function filterVisible(
@@ -549,40 +578,18 @@ function renderOptions(
     return `<vscode-option value="">${emptyMsg}</vscode-option>`;
   }
 
-  // Find the default entry - only ONE should be selected
-  // Priority: exact name match for first entry found (custom > builtIn > etc.)
-  let selectedKey: string | null = null;
-  const priorities: AgentSource[] = [
-    'custom',
-    'builtIn',
-    'builtInToolUse',
-    'remote',
-  ];
-
-  for (const source of priorities) {
-    const match = entries.find(
-      (e) => e.source === source && e.name === defaultName,
-    );
-    if (match) {
-      selectedKey = createKey(match.source, match.name);
-      break;
-    }
-  }
+  // After deduplication, each name appears only once - simple name match
+  const defaultEntry = entries.find((e) => e.name === defaultName);
 
   // Sort: selected first, then alphabetically by name
   const sorted = [...entries].sort((a, b) => {
-    const aKey = createKey(a.source, a.name);
-    const bKey = createKey(b.source, b.name);
-    if (aKey === selectedKey) return -1;
-    if (bKey === selectedKey) return 1;
+    if (a.name === defaultName) return -1;
+    if (b.name === defaultName) return 1;
     return a.name.localeCompare(b.name);
   });
 
   return sorted
-    .map((entry) => {
-      const key = createKey(entry.source, entry.name);
-      return renderOption(entry, key === selectedKey);
-    })
+    .map((entry) => renderOption(entry, entry === defaultEntry))
     .join('\n');
 }
 
