@@ -101,9 +101,6 @@ class TaskGroups {
     ) {
       group.endTime = updates.endTime;
     }
-    if (Object.prototype.hasOwnProperty.call(updates, 'usage')) {
-      group.usage = updates.usage;
-    }
 
     this.set(groupId, group);
   }

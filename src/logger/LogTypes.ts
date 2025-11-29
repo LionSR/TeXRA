@@ -3,7 +3,6 @@
  */
 
 // Local imports
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { TaskGroupId, LogMessageId } from './types/EntityTypes';
 
 export interface TaskGroup {
@@ -19,8 +18,6 @@ export interface TaskGroup {
   status: 'running' | 'error' | 'stopped' | 'ready';
   /** Parent group ID for nested groups */
   parentGroupId?: TaskGroupId;
-  /** Optional usage stats attached to the group */
-  usage?: TokenUsageStats;
 }
 
 export interface LogMessageData {
