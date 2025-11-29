@@ -46,13 +46,9 @@ export function createUsageEvents(
               cost: Number(usage.cost ?? 0),
             };
 
-            // Prefer the active run ID (task group ID) over the passed runId
-            // This ensures usage is keyed correctly when executionId differs from group ID
-            const targetRunId =
-              state.getActiveRunId(stream) ??
-              state.resolveRunId(stream, runId) ??
-              runId ??
-              null;
+            // The backend now emits the correct groupId as runId.
+            // Only fall back to activeRunId if runId is not provided.
+            const targetRunId = runId ?? state.getActiveRunId(stream) ?? null;
 
             if (!targetRunId) {
               shared.logger.warn(
