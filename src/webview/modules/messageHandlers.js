@@ -264,8 +264,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse, isRemote, description, agentType } =
-      this._readAgentOptionMetadata(opt);
+    const {
+      label,
+      isMultiple,
+      isToolUse,
+      isRemote,
+      isCustom,
+      description,
+      agentType,
+    } = this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
@@ -281,6 +288,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Add cloud icon for remote agents (using shared config)
     if (isRemote) {
       const { unicode, hint } = AGENT_DECORATORS.properties.remote;
+      displayLabel = `${unicode} ${displayLabel}`;
+      hints.push(hint);
+    }
+
+    // Add star icon for custom agents (using shared config)
+    if (isCustom) {
+      const { unicode, hint } = AGENT_DECORATORS.properties.custom;
       displayLabel = `${unicode} ${displayLabel}`;
       hints.push(hint);
     }
@@ -338,6 +352,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
       isRemote: opt.dataset.remote === 'true',
+      isCustom: opt.dataset.custom === 'true',
       description: opt.dataset.description ?? '',
       agentType: opt.dataset.agentType ?? '',
     };
