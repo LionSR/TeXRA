@@ -87,34 +87,54 @@ export const AGENT_DECORATORS = {
       icon: 'cloud',
       unicode: '☁',
       label: 'Remote',
-      hint: 'Agent prompts loaded from remote',
+      hint: 'Remote agent: Prompts loaded from cloud',
     },
     custom: {
       icon: 'account',
-      unicode: '✦',
+      unicode: '★',
       label: 'Custom',
-      hint: 'User-defined agent',
+      hint: 'Custom agent: User-defined in your agents directory',
     },
     multipleOutputs: {
       icon: 'files',
-      unicode: '∶∶',
+      unicode: '⧉',
       label: 'Multiple outputs',
-      hint: 'Generates multiple output files',
+      hint: 'Multi-output: Generates multiple output files',
     },
   },
 
   // Agent types (reasoning strategy)
   types: {
-    CoT: { icon: 'list-tree', unicode: '⊢', label: 'Chain of Thought' },
-    direct: { icon: 'lightbulb', unicode: '◈', label: 'Direct' },
-    toolUse: { icon: 'tools', unicode: '⚙', label: 'Tool Use' },
-    unknown: { icon: 'question', unicode: '?', label: 'Unknown' },
+    CoT: {
+      icon: 'list-tree',
+      unicode: '⛓',
+      label: 'Chain of Thought',
+      hint: 'Reasons step-by-step before responding',
+    },
+    direct: {
+      icon: 'lightbulb',
+      unicode: '⚡',
+      label: 'Direct',
+      hint: 'Responds immediately without showing reasoning',
+    },
+    toolUse: {
+      icon: 'tools',
+      unicode: '🔧',
+      label: 'Tool Use',
+      hint: 'Can execute tools and code',
+    },
+    unknown: {
+      icon: 'question',
+      unicode: '?',
+      label: 'Unknown',
+      hint: 'Unknown agent type',
+    },
   },
 
   // Session kinds (workflow vs tool-use category)
   sessionKinds: {
     workflow: { icon: 'symbol-method', unicode: '▷', label: 'Workflow' },
-    toolUse: { icon: 'tools', unicode: '⚙', label: 'Tool Use' },
+    toolUse: { icon: 'tools', unicode: '🔧', label: 'Tool Use' },
   },
 };
 
