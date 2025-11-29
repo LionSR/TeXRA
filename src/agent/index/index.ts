@@ -169,10 +169,3 @@ export const AgentIndexLoader = {
   },
 };
 
-// Re-export defaults that some callers expect
-export {
-  getDefaultWorkflowAgent,
-  getDefaultToolUseAgent,
-} from './AgentOptionsBuilder';
-export { buildAgentOptionsFromIndex } from './AgentOptionsBuilder';
-export type { AgentOptionDefaults } from './AgentOptionsBuilder';
