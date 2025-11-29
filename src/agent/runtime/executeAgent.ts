@@ -12,7 +12,7 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import { resolveAgent, parseKey } from '@agent/index';
+import { resolveAgent, parseKey, getMultipleName } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -207,13 +207,7 @@ function getAgentName(
   baseAgent: string,
   useMultipleOutputs: boolean | undefined,
 ): string {
-  if (useMultipleOutputs) {
-    // logger.info(CHANNEL, `Switching to multiple output mode`);
-    return baseAgent.endsWith('_multiple')
-      ? baseAgent
-      : `${baseAgent}_multiple`;
-  }
-  return baseAgent;
+  return useMultipleOutputs ? getMultipleName(baseAgent) : baseAgent;
 }
 
 /**

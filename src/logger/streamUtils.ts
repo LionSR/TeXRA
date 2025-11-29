@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
-import { parseKey } from '@agent/index';
+import { parseKey, getMultipleName } from '@agent/index';
 import { AgentType } from '@agent/core/AgentDataclass';
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -51,9 +51,7 @@ export function getStreamTabId(
   }
 
   const agentName = options.useMultipleOutputs
-    ? cleanAgent.endsWith('_multiple')
-      ? cleanAgent
-      : `${cleanAgent}_multiple`
+    ? getMultipleName(cleanAgent)
     : cleanAgent;
   const baseName = inputFile ? path.basename(inputFile) : '';
   return `${agentName}@${model}: ${baseName}`;
