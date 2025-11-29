@@ -309,7 +309,9 @@ async function handleCreateAgentWithAI(_context: vscode.ExtensionContext) {
     await promptToAddAgentToConfig(agentName, false, {
       isMultipleOutput,
       baseAgentName: isMultipleOutput ? getBaseName(agentName) : undefined,
-      multipleAgentName: isMultipleOutput ? agentName : getMultipleName(agentName),
+      multipleAgentName: isMultipleOutput
+        ? agentName
+        : getMultipleName(agentName),
     });
     const doc = await vscode.workspace.openTextDocument(filePath);
     await vscode.window.showTextDocument(doc);
