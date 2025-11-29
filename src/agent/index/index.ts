@@ -25,9 +25,14 @@ export {
   refreshAgentOptions,
   DEFAULT_WORKFLOW_AGENT,
   DEFAULT_TOOL_USE_AGENT,
-  // Helpers
-  isRemoteAgent,
-  shouldShowSourceIndicator,
+  // Key helpers
   createKey,
   parseKey,
+  // _multiple helpers
+  isMultipleVariant,
+  getBaseName,
+  getMultipleName,
+  // Source helpers
+  isRemoteAgent,
+  shouldShowSourceIndicator,
 } from './agentRegistry';
