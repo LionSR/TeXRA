@@ -2,10 +2,9 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import {
-  loadAndRegisterRemoteAgents,
-  selectAgentInMainView,
-} from '@agent/remote/remoteAgentUtils';
+import { AgentIndex } from '@agent/index';
+import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
 import {
@@ -77,23 +76,15 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }> = [];
 
     if (tier === 'researcher') {
-      try {
-        // Use shared utility for loading and registering agents
-        const { agents } = await loadAndRegisterRemoteAgents();
-        remoteAgents = agents.map((agent) => ({
-          name: agent.name,
-          description: agent.description,
-          tags: agent.tags,
-          visibility: agent.visibility,
-          agentType: agent.agentType,
-        }));
-      } catch (error) {
-        // Log error but continue - show profile without agents
-        this.logger.error(
-          this.channel,
-          `Failed to load remote agents: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        );
-      }
+      // Get cached remote agents from the index
+      const entries = AgentIndex.getBySource(AgentDirectorySource.Remote);
+      remoteAgents = entries.map((entry) => ({
+        name: entry.name,
+        description: entry.description || '',
+        tags: [], // Tags not cached in index; could be added if needed
+        visibility: 'private', // Default visibility for remote agents
+        agentType: entry.category,
+      }));
     }
 
     await webview.postMessage({
