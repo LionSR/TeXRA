@@ -214,9 +214,6 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             ? SESSION_TYPES.TOOL_USE
             : SESSION_TYPES.WORKFLOW;
 
-        // Switch session type UI if needed (shows correct dropdown, updates radio buttons)
-        mainViewState.applySessionType(targetSessionType);
-
         const selectId = AGENT_SELECT_IDS[targetSessionType];
 
         if (!selectId) {
@@ -260,7 +257,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           }
         }
 
-        // Set the value (creates placeholder if still no match)
+        // Set the value FIRST (creates placeholder if no match)
+        // This must happen before applySessionType to prevent default override
         this._setAgentValue(selectId, targetValue);
 
         // Update mainViewState to persist the selection
@@ -269,6 +267,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
             ? 'toolUseAgent'
             : 'workflowAgent';
         mainViewState.update({ [stateKey]: targetValue });
+
+        // NOW switch session type UI (shows correct dropdown, updates radio buttons)
+        // The value is already set, so applySessionType won't override with default
+        mainViewState.applySessionType(targetSessionType);
 
         // Decorate the placeholder option if it was just created
         // Re-query children since _setAgentValue may have added a new option
