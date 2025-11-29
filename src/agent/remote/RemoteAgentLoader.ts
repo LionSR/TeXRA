@@ -7,6 +7,10 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import {
+  isMultipleVariant,
+  getMultipleName,
+} from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -66,10 +70,7 @@ export class RemoteAgentLoader {
     // Build candidate names: if preferMultiple, try _multiple variant first
     const candidateNames: string[] = [];
     if (preferMultiple) {
-      const multipleName = agentName.endsWith('_multiple')
-        ? agentName
-        : `${agentName}_multiple`;
-      candidateNames.push(multipleName);
+      candidateNames.push(getMultipleName(agentName));
     }
     candidateNames.push(agentName);
 
