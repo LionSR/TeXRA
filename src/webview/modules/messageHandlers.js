@@ -44,6 +44,7 @@ import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
   getAgentTypeDecorator,
+  getModelProviderDecorator,
 } from '@common/iconConstants.js';
 
 // Import standardized commands
@@ -66,6 +67,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     // Track pending model option updates until the select element is ready
     this._disposeModelWaiter = null;
     this._isDisposed = false;
+    // Track tooltip listeners for cleanup
+    this._tooltipListeners = [];
 
     const ctx = {
       postHandle: this._postHandle.bind(this),
@@ -190,6 +193,97 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           console.warn('SET_AGENT_OPTIONS: Agent select elements not found');
         }
       },
+      /**
+       * Sets the selected agent in the dropdown without triggering full state restoration.
+       * Used by profile page to select a remote agent without clearing other fields.
+       * Handles name conflicts: if exact source:name not found, selects by name (any source).
+       * @param {Object} m - Message with agentValue and optional sessionType
+       * @param {string} m.agentValue - The agent value (in source:name format)
+       * @param {string} [m.sessionType] - 'workflow' or 'toolUse' (defaults to 'workflow')
+       */
+      [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (m) => {
+        const { agentValue, sessionType } = m;
+        if (!agentValue) {
+          console.warn('SET_SELECTED_AGENT: No agentValue provided');
+          return;
+        }
+
+        // Determine which dropdown to update
+        const targetSessionType =
+          sessionType === SESSION_TYPES.TOOL_USE
+            ? SESSION_TYPES.TOOL_USE
+            : SESSION_TYPES.WORKFLOW;
+
+        const selectId = AGENT_SELECT_IDS[targetSessionType];
+
+        if (!selectId) {
+          console.warn(
+            `SET_SELECTED_AGENT: No select ID for session type: ${targetSessionType}`,
+          );
+          return;
+        }
+
+        const selectElement = document.getElementById(selectId);
+        if (!selectElement) {
+          console.warn(
+            `SET_SELECTED_AGENT: Select element not found: ${selectId}`,
+          );
+          return;
+        }
+
+        // Find the best matching option
+        let targetValue = agentValue;
+        const options = Array.from(selectElement.children);
+
+        // First try exact match
+        let matchingOption = options.find((opt) => opt.value === agentValue);
+
+        // If no exact match, try to find by name (handles deduplication conflicts)
+        // E.g., "remote:logic" not found but "custom:logic" exists → select custom:logic
+        if (!matchingOption) {
+          const parsed = this._parseAgentKey(agentValue);
+          if (parsed) {
+            // Find option with matching name (any source)
+            matchingOption = options.find((opt) => {
+              const optParsed = this._parseAgentKey(opt.value);
+              return optParsed && optParsed.name === parsed.name;
+            });
+            if (matchingOption) {
+              targetValue = matchingOption.value;
+              console.info(
+                `SET_SELECTED_AGENT: Using ${targetValue} instead of ${agentValue} (name match)`,
+              );
+            }
+          }
+        }
+
+        // Set the value FIRST (creates placeholder if no match)
+        // This must happen before applySessionType to prevent default override
+        this._setAgentValue(selectId, targetValue);
+
+        // Update mainViewState to persist the selection
+        const stateKey =
+          targetSessionType === SESSION_TYPES.TOOL_USE
+            ? 'toolUseAgent'
+            : 'workflowAgent';
+        mainViewState.update({ [stateKey]: targetValue });
+
+        // NOW switch session type UI (shows correct dropdown, updates radio buttons)
+        // The value is already set, so applySessionType won't override with default
+        mainViewState.applySessionType(targetSessionType);
+
+        // Decorate the placeholder option if it was just created
+        // Re-query children since _setAgentValue may have added a new option
+        const currentOptions = Array.from(selectElement.children);
+        const option = currentOptions.find((opt) => opt.value === targetValue);
+        if (option && !option.dataset.decorated) {
+          this._decorateAgentOption(option);
+          option.dataset.decorated = 'true';
+        }
+
+        // Update the select's tooltip
+        this._updateAgentSelectTooltip(selectElement);
+      },
     };
   }
 
@@ -220,13 +314,34 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     selectElement.innerHTML = optionsHtml;
     this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
-      const { provider, context, cost } = opt.dataset;
-      if (provider || context || cost) {
-        opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
-      }
+      this._decorateModelOption(opt);
     });
 
     updateModelApiKeyBanner(selectElement);
+  }
+
+  _decorateModelOption(opt) {
+    const { provider, context, cost } = opt.dataset;
+    const modelName =
+      opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
+
+    // Get provider decorator for the icon
+    const decorator = getModelProviderDecorator(provider);
+    const displayLabel = `${decorator.unicode} ${modelName}`;
+
+    // Build tooltip with provider info
+    const hints = [];
+    hints.push(`${decorator.label}`);
+    if (context) hints.push(`Context: ${context}`);
+    if (cost) hints.push(`Cost: ${cost}`);
+
+    // Set text content with provider icon
+    opt.textContent = displayLabel;
+
+    if (hints.length > 0) {
+      opt.title = hints.join(' | ');
+      opt.setAttribute('aria-label', `${modelName} (${hints.join(', ')})`);
+    }
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
@@ -240,27 +355,63 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
+
+    // Update the select's tooltip to show selected agent info
+    this._updateAgentSelectTooltip(selectElement);
+  }
+
+  /**
+   * Update the agent select element's tooltip to show the selected agent's details.
+   * This provides immediate feedback about the currently selected agent.
+   * @param {HTMLElement} selectElement - The agent select element
+   */
+  _updateAgentSelectTooltip(selectElement) {
+    if (!isSelectLikeElement(selectElement)) {
+      return;
+    }
+
+    const selectedOption = getSelectedOptionElement(selectElement);
+    if (selectedOption && selectedOption.title) {
+      // Use the selected option's tooltip as the select's tooltip
+      selectElement.title = selectedOption.title;
+    } else if (selectedOption) {
+      // Fallback: show the agent name
+      const label =
+        selectedOption.dataset?.label || selectedOption.textContent || '';
+      selectElement.title = label;
+    } else {
+      selectElement.title = '';
+    }
   }
 
   _decorateAgentOption(opt) {
-    const { label, isMultiple, isToolUse, isRemote, description, agentType } =
-      this._readAgentOptionMetadata(opt);
+    const {
+      label,
+      isMultiple,
+      isToolUse,
+      isRemote,
+      isCustom,
+      description,
+      agentType,
+    } = this._readAgentOptionMetadata(opt);
 
     const hints = [];
     let displayLabel = label;
 
-    // Add agent type indicator (CoT, direct, toolUse)
-    // Uses unicode since vscode-option only supports text content
+    // Add agent type hint to tooltip (no unicode icon - too confusing)
     if (agentType) {
       const decorator = getAgentTypeDecorator(agentType);
-      displayLabel = `${decorator.unicode} ${displayLabel}`;
-      hints.push(`Type: ${decorator.label}`);
+      hints.push(decorator.hint || `Type: ${decorator.label}`);
     }
 
-    // Add cloud icon for remote agents (using shared config)
+    // Add cloud icon for remote agents (visible indicator, at end)
     if (isRemote) {
-      const { unicode, hint } = AGENT_DECORATORS.properties.remote;
-      displayLabel = `${unicode} ${displayLabel}`;
+      hints.push(AGENT_DECORATORS.properties.remote.hint);
+    }
+
+    // Add custom hint to tooltip (no unicode icon - too confusing)
+    if (isCustom) {
+      const { hint } = AGENT_DECORATORS.properties.custom;
       hints.push(hint);
     }
 
@@ -269,7 +420,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       hints.push(description);
     }
 
-    // Add multiple outputs indicator (using shared config)
+    // Add multiple outputs indicator (visible indicator, at end)
     if (isMultiple) {
       const { unicode, hint } = AGENT_DECORATORS.properties.multipleOutputs;
       displayLabel = `${displayLabel} ${unicode}`;
@@ -279,8 +430,16 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       opt.style.opacity = '';
     }
 
-    if (isToolUse) {
-      hints.push('Uses tools for actions.');
+    // Add cloud icon for remote agents (visible indicator, at end after multiple)
+    if (isRemote) {
+      const { unicode } = AGENT_DECORATORS.properties.remote;
+      displayLabel = `${displayLabel} ${unicode}`;
+    }
+
+    // Add tool-use hint only if not already covered by agentType
+    // (avoid duplicate "Can execute tools and code" when agentType is toolUse)
+    if (isToolUse && agentType !== 'toolUse') {
+      hints.push('Can execute tools and code');
     }
 
     // Set text content (vscode-option doesn't support HTML)
@@ -317,18 +476,33 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       isMultiple: opt.dataset.multiple === 'true',
       isToolUse: opt.dataset.toolUse === 'true',
       isRemote: opt.dataset.remote === 'true',
+      isCustom: opt.dataset.custom === 'true',
       description: opt.dataset.description ?? '',
       agentType: opt.dataset.agentType ?? '',
     };
   }
 
   /**
+   * Parse source:name format to extract clean name and source.
+   * @param {string} value - The value in source:name format
+   * @returns {{source: string, name: string} | null} - Parsed parts or null if invalid
+   */
+  _parseAgentKey(value) {
+    if (!value) return null;
+    const colonIdx = value.indexOf(':');
+    if (colonIdx === -1) return null;
+    return {
+      source: value.slice(0, colonIdx),
+      name: value.slice(colonIdx + 1),
+    };
+  }
+
+  /**
    * Sets an agent selector value, creating a placeholder option if needed.
-   * Note: Placeholder options are created without remote styling since we can't
-   * determine remote status on the client side. When SET_AGENT_OPTIONS arrives,
-   * it will replace options with properly decorated versions.
+   * Placeholder options display the clean agent name (without source prefix).
+   * When SET_AGENT_OPTIONS arrives, it will replace options with properly decorated versions.
    * @param {string} selectId - The ID of the agent select element
-   * @param {string} value - The agent value to set
+   * @param {string} value - The agent value (in source:name format)
    */
   _setAgentValue(selectId, value) {
     if (!value) {
@@ -348,22 +522,35 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       (opt) => opt.value === value,
     );
 
-    // If option doesn't exist, create a placeholder without remote styling.
+    // If option doesn't exist, create a placeholder with clean display name.
     // SET_AGENT_OPTIONS will replace this with properly decorated options.
     if (!existingOption) {
       const option = document.createElement('vscode-option');
       option.value = value;
-      option.textContent = value;
-      option.dataset.label = value;
-      // Note: We don't set data-remote here since we can't determine
-      // remote status on the client side. The server will provide this
-      // info when SET_AGENT_OPTIONS arrives.
+
+      // Extract clean name from source:name format
+      const parsed = this._parseAgentKey(value);
+      const displayName = parsed ? parsed.name : value;
+
+      option.textContent = displayName;
+      option.dataset.label = displayName;
+
+      // Set source-based data attributes for basic styling
+      if (parsed) {
+        option.dataset.source = parsed.source;
+        if (parsed.source === 'remote') {
+          option.dataset.remote = 'true';
+        } else if (parsed.source === 'custom') {
+          option.dataset.custom = 'true';
+        }
+      }
 
       selectElement.appendChild(option);
     }
 
-    // Set the value
+    // Set the value and dispatch change event to update the component's display
     safeSetElementValue(selectId, value);
+    selectElement.dispatchEvent(new Event('change'));
   }
 
   _getSessionTypeValue() {
@@ -409,6 +596,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    * Attempts to restore from a list of candidate values in order, falling back
    * to the first enabled option if no candidate matches.
    *
+   * Also handles backwards compatibility for agent values that were saved without
+   * the source: prefix (e.g., "summarize" → "custom:summarize").
+   *
    * @param {HTMLElement} selectElement - The select element to restore
    * @param {string[]} candidates - Array of candidate values to try, in priority order
    */
@@ -416,13 +606,29 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const filteredCandidates = candidates.filter(Boolean);
     const options = getSelectOptionElements(selectElement);
 
-    const match = filteredCandidates.find((value) =>
+    // First try exact match
+    const exactMatch = filteredCandidates.find((value) =>
       options.some((option) => option.value === value),
     );
 
-    if (match) {
-      selectElement.value = match;
+    if (exactMatch) {
+      selectElement.value = exactMatch;
       return;
+    }
+
+    // Migration: try matching by name suffix for old format values
+    // (e.g., "summarize" matches "custom:summarize" or "builtin:summarize")
+    for (const candidate of filteredCandidates) {
+      // Skip if already in source:name format
+      if (candidate.includes(':')) continue;
+
+      const suffixMatch = options.find(
+        (option) => option.value.endsWith(`:${candidate}`) && !option.disabled,
+      );
+      if (suffixMatch) {
+        selectElement.value = suffixMatch.value;
+        return;
+      }
     }
 
     const fallbackOption =
@@ -461,9 +667,36 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._disposeModelWaiter = null;
     }
     super.setup();
+    this._setupAgentSelectListeners();
     if (requestData) {
       this._initializeDataRequests();
     }
+  }
+
+  /** Setup change listeners for agent selects to update tooltips. */
+  _setupAgentSelectListeners() {
+    // Clean up any existing listeners first
+    this._cleanupTooltipListeners();
+
+    // Update tooltip when agent selection changes
+    AGENT_SELECT_LIST.forEach((selectId) => {
+      const selectElement = document.getElementById(selectId);
+      if (selectElement) {
+        const handler = () => this._updateAgentSelectTooltip(selectElement);
+        selectElement.addEventListener('change', handler);
+        this._tooltipListeners.push({ element: selectElement, handler });
+        // Set initial tooltip
+        this._updateAgentSelectTooltip(selectElement);
+      }
+    });
+  }
+
+  /** Remove tooltip listeners to prevent memory leaks. */
+  _cleanupTooltipListeners() {
+    this._tooltipListeners.forEach(({ element, handler }) => {
+      element.removeEventListener('change', handler);
+    });
+    this._tooltipListeners = [];
   }
 
   cleanup() {
@@ -473,6 +706,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._disposeModelWaiter = null;
     }
 
+    this._cleanupTooltipListeners();
     super.cleanup();
     this._instructionEl = null;
     this._elementCache.clear();
