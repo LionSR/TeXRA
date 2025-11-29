@@ -25,35 +25,20 @@ export class AgentUsageReporter {
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    *
-   * Note: Usage stats are passed through without modification.
-   * Cost is computed once in model handlers and should not be altered here.
+   * Usage flows to a single source of truth (UsageStatsManager) via updateStreamUsage.
+   * Detailed statistics are logged separately for display in the progress view.
    */
   public report(stats: ExtendedTokenUsageStats, runId?: string): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
 
     // Pass through usage without modification
-    // Note: cacheCreationInputTokens is no longer added to inputTokens here
-    // as it's already handled correctly in the normalized usage computation
     const usage = {
       inputTokens: stats.inputTokens,
       outputTokens: stats.outputTokens,
       cost: stats.cost,
     };
 
-    const groupId = this.logger.withCurrentGroup((id) => id);
-
-    if (groupId) {
-      bus.emit('updateGroupUsage', {
-        stream: this.streamId,
-        groupId,
-        usage,
-      });
-      if (logStatistics) {
-        this.logger.statistics(stats, groupId);
-      }
-      return;
-    }
-
+    // Always emit to the single source of truth (UsageStatsManager)
     if (runId) {
       bus.emit('updateStreamUsage', {
         stream: this.streamId,
@@ -62,8 +47,10 @@ export class AgentUsageReporter {
       });
     }
 
+    // Log detailed statistics for display in the progress view
     if (logStatistics) {
-      this.logger.statistics(stats);
+      const groupId = this.logger.withCurrentGroup((id) => id);
+      this.logger.statistics(stats, groupId);
     }
   }
 }

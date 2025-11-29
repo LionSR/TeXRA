@@ -132,7 +132,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_TASK_GROUP]: (m) => this.handleUpdateTaskGroup(m),
       [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
-      [COMMANDS.UPDATE_GROUP_USAGE]: (m) => this.handleUpdateGroupUsage(m),
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
         this.handleUpdateMissingOutputs(m),
@@ -465,15 +464,6 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setRunUsage(targetStream, runId, usage);
     });
     this._refreshUsageForActiveRun();
-  }
-
-  handleUpdateGroupUsage(message) {
-    if (message.stream === state.activeStream) {
-      dom.usageGroup.update({
-        groupId: message.groupId,
-        usage: message.usage,
-      });
-    }
   }
 
   handleUpdateFiles(message) {
