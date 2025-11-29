@@ -70,7 +70,8 @@ function migrateLegacyUsageSummary(
       base.cacheCreationTokens = usageSummary.cache_creation_input_tokens;
     }
     if (usageSummary.server_tool_use?.web_search_requests) {
-      base.serverToolRequests = usageSummary.server_tool_use.web_search_requests;
+      base.serverToolRequests =
+        usageSummary.server_tool_use.web_search_requests;
     }
   } else if (isOpenAIUsage(usageSummary)) {
     if (usageSummary.cached_tokens > 0) {
@@ -164,7 +165,9 @@ export class ConversationRoundState {
     };
   }
 
-  static fromJSON(json: ConversationRoundStateSnapshot): ConversationRoundState {
+  static fromJSON(
+    json: ConversationRoundStateSnapshot,
+  ): ConversationRoundState {
     const state = new ConversationRoundState(json.roundIndex);
     state.continuationCount = json.continuationCount;
     state.responseTimeMs = json.responseTimeMs;
@@ -240,7 +243,9 @@ export class AgentRunState {
     };
   }
 
-  static fromJSON(json: AgentRunStateSnapshot | null | undefined): AgentRunState {
+  static fromJSON(
+    json: AgentRunStateSnapshot | null | undefined,
+  ): AgentRunState {
     if (!json) {
       return new AgentRunState();
     }
