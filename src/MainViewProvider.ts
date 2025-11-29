@@ -71,7 +71,11 @@ export class MainViewProvider
     );
   }
 
-  private async refreshOptionsAndView() {
+  /**
+   * Refresh agent options and update the webview.
+   * Called when agents change (file watcher) or auth state changes (login/logout).
+   */
+  async refreshOptionsAndView() {
     if (!this._view) {
       return;
     }
