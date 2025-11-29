@@ -81,8 +81,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       remoteAgents = entries.map((entry) => ({
         name: entry.name,
         description: entry.description || '',
-        tags: [], // Tags not cached in index; could be added if needed
-        visibility: 'private', // Default visibility for remote agents
+        tags: entry.tags || [],
+        visibility: entry.visibility || 'researcher',
         agentType: entry.category,
       }));
     }
