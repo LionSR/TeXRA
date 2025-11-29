@@ -44,6 +44,7 @@ import { capitalize, uncapitalize } from '@common/stringUtils.js';
 import {
   AGENT_DECORATORS,
   getAgentTypeDecorator,
+  getModelProviderDecorator,
 } from '@common/iconConstants.js';
 
 // Import standardized commands
@@ -220,13 +221,33 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     selectElement.innerHTML = optionsHtml;
     this._restoreModelSelection(selectElement, previous);
     getSelectOptionElements(selectElement).forEach((opt) => {
-      const { provider, context, cost } = opt.dataset;
-      if (provider || context || cost) {
-        opt.title = `Provider: ${provider ?? 'N/A'}, Context: ${context ?? 'N/A'}, Cost: ${cost ?? 'N/A'}`;
-      }
+      this._decorateModelOption(opt);
     });
 
     updateModelApiKeyBanner(selectElement);
+  }
+
+  _decorateModelOption(opt) {
+    const { provider, context, cost } = opt.dataset;
+    const modelName = opt.textContent?.trim() ?? opt.getAttribute('value') ?? '';
+
+    // Get provider decorator for the icon
+    const decorator = getModelProviderDecorator(provider);
+    const displayLabel = `${decorator.unicode} ${modelName}`;
+
+    // Build tooltip with provider info
+    const hints = [];
+    hints.push(`${decorator.label}`);
+    if (context) hints.push(`Context: ${context}`);
+    if (cost) hints.push(`Cost: ${cost}`);
+
+    // Set text content with provider icon
+    opt.textContent = displayLabel;
+
+    if (hints.length > 0) {
+      opt.title = hints.join(' | ');
+      opt.setAttribute('aria-label', `${modelName} (${hints.join(', ')})`);
+    }
   }
 
   _applyAgentOptions(selectElement, optionsHtml) {
