@@ -97,6 +97,13 @@ export async function runToolUseCycle<C = unknown>(
  *
  * For tool-use agents, we emit a simple file list without lineage or diff
  * stats since there's no meaningful base file to compare against.
+ *
+ * ## RunId for Tool-Use Agents
+ * Tool-use agents don't create task groups (logger hierarchy), so they use
+ * the ExecutionId as their RunId. This is intentional and documented in
+ * IdentifierTypes.ts. The executionId IS the runId for tool-use contexts.
+ *
+ * @see IdentifierTypes.ts for the full execution model documentation
  */
 function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
@@ -109,10 +116,10 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const stream = options.context.streamId;
   const executionId = options.context.executionId;
   const roundIndex = store.round.roundIndex;
-  // Tool-use agents don't create logger groups. Use executionId (or streamId
-  // as fallback) to match the runId used by UsageMonitor for consistency.
-  // This ensures files and usage are stored under the same runId in the
-  // progress view, allowing resolveActiveRunId to correctly display files.
+
+  // For tool-use agents: ExecutionId IS the RunId (no task groups exist).
+  // Fallback to streamId only for legacy sessions without executionId.
+  // See IdentifierTypes.ts for the full execution model.
   const runId = executionId ?? stream;
 
   // Deduplicate by path in case the same file was edited multiple times
