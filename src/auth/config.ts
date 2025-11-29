@@ -74,5 +74,31 @@ export const DEFAULT_OAUTH_PROVIDER: OAuthProvider = 'github';
 /**
  * VS Code extension ID for OAuth redirects.
  * Format: publisher.extensionName (from package.json)
+ *
+ * This is the default/fallback value. At runtime, use getExtensionId()
+ * which returns the actual extension ID from context if available.
  */
 export const EXTENSION_ID = 'texra-ai.texra';
+
+/**
+ * Runtime extension ID set during activation.
+ * This ensures the redirect URI matches the actual extension ID,
+ * which is critical for OAuth flows.
+ */
+let runtimeExtensionId: string | null = null;
+
+/**
+ * Set the runtime extension ID from the extension context.
+ * Should be called during extension activation with context.extension.id
+ */
+export function setRuntimeExtensionId(id: string): void {
+  runtimeExtensionId = id;
+}
+
+/**
+ * Get the extension ID for OAuth redirects.
+ * Returns the runtime ID if set, otherwise falls back to the default.
+ */
+export function getExtensionId(): string {
+  return runtimeExtensionId ?? EXTENSION_ID;
+}
