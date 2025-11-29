@@ -13,7 +13,11 @@ export interface UserVariableChannels {
   output: Record<string, any>;
 }
 
-export const UserVariableChannelsSchema = z.strictObject({
+/**
+ * We use z.object() instead of z.strictObject() to remain backward compatible
+ * with legacy user variable channels that may contain removed or renamed fields.
+ */
+export const UserVariableChannelsSchema = z.object({
   input: z.record(z.string(), z.unknown()),
   transient: z.record(z.string(), z.unknown()),
   output: z.record(z.string(), z.unknown()),
