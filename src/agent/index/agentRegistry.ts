@@ -529,12 +529,20 @@ const SOURCE_PRIORITY: AgentSource[] = [
 
 /**
  * Deduplicate agents by name, keeping only the highest priority source.
- * When multiple agents share the same name, custom takes precedence over built-in.
+ * Custom agents override built-in agents with the same name.
+ * Remote agents are NEVER deduplicated - they always show separately.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byName = new Map<string, AgentEntry>();
+  const remoteEntries: AgentEntry[] = [];
 
   for (const entry of entries) {
+    // Remote agents never get deduplicated - always show them
+    if (entry.source === 'remote') {
+      remoteEntries.push(entry);
+      continue;
+    }
+
     const existing = byName.get(entry.name);
     if (!existing) {
       byName.set(entry.name, entry);
@@ -549,7 +557,7 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
     }
   }
 
-  return [...byName.values()];
+  return [...byName.values(), ...remoteEntries];
 }
 
 function filterVisible(

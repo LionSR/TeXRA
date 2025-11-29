@@ -93,7 +93,7 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    const isRemote = isRemoteAgent(agentName);
+    const isRemote = isRemoteAgent(rawAgentName);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({
