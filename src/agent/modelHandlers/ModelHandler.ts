@@ -401,7 +401,7 @@ export abstract class ModelHandler<
 
     if (tokenFlags.maxOutputTokensExceeded) {
       const totals = stateGlobal.usageAccumulator.getTotals();
-      this.logger.warn(
+      this.logger.info(
         `Output tokens exceed ${this.maxOutputTokensFactor}x input tokens (total: ${totals.totalOutputTokens}, first input: ${totals.firstInputTokens})`,
       );
     }
