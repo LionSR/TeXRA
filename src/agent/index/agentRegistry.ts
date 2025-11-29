@@ -83,7 +83,7 @@ export interface ResolvedAgent {
 // =============================================================================
 
 /** Suffix for multiple-output agent variants. */
-const MULTIPLE_SUFFIX = '_multiple';
+export const MULTIPLE_SUFFIX = '_multiple';
 
 // =============================================================================
 // STATE
