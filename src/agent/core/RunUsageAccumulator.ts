@@ -81,7 +81,11 @@ export class RunUsageAccumulator {
    */
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
     if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens = usage.inputTokens;
+      // Include cached tokens in first input count (Anthropic reports them separately)
+      this.totals.firstInputTokens =
+        usage.inputTokens +
+        (usage.cachedInputTokens ?? 0) +
+        (usage.cacheCreationTokens ?? 0);
     }
 
     this.totals.totalInputTokens += usage.inputTokens;
