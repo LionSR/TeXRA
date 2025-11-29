@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Third-party imports
-import { glob, globSync, type GlobOptionsWithFileTypesFalse } from 'glob';
+import { glob, type GlobOptionsWithFileTypesFalse } from 'glob';
 
 // Local imports - agent runtime
 import {
@@ -42,11 +42,6 @@ type AsyncFetcher = (
   pattern: string,
   options: GlobOptionsWithFileTypesFalse,
 ) => Promise<string[]>;
-
-type SyncFetcher = (
-  pattern: string,
-  options: GlobOptionsWithFileTypesFalse,
-) => string[];
 
 function cleanDirectory(value?: string): string | undefined {
   if (!value) {
@@ -147,35 +142,6 @@ async function resolveWithAsyncFetcher(
   return undefined;
 }
 
-function resolveWithSyncFetcher(
-  agentName: string,
-  candidates: AgentDirectoryCandidate[],
-  options: AgentDefinitionSearchOptions | undefined,
-  fetcher: SyncFetcher,
-): AgentPathResolution | undefined {
-  const preferMultiple = options?.preferMultiple ?? false;
-  const candidateNames = buildCandidateNames(agentName, preferMultiple);
-
-  for (const candidateName of candidateNames) {
-    const pattern = `**/${candidateName}${YAML_EXTENSION}`;
-    for (const candidate of candidates) {
-      const matches = fetcher(pattern, {
-        ...BASE_GLOB_OPTIONS,
-        cwd: candidate.directory,
-      });
-      const match = matches[0];
-      if (match) {
-        const absolute = path.isAbsolute(match)
-          ? match
-          : path.join(candidate.directory, match);
-        return createResolution(absolute, candidate, preferMultiple);
-      }
-    }
-  }
-
-  return undefined;
-}
-
 export async function resolveAgentDefinition(
   agentName: string,
   candidates: AgentDirectoryCandidate[],
@@ -189,19 +155,6 @@ export async function resolveAgentDefinition(
   );
 }
 
-export function resolveAgentDefinitionSync(
-  agentName: string,
-  candidates: AgentDirectoryCandidate[],
-  options?: AgentDefinitionSearchOptions,
-): AgentPathResolution | undefined {
-  return resolveWithSyncFetcher(
-    agentName,
-    candidates,
-    options,
-    (pattern, opts) => globSync(pattern, opts),
-  );
-}
-
 export async function resolveAgentDefinitionInDirectory(
   directory: string,
   source: AgentDirectorySource,
@@ -209,19 +162,6 @@ export async function resolveAgentDefinitionInDirectory(
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution | undefined> {
   return resolveAgentDefinition(
-    agentName,
-    [createCandidate(directory, source)],
-    options,
-  );
-}
-
-export function resolveAgentDefinitionInDirectorySync(
-  directory: string,
-  source: AgentDirectorySource,
-  agentName: string,
-  options?: AgentDefinitionSearchOptions,
-): AgentPathResolution | undefined {
-  return resolveAgentDefinitionSync(
     agentName,
     [createCandidate(directory, source)],
     options,
