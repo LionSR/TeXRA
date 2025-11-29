@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - webview
-import { AgentIndex } from '@agent/index';
+import { getAgent } from '@agent/index';
 import { showLoggedMessage, toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fileLister } from '@frontend/files';
@@ -192,7 +192,7 @@ export class FileManager {
     }
 
     try {
-      const entry = AgentIndex.getEntryByIdentifier(agentIdentifier);
+      const entry = getAgent(agentIdentifier);
       const files = entry?.defaultOutputFiles ?? [];
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,

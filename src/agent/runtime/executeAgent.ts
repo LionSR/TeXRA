@@ -12,7 +12,7 @@ import {
   BaseToolUseAgent,
   BaseReflectionAgent,
 } from '@agent/implementations';
-import { AgentIndex, parseAgentIndexKey } from '@agent/index';
+import { resolveAgent, parseKey } from '@agent/index';
 import { parseAgentConfig, type AgentConfig } from '@agent/core/AgentConfig';
 import {
   AgentSetting,
@@ -149,7 +149,7 @@ async function resolveAgentPathViaGlob(
  * - New format: "source:name" (e.g., "custom:summarize") - uses explicit source
  * - Legacy format: just name (e.g., "summarize") - searches directories in order
  *
- * Uses AgentIndex.resolve() for fast lookups. Falls back to glob-based
+ * Uses resolveAgent() for fast lookups. Falls back to glob-based
  * resolution only if agent is not in the index.
  */
 export async function getAgentPath(
@@ -157,17 +157,25 @@ export async function getAgentPath(
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
-    // Fast path: Use AgentIndex.resolve() which handles source:name parsing
-    const indexResolution = AgentIndex.resolve(agentIdentifier, {
-      preferMultiple: options?.preferMultiple,
-    });
-    if (indexResolution) {
-      return indexResolution;
+    // Fast path: Use resolveAgent() which handles source:name parsing
+    const result = resolveAgent(agentIdentifier, options?.preferMultiple);
+    if (result) {
+      // Convert to AgentPathResolution format
+      const { entry, resolvedPath, resolvedName } = result;
+      return {
+        directory: resolvedPath ? path.dirname(resolvedPath) : '',
+        source: entry.source as unknown as AgentDirectorySource,
+        definitionPath: resolvedPath,
+        resolvedName,
+        usedFallback: options?.preferMultiple === true && !entry.multiplePath,
+      };
     }
 
     // Slow path: Fall back to glob-based resolution for agents not in index
-    const parsed = parseAgentIndexKey(agentIdentifier);
-    const explicitSource = parsed?.source ?? null;
+    const parsed = parseKey(agentIdentifier);
+    const explicitSource = parsed
+      ? (parsed.source as unknown as AgentDirectorySource)
+      : null;
     const agentName = parsed?.name ?? agentIdentifier;
     return await resolveAgentPathViaGlob(agentName, explicitSource, options);
   } catch (err) {

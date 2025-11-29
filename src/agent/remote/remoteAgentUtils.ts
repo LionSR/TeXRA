@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { createAgentIndexKey } from '@agent/index';
+import { createKey, type AgentSource } from '@agent/index';
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 
 // Local imports - common
@@ -79,7 +79,7 @@ export async function selectAgentInMainView(
   } = options;
 
   // Format agent value as source:name for dropdown selection
-  const agentValue = createAgentIndexKey(source, agentName);
+  const agentValue = createKey(source as AgentSource, agentName);
 
   // Focus the main view first
   await vscode.commands.executeCommand('texra.mainView.focus');
