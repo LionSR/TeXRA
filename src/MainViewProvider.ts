@@ -55,24 +55,6 @@ export class MainViewProvider
 
       // Command registration is handled asynchronously
     }
-
-    // Always set up notifier for this instance, regardless of command registration
-    this.context.subscriptions.push(
-      vscode.window.onDidChangeActiveTextEditor(() => {
-        if (this._view) {
-          // Notify the webview that the active editor has changed
-          // TODO: This command is sent but not handled in the webview (no handler in messageHandlers.js)
-          // This appears to be an incomplete implementation from commit bb28ecbf
-          const activeEditor = vscode.window.activeTextEditor;
-          if (activeEditor && activeEditor.document) {
-            this._view.webview.postMessage({
-              command: MAIN_VIEW_COMMANDS.ACTIVE_EDITOR_CHANGED,
-              file: activeEditor.document.fileName,
-            });
-          }
-        }
-      }),
-    );
   }
 
   private setupConfigurationWatcher() {
@@ -85,11 +67,15 @@ export class MainViewProvider
   }
 
   private async refreshOptionsAndView() {
-    if (this._view) {
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
+    if (!this._view) {
+      return;
     }
+    // Send delta messages instead of regenerating entire HTML
+    // This preserves webview state and avoids unnecessary DOM recreation
+    await this.messageHandler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+      this._view as vscode.WebviewView,
+    );
   }
 
   private setupFileWatcher() {

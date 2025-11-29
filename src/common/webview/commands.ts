@@ -140,9 +140,6 @@ export const MAIN_VIEW_COMMANDS = {
 
   // Other operations
   ACCEPT_EDITED: 'acceptEdited',
-
-  // Editor events
-  ACTIVE_EDITOR_CHANGED: 'activeEditorChanged',
 };
 
 // Progress view specific commands
