@@ -110,9 +110,13 @@ export function toErrorMessage(err: unknown): string {
  * ```
  */
 export function isFileNotFoundError(err: unknown): boolean {
+  // VS Code FileSystemError (explicit check for type safety)
+  if (err instanceof vscode.FileSystemError) {
+    return err.code === 'FileNotFound';
+  }
+  // Node.js filesystem errors (ENOENT)
   if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code: string }).code;
-    return code === 'ENOENT' || code === 'FileNotFound';
+    return (err as { code: string }).code === 'ENOENT';
   }
   return false;
 }
