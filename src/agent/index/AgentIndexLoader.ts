@@ -305,7 +305,7 @@ export class AgentIndexLoader {
       category = AgentCategory.Workflow;
     }
 
-    return {
+    const entry: AgentIndexEntry = {
       name,
       source,
       category,
@@ -320,6 +320,7 @@ export class AgentIndexLoader {
           ? defaultOutputFiles
           : undefined,
     };
+    return entry;
   }
 
   /**
@@ -334,7 +335,7 @@ export class AgentIndexLoader {
     try {
       const remoteAgents = await RemoteAgentLoader.listRemoteAgents();
 
-      return remoteAgents.map((agent) => {
+      return remoteAgents.map((agent): AgentIndexEntry => {
         // Determine category from agentType field
         const category =
           agent.agentType === 'toolUse'
@@ -342,7 +343,7 @@ export class AgentIndexLoader {
             : AgentCategory.Workflow;
 
         // Map remote agentType string to AgentType enum
-        const agentType =
+        const mappedAgentType =
           agent.agentType === 'toolUse'
             ? AgentType.ToolUse
             : agent.agentType === 'direct'
@@ -355,12 +356,12 @@ export class AgentIndexLoader {
           category,
           definitionPath: '', // Remote agents don't have local paths
           hasDefinition: true, // Assume remote agents are valid
-          hasMultipleSibling: false, // TODO: Could check for _multiple variant in DB
+          hasMultipleSibling: false,
           isMultipleOutput: false, // Default, will be determined at load time
           description: agent.description,
           visibility: agent.visibility,
           tags: agent.tags,
-          agentType,
+          agentType: mappedAgentType,
         };
       });
     } catch (error) {
