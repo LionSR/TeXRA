@@ -180,6 +180,24 @@ export class ProgressViewState {
     this.saveActiveRunIds();
   }
 
+  /**
+   * Resolve and optionally persist the active run ID for a stream.
+   *
+   * This method determines which run (task group) should be active for display
+   * in the progress view. The resolution strategy:
+   * 1. If a specific runId is requested, validate it exists and use it
+   * 2. Otherwise, check for a previously active runId
+   * 3. If only one run exists, use that
+   * 4. Otherwise, find the most recent run
+   *
+   * For tool-use agents: The runId will be the executionId (same UUID)
+   * For workflow agents: The runId will be a task group ID
+   *
+   * @param stream - The stream to resolve for
+   * @param requested - Optional specific runId to use
+   * @param options.persist - Whether to save the resolved runId (default: true)
+   * @returns The resolved runId, or null if none found
+   */
   resolveRunId(
     stream: StreamTabId,
     requested?: string | null,
@@ -390,10 +408,25 @@ export class ProgressViewState {
     );
   }
 
+  /**
+   * Get output files for a stream, resolving the correct dimension key.
+   *
+   * ## Resolution Strategy
+   * 1. If executionId is provided, try to find files stored under that ID
+   *    (works for both tool-use agents and workflow agents with runStorage)
+   * 2. Otherwise, use runId (task group) or fall back to activeRunId
+   *
+   * For tool-use agents: executionId IS the runId (same UUID)
+   * For workflow agents: runId is the task group ID, executionId is metadata
+   *
+   * @see IdentifierTypes.ts for the full execution model documentation
+   */
   getRunOutputFiles(
     stream: StreamTabId,
     options: { executionId?: ExecutionId; runId?: string | null } = {},
   ): Map<number, OutputFileInfo[]> | undefined {
+    // Try executionId first - works for tool-use agents where executionId IS runId
+    // and for workflow agents with runStorage metadata
     if (options.executionId) {
       const byExecution = this._outputFiles.getRunByExecution(
         stream,
@@ -404,6 +437,7 @@ export class ProgressViewState {
       }
     }
 
+    // Fall back to runId (task group for workflow agents, or legacy data)
     const candidateRunId =
       options.runId ?? this.getActiveRunId(stream) ?? undefined;
     if (!candidateRunId) {
