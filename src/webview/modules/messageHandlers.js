@@ -194,6 +194,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       /**
        * Sets the selected agent in the dropdown without triggering full state restoration.
        * Used by profile page to select a remote agent without clearing other fields.
+       * Handles name conflicts: if exact source:name not found, selects by name (any source).
        * @param {Object} m - Message with agentValue and optional sessionType
        * @param {string} m.agentValue - The agent value (in source:name format)
        * @param {string} [m.sessionType] - 'workflow' or 'toolUse' (defaults to 'workflow')
@@ -219,26 +220,53 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           return;
         }
 
-        // Set the agent value (creates placeholder if needed)
-        this._setAgentValue(selectId, agentValue);
+        const selectElement = document.getElementById(selectId);
+        if (!selectElement) {
+          console.warn(`SET_SELECTED_AGENT: Select element not found: ${selectId}`);
+          return;
+        }
+
+        // Find the best matching option
+        let targetValue = agentValue;
+        const options = Array.from(selectElement.children);
+
+        // First try exact match
+        let matchingOption = options.find((opt) => opt.value === agentValue);
+
+        // If no exact match, try to find by name (handles deduplication conflicts)
+        // E.g., "remote:logic" not found but "custom:logic" exists → select custom:logic
+        if (!matchingOption) {
+          const parsed = this._parseAgentKey(agentValue);
+          if (parsed) {
+            // Find option with matching name (any source)
+            matchingOption = options.find((opt) => {
+              const optParsed = this._parseAgentKey(opt.value);
+              return optParsed && optParsed.name === parsed.name;
+            });
+            if (matchingOption) {
+              targetValue = matchingOption.value;
+              console.info(
+                `SET_SELECTED_AGENT: Using ${targetValue} instead of ${agentValue} (name match)`,
+              );
+            }
+          }
+        }
+
+        // Set the value (creates placeholder if still no match)
+        this._setAgentValue(selectId, targetValue);
 
         // Update mainViewState to persist the selection
         const stateKey =
           targetSessionType === SESSION_TYPES.TOOL_USE
             ? 'toolUseAgent'
             : 'workflowAgent';
-        mainViewState.update({ [stateKey]: agentValue });
+        mainViewState.update({ [stateKey]: targetValue });
 
         // Decorate the placeholder option if it was just created
-        const selectElement = document.getElementById(selectId);
-        if (selectElement) {
-          const option = Array.from(selectElement.children).find(
-            (opt) => opt.value === agentValue,
-          );
-          if (option && !option.dataset.decorated) {
-            this._decorateAgentOption(option);
-            option.dataset.decorated = 'true';
-          }
+        const option = options.find((opt) => opt.value === targetValue);
+        if (option && !option.dataset.decorated) {
+          this._decorateAgentOption(option);
+          option.dataset.decorated = 'true';
         }
       },
     };
