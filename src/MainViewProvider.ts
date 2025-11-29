@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { refresh } from '@agent/index';
+import { agentDirectories } from '@frontend/agents';
 
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
@@ -63,10 +64,10 @@ export class MainViewProvider
   }
 
   private setupConfigurationWatcher() {
-    // Watch for configuration changes
+    // Watch for configuration changes that affect agent/model options
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.models', 'texra.files'],
+      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
       () => this.refreshOptionsAndView(),
     );
   }
@@ -111,13 +112,35 @@ export class MainViewProvider
     const agentPattern = '**/*.yaml';
     this.agentWatcher = vscode.workspace.createFileSystemWatcher(agentPattern);
 
+    // Cache of agent directory paths for filtering
+    let agentDirPaths: string[] = [];
+    const updateAgentDirs = async () => {
+      const dirs = await agentDirectories.getAllLocal();
+      agentDirPaths = dirs.map((d) => d.directory);
+    };
+    // Initialize and refresh periodically (directories might change)
+    void updateAgentDirs();
+
+    // Check if a file path is within an agent directory
+    const isAgentFile = (uri: vscode.Uri): boolean => {
+      const filePath = uri.fsPath;
+      return agentDirPaths.some((dir) => filePath.startsWith(dir));
+    };
+
     // Debounce agent refresh to avoid rapid reloads during file saves
     let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
-    const debouncedRefresh = () => {
+    const debouncedRefresh = (uri: vscode.Uri) => {
+      // Only refresh if the changed file is in an agent directory
+      if (!isAgentFile(uri)) {
+        return;
+      }
+
       if (refreshTimeout) {
         clearTimeout(refreshTimeout);
       }
       refreshTimeout = setTimeout(() => {
+        // Also update agent dirs in case they changed
+        void updateAgentDirs();
         // refreshOptionsAndView already calls refresh()
         void this.refreshOptionsAndView();
         refreshTimeout = undefined;
