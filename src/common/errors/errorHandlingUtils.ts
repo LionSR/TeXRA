@@ -112,11 +112,9 @@ export function toErrorMessage(err: unknown): string {
 export function isFileNotFoundError(err: unknown): boolean {
   if (err && typeof err === 'object' && 'code' in err) {
     const code = (err as { code: string }).code;
-    if (code === 'ENOENT' || code === 'FileNotFound') {
-      return true;
-    }
+    return code === 'ENOENT' || code === 'FileNotFound';
   }
-  return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
+  return false;
 }
 
 /**
