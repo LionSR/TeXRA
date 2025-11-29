@@ -3,10 +3,9 @@ import * as path from 'path';
 
 // Third-party imports
 import { sync as globSync } from 'glob';
-import * as vscode from 'vscode';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
+import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -16,27 +15,16 @@ import { runToolWithCheck } from '@utils/system';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-function isFileNotFound(err: unknown): boolean {
-  if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code: string }).code;
-    if (code === 'ENOENT' || code === 'FileNotFound') {
-      return true;
-    }
-  }
-  return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
-}
-
 async function cleanupIndentLog(
   deleteFn: (path: string) => Promise<void>,
   logPath: string,
-  displayPath: string,
 ): Promise<void> {
   try {
     await deleteFn(logPath);
-    logger.debug(CHANNEL, `Removed ${displayPath}`);
+    logger.debug(CHANNEL, `Removed ${logPath}`);
   } catch (err) {
-    if (isFileNotFound(err)) {
-      logger.debug(CHANNEL, `No indent.log to remove at ${displayPath}`);
+    if (isFileNotFoundError(err)) {
+      logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
     } else {
       logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
     }
@@ -118,7 +106,7 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
             await WorkspaceFS.delete(backupFile);
             logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
           } catch (err) {
-            if (!isFileNotFound(err)) {
+            if (!isFileNotFoundError(err)) {
               logger.warn(
                 CHANNEL,
                 `Error removing backup file ${backupFile}: ${err}`,
@@ -132,7 +120,6 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       const relativeIndentLog = path.join(relativeDir, 'indent.log');
       await cleanupIndentLog(
         WorkspaceFS.delete.bind(WorkspaceFS),
-        relativeIndentLog,
         relativeIndentLog,
       );
     } else {
@@ -148,7 +135,6 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
       const indentLogPath = path.join(fileDir, 'indent.log');
       await cleanupIndentLog(
         AbsoluteFS.delete.bind(AbsoluteFS),
-        indentLogPath,
         indentLogPath,
       );
     }
