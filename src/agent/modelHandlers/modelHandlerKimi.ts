@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@utils/config';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
@@ -27,6 +28,10 @@ import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
  * Handler for Moonshot Kimi models using OpenAI-compatible API.
  */
 export class ModelHandlerKimi extends ModelHandlerOpenAI {
+  protected override get usageProvider(): NormalizedUsage['provider'] {
+    return 'kimi';
+  }
+
   protected createStreamingAggregator(): BaseReasoningStreamAggregator | null {
     // Use aggregator for thinking models to properly reconstruct the response
     const isThinkingModel =
