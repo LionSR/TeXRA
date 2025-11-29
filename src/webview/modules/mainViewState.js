@@ -27,7 +27,7 @@ import {
 import { capitalize } from '@common/stringUtils.js';
 import { WebviewStateManager } from '@common/webviewState.js';
 
-// Note: These defaults must match the values in AgentOptionsBuilder.ts
+// Note: These defaults must match the values in agentRegistry.ts
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 const DEFAULT_TOOL_USE_AGENT = 'chat';
 
