@@ -87,6 +87,39 @@ export function toErrorMessage(err: unknown): string {
 }
 
 /**
+ * Check if an error represents a file-not-found condition.
+ *
+ * Handles both Node.js filesystem errors (ENOENT) and VS Code FileSystemError.
+ * Use this to differentiate between expected "file doesn't exist" errors and
+ * actual filesystem failures (permissions, disk issues, etc.).
+ *
+ * @param err - The error to check
+ * @returns true if the error indicates the file was not found
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await fs.unlink(filePath);
+ * } catch (err) {
+ *   if (isFileNotFoundError(err)) {
+ *     // File already deleted, this is fine
+ *   } else {
+ *     logger.warn(CHANNEL, `Error deleting file: ${err}`);
+ *   }
+ * }
+ * ```
+ */
+export function isFileNotFoundError(err: unknown): boolean {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as { code: string }).code;
+    if (code === 'ENOENT' || code === 'FileNotFound') {
+      return true;
+    }
+  }
+  return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
+}
+
+/**
  * Log a formatted error message and return the formatted message.
  *
  * This function combines error formatting with logging. It:
