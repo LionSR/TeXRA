@@ -151,16 +151,22 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
    ```
    vscode://texra-ai.texra/auth-callback
    vscode-insiders://texra-ai.texra/auth-callback
+   cursor://texra-ai.texra/auth-callback
    ```
 3. Click "Save"
 
-**Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to VS Code using the `vscode://` URI scheme. Without adding these URLs to the allowed list, Supabase will redirect to `localhost:3000` which won't work in the VS Code extension.
+**Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to the IDE using a custom URI scheme. Without adding these URLs to the allowed list, Supabase will show an error "The redirect_uri is not associated with this application".
+
+**Supported IDEs and their URI schemes**:
+- **VS Code**: `vscode://`
+- **VS Code Insiders**: `vscode-insiders://`
+- **Cursor**: `cursor://`
 
 **Common mistakes**:
 
 - ❌ Using `vscode://LionSR.texra/auth-callback` (wrong extension ID)
 - ❌ Only adding `localhost:3000` (this is for web apps, not VS Code extensions)
-- ❌ Forgetting to add both `vscode://` and `vscode-insiders://` variants
+- ❌ Forgetting to add all IDE variants (vscode, vscode-insiders, cursor)
 
 ---
 

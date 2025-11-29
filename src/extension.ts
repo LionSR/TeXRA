@@ -113,7 +113,12 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       const { SupabaseAuthProvider } =
         await import('@/auth/SupabaseAuthProvider');
-      const { isSupabaseConfigured } = await import('@/auth/config');
+      const { isSupabaseConfigured, setRuntimeExtensionId } =
+        await import('@/auth/config');
+
+      // Set the runtime extension ID for OAuth redirects
+      // This ensures the redirect URI matches the actual extension ID
+      setRuntimeExtensionId(context.extension.id);
 
       // Check if Supabase credentials are configured
       if (!isSupabaseConfigured()) {
