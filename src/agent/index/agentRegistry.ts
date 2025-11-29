@@ -562,7 +562,16 @@ function filterVisible(
   // Add default by name (for backwards compatibility)
   configured.add(defaultName);
 
+  // Check if remote agents should auto-show (default: true)
+  const autoShowRemote = getConfig<boolean>(
+    'texra.remoteAgents.autoShow',
+    true,
+  );
+
   return entries.filter((e) => {
+    // Auto-include remote agents if enabled (they don't need to be in texra.agents)
+    if (autoShowRemote && e.source === 'remote') return true;
+
     const key = createKey(e.source, e.name);
     // Match by full key (e.g., "custom:correct") OR by name only (e.g., "correct")
     return configured.has(key) || configured.has(e.name);
