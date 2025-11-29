@@ -64,6 +64,13 @@ export interface AgentEntry {
 }
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+
+/** Suffix for multiple-output agent variants. */
+const MULTIPLE_SUFFIX = '_multiple';
+
+// =============================================================================
 // STATE
 // =============================================================================
 
@@ -195,7 +202,7 @@ export function resolveAgent(
     return {
       entry,
       resolvedPath: entry.multiplePath,
-      resolvedName: `${entry.name}_multiple`,
+      resolvedName: `${entry.name}${MULTIPLE_SUFFIX}`,
     };
   }
 
@@ -276,8 +283,10 @@ function groupByBaseName(
 
   for (const file of files) {
     const name = path.basename(file, '.yaml');
-    const isMultiple = name.endsWith('_multiple');
-    const baseName = isMultiple ? name.slice(0, -9) : name;
+    const isMultiple = name.endsWith(MULTIPLE_SUFFIX);
+    const baseName = isMultiple
+      ? name.slice(0, -MULTIPLE_SUFFIX.length)
+      : name;
 
     const group = groups.get(baseName) || {};
     if (isMultiple) {
@@ -295,7 +304,7 @@ function groupByBaseName(
       result.set(name, paths);
     } else if (paths.multiple) {
       // Only _multiple exists, use it as base
-      result.set(`${name}_multiple`, { base: paths.multiple });
+      result.set(`${name}${MULTIPLE_SUFFIX}`, { base: paths.multiple });
     }
   }
 
@@ -380,7 +389,51 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 }
 
 // =============================================================================
-// COMPATIBILITY HELPERS (for gradual migration)
+// KEY HELPERS
+// =============================================================================
+
+/** Create source:name key. */
+export function createKey(source: AgentSource, name: string): string {
+  return `${source}:${name}`;
+}
+
+/** Parse source:name key. */
+export function parseKey(
+  key: string,
+): { source: AgentSource; name: string } | undefined {
+  const colonIdx = key.indexOf(':');
+  if (colonIdx === -1) return undefined;
+
+  const source = key.slice(0, colonIdx);
+  const name = key.slice(colonIdx + 1);
+
+  if (!AgentSource.safeParse(source).success) return undefined;
+  return { source: source as AgentSource, name };
+}
+
+// =============================================================================
+// _MULTIPLE VARIANT HELPERS
+// =============================================================================
+
+/** Check if agent name is a _multiple variant. */
+export function isMultipleVariant(name: string): boolean {
+  return name.endsWith(MULTIPLE_SUFFIX);
+}
+
+/** Get base name (strips _multiple suffix if present). */
+export function getBaseName(name: string): string {
+  return isMultipleVariant(name)
+    ? name.slice(0, -MULTIPLE_SUFFIX.length)
+    : name;
+}
+
+/** Get _multiple variant name (adds suffix if not present). */
+export function getMultipleName(name: string): string {
+  return isMultipleVariant(name) ? name : `${name}${MULTIPLE_SUFFIX}`;
+}
+
+// =============================================================================
+// SOURCE HELPERS
 // =============================================================================
 
 /** Check if identifier refers to a remote agent. */
@@ -393,32 +446,6 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
 /** Check if source should show an indicator in UI. */
 export function shouldShowSourceIndicator(source: AgentSource): boolean {
   return source === 'custom' || source === 'remote';
-}
-
-/** Create source:name key (for backward compat). */
-export function createKey(source: AgentSource, name: string): string {
-  return `${source}:${name}`;
-}
-
-/** Parse source:name key (for backward compat). */
-export function parseKey(
-  key: string,
-): { source: AgentSource; name: string } | undefined {
-  const colonIdx = key.indexOf(':');
-  if (colonIdx === -1) return undefined;
-
-  const source = key.slice(0, colonIdx);
-  const name = key.slice(colonIdx + 1);
-
-  const validSources: AgentSource[] = [
-    'custom',
-    'builtIn',
-    'builtInToolUse',
-    'remote',
-  ];
-  if (!validSources.includes(source as AgentSource)) return undefined;
-
-  return { source: source as AgentSource, name };
 }
 
 // =============================================================================
