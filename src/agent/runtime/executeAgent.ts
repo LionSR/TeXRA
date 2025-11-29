@@ -79,26 +79,6 @@ type AgentConstructor = {
 };
 
 /**
- * Parse an agent identifier which can be either:
- * - New format: "source:name" (e.g., "custom:summarize", "remote:chat")
- * - Legacy format: just the name (e.g., "summarize", "chat")
- *
- * Returns the source and clean name.
- */
-function parseAgentIdentifier(
-  agentIdentifier: string,
-): { source: AgentDirectorySource | null; name: string } {
-  // Try parsing as source:name format
-  const parsed = parseAgentIndexKey(agentIdentifier);
-  if (parsed) {
-    return { source: parsed.source, name: parsed.name };
-  }
-
-  // Legacy format - just the agent name, source will be determined by search
-  return { source: null, name: agentIdentifier };
-}
-
-/**
  * Try to resolve agent path from the AgentIndex cache.
  * Returns undefined if agent is not in the index.
  */
@@ -168,7 +148,7 @@ async function resolveAgentPathViaGlob(
 ): Promise<AgentPathResolution> {
   // For local agents with explicit source, search only that directory
   if (explicitSource) {
-    const directory = await getDirectoryForSource(explicitSource);
+    const directory = await agentDirectories.getDirectory(explicitSource);
     if (!directory) {
       throw new Error(`Directory for source "${explicitSource}" not available`);
     }
@@ -186,18 +166,10 @@ async function resolveAgentPathViaGlob(
   }
 
   // Legacy behavior: search all directories in order
-  const [customDir, builtInDir, builtInToolUseDir] = await Promise.all([
-    agentDirectories.custom(),
-    agentDirectories.builtIn(),
-    agentDirectories.builtInToolUse(),
-  ]);
-
-  const candidates = [
-    customDir && createCandidate(customDir, AgentDirectorySource.Custom),
-    builtInDir && createCandidate(builtInDir, AgentDirectorySource.BuiltIn),
-    builtInToolUseDir &&
-      createCandidate(builtInToolUseDir, AgentDirectorySource.BuiltInToolUse),
-  ].filter(Boolean) as AgentDirectoryCandidate[];
+  const allDirs = await agentDirectories.getAllLocal();
+  const candidates = allDirs.map(({ directory, source }) =>
+    createCandidate(directory, source),
+  );
 
   if (candidates.length === 0) {
     throw new Error('No agent directories available for lookup');
@@ -208,17 +180,14 @@ async function resolveAgentPathViaGlob(
     return resolution;
   }
 
-  const customDirSet = candidates.some(
-    (candidate) => candidate.source === AgentDirectorySource.Custom,
-  );
-
+  // Custom directory is always available via getAllLocal()
   const view = await vscode.commands.executeCommand<vscode.WebviewView>(
     'texra.getWebviewView',
   );
   view?.webview.postMessage({
     command: MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER,
     agentName,
-    customDirSet,
+    customDirSet: true,
   });
 
   throw new Error(`Could not find yaml file for agent: ${agentName}`);
@@ -239,8 +208,10 @@ export async function getAgentPath(
   options?: AgentDefinitionSearchOptions,
 ): Promise<AgentPathResolution> {
   try {
-    const { source: explicitSource, name: agentName } =
-      parseAgentIdentifier(agentIdentifier);
+    // Parse agent identifier: "source:name" format or just "name" (legacy)
+    const parsed = parseAgentIndexKey(agentIdentifier);
+    const explicitSource = parsed?.source ?? null;
+    const agentName = parsed?.name ?? agentIdentifier;
 
     // If source is explicitly specified, use it directly
     if (explicitSource === AgentDirectorySource.Remote) {
@@ -275,23 +246,6 @@ export async function getAgentPath(
   }
 }
 
-/**
- * Get the directory path for a given source.
- */
-async function getDirectoryForSource(
-  source: AgentDirectorySource,
-): Promise<string | undefined> {
-  switch (source) {
-    case AgentDirectorySource.Custom:
-      return agentDirectories.custom();
-    case AgentDirectorySource.BuiltIn:
-      return agentDirectories.builtIn();
-    case AgentDirectorySource.BuiltInToolUse:
-      return agentDirectories.builtInToolUse();
-    case AgentDirectorySource.Remote:
-      return undefined; // Remote agents don't have local directories
-  }
-}
 
 /**
  * Get agent class based on settings.
