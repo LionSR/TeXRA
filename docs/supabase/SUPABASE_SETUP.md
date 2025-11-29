@@ -152,6 +152,7 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
    vscode://texra-ai.texra/auth-callback
    vscode-insiders://texra-ai.texra/auth-callback
    cursor://texra-ai.texra/auth-callback
+   windsurf://texra-ai.texra/auth-callback
    ```
 3. Click "Save"
 
@@ -161,12 +162,13 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 - **VS Code**: `vscode://`
 - **VS Code Insiders**: `vscode-insiders://`
 - **Cursor**: `cursor://`
+- **Windsurf**: `windsurf://`
 
 **Common mistakes**:
 
 - ❌ Using `vscode://LionSR.texra/auth-callback` (wrong extension ID)
 - ❌ Only adding `localhost:3000` (this is for web apps, not VS Code extensions)
-- ❌ Forgetting to add all IDE variants (vscode, vscode-insiders, cursor)
+- ❌ Forgetting to add all IDE variants (vscode, vscode-insiders, cursor, windsurf)
 
 ---
 
