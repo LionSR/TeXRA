@@ -1,22 +1,12 @@
-// Standard library imports
-import * as path from 'path';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
-import type { AgentOptionsPayload } from '@agent/computeAgentOptions';
+import { computeAgentOptionsSync } from '@agent/computeAgentOptions';
 
 // Internal imports
-import {
-  buildAgentOptionsPayload,
-  DEFAULT_TOOL_USE_AGENT,
-  DEFAULT_WORKFLOW_AGENT,
-  type AgentDirectoryMap,
-} from '@agent/utils/agentOptionMetadata';
 import { BaseViewContentProvider, ModuleDescriptor } from '@common/webview';
 import { getConfig } from '@utils/config';
-import { GlobalStorageFS } from '@utils/files';
 
 export class MainViewContentProvider extends BaseViewContentProvider {
   constructor(context: vscode.ExtensionContext) {
@@ -78,52 +68,10 @@ export class MainViewContentProvider extends BaseViewContentProvider {
   }
 
   protected getTemplateVariables(): Record<string, any> {
-    // Note: This uses synchronous approach for template generation
-    // Agent options with metadata are computed asynchronously via computeAgentOptions
-    const configuredWorkflowAgents = getConfig<string[]>('texra.agents', []);
-    const configuredToolUseAgents = getConfig<string[]>(
-      'texra.toolUseAgents',
-      [],
-    );
-    const toolUseDir = GlobalStorageFS.fullPath('tool_use_agents');
-    const builtInDir = GlobalStorageFS.fullPath('agents');
-    const configuredCustomDir = getConfig<string>(
-      'texra.explorer.agentsDirectory',
-      '',
-    ).trim();
-    const customDir = path.isAbsolute(configuredCustomDir)
-      ? configuredCustomDir
-      : '';
-
-    const agentDirectories: AgentDirectoryMap = {
-      custom: customDir,
-      builtIn: builtInDir,
-      builtInToolUse: toolUseDir,
-    };
-    const hasConfiguredWorkflowAgents = configuredWorkflowAgents.length > 0;
-    const workflowAgents = hasConfiguredWorkflowAgents
-      ? Array.from(new Set(configuredWorkflowAgents))
-      : [DEFAULT_WORKFLOW_AGENT];
-    const toolUseAgents = Array.from(
-      new Set([DEFAULT_TOOL_USE_AGENT, ...configuredToolUseAgents]),
-    );
-    const allAgents = Array.from(
-      new Set([...workflowAgents, ...toolUseAgents]),
-    );
-    const defaultWorkflowAgent = configuredWorkflowAgents.includes(
-      DEFAULT_WORKFLOW_AGENT,
-    )
-      ? DEFAULT_WORKFLOW_AGENT
-      : (workflowAgents[0] ?? DEFAULT_WORKFLOW_AGENT);
-    const optionBuckets: AgentOptionsPayload = buildAgentOptionsPayload(
-      allAgents,
-      agentDirectories,
-      toolUseAgents,
-      {
-        workflowAgent: defaultWorkflowAgent,
-        toolUseAgent: DEFAULT_TOOL_USE_AGENT,
-      },
-    );
+    // Use the cached agent index for fast, synchronous template generation.
+    // If the index isn't initialized yet, this returns placeholder options
+    // that will be replaced by the async computeAgentOptions call in handleWebviewReady.
+    const agentOptions = computeAgentOptionsSync();
 
     const models = getConfig<string[]>('texra.models', []);
     const modelOptions = models
@@ -133,8 +81,8 @@ export class MainViewContentProvider extends BaseViewContentProvider {
       .join('\n');
 
     return {
-      workflowAgentOptions: optionBuckets.workflow,
-      toolUseAgentOptions: optionBuckets.toolUse,
+      workflowAgentOptions: agentOptions.workflow,
+      toolUseAgentOptions: agentOptions.toolUse,
       modelOptions,
     };
   }

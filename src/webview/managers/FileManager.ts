@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { workspace } from 'vscode';
 
 // Local imports - webview
+import { AgentIndex, parseAgentIndexKey } from '@agent/index';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/executeAgent';
 import { showLoggedMessage, toErrorMessage } from '@common/errors';
@@ -183,8 +184,8 @@ export class FileManager {
     if (!webviewView) {
       return;
     }
-    const agent = message.agent;
-    if (!agent) {
+    const agentIdentifier = message.agent;
+    if (!agentIdentifier) {
       webviewView.webview.postMessage({
         command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
         files: [],
@@ -193,7 +194,21 @@ export class FileManager {
     }
 
     try {
-      const agentPath = await getAgentPath(agent);
+      // First, try to get from the cached index (fast path)
+      const parsed = parseAgentIndexKey(agentIdentifier);
+      if (parsed) {
+        const entry = AgentIndex.getEntry(parsed.source, parsed.name);
+        if (entry?.defaultOutputFiles) {
+          webviewView.webview.postMessage({
+            command: MAIN_VIEW_COMMANDS.SET_DEFAULT_OUTPUT_FILES,
+            files: entry.defaultOutputFiles,
+          });
+          return;
+        }
+      }
+
+      // Fallback: load from YAML (for legacy format or if not in cache)
+      const agentPath = await getAgentPath(agentIdentifier);
       const [settings] = await loadAgentSettingAndPrompts(agentPath);
       const files = Array.isArray(settings?.defaultOutputFiles)
         ? settings.defaultOutputFiles
