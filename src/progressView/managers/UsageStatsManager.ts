@@ -243,14 +243,19 @@ export class UsageStatsManager extends PersistentMapManager<
     });
 
     // Skip if no meaningful data
-    if (usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0) {
+    if (
+      usage.inputTokens === 0 &&
+      usage.outputTokens === 0 &&
+      usage.cost === 0
+    ) {
       await this.storage.update(LEGACY_KEY, undefined as never);
       return;
     }
 
     // Store under legacy migration identifiers
     const existing =
-      this.items.get(LEGACY_MIGRATION_STREAM) ?? new Map<string, TokenUsageStats>();
+      this.items.get(LEGACY_MIGRATION_STREAM) ??
+      new Map<string, TokenUsageStats>();
     existing.set(LEGACY_MIGRATION_RUN_ID, usage);
     this.items.set(LEGACY_MIGRATION_STREAM, existing);
 
