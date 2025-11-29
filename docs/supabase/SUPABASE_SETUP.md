@@ -159,6 +159,7 @@ For the VS Code extension OAuth flow to work, you **MUST** add the VS Code URI s
 **Why this is needed**: When users authenticate via GitHub/Google, the OAuth flow redirects back to the IDE using a custom URI scheme. Without adding these URLs to the allowed list, Supabase will show an error "The redirect_uri is not associated with this application".
 
 **Supported IDEs and their URI schemes**:
+
 - **VS Code**: `vscode://`
 - **VS Code Insiders**: `vscode-insiders://`
 - **Cursor**: `cursor://`
