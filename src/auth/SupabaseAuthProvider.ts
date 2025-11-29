@@ -4,7 +4,7 @@ import { SupabaseClient } from './SupabaseClient';
 import {
   SUPABASE_CONFIG,
   DEFAULT_OAUTH_PROVIDER,
-  EXTENSION_ID,
+  getExtensionId,
 } from './config';
 import type { SupabaseUriHandler } from './UriHandler';
 
@@ -137,7 +137,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: DEFAULT_OAUTH_PROVIDER,
         options: {
-          redirectTo: `${vscode.env.uriScheme}://${EXTENSION_ID}/auth-callback`,
+          redirectTo: `${vscode.env.uriScheme}://${getExtensionId()}/auth-callback`,
         },
       });
 
