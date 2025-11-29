@@ -5,6 +5,7 @@ import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 // Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -236,8 +237,18 @@ export interface IModelHandler<
   /** Compute the cost for a response. */
   computePrice(responseUsage: U): number;
 
-  /** Compute detailed usage metrics. */
+  /**
+   * Compute detailed usage metrics.
+   * @deprecated Use normalizeUsage() instead for unified usage tracking
+   */
   computeResponseUsage(responseUsage: U, responseTime: number): R;
+
+  /**
+   * Normalizes provider-specific usage data into a unified format.
+   * This is the single source of truth for usage statistics.
+   * Cost is computed once here and should never be recomputed elsewhere.
+   */
+  normalizeUsage(rawUsage: U, responseTimeMs: number): NormalizedUsage;
 
   /** Update messages when prefill is supported. */
   updateMessageContentWithPrefill(
