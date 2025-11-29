@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
-import { computeAgentOptions } from '@agent/computeAgentOptions';
+import { computeAgentOptions } from '@agent/index';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - webview

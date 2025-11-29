@@ -2,8 +2,17 @@
 import * as path from 'path';
 
 // Local imports - progress view
+import { isRemoteAgent, parseKey } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { RemoteAgentRegistry } from '@agent/remote/RemoteAgentRegistry';
+
+/**
+ * Extract the clean agent name from an identifier.
+ * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ */
+function getCleanAgentName(agentIdentifier: string): string {
+  const parsed = parseKey(agentIdentifier);
+  return parsed ? parsed.name : agentIdentifier;
+}
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
@@ -65,7 +74,9 @@ export function buildStreamInfos(
     const creationTimestamp = logs.length > 0 ? logs[0].timestamp : undefined;
     const outputs = taskState?.agentConfig.outputFiles ?? [];
     const inputFile = taskState?.agentConfig.inputFile ?? '';
-    const agentName = taskState?.agentConfig.agent ?? id.split('@')[0];
+    // Extract clean agent name (strip source: prefix if present)
+    const rawAgentName = taskState?.agentConfig.agent ?? id.split('@')[0];
+    const agentName = getCleanAgentName(rawAgentName);
     let sessionCategory = taskState?.session?.agentCategory ?? sessionKindHint;
 
     // Filter logic: streams without category only show when filter is "all"
@@ -82,7 +93,7 @@ export function buildStreamInfos(
     const agentType =
       taskState?.session?.agentType ?? taskState?.agentConfig.agentType;
     const isToolAgent = sessionCategory === AgentCategory.ToolUse;
-    const isRemote = RemoteAgentRegistry.isRemote(agentName);
+    const isRemote = isRemoteAgent(rawAgentName);
     const executionId = state.getExecutionId(id);
     const label = buildStreamLabel(agentName, inputFile, sessionCategory);
     acc.push({

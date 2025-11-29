@@ -28,7 +28,7 @@ import { FolderExplorer } from './FolderExplorer';
 import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
-import { registerCommands } from './commands';
+import { registerCommands, getMainViewProvider } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
@@ -100,10 +100,21 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
-  // Initialize remote agent registry
-  const { RemoteAgentRegistry } =
-    await import('@agent/remote/RemoteAgentRegistry');
-  RemoteAgentRegistry.initialize(context);
+  // Copy default agents BEFORE initializing the agent index
+  // This ensures built-in agents are available when the index scans directories
+  await copyDefaultAgents(context);
+
+  // Initialize agent index (single source of truth for agent metadata)
+  const { loadAgents } = await import('@agent/index');
+
+  // Start loading the agent index in the background
+  // This will scan all directories and fetch remote agents
+  loadAgents().catch((err) => {
+    logger.error(
+      'extension',
+      `Failed to initialize agent index: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
 
   // Initialize Supabase authentication if enabled
   const authConfig = vscode.workspace.getConfiguration('texra.auth');
@@ -113,7 +124,12 @@ export async function activate(context: vscode.ExtensionContext) {
     try {
       const { SupabaseAuthProvider } =
         await import('@/auth/SupabaseAuthProvider');
-      const { isSupabaseConfigured } = await import('@/auth/config');
+      const { isSupabaseConfigured, setRuntimeExtensionId } =
+        await import('@/auth/config');
+
+      // Set the runtime extension ID for OAuth redirects
+      // This ensures the redirect URI matches the actual extension ID
+      setRuntimeExtensionId(context.extension.id);
 
       // Check if Supabase credentials are configured
       if (!isSupabaseConfigured()) {
@@ -142,6 +158,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Connect URI handler to auth provider
         authProvider.setUriHandler(uriHandler);
+
+        // Subscribe to auth state changes to refresh agent list on login/logout
+        context.subscriptions.push(
+          authProvider.onDidChangeSessions(async (event) => {
+            // Refresh agent options when user logs in or out
+            // This will fetch/clear remote agents and update dropdown
+            const mainView = getMainViewProvider();
+            if (mainView) {
+              logger.info(
+                'extension',
+                `Auth state changed (added: ${event.added?.length ?? 0}, removed: ${event.removed?.length ?? 0}), refreshing agents`,
+              );
+              await mainView.refreshOptionsAndView();
+            }
+          }),
+        );
 
         logger.info('extension', 'Supabase authentication provider registered');
       }
@@ -178,9 +210,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Clean up any tasks that were left in "running" state from previous session
   await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
-
-  // Copy default agents
-  await copyDefaultAgents(context);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();

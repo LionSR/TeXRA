@@ -81,7 +81,11 @@ export class RunUsageAccumulator {
    */
   recordNormalizedUsage(round: number, usage: NormalizedUsage): void {
     if (this.totals.firstInputTokens === 0) {
-      this.totals.firstInputTokens = usage.inputTokens;
+      // Include cached tokens in first input count (Anthropic reports them separately)
+      this.totals.firstInputTokens =
+        usage.inputTokens +
+        (usage.cachedInputTokens ?? 0) +
+        (usage.cacheCreationTokens ?? 0);
     }
 
     this.totals.totalInputTokens += usage.inputTokens;
@@ -195,8 +199,10 @@ function migrateLegacySnapshot(
         cost: 0, // Cannot recover - depends on pricing at time of request
         responseTimeMs: 0,
         provider,
-        cachedInputTokens: (payload.cache_read_input_tokens as number) ?? undefined,
-        cacheCreationTokens: (payload.cache_creation_input_tokens as number) ?? undefined,
+        cachedInputTokens:
+          (payload.cache_read_input_tokens as number) ?? undefined,
+        cacheCreationTokens:
+          (payload.cache_creation_input_tokens as number) ?? undefined,
         _native: payload,
       },
     };
@@ -204,8 +210,12 @@ function migrateLegacySnapshot(
 
   // OpenAI format: prompt_tokens, completion_tokens
   if ('prompt_tokens' in payload) {
-    const details = payload.prompt_tokens_details as Record<string, unknown> | undefined;
-    const completionDetails = payload.completion_tokens_details as Record<string, unknown> | undefined;
+    const details = payload.prompt_tokens_details as
+      | Record<string, unknown>
+      | undefined;
+    const completionDetails = payload.completion_tokens_details as
+      | Record<string, unknown>
+      | undefined;
     return {
       round: legacy.round,
       usage: {
@@ -215,7 +225,8 @@ function migrateLegacySnapshot(
         responseTimeMs: 0,
         provider,
         cachedInputTokens: (details?.cached_tokens as number) ?? undefined,
-        reasoningTokens: (completionDetails?.reasoning_tokens as number) ?? undefined,
+        reasoningTokens:
+          (completionDetails?.reasoning_tokens as number) ?? undefined,
         _native: payload,
       },
     };
@@ -231,9 +242,11 @@ function migrateLegacySnapshot(
         cost: 0, // Cannot recover - depends on pricing at time of request
         responseTimeMs: 0,
         provider,
-        cachedInputTokens: (payload.cachedContentTokenCount as number) ?? undefined,
+        cachedInputTokens:
+          (payload.cachedContentTokenCount as number) ?? undefined,
         reasoningTokens: (payload.thoughtsTokenCount as number) ?? undefined,
-        toolUsePromptTokens: (payload.toolUsePromptTokenCount as number) ?? undefined,
+        toolUsePromptTokens:
+          (payload.toolUsePromptTokenCount as number) ?? undefined,
         _native: payload,
       },
     };
