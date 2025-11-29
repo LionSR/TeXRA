@@ -5,7 +5,7 @@ import * as path from 'path';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
-import { toErrorMessage } from '@common/errors';
+import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
@@ -14,6 +14,22 @@ import { runToolWithCheck } from '@utils/system';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
+
+async function cleanupIndentLog(
+  deleteFn: (path: string) => Promise<void>,
+  logPath: string,
+): Promise<void> {
+  try {
+    await deleteFn(logPath);
+    logger.debug(CHANNEL, `Removed ${logPath}`);
+  } catch (err) {
+    if (isFileNotFoundError(err)) {
+      logger.debug(CHANNEL, `No indent.log to remove at ${logPath}`);
+    } else {
+      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+    }
+  }
+}
 
 export async function runLatexIndent(filePath: string): Promise<boolean> {
   try {
@@ -90,30 +106,34 @@ export async function runLatexIndent(filePath: string): Promise<boolean> {
             await WorkspaceFS.delete(backupFile);
             logger.debug(CHANNEL, `Removed backup file: ${backupFile}`);
           } catch (err) {
-            logger.warn(
-              CHANNEL,
-              `Error removing backup file ${backupFile}: ${err}`,
-            );
+            if (!isFileNotFoundError(err)) {
+              logger.warn(
+                CHANNEL,
+                `Error removing backup file ${backupFile}: ${err}`,
+              );
+            }
           }
         }
       }
+      // Clean up indent.log in the file's directory
+      const relativeDir = path.relative(workspacePath, fileDir);
+      const relativeIndentLog = path.join(relativeDir, 'indent.log');
+      await cleanupIndentLog(
+        WorkspaceFS.delete.bind(WorkspaceFS),
+        relativeIndentLog,
+      );
     } else {
+      // Skip backup cleanup for non-workspace files since glob patterns require
+      // a workspace context. The batch indent command (indent.ts) handles cleanup
+      // for workspace files via recursive directory traversal.
       logger.debug(
         CHANNEL,
-        `Skipping workspace backup cleanup for ${filePath} (outside workspace)`,
+        `Skipping backup cleanup for ${filePath} (outside workspace)`,
       );
-    }
 
-    const indentLogPath = path.join(path.dirname(filePath), 'indent.log');
-    try {
-      if (isWorkspaceFile) {
-        await WorkspaceFS.delete(indentLogPath);
-      } else {
-        await AbsoluteFS.delete(indentLogPath);
-      }
-      logger.debug(CHANNEL, 'Removed indent.log');
-    } catch (err) {
-      logger.warn(CHANNEL, `Error removing indent.log: ${err}`);
+      // Clean up indent.log for non-workspace files
+      const indentLogPath = path.join(fileDir, 'indent.log');
+      await cleanupIndentLog(AbsoluteFS.delete.bind(AbsoluteFS), indentLogPath);
     }
 
     logger.info(CHANNEL, `Indented ${filePath}`);

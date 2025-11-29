@@ -1,10 +1,14 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - agent
+import { refresh } from '@agent/index';
+
 // Local imports - common
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { agentDirectories } from '@frontend/agents';
 import { watchConfig, getConfig } from '@utils/config';
 import { consumePendingState } from '@utils/pendingStateManager';
 import { checkCoreDependencies } from '@utils/system/toolUtils';
@@ -20,6 +24,7 @@ export class MainViewProvider
   protected messageHandler: MainViewMessageHandler;
   protected contentProvider: MainViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
+  private agentWatcher: vscode.FileSystemWatcher | undefined;
 
   // Static flag to track if commands have been registered
   private static commandsRegistered = false;
@@ -29,6 +34,7 @@ export class MainViewProvider
     this.messageHandler = new MainViewMessageHandler(context);
     this.contentProvider = new MainViewContentProvider(context);
     this.setupFileWatcher();
+    this.setupAgentWatcher();
     this.setupConfigurationWatcher();
     this.registerCommandHandlers();
   }
@@ -55,41 +61,35 @@ export class MainViewProvider
 
       // Command registration is handled asynchronously
     }
-
-    // Always set up notifier for this instance, regardless of command registration
-    this.context.subscriptions.push(
-      vscode.window.onDidChangeActiveTextEditor(() => {
-        if (this._view) {
-          // Notify the webview that the active editor has changed
-          // TODO: This command is sent but not handled in the webview (no handler in messageHandlers.js)
-          // This appears to be an incomplete implementation from commit bb28ecbf
-          const activeEditor = vscode.window.activeTextEditor;
-          if (activeEditor && activeEditor.document) {
-            this._view.webview.postMessage({
-              command: MAIN_VIEW_COMMANDS.ACTIVE_EDITOR_CHANGED,
-              file: activeEditor.document.fileName,
-            });
-          }
-        }
-      }),
-    );
   }
 
   private setupConfigurationWatcher() {
-    // Watch for configuration changes
+    // Watch for configuration changes that affect agent/model options
     watchConfig(
       this.context,
-      ['texra.agents', 'texra.models', 'texra.files'],
+      ['texra.agents', 'texra.toolUseAgents', 'texra.models', 'texra.files'],
       () => this.refreshOptionsAndView(),
     );
   }
 
-  private async refreshOptionsAndView() {
-    if (this._view) {
-      this._view.webview.html = this.contentProvider.getHtmlContent(
-        this._view.webview,
-      );
+  /**
+   * Refresh agent options and update the webview.
+   * Called when agents change (file watcher) or auth state changes (login/logout).
+   */
+  async refreshOptionsAndView() {
+    if (!this._view) {
+      return;
     }
+    // Refresh the agent index to pick up any configuration changes
+    // (e.g., texra.toolUseAgents overrides)
+    await refresh();
+
+    // Send delta messages instead of regenerating entire HTML
+    // This preserves webview state and avoids unnecessary DOM recreation
+    await this.messageHandler.handleMessage(
+      { command: MAIN_VIEW_COMMANDS.WEBVIEW_READY },
+      this._view as vscode.WebviewView,
+    );
   }
 
   private setupFileWatcher() {
@@ -104,6 +104,54 @@ export class MainViewProvider
 
     // Dispose watcher when extension is deactivated
     this.context.subscriptions.push(this.fileWatcher);
+  }
+
+  private setupAgentWatcher() {
+    // Watch for YAML changes in agent directories (custom agents)
+    // This refreshes the agent dropdown when agents are added/removed/modified
+    const agentPattern = '**/*.yaml';
+    this.agentWatcher = vscode.workspace.createFileSystemWatcher(agentPattern);
+
+    // Cache of agent directory paths for filtering
+    let agentDirPaths: string[] = [];
+    const updateAgentDirs = async () => {
+      const dirs = await agentDirectories.getAllLocal();
+      agentDirPaths = dirs.map((d) => d.directory);
+    };
+    // Initialize and refresh periodically (directories might change)
+    void updateAgentDirs();
+
+    // Check if a file path is within an agent directory
+    const isAgentFile = (uri: vscode.Uri): boolean => {
+      const filePath = uri.fsPath;
+      return agentDirPaths.some((dir) => filePath.startsWith(dir));
+    };
+
+    // Debounce agent refresh to avoid rapid reloads during file saves
+    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+    const debouncedRefresh = (uri: vscode.Uri) => {
+      // Only refresh if the changed file is in an agent directory
+      if (!isAgentFile(uri)) {
+        return;
+      }
+
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
+      refreshTimeout = setTimeout(() => {
+        // Also update agent dirs in case they changed
+        void updateAgentDirs();
+        // refreshOptionsAndView already calls refresh()
+        void this.refreshOptionsAndView();
+        refreshTimeout = undefined;
+      }, 500);
+    };
+
+    this.agentWatcher.onDidCreate(debouncedRefresh);
+    this.agentWatcher.onDidChange(debouncedRefresh);
+    this.agentWatcher.onDidDelete(debouncedRefresh);
+
+    this.context.subscriptions.push(this.agentWatcher);
   }
 
   private async refreshFiles() {

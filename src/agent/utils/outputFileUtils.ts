@@ -1,11 +1,23 @@
 // Standard library imports
 import * as path from 'path';
 
+// Local imports
+import { parseKey } from '@agent/index';
+
+/**
+ * Extract the clean agent name from an identifier.
+ * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ */
+function getCleanAgentName(agentIdentifier: string): string {
+  const parsed = parseKey(agentIdentifier);
+  return parsed ? parsed.name : agentIdentifier;
+}
+
 /**
  * Generates an output filename incorporating model and round information.
  *
  * @param inputFile The input file path
- * @param agent Agent name
+ * @param agent Agent name (may include source: prefix which will be stripped)
  * @param model Model name
  * @param outputExt Extension for the output file
  * @param currRound Current round number
@@ -23,7 +35,9 @@ export function getOutputFileName(
   },
 ): string {
   const { dir, name: fileName } = path.parse(inputFile);
-  const agentFirstNameChunk = agent.split('_')[0];
+  // Extract clean agent name (strip source: prefix if present)
+  const cleanAgent = getCleanAgentName(agent);
+  const agentFirstNameChunk = cleanAgent.split('_')[0];
 
   let newRound = currRound;
   if (editedFile) {

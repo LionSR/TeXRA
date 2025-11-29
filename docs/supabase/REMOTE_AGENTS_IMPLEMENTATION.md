@@ -31,8 +31,8 @@ We've successfully implemented a complete authentication and remote agents syste
 
 ### Agent Runtime
 
-- **`src/agent/runtime/AgentPathTypes.ts`**
-  - Added `AgentDirectorySource.Remote` enum value
+- **`src/agent/index/agentRegistry.ts`**
+  - Added `'remote'` to `AgentSource` type
 
 - **`src/agent/runtime/executeAgent.ts`**
   - Modified `getAgentPath()` to detect `remote://` prefix

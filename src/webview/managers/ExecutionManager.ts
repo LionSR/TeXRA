@@ -136,7 +136,7 @@ export class ExecutionManager {
       auxiliaryFiles: getFilesIfNotEmpty<string>(message.auxiliaryFiles),
       mediaFile: mapMediaPath(message.mediaFile ?? null),
       mediaFiles: getFilesIfNotEmpty<string>(
-        (message.media?.files ?? [])
+        (message.mediaFiles ?? [])
           .map(mapMediaPath)
           .filter((f: string | null): f is string => f !== null),
       ),
