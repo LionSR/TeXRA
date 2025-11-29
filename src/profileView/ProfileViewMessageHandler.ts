@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { getAgentsBySource, type AgentSource } from '@agent/index';
+import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common
@@ -74,7 +74,8 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     }> = [];
 
     if (tier === 'researcher') {
-      // Get cached remote agents from the index
+      // Refresh agent cache to ensure remote agents are loaded after authentication
+      await loadAgents();
       const entries = getAgentsBySource('remote' as AgentSource);
       remoteAgents = entries.map((entry) => ({
         name: entry.name,
