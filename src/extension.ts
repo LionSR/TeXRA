@@ -105,11 +105,11 @@ export async function activate(context: vscode.ExtensionContext) {
   await copyDefaultAgents(context);
 
   // Initialize agent index (single source of truth for agent metadata)
-  const { AgentIndexLoader } = await import('@agent/index');
+  const { loadAgents } = await import('@agent/index');
 
   // Start loading the agent index in the background
   // This will scan all directories and fetch remote agents
-  AgentIndexLoader.initialize().catch((err) => {
+  loadAgents().catch((err) => {
     logger.error(
       'extension',
       `Failed to initialize agent index: ${err instanceof Error ? err.message : String(err)}`,
