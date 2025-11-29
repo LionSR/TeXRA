@@ -1,71 +1,18 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - agent
+import { createKey, getAgent, type AgentSource } from '@agent/index';
+import { AgentCategory } from '@agent/core/AgentDataclass';
+
 // Local imports - common
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 
 // Local imports - logger
 import * as logger from '@logger/logUtils';
 
-// Local imports - agent (relative imports last)
-import {
-  RemoteAgentLoader,
-  type RemoteAgentMetadata,
-} from './RemoteAgentLoader';
-import { RemoteAgentRegistry } from './RemoteAgentRegistry';
-
 const CHANNEL = 'RemoteAgentUtils';
 logger.initialize(CHANNEL);
-
-/**
- * Result of loading remote agents with registration.
- */
-export interface LoadedRemoteAgents {
-  agents: RemoteAgentMetadata[];
-  newlyRegistered: string[];
-}
-
-/**
- * Load remote agents and register any that aren't already registered.
- * This is the single source of truth for agent loading and registration.
- *
- * @returns The loaded agents and list of newly registered agent names
- */
-export async function loadAndRegisterRemoteAgents(): Promise<LoadedRemoteAgents> {
-  try {
-    const agents = await RemoteAgentLoader.listRemoteAgents();
-
-    if (agents.length === 0) {
-      return { agents: [], newlyRegistered: [] };
-    }
-
-    // Register only unregistered agents
-    const unregisteredAgents = agents.filter(
-      (agent) => !RemoteAgentRegistry.isRemote(agent.name),
-    );
-
-    if (unregisteredAgents.length > 0) {
-      RemoteAgentRegistry.registerMultiple(
-        unregisteredAgents.map((agent) => ({
-          name: agent.name,
-          description: agent.description,
-          agentType: agent.agentType,
-        })),
-      );
-      logger.debug(
-        CHANNEL,
-        `Registered ${unregisteredAgents.length} new remote agents`,
-      );
-    }
-
-    const newlyRegistered = unregisteredAgents.map((agent) => agent.name);
-    return { agents, newlyRegistered };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error(CHANNEL, `Failed to load remote agents: ${message}`);
-    throw error;
-  }
-}
 
 /**
  * Result of selecting an agent in the main view.
@@ -122,10 +69,17 @@ export async function selectAgentInMainView(
   options: {
     showSuccessMessage?: boolean;
     copyToClipboardOnFailure?: boolean;
+    source?: AgentSource;
   } = {},
 ): Promise<SelectAgentResult> {
-  const { showSuccessMessage = true, copyToClipboardOnFailure = false } =
-    options;
+  const {
+    showSuccessMessage = true,
+    copyToClipboardOnFailure = false,
+    source = 'remote' as AgentSource,
+  } = options;
+
+  // Format agent value as source:name for dropdown selection
+  const agentValue = createKey(source as AgentSource, agentName);
 
   // Focus the main view first
   await vscode.commands.executeCommand('texra.mainView.focus');
@@ -136,17 +90,22 @@ export async function selectAgentInMainView(
     >('texra.getWebviewView');
 
     if (webviewView) {
-      // Send STATE_RESTORE message to set the agent selector value
+      // Determine session type based on agent category
+      const entry = getAgent(agentValue);
+      const sessionType =
+        entry?.category === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
+
+      // Send SET_SELECTED_AGENT message to set just the agent selector value
+      // This avoids triggering full state restoration which would clear other fields
       webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: {
-          workflowAgent: agentName,
-        },
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+        agentValue,
+        sessionType,
       });
 
       if (showSuccessMessage) {
         void vscode.window.showInformationMessage(
-          `Remote agent "${agentName}" is now selected.`,
+          `Agent "${agentName}" is now selected.`,
         );
       }
 

@@ -7,6 +7,7 @@ import {
   parseAgentSetting,
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
+import { isMultipleVariant, getMultipleName } from '@agent/index/agentRegistry';
 import * as logger from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
@@ -19,7 +20,6 @@ export interface RemoteAgentMetadata {
   id: string;
   name: string;
   description: string;
-  tags: string[];
   visibility: 'public' | 'researcher' | 'whitelist';
   agentType?: string;
 }
@@ -67,10 +67,7 @@ export class RemoteAgentLoader {
     // Build candidate names: if preferMultiple, try _multiple variant first
     const candidateNames: string[] = [];
     if (preferMultiple) {
-      const multipleName = agentName.endsWith('_multiple')
-        ? agentName
-        : `${agentName}_multiple`;
-      candidateNames.push(multipleName);
+      candidateNames.push(getMultipleName(agentName));
     }
     candidateNames.push(agentName);
 
@@ -195,7 +192,6 @@ export class RemoteAgentLoader {
             id: '',
             name: agentName,
             description: description || '',
-            tags: [],
             visibility: 'researcher',
           },
         };
@@ -252,7 +248,7 @@ export class RemoteAgentLoader {
       // RLS will automatically filter based on user's permissions
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, tags, visibility, agent_type')
+        .select('id, name, description, visibility, agent_type')
         .order('name');
 
       if (error) {
@@ -265,7 +261,6 @@ export class RemoteAgentLoader {
         id: row.id,
         name: row.name,
         description: row.description,
-        tags: row.tags,
         visibility: row.visibility,
         agentType: row.agent_type,
       })) as RemoteAgentMetadata[];
@@ -299,7 +294,7 @@ export class RemoteAgentLoader {
 
       const { data, error } = await supabase
         .from('remote_agents')
-        .select('id, name, description, tags, visibility')
+        .select('id, name, description, visibility')
         .eq('name', agentName)
         .single();
 
