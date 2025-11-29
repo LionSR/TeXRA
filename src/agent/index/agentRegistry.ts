@@ -499,10 +499,10 @@ export function buildAgentOptions(): AgentOptionsPayload {
 
   // Filter visible entries and deduplicate by name (priority: custom > builtIn > remote)
   const visibleWorkflow = deduplicateByName(
-    filterVisible(workflowEntries, configuredWorkflow, DEFAULT_WORKFLOW_AGENT),
+    filterVisible(workflowEntries, configuredWorkflow),
   );
   const visibleToolUse = deduplicateByName(
-    filterVisible(toolUseEntries, configuredToolUse, DEFAULT_TOOL_USE_AGENT),
+    filterVisible(toolUseEntries, configuredToolUse),
   );
 
   return {
@@ -563,12 +563,8 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 function filterVisible(
   entries: AgentEntry[],
   configured: Set<string>,
-  defaultName: string,
 ): AgentEntry[] {
   if (configured.size === 0) return entries;
-
-  // Add default by name (for backwards compatibility)
-  configured.add(defaultName);
 
   // Check if remote agents should auto-show (default: true)
   const autoShowRemote = getConfig<boolean>(
@@ -648,17 +644,15 @@ export async function computeAgentOptions(): Promise<AgentOptionsPayload> {
 
 /**
  * Build placeholder options from config when cache isn't ready.
+ * Only uses default when no agents are configured.
  */
 function buildPlaceholderOptions(
   configKey: string,
   defaultAgent: string,
 ): string {
   const configured = getConfig<string[]>(configKey, []);
-  // Ensure default is included
+  // Only use default if nothing is configured
   const agents = configured.length > 0 ? configured : [defaultAgent];
-  if (!agents.includes(defaultAgent)) {
-    agents.unshift(defaultAgent);
-  }
 
   return agents
     .map(
