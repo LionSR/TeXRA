@@ -27,9 +27,16 @@ export class AgentUsageReporter {
    *
    * Usage flows to a single source of truth (UsageStatsManager) via updateStreamUsage.
    * Detailed statistics are logged separately for display in the progress view.
+   *
+   * The groupId from the logger is the authoritative run identifier - it matches
+   * the TaskGroup ID that the frontend uses for activeRunId. The passed runId
+   * (executionId) is only used as a fallback when no group context exists.
    */
   public report(stats: ExtendedTokenUsageStats, runId?: string): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
+
+    // Get the current task group ID - this is what the frontend uses as activeRunId
+    const groupId = this.logger.withCurrentGroup((id) => id);
 
     // Pass through usage without modification
     const usage = {
@@ -38,18 +45,20 @@ export class AgentUsageReporter {
       cost: stats.cost,
     };
 
+    // Use groupId as the authoritative run identifier, fall back to passed runId
+    const targetRunId = groupId ?? runId;
+
     // Always emit to the single source of truth (UsageStatsManager)
-    if (runId) {
+    if (targetRunId) {
       bus.emit('updateStreamUsage', {
         stream: this.streamId,
-        runId,
+        runId: targetRunId,
         usage,
       });
     }
 
     // Log detailed statistics for display in the progress view
     if (logStatistics) {
-      const groupId = this.logger.withCurrentGroup((id) => id);
       this.logger.statistics(stats, groupId);
     }
   }
