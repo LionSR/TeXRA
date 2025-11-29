@@ -26,7 +26,7 @@ export type NativeResponseUsage =
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata;
 
-export const ConversationRoundStateSnapshotSchema = z.strictObject({
+export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.number().int().nonnegative(),
   continuationCount: z.number().int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
@@ -123,7 +123,7 @@ export interface AgentRunStateJSON {
   usageAccumulator: RunUsageAccumulatorJSON;
 }
 
-export const AgentRunStateSnapshotSchema = z.strictObject({
+export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.number().int().nonnegative(),
   totalResponseTimeMs: z.number().nonnegative(),
   usageAccumulator: z.custom<RunUsageAccumulatorJSON>(),
