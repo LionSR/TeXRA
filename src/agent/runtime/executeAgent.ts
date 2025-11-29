@@ -113,12 +113,28 @@ function resolveFromAgentIndex(
     // Explicit source: look up directly
     entry = AgentIndex.getEntry(explicitSource, agentName);
   } else {
-    // Legacy format: find first matching entry (priority: custom > builtin > builtinToolUse)
+    // Legacy format: find first matching entry (priority: custom > builtin > builtinToolUse > remote)
     const entries = AgentIndex.getEntriesByName(agentName);
     entry = entries[0];
   }
 
-  if (!entry || !entry.definitionPath) {
+  if (!entry) {
+    return undefined;
+  }
+
+  // Remote agents don't have local paths - handle them specially
+  if (entry.source === AgentDirectorySource.Remote) {
+    return {
+      directory: '',
+      source: AgentDirectorySource.Remote,
+      definitionPath: '',
+      resolvedName: entry.name,
+      usedFallback: false,
+    };
+  }
+
+  // Local agents must have a definition path
+  if (!entry.definitionPath) {
     return undefined;
   }
 
