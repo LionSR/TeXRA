@@ -9,9 +9,7 @@ export {
   type RemoteAgentVisibility,
   createAgentIndexKey,
   parseAgentIndexKey,
-  isAgentIndexKey,
   isRemoteAgent,
-  getSourceDisplayLabel,
   shouldShowSourceIndicator,
 } from './AgentIndexEntry';
 export { AgentIndexLoader } from './AgentIndexLoader';

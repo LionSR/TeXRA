@@ -13,7 +13,6 @@
  */
 
 import * as path from 'path';
-import * as vscode from 'vscode';
 import {
   AgentDirectorySource,
   type AgentPathResolution,
@@ -30,24 +29,10 @@ import {
 const CHANNEL = 'AgentIndex';
 logger.initialize(CHANNEL);
 
-/** Persisted state structure for the agent index. */
-interface PersistedIndexState {
-  version: number;
-  entries: Array<{
-    key: AgentIndexKey;
-    entry: AgentIndexEntry;
-  }>;
-  lastUpdated: number;
-}
-
-const STORAGE_KEY = 'texra.agentIndex.v1';
-const CURRENT_VERSION = 1;
-
 /**
  * Singleton class managing the agent index.
  */
 class AgentIndexClass {
-  private context: vscode.ExtensionContext | null = null;
   private entries = new Map<AgentIndexKey, AgentIndexEntry>();
   private initialized = false;
   private initPromise: Promise<void> | null = null;
@@ -58,65 +43,6 @@ class AgentIndexClass {
     workflow: [] as AgentIndexEntry[],
     toolUse: [] as AgentIndexEntry[],
   };
-
-  /**
-   * Initialize the index with ExtensionContext.
-   * Must be called during extension activation.
-   */
-  initialize(context: vscode.ExtensionContext): void {
-    this.context = context;
-    this.restoreFromStorage();
-  }
-
-  /**
-   * Restore index from persisted storage.
-   */
-  private restoreFromStorage(): void {
-    if (!this.context) return;
-
-    const persisted = this.context.globalState.get<PersistedIndexState>(
-      STORAGE_KEY,
-    );
-
-    if (persisted && persisted.version === CURRENT_VERSION) {
-      this.entries.clear();
-      for (const { key, entry } of persisted.entries) {
-        this.entries.set(key, entry);
-      }
-      this.rebuildIndexes();
-    }
-  }
-
-  /**
-   * Persist current state to storage.
-   */
-  private async persist(): Promise<void> {
-    if (!this.context) return;
-
-    const state: PersistedIndexState = {
-      version: CURRENT_VERSION,
-      entries: Array.from(this.entries.entries()).map(([key, entry]) => ({
-        key,
-        entry,
-      })),
-      lastUpdated: Date.now(),
-    };
-
-    await this.context.globalState.update(STORAGE_KEY, state);
-  }
-
-  /**
-   * Persist with error logging.
-   * Use this instead of void this.persist() to avoid silent failures.
-   */
-  private persistWithLogging(): void {
-    this.persist().catch((err) => {
-      logger.error(
-        CHANNEL,
-        `Failed to persist agent index: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
-  }
 
   /**
    * Rebuild the byName and byCategory indexes from entries.
@@ -184,7 +110,6 @@ class AgentIndexClass {
     const key = createAgentIndexKey(entry.source, entry.name);
     this.entries.set(key, entry);
     this.rebuildIndexes();
-    this.persistWithLogging();
   }
 
   /**
@@ -196,7 +121,6 @@ class AgentIndexClass {
       this.entries.set(key, entry);
     }
     this.rebuildIndexes();
-    this.persistWithLogging();
   }
 
   /**
@@ -214,7 +138,6 @@ class AgentIndexClass {
       this.entries.delete(key);
     }
     this.rebuildIndexes();
-    this.persistWithLogging();
   }
 
   /**
@@ -223,7 +146,6 @@ class AgentIndexClass {
   clear(): void {
     this.entries.clear();
     this.rebuildIndexes();
-    this.persistWithLogging();
   }
 
   /**
@@ -235,23 +157,6 @@ class AgentIndexClass {
   ): AgentIndexEntry | undefined {
     const key = createAgentIndexKey(source, name);
     return this.entries.get(key);
-  }
-
-  /**
-   * Get an entry by composite key.
-   */
-  getEntryByKey(key: AgentIndexKey): AgentIndexEntry | undefined {
-    return this.entries.get(key);
-  }
-
-  /**
-   * Get an entry by parsing a key string.
-   * Returns undefined if the key is invalid or entry not found.
-   */
-  getEntryByKeyString(keyString: string): AgentIndexEntry | undefined {
-    const parsed = parseAgentIndexKey(keyString);
-    if (!parsed) return undefined;
-    return this.getEntry(parsed.source, parsed.name);
   }
 
   /**
@@ -296,13 +201,6 @@ class AgentIndexClass {
    */
   size(): number {
     return this.entries.size;
-  }
-
-  /**
-   * Check if an agent exists with the given source and name.
-   */
-  has(source: AgentDirectorySource, name: string): boolean {
-    return this.entries.has(createAgentIndexKey(source, name));
   }
 
   /**
