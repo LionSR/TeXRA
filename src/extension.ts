@@ -100,6 +100,10 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
+  // Copy default agents BEFORE initializing the agent index
+  // This ensures built-in agents are available when the index scans directories
+  await copyDefaultAgents(context);
+
   // Initialize agent index (single source of truth for agent metadata)
   const { AgentIndex, AgentIndexLoader } = await import('@agent/index');
   AgentIndex.initialize(context);
@@ -186,9 +190,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Clean up any tasks that were left in "running" state from previous session
   await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
-
-  // Copy default agents
-  await copyDefaultAgents(context);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
