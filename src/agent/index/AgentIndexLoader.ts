@@ -30,6 +30,20 @@ logger.initialize(CHANNEL);
 const YAML_EXTENSION = '.yaml';
 const MULTIPLE_SUFFIX = '_multiple';
 
+/**
+ * Map a raw agentType string to the AgentType enum.
+ * Defaults to CoT for workflow agents if unspecified.
+ */
+function mapAgentType(agentType: string | undefined): AgentType {
+  if (agentType === AgentType.ToolUse || agentType === 'toolUse') {
+    return AgentType.ToolUse;
+  }
+  if (agentType === AgentType.Direct || agentType === 'direct') {
+    return AgentType.Direct;
+  }
+  return AgentType.CoT;
+}
+
 interface ScannedAgent {
   name: string;
   definitionPath: string;
@@ -305,14 +319,6 @@ export class AgentIndexLoader {
       category = AgentCategory.Workflow;
     }
 
-    // Map agentType string to AgentType enum
-    const mappedAgentType =
-      agentType === AgentType.ToolUse
-        ? AgentType.ToolUse
-        : agentType === AgentType.Direct
-          ? AgentType.Direct
-          : AgentType.CoT;
-
     const entry: AgentIndexEntry = {
       name,
       source,
@@ -327,7 +333,7 @@ export class AgentIndexLoader {
         defaultOutputFiles && defaultOutputFiles.length > 0
           ? defaultOutputFiles
           : undefined,
-      agentType: mappedAgentType,
+      agentType: mapAgentType(agentType),
     };
     return entry;
   }
@@ -351,14 +357,6 @@ export class AgentIndexLoader {
             ? AgentCategory.ToolUse
             : AgentCategory.Workflow;
 
-        // Map remote agentType string to AgentType enum
-        const mappedAgentType =
-          agent.agentType === 'toolUse'
-            ? AgentType.ToolUse
-            : agent.agentType === 'direct'
-              ? AgentType.Direct
-              : AgentType.CoT; // Default to CoT for workflow agents
-
         return {
           name: agent.name,
           source: AgentDirectorySource.Remote,
@@ -369,8 +367,7 @@ export class AgentIndexLoader {
           isMultipleOutput: false, // Default, will be determined at load time
           description: agent.description,
           visibility: agent.visibility,
-          tags: agent.tags,
-          agentType: mappedAgentType,
+          agentType: mapAgentType(agent.agentType),
         };
       });
     } catch (error) {
