@@ -30,17 +30,6 @@ export function createUsageEvents(
 ): UsageEventsModule {
   const withErrorBoundary = createErrorBoundary(shared.logger, 'UsageEvents');
 
-  const resolveTargetRunId = (
-    stream: string,
-    requestedRunId: string | null | undefined,
-    state: ProgressViewState,
-  ): string | null => {
-    if (requestedRunId) {
-      return requestedRunId;
-    }
-    return state.resolveRunId(stream, null);
-  };
-
   return {
     register(
       bus: ProgressEventBusLike,
@@ -57,18 +46,19 @@ export function createUsageEvents(
               cost: Number(usage.cost ?? 0),
             };
 
-            const resolvedRunId = resolveTargetRunId(stream, runId, state);
-            const targetRunId = resolvedRunId ?? runId ?? null;
+            // Prefer the active run ID (task group ID) over the passed runId
+            // This ensures usage is keyed correctly when executionId differs from group ID
+            const targetRunId =
+              state.getActiveRunId(stream) ??
+              state.resolveRunId(stream, runId) ??
+              runId ??
+              null;
 
             if (!targetRunId) {
               shared.logger.warn(
                 `Skipping updateStreamUsage for ${stream}: unable to resolve run ID`,
               );
               return;
-            }
-
-            if (!state.getActiveRunId(stream)) {
-              state.setActiveRunId(stream, targetRunId);
             }
 
             await state.usageStats.setRunUsage(
