@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { getAgentsBySource, type AgentSource } from '@agent/index';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { selectAgentInMainView } from '@agent/remote/remoteAgentUtils';
 
 // Local imports - common

@@ -63,6 +63,21 @@ export interface AgentEntry {
   visibility?: RemoteVisibility; // remote only
 }
 
+/**
+ * Result of resolving an agent. Replaces the old AgentPathResolution interface.
+ * Simple, flat, no redundant fields.
+ */
+export interface ResolvedAgent {
+  /** The full agent entry from the registry. */
+  entry: AgentEntry;
+  /** Absolute path to the YAML definition (empty for remote). */
+  definitionPath: string;
+  /** Agent name (may include _multiple suffix if that variant was resolved). */
+  resolvedName: string;
+  /** True if _multiple was requested but not available. */
+  usedFallback: boolean;
+}
+
 // =============================================================================
 // CONSTANTS
 // =============================================================================
@@ -181,32 +196,43 @@ export function getAgent(identifier: string): AgentEntry | undefined {
 }
 
 /**
- * Resolve an agent to its path, handling _multiple variant logic.
+ * Resolve an agent to its definition path, handling _multiple variant logic.
  */
 export function resolveAgent(
   identifier: string,
   preferMultiple = false,
-):
-  | { entry: AgentEntry; resolvedPath: string; resolvedName: string }
-  | undefined {
+): ResolvedAgent | undefined {
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 
   // Remote agents have no local path
   if (entry.source === 'remote') {
-    return { entry, resolvedPath: '', resolvedName: entry.name };
+    return {
+      entry,
+      definitionPath: '',
+      resolvedName: entry.name,
+      usedFallback: false,
+    };
   }
 
   // Handle _multiple variant
   if (preferMultiple && entry.multiplePath) {
     return {
       entry,
-      resolvedPath: entry.multiplePath,
+      definitionPath: entry.multiplePath,
       resolvedName: `${entry.name}${MULTIPLE_SUFFIX}`,
+      usedFallback: false,
     };
   }
 
-  return { entry, resolvedPath: entry.path, resolvedName: entry.name };
+  // Fallback: requested _multiple but not available
+  const usedFallback = preferMultiple && !entry.multiplePath;
+  return {
+    entry,
+    definitionPath: entry.path,
+    resolvedName: entry.name,
+    usedFallback,
+  };
 }
 
 /** Get all workflow agents. */
