@@ -89,12 +89,12 @@ export async function selectAgentInMainView(
     >('texra.getWebviewView');
 
     if (webviewView) {
-      // Send STATE_RESTORE message to set the agent selector value
+      // Send SET_SELECTED_AGENT message to set just the agent selector value
+      // This avoids triggering full state restoration which would clear other fields
       webviewView.webview.postMessage({
-        command: MAIN_VIEW_COMMANDS.STATE_RESTORE,
-        state: {
-          workflowAgent: agentValue,
-        },
+        command: MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT,
+        agentValue,
+        sessionType: 'workflow', // Remote agents are typically workflow agents
       });
 
       if (showSuccessMessage) {
