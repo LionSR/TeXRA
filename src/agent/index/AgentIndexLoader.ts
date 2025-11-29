@@ -305,6 +305,14 @@ export class AgentIndexLoader {
       category = AgentCategory.Workflow;
     }
 
+    // Map agentType string to AgentType enum
+    const mappedAgentType =
+      agentType === AgentType.ToolUse
+        ? AgentType.ToolUse
+        : agentType === AgentType.Direct
+          ? AgentType.Direct
+          : AgentType.CoT;
+
     const entry: AgentIndexEntry = {
       name,
       source,
@@ -319,6 +327,7 @@ export class AgentIndexLoader {
         defaultOutputFiles && defaultOutputFiles.length > 0
           ? defaultOutputFiles
           : undefined,
+      agentType: mappedAgentType,
     };
     return entry;
   }

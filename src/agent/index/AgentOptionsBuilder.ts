@@ -181,6 +181,11 @@ function createAgentOptionTag(option: OptionEntry): string {
     attributes.push(`data-description="${encodeHtml(entry.description)}"`);
   }
 
+  // Add agent type for frontend display (CoT, direct, toolUse icons)
+  if (entry.agentType) {
+    attributes.push(`data-agent-type="${encodeHtml(entry.agentType)}"`);
+  }
+
   if (isSelected) {
     attributes.push('selected');
   }
