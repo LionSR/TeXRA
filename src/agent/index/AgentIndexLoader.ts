@@ -77,23 +77,12 @@ export class AgentIndexLoader {
         this.loadRemoteAgents(),
       ]);
 
-    // Apply configured category overrides
-    const configuredToolUseAgents = new Set(
-      getConfig<string[]>('texra.toolUseAgents', []),
-    );
-
-    const allEntries = [
+    const allEntries = this.applyConfiguredCategoryOverrides([
       ...customEntries,
       ...builtInEntries,
       ...builtInToolUseEntries,
       ...remoteEntries,
-    ].map((entry) => {
-      // Override category if configured in texra.toolUseAgents
-      if (configuredToolUseAgents.has(entry.name)) {
-        return { ...entry, category: AgentCategory.ToolUse };
-      }
-      return entry;
-    });
+    ]);
 
     // Register all entries
     AgentIndex.registerMultiple(allEntries);
@@ -139,19 +128,31 @@ export class AgentIndexLoader {
         break;
     }
 
-    // Apply configured category overrides
+    const processedEntries = this.applyConfiguredCategoryOverrides(entries);
+    AgentIndex.registerMultiple(processedEntries);
+  }
+
+  /**
+   * Apply configured category overrides from texra.toolUseAgents setting.
+   * Agents listed in this config are treated as tool-use agents regardless of
+   * their YAML-defined category.
+   */
+  private static applyConfiguredCategoryOverrides(
+    entries: AgentIndexEntry[],
+  ): AgentIndexEntry[] {
     const configuredToolUseAgents = new Set(
       getConfig<string[]>('texra.toolUseAgents', []),
     );
 
-    const processedEntries = entries.map((entry) => {
-      if (configuredToolUseAgents.has(entry.name)) {
-        return { ...entry, category: AgentCategory.ToolUse };
-      }
-      return entry;
-    });
+    if (configuredToolUseAgents.size === 0) {
+      return entries;
+    }
 
-    AgentIndex.registerMultiple(processedEntries);
+    return entries.map((entry) =>
+      configuredToolUseAgents.has(entry.name)
+        ? { ...entry, category: AgentCategory.ToolUse }
+        : entry,
+    );
   }
 
   /**
@@ -343,6 +344,8 @@ export class AgentIndexLoader {
           hasMultipleSibling: false, // TODO: Could check for _multiple variant in DB
           isMultipleOutput: false, // Default, will be determined at load time
           description: agent.description,
+          visibility: agent.visibility,
+          tags: agent.tags,
         };
       });
     } catch (error) {

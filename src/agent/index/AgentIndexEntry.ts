@@ -6,6 +6,9 @@
 import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
+/** Remote agent visibility levels. */
+export type RemoteAgentVisibility = 'public' | 'researcher' | 'whitelist';
+
 /**
  * Lightweight metadata for an agent, cached at activation.
  * Contains enough information for dropdown display and routing,
@@ -41,6 +44,12 @@ export interface AgentIndexEntry {
 
   /** Cached defaultOutputFiles from settings (avoids re-parsing). */
   defaultOutputFiles?: string[];
+
+  /** Visibility level for remote agents (only set for Remote source). */
+  visibility?: RemoteAgentVisibility;
+
+  /** Tags for remote agents (only set for Remote source). */
+  tags?: string[];
 }
 
 /**
@@ -91,6 +100,16 @@ export function parseAgentIndexKey(
  */
 export function isAgentIndexKey(value: string): value is AgentIndexKey {
   return parseAgentIndexKey(value) !== undefined;
+}
+
+/**
+ * Check if an agent identifier refers to a remote agent.
+ * Works with both source:name format and raw identifiers.
+ */
+export function isRemoteAgent(agentIdentifier: string | undefined): boolean {
+  if (!agentIdentifier) return false;
+  const parsed = parseAgentIndexKey(agentIdentifier);
+  return parsed?.source === AgentDirectorySource.Remote;
 }
 
 /**
