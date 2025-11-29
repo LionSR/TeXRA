@@ -75,11 +75,6 @@ export interface ProgressEventPayloads {
   clearMissingOutputs: StreamTabId;
   clearOutputFiles: StreamTabId;
   setTaskState: SetTaskStatePayload;
-  updateGroupUsage: {
-    stream: StreamTabId;
-    groupId: string;
-    usage: TokenUsageStats;
-  };
   clearTaskOutput: StreamTabId;
   updateStreamUsage: {
     stream: StreamTabId;
