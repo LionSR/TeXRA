@@ -102,19 +102,19 @@ let initPromise: Promise<void> | null = null;
 
 /**
  * Load all agents into cache. Call once at activation.
+ * Thread-safe: concurrent calls share the same promise.
  */
 export async function loadAgents(): Promise<void> {
   if (initPromise) {
     return initPromise;
   }
 
-  initPromise = doLoad();
-  try {
-    await initPromise;
+  initPromise = doLoad().then(() => {
     initialized = true;
-  } finally {
     initPromise = null;
-  }
+  });
+
+  return initPromise;
 }
 
 async function doLoad(): Promise<void> {
