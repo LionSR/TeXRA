@@ -70,7 +70,6 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
     let remoteAgents: Array<{
       name: string;
       description: string;
-      tags: string[];
       visibility: string;
       agentType?: string;
     }> = [];
@@ -81,7 +80,6 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
       remoteAgents = entries.map((entry) => ({
         name: entry.name,
         description: entry.description || '',
-        tags: entry.tags || [],
         visibility: entry.visibility || 'researcher',
         agentType: entry.agentType || 'CoT',
       }));
