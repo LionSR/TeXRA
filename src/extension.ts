@@ -100,10 +100,18 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeStateManagers(context);
   FileLister.initialize(context);
 
-  // Initialize remote agent registry
-  const { RemoteAgentRegistry } =
-    await import('@agent/remote/RemoteAgentRegistry');
-  RemoteAgentRegistry.initialize(context);
+  // Initialize agent index (single source of truth for agent metadata)
+  const { AgentIndex, AgentIndexLoader } = await import('@agent/index');
+  AgentIndex.initialize(context);
+
+  // Start loading the agent index in the background
+  // This will scan all directories and fetch remote agents
+  AgentIndexLoader.initialize().catch((err) => {
+    logger.error(
+      'extension',
+      `Failed to initialize agent index: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  });
 
   // Initialize Supabase authentication if enabled
   const authConfig = vscode.workspace.getConfiguration('texra.auth');
