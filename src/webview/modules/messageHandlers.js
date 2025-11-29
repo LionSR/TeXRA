@@ -222,7 +222,9 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
         const selectElement = document.getElementById(selectId);
         if (!selectElement) {
-          console.warn(`SET_SELECTED_AGENT: Select element not found: ${selectId}`);
+          console.warn(
+            `SET_SELECTED_AGENT: Select element not found: ${selectId}`,
+          );
           return;
         }
 
@@ -366,7 +368,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       selectElement.title = selectedOption.title;
     } else if (selectedOption) {
       // Fallback: show the agent name
-      const label = selectedOption.dataset?.label || selectedOption.textContent || '';
+      const label =
+        selectedOption.dataset?.label || selectedOption.textContent || '';
       selectElement.title = label;
     } else {
       selectElement.title = '';
