@@ -173,22 +173,6 @@ h2 {
   color: var(--vscode-badge-foreground);
 }
 
-/* Tags */
-.agent-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-small);
-}
-
-.tag {
-  display: inline-block;
-  padding: 2px var(--spacing-small);
-  border-radius: var(--border-radius-small);
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  font-size: var(--font-size-sm);
-}
-
 /* Select button */
 .select-btn {
   white-space: nowrap;
