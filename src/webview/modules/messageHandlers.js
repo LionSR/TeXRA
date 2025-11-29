@@ -191,6 +191,56 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
           console.warn('SET_AGENT_OPTIONS: Agent select elements not found');
         }
       },
+      /**
+       * Sets the selected agent in the dropdown without triggering full state restoration.
+       * Used by profile page to select a remote agent without clearing other fields.
+       * @param {Object} m - Message with agentValue and optional sessionType
+       * @param {string} m.agentValue - The agent value (in source:name format)
+       * @param {string} [m.sessionType] - 'workflow' or 'toolUse' (defaults to 'workflow')
+       */
+      [MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT]: (m) => {
+        const { agentValue, sessionType } = m;
+        if (!agentValue) {
+          console.warn('SET_SELECTED_AGENT: No agentValue provided');
+          return;
+        }
+
+        // Determine which dropdown to update
+        const targetSessionType =
+          sessionType === SESSION_TYPES.TOOL_USE
+            ? SESSION_TYPES.TOOL_USE
+            : SESSION_TYPES.WORKFLOW;
+        const selectId = AGENT_SELECT_IDS[targetSessionType];
+
+        if (!selectId) {
+          console.warn(
+            `SET_SELECTED_AGENT: No select ID for session type: ${targetSessionType}`,
+          );
+          return;
+        }
+
+        // Set the agent value (creates placeholder if needed)
+        this._setAgentValue(selectId, agentValue);
+
+        // Update mainViewState to persist the selection
+        const stateKey =
+          targetSessionType === SESSION_TYPES.TOOL_USE
+            ? 'toolUseAgent'
+            : 'workflowAgent';
+        mainViewState.update({ [stateKey]: agentValue });
+
+        // Decorate the placeholder option if it was just created
+        const selectElement = document.getElementById(selectId);
+        if (selectElement) {
+          const option = Array.from(selectElement.children).find(
+            (opt) => opt.value === agentValue,
+          );
+          if (option && !option.dataset.decorated) {
+            this._decorateAgentOption(option);
+            option.dataset.decorated = 'true';
+          }
+        }
+      },
     };
   }
 
@@ -361,12 +411,26 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   /**
+   * Parse source:name format to extract clean name and source.
+   * @param {string} value - The value in source:name format
+   * @returns {{source: string, name: string} | null} - Parsed parts or null if invalid
+   */
+  _parseAgentKey(value) {
+    if (!value) return null;
+    const colonIdx = value.indexOf(':');
+    if (colonIdx === -1) return null;
+    return {
+      source: value.slice(0, colonIdx),
+      name: value.slice(colonIdx + 1),
+    };
+  }
+
+  /**
    * Sets an agent selector value, creating a placeholder option if needed.
-   * Note: Placeholder options are created without remote styling since we can't
-   * determine remote status on the client side. When SET_AGENT_OPTIONS arrives,
-   * it will replace options with properly decorated versions.
+   * Placeholder options display the clean agent name (without source prefix).
+   * When SET_AGENT_OPTIONS arrives, it will replace options with properly decorated versions.
    * @param {string} selectId - The ID of the agent select element
-   * @param {string} value - The agent value to set
+   * @param {string} value - The agent value (in source:name format)
    */
   _setAgentValue(selectId, value) {
     if (!value) {
@@ -386,16 +450,28 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       (opt) => opt.value === value,
     );
 
-    // If option doesn't exist, create a placeholder without remote styling.
+    // If option doesn't exist, create a placeholder with clean display name.
     // SET_AGENT_OPTIONS will replace this with properly decorated options.
     if (!existingOption) {
       const option = document.createElement('vscode-option');
       option.value = value;
-      option.textContent = value;
-      option.dataset.label = value;
-      // Note: We don't set data-remote here since we can't determine
-      // remote status on the client side. The server will provide this
-      // info when SET_AGENT_OPTIONS arrives.
+
+      // Extract clean name from source:name format
+      const parsed = this._parseAgentKey(value);
+      const displayName = parsed ? parsed.name : value;
+
+      option.textContent = displayName;
+      option.dataset.label = displayName;
+
+      // Set source-based data attributes for basic styling
+      if (parsed) {
+        option.dataset.source = parsed.source;
+        if (parsed.source === 'remote') {
+          option.dataset.remote = 'true';
+        } else if (parsed.source === 'custom') {
+          option.dataset.custom = 'true';
+        }
+      }
 
       selectElement.appendChild(option);
     }
