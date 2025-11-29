@@ -12,8 +12,12 @@
  * at execution time to ensure the latest YAML content is used.
  */
 
+import * as path from 'path';
 import * as vscode from 'vscode';
-import { AgentDirectorySource } from '@agent/runtime/AgentPathTypes';
+import {
+  AgentDirectorySource,
+  type AgentPathResolution,
+} from '@agent/runtime/AgentPathTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import * as logger from '@logger/logUtils';
 import {
@@ -334,6 +338,75 @@ class AgentIndexClass {
   isRemoteByName(name: string): boolean {
     const entries = this.getEntriesByName(name);
     return entries.some((e) => e.source === AgentDirectorySource.Remote);
+  }
+
+  /**
+   * Resolve an agent identifier to path information.
+   *
+   * This is the PRIMARY resolution method - use this instead of manual lookups.
+   *
+   * @param identifier - Either "source:name" format or just "name" (legacy)
+   * @param options - Resolution options (preferMultiple for _multiple variants)
+   * @returns AgentPathResolution or undefined if not found
+   */
+  resolve(
+    identifier: string,
+    options?: { preferMultiple?: boolean },
+  ): AgentPathResolution | undefined {
+    const preferMultiple = options?.preferMultiple ?? false;
+
+    // Parse identifier: "source:name" or just "name"
+    const parsed = parseAgentIndexKey(identifier);
+    const explicitSource = parsed?.source ?? null;
+    const agentName = parsed?.name ?? identifier;
+
+    // Find the entry
+    let entry: AgentIndexEntry | undefined;
+    if (explicitSource) {
+      entry = this.getEntry(explicitSource, agentName);
+    } else {
+      // Legacy format: find first matching entry (priority order from index)
+      const entries = this.getEntriesByName(agentName);
+      entry = entries[0];
+    }
+
+    if (!entry) {
+      return undefined;
+    }
+
+    // Remote agents have no local paths
+    if (entry.source === AgentDirectorySource.Remote) {
+      return {
+        directory: '',
+        source: AgentDirectorySource.Remote,
+        definitionPath: '',
+        resolvedName: entry.name,
+        usedFallback: false,
+      };
+    }
+
+    // Local agents must have a definition path
+    if (!entry.definitionPath) {
+      return undefined;
+    }
+
+    // Determine which path to use based on preferMultiple flag
+    let definitionPath = entry.definitionPath;
+    let resolvedName = entry.name;
+    const usedFallback = preferMultiple && !entry.hasMultipleSibling;
+
+    if (preferMultiple && entry.multipleVariantPath) {
+      definitionPath = entry.multipleVariantPath;
+      resolvedName = `${entry.name}_multiple`;
+    }
+
+    return {
+      directory: path.dirname(definitionPath),
+      source: entry.source,
+      definitionPath,
+      resolvedName,
+      usedFallback,
+    };
   }
 }
 
