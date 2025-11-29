@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent utilities
-import { computeAgentOptionsSync } from '@agent/computeAgentOptions';
+import { computeAgentOptionsSync } from '@agent/index';
 
 // Internal imports
 import { BaseViewContentProvider, ModuleDescriptor } from '@common/webview';
