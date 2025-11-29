@@ -283,7 +283,8 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (agentType) {
       const decorator = getAgentTypeDecorator(agentType);
       displayLabel = `${decorator.unicode} ${displayLabel}`;
-      hints.push(`Type: ${decorator.label}`);
+      // Use hint if available, otherwise fall back to label
+      hints.push(decorator.hint || `Type: ${decorator.label}`);
     }
 
     // Add cloud icon for remote agents (using shared config)
@@ -316,7 +317,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     if (isToolUse) {
-      hints.push('Uses tools for actions.');
+      hints.push('Can execute tools and code');
     }
 
     // Set text content (vscode-option doesn't support HTML)
