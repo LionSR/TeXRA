@@ -33,7 +33,7 @@ export const MODEL_PROVIDER_DECORATORS = {
     hint: 'OpenAI GPT models',
   },
   google: {
-    unicode: '\u264A', // ♊ - Gemini zodiac
+    unicode: '\u{1D53E}', // 𝔾 - Double-struck G
     label: 'Google',
     hint: 'Google Gemini models',
   },
@@ -48,7 +48,7 @@ export const MODEL_PROVIDER_DECORATORS = {
     hint: 'DeepSeek models',
   },
   moonshot: {
-    unicode: '\u{1F319}', // 🌙 - Crescent moon
+    unicode: '\u{1D542}', // 𝕂 - Double-struck K (for Kimi)
     label: 'Moonshot',
     hint: 'Moonshot AI Kimi models',
   },
@@ -99,7 +99,7 @@ export const AGENT_DECORATORS = {
       icon: 'files',
       unicode: '⧉',
       label: 'Multiple outputs',
-      hint: 'Multi-output: Generates multiple output files',
+      hint: 'Has _multiple variant that supports multiple output files',
     },
   },
 
