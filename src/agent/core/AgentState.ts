@@ -27,6 +27,76 @@ export type NativeResponseUsage =
   | AnthropicUsage
   | GenerateContentResponseUsageMetadata;
 
+/**
+ * Migrates legacy UsageSummary format to NormalizedUsage.
+ * Extracts provider-specific fields (cached tokens, reasoning tokens, etc.)
+ * from the legacy format into the normalized structure.
+ */
+function migrateLegacyUsageSummary(
+  usageSummary: UsageSummary,
+  provider: UsageProvider,
+  responseTimeMs: number,
+  nativeUsage?: NativeUsagePayload | null,
+): NormalizedUsage {
+  if (!usageSummary) {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      cost: 0,
+      responseTimeMs,
+      provider,
+    };
+  }
+
+  const base: NormalizedUsage = {
+    inputTokens: usageSummary.totalInputTokens,
+    outputTokens: usageSummary.totalOutputTokens,
+    cost: usageSummary.cost,
+    responseTimeMs,
+    provider,
+    percentageCached:
+      usageSummary.percentageCached > 0
+        ? usageSummary.percentageCached
+        : undefined,
+    _native: nativeUsage ?? undefined,
+  };
+
+  // Extract provider-specific fields from legacy format
+  if (isAnthropicUsage(usageSummary)) {
+    if (usageSummary.cache_read_input_tokens) {
+      base.cachedInputTokens = usageSummary.cache_read_input_tokens;
+    }
+    if (usageSummary.cache_creation_input_tokens) {
+      base.cacheCreationTokens = usageSummary.cache_creation_input_tokens;
+    }
+    if (usageSummary.server_tool_use?.web_search_requests) {
+      base.serverToolRequests = usageSummary.server_tool_use.web_search_requests;
+    }
+  } else if (isOpenAIUsage(usageSummary)) {
+    if (usageSummary.cached_tokens > 0) {
+      base.cachedInputTokens = usageSummary.cached_tokens;
+    }
+    if (usageSummary.reasoning_tokens > 0) {
+      base.reasoningTokens = usageSummary.reasoning_tokens;
+    }
+    if (usageSummary.tool_use_tokens && usageSummary.tool_use_tokens > 0) {
+      base.toolUsePromptTokens = usageSummary.tool_use_tokens;
+    }
+  }
+
+  return base;
+}
+
+function isAnthropicUsage(
+  usage: UsageSummary,
+): usage is AnthropicAPIResponseUsage {
+  return usage !== null && 'input_tokens' in usage;
+}
+
+function isOpenAIUsage(usage: UsageSummary): usage is OpenAIAPIResponseUsage {
+  return usage !== null && 'prompt_tokens' in usage;
+}
+
 export const ConversationRoundStateSnapshotSchema = z.strictObject({
   roundIndex: z.number().int().nonnegative(),
   continuationCount: z.number().int().nonnegative(),
@@ -115,14 +185,12 @@ export class ConversationRoundState {
     }
     // Legacy: convert old format if present (for backward compatibility)
     else if (json.usageSummary && json.provider) {
-      state.normalizedUsage = {
-        inputTokens: json.usageSummary.totalInputTokens,
-        outputTokens: json.usageSummary.totalOutputTokens,
-        cost: json.usageSummary.cost,
-        responseTimeMs: json.usageSummary.responseTime,
-        provider: json.provider,
-        _native: json.nativeUsage ?? undefined,
-      };
+      state.normalizedUsage = migrateLegacyUsageSummary(
+        json.usageSummary,
+        json.provider,
+        json.responseTimeMs,
+        json.nativeUsage,
+      );
     }
 
     return state;
