@@ -340,6 +340,32 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     getSelectOptionElements(selectElement).forEach((opt) => {
       this._decorateAgentOption(opt);
     });
+
+    // Update the select's tooltip to show selected agent info
+    this._updateAgentSelectTooltip(selectElement);
+  }
+
+  /**
+   * Update the agent select element's tooltip to show the selected agent's details.
+   * This provides immediate feedback about the currently selected agent.
+   * @param {HTMLElement} selectElement - The agent select element
+   */
+  _updateAgentSelectTooltip(selectElement) {
+    if (!isSelectLikeElement(selectElement)) {
+      return;
+    }
+
+    const selectedOption = getSelectedOptionElement(selectElement);
+    if (selectedOption && selectedOption.title) {
+      // Use the selected option's tooltip as the select's tooltip
+      selectElement.title = selectedOption.title;
+    } else if (selectedOption) {
+      // Fallback: show the agent name
+      const label = selectedOption.dataset?.label || selectedOption.textContent || '';
+      selectElement.title = label;
+    } else {
+      selectElement.title = '';
+    }
   }
 
   _decorateAgentOption(opt) {
@@ -622,9 +648,26 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       this._disposeModelWaiter = null;
     }
     super.setup();
+    this._setupAgentSelectListeners();
     if (requestData) {
       this._initializeDataRequests();
     }
+  }
+
+  /** Setup change listeners for agent selects to update tooltips. */
+  _setupAgentSelectListeners() {
+    // Update tooltip when agent selection changes
+    AGENT_SELECT_LIST.forEach((selectId) => {
+      const selectElement = document.getElementById(selectId);
+      if (selectElement && !selectElement._tooltipListenerAdded) {
+        selectElement.addEventListener('change', () => {
+          this._updateAgentSelectTooltip(selectElement);
+        });
+        selectElement._tooltipListenerAdded = true;
+        // Also set initial tooltip
+        this._updateAgentSelectTooltip(selectElement);
+      }
+    });
   }
 
   cleanup() {
