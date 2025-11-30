@@ -268,7 +268,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       const activeRunId = this.provider.state.getActiveRunId(message.stream);
       // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
       // Workflow agents store files under task group ID, NOT executionId
-      const storageKey = activeRunId ?? executionId ?? null;
+      // Use normalizeRunId to brand as StorageKey at this boundary
+      const storageKey = normalizeRunId(activeRunId ?? executionId);
       const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
         storageKey,
       });
@@ -426,9 +427,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const resolvedRunId = this.provider.state.resolveRunId(stream, undefined, {
       persist: false,
     });
-    const runOutputs = this.provider.state.getRunOutputFiles(stream, {
-      storageKey: resolvedRunId,
-    });
+    // Only fetch output files if we have a resolved run ID
+    const storageKey = resolvedRunId ? normalizeRunId(resolvedRunId) : null;
+    const runOutputs = storageKey
+      ? this.provider.state.getRunOutputFiles(stream, { storageKey })
+      : undefined;
 
     // Trust stored executionId, don't extract from paths
     const executionId =
