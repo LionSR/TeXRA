@@ -111,6 +111,7 @@ export class WebviewUpdater {
       runInstructions?: Record<string, InstructionUpdate>;
       activeRunId?: string | null;
       runUsage?: Record<string, TokenUsageStats>;
+      runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
   ): void {
     this.sendMessage({
@@ -121,6 +122,7 @@ export class WebviewUpdater {
       runInstructions: extras?.runInstructions,
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
+      runFiles: extras?.runFiles,
     });
   }
 
