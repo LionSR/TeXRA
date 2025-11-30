@@ -524,6 +524,21 @@ export class LogEntryFormatter {
     content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
     content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
 
+    // Also handle Pandoc's reference format: [label]{reference-type="ref" reference="label"}
+    // This format is produced when LaTeX is converted through Pandoc
+    content = content.replace(
+      /\[([^\]]+)\]\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-REF:$2@@',
+    );
+    content = content.replace(
+      /\[([^\]]+)\]\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-EQREF:$2@@',
+    );
+    content = content.replace(
+      /\[([^\]]+)\]\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-CREF:$2@@',
+    );
+
     const renderer = this.md || getMarkdownRenderer();
 
     // Process content as markdown
