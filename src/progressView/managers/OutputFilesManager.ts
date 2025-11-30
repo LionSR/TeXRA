@@ -2,11 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type {
-  ExecutionId,
-  StorageKey,
-  StreamTabId,
-} from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
@@ -49,20 +45,15 @@ export class OutputFilesManager extends PersistentMapManager<
    * Add output files for a stream and round.
    *
    * @param stream - The stream tab ID
-   * @param runId - Legacy parameter, use options.storageKey instead
+   * @param storageKey - THE key for storage (single source of truth)
    * @param filesByRound - Map of round number to output files
-   * @param options - Additional options
-   * @param options.storageKey - THE key for storage (preferred over runId)
-   * @param options.executionId - For metadata purposes
    */
   async addFiles(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
-    options: { storageKey?: StorageKey; executionId?: ExecutionId } = {},
   ): Promise<void> {
-    // Use storageKey if provided, otherwise fall back to normalizing runId
-    const key = options.storageKey ?? (normalizeRunId(runId) as StorageKey);
+    const key = normalizeRunId(storageKey) as StorageKey;
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -102,21 +93,16 @@ export class OutputFilesManager extends PersistentMapManager<
    * Update missing outputs for a stream.
    *
    * @param stream - The stream tab ID
-   * @param runId - Legacy parameter, use options.storageKey instead
+   * @param storageKey - THE key for storage (single source of truth)
    * @param filesByRound - Map of round number to missing file paths
-   * @param options - Additional options
-   * @param options.storageKey - THE key for storage (preferred over runId)
-   * @param options.executionId - For metadata purposes
    */
   async updateMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     filesByRound: { [key: number]: string[] },
-    options: { storageKey?: StorageKey; executionId?: ExecutionId } = {},
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    // Use storageKey if provided, otherwise fall back to normalizing runId
-    const key = options.storageKey ?? (normalizeRunId(runId) as StorageKey);
+    const key = normalizeRunId(storageKey) as StorageKey;
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -193,52 +179,6 @@ export class OutputFilesManager extends PersistentMapManager<
     }
 
     return new Map(target);
-  }
-
-  /**
-   * Find output files for a stream by executionId.
-   *
-   * For tool-use agents, executionId IS the runId (they are stored as such).
-   * For workflow agents, we search for files that have matching executionId
-   * in their location metadata.
-   *
-   * Note: ExecutionId is always a UUID, so we do NOT normalize it.
-   * normalizeRunId() is only for legacy workflow data that might have null runId.
-   *
-   * @see IdentifierTypes.ts for the full execution model documentation
-   */
-  getRunByExecution(
-    stream: StreamTabId,
-    executionId: ExecutionId,
-  ): Map<number, OutputFileInfo[]> | undefined {
-    // For tool-use agents: executionId IS the runId (no normalization needed)
-    // ExecutionId is always a UUID, never null or DEFAULT_RUN_ID
-    const direct = this.getRun(stream, executionId);
-    if (direct) {
-      return direct;
-    }
-
-    // For workflow agents: search for files with matching executionId in metadata
-    const runs = this.items.get(stream);
-    if (!runs) {
-      return undefined;
-    }
-
-    for (const [runKey, rounds] of runs.entries()) {
-      for (const infos of rounds.values()) {
-        if (
-          infos.some(
-            (info) =>
-              info.location.kind === 'runStorage' &&
-              info.location.executionId === executionId,
-          )
-        ) {
-          return this.getRun(stream, runKey);
-        }
-      }
-    }
-
-    return undefined;
   }
 
   /**
