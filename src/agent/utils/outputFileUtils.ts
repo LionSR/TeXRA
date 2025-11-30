@@ -2,16 +2,7 @@
 import * as path from 'path';
 
 // Local imports
-import { parseKey } from '@agent/index';
-
-/**
- * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
- */
-function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseKey(agentIdentifier);
-  return parsed ? parsed.name : agentIdentifier;
-}
+import { getAgentFirstNameChunk } from '@housekeeping/utils';
 
 /**
  * Generates an output filename incorporating model and round information.
@@ -35,9 +26,8 @@ export function getOutputFileName(
   },
 ): string {
   const { dir, name: fileName } = path.parse(inputFile);
-  // Extract clean agent name (strip source: prefix if present)
-  const cleanAgent = getCleanAgentName(agent);
-  const agentFirstNameChunk = cleanAgent.split('_')[0];
+  // Extract agent first name chunk (handles source: prefix and write- agents)
+  const agentFirstNameChunk = getAgentFirstNameChunk(agent);
 
   let newRound = currRound;
   if (editedFile) {
