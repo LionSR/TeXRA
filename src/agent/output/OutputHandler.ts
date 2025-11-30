@@ -113,7 +113,8 @@ export class OutputHandler implements IOutputHandler {
     this.logger = logger || new AgentLogger('OutputHandler');
     this.channel = this.logger.channelId;
     this.fileService = fileService || new TaskRunFileService();
-    this.executionId = executionId ?? this.fileService.getExecutionId();
+    // executionId is passed from the execution context - no fallback needed
+    this.executionId = executionId ?? undefined;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
@@ -212,18 +213,15 @@ export class OutputHandler implements IOutputHandler {
 
   /**
    * Create a storage-scoped payload for event bus emissions.
-   * Returns an object with storageKey (the single source of truth)
-   * and runId (for backward compatibility).
+   * Returns an object with storageKey (the single source of truth).
    */
   private createStoragePayload(): {
     storageKey: StorageKey;
-    runId: string;
     executionId: string | undefined;
   } {
     const storageKey = this.getStorageKey();
     return {
       storageKey,
-      runId: storageKey, // Backward compatibility
       // Use stored executionId - no round-trip to fileService
       executionId: this.executionId,
     };
