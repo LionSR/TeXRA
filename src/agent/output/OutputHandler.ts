@@ -177,13 +177,12 @@ export class OutputHandler implements IOutputHandler {
    *
    * @param storageKey - THE key for storage operations (already branded via normalizeRunId)
    */
-  public setActiveRun(storageKey?: StorageKey | null): void {
+  public setActiveRun(storageKey: StorageKey): void {
     // Use the stored executionId directly - no round-trip to fileService
     // The executionId was resolved once in the constructor and should not change
     this.fileService.updateRunContext(this.executionId ?? undefined);
 
-    // storageKey is already branded - use normalizeRunId only for the null case
-    const nextStorageKey = storageKey ?? normalizeRunId(null);
+    const nextStorageKey = storageKey;
     if (nextStorageKey === this._storageKey) {
       return;
     }
