@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 // Local imports
-import { parseKey, getMultipleName } from '@agent/index';
+import { getCleanAgentName, getMultipleName } from '@agent/index';
 import { AgentType } from '@agent/core/AgentDataclass';
 // Type imports
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
@@ -13,15 +13,6 @@ type StreamTabIdOptions = {
   executionId?: ExecutionId;
   useMultipleOutputs?: boolean;
 };
-
-/**
- * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
- */
-function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseKey(agentIdentifier);
-  return parsed ? parsed.name : agentIdentifier;
-}
 
 function formatToolUseStreamId(
   agent: string,

@@ -5,6 +5,7 @@ import * as path from 'path';
 import { sync as globSync } from 'glob';
 
 // Local imports - log
+import { getCleanAgentName } from '@agent/index';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
@@ -12,11 +13,17 @@ const CHANNEL = 'Housekeeping';
 logger.initialize(CHANNEL);
 
 export function getAgentFirstNameChunk(agent: string): string {
+  // Extract clean agent name (strip source: prefix if present)
+  // Handles all agent sources: custom, local, remote, builtIn, builtInToolUse
+  const cleanAgent = getCleanAgentName(agent);
+
   let result: string;
-  if (agent.startsWith('write-')) {
-    result = agent.split('-')[1];
+  if (cleanAgent.startsWith('write-')) {
+    result = cleanAgent.split('-')[1];
   } else {
-    result = agent.includes('_') ? agent.split('_')[0] : agent.split('-')[0];
+    result = cleanAgent.includes('_')
+      ? cleanAgent.split('_')[0]
+      : cleanAgent.split('-')[0];
   }
   return result;
 }
