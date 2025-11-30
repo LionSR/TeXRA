@@ -351,7 +351,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     // Raw XML files always go to task run storage (when executionId exists)
     // to keep the user's workspace clean. Processed .tex files respect user settings.
     if (this.useScratchpad) {
-      return this.fileService.createRawOutputLocation(fileName) as AgentFileLocation;
+      return this.fileService.createRawOutputLocation(fileName);
     }
 
     // Non-scratchpad outputs respect the user's storage mode setting

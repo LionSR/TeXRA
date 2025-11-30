@@ -403,6 +403,43 @@ export class TaskRunFileService {
   }
 
   /**
+   * Internal helper to resolve output location with configurable run storage behavior.
+   * Reduces duplication between createRawOutputLocation() and createLocation().
+   *
+   * @param relativePath - Workspace-relative path
+   * @param forceRunStorage - If true, always use run storage when executionId exists
+   * @returns AgentFileLocation (workspace or runStorage, never external when workspaceRoot exists)
+   */
+  private resolveOutputLocation(
+    relativePath: string,
+    forceRunStorage: boolean,
+  ): AgentFileLocation {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
+      // This shouldn't happen for agent outputs, but fallback to workspace-like behavior
+      const normalized = relativePath ? path.normalize(relativePath) : '';
+      return createWorkspaceLocation(normalized, normalized);
+    }
+
+    const normalized = relativePath ? path.normalize(relativePath) : '';
+    const executionId = this.activeExecutionId;
+
+    // Use run storage if forced OR if configured via storageMode
+    if (executionId && (forceRunStorage || this.useRunStorage)) {
+      const runDir = forceRunStorage
+        ? getRunDir(executionId)
+        : this.metadata.runDirectory;
+      if (runDir) {
+        const runAbsolute = path.join(runDir, normalized);
+        return createRunStorageLocation(runAbsolute, normalized, executionId);
+      }
+    }
+
+    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
+  }
+
+  /**
    * Create a FileLocation for raw output files (e.g., XML intermediates).
    * This method ALWAYS uses run storage when an executionId is available,
    * regardless of the storageMode setting. This keeps intermediate files
@@ -412,28 +449,10 @@ export class TaskRunFileService {
    * Use createLocation() for processed outputs (.tex files) that respect user settings.
    *
    * @param relativePath - Workspace-relative path (e.g., "paper_polish_r0_sonnet.xml")
-   * @returns FileLocation (runStorage if executionId exists, otherwise workspace)
+   * @returns AgentFileLocation (runStorage if executionId exists, otherwise workspace)
    */
-  public createRawOutputLocation(relativePath: string): FileLocation {
-    const workspaceRoot = this.workspaceRoot;
-    if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
-    }
-
-    // Normalize path separators for current platform
-    const normalized = relativePath ? path.normalize(relativePath) : '';
-
-    // Always use run storage for raw outputs when executionId is available
-    const executionId = this.activeExecutionId;
-    if (executionId) {
-      const runDir = getRunDir(executionId);
-      const runAbsolute = path.join(runDir, normalized);
-      return createRunStorageLocation(runAbsolute, normalized, executionId);
-    }
-
-    // Fallback to workspace when no executionId
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+  public createRawOutputLocation(relativePath: string): AgentFileLocation {
+    return this.resolveOutputLocation(relativePath, true);
   }
 
   /**
@@ -452,23 +471,7 @@ export class TaskRunFileService {
     if (!workspaceRoot) {
       return createExternalLocation(relativePath);
     }
-
-    // Normalize path separators for current platform (idempotent - safe to call on normalized paths)
-    const normalized = relativePath ? path.normalize(relativePath) : '';
-    const workspaceAbsolute = path.join(workspaceRoot, normalized);
-
-    // Check if run storage is enabled
-    const executionId = this.activeExecutionId;
-    if (executionId && this.useRunStorage) {
-      const runDir = this.metadata.runDirectory;
-      if (runDir) {
-        const runAbsolute = path.join(runDir, normalized);
-        return createRunStorageLocation(runAbsolute, normalized, executionId);
-      }
-    }
-
-    // Default to workspace location
-    return createWorkspaceLocation(workspaceAbsolute, normalized);
+    return this.resolveOutputLocation(relativePath, false);
   }
 
   /**
