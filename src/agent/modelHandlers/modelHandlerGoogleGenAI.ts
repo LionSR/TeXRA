@@ -550,7 +550,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ];
         }
 
-        if (!baseResponse.usageMetadata && usageFromChunks) {
+        // Always prefer the latest usage metadata from chunks (typically the final
+        // chunk has complete data). The first chunk may have partial/empty metadata.
+        if (usageFromChunks) {
           baseResponse.usageMetadata = usageFromChunks;
         }
 
@@ -800,15 +802,22 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   ): number {
     if (!responseUsage) return 0.0;
     const promptTokens = responseUsage.promptTokenCount ?? 0;
-    const completionTokens = responseUsage.candidatesTokenCount ?? 0;
-    // const completionTokens = responseUsage.responseTokenCount ?? 0;
-    // responseTokenCount is not correct, we need to compute the completion tokens from the response, maybe it is response.usageMetadata.candidatesTokenCount
-    // completion token computed this way seems to be zero for some reason
+    const candidatesTokens = responseUsage.candidatesTokenCount ?? 0;
     const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
     const toolUseTokens = responseUsage.toolUsePromptTokenCount ?? 0;
+
+    const inputTokens = promptTokens + toolUseTokens;
+    let outputTokens = candidatesTokens + thoughtTokens;
+
+    // Fallback: In streaming mode, individual output fields may be 0 while
+    // totalTokenCount is correct. Compute output from total if needed.
+    if (outputTokens === 0 && responseUsage.totalTokenCount) {
+      outputTokens = Math.max(0, responseUsage.totalTokenCount - inputTokens);
+    }
+
     return calculateTokenPrice(
-      promptTokens + toolUseTokens,
-      thoughtTokens + completionTokens,
+      inputTokens,
+      outputTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -818,17 +827,30 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     responseUsage: GenerateContentResponseUsageMetadata | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    // Use the usageMetadata attribute on the response object after calling generate_content. (we did)
+    // Use the usageMetadata attribute on the response object after calling generate_content.
     // This returns the total number of tokens in both the input and the output: totalTokenCount.
     // It also returns the token counts of the input and output separately: promptTokenCount (input tokens) and candidatesTokenCount (output tokens).
 
-    // Include thoughtsTokenCount in completion_tokens to match OpenAI convention
-    // where completion_tokens is the total, and reasoning_tokens is the breakdown
+    const promptTokens = responseUsage?.promptTokenCount ?? 0;
+    const toolUseTokens = responseUsage?.toolUsePromptTokenCount ?? 0;
     const candidatesTokens = responseUsage?.candidatesTokenCount ?? 0;
     const thoughtsTokens = responseUsage?.thoughtsTokenCount ?? 0;
+
+    const inputTokens = promptTokens + toolUseTokens;
+    let completionTokens = candidatesTokens + thoughtsTokens;
+
+    // Fallback: In streaming mode, individual output fields may be 0 while
+    // totalTokenCount is correct. Compute output from total if needed.
+    if (completionTokens === 0 && responseUsage?.totalTokenCount) {
+      completionTokens = Math.max(
+        0,
+        responseUsage.totalTokenCount - inputTokens,
+      );
+    }
+
     const usageObj: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: candidatesTokens + thoughtsTokens,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
@@ -861,15 +883,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    const inputTokens =
-      (rawUsage.promptTokenCount ?? 0) +
-      (rawUsage.toolUsePromptTokenCount ?? 0);
+    const promptTokens = rawUsage.promptTokenCount ?? 0;
+    const toolUseTokens = rawUsage.toolUsePromptTokenCount ?? 0;
+    const inputTokens = promptTokens + toolUseTokens;
+
     // Include thoughtsTokenCount in output to match cost calculation.
     // For thinking models, candidatesTokenCount may be 0 while most output
     // is in thoughtsTokenCount. Track reasoningTokens separately for breakdown.
     const candidatesTokens = rawUsage.candidatesTokenCount ?? 0;
     const reasoningTokens = rawUsage.thoughtsTokenCount ?? 0;
-    const outputTokens = candidatesTokens + reasoningTokens;
+    let outputTokens = candidatesTokens + reasoningTokens;
+
+    // Fallback: In streaming mode, individual output fields may be 0 while
+    // totalTokenCount is correct. Compute output from total if needed.
+    if (outputTokens === 0 && rawUsage.totalTokenCount) {
+      outputTokens = Math.max(0, rawUsage.totalTokenCount - inputTokens);
+    }
+
     const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
 
     // Calculate percentage cached
