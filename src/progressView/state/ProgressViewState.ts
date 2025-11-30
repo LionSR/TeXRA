@@ -8,7 +8,11 @@ import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+} from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -75,7 +79,7 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
-  private _activeRunIds: Map<StreamTabId, string | null> = new Map();
+  private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -165,11 +169,13 @@ export class ProgressViewState {
   }
 
   setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    this._activeRunIds.set(stream, runId);
+    // Normalize at boundary to ensure branded StorageKey storage
+    const storageKey = runId ? normalizeRunId(runId) : null;
+    this._activeRunIds.set(stream, storageKey);
     this.saveActiveRunIds();
   }
 
-  getActiveRunId(stream: StreamTabId): string | null {
+  getActiveRunId(stream: StreamTabId): StorageKey | null {
     return this._activeRunIds.get(stream) ?? null;
   }
 
@@ -329,8 +335,12 @@ export class ProgressViewState {
       {},
     );
 
+    // Normalize at boundary to ensure branded StorageKey storage
     this._activeRunIds = new Map(
-      Object.entries(stored).map(([stream, runId]) => [stream, runId ?? null]),
+      Object.entries(stored).map(([stream, runId]) => [
+        stream,
+        runId ? normalizeRunId(runId) : null,
+      ]),
     );
   }
 
@@ -409,42 +419,21 @@ export class ProgressViewState {
   }
 
   /**
-   * Get output files for a stream, resolving the correct dimension key.
+   * Get output files for a stream using storageKey.
    *
-   * ## Resolution Strategy
-   * 1. If executionId is provided, try to find files stored under that ID
-   *    (works for both tool-use agents and workflow agents with runStorage)
-   * 2. Otherwise, use runId (task group) or fall back to activeRunId
+   * StorageKey is THE single source of truth for storage operations:
+   * - Workflow agents: storageKey = task group ID
+   * - Tool-use agents: storageKey = executionId
    *
-   * For tool-use agents: executionId IS the runId (same UUID)
-   * For workflow agents: runId is the task group ID, executionId is metadata
-   *
+   * @param stream - The stream tab ID
+   * @param options.storageKey - THE branded key for storage lookup.
    * @see IdentifierTypes.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,
-    options: { executionId?: ExecutionId; runId?: string | null } = {},
+    options: { storageKey: StorageKey },
   ): Map<number, OutputFileInfo[]> | undefined {
-    // Try executionId first - works for tool-use agents where executionId IS runId
-    // and for workflow agents with runStorage metadata
-    if (options.executionId) {
-      const byExecution = this._outputFiles.getRunByExecution(
-        stream,
-        options.executionId,
-      );
-      if (byExecution) {
-        return byExecution;
-      }
-    }
-
-    // Fall back to runId (task group for workflow agents, or legacy data)
-    const candidateRunId =
-      options.runId ?? this.getActiveRunId(stream) ?? undefined;
-    if (!candidateRunId) {
-      return undefined;
-    }
-
-    return this._outputFiles.getRun(stream, normalizeRunId(candidateRunId));
+    return this._outputFiles.getRun(stream, options.storageKey);
   }
 
   // Execution ID management
