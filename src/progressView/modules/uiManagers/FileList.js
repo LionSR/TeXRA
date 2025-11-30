@@ -145,10 +145,7 @@ export class FileList {
 
     // Handle diff stats (use schema field names: added/removed)
     if (statsSpan) {
-      if (
-        file.diff?.added !== undefined &&
-        file.diff?.removed !== undefined
-      ) {
+      if (file.diff?.added !== undefined && file.diff?.removed !== undefined) {
         statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
       } else if (file.diff?.added !== undefined) {
         statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
