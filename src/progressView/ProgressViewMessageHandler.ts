@@ -267,7 +267,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       const activeRunId = this.provider.state.getActiveRunId(message.stream);
       // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
       // Workflow agents store files under task group ID, NOT executionId
-      const storageKey = activeRunId ?? executionId;
+      const storageKey = activeRunId ?? executionId ?? null;
       const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
         storageKey,
       });
