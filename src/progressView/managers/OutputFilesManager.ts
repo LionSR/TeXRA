@@ -2,7 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type {
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+} from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
@@ -41,14 +45,24 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /** Add output files for a stream and round */
+  /**
+   * Add output files for a stream and round.
+   *
+   * @param stream - The stream tab ID
+   * @param runId - Legacy parameter, use options.storageKey instead
+   * @param filesByRound - Map of round number to output files
+   * @param options - Additional options
+   * @param options.storageKey - THE key for storage (preferred over runId)
+   * @param options.executionId - For metadata purposes
+   */
   async addFiles(
     stream: StreamTabId,
     runId: string,
     filesByRound: { [key: number]: OutputFileInfo[] },
-    options: { executionId?: ExecutionId } = {},
+    options: { storageKey?: StorageKey; executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const normalizedRunId = normalizeRunId(runId);
+    // Use storageKey if provided, otherwise fall back to normalizing runId
+    const key = options.storageKey ?? (normalizeRunId(runId) as StorageKey);
 
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
@@ -56,10 +70,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this.items.set(stream, streamRuns);
     }
 
-    let runRounds = streamRuns.get(normalizedRunId);
+    let runRounds = streamRuns.get(key);
     if (!runRounds) {
       runRounds = new Map();
-      streamRuns.set(normalizedRunId, runRounds);
+      streamRuns.set(key, runRounds);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -84,15 +98,25 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.save();
   }
 
-  /** Update missing outputs for a stream */
+  /**
+   * Update missing outputs for a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param runId - Legacy parameter, use options.storageKey instead
+   * @param filesByRound - Map of round number to missing file paths
+   * @param options - Additional options
+   * @param options.storageKey - THE key for storage (preferred over runId)
+   * @param options.executionId - For metadata purposes
+   */
   async updateMissingOutputs(
     stream: StreamTabId,
     runId: string,
     filesByRound: { [key: number]: string[] },
-    options: { executionId?: ExecutionId } = {},
+    options: { storageKey?: StorageKey; executionId?: ExecutionId } = {},
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const normalizedRunId = normalizeRunId(runId);
+    // Use storageKey if provided, otherwise fall back to normalizing runId
+    const key = options.storageKey ?? (normalizeRunId(runId) as StorageKey);
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -100,10 +124,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this._missingOutputs.set(stream, streamMissing);
     }
 
-    let runMissing = streamMissing.get(normalizedRunId);
+    let runMissing = streamMissing.get(key);
     if (!runMissing) {
       runMissing = new Map();
-      streamMissing.set(normalizedRunId, runMissing);
+      streamMissing.set(key, runMissing);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
