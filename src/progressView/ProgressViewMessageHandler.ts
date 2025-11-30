@@ -264,9 +264,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleDiffStream(message: any): Promise<void> {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       const executionId = this.provider.state.getExecutionId(message.stream);
+      const activeRunId = this.provider.state.getActiveRunId(message.stream);
       const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
-        executionId,
-        runId: this.provider.state.getActiveRunId(message.stream),
+        storageKey: executionId ?? activeRunId,
       });
       const outputsByRound = runOutputs
         ? Object.fromEntries(runOutputs.entries())
@@ -424,8 +424,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       persist: false,
     });
     const runOutputs = this.provider.state.getRunOutputFiles(stream, {
-      runId: resolvedRunId ?? undefined,
-      executionId: resolvedRunId ?? undefined,
+      storageKey: resolvedRunId,
     });
 
     // Trust stored executionId, don't extract from paths

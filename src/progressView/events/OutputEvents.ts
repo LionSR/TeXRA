@@ -105,14 +105,12 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, storageKey, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, runId, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        // Use storageKey if provided (new path), fall back to runId for compatibility
-        const key: StorageKey = storageKey ?? (normalizeRunId(runId) as StorageKey);
-        await state.outputFiles.addFiles(stream, runId, filesByRound, {
-          storageKey: key,
-          executionId,
-        });
+        // storageKey is THE single source of truth, runId kept for backward compatibility
+        const key: StorageKey =
+          storageKey ?? (normalizeRunId(runId) as StorageKey);
+        await state.outputFiles.addFiles(stream, key, filesByRound);
         sendRunFileUpdate(state, updater, stream, key);
       });
     },
@@ -120,14 +118,12 @@ const registerOutputFileListeners = (
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, storageKey, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, runId, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-        // Use storageKey if provided (new path), fall back to runId for compatibility
-        const key: StorageKey = storageKey ?? (normalizeRunId(runId) as StorageKey);
-        await state.outputFiles.updateMissingOutputs(stream, runId, filesByRound, {
-          storageKey: key,
-          executionId,
-        });
+        // storageKey is THE single source of truth, runId kept for backward compatibility
+        const key: StorageKey =
+          storageKey ?? (normalizeRunId(runId) as StorageKey);
+        await state.outputFiles.updateMissingOutputs(stream, key, filesByRound);
         sendRunMissingUpdate(state, updater, stream, key);
       });
     },
