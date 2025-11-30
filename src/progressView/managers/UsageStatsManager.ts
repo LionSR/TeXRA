@@ -1,9 +1,7 @@
 // Local imports - identifiers
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-
-// Internal imports
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -36,16 +34,13 @@ export class UsageStatsManager extends PersistentMapManager<
 
   /**
    * Update usage statistics for a stream
+   * @param storageKey - THE key for storage operations
    */
   async setRunUsage(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     usage: TokenUsageStats,
   ): Promise<void> {
-    if (!runId) {
-      return;
-    }
-
     const normalized = this.sanitizeUsage(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
@@ -54,9 +49,9 @@ export class UsageStatsManager extends PersistentMapManager<
       normalized.outputTokens === 0 &&
       normalized.cost === 0
     ) {
-      current.delete(runId);
+      current.delete(storageKey);
     } else {
-      current.set(runId, normalized);
+      current.set(storageKey, normalized);
     }
 
     if (current.size === 0) {
@@ -70,18 +65,15 @@ export class UsageStatsManager extends PersistentMapManager<
 
   /**
    * Delete usage statistics for a specific run within a stream
+   * @param storageKey - THE key for storage operations
    */
-  async deleteRunUsage(stream: StreamTabId, runId: string): Promise<void> {
-    if (!runId) {
-      return;
-    }
-
+  async deleteRunUsage(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
     const existing = this.items.get(stream);
     if (!existing) {
       return;
     }
 
-    existing.delete(runId);
+    existing.delete(storageKey);
     if (existing.size === 0) {
       this.items.delete(stream);
     }
