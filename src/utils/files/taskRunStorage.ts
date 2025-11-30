@@ -403,24 +403,26 @@ export class TaskRunFileService {
   }
 
   /**
-   * Internal helper to resolve output location with configurable run storage behavior.
-   * Reduces duplication between createRawOutputLocation() and createLocation().
+   * Create a FileLocation from a workspace-relative path, with run-storage awareness.
    *
-   * @param relativePath - Workspace-relative path
-   * @param forceRunStorage - If true, always use run storage when executionId exists
-   * @returns AgentFileLocation (workspace or runStorage, never external when workspaceRoot exists)
+   * Path normalization is handled internally - you can pass paths with either
+   * forward slashes or backslashes, and the function will normalize them for
+   * the current platform. It's safe to pass already-normalized paths.
+   *
+   * @param relativePath - Workspace-relative path (e.g., "paper.tex" or "sub/paper.tex")
+   * @param options.forceRunStorage - Always use run storage when executionId exists (for raw XML intermediates)
+   * @returns FileLocation (workspace or runStorage based on mode/options)
    */
-  private resolveOutputLocation(
+  public createLocation(
     relativePath: string,
-    forceRunStorage: boolean,
-  ): AgentFileLocation {
+    options?: { forceRunStorage?: boolean },
+  ): FileLocation {
     const workspaceRoot = this.workspaceRoot;
     if (!workspaceRoot) {
-      // This shouldn't happen for agent outputs, but fallback to workspace-like behavior
-      const normalized = relativePath ? path.normalize(relativePath) : '';
-      return createWorkspaceLocation(normalized, normalized);
+      return createExternalLocation(relativePath);
     }
 
+    const forceRunStorage = options?.forceRunStorage ?? false;
     const normalized = relativePath ? path.normalize(relativePath) : '';
     const executionId = this.activeExecutionId;
 
@@ -437,41 +439,6 @@ export class TaskRunFileService {
 
     const workspaceAbsolute = path.join(workspaceRoot, normalized);
     return createWorkspaceLocation(workspaceAbsolute, normalized);
-  }
-
-  /**
-   * Create a FileLocation for raw output files (e.g., XML intermediates).
-   * This method ALWAYS uses run storage when an executionId is available,
-   * regardless of the storageMode setting. This keeps intermediate files
-   * out of the user's workspace.
-   *
-   * Use this for raw model outputs (XML files) that are intermediate artifacts.
-   * Use createLocation() for processed outputs (.tex files) that respect user settings.
-   *
-   * @param relativePath - Workspace-relative path (e.g., "paper_polish_r0_sonnet.xml")
-   * @returns AgentFileLocation (runStorage if executionId exists, otherwise workspace)
-   */
-  public createRawOutputLocation(relativePath: string): AgentFileLocation {
-    return this.resolveOutputLocation(relativePath, true);
-  }
-
-  /**
-   * Create a FileLocation from a workspace-relative path, with run-storage awareness.
-   * This is the preferred method for creating output file locations.
-   *
-   * Path normalization is handled internally - you can pass paths with either
-   * forward slashes or backslashes, and the function will normalize them for
-   * the current platform. It's safe to pass already-normalized paths.
-   *
-   * @param relativePath - Workspace-relative path (e.g., "paper.tex" or "sub/paper.tex")
-   * @returns FileLocation (workspace or runStorage based on current mode)
-   */
-  public createLocation(relativePath: string): FileLocation {
-    const workspaceRoot = this.workspaceRoot;
-    if (!workspaceRoot) {
-      return createExternalLocation(relativePath);
-    }
-    return this.resolveOutputLocation(relativePath, false);
   }
 
   /**
