@@ -5,8 +5,9 @@ title: 'Agentic Coding'
 
 # Agentic Coding: Humans Design, Agents code!
 
-> If you are an AI agent involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
-> {: .warning }
+::: warning
+If you are an AI agent involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
+:::
 
 ## Agentic Coding Steps
 
@@ -54,8 +55,9 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
          process --> endNode[End]
      ```
 
-   - > **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.  
-     > {: .best-practice }
+   ::: tip Best Practice
+   **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.
+   :::
 
 3. **Utilities**: Based on the Flow Design, identify and implement necessary utility functions.
    - Think of your AI system as the brain. It needs a body—these _external utility functions_—to interact with the real world:
@@ -90,10 +92,13 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
          print(call_llm(prompt))
      ```
 
-   - > **Sometimes, design Utilities before Flow:** For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
-     > {: .best-practice }
-   - > **Avoid Exception Handling in Utilities**: If a utility function is called from a Node's `exec()` method, avoid using `try...except` blocks within the utility. Let the Node's built-in retry mechanism handle failures.
-     > {: .warning }
+   ::: tip Best Practice
+   **Sometimes, design Utilities before Flow:** For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
+   :::
+
+   ::: warning
+   **Avoid Exception Handling in Utilities**: If a utility function is called from a Node's `exec()` method, avoid using `try...except` blocks within the utility. Let the Node's built-in retry mechanism handle failures.
+   :::
 
 4. **Data Design**: Design the shared store that nodes will use to communicate.
    - One core design principle for PocketFlow is to use a well-designed [shared store](./core_abstraction/communication.md)—a data contract that all nodes agree upon to retrieve and store data.
@@ -134,10 +139,11 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
      - **Prompt Engineering**: Use clear, specific instructions with examples to reduce ambiguity.
      - **In-Context Learning**: Provide robust examples for tasks that are difficult to specify with instructions alone.
 
-   - > **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
-     >
-     > <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/success.png?raw=true" width="400"/></div>
-     > {: .best-practice }
+   ::: tip Best Practice
+   **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
+
+   <div align="center"><img src="https://github.com/the-pocket/.github/raw/main/assets/success.png?raw=true" width="400"/></div>
+   :::
 
 8. **Reliability**
    - **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `max_retries` and `wait` times.
