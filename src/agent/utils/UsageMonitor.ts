@@ -19,11 +19,12 @@ import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
  * Cost is computed once during normalization and stored in the accumulator.
  * This class simply reads the pre-computed totals - no cost recomputation needed.
  *
- * ## RunId Resolution
- * - Workflow agents: Uses task group ID from logger hierarchy (via usageReporter)
- * - Tool-use agents: Uses executionId as the runId (no task groups exist)
+ * ## Storage Key Resolution
+ * Uses context.storageKey which is already computed:
+ * - Workflow agents: storageKey = task group ID
+ * - Tool-use agents: storageKey = executionId
  *
- * @see IdentifierTypes.ts for the full execution model documentation
+ * @see ExecutionIdentity for the unified identity model
  */
 type UsageMonitorRunKind = 'workflow' | 'tool-use';
 
@@ -88,10 +89,10 @@ export class UsageMonitor {
         }),
       };
 
-      // For tool-use agents: ExecutionId IS the RunId (no task groups exist).
-      // Fallback to streamId only for legacy sessions without executionId.
-      const runId = this.context.executionId ?? this.context.streamId;
-      usageReporter.report(payload, runId);
+      // Use storageKey from context - already computed correctly for both
+      // workflow agents (task group ID) and tool-use agents (executionId)
+      const storageKey = this.context.storageKey;
+      usageReporter.report(payload, storageKey);
     } catch (error) {
       logger.error(`Error printing ${runKind} statistics: ${error}`);
     }
