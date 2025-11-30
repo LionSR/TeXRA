@@ -11,13 +11,14 @@
  *
  * @see IdentifierTypes.ts for the full execution model documentation
  */
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 
 /**
  * Sentinel run identifier retained for legacy sessions that predate
  * per-run scoping. Persisted state may still reference this ID when no
  * explicit task group identifier was available at the time.
  */
-export const DEFAULT_RUN_ID = '__default__';
+export const DEFAULT_RUN_ID: StorageKey = '__default__' as StorageKey;
 
 /**
  * Normalize a run ID for workflow agents, falling back to the default sentinel value.
@@ -26,10 +27,10 @@ export const DEFAULT_RUN_ID = '__default__';
  * Do NOT use this for tool-use agents or ExecutionId values.
  *
  * @param runId - The run ID to normalize, may be null or undefined
- * @returns Normalized run ID, never null or undefined
+ * @returns StorageKey - the branded type for storage operations
  */
-export function normalizeRunId(runId: string | null | undefined): string {
-  return runId ?? DEFAULT_RUN_ID;
+export function normalizeRunId(runId: string | null | undefined): StorageKey {
+  return (runId ?? DEFAULT_RUN_ID) as StorageKey;
 }
 
 /**
