@@ -2,16 +2,7 @@
 import * as path from 'path';
 
 // Local imports
-import { parseKey } from '@agent/index';
-
-/**
- * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
- */
-function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseKey(agentIdentifier);
-  return parsed ? parsed.name : agentIdentifier;
-}
+import { getCleanAgentName } from '@agent/index';
 
 /**
  * Generates an output filename incorporating model and round information.
