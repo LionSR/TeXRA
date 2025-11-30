@@ -809,6 +809,13 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * the documented formula.
    *
    * Note: candidatesTokenCount does NOT include thinking tokens per llm-gemini#75.
+   *
+   * TODO: Future work - extract per-modality token breakdown from promptTokensDetails[],
+   * candidatesTokensDetails[], cacheTokensDetails[], and toolUsePromptTokensDetails[].
+   * Each array contains ModalityTokenCount objects with modality (TEXT, IMAGE, VIDEO,
+   * AUDIO, DOCUMENT) and tokenCount. Note that PDF pages are currently reported under
+   * IMAGE modality, not DOCUMENT. This would enable modality-specific cost tracking
+   * and better insights into multimodal token consumption.
    */
   private computeTokenCounts(
     usage: GenerateContentResponseUsageMetadata | null,
