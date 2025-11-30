@@ -265,8 +265,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     await this.withToolbarTaskState(message.stream, async (taskState) => {
       const executionId = this.provider.state.getExecutionId(message.stream);
       const activeRunId = this.provider.state.getActiveRunId(message.stream);
+      // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
+      // Workflow agents store files under task group ID, NOT executionId
+      const storageKey = activeRunId ?? executionId;
       const runOutputs = this.provider.state.getRunOutputFiles(message.stream, {
-        storageKey: executionId ?? activeRunId,
+        storageKey,
       });
       const outputsByRound = runOutputs
         ? Object.fromEntries(runOutputs.entries())
@@ -279,8 +282,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
         streamId: message.stream,
-        runId:
-          executionId ?? this.provider.state.getActiveRunId(message.stream),
+        runId: storageKey,
         outputsByRound,
       });
     });
