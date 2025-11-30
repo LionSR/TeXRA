@@ -87,11 +87,8 @@ export interface ProgressEventPayloads {
   clearOutputFiles: StreamTabId;
   setTaskState: SetTaskStatePayload;
   clearTaskOutput: StreamTabId;
-  updateStreamUsage: {
-    stream: StreamTabId;
+  updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
-    /** THE key for storage operations. Required. */
-    storageKey: StorageKey;
   };
   showRetryRequest: {
     streamId: StreamTabId;
