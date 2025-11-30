@@ -30,18 +30,14 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- Fixed a race condition and memory leak in the core agent execution loop.
 - Resolved duplicate agent names appearing in the dropdown when multiple
   sources define the same agent.
 - Agent selection now persists correctly across extension reloads.
-- OAuth redirect URIs use the runtime extension ID, fixing authentication in
-  forked or repackaged builds.
-- Usage statistics now include cached tokens and correctly identify the active
-  run.
+- Fixed authentication redirects not working in some IDEs.
+- Usage statistics now display accurate totals for the current session.
 - The API key banner displays reliably on initial webview load.
 - Dropdown menus no longer get clipped by container edges.
-- arXiv search queries with multiple terms are now split correctly so results
-  stay relevant.
+- arXiv search queries with multiple terms now return more relevant results.
 
 ## [0.34.5] - 2025-11-21
 
