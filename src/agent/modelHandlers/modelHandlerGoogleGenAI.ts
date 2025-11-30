@@ -822,15 +822,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // This returns the total number of tokens in both the input and the output: totalTokenCount.
     // It also returns the token counts of the input and output separately: promptTokenCount (input tokens) and candidatesTokenCount (output tokens).
 
+    // Include thoughtsTokenCount in completion_tokens to match OpenAI convention
+    // where completion_tokens is the total, and reasoning_tokens is the breakdown
+    const candidatesTokens = responseUsage?.candidatesTokenCount ?? 0;
+    const thoughtsTokens = responseUsage?.thoughtsTokenCount ?? 0;
     const usageObj: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
+      completion_tokens: candidatesTokens + thoughtsTokens,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },
       completion_tokens_details: {
-        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
+        reasoning_tokens: thoughtsTokens,
         accepted_prediction_tokens: undefined,
         rejected_prediction_tokens: undefined,
       },
@@ -860,8 +864,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const inputTokens =
       (rawUsage.promptTokenCount ?? 0) +
       (rawUsage.toolUsePromptTokenCount ?? 0);
-    const outputTokens = rawUsage.candidatesTokenCount ?? 0;
+    // Include thoughtsTokenCount in output to match cost calculation.
+    // For thinking models, candidatesTokenCount may be 0 while most output
+    // is in thoughtsTokenCount. Track reasoningTokens separately for breakdown.
+    const candidatesTokens = rawUsage.candidatesTokenCount ?? 0;
     const reasoningTokens = rawUsage.thoughtsTokenCount ?? 0;
+    const outputTokens = candidatesTokens + reasoningTokens;
     const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
 
     // Calculate percentage cached
