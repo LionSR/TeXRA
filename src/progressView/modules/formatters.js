@@ -539,6 +539,36 @@ export class LogEntryFormatter {
       '@@LATEX-CREF:$2@@',
     );
 
+    // Handle Pandoc markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
+    // This format combines a markdown link with Pandoc attributes
+    content = content.replace(
+      /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-REF:$2@@',
+    );
+    content = content.replace(
+      /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-EQREF:$2@@',
+    );
+    content = content.replace(
+      /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-CREF:$2@@',
+    );
+
+    // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
+    // (without escaped brackets in the label)
+    content = content.replace(
+      /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-REF:$2@@',
+    );
+    content = content.replace(
+      /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-EQREF:$2@@',
+    );
+    content = content.replace(
+      /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+      '@@LATEX-CREF:$2@@',
+    );
+
     const renderer = this.md || getMarkdownRenderer();
 
     // Process content as markdown
