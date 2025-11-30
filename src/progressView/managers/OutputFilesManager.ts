@@ -53,18 +53,17 @@ export class OutputFilesManager extends PersistentMapManager<
     storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): Promise<void> {
-    const key = normalizeRunId(storageKey) as StorageKey;
-
+    // storageKey is already branded - use directly, no normalization needed
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
       streamRuns = new Map();
       this.items.set(stream, streamRuns);
     }
 
-    let runRounds = streamRuns.get(key);
+    let runRounds = streamRuns.get(storageKey);
     if (!runRounds) {
       runRounds = new Map();
-      streamRuns.set(key, runRounds);
+      streamRuns.set(storageKey, runRounds);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -102,7 +101,7 @@ export class OutputFilesManager extends PersistentMapManager<
     filesByRound: { [key: number]: string[] },
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const key = normalizeRunId(storageKey) as StorageKey;
+    // storageKey is already branded - use directly, no normalization needed
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -110,10 +109,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this._missingOutputs.set(stream, streamMissing);
     }
 
-    let runMissing = streamMissing.get(key);
+    let runMissing = streamMissing.get(storageKey);
     if (!runMissing) {
       runMissing = new Map();
-      streamMissing.set(key, runMissing);
+      streamMissing.set(storageKey, runMissing);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
