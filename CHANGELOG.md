@@ -26,16 +26,12 @@ All notable changes to this project will be documented in this file.
   completed runs.
 - File selection lists are now sorted alphabetically by name.
 - History view displays the session kind (workflow vs tool use) for each entry.
-- OAuth redirect now supports additional IDEs including Windsurf.
 
 ### Bug Fixes
 
 - Resolved duplicate agent names appearing in the dropdown when multiple
   sources define the same agent.
-- Agent selection now persists correctly across extension reloads.
-- Usage statistics now display accurate totals for the current session.
 - The API key banner displays reliably on initial webview load.
-- Dropdown menus no longer get clipped by container edges.
 - arXiv search queries with multiple terms now return more relevant results.
 
 ## [0.34.5] - 2025-11-21
