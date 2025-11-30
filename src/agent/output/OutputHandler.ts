@@ -87,7 +87,7 @@ export class OutputHandler implements IOutputHandler {
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
-  private readonly executionId?: string;
+  private readonly executionId: string;
   /**
    * The storage key for this handler.
    * Set via setActiveRun() when a workflow agent creates its primary task group.
@@ -100,21 +100,20 @@ export class OutputHandler implements IOutputHandler {
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     logId: number,
-    baseFiles: FileLocation[] = [],
-    logger?: AgentLogger,
-    fileService?: TaskRunFileService,
-    executionId?: string | null,
+    baseFiles: FileLocation[],
+    logger: AgentLogger,
+    fileService: TaskRunFileService,
+    executionId: string,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
     this.logId = logId;
     this.rounds = new Map();
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
+    this.logger = logger;
     this.channel = this.logger.channelId;
-    this.fileService = fileService || new TaskRunFileService();
-    // executionId is passed from the execution context - no fallback needed
-    this.executionId = executionId ?? undefined;
+    this.fileService = fileService;
+    this.executionId = executionId;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
@@ -179,27 +178,21 @@ export class OutputHandler implements IOutputHandler {
    */
   public setActiveRun(storageKey: StorageKey): void {
     // Use the stored executionId directly - no round-trip to fileService
-    // The executionId was resolved once in the constructor and should not change
-    this.fileService.updateRunContext(this.executionId ?? undefined);
+    this.fileService.updateRunContext(this.executionId);
 
-    const nextStorageKey = storageKey;
-    if (nextStorageKey === this._storageKey) {
+    if (storageKey === this._storageKey) {
       return;
     }
 
-    this._storageKey = nextStorageKey;
+    this._storageKey = storageKey;
     this.openedOutputs.clear();
 
-    if (this.executionId) {
-      const snapshotTargets = this.collectRunSnapshotFiles();
-      const supportFiles = this.collectRunSupportFiles();
-      this.runPreparation = this.fileService.prepareRunWorkspace(
-        snapshotTargets,
-        { linkFiles: supportFiles },
-      );
-    } else {
-      this.runPreparation = null;
-    }
+    const snapshotTargets = this.collectRunSnapshotFiles();
+    const supportFiles = this.collectRunSupportFiles();
+    this.runPreparation = this.fileService.prepareRunWorkspace(
+      snapshotTargets,
+      { linkFiles: supportFiles },
+    );
   }
 
   /**

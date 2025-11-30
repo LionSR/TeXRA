@@ -858,10 +858,8 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               }
 
               // Check if storageKey was already set by hydrateOutputState (resume case)
-              // Initial storageKey equals executionId; if different, it was already set
-              const initialStorageKey = normalizeRunId(this.context.executionId);
-              if (this.context.storageKey === initialStorageKey) {
-                // New run - use the task group ID as the storage key
+              // If still initial, this is a new run - set to task group ID
+              if (this.context.hasInitialStorageKey()) {
                 const storageKey = normalizeRunId(runStage.id);
                 this.context.updateStorageKey(storageKey);
                 this.outputHandler.setActiveRun(storageKey);
