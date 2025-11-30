@@ -51,7 +51,6 @@ export class AgentUsageReporter {
     bus.emit('updateStreamUsage', {
       stream: this.streamId,
       storageKey,
-      runId: storageKey, // Backward compatibility
       usage,
     });
 
