@@ -108,8 +108,8 @@ const registerOutputFileListeners = (
     ({ stream, storageKey, runId, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
         // storageKey is THE single source of truth, runId kept for backward compatibility
-        const key: StorageKey =
-          storageKey ?? (normalizeRunId(runId) as StorageKey);
+        // normalizeRunId returns StorageKey, no cast needed
+        const key = storageKey ?? normalizeRunId(runId);
         await state.outputFiles.addFiles(stream, key, filesByRound);
         sendRunFileUpdate(state, updater, stream, key);
       });
@@ -121,8 +121,8 @@ const registerOutputFileListeners = (
     ({ stream, storageKey, runId, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
         // storageKey is THE single source of truth, runId kept for backward compatibility
-        const key: StorageKey =
-          storageKey ?? (normalizeRunId(runId) as StorageKey);
+        // normalizeRunId returns StorageKey, no cast needed
+        const key = storageKey ?? normalizeRunId(runId);
         await state.outputFiles.updateMissingOutputs(stream, key, filesByRound);
         sendRunMissingUpdate(state, updater, stream, key);
       });

@@ -48,8 +48,31 @@ export class AgentExecutionContext {
   private readonly agentCategory: AgentCategory;
 
   /**
-   * Mutable identity - storageKey can be updated by workflow agents
-   * when they create their primary task group.
+   * Mutable identity for storage key resolution.
+   *
+   * ## Design Decision: Mutable storageKey
+   *
+   * The storageKey is intentionally mutable while other identity fields are readonly:
+   * - executionId: Immutable, set at construction, always a UUID
+   * - streamTabId: Immutable, set at construction, for UI identification
+   * - storageKey: Mutable, initially equals executionId
+   *
+   * ## Why Mutable?
+   *
+   * Workflow agents create their primary task group AFTER construction.
+   * When the task group is created, updateStorageKey() sets storageKey to the
+   * task group ID. This is the single moment of mutation - after that,
+   * storageKey remains constant for the execution lifetime.
+   *
+   * Tool-use agents never call updateStorageKey(), so storageKey remains
+   * equal to executionId throughout execution.
+   *
+   * ## Type Note
+   *
+   * The getter returns ExecutionIdentity (all readonly). This is intentional -
+   * consumers should not be able to mutate the identity directly. The mutable
+   * `storageKey` here is an internal implementation detail for the workflow
+   * agent lifecycle.
    */
   private _identity: {
     readonly executionId: ExecutionId;
