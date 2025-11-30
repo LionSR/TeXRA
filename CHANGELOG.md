@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.7] - 2025-11-30
+
+### Bug Fixes
+
+- Fixed packing and cleaning operations not working correctly.
+
 ## [0.34.6] - 2025-11-30
 
 ### Features
