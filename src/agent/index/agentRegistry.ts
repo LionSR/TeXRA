@@ -435,6 +435,15 @@ export function parseKey(
   return { source: source as AgentSource, name };
 }
 
+/**
+ * Extract the clean agent name from an identifier.
+ * Handles source:name format (e.g., "custom:summarize" → "summarize").
+ */
+export function getCleanAgentName(agentIdentifier: string): string {
+  const parsed = parseKey(agentIdentifier);
+  return parsed ? parsed.name : agentIdentifier;
+}
+
 // =============================================================================
 // _MULTIPLE VARIANT HELPERS
 // =============================================================================
