@@ -280,7 +280,10 @@ export class OutputFilesManager extends PersistentMapManager<
    * @param stream - The stream tab ID
    * @param storageKey - THE key for storage operations
    */
-  async clearRunFiles(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
+  async clearRunFiles(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): Promise<void> {
     const runs = this.items.get(stream);
     if (!runs) {
       return;

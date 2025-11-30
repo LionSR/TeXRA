@@ -118,7 +118,11 @@ const registerOutputFileListeners = (
     ({ stream, storageKey, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
         // storageKey is THE single source of truth - no fallbacks
-        await state.outputFiles.updateMissingOutputs(stream, storageKey, filesByRound);
+        await state.outputFiles.updateMissingOutputs(
+          stream,
+          storageKey,
+          filesByRound,
+        );
         sendRunMissingUpdate(state, updater, stream, storageKey);
       });
     },

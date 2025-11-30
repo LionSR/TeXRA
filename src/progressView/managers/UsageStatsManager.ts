@@ -67,7 +67,10 @@ export class UsageStatsManager extends PersistentMapManager<
    * Delete usage statistics for a specific run within a stream
    * @param storageKey - THE key for storage operations
    */
-  async deleteRunUsage(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
+  async deleteRunUsage(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+  ): Promise<void> {
     const existing = this.items.get(stream);
     if (!existing) {
       return;
