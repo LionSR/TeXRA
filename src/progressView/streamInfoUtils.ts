@@ -2,17 +2,8 @@
 import * as path from 'path';
 
 // Local imports - progress view
-import { isRemoteAgent, parseKey } from '@agent/index';
+import { getCleanAgentName, isRemoteAgent } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-
-/**
- * Extract the clean agent name from an identifier.
- * Handles source:name format (e.g., "custom:summarize" → "summarize").
- */
-function getCleanAgentName(agentIdentifier: string): string {
-  const parsed = parseKey(agentIdentifier);
-  return parsed ? parsed.name : agentIdentifier;
-}
 
 // Type imports
 import type { ProgressViewState } from './state/ProgressViewState';
