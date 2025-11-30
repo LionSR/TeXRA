@@ -243,43 +243,7 @@ export class SettingsButtonManager extends BaseUIManager {
     this._menuObservers = [];
   }
 
-  _setupAdaptiveDropdownPositioning() {
-    // Fix dropdown positioning for footer selects that need to open upward
-    const footerSelects = [
-      ELEMENT_IDS.WORKFLOW_AGENT_SELECT,
-      ELEMENT_IDS.TOOL_USE_AGENT_SELECT,
-      'model',
-    ];
-
-    footerSelects.forEach((id) => {
-      const select = safeGetElementById(id);
-      if (!select) return;
-
-      // When dropdown opens, adjust position if it would overflow viewport
-      const adjustPosition = () => {
-        const dropdown = select.shadowRoot?.querySelector('.dropdown');
-        if (!dropdown) return;
-
-        const rect = select.getBoundingClientRect();
-        const viewportHeight = window.innerHeight;
-        const spaceBelow = viewportHeight - rect.bottom;
-        const dropdownHeight = 220; // 10 options * 22px
-
-        if (spaceBelow < dropdownHeight && rect.top > spaceBelow) {
-          // Not enough space below, position above
-          dropdown.style.top = 'unset';
-          dropdown.style.bottom = `${viewportHeight - rect.top}px`;
-        }
-      };
-
-      this.addListener(select, 'focus', adjustPosition);
-      this.addListener(select, 'click', adjustPosition);
-    });
-  }
-
   _setupDropdowns() {
-    this._setupAdaptiveDropdownPositioning();
-
     const toggleContainer = safeGetElementById(ELEMENT_IDS.SESSION_TYPE_TOGGLE);
     if (toggleContainer) {
       const handleSessionTypeSelection = (sessionType) => {

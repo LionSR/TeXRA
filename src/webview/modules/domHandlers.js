@@ -23,6 +23,30 @@ export const instructionManager = new InstructionManager(
 export const recordingManager = new RecordingManager(vscode);
 
 /**
+ * Adjusts dropdown position based on available viewport space.
+ * @param {HTMLElement} select - The vscode-single-select element
+ */
+function adjustDropdownPosition(select) {
+  const dropdown = select.shadowRoot?.querySelector('.dropdown');
+  if (!dropdown) return;
+
+  const rect = select.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const spaceAbove = rect.top;
+  const dropdownHeight = 220; // 10 visible options * 22px
+
+  if (spaceBelow >= dropdownHeight || spaceBelow >= spaceAbove) {
+    // Enough space below or more space below than above - default position
+    dropdown.style.top = '';
+    dropdown.style.bottom = '';
+  } else {
+    // More space above - position upward
+    dropdown.style.top = 'unset';
+    dropdown.style.bottom = `${window.innerHeight - rect.top}px`;
+  }
+}
+
+/**
  * Coordinates UI managers for the main webview.
  */
 class MainViewDomHandler extends BaseDomHandler {
@@ -32,6 +56,7 @@ class MainViewDomHandler extends BaseDomHandler {
     this.actionButtonManager = null;
     this.settingsButtonManager = null;
     this.debugMode = false;
+    this._dropdownListeners = [];
   }
 
   _updateDebugButtonVisibility() {
@@ -49,8 +74,26 @@ class MainViewDomHandler extends BaseDomHandler {
     this._updateDebugButtonVisibility();
   }
 
+  _setupAdaptiveDropdowns() {
+    document.querySelectorAll('vscode-single-select').forEach((select) => {
+      const handler = () => adjustDropdownPosition(select);
+      select.addEventListener('focus', handler, { capture: true });
+      select.addEventListener('click', handler, { capture: true });
+      this._dropdownListeners.push({ element: select, handler });
+    });
+  }
+
+  _cleanupAdaptiveDropdowns() {
+    this._dropdownListeners.forEach(({ element, handler }) => {
+      element.removeEventListener('focus', handler, { capture: true });
+      element.removeEventListener('click', handler, { capture: true });
+    });
+    this._dropdownListeners = [];
+  }
+
   initializeUI() {
     this._updateDebugButtonVisibility();
+    this._setupAdaptiveDropdowns();
 
     this.fileInputManager = new FileInputManager(
       vscode,
@@ -137,6 +180,7 @@ class MainViewDomHandler extends BaseDomHandler {
   }
 
   cleanupUI() {
+    this._cleanupAdaptiveDropdowns();
     if (this.fileInputManager) {
       this.fileInputManager.cleanup();
       this.fileInputManager = null;
