@@ -204,6 +204,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
     const hydration = (async () => {
       this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
+
+      // Set the resumed storageKey on context and outputHandler BEFORE hydrating
+      // This ensures subsequent events use the correct key
+      if (params.storageKey) {
+        this.context.updateStorageKey(params.storageKey);
+        this.outputHandler.setActiveRun(params.storageKey);
+      }
+
       this.outputHandler.hydrateFromArtifacts(
         params.storageKey ?? null,
         params.rounds,
@@ -848,11 +856,19 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
                   'Run group identifier is required for reflection runs.',
                 );
               }
-              // Update the context's storage key to the task group ID
-              // This is THE key for all storage operations
-              const storageKey = normalizeRunId(runStage.id);
-              this.context.updateStorageKey(runStage.id);
-              this.outputHandler.setActiveRun(storageKey);
+
+              // Check if we're resuming a previous run (have hydrated rounds)
+              // If resuming, the storageKey was already set by hydrateOutputState
+              // and we should NOT overwrite it with the new runStage.id
+              if (this.hydratedRoundCount === 0) {
+                // New run - use the task group ID as the storage key
+                const storageKey = normalizeRunId(runStage.id);
+                this.context.updateStorageKey(runStage.id);
+                this.outputHandler.setActiveRun(storageKey);
+              }
+              // For resumed runs, context.storageKey and outputHandler.activeRun
+              // were already set by hydrateOutputState() - preserve them
+
               return runStage;
             },
             resetPromptBuilder: () => this.resetPromptBuilder(),
