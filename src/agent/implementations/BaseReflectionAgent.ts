@@ -197,14 +197,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   public async hydrateOutputState(params: {
     executionId: ExecutionId;
-    runId?: string | null;
+    storageKey?: string | null;
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
       this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
       this.outputHandler.hydrateFromArtifacts(
-        params.runId ?? null,
+        params.storageKey ?? null,
         params.rounds,
       );
 
