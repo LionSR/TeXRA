@@ -14,10 +14,11 @@ Because of Python's GIL, parallel nodes and flows can't truly parallelize CPU-bo
 :::
 
 ::: tip Best Practice
+
 - **Ensure Tasks Are Independent**: If each item depends on the output of a previous item, **do not** parallelize.
 - **Beware of Rate Limits**: Parallel calls can **quickly** trigger rate limits on LLM services. You may need a **throttling** mechanism (e.g., semaphores or sleep intervals).
 - **Consider Single-Node Batch APIs**: Some LLMs offer a **batch inference** API where you can send multiple prompts in a single call. This is more complex to implement but can be more efficient than launching many parallel requests and mitigates rate limits.
-:::
+  :::
 
 ## AsyncParallelBatchNode
 
