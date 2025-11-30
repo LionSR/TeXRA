@@ -38,7 +38,7 @@ export function createUsageEvents(
     ): vscode.Disposable[] {
       const updateStreamUsage = bus.on(
         'updateStreamUsage',
-        ({ stream, usage, runId }) => {
+        ({ stream, usage, storageKey, runId }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
             const normalizedUsage: TokenUsageStats = {
               inputTokens: Number(usage.inputTokens ?? 0),
@@ -46,13 +46,14 @@ export function createUsageEvents(
               cost: Number(usage.cost ?? 0),
             };
 
-            // The backend now emits the correct groupId as runId.
-            // Only fall back to activeRunId if runId is not provided.
-            const targetRunId = runId ?? state.getActiveRunId(stream) ?? null;
+            // storageKey is THE single source of truth
+            // runId is for backward compatibility (backend sets runId = storageKey)
+            // No round-trip to state.getActiveRunId - trust what the backend emitted
+            const targetRunId = storageKey ?? runId;
 
             if (!targetRunId) {
               shared.logger.warn(
-                `Skipping updateStreamUsage for ${stream}: unable to resolve run ID`,
+                `Skipping updateStreamUsage for ${stream}: no storageKey or runId in event`,
               );
               return;
             }

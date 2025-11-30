@@ -367,20 +367,20 @@ export async function executeAgentWithLogging<T extends IAgent>(
       executionId &&
       provider
     ) {
+      // For resume, use a single storageKey for both fetching and hydrating
+      // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
+      // No complex resolution or multiple fallback chains
       const activeRunId = provider.state.getActiveRunId(activeStreamId);
+      const storageKey = activeRunId ?? executionId;
+
       const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
-        storageKey: activeRunId ?? executionId,
+        storageKey,
       });
 
       if (runOutputs) {
-        const resolvedRunId =
-          provider.state.resolveRunId(activeStreamId, activeRunId, {
-            persist: false,
-          }) ?? executionId;
-
         await agent.hydrateOutputState({
           executionId,
-          storageKey: resolvedRunId,
+          storageKey, // Use same key we fetched with - no inconsistency
           rounds: runOutputs,
         });
       }
