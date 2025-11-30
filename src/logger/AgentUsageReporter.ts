@@ -1,5 +1,5 @@
 // Local imports - agent types
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
@@ -14,6 +14,15 @@ import { AgentLogger } from './AgentLogger';
  *
  * Usage data flows through without modification - cost and token counts
  * are already computed upstream in the model handlers.
+ *
+ * ## Single Source of Truth
+ * The storageKey parameter is THE authoritative key for storage operations.
+ * It is computed once at execution start:
+ * - Workflow agents: storageKey = task group ID
+ * - Tool-use agents: storageKey = executionId
+ *
+ * This class does NOT query the logger for group IDs - it trusts the
+ * passed storageKey as the single source of truth.
  */
 export class AgentUsageReporter {
   constructor(
@@ -25,18 +34,11 @@ export class AgentUsageReporter {
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    *
-   * Usage flows to a single source of truth (UsageStatsManager) via updateStreamUsage.
-   * Detailed statistics are logged separately for display in the progress view.
-   *
-   * The groupId from the logger is the authoritative run identifier - it matches
-   * the TaskGroup ID that the frontend uses for activeRunId. The passed runId
-   * (executionId) is only used as a fallback when no group context exists.
+   * @param stats - Token usage statistics to report
+   * @param storageKey - THE key for storage (from context.storageKey) - REQUIRED
    */
-  public report(stats: ExtendedTokenUsageStats, runId?: string): void {
+  public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
-
-    // Get the current task group ID - this is what the frontend uses as activeRunId
-    const groupId = this.logger.withCurrentGroup((id) => id);
 
     // Pass through usage without modification
     const usage = {
@@ -45,21 +47,17 @@ export class AgentUsageReporter {
       cost: stats.cost,
     };
 
-    // Use groupId as the authoritative run identifier, fall back to passed runId
-    const targetRunId = groupId ?? runId;
-
-    // Always emit to the single source of truth (UsageStatsManager)
-    if (targetRunId) {
-      bus.emit('updateStreamUsage', {
-        stream: this.streamId,
-        runId: targetRunId,
-        usage,
-      });
-    }
+    // storageKey is THE single source of truth - no fallbacks, no round-trips
+    bus.emit('updateStreamUsage', {
+      stream: this.streamId,
+      storageKey,
+      usage,
+    });
 
     // Log detailed statistics for display in the progress view
+    // Use storageKey for logging context as well
     if (logStatistics) {
-      this.logger.statistics(stats, groupId);
+      this.logger.statistics(stats, storageKey);
     }
   }
 }

@@ -13,7 +13,7 @@ import {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StorageKey } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import {
@@ -42,6 +42,7 @@ import { createLifecycleState } from '@agent/implementations/flows/common/lifecy
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
+import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
@@ -197,14 +198,22 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   public async hydrateOutputState(params: {
     executionId: ExecutionId;
-    runId?: string | null;
+    storageKey?: StorageKey | null;
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
       this.roundOutputs = [];
       this.fileService.updateRunContext(params.executionId);
+
+      // Set the resumed storageKey on context and outputHandler BEFORE hydrating
+      // This ensures subsequent events use the correct key
+      if (params.storageKey) {
+        this.context.updateStorageKey(params.storageKey);
+        this.outputHandler.setActiveRun(params.storageKey);
+      }
+
       this.outputHandler.hydrateFromArtifacts(
-        params.runId ?? null,
+        params.storageKey ?? null,
         params.rounds,
       );
 
@@ -842,12 +851,22 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             },
             start: async () => {
               const runStage = await baseStart();
-              if (!runStage) {
+              if (!runStage || !runStage.id) {
                 throw new Error(
                   'Run group identifier is required for reflection runs.',
                 );
               }
-              this.outputHandler.setActiveRun(runStage.id);
+
+              // Check if storageKey was already set by hydrateOutputState (resume case)
+              // If still initial, this is a new run - set to task group ID
+              if (this.context.hasInitialStorageKey()) {
+                const storageKey = normalizeRunId(runStage.id);
+                this.context.updateStorageKey(storageKey);
+                this.outputHandler.setActiveRun(storageKey);
+              }
+              // For resumed runs, context.storageKey and outputHandler.activeRun
+              // were already set by hydrateOutputState() - preserve them
+
               return runStage;
             },
             resetPromptBuilder: () => this.resetPromptBuilder(),
