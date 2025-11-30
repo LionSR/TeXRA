@@ -178,9 +178,9 @@ export class OutputHandler implements IOutputHandler {
    *                     Accepts string for convenience; branded internally via normalizeRunId.
    */
   public setActiveRun(storageKey?: string | null): void {
-    const targetExecutionId =
-      this.executionId ?? this.fileService.getExecutionId();
-    this.fileService.updateRunContext(targetExecutionId ?? undefined);
+    // Use the stored executionId directly - no round-trip to fileService
+    // The executionId was resolved once in the constructor and should not change
+    this.fileService.updateRunContext(this.executionId ?? undefined);
 
     // Use normalizeRunId for proper branding - no manual casts
     const nextStorageKey = normalizeRunId(storageKey);
@@ -191,7 +191,7 @@ export class OutputHandler implements IOutputHandler {
     this._storageKey = nextStorageKey;
     this.openedOutputs.clear();
 
-    if (targetExecutionId) {
+    if (this.executionId) {
       const snapshotTargets = this.collectRunSnapshotFiles();
       const supportFiles = this.collectRunSupportFiles();
       this.runPreparation = this.fileService.prepareRunWorkspace(
@@ -225,7 +225,8 @@ export class OutputHandler implements IOutputHandler {
     return {
       storageKey,
       runId: storageKey, // Backward compatibility
-      executionId: this.fileService.getExecutionId(),
+      // Use stored executionId - no round-trip to fileService
+      executionId: this.executionId,
     };
   }
 
