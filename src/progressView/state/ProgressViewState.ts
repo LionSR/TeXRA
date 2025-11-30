@@ -79,7 +79,7 @@ export class ProgressViewState {
    * is cleared, so there is no need to persist these hints across sessions.
    */
   private _sessionCategoryHints: Map<StreamTabId, AgentCategory> = new Map();
-  private _activeRunIds: Map<StreamTabId, string | null> = new Map();
+  private _activeRunIds: Map<StreamTabId, StorageKey | null> = new Map();
   private readonly storage: StateStorage;
   private readonly logger: AgentLogger;
 
@@ -169,11 +169,13 @@ export class ProgressViewState {
   }
 
   setActiveRunId(stream: StreamTabId, runId: string | null): void {
-    this._activeRunIds.set(stream, runId);
+    // Normalize at boundary to ensure branded StorageKey storage
+    const storageKey = runId ? normalizeRunId(runId) : null;
+    this._activeRunIds.set(stream, storageKey);
     this.saveActiveRunIds();
   }
 
-  getActiveRunId(stream: StreamTabId): string | null {
+  getActiveRunId(stream: StreamTabId): StorageKey | null {
     return this._activeRunIds.get(stream) ?? null;
   }
 
@@ -333,8 +335,12 @@ export class ProgressViewState {
       {},
     );
 
+    // Normalize at boundary to ensure branded StorageKey storage
     this._activeRunIds = new Map(
-      Object.entries(stored).map(([stream, runId]) => [stream, runId ?? null]),
+      Object.entries(stored).map(([stream, runId]) => [
+        stream,
+        runId ? normalizeRunId(runId) : null,
+      ]),
     );
   }
 
