@@ -166,6 +166,23 @@ const isAnyThinkingBlockParam = (
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
 
+/** Extract concatenated text from content blocks, optionally trimming each block */
+const extractTextFromContent = (
+  content: BetaContentBlock[] | undefined,
+  trim = false,
+): string => {
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  let text = '';
+  for (const block of content) {
+    if (block.type === 'text') {
+      text += trim ? block.text.trim() : block.text;
+    }
+  }
+  return text;
+};
+
 /**
  * Anthropic-specific model handler implementation for managing API interactions and message processing.
  */
@@ -579,8 +596,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
           response = await stream.finalMessage();
           const finalReasoning = this.processThinkingBlock(response);
           thinking.finalize(finalReasoning ?? undefined);
-          // Use SDK's finalText() method to extract concatenated text content
-          const finalOutput = await stream.finalText();
+          // Extract text manually instead of using finalText() which throws
+          // when response contains only thinking + tool_use blocks with no text
+          const finalOutput = extractTextFromContent(response.content);
           if (output) output.finalize(finalOutput);
         } finally {
           cleanupAbortListener?.();
@@ -1122,27 +1140,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Extract base response
     const stopReason = responseObject.stop_reason;
-    let newResponse = '';
-
-    if (
-      this.capabilities.supportsReasoning &&
-      Array.isArray(responseObject.content) &&
-      responseObject.content.length > 0
-    ) {
-      // Handle text blocks in Claude 3.7 Sonnet responses
-      for (const block of responseObject.content) {
-        if (block.type === 'text') {
-          newResponse += block.text.trim();
-        }
-        // We don't include thinking blocks in the response text
-      }
-    } else if (responseObject.content && responseObject.content.length > 0) {
-      // Handle regular text responses
-      const firstBlock = responseObject.content[0];
-      if (firstBlock.type === 'text') {
-        newResponse = firstBlock.text.trim();
-      }
-    }
+    let newResponse = extractTextFromContent(responseObject.content, true);
 
     // Add end tag if needed
     if (
