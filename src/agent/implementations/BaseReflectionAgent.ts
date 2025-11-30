@@ -863,7 +863,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               if (this.hydratedRoundCount === 0) {
                 // New run - use the task group ID as the storage key
                 const storageKey = normalizeRunId(runStage.id);
-                this.context.updateStorageKey(runStage.id);
+                this.context.updateStorageKey(storageKey);
                 this.outputHandler.setActiveRun(storageKey);
               }
               // For resumed runs, context.storageKey and outputHandler.activeRun
