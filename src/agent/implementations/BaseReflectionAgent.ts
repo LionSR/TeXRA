@@ -857,10 +857,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
                 );
               }
 
-              // Check if we're resuming a previous run (have hydrated rounds)
-              // If resuming, the storageKey was already set by hydrateOutputState
-              // and we should NOT overwrite it with the new runStage.id
-              if (this.hydratedRoundCount === 0) {
+              // Check if storageKey was already set by hydrateOutputState (resume case)
+              // Initial storageKey equals executionId; if different, it was already set
+              const initialStorageKey = normalizeRunId(this.context.executionId);
+              if (this.context.storageKey === initialStorageKey) {
                 // New run - use the task group ID as the storage key
                 const storageKey = normalizeRunId(runStage.id);
                 this.context.updateStorageKey(storageKey);
