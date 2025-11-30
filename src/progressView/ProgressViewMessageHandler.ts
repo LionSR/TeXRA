@@ -284,7 +284,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
         outputFiles: taskState.agentConfig.outputFiles,
         outputFilesActive: taskState.activeFiles.output,
         streamId: message.stream,
-        runId: storageKey,
+        // executionId is for file system paths (taskRuns/<executionId>/...)
+        // storageKey is for logical storage indexing - different concepts
+        runId: executionId,
         outputsByRound,
       });
     });
