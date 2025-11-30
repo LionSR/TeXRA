@@ -1,4 +1,5 @@
 // Local imports - agent
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local file imports
@@ -71,11 +72,16 @@ export interface IOutputHandler {
    * @param rounds - Map of round number to output files
    */
   hydrateFromArtifacts(
-    storageKey: string | null,
+    storageKey: StorageKey | null,
     rounds: Map<number, OutputFileInfo[]>,
   ): void;
 
   getRoundArtifacts(round: number): Promise<RoundOutput>;
   getRoundXmlSummary(round: number): OutputXmlSummary;
-  setActiveRun(runId?: string | null): void;
+
+  /**
+   * Set the active storage key for this handler.
+   * @param storageKey - THE key for storage operations (task group ID or execution ID)
+   */
+  setActiveRun(storageKey?: StorageKey | null): void;
 }

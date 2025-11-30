@@ -137,14 +137,14 @@ export class OutputFilesManager extends PersistentMapManager<
 
   getRun(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
     const runs = this.items.get(stream);
     if (!runs) {
       return undefined;
     }
 
-    const target = runs.get(runId);
+    const target = runs.get(storageKey);
     if (!target) {
       return undefined;
     }
@@ -161,7 +161,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   getRunMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Map<number, string[]> | undefined {
     if (!this.missingOutputsLoaded) {
       throw new Error('Missing outputs requested before load completed');
@@ -172,7 +172,7 @@ export class OutputFilesManager extends PersistentMapManager<
       return undefined;
     }
 
-    const target = runs.get(runId);
+    const target = runs.get(storageKey);
     if (!target) {
       return undefined;
     }
@@ -186,12 +186,12 @@ export class OutputFilesManager extends PersistentMapManager<
    * commands like pack/clean do not accidentally target run-storage artifacts.
    *
    * @param stream - The stream tab ID
-   * @param options.runId - The storage key for lookup. Normalized internally for safety.
+   * @param options.storageKey - THE key for storage lookup
    * @param options.workspaceOnly - If true, only returns workspace-scoped paths
    */
   getKnownFilePaths(
     stream: StreamTabId,
-    options: { runId?: string | null; workspaceOnly?: boolean } = {},
+    options: { storageKey?: StorageKey | null; workspaceOnly?: boolean } = {},
   ): Set<string> {
     const paths = new Set<string>();
     const runs = this.items.get(stream);
@@ -199,10 +199,10 @@ export class OutputFilesManager extends PersistentMapManager<
       return paths;
     }
 
-    // runId is normalized for safety - caller should pass the storageKey
+    // storageKey is THE single source of truth
     const targetRunIds =
-      options.runId !== undefined
-        ? [normalizeRunId(options.runId)]
+      options.storageKey !== undefined && options.storageKey !== null
+        ? [options.storageKey]
         : Array.from(runs.keys());
 
     for (const target of targetRunIds) {
@@ -278,17 +278,15 @@ export class OutputFilesManager extends PersistentMapManager<
    * Clear output files for a specific run within a stream.
    *
    * @param stream - The stream tab ID
-   * @param runId - The storage key for the run. Normalized internally for safety.
+   * @param storageKey - THE key for storage operations
    */
-  async clearRunFiles(stream: StreamTabId, runId: string): Promise<void> {
-    // runId is normalized for safety - caller should pass the storageKey
-    const normalizedRunId = normalizeRunId(runId);
+  async clearRunFiles(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
     const runs = this.items.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(normalizedRunId);
+    const removed = runs.delete(storageKey);
     if (runs.size === 0) {
       this.items.delete(stream);
     }
@@ -311,21 +309,19 @@ export class OutputFilesManager extends PersistentMapManager<
    * Clear missing output records for a specific run within a stream.
    *
    * @param stream - The stream tab ID
-   * @param runId - The storage key for the run. Normalized internally for safety.
+   * @param storageKey - THE key for storage operations
    */
   async clearRunMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    // runId is normalized for safety - caller should pass the storageKey
-    const normalizedRunId = normalizeRunId(runId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(normalizedRunId);
+    const removed = runs.delete(storageKey);
     if (runs.size === 0) {
       this._missingOutputs.delete(stream);
     }
