@@ -829,7 +829,6 @@ export class OutputHandler implements IOutputHandler {
     const roundData = this.rounds.get(round);
     return {
       round,
-      rawOutput: roundData?.rawOutput ?? null,
       outputs: fileInfos,
       xmlSummary: roundData?.xmlSummary ?? this.getRoundXmlSummary(round),
     };

@@ -97,14 +97,12 @@ export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 /**
  * Output from processing a conversation round.
  * - round: Round number
- * - rawOutput: The XML file the LLM wrote (before extraction)
  * - outputs: Extracted output files with metadata
- * - xmlSummary: Parsed XML metadata (TODO: Can this be simplified/removed?)
+ * - xmlSummary: Parsed XML metadata (sourceLocation contains the raw XML file path)
  */
 export const RoundOutputSchema = z
   .object({
     round: z.number(),
-    rawOutput: z.custom<FileLocation>().nullable(),
     outputs: OutputFileInfoSchema.array(),
     xmlSummary: OutputXmlSummarySchema,
   })
