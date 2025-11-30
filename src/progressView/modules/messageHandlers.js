@@ -260,6 +260,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.taskGroups.clear();
       state.taskGroups.clear();
       state.clearRunInstructions(message.stream);
+      state.clearRunFiles(message.stream);
       state.clearPendingInstruction(state.activeStream);
       const previousRunId = state.getActiveRunId(message.stream);
       state.clearActiveRun(message.stream);
@@ -283,6 +284,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         if (message.runUsage) {
           Object.entries(message.runUsage).forEach(([runId, usage]) => {
             state.setRunUsage(message.stream, runId, usage);
+          });
+        }
+
+        if (message.runFiles) {
+          Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+            if (runId) {
+              state.setRunFiles(message.stream, runId, filesByRound);
+            }
           });
         }
 
