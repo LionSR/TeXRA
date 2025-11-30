@@ -70,5 +70,6 @@ print("Individual Summaries:", shared["file_summaries"])
 print("\nFinal Summary:\n", shared["all_files_summary"])
 ```
 
-> **Performance Tip**: The example above works sequentially. You can speed up the map phase by running it in parallel. See [(Advanced) Parallel](../core_abstraction/parallel.md) for more details.
-> {: .note }
+::: tip Performance Tip
+The example above works sequentially. You can speed up the map phase by running it in parallel. See [(Advanced) Parallel](../core_abstraction/parallel.md) for more details.
+:::
