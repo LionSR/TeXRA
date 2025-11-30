@@ -216,6 +216,7 @@ export class ProgressEventHandler {
       runInstructions,
       activeRunId,
       runUsage: usageByRun,
+      runFiles: filesByRun,
     });
 
     this.webviewUpdater.updateFiles(stream, { reset: true });
