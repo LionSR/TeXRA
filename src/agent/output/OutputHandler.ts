@@ -174,16 +174,15 @@ export class OutputHandler implements IOutputHandler {
    * Called by workflow agents when they create their primary task group.
    * The storageKey becomes THE key for all storage operations.
    *
-   * @param storageKey - The storage key (task group ID or execution ID).
-   *                     Accepts string for convenience; branded internally via normalizeRunId.
+   * @param storageKey - THE key for storage operations (already branded via normalizeRunId)
    */
-  public setActiveRun(storageKey?: string | null): void {
+  public setActiveRun(storageKey?: StorageKey | null): void {
     // Use the stored executionId directly - no round-trip to fileService
     // The executionId was resolved once in the constructor and should not change
     this.fileService.updateRunContext(this.executionId ?? undefined);
 
-    // Use normalizeRunId for proper branding - no manual casts
-    const nextStorageKey = normalizeRunId(storageKey);
+    // storageKey is already branded - use normalizeRunId only for the null case
+    const nextStorageKey = storageKey ?? normalizeRunId(null);
     if (nextStorageKey === this._storageKey) {
       return;
     }

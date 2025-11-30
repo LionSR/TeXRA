@@ -22,6 +22,7 @@ import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersiste
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
+import { normalizeRunId } from '@common/constants/runIds';
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,
@@ -609,7 +610,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     const generatedPaths = this.provider.state.outputFiles.getKnownFilePaths(
       stream,
       {
-        runId: resolvedRunId ?? undefined,
+        storageKey: resolvedRunId ? normalizeRunId(resolvedRunId) : null,
         workspaceOnly: true,
       },
     );
