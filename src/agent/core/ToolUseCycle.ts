@@ -131,7 +131,6 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   bus.emit('addOutputFiles', {
     stream,
     storageKey,
-    runId: storageKey, // Backward compatibility
     executionId,
     filesByRound: { [roundIndex]: fileInfos },
   });
