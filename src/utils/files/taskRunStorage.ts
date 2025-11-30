@@ -403,6 +403,40 @@ export class TaskRunFileService {
   }
 
   /**
+   * Create a FileLocation for raw output files (e.g., XML intermediates).
+   * This method ALWAYS uses run storage when an executionId is available,
+   * regardless of the storageMode setting. This keeps intermediate files
+   * out of the user's workspace.
+   *
+   * Use this for raw model outputs (XML files) that are intermediate artifacts.
+   * Use createLocation() for processed outputs (.tex files) that respect user settings.
+   *
+   * @param relativePath - Workspace-relative path (e.g., "paper_polish_r0_sonnet.xml")
+   * @returns FileLocation (runStorage if executionId exists, otherwise workspace)
+   */
+  public createRawOutputLocation(relativePath: string): FileLocation {
+    const workspaceRoot = this.workspaceRoot;
+    if (!workspaceRoot) {
+      return createExternalLocation(relativePath);
+    }
+
+    // Normalize path separators for current platform
+    const normalized = relativePath ? path.normalize(relativePath) : '';
+
+    // Always use run storage for raw outputs when executionId is available
+    const executionId = this.activeExecutionId;
+    if (executionId) {
+      const runDir = getRunDir(executionId);
+      const runAbsolute = path.join(runDir, normalized);
+      return createRunStorageLocation(runAbsolute, normalized, executionId);
+    }
+
+    // Fallback to workspace when no executionId
+    const workspaceAbsolute = path.join(workspaceRoot, normalized);
+    return createWorkspaceLocation(workspaceAbsolute, normalized);
+  }
+
+  /**
    * Create a FileLocation from a workspace-relative path, with run-storage awareness.
    * This is the preferred method for creating output file locations.
    *

@@ -327,6 +327,10 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
    * Generates output file path for specified conversation round.
    * Default implementation uses scratchpad mode detection to determine file extension.
    * Override for specialized naming logic (e.g., MergeAgent).
+   *
+   * Raw XML files (scratchpad mode) are always stored in task run storage to keep
+   * the user's workspace clean. Processed outputs respect the user's storage mode setting.
+   *
    * @returns AgentFileLocation - always workspace or runStorage (never external)
    */
   public getOutputFileLocation(currRound: number): AgentFileLocation {
@@ -344,7 +348,13 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
       this.agentConfig.editedFile || undefined,
     );
 
-    // fileService.createLocation always returns workspace or runStorage for agent outputs
+    // Raw XML files always go to task run storage (when executionId exists)
+    // to keep the user's workspace clean. Processed .tex files respect user settings.
+    if (this.useScratchpad) {
+      return this.fileService.createRawOutputLocation(fileName) as AgentFileLocation;
+    }
+
+    // Non-scratchpad outputs respect the user's storage mode setting
     return this.fileService.createLocation(fileName) as AgentFileLocation;
   }
 
