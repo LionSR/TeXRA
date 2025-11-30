@@ -33,7 +33,6 @@ All notable changes to this project will be documented in this file.
 - Resolved duplicate agent names appearing in the dropdown when multiple
   sources define the same agent.
 - Agent selection now persists correctly across extension reloads.
-- Fixed authentication redirects not working in some IDEs.
 - Usage statistics now display accurate totals for the current session.
 - The API key banner displays reliably on initial webview load.
 - Dropdown menus no longer get clipped by container edges.
