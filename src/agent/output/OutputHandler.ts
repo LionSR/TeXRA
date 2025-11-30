@@ -11,6 +11,7 @@ import {
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -86,28 +87,33 @@ export class OutputHandler implements IOutputHandler {
   private diffStatsManager: DiffStatsManager;
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
-  private readonly executionId?: string;
-  private currentRunId: string | null | undefined;
+  private readonly executionId: string;
+  /**
+   * The storage key for this handler.
+   * Set via setActiveRun() when a workflow agent creates its primary task group.
+   * This is THE key for storage operations.
+   */
+  private _storageKey: StorageKey | null;
   private runPreparation: Promise<void> | null;
 
   constructor(
     agentSetting: AgentSetting,
     agentConfig: AgentConfig,
     logId: number,
-    baseFiles: FileLocation[] = [],
-    logger?: AgentLogger,
-    fileService?: TaskRunFileService,
-    executionId?: string | null,
+    baseFiles: FileLocation[],
+    logger: AgentLogger,
+    fileService: TaskRunFileService,
+    executionId: string,
   ) {
     this.agentSetting = requireWorkflowSetting(agentSetting);
     this.agentConfig = agentConfig;
     this.logId = logId;
     this.rounds = new Map();
     this.baseFiles = baseFiles;
-    this.logger = logger || new AgentLogger('OutputHandler');
+    this.logger = logger;
     this.channel = this.logger.channelId;
-    this.fileService = fileService || new TaskRunFileService();
-    this.executionId = executionId ?? this.fileService.getExecutionId();
+    this.fileService = fileService;
+    this.executionId = executionId;
 
     this.xmlManager = new XmlOutputManager(
       this.agentSetting,
@@ -125,11 +131,12 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
-    this.currentRunId = undefined;
+    this._storageKey = null;
     this.runPreparation = null;
 
-    const initialRunId = this.logger.withCurrentGroup((id) => id);
-    this.setActiveRun(initialRunId ?? null);
+    // Don't ask logger for initial group - let the agent set it explicitly
+    // via setActiveRun() when it creates its primary task group.
+    // This eliminates the round-trip to logger for ID resolution.
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -161,34 +168,55 @@ export class OutputHandler implements IOutputHandler {
     return Array.from(extras.values());
   }
 
-  public setActiveRun(runId?: string | null): void {
-    const targetExecutionId =
-      this.executionId ?? this.fileService.getExecutionId();
-    this.fileService.updateRunContext(targetExecutionId ?? undefined);
+  /**
+   * Set the active storage key for this handler.
+   *
+   * Called by workflow agents when they create their primary task group.
+   * The storageKey becomes THE key for all storage operations.
+   *
+   * @param storageKey - THE key for storage operations (already branded via normalizeRunId)
+   */
+  public setActiveRun(storageKey: StorageKey): void {
+    // Use the stored executionId directly - no round-trip to fileService
+    this.fileService.updateRunContext(this.executionId);
 
-    const nextRunId = runId ?? null;
-    const previousRunId = this.currentRunId;
-    if (nextRunId === this.currentRunId) {
+    if (storageKey === this._storageKey) {
       return;
     }
 
-    this.currentRunId = nextRunId;
+    this._storageKey = storageKey;
     this.openedOutputs.clear();
 
-    if (targetExecutionId) {
-      const snapshotTargets = this.collectRunSnapshotFiles();
-      const supportFiles = this.collectRunSupportFiles();
-      this.runPreparation = this.fileService.prepareRunWorkspace(
-        snapshotTargets,
-        { linkFiles: supportFiles },
-      );
-    } else {
-      this.runPreparation = null;
-    }
+    const snapshotTargets = this.collectRunSnapshotFiles();
+    const supportFiles = this.collectRunSupportFiles();
+    this.runPreparation = this.fileService.prepareRunWorkspace(
+      snapshotTargets,
+      { linkFiles: supportFiles },
+    );
   }
 
-  private getActiveRunId(): string {
-    return normalizeRunId(this.currentRunId);
+  /**
+   * Get the current storage key.
+   * Returns the storageKey if set, otherwise falls back to DEFAULT_RUN_ID.
+   */
+  private getStorageKey(): StorageKey {
+    return this._storageKey ?? normalizeRunId(null);
+  }
+
+  /**
+   * Create a storage-scoped payload for event bus emissions.
+   * Returns an object with storageKey (the single source of truth).
+   */
+  private createStoragePayload(): {
+    storageKey: StorageKey;
+    executionId: string | undefined;
+  } {
+    const storageKey = this.getStorageKey();
+    return {
+      storageKey,
+      // Use stored executionId - no round-trip to fileService
+      executionId: this.executionId,
+    };
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
@@ -462,20 +490,28 @@ export class OutputHandler implements IOutputHandler {
     };
   }
 
+  /**
+   * Hydrate output artifacts from a saved state.
+   *
+   * @param storageKey - THE key for storage (from context.storageKey or saved state)
+   *                     Pass null only for legacy data without storage key.
+   * @param rounds - Map of round number to output files
+   */
   public hydrateFromArtifacts(
-    runId: string | null | undefined,
+    storageKey: StorageKey | null,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    const loggerRunId = this.logger.withCurrentGroup((id) => id);
-    const effectiveRunId = runId ?? loggerRunId ?? null;
-    const normalizedCurrent = normalizeRunId(this.currentRunId);
-    const normalizedTarget = normalizeRunId(effectiveRunId);
+    // storageKey is the single source of truth - no logger round-trips
+    const currentKey = this.getStorageKey();
+    const targetKey = storageKey ?? currentKey;
+
     this.logger.debug(
-      `Hydrate outputs for runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} current=${normalizedCurrent} target=${normalizedTarget}`,
+      `Hydrate outputs: storageKey=${storageKey ?? 'null'} current=${currentKey} target=${targetKey}`,
       { messageType: MESSAGE_TYPES.INTERNAL },
     );
-    if (normalizedTarget !== normalizedCurrent) {
-      this.setActiveRun(effectiveRunId);
+
+    if (targetKey !== currentKey) {
+      this.setActiveRun(targetKey);
     }
 
     for (const [round, infos] of rounds.entries()) {
@@ -513,18 +549,16 @@ export class OutputHandler implements IOutputHandler {
       `Validate expected r${currRound}`,
       stage,
       async () => {
-        const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storagePayload = this.createStoragePayload();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
-            runId,
-            executionId,
+            ...storagePayload,
             filesByRound: { [currRound]: [] },
           });
           this.logger.debug(
-            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} storageKey=${storagePayload.storageKey}`,
             { messageType: MESSAGE_TYPES.INTERNAL },
           );
           return;
@@ -566,12 +600,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          runId,
-          executionId,
+          ...storagePayload,
           filesByRound: { [currRound]: missing },
         });
         this.logger.debug(
-          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} storageKey=${storagePayload.storageKey}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
       },
@@ -599,8 +632,7 @@ export class OutputHandler implements IOutputHandler {
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
-        const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storagePayload = this.createStoragePayload();
 
         if (endTurn) {
           try {
@@ -617,12 +649,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
-          runId,
-          executionId,
+          ...storagePayload,
           filesByRound: { [currRound]: fileInfos },
         });
         this.logger.debug(
-          `addOutputFiles emitted for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'} files=${fileInfos.length}`,
+          `addOutputFiles emitted for round ${currRound} storageKey=${storagePayload.storageKey} files=${fileInfos.length}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
 
@@ -664,8 +695,7 @@ export class OutputHandler implements IOutputHandler {
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
         const rawPath = rawLocation.absolutePath;
-        const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storagePayload = this.createStoragePayload();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -795,8 +825,7 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
-              runId,
-              executionId,
+              ...storagePayload,
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);

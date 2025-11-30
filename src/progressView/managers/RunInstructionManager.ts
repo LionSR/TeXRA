@@ -1,5 +1,5 @@
 // Local imports - identifiers and logging
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import { WorkspaceStateKey } from '@common/state/stateManager';
@@ -36,19 +36,15 @@ export class RunInstructionManager extends PersistentMapManager<
 
   async setInstruction(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     instruction: InstructionUpdate | null,
   ): Promise<void> {
-    if (!runId) {
-      return;
-    }
-
     const existing = this.items.get(stream) ?? new Map();
 
     if (!instruction) {
-      existing.delete(runId);
+      existing.delete(storageKey);
     } else {
-      existing.set(runId, instruction);
+      existing.set(storageKey, instruction);
     }
 
     if (existing.size === 0) {
@@ -60,17 +56,13 @@ export class RunInstructionManager extends PersistentMapManager<
     await this.save();
   }
 
-  async deleteRun(stream: StreamTabId, runId: string): Promise<void> {
-    if (!runId) {
-      return;
-    }
-
+  async deleteRun(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
     const existing = this.items.get(stream);
     if (!existing) {
       return;
     }
 
-    existing.delete(runId);
+    existing.delete(storageKey);
     if (existing.size === 0) {
       this.items.delete(stream);
     }
