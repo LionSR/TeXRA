@@ -1,5 +1,13 @@
+// Standard library imports
+import { randomUUID } from 'crypto';
+
 // Local imports - agent types
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type {
+  ExecutionId,
+  ExecutionIdentity,
+  StorageKey,
+  StreamTabId,
+} from '@agent/types/IdentifierTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
 // Local imports - logger
@@ -17,12 +25,37 @@ export interface AgentExecutionContextInit {
 }
 
 /**
- * Aggregates shared execution state so collaborators avoid plumbing IDs.
+ * Aggregates shared execution state and provides the unified ExecutionIdentity.
+ *
+ * This is the single source of truth for execution identity:
+ * - executionId: Always a UUID, generated if not provided
+ * - storageKey: THE key for storage operations
+ * - streamTabId: UI tab identifier
+ *
+ * ## Storage Key Resolution
+ *
+ * The storageKey is computed once and updated only when a workflow agent
+ * creates its primary task group:
+ * - Initial value: executionId (works for tool-use agents)
+ * - After updateStorageKey(): task group ID (for workflow agents)
+ *
+ * Components receive the identity and use storageKey directly, eliminating
+ * runtime resolution and "which ID do I use?" confusion.
  */
 export class AgentExecutionContext {
   public readonly logger: AgentLogger;
   public readonly usageReporter: AgentUsageReporter;
   private readonly agentCategory: AgentCategory;
+
+  /**
+   * Mutable identity - storageKey can be updated by workflow agents
+   * when they create their primary task group.
+   */
+  private _identity: {
+    readonly executionId: ExecutionId;
+    storageKey: StorageKey;
+    readonly streamTabId: StreamTabId;
+  };
 
   constructor(private readonly init: AgentExecutionContextInit) {
     this.logger = new AgentLogger(init.streamId, true);
@@ -32,18 +65,67 @@ export class AgentExecutionContext {
       init.streamId,
       this.agentCategory,
     );
+
+    // Generate executionId if not provided (always a UUID)
+    const executionId = init.executionId ?? randomUUID();
+
+    // Initialize identity with executionId as the initial storageKey
+    // Workflow agents will call updateStorageKey() when they create
+    // their primary task group
+    this._identity = {
+      executionId,
+      storageKey: executionId,
+      streamTabId: init.streamId,
+    };
+  }
+
+  /**
+   * The unified execution identity.
+   * Use this instead of accessing individual ID fields.
+   */
+  get identity(): ExecutionIdentity {
+    return this._identity;
+  }
+
+  /**
+   * THE key for storage operations (files, usage, artifacts).
+   * This is the single source of truth - use this instead of computing IDs.
+   */
+  get storageKey(): StorageKey {
+    return this._identity.storageKey;
   }
 
   get streamId(): StreamTabId {
     return this.init.streamId;
   }
 
-  get executionId(): ExecutionId | undefined {
-    return this.init.executionId;
+  get executionId(): ExecutionId {
+    return this._identity.executionId;
   }
 
   get sessionCategory(): AgentCategory {
     return this.agentCategory;
+  }
+
+  /**
+   * Update the storage key to a task group ID.
+   *
+   * Called by workflow agents when they create their primary task group.
+   * After this call, all storage operations use the task group ID.
+   *
+   * This should only be called ONCE per execution, when the primary
+   * task group is created. Multiple calls are allowed but logged as warnings.
+   *
+   * @param taskGroupId - The task group ID to use as the storage key
+   */
+  updateStorageKey(taskGroupId: string): void {
+    if (this._identity.storageKey !== this._identity.executionId) {
+      this.logger.warn(
+        `Storage key already set to ${this._identity.storageKey}, ` +
+          `updating to ${taskGroupId}. This may indicate a bug.`,
+      );
+    }
+    this._identity.storageKey = taskGroupId;
   }
 
   stage(
