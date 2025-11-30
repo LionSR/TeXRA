@@ -220,13 +220,10 @@ export class ProgressEventHandler {
       runFiles: filesByRun,
     });
 
-    this.webviewUpdater.updateFiles(stream, { reset: true });
-    Object.entries(filesByRun).forEach(([runId, rounds]) => {
-      this.webviewUpdater.updateFiles(stream, {
-        runId,
-        rounds,
-      });
-    });
+    // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
+    // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
+    // messages here to avoid a race condition where reset: true would clear
+    // the files just populated from UPDATE_LOGS.
 
     this.webviewUpdater.updateMissingOutputs(stream, { reset: true });
     Object.entries(missingByRun).forEach(([runId, rounds]) => {
