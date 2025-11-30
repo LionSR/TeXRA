@@ -27,7 +27,9 @@ describe('AgentUsageReporter', () => {
     const loggerStub = {
       // This should NOT be called - we don't do round-trips anymore
       withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined => {
-        throw new Error('withCurrentGroup should not be called - no round-trips!');
+        throw new Error(
+          'withCurrentGroup should not be called - no round-trips!',
+        );
       },
       statistics: (stats: ExtendedTokenUsageStats, key: string) => {
         recordedStats = stats;
