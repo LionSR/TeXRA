@@ -76,19 +76,6 @@ export type ExecutionId = string;
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
 /**
- * Run ID: Legacy identifier for grouping files and usage statistics.
- *
- * @deprecated Use StorageKey and ExecutionIdentity instead.
- * This type is kept for backward compatibility with existing code.
- * New code should use ExecutionIdentity.storageKey.
- *
- * For workflow agents: This is the task group ID from the logger hierarchy.
- * For tool-use agents: This equals the ExecutionId (no task groups).
- * For legacy sessions: This is DEFAULT_RUN_ID ("__default__").
- */
-export type RunId = string;
-
-/**
  * Unified identity for an execution - computed once, used everywhere.
  *
  * This interface eliminates "which ID should I use?" confusion by providing:
