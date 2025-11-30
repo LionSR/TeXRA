@@ -11,6 +11,7 @@ import {
   requireWorkflowSetting,
 } from '@agent/core/AgentDataclass';
 import { AgentRunState, ConversationRoundState } from '@agent/core/AgentState';
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -87,6 +88,15 @@ export class OutputHandler implements IOutputHandler {
   private readonly openedOutputs: Set<string>;
   private readonly fileService: TaskRunFileService;
   private readonly executionId?: string;
+  /**
+   * The storage key for this handler.
+   * Set via setActiveRun() when a workflow agent creates its primary task group.
+   * This is THE key for storage operations.
+   */
+  private _storageKey: StorageKey | null;
+  /**
+   * @deprecated Use _storageKey instead. Kept for backward compatibility.
+   */
   private currentRunId: string | null | undefined;
   private runPreparation: Promise<void> | null;
 
@@ -125,11 +135,13 @@ export class OutputHandler implements IOutputHandler {
     );
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
+    this._storageKey = null;
     this.currentRunId = undefined;
     this.runPreparation = null;
 
-    const initialRunId = this.logger.withCurrentGroup((id) => id);
-    this.setActiveRun(initialRunId ?? null);
+    // Don't ask logger for initial group - let the agent set it explicitly
+    // via setActiveRun() when it creates its primary task group.
+    // This eliminates the round-trip to logger for ID resolution.
   }
 
   private collectRunSnapshotFiles(): FileLocation[] {
@@ -161,18 +173,27 @@ export class OutputHandler implements IOutputHandler {
     return Array.from(extras.values());
   }
 
-  public setActiveRun(runId?: string | null): void {
+  /**
+   * Set the active storage key for this handler.
+   *
+   * Called by workflow agents when they create their primary task group.
+   * The storageKey becomes THE key for all storage operations.
+   *
+   * @param storageKey - The storage key (task group ID or execution ID)
+   */
+  public setActiveRun(storageKey?: string | null): void {
     const targetExecutionId =
       this.executionId ?? this.fileService.getExecutionId();
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
-    const nextRunId = runId ?? null;
-    const previousRunId = this.currentRunId;
-    if (nextRunId === this.currentRunId) {
+    const nextStorageKey = (storageKey ?? null) as StorageKey | null;
+    if (nextStorageKey === this._storageKey) {
       return;
     }
 
-    this.currentRunId = nextRunId;
+    this._storageKey = nextStorageKey;
+    // Keep currentRunId in sync for backward compatibility
+    this.currentRunId = storageKey ?? null;
     this.openedOutputs.clear();
 
     if (targetExecutionId) {
@@ -187,8 +208,25 @@ export class OutputHandler implements IOutputHandler {
     }
   }
 
+  /**
+   * Get the current storage key.
+   * Returns the storageKey if set, otherwise falls back to normalized runId.
+   */
+  private getStorageKey(): StorageKey {
+    // Use _storageKey if available (new path)
+    if (this._storageKey) {
+      return this._storageKey;
+    }
+    // Fall back to normalized currentRunId for backward compatibility
+    return normalizeRunId(this.currentRunId) as StorageKey;
+  }
+
+  /**
+   * @deprecated Use getStorageKey() instead.
+   * Kept for backward compatibility.
+   */
   private getActiveRunId(): string {
-    return normalizeRunId(this.currentRunId);
+    return this.getStorageKey();
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
@@ -514,11 +552,13 @@ export class OutputHandler implements IOutputHandler {
       stage,
       async () => {
         const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storageKey = this.getStorageKey();
+        const runId = storageKey; // Backward compatibility
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
+            storageKey,
             runId,
             executionId,
             filesByRound: { [currRound]: [] },
@@ -566,6 +606,7 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
+          storageKey,
           runId,
           executionId,
           filesByRound: { [currRound]: missing },
@@ -600,7 +641,8 @@ export class OutputHandler implements IOutputHandler {
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
         const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storageKey = this.getStorageKey();
+        const runId = storageKey; // Backward compatibility
 
         if (endTurn) {
           try {
@@ -617,6 +659,7 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
+          storageKey,
           runId,
           executionId,
           filesByRound: { [currRound]: fileInfos },
@@ -665,7 +708,8 @@ export class OutputHandler implements IOutputHandler {
         data.rawOutput = rawLocation;
         const rawPath = rawLocation.absolutePath;
         const executionId = this.fileService.getExecutionId();
-        const runId = this.getActiveRunId();
+        const storageKey = this.getStorageKey();
+        const runId = storageKey; // Backward compatibility
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -795,6 +839,7 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
+              storageKey,
               runId,
               executionId,
               filesByRound: { [currRound]: [] },

@@ -4,7 +4,11 @@ import { EventEmitter } from 'events';
 // Local imports - agent
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+} from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type {
   LogMessageData,
@@ -53,9 +57,25 @@ interface SetTaskStatePayload {
   taskState: TaskState;
 }
 
+/**
+ * Payload for storage-scoped events (files, usage, etc.).
+ *
+ * storageKey is THE key for storage operations - use this preferentially.
+ * runId is kept for backward compatibility during migration.
+ */
 interface RunScopedPayload {
   stream: StreamTabId;
+  /**
+   * THE key for storage operations.
+   * For new code, prefer using this over runId.
+   */
+  storageKey?: StorageKey;
+  /**
+   * @deprecated Use storageKey instead.
+   * Kept for backward compatibility - will be removed in future.
+   */
   runId: string;
+  /** For metadata/audit purposes */
   executionId?: ExecutionId;
 }
 
@@ -79,6 +99,9 @@ export interface ProgressEventPayloads {
   updateStreamUsage: {
     stream: StreamTabId;
     usage: TokenUsageStats;
+    /** THE key for storage operations. Prefer using this over runId. */
+    storageKey?: StorageKey;
+    /** @deprecated Use storageKey instead. */
     runId: string;
   };
   showRetryRequest: {

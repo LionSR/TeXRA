@@ -842,11 +842,14 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
             },
             start: async () => {
               const runStage = await baseStart();
-              if (!runStage) {
+              if (!runStage || !runStage.id) {
                 throw new Error(
                   'Run group identifier is required for reflection runs.',
                 );
               }
+              // Update the context's storage key to the task group ID
+              // This is THE key for all storage operations
+              this.context.updateStorageKey(runStage.id);
               this.outputHandler.setActiveRun(runStage.id);
               return runStage;
             },
