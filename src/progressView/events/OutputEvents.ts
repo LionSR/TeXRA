@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports - progress view
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
-import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -105,34 +104,22 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        const normalizedRunId = normalizeRunId(runId);
-        await state.outputFiles.addFiles(
-          stream,
-          normalizedRunId,
-          filesByRound,
-          {
-            executionId,
-          },
-        );
-        sendRunFileUpdate(state, updater, stream, normalizedRunId);
+        // storageKey is THE single source of truth - no fallbacks
+        await state.outputFiles.addFiles(stream, storageKey, filesByRound);
+        sendRunFileUpdate(state, updater, stream, storageKey);
       });
     },
   );
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-        const normalizedRunId = normalizeRunId(runId);
-        await state.outputFiles.updateMissingOutputs(
-          stream,
-          normalizedRunId,
-          filesByRound,
-          { executionId },
-        );
-        sendRunMissingUpdate(state, updater, stream, normalizedRunId);
+        // storageKey is THE single source of truth - no fallbacks
+        await state.outputFiles.updateMissingOutputs(stream, storageKey, filesByRound);
+        sendRunMissingUpdate(state, updater, stream, storageKey);
       });
     },
   );
