@@ -127,7 +127,6 @@ If you prefer not to use remote agents:
 
 This will hide remote agents from your interface without affecting built-in agents.
 
-
 ## Need Help?
 
 If you encounter any issues with remote agents or have questions about the Researcher Access Program:

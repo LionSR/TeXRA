@@ -29,6 +29,7 @@ export {
   // Key helpers
   createKey,
   parseKey,
+  getCleanAgentName,
   // _multiple helpers
   isMultipleVariant,
   getBaseName,
