@@ -550,7 +550,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           ];
         }
 
-        if (!baseResponse.usageMetadata && usageFromChunks) {
+        // Always prefer the latest usage metadata from chunks (typically the final
+        // chunk has complete data). The first chunk may have partial/empty metadata.
+        if (usageFromChunks) {
           baseResponse.usageMetadata = usageFromChunks;
         }
 
@@ -795,20 +797,65 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return { response: responseText, usage, stopReason };
   }
 
+  /**
+   * Computes input and output token counts from Gemini usageMetadata.
+   *
+   * Google's formula: totalTokenCount = promptTokenCount + candidatesTokenCount
+   *                                   + toolUsePromptTokenCount + thoughtsTokenCount
+   *
+   * For output tokens, we prefer the sum of candidatesTokenCount + thoughtsTokenCount
+   * when available. When individual fields are unpopulated (which can happen in
+   * streaming mode for some models), we derive output from totalTokenCount using
+   * the documented formula.
+   *
+   * Note: candidatesTokenCount does NOT include thinking tokens per llm-gemini#75.
+   *
+   * TODO: Future work - extract per-modality token breakdown from promptTokensDetails[],
+   * candidatesTokensDetails[], cacheTokensDetails[], and toolUsePromptTokensDetails[].
+   * Each array contains ModalityTokenCount objects with modality (TEXT, IMAGE, VIDEO,
+   * AUDIO, DOCUMENT) and tokenCount. Note that PDF pages are currently reported under
+   * IMAGE modality, not DOCUMENT. This would enable modality-specific cost tracking
+   * and better insights into multimodal token consumption.
+   */
+  private computeTokenCounts(
+    usage: GenerateContentResponseUsageMetadata | null,
+  ): { inputTokens: number; outputTokens: number; reasoningTokens: number } {
+    if (!usage) {
+      return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
+    }
+
+    const promptTokens = usage.promptTokenCount ?? 0;
+    const toolUseTokens = usage.toolUsePromptTokenCount ?? 0;
+    const candidatesTokens = usage.candidatesTokenCount ?? 0;
+    const reasoningTokens = usage.thoughtsTokenCount ?? 0;
+
+    const inputTokens = promptTokens + toolUseTokens;
+
+    // Per Google's formula: outputTokens = candidatesTokenCount + thoughtsTokenCount
+    // When these fields are populated, use them directly.
+    // When unpopulated (some models in streaming), derive from totalTokenCount.
+    const directOutput = candidatesTokens + reasoningTokens;
+    const derivedOutput =
+      usage.totalTokenCount !== undefined
+        ? Math.max(0, usage.totalTokenCount - inputTokens)
+        : 0;
+
+    // Use direct values when available; otherwise use derived calculation
+    const outputTokens = directOutput > 0 ? directOutput : derivedOutput;
+
+    return { inputTokens, outputTokens, reasoningTokens };
+  }
+
   computePrice(
     responseUsage: GenerateContentResponseUsageMetadata | null,
   ): number {
     if (!responseUsage) return 0.0;
-    const promptTokens = responseUsage.promptTokenCount ?? 0;
-    const completionTokens = responseUsage.candidatesTokenCount ?? 0;
-    // const completionTokens = responseUsage.responseTokenCount ?? 0;
-    // responseTokenCount is not correct, we need to compute the completion tokens from the response, maybe it is response.usageMetadata.candidatesTokenCount
-    // completion token computed this way seems to be zero for some reason
-    const thoughtTokens = responseUsage.thoughtsTokenCount ?? 0;
-    const toolUseTokens = responseUsage.toolUsePromptTokenCount ?? 0;
+    const { inputTokens, outputTokens } =
+      this.computeTokenCounts(responseUsage);
+
     return calculateTokenPrice(
-      promptTokens + toolUseTokens,
-      thoughtTokens + completionTokens,
+      inputTokens,
+      outputTokens,
       this.config.inputPrice,
       this.config.outputPrice,
     );
@@ -818,19 +865,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     responseUsage: GenerateContentResponseUsageMetadata | null,
     responseTime: number,
   ): OpenAIAPIResponseUsage {
-    // Use the usageMetadata attribute on the response object after calling generate_content. (we did)
-    // This returns the total number of tokens in both the input and the output: totalTokenCount.
-    // It also returns the token counts of the input and output separately: promptTokenCount (input tokens) and candidatesTokenCount (output tokens).
+    const { outputTokens, reasoningTokens } =
+      this.computeTokenCounts(responseUsage);
 
     const usageObj: ExtendedCompletionUsage = {
       prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: responseUsage?.candidatesTokenCount ?? 0,
+      completion_tokens: outputTokens,
       total_tokens: responseUsage?.totalTokenCount ?? 0,
       prompt_tokens_details: {
         cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
       },
       completion_tokens_details: {
-        reasoning_tokens: responseUsage?.thoughtsTokenCount ?? 0,
+        reasoning_tokens: reasoningTokens,
         accepted_prediction_tokens: undefined,
         rejected_prediction_tokens: undefined,
       },
@@ -857,14 +903,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
     }
 
-    const inputTokens =
-      (rawUsage.promptTokenCount ?? 0) +
-      (rawUsage.toolUsePromptTokenCount ?? 0);
-    const outputTokens = rawUsage.candidatesTokenCount ?? 0;
-    const reasoningTokens = rawUsage.thoughtsTokenCount ?? 0;
-    const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
+    const { inputTokens, outputTokens, reasoningTokens } =
+      this.computeTokenCounts(rawUsage);
 
-    // Calculate percentage cached
+    const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
     const percentageCached =
       inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : 0;
 
