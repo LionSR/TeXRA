@@ -8,7 +8,11 @@ import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 // Internal imports
 import { isAgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Type imports
-import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
+import type {
+  StreamTabId,
+  ExecutionId,
+  StorageKey,
+} from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 // Internal imports
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
@@ -416,19 +420,14 @@ export class ProgressViewState {
    * - Tool-use agents: storageKey = executionId
    *
    * @param stream - The stream tab ID
-   * @param options.storageKey - THE key for storage lookup. Required.
+   * @param options.storageKey - THE branded key for storage lookup.
    * @see IdentifierTypes.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,
-    options: { storageKey: string | null },
+    options: { storageKey: StorageKey },
   ): Map<number, OutputFileInfo[]> | undefined {
-    // storageKey is THE single source of truth - no fallbacks
-    if (!options.storageKey) {
-      return undefined;
-    }
-
-    return this._outputFiles.getRun(stream, normalizeRunId(options.storageKey));
+    return this._outputFiles.getRun(stream, options.storageKey);
   }
 
   // Execution ID management
