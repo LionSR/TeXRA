@@ -98,12 +98,12 @@ export async function runToolUseCycle<C = unknown>(
  * For tool-use agents, we emit a simple file list without lineage or diff
  * stats since there's no meaningful base file to compare against.
  *
- * ## RunId for Tool-Use Agents
- * Tool-use agents don't create task groups (logger hierarchy), so they use
- * the ExecutionId as their RunId. This is intentional and documented in
- * IdentifierTypes.ts. The executionId IS the runId for tool-use contexts.
+ * ## Storage Key for Tool-Use Agents
+ * Tool-use agents use context.storageKey which equals their executionId
+ * (since they don't create task groups). This is computed once at execution
+ * start and used consistently across all storage operations.
  *
- * @see IdentifierTypes.ts for the full execution model documentation
+ * @see ExecutionIdentity for the unified identity model
  */
 function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
   const { options, store } = input;
@@ -113,14 +113,11 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
     return;
   }
 
-  const stream = options.context.streamId;
-  const executionId = options.context.executionId;
+  const { context } = options;
+  const stream = context.streamId;
+  const storageKey = context.storageKey;
+  const executionId = context.executionId;
   const roundIndex = store.round.roundIndex;
-
-  // For tool-use agents: ExecutionId IS the RunId (no task groups exist).
-  // Fallback to streamId only for legacy sessions without executionId.
-  // See IdentifierTypes.ts for the full execution model.
-  const runId = executionId ?? stream;
 
   // Deduplicate by path in case the same file was edited multiple times
   const uniquePaths = [...new Set(interactions.edits.map((e) => e.path))];
@@ -133,7 +130,8 @@ function emitEditedFiles<C>(input: ToolUseCycleInput<C>): void {
 
   bus.emit('addOutputFiles', {
     stream,
-    runId,
+    storageKey,
+    runId: storageKey, // Backward compatibility
     executionId,
     filesByRound: { [roundIndex]: fileInfos },
   });

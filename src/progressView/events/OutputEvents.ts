@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
@@ -105,34 +105,30 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, runId, executionId, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        const normalizedRunId = normalizeRunId(runId);
-        await state.outputFiles.addFiles(
-          stream,
-          normalizedRunId,
-          filesByRound,
-          {
-            executionId,
-          },
-        );
-        sendRunFileUpdate(state, updater, stream, normalizedRunId);
+        // Use storageKey if provided (new path), fall back to runId for compatibility
+        const key: StorageKey = storageKey ?? (normalizeRunId(runId) as StorageKey);
+        await state.outputFiles.addFiles(stream, runId, filesByRound, {
+          storageKey: key,
+          executionId,
+        });
+        sendRunFileUpdate(state, updater, stream, key);
       });
     },
   );
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, runId, executionId, filesByRound }) => {
+    ({ stream, storageKey, runId, executionId, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-        const normalizedRunId = normalizeRunId(runId);
-        await state.outputFiles.updateMissingOutputs(
-          stream,
-          normalizedRunId,
-          filesByRound,
-          { executionId },
-        );
-        sendRunMissingUpdate(state, updater, stream, normalizedRunId);
+        // Use storageKey if provided (new path), fall back to runId for compatibility
+        const key: StorageKey = storageKey ?? (normalizeRunId(runId) as StorageKey);
+        await state.outputFiles.updateMissingOutputs(stream, runId, filesByRound, {
+          storageKey: key,
+          executionId,
+        });
+        sendRunMissingUpdate(state, updater, stream, key);
       });
     },
   );
