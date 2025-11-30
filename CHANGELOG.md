@@ -2,13 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.34.6] - 2025-11-24
+## [0.34.6] - 2025-11-30
+
+### Features
+
+- Introduced **Remote Agents** with Supabase authentication, letting you browse
+  and run cloud-hosted agents directly from the new Profile view.
+- Added **manual retry controls** so you can retry failed API requests on demand
+  instead of relying solely on automatic retries.
+- Display provider icons in the model dropdown for quick visual identification
+  of each model's source.
 
 ### Improvements
 
 - Added Claude Opus 4.5 (thinking and regular) to the default model catalog,
   VS Code settings, and documentation so the latest Anthropic tier is
   available out of the box.
+- Widened agent and model dropdowns by ~20% and added descriptive tooltips
+  explaining indicator icons.
+- Footer dropdowns now open upward to prevent clipping at the bottom of the
+  panel.
+- Stream tab close buttons are always visible, making it easier to dismiss
+  completed runs.
+- File selection lists are now sorted alphabetically by name.
+- History view displays the session kind (workflow vs tool use) for each entry.
+- OAuth redirect now supports additional IDEs including Windsurf.
+
+### Bug Fixes
+
+- Fixed a race condition and memory leak in the core agent execution loop.
+- Resolved duplicate agent names appearing in the dropdown when multiple
+  sources define the same agent.
+- Agent selection now persists correctly across extension reloads.
+- OAuth redirect URIs use the runtime extension ID, fixing authentication in
+  forked or repackaged builds.
+- Usage statistics now include cached tokens and correctly identify the active
+  run.
+- The API key banner displays reliably on initial webview load.
+- Dropdown menus no longer get clipped by container edges.
+- arXiv search queries with multiple terms are now split correctly so results
+  stay relevant.
 
 ## [0.34.5] - 2025-11-21
 
