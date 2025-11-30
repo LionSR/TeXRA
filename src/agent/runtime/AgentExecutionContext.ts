@@ -132,6 +132,15 @@ export class AgentExecutionContext {
   }
 
   /**
+   * Check if the storageKey is still in its initial state (equals executionId).
+   * Returns true if storageKey hasn't been updated yet (new run, not resumed).
+   */
+  hasInitialStorageKey(): boolean {
+    const initialStorageKey = normalizeRunId(this._identity.executionId);
+    return this._identity.storageKey === initialStorageKey;
+  }
+
+  /**
    * Update the storage key to a task group ID.
    *
    * Called by workflow agents when they create their primary task group.
@@ -143,9 +152,7 @@ export class AgentExecutionContext {
    * @param storageKey - The branded StorageKey to use for storage operations
    */
   updateStorageKey(storageKey: StorageKey): void {
-    // Compare with branded executionId to avoid type mismatch
-    const initialStorageKey = normalizeRunId(this._identity.executionId);
-    if (this._identity.storageKey !== initialStorageKey) {
+    if (!this.hasInitialStorageKey()) {
       this.logger.warn(
         `Storage key already set to ${this._identity.storageKey}, ` +
           `updating to ${storageKey}. This may indicate a bug.`,

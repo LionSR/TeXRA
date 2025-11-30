@@ -56,7 +56,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
   protected client: C | null = null;
   protected isInterrupted = false;
   protected abortController: AbortController | null = null;
-  protected executionId?: ExecutionId;
+  protected readonly executionId: ExecutionId;
 
   private static runningAgents: Map<string, BaseAgent> = new Map();
 
@@ -247,11 +247,7 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     return this.isInterrupted;
   }
 
-  public setExecutionId(id: ExecutionId): void {
-    this.executionId = id;
-  }
-
-  public getExecutionId(): ExecutionId | undefined {
+  public getExecutionId(): ExecutionId {
     return this.executionId;
   }
 
