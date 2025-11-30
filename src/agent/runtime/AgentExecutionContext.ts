@@ -74,7 +74,7 @@ export class AgentExecutionContext {
     // their primary task group
     this._identity = {
       executionId,
-      storageKey: executionId,
+      storageKey: executionId as StorageKey,
       streamTabId: init.streamId,
     };
   }
@@ -125,7 +125,7 @@ export class AgentExecutionContext {
           `updating to ${taskGroupId}. This may indicate a bug.`,
       );
     }
-    this._identity.storageKey = taskGroupId;
+    this._identity.storageKey = taskGroupId as StorageKey;
   }
 
   stage(

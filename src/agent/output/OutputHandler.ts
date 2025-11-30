@@ -94,10 +94,6 @@ export class OutputHandler implements IOutputHandler {
    * This is THE key for storage operations.
    */
   private _storageKey: StorageKey | null;
-  /**
-   * @deprecated Use _storageKey instead. Kept for backward compatibility.
-   */
-  private currentRunId: string | null | undefined;
   private runPreparation: Promise<void> | null;
 
   constructor(
@@ -136,7 +132,6 @@ export class OutputHandler implements IOutputHandler {
     this.diffStatsManager = new DiffStatsManager();
     this.openedOutputs = new Set();
     this._storageKey = null;
-    this.currentRunId = undefined;
     this.runPreparation = null;
 
     // Don't ask logger for initial group - let the agent set it explicitly
@@ -186,14 +181,14 @@ export class OutputHandler implements IOutputHandler {
       this.executionId ?? this.fileService.getExecutionId();
     this.fileService.updateRunContext(targetExecutionId ?? undefined);
 
-    const nextStorageKey = (storageKey ?? null) as StorageKey | null;
+    const nextStorageKey = storageKey
+      ? (storageKey as StorageKey)
+      : normalizeRunId(null);
     if (nextStorageKey === this._storageKey) {
       return;
     }
 
     this._storageKey = nextStorageKey;
-    // Keep currentRunId in sync for backward compatibility
-    this.currentRunId = storageKey ?? null;
     this.openedOutputs.clear();
 
     if (targetExecutionId) {
@@ -210,23 +205,28 @@ export class OutputHandler implements IOutputHandler {
 
   /**
    * Get the current storage key.
-   * Returns the storageKey if set, otherwise falls back to normalized runId.
+   * Returns the storageKey if set, otherwise falls back to DEFAULT_RUN_ID.
    */
   private getStorageKey(): StorageKey {
-    // Use _storageKey if available (new path)
-    if (this._storageKey) {
-      return this._storageKey;
-    }
-    // Fall back to normalized currentRunId for backward compatibility
-    return normalizeRunId(this.currentRunId) as StorageKey;
+    return this._storageKey ?? normalizeRunId(null);
   }
 
   /**
-   * @deprecated Use getStorageKey() instead.
-   * Kept for backward compatibility.
+   * Create a storage-scoped payload for event bus emissions.
+   * Returns an object with storageKey (the single source of truth)
+   * and runId (for backward compatibility).
    */
-  private getActiveRunId(): string {
-    return this.getStorageKey();
+  private createStoragePayload(): {
+    storageKey: StorageKey;
+    runId: string;
+    executionId: string | undefined;
+  } {
+    const storageKey = this.getStorageKey();
+    return {
+      storageKey,
+      runId: storageKey, // Backward compatibility
+      executionId: this.fileService.getExecutionId(),
+    };
   }
 
   private async prepareRunWorkspaceIfNeeded(): Promise<void> {
@@ -559,20 +559,16 @@ export class OutputHandler implements IOutputHandler {
       `Validate expected r${currRound}`,
       stage,
       async () => {
-        const executionId = this.fileService.getExecutionId();
-        const storageKey = this.getStorageKey();
-        const runId = storageKey; // Backward compatibility
+        const storagePayload = this.createStoragePayload();
         const expected = this.agentConfig.outputFiles;
         if (!expected || expected.length === 0) {
           bus.emit('updateMissingOutputs', {
             stream: this.channel,
-            storageKey,
-            runId,
-            executionId,
+            ...storagePayload,
             filesByRound: { [currRound]: [] },
           });
           this.logger.debug(
-            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+            `updateMissingOutputs emitted (no expected outputs) for round ${currRound} storageKey=${storagePayload.storageKey}`,
             { messageType: MESSAGE_TYPES.INTERNAL },
           );
           return;
@@ -614,13 +610,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('updateMissingOutputs', {
           stream: this.channel,
-          storageKey,
-          runId,
-          executionId,
+          ...storagePayload,
           filesByRound: { [currRound]: missing },
         });
         this.logger.debug(
-          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'}`,
+          `updateMissingOutputs emitted with ${missing.length} missing for round ${currRound} storageKey=${storagePayload.storageKey}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
       },
@@ -648,9 +642,7 @@ export class OutputHandler implements IOutputHandler {
 
         const fileInfos = await this.gatherOutputFileInfo(currRound);
         data.outputs = fileInfos;
-        const executionId = this.fileService.getExecutionId();
-        const storageKey = this.getStorageKey();
-        const runId = storageKey; // Backward compatibility
+        const storagePayload = this.createStoragePayload();
 
         if (endTurn) {
           try {
@@ -667,13 +659,11 @@ export class OutputHandler implements IOutputHandler {
 
         bus.emit('addOutputFiles', {
           stream: this.channel,
-          storageKey,
-          runId,
-          executionId,
+          ...storagePayload,
           filesByRound: { [currRound]: fileInfos },
         });
         this.logger.debug(
-          `addOutputFiles emitted for round ${currRound} runId=${runId} executionId=${executionId ?? 'none'} files=${fileInfos.length}`,
+          `addOutputFiles emitted for round ${currRound} storageKey=${storagePayload.storageKey} files=${fileInfos.length}`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
 
@@ -715,9 +705,7 @@ export class OutputHandler implements IOutputHandler {
         const rawLocation = data.rawOutput ?? outputLocation;
         data.rawOutput = rawLocation;
         const rawPath = rawLocation.absolutePath;
-        const executionId = this.fileService.getExecutionId();
-        const storageKey = this.getStorageKey();
-        const runId = storageKey; // Backward compatibility
+        const storagePayload = this.createStoragePayload();
 
         const handleMultipleOutputs = async () => {
           this.logger.debug(
@@ -847,9 +835,7 @@ export class OutputHandler implements IOutputHandler {
             this.logger.missingOutputs(missingOutputsData);
             bus.emit('updateMissingOutputs', {
               stream: this.channel,
-              storageKey,
-              runId,
-              executionId,
+              ...storagePayload,
               filesByRound: { [currRound]: [] },
             });
             this.setRoundOutputs(currRound, []);
