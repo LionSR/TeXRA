@@ -140,16 +140,18 @@ export class AgentExecutionContext {
    * This should only be called ONCE per execution, when the primary
    * task group is created. Multiple calls are allowed but logged as warnings.
    *
-   * @param taskGroupId - The task group ID to use as the storage key
+   * @param storageKey - The branded StorageKey to use for storage operations
    */
-  updateStorageKey(taskGroupId: string): void {
-    if (this._identity.storageKey !== this._identity.executionId) {
+  updateStorageKey(storageKey: StorageKey): void {
+    // Compare with branded executionId to avoid type mismatch
+    const initialStorageKey = normalizeRunId(this._identity.executionId);
+    if (this._identity.storageKey !== initialStorageKey) {
       this.logger.warn(
         `Storage key already set to ${this._identity.storageKey}, ` +
-          `updating to ${taskGroupId}. This may indicate a bug.`,
+          `updating to ${storageKey}. This may indicate a bug.`,
       );
     }
-    this._identity.storageKey = normalizeRunId(taskGroupId);
+    this._identity.storageKey = storageKey;
   }
 
   stage(
