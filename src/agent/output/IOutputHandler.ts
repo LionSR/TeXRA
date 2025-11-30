@@ -65,8 +65,13 @@ export interface IOutputHandler {
     },
   ): Promise<void>;
 
+  /**
+   * Hydrate output artifacts from a saved state.
+   * @param storageKey - THE key for storage (from context.storageKey or saved state)
+   * @param rounds - Map of round number to output files
+   */
   hydrateFromArtifacts(
-    runId: string | null | undefined,
+    storageKey: string | null,
     rounds: Map<number, OutputFileInfo[]>,
   ): void;
 

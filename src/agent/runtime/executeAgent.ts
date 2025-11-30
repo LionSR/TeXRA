@@ -369,8 +369,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
     ) {
       const activeRunId = provider.state.getActiveRunId(activeStreamId);
       const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
-        executionId,
-        runId: activeRunId,
+        storageKey: activeRunId ?? executionId,
       });
 
       if (runOutputs) {
@@ -381,7 +380,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
         await agent.hydrateOutputState({
           executionId,
-          runId: resolvedRunId,
+          storageKey: resolvedRunId,
           rounds: runOutputs,
         });
       }

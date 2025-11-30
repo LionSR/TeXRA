@@ -500,20 +500,28 @@ export class OutputHandler implements IOutputHandler {
     };
   }
 
+  /**
+   * Hydrate output artifacts from a saved state.
+   *
+   * @param storageKey - THE key for storage (from context.storageKey or saved state)
+   *                     Pass null only for legacy data without storage key.
+   * @param rounds - Map of round number to output files
+   */
   public hydrateFromArtifacts(
-    runId: string | null | undefined,
+    storageKey: StorageKey | null,
     rounds: Map<number, OutputFileInfo[]>,
   ): void {
-    const loggerRunId = this.logger.withCurrentGroup((id) => id);
-    const effectiveRunId = runId ?? loggerRunId ?? null;
-    const normalizedCurrent = normalizeRunId(this.currentRunId);
-    const normalizedTarget = normalizeRunId(effectiveRunId);
+    // storageKey is the single source of truth - no logger round-trips
+    const currentKey = this.getStorageKey();
+    const targetKey = storageKey ?? currentKey;
+
     this.logger.debug(
-      `Hydrate outputs for runId=${normalizeRunId(runId)} loggerRunId=${normalizeRunId(loggerRunId)} current=${normalizedCurrent} target=${normalizedTarget}`,
+      `Hydrate outputs: storageKey=${storageKey ?? 'null'} current=${currentKey} target=${targetKey}`,
       { messageType: MESSAGE_TYPES.INTERNAL },
     );
-    if (normalizedTarget !== normalizedCurrent) {
-      this.setActiveRun(effectiveRunId);
+
+    if (targetKey !== currentKey) {
+      this.setActiveRun(targetKey);
     }
 
     for (const [round, infos] of rounds.entries()) {
