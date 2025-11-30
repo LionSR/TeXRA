@@ -51,11 +51,10 @@ describe('AgentUsageReporter', () => {
       reporter.report(stats, storageKey);
 
       assert.equal(streamEvents.length, 1);
-      // Verify both storageKey and runId are emitted
+      // storageKey is THE single source of truth - no runId needed
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
-        storageKey, // THE single source of truth
-        runId: storageKey, // Backward compatibility
+        storageKey,
         usage: {
           inputTokens: 10,
           outputTokens: 5,
@@ -107,7 +106,6 @@ describe('AgentUsageReporter', () => {
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
         storageKey,
-        runId: storageKey, // Backward compatibility
         usage: {
           inputTokens: 6,
           outputTokens: 2,
