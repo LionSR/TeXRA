@@ -409,42 +409,30 @@ export class ProgressViewState {
   }
 
   /**
-   * Get output files for a stream, resolving the correct dimension key.
+   * Get output files for a stream using storageKey.
    *
-   * ## Resolution Strategy
-   * 1. If executionId is provided, try to find files stored under that ID
-   *    (works for both tool-use agents and workflow agents with runStorage)
-   * 2. Otherwise, use runId (task group) or fall back to activeRunId
+   * StorageKey is THE single source of truth for storage operations:
+   * - Workflow agents: storageKey = task group ID
+   * - Tool-use agents: storageKey = executionId
    *
-   * For tool-use agents: executionId IS the runId (same UUID)
-   * For workflow agents: runId is the task group ID, executionId is metadata
+   * The caller should pass storageKey directly. If not provided,
+   * falls back to activeRunId for the stream.
    *
+   * @param stream - The stream tab ID
+   * @param options.storageKey - THE key for storage lookup (preferred)
    * @see IdentifierTypes.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,
-    options: { executionId?: ExecutionId; runId?: string | null } = {},
+    options: { storageKey?: string | null } = {},
   ): Map<number, OutputFileInfo[]> | undefined {
-    // Try executionId first - works for tool-use agents where executionId IS runId
-    // and for workflow agents with runStorage metadata
-    if (options.executionId) {
-      const byExecution = this._outputFiles.getRunByExecution(
-        stream,
-        options.executionId,
-      );
-      if (byExecution) {
-        return byExecution;
-      }
-    }
-
-    // Fall back to runId (task group for workflow agents, or legacy data)
-    const candidateRunId =
-      options.runId ?? this.getActiveRunId(stream) ?? undefined;
-    if (!candidateRunId) {
+    // Use storageKey directly - no dual-lookup, no spaghetti
+    const key = options.storageKey ?? this.getActiveRunId(stream);
+    if (!key) {
       return undefined;
     }
 
-    return this._outputFiles.getRun(stream, normalizeRunId(candidateRunId));
+    return this._outputFiles.getRun(stream, normalizeRunId(key));
   }
 
   // Execution ID management

@@ -14,6 +14,15 @@ import { AgentLogger } from './AgentLogger';
  *
  * Usage data flows through without modification - cost and token counts
  * are already computed upstream in the model handlers.
+ *
+ * ## Single Source of Truth
+ * The storageKey parameter is THE authoritative key for storage operations.
+ * It is computed once at execution start:
+ * - Workflow agents: storageKey = task group ID
+ * - Tool-use agents: storageKey = executionId
+ *
+ * This class does NOT query the logger for group IDs - it trusts the
+ * passed storageKey as the single source of truth.
  */
 export class AgentUsageReporter {
   constructor(
@@ -25,18 +34,11 @@ export class AgentUsageReporter {
   /**
    * Emit usage data to the progress view and attach detailed stats to the log.
    *
-   * Usage flows to a single source of truth (UsageStatsManager) via updateStreamUsage.
-   * Detailed statistics are logged separately for display in the progress view.
-   *
    * @param stats - Token usage statistics to report
-   * @param storageKey - THE key for storage (from context.storageKey)
+   * @param storageKey - THE key for storage (from context.storageKey) - REQUIRED
    */
-  public report(stats: ExtendedTokenUsageStats, storageKey?: string): void {
+  public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
-
-    // Get the current task group ID for workflow agents
-    // For tool-use agents, this will be undefined and we use the passed storageKey
-    const groupId = this.logger.withCurrentGroup((id) => id);
 
     // Pass through usage without modification
     const usage = {
@@ -45,23 +47,18 @@ export class AgentUsageReporter {
       cost: stats.cost,
     };
 
-    // Use groupId if available (workflow agents within a task group),
-    // otherwise use the passed storageKey (tool-use agents or outside group context)
-    const targetKey = (groupId ?? storageKey) as StorageKey | undefined;
-
-    // Always emit to the single source of truth (UsageStatsManager)
-    if (targetKey) {
-      bus.emit('updateStreamUsage', {
-        stream: this.streamId,
-        storageKey: targetKey,
-        runId: targetKey, // Backward compatibility
-        usage,
-      });
-    }
+    // storageKey is THE single source of truth - no fallbacks, no round-trips
+    bus.emit('updateStreamUsage', {
+      stream: this.streamId,
+      storageKey,
+      runId: storageKey, // Backward compatibility
+      usage,
+    });
 
     // Log detailed statistics for display in the progress view
+    // Use storageKey for logging context as well
     if (logStatistics) {
-      this.logger.statistics(stats, groupId);
+      this.logger.statistics(stats, storageKey);
     }
   }
 }
