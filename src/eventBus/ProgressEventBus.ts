@@ -60,21 +60,18 @@ interface SetTaskStatePayload {
 /**
  * Payload for storage-scoped events (files, usage, etc.).
  *
- * storageKey is THE key for storage operations - use this preferentially.
- * runId is kept for backward compatibility during migration.
+ * storageKey is THE key for storage operations - required for all events.
  */
 interface RunScopedPayload {
   stream: StreamTabId;
   /**
-   * THE key for storage operations.
-   * For new code, prefer using this over runId.
+   * THE key for storage operations. Required.
    */
-  storageKey?: StorageKey;
+  storageKey: StorageKey;
   /**
-   * @deprecated Use storageKey instead.
-   * Kept for backward compatibility - will be removed in future.
+   * @deprecated Redundant - equals storageKey. Kept for backward compatibility.
    */
-  runId: string;
+  runId?: string;
   /** For metadata/audit purposes */
   executionId?: ExecutionId;
 }
@@ -99,10 +96,10 @@ export interface ProgressEventPayloads {
   updateStreamUsage: {
     stream: StreamTabId;
     usage: TokenUsageStats;
-    /** THE key for storage operations. Prefer using this over runId. */
-    storageKey?: StorageKey;
-    /** @deprecated Use storageKey instead. */
-    runId: string;
+    /** THE key for storage operations. Required. */
+    storageKey: StorageKey;
+    /** @deprecated Redundant - equals storageKey. */
+    runId?: string;
   };
   showRetryRequest: {
     streamId: StreamTabId;

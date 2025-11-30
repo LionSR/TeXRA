@@ -2,8 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-import { normalizeRunId } from '@common/constants/runIds';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -105,26 +104,22 @@ const registerOutputFileListeners = (
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
-    ({ stream, storageKey, runId, filesByRound }) => {
+    ({ stream, storageKey, filesByRound }) => {
       withErrorBoundary('failed to handle addOutputFiles', async () => {
-        // storageKey is THE single source of truth, runId kept for backward compatibility
-        // normalizeRunId returns StorageKey, no cast needed
-        const key = storageKey ?? normalizeRunId(runId);
-        await state.outputFiles.addFiles(stream, key, filesByRound);
-        sendRunFileUpdate(state, updater, stream, key);
+        // storageKey is THE single source of truth - no fallbacks
+        await state.outputFiles.addFiles(stream, storageKey, filesByRound);
+        sendRunFileUpdate(state, updater, stream, storageKey);
       });
     },
   );
 
   const updateMissing = bus.on(
     'updateMissingOutputs',
-    ({ stream, storageKey, runId, filesByRound }) => {
+    ({ stream, storageKey, filesByRound }) => {
       withErrorBoundary('failed to handle updateMissingOutputs', async () => {
-        // storageKey is THE single source of truth, runId kept for backward compatibility
-        // normalizeRunId returns StorageKey, no cast needed
-        const key = storageKey ?? normalizeRunId(runId);
-        await state.outputFiles.updateMissingOutputs(stream, key, filesByRound);
-        sendRunMissingUpdate(state, updater, stream, key);
+        // storageKey is THE single source of truth - no fallbacks
+        await state.outputFiles.updateMissingOutputs(stream, storageKey, filesByRound);
+        sendRunMissingUpdate(state, updater, stream, storageKey);
       });
     },
   );

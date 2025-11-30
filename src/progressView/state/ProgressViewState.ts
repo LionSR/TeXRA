@@ -416,22 +416,19 @@ export class ProgressViewState {
    * - Tool-use agents: storageKey = executionId
    *
    * @param stream - The stream tab ID
-   * @param options.storageKey - THE key for storage lookup. **Always pass this.**
-   *        Fallback to activeRunId is deprecated and will be removed.
+   * @param options.storageKey - THE key for storage lookup. Required.
    * @see IdentifierTypes.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,
-    options: { storageKey?: string | null } = {},
+    options: { storageKey: string | null },
   ): Map<number, OutputFileInfo[]> | undefined {
-    // storageKey is THE single source of truth - use it directly when provided
-    // Fallback to activeRunId is for backward compatibility only (deprecated)
-    const key = options.storageKey ?? this.getActiveRunId(stream);
-    if (!key) {
+    // storageKey is THE single source of truth - no fallbacks
+    if (!options.storageKey) {
       return undefined;
     }
 
-    return this._outputFiles.getRun(stream, normalizeRunId(key));
+    return this._outputFiles.getRun(stream, normalizeRunId(options.storageKey));
   }
 
   // Execution ID management
