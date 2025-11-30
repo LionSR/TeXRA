@@ -61,12 +61,3 @@
 .agent-select--active {
   position: relative;
 }
-
-/* Make footer dropdowns open upward to avoid clipping at bottom of webview */
-.model-selection-footer vscode-single-select::part(listbox),
-#workflowAgent::part(listbox),
-#toolUseAgent::part(listbox),
-#model::part(listbox) {
-  bottom: 100%;
-  top: auto;
-}
