@@ -9,6 +9,7 @@ import type {
   StreamTabId,
 } from '@agent/types/IdentifierTypes';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { normalizeRunId } from '@common/constants/runIds';
 
 // Local imports - logger
 import {
@@ -97,7 +98,7 @@ export class AgentExecutionContext {
     // their primary task group
     this._identity = {
       executionId,
-      storageKey: executionId as StorageKey,
+      storageKey: normalizeRunId(executionId), // Use normalizeRunId for consistent branding
       streamTabId: init.streamId,
     };
   }
@@ -148,7 +149,7 @@ export class AgentExecutionContext {
           `updating to ${taskGroupId}. This may indicate a bug.`,
       );
     }
-    this._identity.storageKey = taskGroupId as StorageKey;
+    this._identity.storageKey = normalizeRunId(taskGroupId);
   }
 
   stage(

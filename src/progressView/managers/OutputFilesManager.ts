@@ -184,6 +184,10 @@ export class OutputFilesManager extends PersistentMapManager<
    * Return a flattened set of file paths known for the provided stream.
    * When workspaceOnly is true, only workspace-scoped paths are returned so
    * commands like pack/clean do not accidentally target run-storage artifacts.
+   *
+   * @param stream - The stream tab ID
+   * @param options.runId - The storage key for lookup. Normalized internally for safety.
+   * @param options.workspaceOnly - If true, only returns workspace-scoped paths
    */
   getKnownFilePaths(
     stream: StreamTabId,
@@ -195,6 +199,7 @@ export class OutputFilesManager extends PersistentMapManager<
       return paths;
     }
 
+    // runId is normalized for safety - caller should pass the storageKey
     const targetRunIds =
       options.runId !== undefined
         ? [normalizeRunId(options.runId)]
@@ -269,7 +274,14 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.delete(stream);
   }
 
+  /**
+   * Clear output files for a specific run within a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param runId - The storage key for the run. Normalized internally for safety.
+   */
   async clearRunFiles(stream: StreamTabId, runId: string): Promise<void> {
+    // runId is normalized for safety - caller should pass the storageKey
     const normalizedRunId = normalizeRunId(runId);
     const runs = this.items.get(stream);
     if (!runs) {
@@ -295,11 +307,18 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.saveMissingOutputs();
   }
 
+  /**
+   * Clear missing output records for a specific run within a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param runId - The storage key for the run. Normalized internally for safety.
+   */
   async clearRunMissingOutputs(
     stream: StreamTabId,
     runId: string,
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
+    // runId is normalized for safety - caller should pass the storageKey
     const normalizedRunId = normalizeRunId(runId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {

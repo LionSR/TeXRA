@@ -415,18 +415,17 @@ export class ProgressViewState {
    * - Workflow agents: storageKey = task group ID
    * - Tool-use agents: storageKey = executionId
    *
-   * The caller should pass storageKey directly. If not provided,
-   * falls back to activeRunId for the stream.
-   *
    * @param stream - The stream tab ID
-   * @param options.storageKey - THE key for storage lookup (preferred)
+   * @param options.storageKey - THE key for storage lookup. **Always pass this.**
+   *        Fallback to activeRunId is deprecated and will be removed.
    * @see IdentifierTypes.ts for the full execution model documentation
    */
   getRunOutputFiles(
     stream: StreamTabId,
     options: { storageKey?: string | null } = {},
   ): Map<number, OutputFileInfo[]> | undefined {
-    // Use storageKey directly - no dual-lookup, no spaghetti
+    // storageKey is THE single source of truth - use it directly when provided
+    // Fallback to activeRunId is for backward compatibility only (deprecated)
     const key = options.storageKey ?? this.getActiveRunId(stream);
     if (!key) {
       return undefined;
