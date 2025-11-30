@@ -115,7 +115,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     const filesByRound = activeRunId
       ? state.getRunFiles(stream, activeRunId) || {}
       : {};
-    dom.fileList.update(filesByRound);
+    // Hide round headers for tool-use agents where round numbers don't have meaning
+    const showRoundHeaders = state.activeSessionKind !== 'toolUse';
+    dom.fileList.update(filesByRound, { showRoundHeaders });
   }
 
   _refreshUsageForActiveRun() {

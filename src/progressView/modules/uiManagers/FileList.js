@@ -2,8 +2,6 @@
 import { COMMANDS, ELEMENT_IDS } from '../constants.js';
 // Local imports
 import { createFromTemplate } from '@common/templateUtils.js';
-import { vscode } from '@common/webviewContext.js';
-import { getBasename } from '@common/pathUtils.js';
 
 /**
  * Manages file list rendering.
@@ -13,8 +11,12 @@ export class FileList {
   /**
    * Update the generated files list
    * @param {Object} filesByRound - Files organized by round
+   * @param {Object} [options] - Display options
+   * @param {boolean} [options.showRoundHeaders=true] - Whether to show round headers (e.g., "r1", "r2").
+   *   For workflow agents, files are grouped per round. For tool-use agents, all files are shown as a flat list.
    */
-  update(filesByRound) {
+  update(filesByRound, options = {}) {
+    const { showRoundHeaders = true } = options;
     const container = document.getElementById(ELEMENT_IDS.GENERATED_FILES);
     if (!container) return;
 
@@ -35,6 +37,19 @@ export class FileList {
       .map((r) => parseInt(r, 10))
       .sort((a, b) => a - b);
 
+    // Tool-use mode: create a single flat container without round headers
+    // Workflow mode: each round gets its own container with a header
+    let flatGroup = null;
+    if (!showRoundHeaders) {
+      flatGroup = createFromTemplate('roundHeaderTemplate');
+      if (!flatGroup) return;
+      const roundHeader = flatGroup.querySelector('.round-header');
+      if (roundHeader) {
+        roundHeader.remove();
+      }
+    }
+
+    let hasFiles = false;
     rounds.forEach((round) => {
       const files = filesByRound[round];
       if (!Array.isArray(files)) {
@@ -49,95 +64,109 @@ export class FileList {
       }
       if (files.length === 0) return;
 
-      const roundGroup = createFromTemplate('roundHeaderTemplate');
-      if (!roundGroup) return;
-      const roundHeader = roundGroup.querySelector('.round-header');
-      if (roundHeader) roundHeader.textContent = `r${round}`;
+      hasFiles = true;
 
-      files.forEach((file) => {
-        // Skip invalid file entries - trust the data structure
-        if (!file || !file.location) {
-          console.warn('FileList.update: Invalid file entry:', file);
-          return;
+      if (showRoundHeaders) {
+        // Workflow mode: create new round group with header for each round
+        const roundGroup = createFromTemplate('roundHeaderTemplate');
+        if (!roundGroup) return;
+        const roundHeader = roundGroup.querySelector('.round-header');
+        if (roundHeader) {
+          roundHeader.textContent = `r${round}`;
         }
 
-        const clone = template.content.cloneNode(true);
-        const fileItem = clone.querySelector('.file-item');
-        const filePathSpan = clone.querySelector('.file-path');
-        const dirSpan = clone.querySelector('.file-dir');
-        const basenameSpan = clone.querySelector('.file-basename');
-        const fileActions = clone.querySelector('.file-actions');
-        const statsSpan = clone.querySelector('.file-stats');
+        files.forEach((file) => {
+          this._renderFileItem(template, roundGroup, file, round);
+        });
 
-        // Always use just the basename for display (no directory doubling)
-        const displayLabel = file.source
-          ? getBasename(file.source)
-          : getBasename(file.location.relativePath);
-        const relativePath = file.location.relativePath;
-        const dirPath =
-          relativePath && relativePath.includes('/')
-            ? relativePath.substring(0, relativePath.lastIndexOf('/'))
-            : '';
-
-        // Set file data attributes using new structure
-        if (fileItem) {
-          fileItem.dataset.file = file.location.absolutePath;
-          fileItem.dataset.original =
-            file.lineage?.original?.absolutePath || '';
-          fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
-          fileItem.dataset.round = round;
-          if (file.location.kind === 'workspace') {
-            fileItem.dataset.workspace = file.location.absolutePath;
-          }
-          if (
-            file.location.kind === 'workspace' ||
-            file.location.kind === 'runStorage'
-          ) {
-            fileItem.dataset.relative = file.location.relativePath;
-          }
-        }
-
-        // Set the file path display - simplified, no color coding for directory
-        if (basenameSpan) basenameSpan.textContent = relativePath;
-        if (dirSpan) dirSpan.textContent = '';
-        if (filePathSpan) {
-          const displayPath =
-            file.location.kind === 'workspace' ||
-            file.location.kind === 'runStorage'
-              ? file.location.relativePath
-              : file.location.absolutePath;
-          filePathSpan.title = displayPath;
-        }
-
-        // Handle diff stats (use schema field names: added/removed)
-        if (statsSpan) {
-          if (
-            file.diff?.added !== undefined &&
-            file.diff?.removed !== undefined
-          ) {
-            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
-          } else if (file.diff?.added !== undefined) {
-            statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
-          } else {
-            statsSpan.remove();
-          }
-        }
-
-        // Get effective base file for comparisons
-        // NEW STRUCTURE: diffBase is already computed, use it directly
-        const effectiveBase =
-          file.lineage?.diffBase?.absolutePath ||
-          file.lineage?.original?.absolutePath;
-
-        // Update buttons with click handlers
-        this.updateFileButtons(clone, file, effectiveBase);
-
-        roundGroup.appendChild(clone);
-      });
-
-      // Append the round group to the container
-      container.appendChild(roundGroup);
+        container.appendChild(roundGroup);
+      } else {
+        // Tool-use mode: append directly to flat group
+        files.forEach((file) => {
+          this._renderFileItem(template, flatGroup, file, round);
+        });
+      }
     });
+
+    // Append flat group only if it has files
+    if (!showRoundHeaders && flatGroup && hasFiles) {
+      container.appendChild(flatGroup);
+    }
+  }
+
+  /**
+   * Render a single file item and append it to the parent element
+   * @private
+   */
+  _renderFileItem(template, parent, file, round) {
+    // Skip invalid file entries - trust the data structure
+    if (!file || !file.location) {
+      console.warn('FileList.update: Invalid file entry:', file);
+      return;
+    }
+
+    const clone = template.content.cloneNode(true);
+    const fileItem = clone.querySelector('.file-item');
+    const filePathSpan = clone.querySelector('.file-path');
+    const dirSpan = clone.querySelector('.file-dir');
+    const basenameSpan = clone.querySelector('.file-basename');
+    const statsSpan = clone.querySelector('.file-stats');
+
+    const relativePath = file.location.relativePath;
+
+    // Set file data attributes using new structure
+    if (fileItem) {
+      fileItem.dataset.file = file.location.absolutePath;
+      fileItem.dataset.original = file.lineage?.original?.absolutePath || '';
+      fileItem.dataset.base = file.lineage?.diffBase?.absolutePath || '';
+      fileItem.dataset.round = round;
+      if (file.location.kind === 'workspace') {
+        fileItem.dataset.workspace = file.location.absolutePath;
+      }
+      if (
+        file.location.kind === 'workspace' ||
+        file.location.kind === 'runStorage'
+      ) {
+        fileItem.dataset.relative = file.location.relativePath;
+      }
+    }
+
+    // Set the file path display - simplified, no color coding for directory
+    if (basenameSpan) basenameSpan.textContent = relativePath;
+    if (dirSpan) dirSpan.textContent = '';
+    if (filePathSpan) {
+      const displayPath =
+        file.location.kind === 'workspace' ||
+        file.location.kind === 'runStorage'
+          ? file.location.relativePath
+          : file.location.absolutePath;
+      filePathSpan.title = displayPath;
+    }
+
+    // Handle diff stats (use schema field names: added/removed)
+    if (statsSpan) {
+      if (
+        file.diff?.added !== undefined &&
+        file.diff?.removed !== undefined
+      ) {
+        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span><span class="removed">-${file.diff.removed}</span>`;
+      } else if (file.diff?.added !== undefined) {
+        statsSpan.innerHTML = `<span class="added">+${file.diff.added}</span>`;
+      } else {
+        statsSpan.remove();
+      }
+    }
+
+    // Get effective base file for comparisons
+    // NEW STRUCTURE: diffBase is already computed, use it directly
+    const effectiveBase =
+      file.lineage?.diffBase?.absolutePath ||
+      file.lineage?.original?.absolutePath;
+
+    // Update buttons with click handlers
+    this.updateFileButtons(clone, file, effectiveBase);
+
+    parent.appendChild(clone);
   }
 
   /**
