@@ -34,6 +34,7 @@ import { ModelFactory } from '@agent/runtime/ModelFactory';
 import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import { STREAM_STATUS } from '@common/constants/streamStatus';
+import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
@@ -369,9 +370,9 @@ export async function executeAgentWithLogging<T extends IAgent>(
     ) {
       // For resume, use a single storageKey for both fetching and hydrating
       // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
-      // No complex resolution or multiple fallback chains
+      // Use normalizeRunId to brand as StorageKey
       const activeRunId = provider.state.getActiveRunId(activeStreamId);
-      const storageKey = activeRunId ?? executionId;
+      const storageKey = normalizeRunId(activeRunId ?? executionId);
 
       const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
         storageKey,
@@ -380,7 +381,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       if (runOutputs) {
         await agent.hydrateOutputState({
           executionId,
-          storageKey, // Use same key we fetched with - no inconsistency
+          storageKey, // Properly branded StorageKey
           rounds: runOutputs,
         });
       }

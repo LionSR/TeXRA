@@ -13,7 +13,7 @@ import {
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { ResponseCycleOptions } from '@agent/core/ResponseCycle';
 import type { AgentRunHooks } from '@agent/implementations/flows/common/types';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StorageKey } from '@agent/types/IdentifierTypes';
 
 // Internal imports
 import {
@@ -42,6 +42,7 @@ import { createLifecycleState } from '@agent/implementations/flows/common/lifecy
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import { PromptBuilder } from '@agent/utils/PromptBuilder';
 import { writePromptToXml } from '@agent/utils/promptUtils';
+import { normalizeRunId } from '@common/constants/runIds';
 import type { AgentLogStage } from '@logger/AgentLogger';
 
 // Local imports - configuration
@@ -197,7 +198,7 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
 
   public async hydrateOutputState(params: {
     executionId: ExecutionId;
-    storageKey?: string | null;
+    storageKey?: StorageKey | null;
     rounds: Map<number, OutputFileInfo[]>;
   }): Promise<void> {
     const hydration = (async () => {
@@ -849,8 +850,9 @@ export abstract class BaseReflectionAgent<C = unknown> extends BaseAgent<C> {
               }
               // Update the context's storage key to the task group ID
               // This is THE key for all storage operations
+              const storageKey = normalizeRunId(runStage.id);
               this.context.updateStorageKey(runStage.id);
-              this.outputHandler.setActiveRun(runStage.id);
+              this.outputHandler.setActiveRun(storageKey);
               return runStage;
             },
             resetPromptBuilder: () => this.resetPromptBuilder(),
