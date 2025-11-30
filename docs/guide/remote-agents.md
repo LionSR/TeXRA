@@ -127,23 +127,12 @@ If you prefer not to use remote agents:
 
 This will hide remote agents from your interface without affecting built-in agents.
 
-## Privacy and Security
-
-TeXRA takes your privacy seriously:
-
-- **No document uploads**: Your LaTeX files and research documents never leave your machine
-- **Secure authentication**: We use industry-standard OAuth through GitHub, Google, and GitLab
-- **API key security**: Your AI provider API keys are stored locally in VS Code's secure storage
-- **Minimal data collection**: We only collect anonymous usage statistics to improve agent quality
-
-For more details, see our [Privacy Policy](https://texra.ai/privacy).
 
 ## Need Help?
 
 If you encounter any issues with remote agents or have questions about the Researcher Access Program:
 
 - **Email**: [contact@texra.ai](mailto:contact@texra.ai)
-- **GitHub Issues**: [github.com/LionSR/TeXRA/issues](https://github.com/LionSR/TeXRA/issues)
 - **Documentation**: [texra.ai/guide](https://texra.ai/guide)
 
 We typically respond to inquiries within 24-48 hours.
