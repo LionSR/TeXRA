@@ -14,6 +14,7 @@ Many real-world tasks are too complex for one LLM call. The solution is to **Tas
 </div>
 
 ::: tip Best Practice
+
 - You don't want to make each task **too coarse**, because it may be _too complex for one LLM call_.
 - You don't want to make each task **too granular**, because then _the LLM call doesn't have enough context_ and results are _not consistent across nodes_.
 
