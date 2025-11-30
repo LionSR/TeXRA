@@ -83,5 +83,5 @@ export interface IOutputHandler {
    * Set the active storage key for this handler.
    * @param storageKey - THE key for storage operations (task group ID or execution ID)
    */
-  setActiveRun(storageKey?: StorageKey | null): void;
+  setActiveRun(storageKey: StorageKey): void;
 }
