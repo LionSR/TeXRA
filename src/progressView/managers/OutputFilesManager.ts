@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
@@ -41,25 +41,29 @@ export class OutputFilesManager extends PersistentMapManager<
     this.logger = new AgentLogger('OutputFilesManager');
   }
 
-  /** Add output files for a stream and round */
+  /**
+   * Add output files for a stream and round.
+   *
+   * @param stream - The stream tab ID
+   * @param storageKey - THE key for storage (single source of truth)
+   * @param filesByRound - Map of round number to output files
+   */
   async addFiles(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     filesByRound: { [key: number]: OutputFileInfo[] },
-    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
-    const normalizedRunId = normalizeRunId(runId);
-
+    // storageKey is already branded - use directly, no normalization needed
     let streamRuns = this.items.get(stream);
     if (!streamRuns) {
       streamRuns = new Map();
       this.items.set(stream, streamRuns);
     }
 
-    let runRounds = streamRuns.get(normalizedRunId);
+    let runRounds = streamRuns.get(storageKey);
     if (!runRounds) {
       runRounds = new Map();
-      streamRuns.set(normalizedRunId, runRounds);
+      streamRuns.set(storageKey, runRounds);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -84,15 +88,20 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.save();
   }
 
-  /** Update missing outputs for a stream */
+  /**
+   * Update missing outputs for a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param storageKey - THE key for storage (single source of truth)
+   * @param filesByRound - Map of round number to missing file paths
+   */
   async updateMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
     filesByRound: { [key: number]: string[] },
-    options: { executionId?: ExecutionId } = {},
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const normalizedRunId = normalizeRunId(runId);
+    // storageKey is already branded - use directly, no normalization needed
 
     let streamMissing = this._missingOutputs.get(stream);
     if (!streamMissing) {
@@ -100,10 +109,10 @@ export class OutputFilesManager extends PersistentMapManager<
       this._missingOutputs.set(stream, streamMissing);
     }
 
-    let runMissing = streamMissing.get(normalizedRunId);
+    let runMissing = streamMissing.get(storageKey);
     if (!runMissing) {
       runMissing = new Map();
-      streamMissing.set(normalizedRunId, runMissing);
+      streamMissing.set(storageKey, runMissing);
     }
 
     for (const [round, files] of Object.entries(filesByRound)) {
@@ -128,14 +137,14 @@ export class OutputFilesManager extends PersistentMapManager<
 
   getRun(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Map<number, OutputFileInfo[]> | undefined {
     const runs = this.items.get(stream);
     if (!runs) {
       return undefined;
     }
 
-    const target = runs.get(runId);
+    const target = runs.get(storageKey);
     if (!target) {
       return undefined;
     }
@@ -152,7 +161,7 @@ export class OutputFilesManager extends PersistentMapManager<
 
   getRunMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Map<number, string[]> | undefined {
     if (!this.missingOutputsLoaded) {
       throw new Error('Missing outputs requested before load completed');
@@ -163,7 +172,7 @@ export class OutputFilesManager extends PersistentMapManager<
       return undefined;
     }
 
-    const target = runs.get(runId);
+    const target = runs.get(storageKey);
     if (!target) {
       return undefined;
     }
@@ -172,59 +181,17 @@ export class OutputFilesManager extends PersistentMapManager<
   }
 
   /**
-   * Find output files for a stream by executionId.
-   *
-   * For tool-use agents, executionId IS the runId (they are stored as such).
-   * For workflow agents, we search for files that have matching executionId
-   * in their location metadata.
-   *
-   * Note: ExecutionId is always a UUID, so we do NOT normalize it.
-   * normalizeRunId() is only for legacy workflow data that might have null runId.
-   *
-   * @see IdentifierTypes.ts for the full execution model documentation
-   */
-  getRunByExecution(
-    stream: StreamTabId,
-    executionId: ExecutionId,
-  ): Map<number, OutputFileInfo[]> | undefined {
-    // For tool-use agents: executionId IS the runId (no normalization needed)
-    // ExecutionId is always a UUID, never null or DEFAULT_RUN_ID
-    const direct = this.getRun(stream, executionId);
-    if (direct) {
-      return direct;
-    }
-
-    // For workflow agents: search for files with matching executionId in metadata
-    const runs = this.items.get(stream);
-    if (!runs) {
-      return undefined;
-    }
-
-    for (const [runKey, rounds] of runs.entries()) {
-      for (const infos of rounds.values()) {
-        if (
-          infos.some(
-            (info) =>
-              info.location.kind === 'runStorage' &&
-              info.location.executionId === executionId,
-          )
-        ) {
-          return this.getRun(stream, runKey);
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
    * Return a flattened set of file paths known for the provided stream.
    * When workspaceOnly is true, only workspace-scoped paths are returned so
    * commands like pack/clean do not accidentally target run-storage artifacts.
+   *
+   * @param stream - The stream tab ID
+   * @param options.storageKey - THE key for storage lookup
+   * @param options.workspaceOnly - If true, only returns workspace-scoped paths
    */
   getKnownFilePaths(
     stream: StreamTabId,
-    options: { runId?: string | null; workspaceOnly?: boolean } = {},
+    options: { storageKey?: StorageKey | null; workspaceOnly?: boolean } = {},
   ): Set<string> {
     const paths = new Set<string>();
     const runs = this.items.get(stream);
@@ -232,9 +199,10 @@ export class OutputFilesManager extends PersistentMapManager<
       return paths;
     }
 
+    // storageKey is THE single source of truth
     const targetRunIds =
-      options.runId !== undefined
-        ? [normalizeRunId(options.runId)]
+      options.storageKey !== undefined && options.storageKey !== null
+        ? [options.storageKey]
         : Array.from(runs.keys());
 
     for (const target of targetRunIds) {
@@ -306,14 +274,19 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.delete(stream);
   }
 
-  async clearRunFiles(stream: StreamTabId, runId: string): Promise<void> {
-    const normalizedRunId = normalizeRunId(runId);
+  /**
+   * Clear output files for a specific run within a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param storageKey - THE key for storage operations
+   */
+  async clearRunFiles(stream: StreamTabId, storageKey: StorageKey): Promise<void> {
     const runs = this.items.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(normalizedRunId);
+    const removed = runs.delete(storageKey);
     if (runs.size === 0) {
       this.items.delete(stream);
     }
@@ -332,18 +305,23 @@ export class OutputFilesManager extends PersistentMapManager<
     await this.saveMissingOutputs();
   }
 
+  /**
+   * Clear missing output records for a specific run within a stream.
+   *
+   * @param stream - The stream tab ID
+   * @param storageKey - THE key for storage operations
+   */
   async clearRunMissingOutputs(
     stream: StreamTabId,
-    runId: string,
+    storageKey: StorageKey,
   ): Promise<void> {
     await this.ensureMissingOutputsLoaded();
-    const normalizedRunId = normalizeRunId(runId);
     const runs = this._missingOutputs.get(stream);
     if (!runs) {
       return;
     }
 
-    const removed = runs.delete(normalizedRunId);
+    const removed = runs.delete(storageKey);
     if (runs.size === 0) {
       this._missingOutputs.delete(stream);
     }

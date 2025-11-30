@@ -7,6 +7,7 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
@@ -149,11 +150,11 @@ export class ProgressEventHandler {
     if (runId && instructionUpdate) {
       void this.state.runInstructions.setInstruction(
         stream,
-        runId,
+        normalizeRunId(runId),
         instructionUpdate,
       );
     } else if (runId) {
-      void this.state.runInstructions.deleteRun(stream, runId);
+      void this.state.runInstructions.deleteRun(stream, normalizeRunId(runId));
     }
 
     if (instructionUpdate) {
