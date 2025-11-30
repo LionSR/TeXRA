@@ -69,8 +69,11 @@ export type ExecutionId = string;
  * is created for workflow agents) and never changes during execution.
  *
  * Use ExecutionIdentity.storageKey to get this value - never compute it manually.
+ *
+ * This is a branded type for compile-time safety - you cannot accidentally
+ * pass a random string where a StorageKey is expected.
  */
-export type StorageKey = string;
+export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
 /**
  * Run ID: Legacy identifier for grouping files and usage statistics.

@@ -3,26 +3,35 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { StorageKey } from '@agent/types/IdentifierTypes';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { bus } from '@eventBus/ProgressEventBus';
 import { AgentUsageReporter } from '@/logger/AgentUsageReporter';
 
 describe('AgentUsageReporter', () => {
-  it('falls back to passed runId when groupId is not available', () => {
+  /**
+   * AgentUsageReporter trusts the passed storageKey as the single source of truth.
+   * It does NOT query the logger for group IDs - no round-trips.
+   */
+  it('trusts storageKey as single source of truth (no round-trip to logger)', () => {
     const streamId = 'stream:test';
-    const runId = 'run-123';
+    const storageKey = 'task-group-123' as StorageKey;
     const streamEvents: unknown[] = [];
     const disposeStream = bus.on('updateStreamUsage', (payload) => {
       streamEvents.push(payload);
     });
 
     let recordedStats: ExtendedTokenUsageStats | undefined;
+    let recordedStorageKey: string | undefined;
     const loggerStub = {
-      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined =>
-        undefined,
-      statistics: (stats: ExtendedTokenUsageStats) => {
+      // This should NOT be called - we don't do round-trips anymore
+      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined => {
+        throw new Error('withCurrentGroup should not be called - no round-trips!');
+      },
+      statistics: (stats: ExtendedTokenUsageStats, key: string) => {
         recordedStats = stats;
+        recordedStorageKey = key;
       },
     } as unknown as AgentLogger;
 
@@ -39,66 +48,23 @@ describe('AgentUsageReporter', () => {
     };
 
     try {
-      reporter.report(stats, runId);
+      reporter.report(stats, storageKey);
 
       assert.equal(streamEvents.length, 1);
-      // inputTokens is passed through unchanged - cacheCreationInputTokens
-      // is tracked separately in the normalized usage system
+      // Verify both storageKey and runId are emitted
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
-        runId,
+        storageKey, // THE single source of truth
+        runId: storageKey, // Backward compatibility
         usage: {
           inputTokens: 10,
           outputTokens: 5,
           cost: 0.25,
         },
       });
+      // Verify statistics were logged with storageKey
       assert.strictEqual(recordedStats, stats);
-    } finally {
-      disposeStream();
-    }
-  });
-
-  it('uses groupId from logger instead of passed runId when available', () => {
-    const streamId = 'stream:test';
-    const passedRunId = 'execution-id-123';
-    const groupId = 'task-group-id-456';
-    const streamEvents: unknown[] = [];
-    const disposeStream = bus.on('updateStreamUsage', (payload) => {
-      streamEvents.push(payload);
-    });
-
-    const loggerStub = {
-      withCurrentGroup: <T>(fn: (groupId: string) => T): T | undefined =>
-        fn(groupId),
-      statistics: () => {},
-    } as unknown as AgentLogger;
-
-    const reporter = new AgentUsageReporter(
-      loggerStub,
-      streamId,
-      AgentCategory.Workflow,
-    );
-    const stats: ExtendedTokenUsageStats = {
-      inputTokens: 10,
-      outputTokens: 5,
-      cost: 0.25,
-    };
-
-    try {
-      reporter.report(stats, passedRunId);
-
-      assert.equal(streamEvents.length, 1);
-      // groupId should be used instead of passedRunId
-      assert.deepEqual(streamEvents[0], {
-        stream: streamId,
-        runId: groupId, // NOT passedRunId!
-        usage: {
-          inputTokens: 10,
-          outputTokens: 5,
-          cost: 0.25,
-        },
-      });
+      assert.strictEqual(recordedStorageKey, storageKey);
     } finally {
       disposeStream();
     }
@@ -106,15 +72,16 @@ describe('AgentUsageReporter', () => {
 
   it('skips statistics logging for tool-use sessions', () => {
     const streamId = 'stream:test';
-    const runId = 'run-456';
+    const storageKey = 'execution-id-456' as StorageKey;
     const streamEvents: unknown[] = [];
     const disposeStream = bus.on('updateStreamUsage', (payload) => {
       streamEvents.push(payload);
     });
 
     const loggerStub = {
-      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined =>
-        undefined,
+      withCurrentGroup: <T>(_: (groupId: string) => T): T | undefined => {
+        throw new Error('withCurrentGroup should not be called');
+      },
       statistics: () => {
         throw new Error('statistics should not be called for tool-use runs');
       },
@@ -134,12 +101,13 @@ describe('AgentUsageReporter', () => {
     };
 
     try {
-      reporter.report(stats, runId);
+      reporter.report(stats, storageKey);
 
       assert.equal(streamEvents.length, 1);
       assert.deepEqual(streamEvents[0], {
         stream: streamId,
-        runId,
+        storageKey,
+        runId: storageKey, // Backward compatibility
         usage: {
           inputTokens: 6,
           outputTokens: 2,
