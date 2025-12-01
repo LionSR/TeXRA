@@ -12,7 +12,6 @@ const DEEPSEEK_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsAutoPromptCaching: true,
   cacheDiscountFactor: 0.5,
   supportsVision: false,
-  supportsToolResultAttachments: false,
 };
 
 export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
