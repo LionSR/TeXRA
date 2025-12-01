@@ -113,13 +113,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
+  /**
+   * OpenAI Response API supports file uploads.
+   */
   protected override get supportsToolFileOutputs(): boolean {
     return true;
   }
 
-  protected override get supportsInlineToolImages(): boolean {
-    return true;
-  }
+  // supportsInlineToolImages uses the capability from base class
 
   constructor(config: ModelConfig) {
     super(config);

@@ -128,8 +128,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
    *
-   * Note: DeepSeek models don't support attachments in tool results,
-   * so we pass the result directly without attachment extraction.
+   * Attachment handling is controlled by supportsToolResultAttachments capability.
    */
   override async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
@@ -173,8 +172,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * should be in ONE assistant message with reasoning_content, followed by
    * individual tool result messages.
    *
-   * Note: DeepSeek models don't support attachments in tool results,
-   * so we pass results directly without attachment extraction.
+   * Attachment handling is controlled by supportsToolResultAttachments capability.
    *
    * @param calls - Array of tool calls from the model response
    * @param results - Array of results corresponding to each call

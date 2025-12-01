@@ -232,13 +232,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
 > {
   private cacheControlledBlock?: CacheControlEligibleBlock;
 
+  /**
+   * Anthropic supports file uploads via their Files API.
+   */
   protected override get supportsToolFileOutputs(): boolean {
     return true;
   }
 
-  protected override get supportsInlineToolImages(): boolean {
-    return true;
-  }
+  // supportsInlineToolImages uses the capability from base class
 
   private setCacheControlTarget(block: CacheControlEligibleBlock): void {
     if (!this.capabilities.supportsPromptCaching) {
