@@ -91,19 +91,12 @@ export abstract class ModelHandler<
   protected mediaProcessor: MediaAttachmentProcessor;
 
   /**
-   * Whether the model supports file attachments in tool results via API upload.
-   * Override in handlers that support provider-specific file upload APIs.
+   * Whether the handler can upload files to the provider's API for tool results.
+   * Override in handlers that support provider-specific file upload APIs
+   * (e.g., Anthropic Files API, OpenAI Files API).
    */
-  protected get supportsToolFileOutputs(): boolean {
+  protected get supportsToolResultFileUpload(): boolean {
     return false;
-  }
-
-  /**
-   * Whether the model supports inline base64 images in tool results.
-   * Uses the supportsToolResultAttachments capability by default.
-   */
-  protected get supportsInlineToolImages(): boolean {
-    return this.config.capabilities.supportsToolResultAttachments;
   }
 
   constructor(config: ModelConfig) {

@@ -116,11 +116,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   /**
    * OpenAI Response API supports file uploads.
    */
-  protected override get supportsToolFileOutputs(): boolean {
+  protected override get supportsToolResultFileUpload(): boolean {
     return true;
   }
-
-  // supportsInlineToolImages uses the capability from base class
 
   constructor(config: ModelConfig) {
     super(config);
@@ -1332,11 +1330,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
-    const supportsAttachments = this.supportsToolFileOutputs;
-    const supportsInlineImages = this.supportsInlineToolImages;
+    const canUploadFiles = this.supportsToolResultFileUpload;
+    const canInlineAttachments = this.capabilities.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
-    if (supportsAttachments && attachments.length > 0 && client) {
+    if (canUploadFiles && attachments.length > 0 && client) {
       uploadedAttachments = await this.uploadToolAttachments(
         client,
         attachments,
@@ -1354,7 +1352,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (
       attachments.length > 0 &&
-      (!supportsAttachments || !client || uploadedAttachments.length === 0)
+      (!canUploadFiles || !client || uploadedAttachments.length === 0)
     ) {
       (sanitizedResult as Record<string, unknown>).attachmentSummary =
         `Attachments available:\n${describeAttachments(attachments).join(
@@ -1381,7 +1379,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ];
 
       for (const uploaded of uploadedAttachments) {
-        if (supportsInlineImages && uploaded.isImage) {
+        if (canInlineAttachments && uploaded.isImage) {
           parts.push({
             type: 'input_image',
             detail: 'auto',
