@@ -91,6 +91,14 @@ export abstract class ModelHandler<
   protected mediaProcessor: MediaAttachmentProcessor;
 
   /**
+   * Whether the handler supports processing attachments in tool results.
+   * Override in handlers that don't support attachments (e.g., DeepSeek).
+   */
+  protected get supportsToolResultAttachments(): boolean {
+    return true;
+  }
+
+  /**
    * Whether the handler can upload files to the provider's API for tool results.
    * Override in handlers that support provider-specific file upload APIs
    * (e.g., Anthropic Files API, OpenAI Files API).

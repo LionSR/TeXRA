@@ -1267,11 +1267,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: GoogleToolCall,
     result: Record<string, unknown>,
   ): Promise<Part> {
-    // Only extract attachments if the model supports them
+    // Only extract attachments if the handler supports them
     let finalResult = result;
     let attachmentParts: FunctionResponsePart[] = [];
 
-    if (this.config.capabilities.supportsToolResultAttachments) {
+    if (this.supportsToolResultAttachments) {
       const { attachments, sanitizedResult } = extractToolAttachments(result);
 
       if (attachments.length > 0) {
