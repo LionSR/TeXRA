@@ -1329,18 +1329,24 @@ export class ModelHandlerOpenAI<
     if (text) {
       callMsg.content = this.formatAssistantContent(text);
     }
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to download them.`;
+
+    // Only extract attachments if the model supports them
+    let finalResult = result;
+    if (this.config.capabilities.supportsToolResultAttachments) {
+      const { attachments, sanitizedResult } = extractToolAttachments(result);
+      if (attachments.length > 0) {
+        (sanitizedResult as Record<string, unknown>).attachmentSummary =
+          `Attachments available:\n${describeAttachments(attachments).join(
+            '\n',
+          )}\nUse the read_file tool to read them.`;
+      }
+      finalResult = sanitizedResult;
     }
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify(sanitizedResult),
+      content: JSON.stringify(finalResult),
     };
     return [callMsg, resultMsg];
   }
