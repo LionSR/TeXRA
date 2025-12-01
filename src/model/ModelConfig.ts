@@ -35,6 +35,7 @@ export const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities = {
   supportsIntermDevMsgs: false,
   supportsReasoningEffort: false,
   supportsNativeAudio: false,
+  supportsToolResultAttachments: true,
 };
 
 /** Supported language model providers with their API identifiers. */
@@ -71,6 +72,8 @@ export interface ModelCapabilities {
   supportsIntermDevMsgs: boolean;
   supportsReasoningEffort: boolean;
   supportsNativeAudio: boolean;
+  /** Whether the model supports attachments (images/files) in tool results */
+  supportsToolResultAttachments: boolean;
 }
 
 /** Complete configuration for a language model instance. */
