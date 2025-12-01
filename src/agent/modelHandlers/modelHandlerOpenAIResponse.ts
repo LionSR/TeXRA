@@ -1331,7 +1331,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const canUploadFiles = this.supportsToolResultFileUpload;
-    const canInlineAttachments = this.capabilities.supportsToolResultAttachments;
+    const canInlineAttachments = this.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {

@@ -1330,9 +1330,9 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Only extract attachments if the model supports them
+    // Only extract attachments if the handler supports them
     let finalResult = result;
-    if (this.config.capabilities.supportsToolResultAttachments) {
+    if (this.supportsToolResultAttachments) {
       const { attachments, sanitizedResult } = extractToolAttachments(result);
       if (attachments.length > 0) {
         (sanitizedResult as Record<string, unknown>).attachmentSummary =
