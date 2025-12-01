@@ -148,7 +148,10 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     responseObject: any,
     workspaceState?: AgentWorkspaceState,
   ): string | null {
-    const reasoning = super.processThinkingBlock(responseObject, workspaceState);
+    const reasoning = super.processThinkingBlock(
+      responseObject,
+      workspaceState,
+    );
     // Store reasoning for tool-use follow-up messages
     this.lastReasoningContent = reasoning;
     return reasoning;
