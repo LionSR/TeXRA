@@ -244,6 +244,11 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
+  /** Checks if the model is from DeepSeek provider. */
+  get isDeepSeek(): boolean {
+    return this.config.provider === ModelProvider.DEEPSEEK;
+  }
+
   /**
    * Gets streaming configuration for the current model provider
    * @returns Boolean indicating if streaming should be enabled
