@@ -48,6 +48,23 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
+  'deepseekT+': {
+    name: 'deepseekT+',
+    fullName: 'deepseek-reasoner',
+    provider: ModelProvider.DEEPSEEK,
+    maxOutputTokens: 65536,
+    contextWindow: 128000,
+    inputPrice: 0.56,
+    outputPrice: 1.68,
+    capabilities: {
+      ...DEEPSEEK_DEFAULT_CAPABILITIES,
+      supportsReasoning: true,
+      supportsReasoningEffort: false,
+      supportsFunctionCalling: false,
+    } satisfies ModelCapabilities,
+    openRouterOnly: false,
+    baseUrl: 'https://api.deepseek.com/v3.2_speciale_expires_on_20251215',
+  },
   dsv3: {
     name: 'dsv3',
     fullName: 'deepseek-chat',
