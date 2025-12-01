@@ -164,6 +164,9 @@ export interface IModelHandler<
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 
+  /** Indicates if the model is served by DeepSeek. */
+  readonly isDeepSeek: boolean;
+
   /** Checks if the provider implements the OpenAI API. */
   readonly isOpenaiCompatible: boolean;
 

@@ -792,9 +792,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     // Step 2: Create follow-up messages
     // For Google handlers with multiple parallel calls, use batched method
-    // to properly preserve thought signatures (required for Gemini 3 models)
+    // to properly preserve thought signatures (required for Gemini 3 models).
+    // For DeepSeek thinking mode, batching ensures reasoning_content is
+    // properly included in the single assistant message with all tool calls.
     const shouldBatch =
-      options.modelHandler.isGoogle &&
+      (options.modelHandler.isGoogle || options.modelHandler.isDeepSeek) &&
       calls.length > 1 &&
       typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
         'function';
