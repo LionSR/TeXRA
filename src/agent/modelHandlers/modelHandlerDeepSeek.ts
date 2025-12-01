@@ -64,7 +64,13 @@ type DeepSeekAssistantMessage = ChatCompletionAssistantMessageParam & {
  * Supports DeepSeek's thinking mode with tool calls. When thinking mode is enabled:
  * - The model outputs reasoning_content along with tool_calls
  * - The reasoning_content must be included in assistant messages during tool-use cycles
- * - The reasoning_content should be cleared when a new user turn begins
+ *
+ * Reasoning content lifecycle:
+ * - Captured in processThinkingBlock() on each model response
+ * - Consumed (and cleared) when creating tool-use follow-up messages
+ * - Overwritten on next model response if not consumed (no leak between turns)
+ *
+ * Note: Handler instances are created per-agent-run, not shared across requests.
  *
  * @see https://api-docs.deepseek.com/guides/thinking_with_tools
  */
@@ -73,6 +79,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * Stores the last reasoning_content from a model response.
    * This is used to include reasoning_content in follow-up tool-use messages
    * as required by DeepSeek's thinking mode API.
+   *
+   * Cleared after use in tool-use methods, or overwritten by next response.
    */
   private lastReasoningContent: string | null = null;
 
@@ -103,6 +111,33 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
+   * Builds an assistant message with tool calls and reasoning_content.
+   * Consumes and clears lastReasoningContent if present.
+   */
+  private buildAssistantMessageWithReasoning(
+    toolCalls: ReturnType<typeof this.normalizeToolCall>[],
+    text?: string,
+  ): DeepSeekAssistantMessage {
+    const callMsg: DeepSeekAssistantMessage = {
+      role: 'assistant',
+      tool_calls: toolCalls,
+    };
+
+    // Include reasoning_content if available (required for thinking mode)
+    if (this.lastReasoningContent) {
+      callMsg.reasoning_content = this.lastReasoningContent;
+      // Clear after use since it should only be included once per response
+      this.lastReasoningContent = null;
+    }
+
+    if (text) {
+      callMsg.content = this.formatAssistantContent(text);
+    }
+
+    return callMsg;
+  }
+
+  /**
    * Process thinking block and capture reasoning_content for tool-use cycles.
    *
    * DeepSeek's thinking mode requires reasoning_content to be included in
@@ -125,8 +160,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * For DeepSeek thinking mode, the assistant message must include
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
-   *
-   * Attachment handling is controlled by supportsToolResultAttachments capability.
    */
   override async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
@@ -136,23 +169,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(call.raw);
-
-    // Build assistant message with reasoning_content for thinking mode
-    const callMsg: DeepSeekAssistantMessage = {
-      role: 'assistant',
-      tool_calls: [toolCall],
-    };
-
-    // Include reasoning_content if available (required for thinking mode)
-    if (this.lastReasoningContent) {
-      callMsg.reasoning_content = this.lastReasoningContent;
-      // Clear after use since it should only be included once per response
-      this.lastReasoningContent = null;
-    }
-
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
-    }
+    const callMsg = this.buildAssistantMessageWithReasoning([toolCall], text);
 
     const resultMsg = {
       role: 'tool' as const,
@@ -170,49 +187,41 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * should be in ONE assistant message with reasoning_content, followed by
    * individual tool result messages.
    *
-   * Attachment handling is controlled by supportsToolResultAttachments capability.
-   *
    * @param calls - Array of tool calls from the model response
-   * @param results - Array of results corresponding to each call
+   * @param results - Array of results corresponding to each call (must match calls length)
    * @param text - Optional text content to include in the assistant message
+   * @throws Error if calls and results arrays have different lengths
    */
   async createBatchedToolUseFollowUpMessages(
     calls: DeepSeekToolCall[],
     results: Record<string, unknown>[],
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
+    // Validate input arrays
+    if (calls.length !== results.length) {
+      throw new Error(
+        `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
+      );
+    }
+
+    if (calls.length === 0) {
+      return [];
+    }
+
     // Build assistant message with ALL tool calls and reasoning_content
     const toolCalls = calls.map((call) => this.normalizeToolCall(call.raw));
-
-    const callMsg: DeepSeekAssistantMessage = {
-      role: 'assistant',
-      tool_calls: toolCalls,
-    };
-
-    // Include reasoning_content if available (required for thinking mode)
-    if (this.lastReasoningContent) {
-      callMsg.reasoning_content = this.lastReasoningContent;
-      // Clear after use since it should only be included once per response
-      this.lastReasoningContent = null;
-    }
-
-    if (text) {
-      callMsg.content = this.formatAssistantContent(text);
-    }
+    const callMsg = this.buildAssistantMessageWithReasoning(toolCalls, text);
 
     const messages: ChatCompletionMessageParam[] = [
       callMsg as ChatCompletionMessageParam,
     ];
 
-    // Add individual tool result messages (use normalized toolCalls for consistency)
+    // Add individual tool result messages
     for (let i = 0; i < toolCalls.length; i++) {
-      const toolCall = toolCalls[i];
-      const result = results[i];
-
       messages.push({
         role: 'tool' as const,
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(result),
+        tool_call_id: toolCalls[i].id,
+        content: JSON.stringify(results[i]),
       });
     }
 
