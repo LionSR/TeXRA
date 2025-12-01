@@ -1752,7 +1752,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const canUploadFiles = this.supportsToolResultFileUpload;
-    const canInlineAttachments = this.capabilities.supportsToolResultAttachments;
+    const canInlineAttachments = this.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
     const unsupportedAttachments: ToolFileAttachment[] = [];

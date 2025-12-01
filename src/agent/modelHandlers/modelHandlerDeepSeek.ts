@@ -85,6 +85,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   }
 
   /**
+   * DeepSeek models don't support vision/attachments in tool results.
+   */
+  protected override get supportsToolResultAttachments(): boolean {
+    return false;
+  }
+
+  /**
    * DeepSeek expects string content format instead of array format.
    */
   protected override formatAssistantContent(text: string): string {
@@ -110,15 +117,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     // Store reasoning for tool-use follow-up messages
     this.lastReasoningContent = reasoning;
     return reasoning;
-  }
-
-  /**
-   * Clears the stored reasoning content.
-   * Should be called when a new user turn begins to avoid including
-   * stale reasoning from previous turns.
-   */
-  clearReasoningContent(): void {
-    this.lastReasoningContent = null;
   }
 
   /**
@@ -206,14 +204,14 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       callMsg as ChatCompletionMessageParam,
     ];
 
-    // Add individual tool result messages
-    for (let i = 0; i < calls.length; i++) {
-      const call = calls[i];
+    // Add individual tool result messages (use normalized toolCalls for consistency)
+    for (let i = 0; i < toolCalls.length; i++) {
+      const toolCall = toolCalls[i];
       const result = results[i];
 
       messages.push({
         role: 'tool' as const,
-        tool_call_id: call.callId,
+        tool_call_id: toolCall.id,
         content: JSON.stringify(result),
       });
     }
