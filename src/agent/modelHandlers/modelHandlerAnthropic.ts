@@ -235,11 +235,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Anthropic supports file uploads via their Files API.
    */
-  protected override get supportsToolFileOutputs(): boolean {
+  protected override get supportsToolResultFileUpload(): boolean {
     return true;
   }
-
-  // supportsInlineToolImages uses the capability from base class
 
   private setCacheControlTarget(block: CacheControlEligibleBlock): void {
     if (!this.capabilities.supportsPromptCaching) {
@@ -1753,13 +1751,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
-    const supportsAttachments = this.supportsToolFileOutputs;
-    const supportsInlineImages = this.supportsInlineToolImages;
+    const canUploadFiles = this.supportsToolResultFileUpload;
+    const canInlineAttachments = this.capabilities.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
     const unsupportedAttachments: ToolFileAttachment[] = [];
 
-    if (supportsAttachments && attachments.length > 0 && client) {
+    if (canUploadFiles && attachments.length > 0 && client) {
       const uploadResult = await this.uploadToolAttachments(
         client,
         attachments,
@@ -1794,7 +1792,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     for (const uploaded of uploadedAttachments) {
       if (uploaded.blockType === 'image') {
-        if (supportsInlineImages && uploaded.base64Data) {
+        if (canInlineAttachments && uploaded.base64Data) {
           const mediaType =
             (uploaded.mediaType as Base64ImageSource['media_type']) ??
             'image/png';
