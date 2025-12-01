@@ -1267,30 +1267,36 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     call: GoogleToolCall,
     result: Record<string, unknown>,
   ): Promise<Part> {
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    // Only extract attachments if the model supports them
+    let finalResult = result;
     let attachmentParts: FunctionResponsePart[] = [];
 
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments included in this response:\n${describeAttachments(
-          attachments,
-        ).join('\n')}`;
+    if (this.config.capabilities.supportsToolResultAttachments) {
+      const { attachments, sanitizedResult } = extractToolAttachments(result);
 
-      const encodedParts = await Promise.all(
-        attachments.map((attachment) =>
-          this.buildFunctionResponseAttachment(attachment),
-        ),
-      );
+      if (attachments.length > 0) {
+        (sanitizedResult as Record<string, unknown>).attachmentSummary =
+          `Attachments included in this response:\n${describeAttachments(
+            attachments,
+          ).join('\n')}`;
 
-      attachmentParts = encodedParts.filter(
-        (part): part is FunctionResponsePart => part !== null,
-      );
-
-      if (attachmentParts.length === 0 && attachments.length > 0) {
-        this.logger.warn(
-          `All attachments for Google function response '${call.name}' failed to encode.`,
+        const encodedParts = await Promise.all(
+          attachments.map((attachment) =>
+            this.buildFunctionResponseAttachment(attachment),
+          ),
         );
+
+        attachmentParts = encodedParts.filter(
+          (part): part is FunctionResponsePart => part !== null,
+        );
+
+        if (attachmentParts.length === 0 && attachments.length > 0) {
+          this.logger.warn(
+            `All attachments for Google function response '${call.name}' failed to encode.`,
+          );
+        }
       }
+      finalResult = sanitizedResult;
     }
 
     // Use SDK's createPartFromFunctionResponse with native attachment support
@@ -1298,7 +1304,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return createPartFromFunctionResponse(
       call.callId,
       call.name,
-      sanitizedResult,
+      finalResult,
       attachmentParts.length > 0 ? attachmentParts : undefined,
     );
   }
