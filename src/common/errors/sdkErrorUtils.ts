@@ -517,3 +517,45 @@ export function formatProviderHttpError(
 export function getSdkErrorMessage(err: unknown): string {
   return formatProviderHttpError(err).message;
 }
+
+/**
+ * Context for building error log data.
+ */
+export interface ErrorLogContext {
+  /** The operation that failed (e.g., 'API request', 'manual retry'). */
+  operation?: string;
+  /** The model being used when the error occurred. */
+  model?: string;
+}
+
+/**
+ * Structured data for error log messages.
+ * Used by progressView formatters to display error details.
+ */
+export interface ErrorLogData extends ProviderHttpErrorDetails {
+  /** Raw error message before formatting. */
+  rawMessage?: string;
+  /** The operation that failed. */
+  operation?: string;
+  /** The model being used. */
+  model?: string;
+}
+
+/**
+ * Builds consistent error data for logging with MESSAGE_TYPES.ERROR.
+ * Ensures all error logs have the same structure for DRY display formatting.
+ */
+export function buildErrorLogData(
+  err: unknown,
+  context?: ErrorLogContext,
+): ErrorLogData {
+  const formatted = formatProviderHttpError(err);
+  const rawMessage = err instanceof Error ? err.message : String(err);
+
+  return {
+    ...formatted,
+    rawMessage: rawMessage !== formatted.message ? rawMessage : undefined,
+    operation: context?.operation,
+    model: context?.model,
+  };
+}

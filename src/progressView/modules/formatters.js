@@ -1307,24 +1307,27 @@ export class LogEntryFormatter {
       (normalizedPayload.decodedText || message.text || '').trim() ||
       'Error occurred';
 
-    // Build error details from structured data
+    // Build error details from structured data - order defines display priority
     const structured = normalizedPayload.structured || {};
-    const detailLines = [];
+    const fieldConfig = [
+      { key: 'message', skip: (v) => v === summaryText },
+      { key: 'operation' },
+      { key: 'model' },
+      { key: 'provider' },
+      { key: 'statusCode' },
+      { key: 'retryable' },
+      { key: 'rawMessage' },
+      { key: 'requestId' },
+    ];
 
-    if (structured.message && structured.message !== summaryText) {
-      detailLines.push(`message: ${structured.message}`);
-    }
-    if (structured.provider) {
-      detailLines.push(`provider: ${structured.provider}`);
-    }
-    if (structured.rawMessage) {
-      detailLines.push(`rawMessage: ${structured.rawMessage}`);
-    }
-    if (structured.statusCode) {
-      detailLines.push(`statusCode: ${structured.statusCode}`);
-    }
+    const detailLines = fieldConfig
+      .filter(({ key, skip }) => {
+        const value = structured[key];
+        return value !== undefined && value !== null && (!skip || !skip(value));
+      })
+      .map(({ key }) => `${key}: ${structured[key]}`);
 
-    const detailText = detailLines.length > 0 ? detailLines.join('\n') : '';
+    const detailText = detailLines.join('\n');
 
     const bannerEntry = this._createBannerEntry({
       logId: message.id,
