@@ -197,22 +197,6 @@ export function describeAttachments(
   });
 }
 
-/**
- * Creates a log-safe payload from a tool result, omitting binary data and noting its presence.
- */
-export function sanitizeToolResultForLog(
-  result: ToolResult,
-): ToolResultPayload {
-  const { sanitizedResult } = extractToolAttachments(result);
-
-  // Note presence of base64Image without including the data
-  if (typeof result.base64Image === 'string') {
-    sanitizedResult.base64Image = `[omitted ${result.base64Image.length} chars]`;
-  }
-
-  return sanitizedResult;
-}
-
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {
