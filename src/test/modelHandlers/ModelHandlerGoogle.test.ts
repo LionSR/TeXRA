@@ -133,7 +133,7 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
       undefined,
       providerCall,
       {},
-      undefined,
+      [],
     );
 
     const callMessage = messages[0];
