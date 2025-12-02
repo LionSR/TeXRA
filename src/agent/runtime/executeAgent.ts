@@ -498,7 +498,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`);
           StreamStatusService.set(activeStreamId, STREAM_STATUS.STOPPED);
         } catch (err) {
-          logger.error(`Task failed: ${toErrorMessage(err)}`);
+          // Don't log error here - it will be logged with full details in the outer catch block
           StreamStatusService.set(activeStreamId, STREAM_STATUS.ERROR);
           throw err;
         }
@@ -539,47 +539,37 @@ export async function executeAgentWithLogging<T extends IAgent>(
       vscode.window.showErrorMessage(errorMsg);
     }
 
-    const agentLoggerFallback =
+    // Use the agent's logger if available (has group context), otherwise use main logger
+    const errorLogger =
       executionContext?.logger ??
       contextLogger ??
-      (streamTabId ? new AgentLogger(streamTabId, true) : undefined);
-    if (agentLoggerFallback) {
-      const fallbackGroupId = agent?.getLastRunGroupId();
-      if (fallbackGroupId) {
-        await agentLoggerFallback.withExistingGroup(
-          fallbackGroupId,
-          async () => {
-            agentLoggerFallback.error(errorMsg, {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-              data: errorData,
-            });
-          },
-          { label: `Error: ${agentName}` },
-        );
-      } else {
-        await agentLoggerFallback.withScope(
-          `Error: ${agentName}`,
-          async () => {
-            agentLoggerFallback.error(errorMsg, {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-              data: errorData,
-            });
-          },
-          { errorStatus: 'error' },
-        );
-      }
-    }
+      (streamTabId ? new AgentLogger(streamTabId, true) : undefined) ??
+      logger;
 
-    await logger.withScope(
-      `Error: ${agentName}`,
-      async () => {
-        logger.error(errorMsg, {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: errorData,
-        });
-      },
-      { errorStatus: 'error' },
-    );
+    const fallbackGroupId = agent?.getLastRunGroupId();
+    if (fallbackGroupId && errorLogger !== logger) {
+      await errorLogger.withExistingGroup(
+        fallbackGroupId,
+        async () => {
+          errorLogger.error(errorMsg, {
+            messageType: MESSAGE_TYPES.ERROR,
+            data: errorData,
+          });
+        },
+        { label: `Error: ${agentName}` },
+      );
+    } else {
+      await errorLogger.withScope(
+        `Error: ${agentName}`,
+        async () => {
+          errorLogger.error(errorMsg, {
+            messageType: MESSAGE_TYPES.ERROR,
+            data: errorData,
+          });
+        },
+        { errorStatus: 'error' },
+      );
+    }
     throw new Error(errorMsg);
   }
 }
