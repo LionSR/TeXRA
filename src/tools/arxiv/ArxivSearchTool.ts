@@ -11,7 +11,6 @@ import {
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
-  readPrimaryCategory,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
@@ -109,7 +108,7 @@ export class ArxivSearchTool extends defineTool({
         published: entry.published ?? null,
         updated: entry.updated ?? null,
         authors: getAuthorNames(entry.authors),
-        primaryCategory: readPrimaryCategory(entry.primaryCategory),
+        primaryCategory: entry.primaryCategory ?? null,
         arxivUrl: identifier
           ? `https://arxiv.org/abs/${normaliseArxivIdentifier(identifier)}`
           : null,
