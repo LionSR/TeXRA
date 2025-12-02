@@ -133,10 +133,11 @@ export class StreamTabs {
       `.stream-tab .tab[data-stream="${streamName}"]`,
     );
     if (!tabEl) {
-      // Warn: tab should exist before status update (ordering issue)
-      console.warn(
+      // Tab doesn't exist yet - this is OK, status is stored in state and
+      // will be applied when UPDATE_STREAMS creates the tab
+      console.debug(
         `[updateStreamStatus] Tab not found for stream: ${streamName}. ` +
-          'UPDATE_STREAMS should be sent before UPDATE_STREAM_STATUS.',
+          'Status stored in state; will apply when tab is created.',
       );
       return false;
     }
