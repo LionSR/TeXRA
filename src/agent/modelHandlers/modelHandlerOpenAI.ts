@@ -296,7 +296,6 @@ export class ModelHandlerOpenAI<
 
     return executeRequest(
       {
-        logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.stream',
         signal,
@@ -367,7 +366,6 @@ export class ModelHandlerOpenAI<
   ): Promise<ChatCompletion> {
     return executeRequest(
       {
-        logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.create',
         signal,
