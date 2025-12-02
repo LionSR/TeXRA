@@ -96,7 +96,8 @@ export class ProgressViewProvider
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         await this.state.load();
-        this.updateWebview();
+        // Force rebuild after state reload to ensure freshly loaded data is rendered
+        this.updateWebview({ forceRebuild: true });
       }),
     );
   }
