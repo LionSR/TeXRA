@@ -40,7 +40,6 @@ import {
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   AnthropicAPIResponseUsage,
-  ResponseUsageFactory,
   AnthropicUsage,
 } from '@agent/core/ResponseUsage';
 import {
@@ -1369,18 +1368,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     return basePrice;
-  }
-
-  /** Computes detailed response usage metrics including tokens, price, and response time. */
-  computeResponseUsage(
-    responseUsage: AnthropicUsage,
-    responseTime: number,
-  ): AnthropicAPIResponseUsage {
-    return ResponseUsageFactory.fromAnthropicResponse(
-      responseUsage,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
   }
 
   /** Normalizes Anthropic usage data into a unified format. */
