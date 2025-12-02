@@ -115,7 +115,7 @@ export function cancelManualRetry(key: string): boolean {
       task.cancel();
     } catch (error) {
       task.logger.error(`Cancel callback failed for ${task.operation}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        messageType: MESSAGE_TYPES.ERROR,
         data: { model: task.model, operation: task.operation, error },
       });
     }
@@ -162,7 +162,7 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
     return true;
   } catch (error) {
     task.logger.error(`Retry failed for ${task.operation}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      messageType: MESSAGE_TYPES.ERROR,
       data: { model: task.model, operation: task.operation, error },
     });
     return false;

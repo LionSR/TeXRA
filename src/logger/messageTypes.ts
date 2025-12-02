@@ -9,6 +9,8 @@ export const MESSAGE_TYPES = {
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
+  /** Error messages displayed as foldable banners */
+  ERROR: 'error',
   /** Internal/system messages used by the extension */
   INTERNAL: 'internal',
   DEFAULT: 'default',
