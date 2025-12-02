@@ -76,10 +76,6 @@ type DeepSeekAssistantMessage = ChatCompletionAssistantMessageParam & {
  * @see https://api-docs.deepseek.com/guides/thinking_with_tools
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
-  // Uses inherited `protected lastReasoningContent` from ModelHandlerOpenAI
-  // for DeepSeek's thinking mode with tool calls.
-  // See: https://api-docs.deepseek.com/guides/thinking_with_tools
-
   // toolCallProvider and usageProvider inherit from base class via config.provider
 
   /**
@@ -102,10 +98,15 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
   /**
    * Builds an assistant message with tool calls and reasoning_content.
-   * Consumes and clears lastReasoningContent if present.
+   * Reads reasoning from workspaceState and clears it after use.
+   *
+   * This follows the same pattern as Anthropic/Google handlers:
+   * - processThinkingBlock() stores to workspaceState.reasoning
+   * - createToolUseFollowUpMessages() reads and clears via this method
    */
   private buildAssistantMessageWithReasoning(
     toolCalls: ReturnType<typeof this.normalizeToolCall>[],
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): DeepSeekAssistantMessage {
     const callMsg: DeepSeekAssistantMessage = {
@@ -113,11 +114,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       tool_calls: toolCalls,
     };
 
-    // Include reasoning_content if available (required for thinking mode)
-    if (this.lastReasoningContent) {
-      callMsg.reasoning_content = this.lastReasoningContent;
-      // Clear after use since it should only be included once per response
-      this.lastReasoningContent = null;
+    // Include reasoning_content from workspaceState if available
+    const reasoningContent =
+      workspaceState?.reasoning.thinkingBlocks[0]?.thinking;
+    if (reasoningContent) {
+      callMsg.reasoning_content = reasoningContent;
+      // Clear after use (same pattern as Anthropic handler)
+      workspaceState?.resetReasoning();
     }
 
     if (text) {
@@ -127,25 +130,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return callMsg;
   }
 
-  /**
-   * Process thinking block and capture reasoning_content for tool-use cycles.
-   *
-   * DeepSeek's thinking mode requires reasoning_content to be included in
-   * assistant messages during tool-use cycles. This method captures it
-   * for use in createToolUseFollowUpMessages.
-   */
-  override processThinkingBlock(
-    responseObject: any,
-    workspaceState?: AgentWorkspaceState,
-  ): string | null {
-    const reasoning = super.processThinkingBlock(
-      responseObject,
-      workspaceState,
-    );
-    // Store reasoning for tool-use follow-up messages
-    this.lastReasoningContent = reasoning;
-    return reasoning;
-  }
+  // processThinkingBlock is inherited from base class - it already stores
+  // reasoning to workspaceState.reasoning.thinkingBlocks
 
   /**
    * Creates tool-use follow-up messages with reasoning_content support.
@@ -154,6 +140,10 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
    *
+   * Follows the same pattern as Anthropic handler:
+   * - Reads reasoning from workspaceState.reasoning.thinkingBlocks
+   * - Clears reasoning after including it in the message
+   *
    * Attachments are ignored since DeepSeek doesn't support them.
    */
   override async createToolUseFollowUpMessages(
@@ -161,11 +151,15 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     call: DeepSeekToolCall,
     result: ToolResultPayload,
     _attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     const toolCall = this.normalizeToolCall(call.raw);
-    const callMsg = this.buildAssistantMessageWithReasoning([toolCall], text);
+    const callMsg = this.buildAssistantMessageWithReasoning(
+      [toolCall],
+      workspaceState,
+      text,
+    );
 
     // Result is already sanitized by source - attachments are ignored
     const resultMsg = {
@@ -189,6 +183,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * @param calls - Array of tool calls from the model response
    * @param results - Array of sanitized results (same order as calls)
    * @param _attachmentsPerCall - Array of attachment arrays (ignored for DeepSeek)
+   * @param workspaceState - Workspace state containing reasoning blocks
    * @param text - Optional text content to include in the assistant message
    * @throws Error if calls and results arrays have different lengths
    */
@@ -196,6 +191,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     calls: DeepSeekToolCall[],
     results: ToolResultPayload[],
     _attachmentsPerCall: ToolFileAttachment[][],
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
     // Validate input arrays
@@ -211,7 +207,11 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
     // Build assistant message with ALL tool calls and reasoning_content
     const toolCalls = calls.map((call) => this.normalizeToolCall(call.raw));
-    const callMsg = this.buildAssistantMessageWithReasoning(toolCalls, text);
+    const callMsg = this.buildAssistantMessageWithReasoning(
+      toolCalls,
+      workspaceState,
+      text,
+    );
 
     const messages: ChatCompletionMessageParam[] = [
       callMsg as ChatCompletionMessageParam,
