@@ -304,17 +304,18 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // When forceRebuild is explicitly false, do incremental update (skip DOM rebuild).
-    // NOTE: We check `=== false` (not `!message.forceRebuild`) intentionally.
-    // Backend explicitly passes forceRebuild: false for incremental updates.
-    // Strict equality distinguishes this from undefined (full rebuild needed).
-    if (message.forceRebuild === false) {
+    // Determine rebuild strategy based on forceRebuild flag:
+    // - false: Incremental update only (skip DOM rebuild)
+    // - true/undefined: Full DOM rebuild needed
+    // See WebviewUpdater.updateLogContent() JSDoc for contract details.
+    const useIncrementalUpdate = message.forceRebuild === false;
+    if (useIncrementalUpdate) {
       this._handleIncrementalUpdate(message);
       this._updatePlaceholderVisibility();
       return;
     }
 
-    // Full rebuild path (stream switch or explicit forceRebuild)
+    // Full rebuild path (stream switch, explicit forceRebuild, or legacy undefined)
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
     pendingLogUpdates.clear();
     dom.taskGroups.clear();

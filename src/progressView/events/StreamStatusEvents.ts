@@ -89,10 +89,14 @@ export function createStreamStatusEvents(
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
 
     if (updater.isAvailable()) {
-      // ORDERING: Send UPDATE_STREAMS before setStreamStatus.
-      // updateAll sends UPDATE_STREAMS which creates the tab and sets activeStream.
-      // setStreamStatus then sends UPDATE_STREAM_STATUS to update the existing tab.
-      // Frontend processes messages in FIFO order, so tab exists before status update.
+      // ORDERING REQUIREMENTS:
+      // 1. ensureStream (line 70) must be awaited BEFORE this block to ensure
+      //    backend state.streamTabs.has(stream) returns true in setStreamStatus.
+      // 2. updateAll sends UPDATE_STREAMS which creates the frontend tab.
+      // 3. setStreamStatus sends UPDATE_STREAM_STATUS to update the existing tab.
+      // Frontend processes messages FIFO, so tab exists before status update.
+      // If setStreamStatus is called before stream is in backend state, it will
+      // trigger another full updateAll, which is inefficient but safe.
       updater.updateAll(state, shared.streamStatus);
     }
 
