@@ -30,7 +30,10 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -246,9 +249,14 @@ export class ModelHandlerOpenAI<
         }
       }
     } catch (err) {
-      this.logger.error(
+      // Re-throw context window violations - these are intentional validation errors
+      // that should fail fast, not be swallowed by soft failure
+      if (isContextWindowError(err)) {
+        throw err;
+      }
+      // Soft failure for token counting errors - proceed without adjustment
+      this.logger.warn(
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-        { data: err },
       );
     }
   }
@@ -296,7 +304,6 @@ export class ModelHandlerOpenAI<
 
     return executeRequest(
       {
-        logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.stream',
         signal,
@@ -367,7 +374,6 @@ export class ModelHandlerOpenAI<
   ): Promise<ChatCompletion> {
     return executeRequest(
       {
-        logger: this.logger,
         model: this.config.name,
         operation: 'openai.chat.completions.create',
         signal,
@@ -1336,40 +1342,34 @@ export class ModelHandlerOpenAI<
     // Note: This is a simplified token count. A more accurate count would
     // need to replicate OpenAI's specific chat message formatting rules.
     // https://github.com/openai/openai-cookbook/blob/main/examples/How_to_count_tokens_with_tiktoken.ipynb
-    try {
-      // Combine system prompt and messages for counting
-      // TODO: This might not be perfectly accurate for multi-modal or structured messages.
-      // gpt-tokenizer's countTokens might need a ChatMessage structure similar to Anthropic's.
-      // For now, concatenate text content.
-      let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
-      messages.forEach((msg) => {
-        if (Array.isArray(msg.content)) {
-          msg.content.forEach((part: any) => {
-            if (part.type === 'text') {
-              textToCount += `${msg.role}: ${part.text}\n`;
-            }
-            // Basic handling for other types, might need refinement
-            else if (part.type === 'image_url') {
-              // Approximation: Count tokens for a placeholder text representation
-              textToCount += `${msg.role}: [Image]\n`;
-            } else if (part.type === 'input_audio') {
-              textToCount += `${msg.role}: [Audio]\n`;
-            }
-          });
-        } else if (typeof msg.content === 'string') {
-          textToCount += `${msg.role}: ${msg.content}\n`;
-        }
-      });
-      // Use the appropriate encoding based on the model, defaulting to cl100k_base
-      // Needs a mapping from model name to encoding or importing specific model tokenizers.
-      // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
-      return countTokens(textToCount); // Assuming cl100k_base default
-    } catch (err) {
-      // Log the error and re-throw to indicate failure
-      this.logger.error(`Error counting tokens: ${getSdkErrorMessage(err)}`, {
-        data: err,
-      });
-      throw err;
-    }
+    // Errors propagate to caller which handles them appropriately.
+
+    // Combine system prompt and messages for counting
+    // TODO: This might not be perfectly accurate for multi-modal or structured messages.
+    // gpt-tokenizer's countTokens might need a ChatMessage structure similar to Anthropic's.
+    // For now, concatenate text content.
+    let textToCount = systemPrompt ? `${systemPrompt}\n` : '';
+    messages.forEach((msg) => {
+      if (Array.isArray(msg.content)) {
+        msg.content.forEach((part: any) => {
+          if (part.type === 'text') {
+            textToCount += `${msg.role}: ${part.text}\n`;
+          }
+          // Basic handling for other types, might need refinement
+          else if (part.type === 'image_url') {
+            // Approximation: Count tokens for a placeholder text representation
+            textToCount += `${msg.role}: [Image]\n`;
+          } else if (part.type === 'input_audio') {
+            textToCount += `${msg.role}: [Audio]\n`;
+          }
+        });
+      } else if (typeof msg.content === 'string') {
+        textToCount += `${msg.role}: ${msg.content}\n`;
+      }
+    });
+    // Use the appropriate encoding based on the model, defaulting to cl100k_base
+    // Needs a mapping from model name to encoding or importing specific model tokenizers.
+    // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
+    return countTokens(textToCount); // Assuming cl100k_base default
   }
 }

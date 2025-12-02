@@ -465,7 +465,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       buffer = Buffer.from(payload, 'base64');
       const uploadedFile = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: `openai.files.create:${filename}`,
         },
@@ -610,7 +609,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'openai.responses.stream',
           signal,
@@ -640,56 +638,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return response;
     }
 
-    try {
-      const { stream: _nonStream, ...nonStreamRest } = params;
-      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
-        ...nonStreamRest,
-        stream: false,
-      };
-      let response = await executeRequest(
+    // Non-streaming path
+    // Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+    const { stream: _nonStream, ...nonStreamRest } = params;
+    const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+      ...nonStreamRest,
+      stream: false,
+    };
+    let response = await executeRequest(
+      {
+        model: this.config.name,
+        operation: 'openai.responses.create',
+        signal,
+      },
+      () => client.responses.create(nonStreamingParams, { signal }),
+    );
+    if (useBackgroundResponses) {
+      this.logger.debug(
+        `Background response ${response.id} created with status ${
+          response.status ?? 'unknown'
+        }`,
         {
-          logger: this.logger,
-          model: this.config.name,
-          operation: 'openai.responses.create',
-          signal,
-        },
-        () => client.responses.create(nonStreamingParams, { signal }),
-      );
-      if (useBackgroundResponses) {
-        this.logger.debug(
-          `Background response ${response.id} created with status ${
-            response.status ?? 'unknown'
-          }`,
-          {
-            data: {
-              responseId: response.id,
-              status: response.status,
-              usage: response.usage ?? undefined,
-            },
+          data: {
+            responseId: response.id,
+            status: response.status,
+            usage: response.usage ?? undefined,
           },
-        );
-        this.logger.logProgress(
-          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-        );
-      }
-      if (useBackgroundResponses) {
-        response = await this.waitForBackgroundCompletion(
-          client,
-          response,
-          signal,
-        );
-      }
-      this.previousResponseId = response.id;
-      this.sentMessages = messages.length;
-      return response;
-    } catch (err) {
-      this.logger.logError(
-        `Error in createResponse: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'create response' },
+        },
       );
-      throw err;
+      this.logger.logProgress(
+        `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+      );
     }
+    if (useBackgroundResponses) {
+      response = await this.waitForBackgroundCompletion(
+        client,
+        response,
+        signal,
+      );
+    }
+    this.previousResponseId = response.id;
+    this.sentMessages = messages.length;
+    return response;
   }
 
   /**
@@ -914,7 +904,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const requestOptions = signal ? { signal } : undefined;
       current = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: `openai.responses.retrieve:${responseId}`,
           signal,
@@ -1397,7 +1386,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         const uploadedFile = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: `openai.files.create:${filename}`,
           },

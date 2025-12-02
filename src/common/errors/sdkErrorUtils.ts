@@ -518,6 +518,56 @@ export function getSdkErrorMessage(err: unknown): string {
   return formatProviderHttpError(err).message;
 }
 
+// ============================================================================
+// Context Window Error Detection
+// ============================================================================
+
+/**
+ * Patterns that indicate a context window/token limit violation.
+ * These are intentional validation errors that should NOT be retried
+ * and should propagate to fail fast.
+ *
+ * Pattern coverage by provider:
+ * - TeXRA internal: "exceeds context window" (token counting validation)
+ * - OpenAI: "maximum context length", "too many tokens"
+ * - Anthropic: "exceeds context window", "token limit exceeded"
+ * - Google: "input too long", "context length exceeded"
+ */
+const CONTEXT_WINDOW_PATTERNS = [
+  'exceeds context window', // TeXRA internal, Anthropic
+  'context length exceeded', // Google
+  'maximum context length', // OpenAI
+  'token limit exceeded', // Anthropic
+  'too many tokens', // OpenAI
+  'input too long', // Google
+] as const;
+
+/**
+ * Checks if an error is a context window violation.
+ * These errors should NOT be caught by soft failure handlers because
+ * they indicate the input needs to be reduced - retrying won't help.
+ *
+ * Use this to re-throw context window errors in token counting catch blocks:
+ * @example
+ * ```ts
+ * try {
+ *   await countTokens(input);
+ * } catch (err) {
+ *   if (isContextWindowError(err)) {
+ *     throw err; // Don't swallow - this is intentional validation
+ *   }
+ *   logger.warn('Token counting failed, proceeding without adjustment');
+ * }
+ * ```
+ */
+export function isContextWindowError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  const message = err.message.toLowerCase();
+  return CONTEXT_WINDOW_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
 /**
  * Context for building error log data.
  */
@@ -526,6 +576,57 @@ export interface ErrorLogContext {
   operation?: string;
   /** The model being used when the error occurred. */
   model?: string;
+}
+
+// ============================================================================
+// Error Enrichment
+// ============================================================================
+
+/**
+ * WeakMap to store operation context on error objects without modifying them.
+ * This allows us to track where errors originated as they propagate up the stack.
+ */
+const errorContextMap = new WeakMap<object, ErrorLogContext>();
+
+/**
+ * Enriches an error with operation context without logging.
+ * The context is stored in a WeakMap and can be extracted later when the error
+ * is finally logged at the boundary (e.g., in RetryState.applyFallbackResult).
+ *
+ * This follows the "log at the boundary" principle:
+ * - Middle layers enrich errors with context
+ * - Only the final handler logs, with full context
+ *
+ * @param error - The error to enrich
+ * @param context - Operation context (operation name, model)
+ * @returns The same error (for throw chaining)
+ */
+export function enrichError<T>(error: T, context: ErrorLogContext): T {
+  if (error && typeof error === 'object') {
+    // Merge with any existing context (inner operations are preserved)
+    const existing = errorContextMap.get(error) ?? {};
+    errorContextMap.set(error, {
+      ...context,
+      // Keep the innermost operation if already set (more specific)
+      operation: existing.operation ?? context.operation,
+      // Keep the model if already set
+      model: existing.model ?? context.model,
+    });
+  }
+  return error;
+}
+
+/**
+ * Extracts enriched context from an error, if any was attached via enrichError().
+ * Returns undefined if no context was attached.
+ */
+export function extractErrorContext(
+  error: unknown,
+): ErrorLogContext | undefined {
+  if (error && typeof error === 'object') {
+    return errorContextMap.get(error);
+  }
+  return undefined;
 }
 
 /**
