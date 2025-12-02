@@ -6,6 +6,10 @@ import { encode as encodeHtml } from 'he';
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
 
 // Internal imports
+import {
+  buildErrorLogData,
+  type ErrorLogContext,
+} from '@common/errors/sdkErrorUtils';
 import { sleep } from '@utils/helpers';
 import { SHORT_SLEEP_MS } from '@utils/config';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -211,6 +215,66 @@ export class AgentLogger {
       messageType: options.messageType,
       isAgent: this.isAgentLogger,
       data: options.data,
+    });
+  }
+
+  /**
+   * Log a structured error with consistent formatting.
+   * Single source of truth for ERROR message type logging.
+   *
+   * @param message - Human-readable error description
+   * @param err - The error object to format
+   * @param context - Optional context (operation, model)
+   * @param groupId - Optional group ID for progress view
+   */
+  logError(
+    message: string,
+    err: unknown,
+    context?: ErrorLogContext,
+    groupId?: string,
+  ): void {
+    const errorData = buildErrorLogData(err, context);
+    this.error(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.ERROR,
+      data: errorData,
+    });
+  }
+
+  /**
+   * Log a progress status update.
+   * Single source of truth for PROGRESS_STATUS message type logging.
+   *
+   * @param message - Status message
+   * @param context - Optional context (operation, model)
+   * @param groupId - Optional group ID for progress view
+   */
+  logProgress(
+    message: string,
+    context?: ErrorLogContext,
+    groupId?: string,
+  ): void {
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+      data: context,
+    });
+  }
+
+  /**
+   * Log a structured error with pre-formatted error data.
+   * Use this when error data is already structured (e.g., RetryErrorInfo).
+   * For raw errors, use logError() instead.
+   *
+   * @param message - Human-readable error description
+   * @param errorData - Pre-structured error data
+   * @param groupId - Optional group ID for progress view
+   */
+  logErrorData(message: string, errorData: unknown, groupId?: string): void {
+    this.error(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.ERROR,
+      data: errorData,
     });
   }
 
