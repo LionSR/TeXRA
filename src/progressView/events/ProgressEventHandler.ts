@@ -130,7 +130,7 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
-    disposables.push(...this.retryEvents.register(bus, this.state));
+    disposables.push(...this.retryEvents.register(bus));
     disposables.push(...this.approvalEvents.register(bus));
     disposables.push(
       new vscode.Disposable(
