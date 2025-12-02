@@ -116,14 +116,21 @@ class RetryRequestCoordinatorImpl {
     logger.debug(`Waiting for manual retry: ${errorMessage ?? 'unknown error'}`);
 
     return new Promise<RetryResult>((resolve) => {
-      // Set up timeout
+      // Set up timeout - capture generation to detect if request was replaced
+      const generation = this.getGeneration(streamId);
+      const actualTimeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const timeoutId = setTimeout(() => {
+        // Only process if this is still the same request (generation unchanged)
+        if (this.getGeneration(streamId) !== generation) {
+          return;
+        }
         const req = this.requests.get(streamId);
         if (req?.status === 'pending') {
-          logger.warn('Manual retry wait timed out after 5 minutes');
+          const timeoutMinutes = Math.round(actualTimeoutMs / 60000);
+          logger.warn(`Manual retry wait timed out after ${timeoutMinutes} minutes`);
           this.resolveRequest(streamId, { action: 'timeout' });
         }
-      }, timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      }, actualTimeoutMs);
 
       // Store pending state
       this.requests.set(streamId, {
@@ -230,9 +237,13 @@ class RetryRequestCoordinatorImpl {
 
     if (req.status === 'pending') {
       clearTimeout(req.timeoutId);
+      // Resolve with cancel to avoid hanging Promise and potential memory leak
+      req.resolve({ action: 'cancel' });
+    } else if (req.status === 'executing') {
+      // Also resolve executing requests to avoid hanging Promise
+      req.resolve({ action: 'cancel' });
     }
 
-    // Don't resolve the Promise - let it hang (the flow is being cancelled anyway)
     this.cleanup(streamId);
   }
 
@@ -263,14 +274,22 @@ class RetryRequestCoordinatorImpl {
    * Clean up state and emit UI resolution event.
    */
   private cleanup(streamId: string): void {
+    // Capture the current generation before marking resolved
+    const generation = this.getGeneration(streamId);
+
     this.requests.set(streamId, { status: 'resolved' });
     this.generations.delete(streamId);
 
-    // Use setImmediate to avoid blocking the current execution
-    // and ensure the UI event is processed after the Promise resolves
+    // Emit UI event synchronously so UI updates immediately
+    bus.emit('resolveRetryRequest', { streamId });
+
+    // Defer only the Map deletion to avoid blocking current execution
+    // Guard with generation to prevent deleting a newly registered request
     setImmediate(() => {
-      this.requests.delete(streamId);
-      bus.emit('resolveRetryRequest', { streamId });
+      // Only delete if no new request was registered (generation would be > 0)
+      if (this.getGeneration(streamId) === 0) {
+        this.requests.delete(streamId);
+      }
     });
   }
 
