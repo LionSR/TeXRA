@@ -43,7 +43,10 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
 
 import { ReasoningEffort } from '@model/ModelConfig';
@@ -426,7 +429,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       } catch (err) {
         // Re-throw context window violations - these are intentional validation errors
         // that should fail fast, not be swallowed by soft failure
-        if (err instanceof Error && err.message.includes('exceeds context window')) {
+        if (isContextWindowError(err)) {
           throw err;
         }
         // Soft failure for token counting API errors - proceed without adjustment
