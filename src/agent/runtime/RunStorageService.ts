@@ -27,3 +27,8 @@ export const getRunStorageService = (): IRunStorageService =>
     getRunOutputFiles: () => undefined,
     isViewVisible: () => false,
   };
+
+/** Reset to default state (for testing) */
+export const resetRunStorageService = (): void => {
+  service = null;
+};
