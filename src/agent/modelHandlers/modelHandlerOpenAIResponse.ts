@@ -679,14 +679,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
       return response;
-    } catch (err) {
-      this.logger.logError(
-        `Error in createResponse: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'create response' },
-      );
-      throw err;
     }
+    // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
   }
 
   /**

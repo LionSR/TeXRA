@@ -2,10 +2,13 @@
  * Request execution utilities for model handlers.
  *
  * NOTE: Retry logic is handled at the flow level (ResponseCycleFlow/ToolUseCycleFlow).
- * Error logging follows the "log at the boundary" principle - errors are NOT logged here.
- * The final fallback handler (RetryState.applyFallbackResult) is the single source of truth
- * for error logging, preventing duplicate log entries as errors propagate up the stack.
+ * Error logging follows the "log at the boundary" principle:
+ * - Errors are enriched with operation context here (not logged)
+ * - The final fallback handler (RetryState.applyFallbackResult) logs once with full context
+ * - This prevents duplicate log entries while preserving where errors originated
  */
+
+import { enrichError } from '@common/errors/sdkErrorUtils';
 
 /**
  * Options for request execution.
@@ -22,12 +25,12 @@ export interface RequestExecutionOptions {
 }
 
 /**
- * Executes a request with abort handling.
+ * Executes a request with error enrichment and abort handling.
  *
- * Error logging follows the "log at the boundary" principle:
- * - This function does NOT log errors
- * - Errors propagate up to the fallback handler which logs once
- * - This prevents the same error being logged at multiple abstraction layers
+ * Error handling follows the "log at the boundary" principle:
+ * - This function enriches errors with operation context (does NOT log)
+ * - Errors propagate up to the fallback handler which logs once with full context
+ * - This preserves where errors originated without duplicate logging
  *
  * Retry logic is handled at the flow level, not here.
  */
@@ -41,5 +44,13 @@ export async function executeRequest<T>(
     throw options.signal.reason ?? new Error('The request was aborted.');
   }
 
-  return await request();
+  try {
+    return await request();
+  } catch (error) {
+    // Enrich error with operation context (no logging - just attach metadata)
+    throw enrichError(error, {
+      operation: options.operation,
+      model: options.model,
+    });
+  }
 }

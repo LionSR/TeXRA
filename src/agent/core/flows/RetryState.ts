@@ -11,6 +11,7 @@
  */
 
 import type { AgentLogger } from '@logger/AgentLogger';
+import type { ErrorLogContext } from '@common/errors/sdkErrorUtils';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
@@ -43,6 +44,8 @@ export interface RetryErrorInfo {
   message: string;
   statusCode?: number;
   retryable: boolean;
+  /** Operation context from error enrichment (e.g., operation name, model) */
+  context?: ErrorLogContext;
 }
 
 /**
@@ -151,14 +154,16 @@ export type FallbackResult =
  * @param retryable - Whether the error is retryable (from formatProviderHttpError)
  * @param message - Error message
  * @param statusCode - HTTP status code if available
+ * @param context - Operation context from error enrichment (operation name, model)
  * @returns FallbackResult for post() to handle
  */
 export function determineFallbackAction(
   retryable: boolean,
   message: string,
   statusCode?: number,
+  context?: ErrorLogContext,
 ): FallbackResult {
-  const error: RetryErrorInfo = { message, statusCode, retryable };
+  const error: RetryErrorInfo = { message, statusCode, retryable, context };
 
   if (retryable) {
     // Error is retryable but auto-retries exhausted → offer manual retry
@@ -170,8 +175,38 @@ export function determineFallbackAction(
 }
 
 /**
+ * Formats the error message with operation context for logging.
+ * Includes the specific operation that failed (e.g., "google.chat.sendMessageStream").
+ */
+function formatErrorMessage(
+  operationName: string,
+  error: RetryErrorInfo,
+  suffix?: string,
+): string {
+  const context = error.context;
+  const operation = context?.operation;
+
+  // Build message parts
+  const parts: string[] = [`${operationName} failed`];
+  if (suffix) {
+    parts[0] += ` ${suffix}`;
+  }
+  parts.push(error.message);
+
+  // Add operation context if available and different from operationName
+  if (operation && !operationName.toLowerCase().includes(operation.toLowerCase())) {
+    return `${parts[0]} [${operation}]: ${error.message}`;
+  }
+
+  return `${parts[0]}: ${error.message}`;
+}
+
+/**
  * Applies fallback result: records error, logs, and returns flow transition.
  * Called from post() after receiving FallbackResult from execFallback.
+ *
+ * This is the single source of truth for error logging (log at boundary principle).
+ * The error context from enrichError() is included in the log message.
  *
  * @param result - The fallback result from determineFallbackAction
  * @param state - The retry state to update
@@ -191,14 +226,14 @@ export function applyFallbackResult(
   switch (result.outcome) {
     case 'manual_retry':
       logger.logErrorData(
-        `${operationName} failed: ${result.error.message}`,
+        formatErrorMessage(operationName, result.error),
         result.error,
       );
       return FlowTransition.AWAIT_RETRY;
 
     case 'fail':
       logger.logErrorData(
-        `${operationName} failed (not retryable): ${result.error.message}`,
+        formatErrorMessage(operationName, result.error, '(not retryable)'),
         result.error,
       );
       return FlowTransition.COMPLETE;
