@@ -87,6 +87,13 @@ export function createStreamStatusEvents(
 
     const status: StreamStatusOrReadyType =
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+
+    if (updater.isAvailable()) {
+      // Send UPDATE_STREAMS first so frontend knows about the stream and active stream change
+      // This is required before setStreamStatus which now uses targeted updates
+      updater.updateAll(state, shared.streamStatus);
+    }
+
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
