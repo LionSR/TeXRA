@@ -76,14 +76,9 @@ type DeepSeekAssistantMessage = ChatCompletionAssistantMessageParam & {
  * @see https://api-docs.deepseek.com/guides/thinking_with_tools
  */
 export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
-  /**
-   * Stores the last reasoning_content from a model response.
-   * This is used to include reasoning_content in follow-up tool-use messages
-   * as required by DeepSeek's thinking mode API.
-   *
-   * Cleared after use in tool-use methods, or overwritten by next response.
-   */
-  private lastReasoningContent: string | null = null;
+  // Uses inherited `protected lastReasoningContent` from ModelHandlerOpenAI
+  // for DeepSeek's thinking mode with tool calls.
+  // See: https://api-docs.deepseek.com/guides/thinking_with_tools
 
   // toolCallProvider and usageProvider inherit from base class via config.provider
 
