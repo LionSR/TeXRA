@@ -3,13 +3,6 @@ import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
-// Re-export event bus types for backwards compatibility
-// These types are now defined in @eventBus/types to break circular dependency
-export type {
-  ToolEditApprovalPrompt,
-  RetryRequestPrompt,
-} from '@eventBus/types';
-
 export interface StreamUITraits {
   /** Canonical session grouping for the stream. */
   sessionKind: AgentCategory;

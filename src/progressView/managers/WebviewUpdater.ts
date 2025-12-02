@@ -13,11 +13,10 @@ import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
 import type {
-  InstructionUpdate,
   RetryRequestPrompt,
-  StreamTabInfo,
   ToolEditApprovalPrompt,
-} from '@progressView/types';
+} from '@eventBus/types';
+import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 
