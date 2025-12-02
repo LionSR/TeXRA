@@ -518,6 +518,50 @@ export function getSdkErrorMessage(err: unknown): string {
   return formatProviderHttpError(err).message;
 }
 
+// ============================================================================
+// Context Window Error Detection
+// ============================================================================
+
+/**
+ * Patterns that indicate a context window/token limit violation.
+ * These are intentional validation errors that should NOT be retried
+ * and should propagate to fail fast.
+ */
+const CONTEXT_WINDOW_PATTERNS = [
+  'exceeds context window',
+  'context length exceeded',
+  'maximum context length',
+  'token limit exceeded',
+  'too many tokens',
+  'input too long',
+] as const;
+
+/**
+ * Checks if an error is a context window violation.
+ * These errors should NOT be caught by soft failure handlers because
+ * they indicate the input needs to be reduced - retrying won't help.
+ *
+ * Use this to re-throw context window errors in token counting catch blocks:
+ * @example
+ * ```ts
+ * try {
+ *   await countTokens(input);
+ * } catch (err) {
+ *   if (isContextWindowError(err)) {
+ *     throw err; // Don't swallow - this is intentional validation
+ *   }
+ *   logger.warn('Token counting failed, proceeding without adjustment');
+ * }
+ * ```
+ */
+export function isContextWindowError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  const message = err.message.toLowerCase();
+  return CONTEXT_WINDOW_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
 /**
  * Context for building error log data.
  */
