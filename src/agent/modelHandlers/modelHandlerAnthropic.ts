@@ -427,73 +427,81 @@ export class ModelHandlerAnthropic extends ModelHandler<
           'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
         );
       } else {
-        const countTokensParams: MessageCountTokensParams = {
-          model: this.config.fullName,
-          system: systemPrompt,
-          messages,
-        };
+        // Token counting uses soft failure - if it fails, we proceed without adjustment
+        // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
+        try {
+          const countTokensParams: MessageCountTokensParams = {
+            model: this.config.fullName,
+            system: systemPrompt,
+            messages,
+          };
 
-        // If thinking is enabled, we need to pass it to countTokens as well
-        // to ensure consistency with the actual message creation.
-        // Without this, the API returns an error when messages contain thinking blocks.
-        if (options.thinking) {
-          countTokensParams.thinking = options.thinking;
-        }
+          // If thinking is enabled, we need to pass it to countTokens as well
+          // to ensure consistency with the actual message creation.
+          // Without this, the API returns an error when messages contain thinking blocks.
+          if (options.thinking) {
+            countTokensParams.thinking = options.thinking;
+          }
 
-        // Strip betas that only apply to message creation (e.g., output length)
-        // while keeping context headers needed for accurate token counting.
-        const countTokenBetas = options.betas?.filter(
-          (beta) => beta === CONTEXT_1M_BETA,
-        );
-        if (countTokenBetas && countTokenBetas.length > 0) {
-          countTokensParams.betas = countTokenBetas;
-        }
-
-        const responseTokenCount = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'anthropic.beta.messages.countTokens',
-            signal,
-          },
-          () => client.beta.messages.countTokens(countTokensParams),
-        );
-        const { input_tokens: inputTokens } = responseTokenCount;
-        this.logger.debug(`Token count of message: ${inputTokens}`);
-        if (inputTokens > effectiveContextWindow) {
-          const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
-          this.logger.error(errMsg);
-          throw new Error(errMsg);
-        }
-        if (effectiveContextWindow - inputTokens < options.max_tokens) {
-          const reducedMaxTokens = Math.max(
-            0,
-            effectiveContextWindow - inputTokens - 10,
+          // Strip betas that only apply to message creation (e.g., output length)
+          // while keeping context headers needed for accurate token counting.
+          const countTokenBetas = options.betas?.filter(
+            (beta) => beta === CONTEXT_1M_BETA,
           );
-          const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
-          this.logger.warn(warnMsg);
-          options.max_tokens = reducedMaxTokens;
+          if (countTokenBetas && countTokenBetas.length > 0) {
+            countTokensParams.betas = countTokenBetas;
+          }
 
-          if (
-            this.capabilities.supportsReasoning &&
-            options.thinking &&
-            options.thinking.type === 'enabled'
-          ) {
-            const adjustedBudget = Math.max(
-              1,
-              Math.min(
-                options.thinking.budget_tokens,
-                Math.floor(options.max_tokens * 0.5),
-              ),
+          const responseTokenCount = await executeRequest(
+            {
+              model: this.config.name,
+              operation: 'anthropic.beta.messages.countTokens',
+              signal,
+            },
+            () => client.beta.messages.countTokens(countTokensParams),
+          );
+          const { input_tokens: inputTokens } = responseTokenCount;
+          this.logger.debug(`Token count of message: ${inputTokens}`);
+          if (inputTokens > effectiveContextWindow) {
+            const errMsg = `Token count of message exceeds context window: ${inputTokens} > ${effectiveContextWindow}`;
+            this.logger.error(errMsg);
+            throw new Error(errMsg);
+          }
+          if (effectiveContextWindow - inputTokens < options.max_tokens) {
+            const reducedMaxTokens = Math.max(
+              0,
+              effectiveContextWindow - inputTokens - 10,
             );
-            if (adjustedBudget !== options.thinking.budget_tokens) {
-              this.logger.debug(
-                `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+            const warnMsg = `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${options.max_tokens} > ${effectiveContextWindow}. Reducing max tokens to ${reducedMaxTokens}.`;
+            this.logger.warn(warnMsg);
+            options.max_tokens = reducedMaxTokens;
+
+            if (
+              this.capabilities.supportsReasoning &&
+              options.thinking &&
+              options.thinking.type === 'enabled'
+            ) {
+              const adjustedBudget = Math.max(
+                1,
+                Math.min(
+                  options.thinking.budget_tokens,
+                  Math.floor(options.max_tokens * 0.5),
+                ),
               );
-              options.thinking.budget_tokens = adjustedBudget;
+              if (adjustedBudget !== options.thinking.budget_tokens) {
+                this.logger.debug(
+                  `Adjusted thinking budget to ${adjustedBudget} due to reduced max_tokens`,
+                );
+                options.thinking.budget_tokens = adjustedBudget;
+              }
             }
           }
+          // in the future we log this in firstInputTokens of the AgentRunState
+        } catch (err) {
+          this.logger.warn(
+            `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+          );
         }
-        // in the future we log this in firstInputTokens of the AgentRunState
       }
     }
 
