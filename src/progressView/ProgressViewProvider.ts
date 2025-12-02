@@ -136,6 +136,8 @@ export class ProgressViewProvider
 
     this._webviewReady = false;
     this._pendingUpdate = false;
+    // Clear last rendered stream to force rebuild - DOM state is stale after resolve
+    this._lastRenderedStream = '';
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -191,7 +193,10 @@ export class ProgressViewProvider
       theme,
     );
 
-    // Detect stream switch by comparing to last rendered stream
+    // Determine if full DOM rebuild is needed:
+    // - Explicit forceRebuild: true (e.g., after state.load())
+    // - Stream switch detected (different stream than last render)
+    // - First render after webview resolve (_lastRenderedStream is '')
     const isStreamSwitch = this._lastRenderedStream !== activeStream;
     const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
 
