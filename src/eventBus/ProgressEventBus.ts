@@ -109,7 +109,7 @@ export interface ProgressEventPayloads {
   };
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
-  extensionDeactivating: void;
+  extensionDeactivating: undefined;
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;
