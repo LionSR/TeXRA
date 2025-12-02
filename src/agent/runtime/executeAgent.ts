@@ -419,13 +419,13 @@ export async function executeAgentWithLogging<T extends IAgent>(
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 
               if (!isResume) {
-                const viewVisible = runStorage.isViewVisible();
-                if (!viewVisible) {
+                if (!runStorage.isViewVisible()) {
                   await vscode.commands.executeCommand(
                     'texra.showProgressView',
                   );
                 }
 
+                // Re-check after command: view might still be hidden (e.g., collapsed sidebar)
                 if (!runStorage.isViewVisible()) {
                   const inputFileName = config.inputFile
                     ? path.basename(config.inputFile)
