@@ -286,6 +286,8 @@ class ResponseModelInvocationNode<C> extends Node<
     }
 
     const abortController = new AbortController();
+    // Set signal on Node so retry loop can detect user cancellation
+    this.signal = abortController.signal;
     options.setAbortController(abortController);
     options.modelHandler.setOutputStreaming(false);
 
