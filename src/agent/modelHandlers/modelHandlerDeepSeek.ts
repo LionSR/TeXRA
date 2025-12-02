@@ -168,6 +168,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       content: JSON.stringify(result),
     };
 
+    // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
+    // with reasoning_content field that OpenAI's types don't know about
     return [callMsg as ChatCompletionMessageParam, resultMsg];
   }
 
@@ -190,14 +192,20 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   async createBatchedToolUseFollowUpMessages(
     calls: DeepSeekToolCall[],
     results: ToolResultPayload[],
-    _attachmentsPerCall: ToolFileAttachment[][],
+    attachmentsPerCall: ToolFileAttachment[][],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
-    // Validate input arrays
+    // Validate input arrays (consistent with Google handler)
     if (calls.length !== results.length) {
       throw new Error(
         `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${results.length} results`,
+      );
+    }
+
+    if (calls.length !== attachmentsPerCall.length) {
+      throw new Error(
+        `DeepSeek batched tool calls mismatch: ${calls.length} calls vs ${attachmentsPerCall.length} attachment arrays`,
       );
     }
 
@@ -213,6 +221,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       text,
     );
 
+    // Type assertion needed: DeepSeekAssistantMessage extends ChatCompletionAssistantMessageParam
+    // with reasoning_content field that OpenAI's types don't know about
     const messages: ChatCompletionMessageParam[] = [
       callMsg as ChatCompletionMessageParam,
     ];
