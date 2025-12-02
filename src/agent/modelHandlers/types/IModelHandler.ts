@@ -10,6 +10,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
@@ -303,14 +304,19 @@ export interface IModelHandler<
   /**
    * Create provider-specific messages capturing the tool call and result.
    *
+   * @param client - Provider client (for file uploads if supported)
    * @param call - Parsed tool call object or input payload
-   * @param result - Object with output/error fields
-   * @returns Tuple of [call message, result message]
+   * @param result - Sanitized result (binary data stripped)
+   * @param attachments - Extracted file attachments (for upload/inline if supported)
+   * @param workspaceState - Optional workspace state
+   * @param text - Optional text to include before tool call
+   * @returns Array of provider-specific messages
    */
   createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
@@ -326,12 +332,14 @@ export interface IModelHandler<
    * - All function responses go in ONE user message
    *
    * @param calls - Array of tool calls (preserving original order from model response)
-   * @param results - Array of results corresponding to each call (same order)
+   * @param results - Array of sanitized results (same order as calls)
+   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
    * @param text - Optional text to include before function calls
    */
   createBatchedToolUseFollowUpMessages?(
     calls: T[],
     results: Record<string, unknown>[],
+    attachmentsPerCall: ToolFileAttachment[][],
     text?: string,
   ): Promise<M[]>;
 
