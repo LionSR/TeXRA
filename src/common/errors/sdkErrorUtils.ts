@@ -526,14 +526,20 @@ export function getSdkErrorMessage(err: unknown): string {
  * Patterns that indicate a context window/token limit violation.
  * These are intentional validation errors that should NOT be retried
  * and should propagate to fail fast.
+ *
+ * Pattern coverage by provider:
+ * - TeXRA internal: "exceeds context window" (token counting validation)
+ * - OpenAI: "maximum context length", "too many tokens"
+ * - Anthropic: "exceeds context window", "token limit exceeded"
+ * - Google: "input too long", "context length exceeded"
  */
 const CONTEXT_WINDOW_PATTERNS = [
-  'exceeds context window',
-  'context length exceeded',
-  'maximum context length',
-  'token limit exceeded',
-  'too many tokens',
-  'input too long',
+  'exceeds context window', // TeXRA internal, Anthropic
+  'context length exceeded', // Google
+  'maximum context length', // OpenAI
+  'token limit exceeded', // Anthropic
+  'too many tokens', // OpenAI
+  'input too long', // Google
 ] as const;
 
 /**
