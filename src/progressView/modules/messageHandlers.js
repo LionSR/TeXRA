@@ -306,8 +306,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
 
     // When forceRebuild is explicitly false, do incremental update (skip DOM rebuild).
     // NOTE: We check `=== false` (not `!message.forceRebuild`) intentionally.
-    // Backend defaults forceRebuild to false for performance, but we use strict
-    // equality to distinguish from undefined (legacy messages that need full rebuild).
+    // Backend explicitly passes forceRebuild: false for incremental updates.
+    // Strict equality distinguishes this from undefined (full rebuild needed).
     if (message.forceRebuild === false) {
       this._handleIncrementalUpdate(message);
       this._updatePlaceholderVisibility();
@@ -390,6 +390,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * - Log messages are NOT appended here; they arrive via APPEND_LOG command
    * - Only group status/endTime are updated; other group fields are immutable post-creation
    * - New groups are NOT created; they arrive via ADD_TASK_GROUP command
+   * - Stream status is NOT updated here; it arrives via UPDATE_STREAM_STATUS command
    */
   _handleIncrementalUpdate(message) {
     // Defensive guard: caller should verify stream matches active stream
@@ -571,16 +572,17 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // Update the stream tab UI first - only update state if DOM update succeeded
-    // This keeps state and DOM in sync even if tab doesn't exist yet
-    const updated = dom.streamTabs.updateStreamStatus(stream, status);
-    if (updated) {
-      if (status && status !== STREAM_STATUS.READY) {
-        state.streamStatuses.set(stream, status);
-      } else {
-        state.streamStatuses.delete(stream);
-      }
+    // Always update state first - state is the single source of truth.
+    // If tab doesn't exist yet (race condition), UPDATE_STREAMS will read
+    // from state.streamStatuses and apply the status when creating the tab.
+    if (status && status !== STREAM_STATUS.READY) {
+      state.streamStatuses.set(stream, status);
+    } else {
+      state.streamStatuses.delete(stream);
     }
+
+    // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
+    dom.streamTabs.updateStreamStatus(stream, status);
   }
 
   handleUpdateUsage(message) {
