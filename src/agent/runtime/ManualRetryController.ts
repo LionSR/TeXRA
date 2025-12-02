@@ -13,7 +13,8 @@
  * 4. Or: timeout/cancel → cleanup calls `removeRetryTask` and emits 'resolveRetryRequest'
  */
 
-// Local imports - logging
+// Local imports
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -114,9 +115,13 @@ export function cancelManualRetry(key: string): boolean {
     try {
       task.cancel();
     } catch (error) {
+      const errorData = buildErrorLogData(error, {
+        operation: task.operation,
+        model: task.model,
+      });
       task.logger.error(`Cancel callback failed for ${task.operation}`, {
         messageType: MESSAGE_TYPES.ERROR,
-        data: { model: task.model, operation: task.operation, error },
+        data: errorData,
       });
     }
   }
@@ -161,9 +166,13 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
     });
     return true;
   } catch (error) {
+    const errorData = buildErrorLogData(error, {
+      operation: task.operation,
+      model: task.model,
+    });
     task.logger.error(`Retry failed for ${task.operation}`, {
       messageType: MESSAGE_TYPES.ERROR,
-      data: { model: task.model, operation: task.operation, error },
+      data: errorData,
     });
     return false;
   } finally {
