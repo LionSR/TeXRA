@@ -211,6 +211,7 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
+      customBaseUrl: this.config.baseUrl,
       logger: this.logger,
     });
   }
