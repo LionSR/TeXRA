@@ -118,15 +118,6 @@ export class ModelHandlerOpenAI<
   ChatCompletion
 > {
   /**
-   * Stores the last reasoning_content from a model response.
-   * Used by subclasses that need to include reasoning in tool-use messages
-   * (e.g., DeepSeek's thinking mode API requires this).
-   *
-   * Set by processThinkingBlock, consumed and cleared by tool-use methods.
-   */
-  protected lastReasoningContent: string | null = null;
-
-  /**
    * Creates a new OpenAI client using the stored credentials.
    * Handles API key retrieval, base URL resolution, and logging.
    * @param providerName Optional name used for logging purposes
