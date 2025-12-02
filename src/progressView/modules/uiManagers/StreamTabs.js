@@ -116,15 +116,16 @@ export class StreamTabs {
    * More efficient than full update() when only status changed.
    * @param {string} streamName - The stream to update
    * @param {string} status - New status value
+   * @returns {boolean} True if DOM was updated, false if tab not found
    */
   updateStreamStatus(streamName, status) {
     if (!streamName) {
-      return;
+      return false;
     }
 
     const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
     if (!tabsContainer) {
-      return;
+      return false;
     }
 
     // Find the tab for this stream
@@ -137,17 +138,17 @@ export class StreamTabs {
         `[updateStreamStatus] Tab not found for stream: ${streamName}. ` +
           'UPDATE_STREAMS should be sent before UPDATE_STREAM_STATUS.',
       );
-      return;
+      return false;
     }
 
     const streamTab = tabEl.closest('.stream-tab');
     if (!streamTab) {
-      return;
+      return false;
     }
 
     const statusEl = streamTab.querySelector('.tab-status');
     if (!statusEl) {
-      return;
+      return false;
     }
 
     // Remove old status classes dynamically from STREAM_STATUS values
@@ -158,6 +159,7 @@ export class StreamTabs {
     statusEl.classList.add(normalizedStatus);
     statusEl.dataset.status =
       normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+    return true;
   }
 
   /**
