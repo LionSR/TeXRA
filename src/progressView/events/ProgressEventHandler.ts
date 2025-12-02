@@ -11,7 +11,6 @@ import { normalizeRunId } from '@common/constants/runIds';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -197,14 +196,17 @@ export class ProgressEventHandler {
 
   /**
    * Refresh all webview surface data for a specific stream.
+   * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
+   *   Required when switching streams or after data deletion. Defaults to false
+   *   for incremental updates.
    */
   public refreshStreamSurface(
     stream: string,
-    options: { updateInstruction?: boolean } = {},
+    options: { updateInstruction?: boolean; forceRebuild?: boolean } = {},
   ): void {
     if (!this.webviewUpdater.isAvailable()) return;
 
-    const { updateInstruction = true } = options;
+    const { updateInstruction = true, forceRebuild = false } = options;
 
     if (!stream) {
       this.webviewUpdater.updateLogContent('', [], []);
@@ -240,12 +242,18 @@ export class ProgressEventHandler {
       this.state.usageStats.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
-    this.webviewUpdater.updateLogContent(stream, messages, groups, {
-      runInstructions,
-      activeRunId,
-      runUsage: usageByRun,
-      runFiles: filesByRun,
-    });
+    this.webviewUpdater.updateLogContent(
+      stream,
+      messages,
+      groups,
+      {
+        runInstructions,
+        activeRunId,
+        runUsage: usageByRun,
+        runFiles: filesByRun,
+      },
+      { forceRebuild },
+    );
 
     // Note: Files are already included in UPDATE_LOGS (runFiles) and handled
     // by handleUpdateLogs in the frontend. We don't send separate UPDATE_FILES
@@ -288,16 +296,14 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      const infos = buildStreamInfos(
-        this.state,
-        this._streamStatus,
-        this.state.agentTypeFilter,
-      );
-      this.webviewUpdater.updateStreams(
-        infos,
-        this.state.activeStream,
-        this.state.agentTypeFilter,
-      );
+      // Check if the stream tab exists before deciding update strategy
+      if (this.state.streamTabs.has(stream)) {
+        // Use targeted single-stream update for existing tabs
+        this.webviewUpdater.updateStreamStatus(stream, status);
+      } else {
+        // New stream: need full updateStreams to create the tab
+        this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      }
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
@@ -358,7 +364,11 @@ export class ProgressEventHandler {
     this.setStreamStatus(stream, status);
 
     if (this.webviewUpdater.isAvailable()) {
-      this.refreshStreamSurface(stream, { updateInstruction: false });
+      // Force rebuild since this is a new stream initialization
+      this.refreshStreamSurface(stream, {
+        updateInstruction: false,
+        forceRebuild: true,
+      });
       this.sendInstructionUpdate(stream);
     }
   }

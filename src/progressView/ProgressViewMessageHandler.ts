@@ -209,7 +209,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     // Delete persisted session data if any
     await this.deleteSessionSnapshot(message.stream);
     await this.provider.state.clearStream(message.stream);
-    this.provider.updateWebview();
+    // Force rebuild since we deleted a stream
+    this.provider.updateWebview({ forceRebuild: true });
   }
 
   private async handleDeleteAll(_message: any): Promise<void> {
@@ -232,7 +233,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     }
 
     await this.provider.state.clearAll();
-    this.provider.updateWebview();
+    // Force rebuild since we deleted all streams
+    this.provider.updateWebview({ forceRebuild: true });
   }
 
   private async handleStopStream(message: any): Promise<void> {
