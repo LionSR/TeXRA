@@ -1336,12 +1336,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * @param calls - Array of tool calls (should preserve original order from model response)
    * @param results - Array of sanitized results (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param _workspaceState - Unused, for interface compatibility
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
     results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
