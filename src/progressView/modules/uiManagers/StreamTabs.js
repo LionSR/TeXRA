@@ -149,7 +149,7 @@ export class StreamTabs {
     }
 
     // Remove old status classes and add new one
-    // Must include all STREAM_STATUS values that have CSS classes
+    // SYNC: These must match STREAM_STATUS values in @common/constants/streamStatus
     statusEl.classList.remove(
       'running',
       'stopped',
