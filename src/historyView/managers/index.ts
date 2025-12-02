@@ -1,1 +1,1 @@
-export { AgentHistoryManager } from './AgentHistoryManager';
+export { AgentHistoryManager, type AgentHistoryItem } from '@common/history';
