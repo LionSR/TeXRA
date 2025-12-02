@@ -1,6 +1,6 @@
 /**
  * Shared styles for approval-requests and retry-requests
- * DRY consolidation of common patterns
+ * Uses CSS variables from common.css
  */
 
 /* ==========================================================================
@@ -9,13 +9,13 @@
 
 .approval-requests,
 .retry-requests {
-  margin: 0.75rem 0;
-  padding: 0.75rem;
-  border-radius: 6px;
+  margin: var(--spacing-large) 0;
+  padding: var(--spacing-large);
+  border-radius: var(--border-radius-large);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   display: none;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--spacing-large);
 }
 
 .approval-requests.is-visible,
@@ -31,46 +31,42 @@
 .retry-requests__header {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-medium);
   font-weight: 600;
   color: var(--vscode-editor-foreground);
 }
 
 /* ==========================================================================
-   Lists
+   Lists & Items
    ========================================================================== */
 
 .approval-requests__list,
-.retry-requests__list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-/* ==========================================================================
-   Individual Items
-   ========================================================================== */
-
+.retry-requests__list,
 .approval-request,
-.retry-request {
-  border-radius: 4px;
-  border: 1px solid var(--vscode-editorHoverWidget-border);
-  background: var(--vscode-editorHoverWidget-background);
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/* ==========================================================================
-   Details Sections
-   ========================================================================== */
-
+.retry-request,
 .approval-request__details,
 .retry-request__details {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+}
+
+.approval-requests__list,
+.retry-requests__list {
+  gap: var(--spacing-large);
+}
+
+.approval-request,
+.retry-request {
+  border-radius: var(--border-radius);
+  border: var(--border-thin) solid var(--vscode-editorHoverWidget-border);
+  background: var(--vscode-editorHoverWidget-background);
+  padding: var(--spacing-large);
+  gap: var(--spacing-medium);
+}
+
+.approval-request__details,
+.retry-request__details {
+  gap: var(--spacing-small);
 }
 
 /* ==========================================================================
@@ -79,11 +75,11 @@
 
 .approval-request__meta,
 .retry-request__meta {
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   color: var(--vscode-descriptionForeground);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--spacing-small);
   flex-wrap: wrap;
 }
 
@@ -95,14 +91,14 @@
 .retry-request__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--spacing-small);
 }
 
 .approval-request__actions::part(container),
 .retry-request__actions::part(container) {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--spacing-small);
 }
 
 .approval-request__actions vscode-toolbar-button,
@@ -113,7 +109,7 @@
 .approval-request__actions vscode-toolbar-button::part(control),
 .retry-request__actions vscode-toolbar-button::part(control) {
   justify-content: flex-start;
-  gap: 0.35rem;
+  gap: var(--spacing-small);
 }
 
 .approval-request__actions [hidden],
