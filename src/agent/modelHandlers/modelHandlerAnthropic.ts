@@ -76,6 +76,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 import {
   describeAttachments,
   loadAttachmentBuffer,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
@@ -1715,7 +1716,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
     call: AnthropicToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,

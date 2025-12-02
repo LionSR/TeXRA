@@ -53,7 +53,10 @@ import {
   NormalizeOpenAIMessageContentOptions,
 } from './openAIMessageUtils';
 import { toOpenAITools } from './toolConversion';
-import { describeAttachments } from './utils/toolAttachmentUtils';
+import {
+  describeAttachments,
+  type ToolResultPayload,
+} from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
 import type {
@@ -1320,7 +1323,7 @@ export class ModelHandlerOpenAI<
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: TCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,

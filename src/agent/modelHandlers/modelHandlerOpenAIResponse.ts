@@ -46,6 +46,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 import {
   describeAttachments,
   loadAttachmentBuffer,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -1312,7 +1313,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1329,8 +1330,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       arguments: call.raw.arguments,
     };
 
-    // Result is already sanitized by source - use as-is
-    const sanitizedResult = { ...result };
+    // Create mutable copy for adding attachmentSummary/files
+    const finalResult: ToolResultPayload = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
@@ -1340,13 +1341,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         attachments,
       );
       if (uploadedAttachments.length > 0) {
-        (sanitizedResult as { files?: unknown }).files =
-          uploadedAttachments.map(({ attachment, fileId }) => ({
+        finalResult.files = uploadedAttachments.map(
+          ({ attachment, fileId }) => ({
             path: attachment.path,
             mimeType: attachment.mimeType,
             description: attachment.description,
             fileId,
-          }));
+          }),
+        );
       }
     }
 
@@ -1354,10 +1356,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       attachments.length > 0 &&
       (!canUploadFiles || !client || uploadedAttachments.length === 0)
     ) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to inspect them.`;
+      finalResult.attachmentSummary = `Attachments available:\n${describeAttachments(attachments).join(
+        '\n',
+      )}\nUse the read_file tool to inspect them.`;
     }
 
     const primaryText =
@@ -1366,7 +1367,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         : typeof result.summary === 'string'
           ? result.summary
           : undefined;
-    const summaryPayload = JSON.stringify(sanitizedResult, null, 2);
+    const summaryPayload = JSON.stringify(finalResult, null, 2);
     const combinedText = primaryText
       ? `${primaryText}\n\n${summaryPayload}`
       : summaryPayload;
