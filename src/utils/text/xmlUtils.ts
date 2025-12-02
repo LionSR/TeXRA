@@ -136,11 +136,65 @@ async function convertWithPandoc(text: string): Promise<string | null> {
         },
       );
     });
-    return result;
+    // Normalize Pandoc reference syntax to canonical LaTeX format
+    return normalizePandocReferences(result);
   } catch (err) {
     logger.error(CHANNEL, `Pandoc conversion failed: ${toErrorMessage(err)}`);
     return null;
   }
+}
+
+/**
+ * Normalize Pandoc reference syntax to canonical LaTeX format.
+ * Pandoc outputs references in formats like:
+ * - [label]{reference-type="ref" reference="label"}
+ * - [\[label\]](#anchor){reference-type="ref" reference="label"}
+ * These are converted to standard \ref{label}, \cref{label}, \eqref{label}
+ */
+function normalizePandocReferences(text: string): string {
+  // Handle markdown-link format: [\[label\]](#anchor){reference-type="ref" reference="label"}
+  text = text.replace(
+    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+    '\\ref{$2}',
+  );
+  text = text.replace(
+    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+    '\\eqref{$2}',
+  );
+  text = text.replace(
+    /\[\\?\[([^\]]+)\\?\]\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+    '\\cref{$2}',
+  );
+
+  // Handle plain markdown-link format: [label](#anchor){reference-type="ref" reference="label"}
+  text = text.replace(
+    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+    '\\ref{$2}',
+  );
+  text = text.replace(
+    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+    '\\eqref{$2}',
+  );
+  text = text.replace(
+    /\[([^\[\]]+)\]\(#[^)]*\)\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+    '\\cref{$2}',
+  );
+
+  // Handle simple Pandoc format: [label]{reference-type="ref" reference="label"}
+  text = text.replace(
+    /\[([^\]]+)\]\{reference-type="ref"\s+reference="([^"]+)"\}/g,
+    '\\ref{$2}',
+  );
+  text = text.replace(
+    /\[([^\]]+)\]\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
+    '\\eqref{$2}',
+  );
+  text = text.replace(
+    /\[([^\]]+)\]\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
+    '\\cref{$2}',
+  );
+
+  return text;
 }
 
 /**
