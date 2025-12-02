@@ -51,11 +51,12 @@ export const DEEPSEEK_MODELS: Record<string, ModelConfig> = {
   'deepseekT+': {
     name: 'deepseekT+',
     fullName: 'deepseek-reasoner',
+    openrouterFullName: 'deepseek/deepseek-v3.2-speciale',
     provider: ModelProvider.DEEPSEEK,
     maxOutputTokens: 65536,
-    contextWindow: 128000,
-    inputPrice: 0.56,
-    outputPrice: 1.68,
+    contextWindow: 163840,
+    inputPrice: 0.28,
+    outputPrice: 0.4,
     capabilities: {
       ...DEEPSEEK_DEFAULT_CAPABILITIES,
       supportsReasoning: true,

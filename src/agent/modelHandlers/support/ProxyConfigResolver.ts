@@ -32,6 +32,12 @@ export interface ProxyConfig {
 }
 
 export function resolveBaseUrl(config: ProxyConfig): string | null {
+  // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
+  if (config.customBaseUrl) {
+    config.logger?.debug(`Using custom base URL for model: ${config.customBaseUrl}`);
+    return config.customBaseUrl;
+  }
+
   const useOpenRouter =
     config.openRouterOnly ||
     getConfig<boolean>('texra.model.useOpenRouter', false);
@@ -69,12 +75,6 @@ export function resolveBaseUrl(config: ProxyConfig): string | null {
   }
 
   if (useOpenRouter) return 'https://openrouter.ai/api/v1';
-
-  // Per-model custom base URL takes precedence
-  if (config.customBaseUrl) {
-    config.logger?.debug(`Using custom base URL for model: ${config.customBaseUrl}`);
-    return config.customBaseUrl;
-  }
 
   if (config.provider === ModelProvider.DEEPSEEK) {
     const customUrl = getConfig<string>('texra.model.baseUrlDeepSeek', '');
