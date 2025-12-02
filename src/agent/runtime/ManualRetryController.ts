@@ -63,6 +63,7 @@ const taskContext = (task: ManualRetryTask) => ({
 export function registerManualRetry(key: string, task: ManualRetryTask): void {
   nextGeneration(key);
   pendingRetries.set(key, task);
+  task.logger.debug(`Manual retry registered for ${task.operation}`);
 }
 
 /**
@@ -110,6 +111,8 @@ export function cancelManualRetry(key: string): boolean {
   pendingRetries.delete(key);
   taskGenerations.delete(key);
 
+  task.logger.debug(`Retry cancelled for ${task.operation}`);
+
   // Trigger cancel callback if provided (with error boundary)
   if (task.cancel) {
     try {
@@ -145,8 +148,11 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
   // Remove from registry before execution
   pendingRetries.delete(key);
 
+  task.logger.debug(`Retry requested for ${task.operation}`);
+
   try {
     await task.run();
+    task.logger.debug(`Retry succeeded for ${task.operation}`);
     return true;
   } catch (error) {
     task.logger.logError(
