@@ -2,6 +2,40 @@ type NonIterableObject = Partial<Record<string, unknown>> & {
   [Symbol.iterator]?: never;
 };
 type Action = string;
+
+/**
+ * Detects if an error is an abort/cancellation error.
+ * These are NOT retryable since the user intentionally cancelled.
+ * Handles:
+ * - DOM AbortError (from AbortController)
+ * - Errors with 'abort' or 'cancel' in name/message
+ */
+function isAbortOrCancellationError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+
+  const errorObj = err as { name?: string; message?: string };
+
+  // Check for DOM AbortError (DOMException with name 'AbortError')
+  if (errorObj.name === 'AbortError') {
+    return true;
+  }
+
+  // Check for abort-related patterns in error name
+  const name = errorObj.name?.toLowerCase() ?? '';
+  if (name.includes('abort') || name.includes('cancel')) {
+    return true;
+  }
+
+  // Check for abort-related patterns in error message
+  const message = errorObj.message?.toLowerCase() ?? '';
+  if (message.includes('aborted') || message.includes('cancelled')) {
+    return true;
+  }
+
+  return false;
+}
 class BaseNode<S = unknown, P extends NonIterableObject = NonIterableObject> {
   protected _params: P = {} as P;
   protected _successors: Map<Action, BaseNode> = new Map();
@@ -86,7 +120,10 @@ class Node<
       try {
         return await this.exec(prepRes);
       } catch (e) {
-        if (this.currentRetry === this.maxRetries - 1)
+        // Abort/cancellation errors are NOT retryable - go directly to fallback
+        // This prevents unnecessary retries when the user intentionally cancelled
+        const isAbort = isAbortOrCancellationError(e);
+        if (this.currentRetry === this.maxRetries - 1 || isAbort)
           return await this.execFallback(prepRes, e as Error);
         if (this.wait > 0)
           await new Promise((resolve) => setTimeout(resolve, this.wait * 1000));
