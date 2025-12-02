@@ -365,7 +365,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       const outputState = await vscode.commands.executeCommand<{
         activeRunId: string | null;
         runOutputs: Map<number, any[]> | undefined;
-      }>('texra.progressView.getRunOutputState', activeStreamId);
+      }>('texra.progressView.getRunOutputState', activeStreamId, executionId);
 
       if (outputState) {
         // For resume, use a single storageKey for both fetching and hydrating

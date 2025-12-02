@@ -24,6 +24,7 @@ import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import { normalizeRunId } from '@common/constants/runIds';
+import { RecordingManager } from '@frontend/media';
 import {
   isWorkflowTaskState,
   type WorkflowTaskState,
@@ -41,7 +42,6 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { RecordingManager } from '@frontend/media';
 // @ts-ignore - Import JavaScript module
 
 // Type imports

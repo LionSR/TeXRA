@@ -11,6 +11,7 @@ import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager } from '@frontend/secretManager';
 import { agentDirectories } from '@frontend/agents';
+import { RecordingManager } from '@frontend/media';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { computeModelOptions } from '@model/computeModelOptions';
 import { getConfig, setConfig } from '@utils/config';
@@ -30,7 +31,6 @@ import {
   DiffManager,
   InstructionManager,
 } from './managers';
-import { RecordingManager } from '@frontend/media';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;

@@ -195,10 +195,10 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'texra.progressView.getRunOutputState',
-      (streamId: string) => {
+      (streamId: string, executionId?: string) => {
         const activeRunId =
           progressViewProviderInstance?.state.getActiveRunId(streamId);
-        const storageKey = activeRunId ?? null;
+        const storageKey = activeRunId ?? executionId ?? null;
         const runOutputs = storageKey
           ? progressViewProviderInstance?.state.getRunOutputFiles(streamId, {
               storageKey: storageKey as any, // StorageKey branded type
