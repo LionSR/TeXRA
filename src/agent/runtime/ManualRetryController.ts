@@ -13,9 +13,8 @@
  * 4. Or: timeout/cancel → cleanup calls `removeRetryTask` and emits 'resolveRetryRequest'
  */
 
-// Local imports - logging
+// Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
 
 export interface ManualRetryTask {
@@ -51,6 +50,12 @@ function nextGeneration(key: string): number {
   return next;
 }
 
+/** Extract context from task for logging */
+const taskContext = (task: ManualRetryTask) => ({
+  operation: task.operation,
+  model: task.model,
+});
+
 /**
  * Register a manual retry task for a stream.
  * Does NOT emit UI events - caller is responsible for emitting 'showRetryRequest'.
@@ -58,10 +63,10 @@ function nextGeneration(key: string): number {
 export function registerManualRetry(key: string, task: ManualRetryTask): void {
   nextGeneration(key);
   pendingRetries.set(key, task);
-  task.logger.info(`Manual retry available for ${task.operation}`, {
-    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    data: { model: task.model, operation: task.operation },
-  });
+  task.logger.logProgress(
+    `Manual retry available for ${task.operation}`,
+    taskContext(task),
+  );
 }
 
 /**
@@ -114,17 +119,18 @@ export function cancelManualRetry(key: string): boolean {
     try {
       task.cancel();
     } catch (error) {
-      task.logger.error(`Cancel callback failed for ${task.operation}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: { model: task.model, operation: task.operation, error },
-      });
+      task.logger.logError(
+        `Cancel callback failed for ${task.operation}`,
+        error,
+        taskContext(task),
+      );
     }
   }
 
-  task.logger.info(`Retry cancelled for ${task.operation}`, {
-    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    data: { model: task.model, operation: task.operation },
-  });
+  task.logger.logProgress(
+    `Retry cancelled for ${task.operation}`,
+    taskContext(task),
+  );
 
   // Emit UI resolution event
   bus.emit('resolveRetryRequest', { streamId: key });
@@ -148,23 +154,24 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
   // Remove from registry before execution
   pendingRetries.delete(key);
 
-  task.logger.info(`Retry requested for ${task.operation}`, {
-    messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    data: { model: task.model, operation: task.operation },
-  });
+  task.logger.logProgress(
+    `Retry requested for ${task.operation}`,
+    taskContext(task),
+  );
 
   try {
     await task.run();
-    task.logger.info(`Retry succeeded for ${task.operation}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: { model: task.model, operation: task.operation },
-    });
+    task.logger.logProgress(
+      `Retry succeeded for ${task.operation}`,
+      taskContext(task),
+    );
     return true;
   } catch (error) {
-    task.logger.error(`Retry failed for ${task.operation}`, {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: { model: task.model, operation: task.operation, error },
-    });
+    task.logger.logError(
+      `Retry failed for ${task.operation}`,
+      error,
+      taskContext(task),
+    );
     return false;
   } finally {
     // Only emit resolve if no new task was registered during execution
