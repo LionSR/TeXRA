@@ -169,6 +169,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Status and files
   UPDATE_STATUS: 'updateStatus',
+  UPDATE_STREAM_STATUS: 'updateStreamStatus', // Update single stream's status in tabs
   UPDATE_FILES: 'updateFiles',
   UPDATE_MISSING_OUTPUTS: 'updateMissingOutputs',
   SHOW_TOOL_EDIT_APPROVAL: 'showToolEditApproval',
@@ -179,6 +180,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
+  UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
 
   // Actions
   RUN_AGAIN: 'runAgain',

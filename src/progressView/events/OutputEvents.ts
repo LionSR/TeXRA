@@ -25,7 +25,7 @@ interface OutputEventsShared {
   logger: AgentLogger;
   refreshStreamSurface: (
     stream: string,
-    options?: { updateInstruction?: boolean },
+    options?: { updateInstruction?: boolean; forceRebuild?: boolean },
   ) => void;
   getAllStreamStatuses: () => Map<string, StreamStatusType>;
 }
@@ -163,7 +163,8 @@ const registerClearTaskOutput = (
             state,
             shared.getAllStreamStatuses(),
           );
-          shared.refreshStreamSurface(activeStream);
+          // Force rebuild since we cleared data
+          shared.refreshStreamSurface(activeStream, { forceRebuild: true });
         }
       });
     }),
