@@ -32,6 +32,7 @@ import {
 import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
+  ProgressViewApprovalActions,
 } from '@tools/approval/toolEditApproval';
 import { pathToLocation } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
@@ -65,7 +66,7 @@ const PolishFollowUp = z.object({ stream: z.string().min(1), text: TrimmedString
 const InfoMessage = z.object({ text: TrimmedString });
 const ApprovalAction = z.object({
   requestId: z.string().min(1),
-  action: z.enum(['approve', 'reject', 'openDiff', 'approveAll', 'resumeApprovals']),
+  action: z.enum(ProgressViewApprovalActions),
   note: z.string().optional(),
 });
 
