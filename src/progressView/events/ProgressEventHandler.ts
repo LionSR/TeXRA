@@ -32,6 +32,11 @@ import {
   type RetryEventsModule,
   type RetryEventsShared,
 } from './RetryEvents';
+import {
+  createApprovalEventsModule,
+  type ApprovalEventsModule,
+  type ApprovalEventsShared,
+} from './ApprovalEvents';
 
 // Local imports - events
 import type { StreamStatusOrReadyType, StreamStatusType } from './types';
@@ -50,14 +55,18 @@ export class ProgressEventHandler {
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
   private readonly retryEvents: RetryEventsModule;
+  private readonly approvalEvents: ApprovalEventsModule;
 
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    retryCallbacks: Pick<
-      RetryEventsShared,
-      'showRetryRequest' | 'resolveRetryRequest'
-    >,
+    callbacks: Pick<RetryEventsShared, 'showRetryRequest' | 'resolveRetryRequest'> &
+      Pick<
+        ApprovalEventsShared,
+        | 'showToolEditApprovalPrompt'
+        | 'resolveToolEditApprovalPrompt'
+        | 'updateToolEditApprovalBypassState'
+      >,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
     this.streamStatusEvents = createStreamStatusEvents({
@@ -87,8 +96,14 @@ export class ProgressEventHandler {
     });
     this.retryEvents = createRetryEventsModule({
       logger: this.logger,
-      showRetryRequest: retryCallbacks.showRetryRequest,
-      resolveRetryRequest: retryCallbacks.resolveRetryRequest,
+      showRetryRequest: callbacks.showRetryRequest,
+      resolveRetryRequest: callbacks.resolveRetryRequest,
+    });
+    this.approvalEvents = createApprovalEventsModule({
+      logger: this.logger,
+      showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
+      resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
+      updateToolEditApprovalBypassState: callbacks.updateToolEditApprovalBypassState,
     });
   }
 
@@ -115,7 +130,13 @@ export class ProgressEventHandler {
     disposables.push(
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
-    disposables.push(...this.retryEvents.register(bus, this.state));
+    disposables.push(...this.retryEvents.register(bus));
+    disposables.push(...this.approvalEvents.register(bus));
+    disposables.push(
+      new vscode.Disposable(
+        bus.on('extensionDeactivating', () => this.markAllRunningTasksAsCancelled()),
+      ),
+    );
 
     return disposables;
   }
