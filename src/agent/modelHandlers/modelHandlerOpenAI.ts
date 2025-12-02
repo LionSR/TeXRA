@@ -31,7 +31,6 @@ import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -857,7 +856,7 @@ export class ModelHandlerOpenAI<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+      this.logger.logScratchpad(scratchpad);
     }
 
     // Write file content to output file
