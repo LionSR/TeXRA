@@ -1,21 +1,29 @@
 /**
  * Utility classes for ProgressView
- * Reusable patterns to avoid CSS repetition (DRY)
+ * Only structural utilities that can't be expressed with CSS variables
+ *
+ * Spacing, colors, and sizes should use CSS variables from common.css:
+ *   --spacing-tiny, --spacing-small, --spacing-medium, --spacing-large, --spacing-xlarge
+ *   --font-size-sm, --font-size-lg
+ *   --vscode-* color variables
  */
 
 /* ==========================================================================
-   Layout Utilities
+   Layout Utilities - structural only
    ========================================================================== */
 
-/* Flex utilities */
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
 .flex-center {
   display: flex;
   align-items: center;
-}
-
-.flex-column {
-  display: flex;
-  flex-direction: column;
 }
 
 .flex-wrap {
@@ -23,148 +31,37 @@
   flex-wrap: wrap;
 }
 
-/* Gap utilities */
-.gap-xs {
-  gap: 0.25rem;
-}
-
-.gap-sm {
-  gap: 0.35rem;
-}
-
-.gap-md {
-  gap: 0.5rem;
-}
-
-.gap-lg {
-  gap: 0.75rem;
-}
-
 /* ==========================================================================
-   Text Utilities
+   Text Utilities - structural only
    ========================================================================== */
 
-/* Text truncation */
 .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Pre-wrapped text */
 .pre-wrap {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 /* ==========================================================================
-   Visibility Utilities
+   Visibility
    ========================================================================== */
 
-/* Hidden until .is-visible is added */
-.hidden-panel {
+.hidden {
   display: none;
 }
 
-.hidden-panel.is-visible {
+.hidden.is-visible {
   display: flex;
 }
 
 /* ==========================================================================
-   Request Panel Base Styles
-   Shared between approval-requests and retry-requests
+   Interactive - Copy button base behavior
    ========================================================================== */
 
-/* Container panel */
-.request-panel {
-  margin: 0.75rem 0;
-  padding: 0.75rem;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  display: none;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.request-panel.is-visible {
-  display: flex;
-}
-
-/* Panel header */
-.request-panel__header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
-  color: var(--vscode-editor-foreground);
-}
-
-/* Panel list container */
-.request-panel__list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-/* Individual request item */
-.request-item {
-  border-radius: 4px;
-  border: 1px solid var(--vscode-editorHoverWidget-border);
-  background: var(--vscode-editorHoverWidget-background);
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-/* Request details section */
-.request-item__details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-/* Request metadata */
-.request-item__meta {
-  font-size: 0.8rem;
-  color: var(--vscode-descriptionForeground);
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-/* Request actions */
-.request-item__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.request-item__actions::part(container) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.request-item__actions vscode-toolbar-button {
-  min-width: auto;
-}
-
-.request-item__actions vscode-toolbar-button::part(control) {
-  justify-content: flex-start;
-  gap: 0.35rem;
-}
-
-.request-item__actions [hidden] {
-  display: none !important;
-}
-
-/* ==========================================================================
-   Copy Button Utilities
-   ========================================================================== */
-
-/* Base copy button behavior - shared transition and success state */
 .banner-content-copy,
 .instruction-panel__copy {
   transition: opacity 0.2s ease;
@@ -180,20 +77,4 @@
 .banner-content-copy.copy-success,
 .instruction-panel__copy.copy-success {
   color: var(--vscode-testing-iconPassed);
-}
-
-/* ==========================================================================
-   Status Colors
-   ========================================================================== */
-
-.status-success {
-  color: var(--vscode-testing-iconPassed, #2ea043);
-}
-
-.status-error {
-  color: var(--vscode-editorError-foreground, #f14c4c);
-}
-
-.status-warning {
-  color: var(--vscode-notificationsWarningIcon-foreground, #cca700);
 }
