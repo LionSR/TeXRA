@@ -53,7 +53,7 @@ import {
 } from './openAIMessageUtils';
 import { toOpenAITools } from './toolConversion';
 import {
-  describeAttachments,
+  formatAttachmentSummary,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -1303,13 +1303,14 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Add attachment summary if handler supports them and attachments exist
-    const finalResult = { ...result };
-    if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      finalResult.attachmentSummary = `Attachments available:\n${describeAttachments(
-        attachments,
-      ).join('\n')}\nUse the read_file tool to read them.`;
-    }
+    // Add attachment summary only if handler supports them and attachments exist
+    const finalResult =
+      this.canProcessToolResultAttachments && attachments.length > 0
+        ? {
+            ...result,
+            attachmentSummary: formatAttachmentSummary(attachments),
+          }
+        : result;
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
