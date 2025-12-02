@@ -776,17 +776,22 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
+    // TaskState has session at top level - this is the canonical source of truth
+    // agentConfig.session should match, but may be missing in legacy data
+    const canonicalSession = state.session || config.session;
 
     const savedState = {};
-    this._restoreFormFields(config, savedState);
+    this._restoreFormFields(config, savedState, canonicalSession);
     this._restoreFileArrays(config, savedState, activeFiles);
     mainViewState.set(savedState);
     mainViewState.restore();
     this._skipNextRestoreState = true;
   }
 
-  _restoreFormFields(state, savedState) {
-    const sessionCategory = state.session?.agentCategory;
+  _restoreFormFields(state, savedState, canonicalSession) {
+    // Use the canonical session from TaskState (passed in), fallback to agentConfig.session
+    const sessionCategory =
+      canonicalSession?.agentCategory ?? state.session?.agentCategory;
 
     let sessionType = state.sessionType;
     if (sessionCategory === SESSION_TYPES.TOOL_USE) {
@@ -796,9 +801,13 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     if (!sessionType) {
-      sessionType = state.isToolUseAgent
-        ? SESSION_TYPES.TOOL_USE
-        : SESSION_TYPES.WORKFLOW;
+      // Final fallback: check agentType from canonical session, then isToolUseAgent flag
+      const agentType = canonicalSession?.agentType ?? state.agentType;
+      const isToolUse =
+        agentType === 'toolUse' ||
+        state.isToolUseAgent ||
+        sessionCategory === SESSION_TYPES.TOOL_USE;
+      sessionType = isToolUse ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
     }
 
     const normalizedSessionType = normalizeSessionType(sessionType);
