@@ -25,12 +25,12 @@ import { PROVIDER_URLS } from '@commands/api/apiKeyCommands';
 // Local file imports
 import {
   SettingsManager,
-  RecordingManager,
   FileManager,
   ExecutionManager,
   DiffManager,
   InstructionManager,
 } from './managers';
+import { RecordingManager } from '@frontend/media';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly settingsManager: SettingsManager;

@@ -121,6 +121,13 @@ export function registerCommands(context: vscode.ExtensionContext) {
         },
       },
     ),
+    // Register command to refresh main view (used by auth provider on state changes)
+    vscode.commands.registerCommand(
+      'texra.mainView.refreshOptionsAndView',
+      async () => {
+        await mainViewProviderInstance?.refreshOptionsAndView();
+      },
+    ),
   );
 
   return registeredCommands;

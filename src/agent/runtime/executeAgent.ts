@@ -42,7 +42,6 @@ import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -357,33 +356,32 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     const activeStreamId: StreamTabId = streamTabId;
 
-    const provider = ProgressViewProvider.getInstance();
     if (isResume) {
       StreamStatusService.set(activeStreamId, STREAM_STATUS.RESUMING);
     }
 
-    if (
-      isResume &&
-      agent instanceof BaseReflectionAgent &&
-      executionId &&
-      provider
-    ) {
-      // For resume, use a single storageKey for both fetching and hydrating
-      // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
-      // Use normalizeRunId to brand as StorageKey
-      const activeRunId = provider.state.getActiveRunId(activeStreamId);
-      const storageKey = normalizeRunId(activeRunId ?? executionId);
+    if (isResume && agent instanceof BaseReflectionAgent && executionId) {
+      // Query run output state via command to avoid direct provider coupling
+      const outputState = await vscode.commands.executeCommand<{
+        activeRunId: string | null;
+        runOutputs: Map<number, any[]> | undefined;
+      }>('texra.progressView.getRunOutputState', activeStreamId);
 
-      const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
-        storageKey,
-      });
+      if (outputState) {
+        // For resume, use a single storageKey for both fetching and hydrating
+        // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
+        // Use normalizeRunId to brand as StorageKey
+        const storageKey = normalizeRunId(
+          outputState.activeRunId ?? executionId,
+        );
 
-      if (runOutputs) {
-        await agent.hydrateOutputState({
-          executionId,
-          storageKey, // Properly branded StorageKey
-          rounds: runOutputs,
-        });
+        if (outputState.runOutputs) {
+          await agent.hydrateOutputState({
+            executionId,
+            storageKey, // Properly branded StorageKey
+            rounds: outputState.runOutputs,
+          });
+        }
       }
     }
 
@@ -422,14 +420,21 @@ export async function executeAgentWithLogging<T extends IAgent>(
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 
               if (!isResume) {
-                const viewVisible = provider?.isViewVisible() ?? false;
+                const viewVisible = await vscode.commands.executeCommand<boolean>(
+                  'texra.progressView.isVisible',
+                );
                 if (!viewVisible) {
                   await vscode.commands.executeCommand(
                     'texra.showProgressView',
                   );
                 }
 
-                if (!provider?.isViewVisible()) {
+                // Check visibility again after attempting to show
+                const stillNotVisible =
+                  !(await vscode.commands.executeCommand<boolean>(
+                    'texra.progressView.isVisible',
+                  ));
+                if (stillNotVisible) {
                   const inputFileName = config.inputFile
                     ? path.basename(config.inputFile)
                     : 'selected input';

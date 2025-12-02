@@ -28,11 +28,12 @@ import { FolderExplorer } from './FolderExplorer';
 import { ExplorerOperations } from './explorer/ExplorerOperations';
 import { ExplorerCommands } from './explorer/ExplorerCommands';
 import { WatcherManager } from './explorer/WatcherManager';
-import { registerCommands, getMainViewProvider } from './commands';
+import { registerCommands } from './commands';
 
 let statusBarItem: vscode.StatusBarItem | undefined;
 let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 let disposeStatusListener: (() => void) | undefined;
+let progressViewProviderInstance: ProgressViewProvider | undefined;
 
 function promptToOpenFolder(message: string): void {
   const openAction = 'Open Folder';
@@ -164,14 +165,13 @@ export async function activate(context: vscode.ExtensionContext) {
           authProvider.onDidChangeSessions(async (event) => {
             // Refresh agent options when user logs in or out
             // This will fetch/clear remote agents and update dropdown
-            const mainView = getMainViewProvider();
-            if (mainView) {
-              logger.info(
-                'extension',
-                `Auth state changed (added: ${event.added?.length ?? 0}, removed: ${event.removed?.length ?? 0}), refreshing agents`,
-              );
-              await mainView.refreshOptionsAndView();
-            }
+            logger.info(
+              'extension',
+              `Auth state changed (added: ${event.added?.length ?? 0}, removed: ${event.removed?.length ?? 0}), refreshing agents`,
+            );
+            await vscode.commands.executeCommand(
+              'texra.mainView.refreshOptionsAndView',
+            );
           }),
         );
 
@@ -188,8 +188,29 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   // Create the log view provider
-  const progressViewProvider = new ProgressViewProvider(context);
-  await progressViewProvider.initialize();
+  progressViewProviderInstance = new ProgressViewProvider(context);
+  await progressViewProviderInstance.initialize();
+
+  // Register commands to query progress view state (used by executeAgent)
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'texra.progressView.getRunOutputState',
+      (streamId: string) => {
+        const activeRunId =
+          progressViewProviderInstance?.state.getActiveRunId(streamId);
+        const storageKey = activeRunId ?? null;
+        const runOutputs = storageKey
+          ? progressViewProviderInstance?.state.getRunOutputFiles(streamId, {
+              storageKey: storageKey as any, // StorageKey branded type
+            })
+          : undefined;
+        return { activeRunId, runOutputs };
+      },
+    ),
+    vscode.commands.registerCommand('texra.progressView.isVisible', () =>
+      progressViewProviderInstance?.isViewVisible(),
+    ),
+  );
 
   await ToolUseSnapshotStore.initialize();
 
@@ -209,7 +230,7 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.info('extension', 'TeXRA extension activated');
 
   // Clean up any tasks that were left in "running" state from previous session
-  await progressViewProvider.cleanupTasksAfterRestart(waitingStreams);
+  await progressViewProviderInstance.cleanupTasksAfterRestart(waitingStreams);
 
   // Configure LaTeX settings if LaTeX Workshop is installed
   configureLatexSettings();
@@ -275,7 +296,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       'texra.progressView',
-      progressViewProvider,
+      progressViewProviderInstance,
       { webviewOptions: { retainContextWhenHidden: true } }, // Keep the webview alive even when hidden
     ),
     // Removed duplicate mainViewProvider registration since it's handled in commands.ts
@@ -326,12 +347,9 @@ export async function deactivate() {
   ToolUseSessionPersistence.clearAllPersistedSnapshots();
   await ToolUseSnapshotStore.deleteAll();
 
-  // Get the ProgressViewProvider instance
-  const progressViewProvider = ProgressViewProvider.getInstance();
-  if (progressViewProvider) {
-    // Mark all running tasks as cancelled when extension deactivates
-    progressViewProvider.eventHandler.markAllRunningTasksAsCancelled();
-  }
+  // Mark all running tasks as cancelled when extension deactivates
+  progressViewProviderInstance?.eventHandler.markAllRunningTasksAsCancelled();
+
   statusBarItem?.dispose();
   disposeDiffRefresh();
 }

@@ -39,7 +39,7 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { RecordingManager } from '@webview/managers/RecordingManager';
+import { RecordingManager } from '@frontend/media';
 // @ts-ignore - Import JavaScript module
 
 // Type imports

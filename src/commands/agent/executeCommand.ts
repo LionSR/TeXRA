@@ -12,8 +12,7 @@ import {
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 
-// Local imports - history
-import { AgentHistoryManager } from '@historyView/managers';
+// Local imports
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
@@ -47,7 +46,10 @@ export const executeCommand = {
 
       const resolvedExecutionId: ExecutionId =
         executionId ??
-        (await AgentHistoryManager.addToHistory(normalizedConfig));
+        (await vscode.commands.executeCommand<ExecutionId>(
+          'texra.history.addToHistory',
+          normalizedConfig,
+        ))!;
 
       await executeAgent(normalizedConfig, resolvedExecutionId);
     } catch (error) {

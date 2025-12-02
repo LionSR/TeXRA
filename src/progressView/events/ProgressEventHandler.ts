@@ -32,6 +32,11 @@ import {
   type RetryEventsModule,
   type RetryEventsShared,
 } from './RetryEvents';
+import {
+  createToolEditApprovalEventsModule,
+  type ToolEditApprovalEventsModule,
+  type ToolEditApprovalEventsShared,
+} from './ToolEditApprovalEvents';
 
 // Local imports - events
 import type { StreamStatusOrReadyType, StreamStatusType } from './types';
@@ -50,6 +55,7 @@ export class ProgressEventHandler {
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
   private readonly retryEvents: RetryEventsModule;
+  private readonly toolEditApprovalEvents: ToolEditApprovalEventsModule;
 
   constructor(
     private state: ProgressViewState,
@@ -57,6 +63,12 @@ export class ProgressEventHandler {
     retryCallbacks: Pick<
       RetryEventsShared,
       'showRetryRequest' | 'resolveRetryRequest'
+    >,
+    toolEditApprovalCallbacks: Pick<
+      ToolEditApprovalEventsShared,
+      | 'showToolEditApprovalPrompt'
+      | 'resolveToolEditApprovalPrompt'
+      | 'updateToolEditApprovalBypassState'
     >,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
@@ -90,6 +102,15 @@ export class ProgressEventHandler {
       showRetryRequest: retryCallbacks.showRetryRequest,
       resolveRetryRequest: retryCallbacks.resolveRetryRequest,
     });
+    this.toolEditApprovalEvents = createToolEditApprovalEventsModule({
+      logger: this.logger,
+      showToolEditApprovalPrompt:
+        toolEditApprovalCallbacks.showToolEditApprovalPrompt,
+      resolveToolEditApprovalPrompt:
+        toolEditApprovalCallbacks.resolveToolEditApprovalPrompt,
+      updateToolEditApprovalBypassState:
+        toolEditApprovalCallbacks.updateToolEditApprovalBypassState,
+    });
   }
 
   /**
@@ -116,6 +137,9 @@ export class ProgressEventHandler {
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
     disposables.push(...this.retryEvents.register(bus, this.state));
+    disposables.push(
+      ...this.toolEditApprovalEvents.register(bus, this.state),
+    );
 
     return disposables;
   }
