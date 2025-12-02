@@ -74,6 +74,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import {
   describeAttachments,
+  formatAttachmentSummaryFromNotes,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1739,7 +1740,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     // Result is already sanitized by source - use the passed attachments
-    const sanitizedResult = { ...result };
+    // Create mutable copy with explicit type to avoid type assertions later
+    const sanitizedResult: ToolResultPayload = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
@@ -1754,13 +1756,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
       unsupportedAttachments.push(...uploadResult.unsupported);
 
       if (uploadedAttachments.length > 0) {
-        (sanitizedResult as { files?: unknown }).files =
-          uploadedAttachments.map(({ attachment, fileId }) => ({
+        // Store uploaded file info with fileId (Anthropic-specific extension)
+        // Type assertion needed because FileReference doesn't include fileId
+        sanitizedResult.files = uploadedAttachments.map(
+          ({ attachment, fileId }) => ({
             path: attachment.path,
             mimeType: attachment.mimeType,
             description: attachment.description,
-            fileId,
-          }));
+            fileId, // Anthropic-specific: retained for potential future reference
+          }),
+        ) as typeof sanitizedResult.files;
       }
     } else if (attachments.length > 0) {
       unsupportedAttachments.push(...attachments);
@@ -1831,25 +1836,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     if (unsupportedNotes.length > 0) {
+      const notesText = unsupportedNotes.join('\n');
       toolResultContent.unshift({
         type: 'text',
-        text: `Attachments available but returned as metadata only:\n${unsupportedNotes.join(
-          '\n',
-        )}\nUse the read_file tool if you need the raw bytes.`,
+        text: formatAttachmentSummaryFromNotes(notesText, 'metadata-fallback'),
       });
-      if (!(sanitizedResult as Record<string, unknown>).attachmentSummary) {
-        (sanitizedResult as Record<string, unknown>).attachmentSummary =
-          `Attachments available but returned as metadata only:\n${unsupportedNotes.join(
-            '\n',
-          )}`;
+      if (!sanitizedResult.attachmentSummary) {
+        // Store summary without the instruction (it's in the text block above)
+        sanitizedResult.attachmentSummary = `Attachments available but returned as metadata only:\n${notesText}`;
       }
     }
 
-    if (unsupportedNotes.length > 0) {
-      // Summary already added above
-    }
-
-    const isError = Boolean((result as { isError?: boolean }).isError);
+    const isError = Boolean(result.isError);
     const resultMsg: MessageParam = {
       role: 'user',
       content: [

@@ -197,6 +197,52 @@ export function describeAttachments(
   });
 }
 
+/**
+ * Attachment summary message variants for different handler scenarios.
+ */
+export type AttachmentSummaryVariant =
+  /** Handler doesn't upload files - tell model to use read_file */
+  | 'metadata-only'
+  /** Files were uploaded/included inline - no read instruction needed */
+  | 'included-inline'
+  /** Some files couldn't be uploaded - fallback to read_file */
+  | 'metadata-fallback';
+
+/**
+ * Format a standardized attachment summary message.
+ * Centralizes the summary text used across all handlers for consistency.
+ *
+ * @param attachments - File attachments to describe
+ * @param variant - Which message variant to use
+ * @returns Formatted summary string
+ */
+export function formatAttachmentSummary(
+  attachments: ToolFileAttachment[],
+  variant: AttachmentSummaryVariant = 'metadata-only',
+): string {
+  const descriptions = describeAttachments(attachments).join('\n');
+  return formatAttachmentSummaryFromNotes(descriptions, variant);
+}
+
+/**
+ * Format attachment summary from pre-built description notes.
+ * Use this when descriptions come from multiple sources (e.g., Anthropic handler).
+ */
+export function formatAttachmentSummaryFromNotes(
+  notes: string,
+  variant: AttachmentSummaryVariant = 'metadata-only',
+): string {
+  switch (variant) {
+    case 'included-inline':
+      return `Attachments included in this response:\n${notes}`;
+    case 'metadata-fallback':
+      return `Attachments available but returned as metadata only:\n${notes}\nUse the read_file tool if you need the raw bytes.`;
+    case 'metadata-only':
+    default:
+      return `Attachments available:\n${notes}\nUse the read_file tool to read them.`;
+  }
+}
+
 export async function loadAttachmentBuffer(
   attachment: ToolFileAttachment,
 ): Promise<Buffer> {

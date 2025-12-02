@@ -70,7 +70,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
-  describeAttachments,
+  formatAttachmentSummary,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1250,9 +1250,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      finalResult.attachmentSummary = `Attachments included in this response:\n${describeAttachments(
+      finalResult.attachmentSummary = formatAttachmentSummary(
         attachments,
-      ).join('\n')}`;
+        'included-inline',
+      );
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
