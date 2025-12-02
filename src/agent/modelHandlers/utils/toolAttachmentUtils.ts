@@ -139,12 +139,10 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
  * are preserved for forward compatibility.
  *
  * @param result - Raw tool result (may contain binary data)
- * @param fallbackLineChanges - Optional line changes to apply if not present in result
  * @returns Extracted attachments and typed payload (without binary data)
  */
 export function extractToolAttachments(
   result: ToolResult,
-  fallbackLineChanges?: { added: number; removed: number },
 ): ExtractedToolAttachments {
   // Extract attachments from files array
   const attachmentsCandidate = result.files;
@@ -164,17 +162,6 @@ export function extractToolAttachments(
       continue;
     }
     sanitizedResult[key] = value;
-  }
-
-  // Apply fallback line changes if not present
-  const lineChanges = result.lineChanges ?? fallbackLineChanges;
-  if (lineChanges !== undefined) {
-    sanitizedResult.lineChanges = lineChanges;
-  }
-
-  // Ensure isError is set if present in result
-  if (result.isError && !sanitizedResult.isError) {
-    sanitizedResult.isError = true;
   }
 
   // Strip binary data from file references, keep metadata
