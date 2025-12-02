@@ -133,7 +133,7 @@ function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
 
 /**
  * Extracts file attachments from a tool result and returns a typed payload.
- * Binary data (base64Data, bytes, base64Image) is stripped from the result.
+ * Binary data (base64Data, bytes) is stripped from the result.
  *
  * Uses Zod schema with passthrough() so parsing never fails - unknown fields
  * are preserved for forward compatibility.
@@ -150,27 +150,6 @@ export function extractToolAttachments(
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Backward compatibility: convert legacy base64Image field to attachment
-  // (No tools currently use this, but handle it for safety)
-  const legacyBase64Image = (result as { base64Image?: string }).base64Image;
-  if (typeof legacyBase64Image === 'string' && legacyBase64Image.length > 0) {
-    // Extract MIME type from data URL if present, otherwise default to image/png
-    const dataUrlMatch = legacyBase64Image.match(
-      /^data:([^;,]+)(?:;base64)?,/,
-    );
-    const mimeType = dataUrlMatch?.[1] ?? 'image/png';
-    const base64Data = dataUrlMatch
-      ? legacyBase64Image.slice(legacyBase64Image.indexOf(',') + 1)
-      : legacyBase64Image;
-
-    attachments.push({
-      path: 'inline-image',
-      mimeType,
-      base64Data,
-      description: 'Image from tool result (legacy base64Image field)',
-    });
-  }
-
   // Parse with Zod - passthrough() ensures this never fails
   const parsed = ToolResultPayloadSchema.parse(result);
 
@@ -178,8 +157,8 @@ export function extractToolAttachments(
   const sanitizedResult: ToolResultPayload = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
-    // Skip binary fields
-    if (key === 'base64Image' || key === 'base64Data' || key === 'bytes') {
+    // Skip binary fields (these belong in files array attachments)
+    if (key === 'base64Data' || key === 'bytes') {
       continue;
     }
     sanitizedResult[key] = value;
