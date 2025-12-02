@@ -7,7 +7,6 @@ import OpenAI from 'openai';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local file imports
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import type { CreateResponseOptions } from './types/IModelHandler';
 import type {
@@ -17,12 +16,9 @@ import type {
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
+ * usageProvider and toolCallProvider inherit from base class via config.provider.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
-  protected override get usageProvider(): NormalizedUsage['provider'] {
-    return 'dashscope';
-  }
-
   /** Thinking blocks are handled by the base OpenAI handler. */
   /**
    * Override createResponse to preprocess messages for DashScope models
