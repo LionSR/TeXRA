@@ -72,7 +72,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
       kwargs.stream_options = { include_usage: true }; // Assuming OpenRouter passes this through
       const stream = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'openrouter.chat.completions.stream',
           signal,
@@ -112,7 +111,6 @@ export class ModelHandlerOpenRouter extends ModelHandlerOpenAI {
     } else {
       return executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'openrouter.chat.completions.create',
           signal,
