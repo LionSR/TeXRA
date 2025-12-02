@@ -32,7 +32,7 @@ export interface StreamStatusEventShared {
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
-    options?: { updateInstruction?: boolean },
+    options?: { updateInstruction?: boolean; forceRebuild?: boolean },
   ): void;
 }
 
@@ -63,6 +63,10 @@ export function createStreamStatusEvents(
       return;
     }
 
+    // Track if this is actually switching to a different stream
+    const previousStream = state.activeStream;
+    const isStreamSwitch = previousStream !== stream;
+
     await state.streamTabs.ensureStream(stream);
 
     if (session) {
@@ -83,10 +87,27 @@ export function createStreamStatusEvents(
 
     const status: StreamStatusOrReadyType =
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
+
+    if (updater.isAvailable()) {
+      // ORDERING REQUIREMENTS:
+      // 1. ensureStream (line 70) must be awaited BEFORE this block to ensure
+      //    backend state.streamTabs.has(stream) returns true in setStreamStatus.
+      // 2. updateAll sends UPDATE_STREAMS which creates the frontend tab.
+      // 3. setStreamStatus sends UPDATE_STREAM_STATUS to update the existing tab.
+      // Frontend processes messages FIFO, so tab exists before status update.
+      // If setStreamStatus is called before stream is in backend state, it will
+      // trigger another full updateAll, which is inefficient but safe.
+      updater.updateAll(state, shared.streamStatus);
+    }
+
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
-      shared.refreshStreamSurface(stream, { updateInstruction: false });
+      // Only force rebuild when actually switching streams
+      shared.refreshStreamSurface(stream, {
+        updateInstruction: false,
+        forceRebuild: isStreamSwitch,
+      });
       shared.sendInstructionUpdate(stream);
     }
   };

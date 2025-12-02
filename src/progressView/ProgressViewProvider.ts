@@ -46,6 +46,7 @@ export class ProgressViewProvider
   private _webviewReady = false;
   private _pendingUpdate = false;
   private _hasResolved = false;
+  private _lastRenderedStream = ''; // Track last rendered stream for switch detection
   private readonly logger: AgentLogger;
   private readonly pendingApprovalPrompts = new Map<
     string,
@@ -95,7 +96,8 @@ export class ProgressViewProvider
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
         await this.state.load();
-        this.updateWebview();
+        // Force rebuild after state reload to ensure freshly loaded data is rendered
+        this.updateWebview({ forceRebuild: true });
       }),
     );
   }
@@ -122,6 +124,7 @@ export class ProgressViewProvider
     super.cleanupView();
     this._webviewReady = false;
     this._pendingUpdate = false;
+    this._lastRenderedStream = '';
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -133,6 +136,8 @@ export class ProgressViewProvider
 
     this._webviewReady = false;
     this._pendingUpdate = false;
+    // Clear last rendered stream to force rebuild - DOM state is stale after resolve
+    this._lastRenderedStream = '';
     webviewView.webview.options = {
       enableScripts: true,
       enableCommandUris: true,
@@ -167,8 +172,9 @@ export class ProgressViewProvider
 
   /**
    * Update webview content using the new architecture
+   * @param options.forceRebuild - Force full DOM rebuild in frontend
    */
-  public updateWebview(): void {
+  public updateWebview(options?: { forceRebuild?: boolean }): void {
     if (!this._view) return;
 
     if (!this._webviewReady) {
@@ -187,8 +193,20 @@ export class ProgressViewProvider
       theme,
     );
 
-    this.eventHandler.refreshStreamSurface(activeStream || '');
+    // Determine if full DOM rebuild is needed.
+    // forceRebuild has tri-state behavior:
+    // - true: Always rebuild (e.g., after state.load(), data deletion)
+    // - false: Always use incremental update (caller explicitly knows content unchanged)
+    // - undefined: Auto-detect based on stream switch or first render
+    const isStreamSwitch = this._lastRenderedStream !== activeStream;
+    const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
 
+    this.eventHandler.refreshStreamSurface(activeStream || '', {
+      forceRebuild: shouldForceRebuild,
+    });
+
+    // Update tracking after refresh
+    this._lastRenderedStream = activeStream;
     this._pendingUpdate = false;
   }
 
@@ -197,7 +215,8 @@ export class ProgressViewProvider
    */
   public markWebviewReady(): void {
     this._webviewReady = true;
-    this.updateWebview();
+    // Force rebuild on first load
+    this.updateWebview({ forceRebuild: true });
 
     if (this.webviewUpdater.isAvailable()) {
       // Replay pending approval prompts
@@ -265,7 +284,8 @@ export class ProgressViewProvider
   ): Promise<void> {
     // Use the same logic as webview reload to mark all running tasks/groups as ERROR
     await this.resetRunningStreamStatuses(waitingStreams);
-    this.updateWebview();
+    // Force rebuild since we modified task states
+    this.updateWebview({ forceRebuild: true });
   }
 
   /**

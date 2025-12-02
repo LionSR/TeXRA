@@ -1,6 +1,5 @@
-// Local imports - progress view
 // Local imports
-import { ELEMENT_IDS } from '../constants.js';
+import { ELEMENT_IDS, STREAM_STATUS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 import {
@@ -110,6 +109,61 @@ export class StreamTabs {
       }
     }
     return parts.filter(Boolean).join('\n');
+  }
+
+  /**
+   * Update status for a single stream tab.
+   * More efficient than full update() when only status changed.
+   * @param {string} streamName - The stream to update
+   * @param {string} status - New status value
+   * @returns {boolean} True if DOM was updated, false if tab not found
+   */
+  updateStreamStatus(streamName, status) {
+    if (!streamName) {
+      return false;
+    }
+
+    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
+    if (!tabsContainer) {
+      return false;
+    }
+
+    // Find the tab for this stream
+    const tabEl = tabsContainer.querySelector(
+      `.stream-tab .tab[data-stream="${streamName}"]`,
+    );
+    if (!tabEl) {
+      // Tab doesn't exist yet - this is OK, status is stored in state and
+      // will be applied when UPDATE_STREAMS creates the tab
+      console.debug(
+        `[updateStreamStatus] Tab not found for stream: ${streamName}. ` +
+          'Status stored in state; will apply when tab is created.',
+      );
+      return false;
+    }
+
+    const streamTab = tabEl.closest('.stream-tab');
+    if (!streamTab) {
+      return false;
+    }
+
+    const statusEl = streamTab.querySelector('.tab-status');
+    if (!statusEl) {
+      return false;
+    }
+
+    // Remove old status classes dynamically from STREAM_STATUS values
+    // This ensures the class list stays in sync with constants
+    Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
+    // READY means execution completed - display as stopped (no active indicator)
+    const normalizedStatus =
+      status === STREAM_STATUS.READY
+        ? STREAM_STATUS.STOPPED
+        : status || STREAM_STATUS.STOPPED;
+    statusEl.classList.add(normalizedStatus);
+    statusEl.dataset.status =
+      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+    return true;
   }
 
   /**
