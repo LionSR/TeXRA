@@ -967,7 +967,6 @@ export class ModelHandlerOpenAI<
    * Defaults to config.provider. Override only when usage tracking
    * needs a different identifier (e.g., 'kimi' for Moonshot).
    */
-  /** Returns the provider identifier for usage tracking. Subclasses can override. */
   protected get usageProvider(): NormalizedUsage['provider'] {
     return this.config.provider as NormalizedUsage['provider'];
   }

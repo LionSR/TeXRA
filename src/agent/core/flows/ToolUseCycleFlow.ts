@@ -19,7 +19,6 @@ import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 // Internal imports - use core ToolTypes as single source of truth
 import {
   extractToolAttachments,
-  sanitizeToolResultForLog,
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
@@ -673,7 +672,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
       result.lineChanges = trackedEdits.lineChanges;
     }
 
-    const sanitizedOutput = sanitizeToolResultForLog(result);
+    const sanitizedOutput = extractToolAttachments(result).sanitizedResult;
     const editedFiles = trackedEdits.edits.map((entry) => ({
       path: entry.path,
       ok: true,
