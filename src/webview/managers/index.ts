@@ -1,4 +1,4 @@
-export { RecordingManager } from './RecordingManager';
+export { RecordingManager, type RecordingManagerConfig } from '@common/managers';
 export { SettingsManager } from './SettingsManager';
 export { FileManager } from './FileManager';
 export { ExecutionManager } from './ExecutionManager';

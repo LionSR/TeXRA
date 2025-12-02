@@ -21,6 +21,7 @@ import {
 } from '@agent/runtime/ManualRetryController';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
+import { RecordingManager } from '@common/managers';
 import { BaseViewMessageHandler, MessageHandler } from '@common/webview';
 import { PROGRESS_VIEW_COMMANDS } from '@common/webview';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -41,8 +42,6 @@ import {
   buildFileContextFromTaskState,
   polishTextWithAI,
 } from '@utils/text/textEnhancementUtils';
-import { RecordingManager } from '@webview/managers/RecordingManager';
-// @ts-ignore - Import JavaScript module
 
 // Type imports
 import type { ProgressViewProvider } from './ProgressViewProvider';
