@@ -49,7 +49,7 @@ export async function executeRequest<T>(
     options.logger.error(
       `Error in ${options.operation}: ${formatted.message}`,
       {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        messageType: MESSAGE_TYPES.ERROR,
         data: {
           ...formatted,
           attempt: 1,
