@@ -614,8 +614,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
       }
       if (error instanceof Error && error.message?.includes('SAFETY')) {
-        this.logger.debug(
-          `Safety block details: ${JSON.stringify((error as any).response?.promptFeedback)}`,
+        this.logger.warn(
+          `Content blocked by safety filter: ${JSON.stringify((error as any).response?.promptFeedback)}`,
         );
       }
       throw error;
