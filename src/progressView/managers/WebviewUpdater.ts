@@ -12,10 +12,6 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import type {
-  RetryRequestPrompt,
-  ToolEditApprovalPrompt,
-} from '@eventBus/types';
 import type { InstructionUpdate, StreamTabInfo } from '@progressView/types';
 // Internal imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
@@ -25,6 +21,10 @@ import type { TaskGroupUpdatePayload } from '@progressView/managers/TaskGroupMan
 // Internal imports
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { COMMANDS } from '@progressView/modules/constants.js';
+import type {
+  RetryRequestPrompt,
+  ToolEditApprovalPrompt,
+} from '@eventBus/types';
 
 // Logger imports
 // Type imports
