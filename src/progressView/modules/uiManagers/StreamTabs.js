@@ -149,7 +149,15 @@ export class StreamTabs {
     }
 
     // Remove old status classes and add new one
-    statusEl.classList.remove('running', 'stopped', 'error', 'waiting', 'ready');
+    // Must include all STREAM_STATUS values that have CSS classes
+    statusEl.classList.remove(
+      'running',
+      'stopped',
+      'error',
+      'waiting',
+      'ready',
+      'resuming',
+    );
     const normalizedStatus =
       status === STREAM_STATUS.READY ? 'stopped' : status || 'stopped';
     statusEl.classList.add(normalizedStatus);
