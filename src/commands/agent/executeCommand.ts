@@ -7,7 +7,10 @@ import { z, ZodError } from 'zod';
 
 // Local imports
 import { parseAgentConfig } from '@agent/core/AgentConfig';
-import { executeAgent, resumeAgentExecution } from '@agent/runtime/executeAgent';
+import {
+  executeAgent,
+  resumeAgentExecution,
+} from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 import { AgentHistoryManager } from '@historyView/managers';
 import * as logger from '@logger/logUtils';
@@ -71,7 +74,10 @@ export const executeCommand = {
       }
 
       if (resume) {
-        logger.warn(CHANNEL, 'Resume requested without execution ID; starting new run.');
+        logger.warn(
+          CHANNEL,
+          'Resume requested without execution ID; starting new run.',
+        );
       }
 
       const newExecutionId = randomUUID() as ExecutionId;
@@ -80,12 +86,18 @@ export const executeCommand = {
     } catch (error) {
       if (error instanceof ZodError) {
         const detail = error.issues.map((i) => i.message).join('; ');
-        logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, { data: error });
-        void vscode.window.showErrorMessage(`Invalid agent configuration. ${detail}`);
+        logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, {
+          data: error,
+        });
+        void vscode.window.showErrorMessage(
+          `Invalid agent configuration. ${detail}`,
+        );
         return;
       }
 
-      logger.error(CHANNEL, 'Agent execution failed before start.', { data: error });
+      logger.error(CHANNEL, 'Agent execution failed before start.', {
+        data: error,
+      });
       throw error;
     }
   },
