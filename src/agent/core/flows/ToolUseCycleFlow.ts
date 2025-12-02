@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
 import { isRemoteAgent } from '@agent/index';
@@ -216,38 +219,102 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
-/** Keys to copy from ToolResult to payload */
-const TOOL_RESULT_KEYS = [
-  'summary',
-  'output',
-  'error',
-  'base64Image',
-  'userInstruction',
-  'userPatch',
-  'diagnostics',
-  'edits',
-  'files',
-] as const;
+/**
+ * Zod schema for ToolFileAttachment with validation.
+ */
+const ToolFileAttachmentSchema = z.object({
+  path: z.string().min(1),
+  mimeType: z.string().min(1),
+  description: z.string().optional(),
+  base64Data: z.string().optional(),
+  bytes: z.instanceof(Uint8Array).optional(),
+});
+
+/**
+ * Zod schema for LineChanges.
+ */
+const LineChangesSchema = z.object({
+  added: z.number(),
+  removed: z.number(),
+});
+
+/**
+ * Zod schema for EditEntry (file edit with optional line changes).
+ */
+const EditEntrySchema = z.object({
+  path: z.string(),
+  lineChanges: LineChangesSchema.optional(),
+});
+
+/**
+ * Zod schema for ToolResult payload fields.
+ * Only includes fields that should be passed to the model.
+ */
+const ToolResultPayloadSchema = z
+  .object({
+    summary: z.string().optional(),
+    output: z.string().optional(),
+    error: z.string().optional(),
+    base64Image: z.string().optional(),
+    userInstruction: z.string().optional(),
+    userPatch: z.string().optional(),
+    diagnostics: z.unknown().optional(),
+    edits: z.array(EditEntrySchema).optional(),
+    files: z.array(ToolFileAttachmentSchema).optional(),
+    isError: z.boolean().optional(),
+    lineChanges: LineChangesSchema.optional(),
+  })
+  .passthrough();
 
 /**
  * Builds a tool result payload and extracts attachments in one pass.
  * Returns both the sanitized result (safe for any provider) and extracted attachments.
+ *
+ * Uses Zod for type-safe parsing and validation.
  */
 function buildToolResultPayload(
   result: ToolResult,
   fallbackLineChanges?: { added: number; removed: number },
 ): ExtractedToolAttachments {
-  // Build payload from defined keys
+  // Build payload with only defined values using Zod parse + strip undefined
+  const parseResult = ToolResultPayloadSchema.safeParse(result);
+
+  // Build payload from result, stripping undefined values
   const payload: Record<string, unknown> = {};
-  for (const key of TOOL_RESULT_KEYS) {
-    if (result[key] !== undefined) {
-      payload[key] = result[key];
+
+  if (parseResult.success) {
+    const data = parseResult.data;
+    // Copy only defined values (Zod parsed data)
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        payload[key] = value;
+      }
     }
+  } else {
+    // Fallback: manually copy known fields if parsing fails
+    const keys = [
+      'summary',
+      'output',
+      'error',
+      'base64Image',
+      'userInstruction',
+      'userPatch',
+      'diagnostics',
+      'edits',
+      'files',
+    ] as const;
+    for (const key of keys) {
+      if (result[key] !== undefined) {
+        payload[key] = result[key];
+      }
+    }
+    if (result.isError) payload.isError = true;
   }
-  // Handle special cases
-  if (result.isError) payload.isError = true;
+
+  // Apply fallback line changes if not present
   const lineChanges = result.lineChanges ?? fallbackLineChanges;
   if (lineChanges !== undefined) payload.lineChanges = lineChanges;
+  if (result.isError && !payload.isError) payload.isError = true;
 
   // Extract attachments once - returns {sanitizedResult, attachments}
   return extractToolAttachments(payload);
@@ -715,8 +782,9 @@ class ToolUseDispatchNode<C> extends BaseNode<
       sourceDisplay: 'Tool use',
     }));
 
+    // Track edited files separately (not same as attachment files)
     if (editedFiles.length > 0) {
-      sanitizedOutput.files = editedFiles;
+      sanitizedOutput.editedFiles = editedFiles;
     }
 
     return {
