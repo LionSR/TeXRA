@@ -3,6 +3,7 @@ import {
   CrossrefClient,
   SortOrder,
   type QueryWorksParams,
+  type Work,
   type WorkSortOptions,
 } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
@@ -15,8 +16,6 @@ import { defineTool } from '@tools/core/define';
 // Local file imports
 import { CROSSREF_CONSTANTS } from './constants';
 import { waitForRateLimit } from './rateLimiter';
-
-// Local imports - tools
 
 const CrossrefSearchInputSchema = z.strictObject({
   query: z.string(),
@@ -43,14 +42,6 @@ const crossrefClient = new CrossrefClient();
  * See: https://api.crossref.org/swagger-ui/index.html#/Works/get_works
  */
 type ExtendedQueryWorksParams = QueryWorksParams & { filter?: string };
-
-/**
- * Type guard to safely access Crossref work item properties.
- * The library returns untyped objects, so we use this helper to access properties safely.
- */
-function isWorkItem(item: unknown): item is Record<string, unknown> {
-  return typeof item === 'object' && item !== null;
-}
 
 export class CrossrefSearchTool extends defineTool({
   name: 'crossref_search',
@@ -106,35 +97,16 @@ export class CrossrefSearchTool extends defineTool({
     }
 
     const message = response.content.message;
-    const items = Array.isArray(message.items) ? message.items : [];
+    const items: Work[] = message.items;
 
-    const results = items.map((item) => {
-      if (!isWorkItem(item)) {
-        return {
-          title: null,
-          doi: null,
-          publisher: null,
-          type: null,
-          issued: null,
-          url: null,
-        };
-      }
-      const titleValue = item.title;
-      const primaryTitle = Array.isArray(titleValue)
-        ? (titleValue.find((entry) => typeof entry === 'string') ?? null)
-        : typeof titleValue === 'string'
-          ? titleValue
-          : null;
-
-      return {
-        title: primaryTitle,
-        doi: typeof item.DOI === 'string' ? item.DOI : null,
-        publisher: typeof item.publisher === 'string' ? item.publisher : null,
-        type: typeof item.type === 'string' ? item.type : null,
-        issued: item.issued ?? null,
-        url: typeof item.URL === 'string' ? item.URL : null,
-      };
-    });
+    const results = items.map((work) => ({
+      title: work.title[0] ?? null,
+      doi: work.DOI,
+      publisher: work.publisher,
+      type: work.type,
+      issued: work.issued,
+      url: work.resource?.primary?.URL ?? null,
+    }));
 
     const payload = {
       query: trimmedQuery,
