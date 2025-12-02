@@ -72,7 +72,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   describeAttachments,
-  extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -1262,41 +1261,42 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   /**
    * Build a function response part with attachments for a single tool call result.
    * Uses SDK's native FunctionResponsePart for attachments, passed to createPartFromFunctionResponse.
+   *
+   * @param call - The tool call to respond to
+   * @param result - Sanitized result (binary data already stripped by source)
+   * @param attachments - Pre-extracted file attachments
    */
   private async buildFunctionResponsePart(
     call: GoogleToolCall,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    // Only extract attachments if the handler supports them
-    let finalResult = result;
+    // Result is already sanitized by source - use as-is
+    const finalResult = { ...result };
     let attachmentParts: FunctionResponsePart[] = [];
 
-    if (this.canProcessToolResultAttachments) {
-      const { attachments, sanitizedResult } = extractToolAttachments(result);
+    // Only process attachments if the handler supports them
+    if (this.canProcessToolResultAttachments && attachments.length > 0) {
+      (finalResult as Record<string, unknown>).attachmentSummary =
+        `Attachments included in this response:\n${describeAttachments(
+          attachments,
+        ).join('\n')}`;
 
-      if (attachments.length > 0) {
-        (sanitizedResult as Record<string, unknown>).attachmentSummary =
-          `Attachments included in this response:\n${describeAttachments(
-            attachments,
-          ).join('\n')}`;
+      const encodedParts = await Promise.all(
+        attachments.map((attachment) =>
+          this.buildFunctionResponseAttachment(attachment),
+        ),
+      );
 
-        const encodedParts = await Promise.all(
-          attachments.map((attachment) =>
-            this.buildFunctionResponseAttachment(attachment),
-          ),
+      attachmentParts = encodedParts.filter(
+        (part): part is FunctionResponsePart => part !== null,
+      );
+
+      if (attachmentParts.length === 0 && attachments.length > 0) {
+        this.logger.warn(
+          `All attachments for Google function response '${call.name}' failed to encode.`,
         );
-
-        attachmentParts = encodedParts.filter(
-          (part): part is FunctionResponsePart => part !== null,
-        );
-
-        if (attachmentParts.length === 0 && attachments.length > 0) {
-          this.logger.warn(
-            `All attachments for Google function response '${call.name}' failed to encode.`,
-          );
-        }
       }
-      finalResult = sanitizedResult;
     }
 
     // Use SDK's createPartFromFunctionResponse with native attachment support
@@ -1322,6 +1322,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
@@ -1330,7 +1331,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const callPart = this.buildFunctionCallPart(call);
-    const responsePart = await this.buildFunctionResponsePart(call, result);
+    const responsePart = await this.buildFunctionResponsePart(
+      call,
+      result,
+      attachments,
+    );
 
     const callParts: Part[] = [];
     if (text) {
@@ -1357,12 +1362,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * model messages, each becomes a new step requiring its own signature.
    *
    * @param calls - Array of tool calls (should preserve original order from model response)
-   * @param results - Array of results corresponding to each call (same order as calls)
+   * @param results - Array of sanitized results (same order as calls)
+   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
     results: Record<string, unknown>[],
+    attachmentsPerCall: ToolFileAttachment[][],
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
@@ -1372,6 +1379,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (calls.length !== results.length) {
       throw new Error(
         `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
+      );
+    }
+
+    if (calls.length !== attachmentsPerCall.length) {
+      throw new Error(
+        `Mismatched calls and attachments: ${calls.length} calls, ${attachmentsPerCall.length} attachment arrays`,
       );
     }
 
@@ -1396,7 +1409,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Build all function response parts
     const responseParts: Part[] = [];
     for (let i = 0; i < calls.length; i++) {
-      const part = await this.buildFunctionResponsePart(calls[i], results[i]);
+      const part = await this.buildFunctionResponsePart(
+        calls[i],
+        results[i],
+        attachmentsPerCall[i],
+      );
       responseParts.push(part);
     }
 

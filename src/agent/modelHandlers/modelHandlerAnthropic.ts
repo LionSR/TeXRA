@@ -75,7 +75,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import {
   describeAttachments,
-  extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
@@ -1717,6 +1716,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     client: Anthropic | undefined,
     call: AnthropicToolCall,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<MessageParam[]> {
@@ -1750,7 +1750,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
       content,
     };
 
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    // Result is already sanitized by source - use the passed attachments
+    const sanitizedResult = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];

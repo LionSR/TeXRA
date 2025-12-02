@@ -19,6 +19,7 @@ import {
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
+import type { ToolFileAttachment } from '@tools/result';
 import { getConfig } from '@utils/config';
 
 // Local file imports
@@ -605,11 +606,19 @@ export abstract class ModelHandler<
 
   /**
    * Build a provider-specific follow-up message containing a tool result.
+   *
+   * @param client - Provider client (for file uploads if supported)
+   * @param call - Parsed tool call object
+   * @param result - Sanitized result (binary data stripped)
+   * @param attachments - Extracted file attachments (for upload/inline if supported)
+   * @param workspaceState - Optional workspace state
+   * @param text - Optional text to include before tool call
    */
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
