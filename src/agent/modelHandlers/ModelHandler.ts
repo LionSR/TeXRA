@@ -521,13 +521,6 @@ export abstract class ModelHandler<
   abstract computePrice(responseUsage: U): number;
 
   /**
-   * Computes detailed usage metrics from model response.
-   * @returns Provider-specific response usage object
-   * @deprecated Use normalizeUsage() instead for unified usage tracking
-   */
-  abstract computeResponseUsage(responseUsage: U, responseTime: number): R;
-
-  /**
    * Normalizes provider-specific usage data into a unified format.
    * This is the single source of truth for usage statistics.
    *

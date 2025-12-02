@@ -23,7 +23,6 @@ import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
-  ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -960,39 +959,6 @@ export class ModelHandlerOpenAI<
     }
 
     return basePrice;
-  }
-
-  /** Creates usage statistics from OpenAI's response format. */
-  computeResponseUsage(
-    responseUsage: ExtendedCompletionUsage | null,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    // For Google models, create a minimal usage object with zeros
-    if (!responseUsage) {
-      const emptyUsage: ExtendedCompletionUsage = {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        // Note: OpenAI doesn't provide tool_use_tokens, so we don't include it
-        prompt_tokens_details: { cached_tokens: 0 },
-        completion_tokens_details: {
-          reasoning_tokens: 0,
-          accepted_prediction_tokens: undefined,
-          rejected_prediction_tokens: undefined,
-        },
-      };
-      return ResponseUsageFactory.fromOpenAIResponse(
-        emptyUsage,
-        this.computePrice(responseUsage),
-        responseTime,
-      );
-    }
-
-    return ResponseUsageFactory.fromOpenAIResponse(
-      responseUsage,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
   }
 
   /** Returns the provider identifier for usage tracking. Subclasses can override. */
