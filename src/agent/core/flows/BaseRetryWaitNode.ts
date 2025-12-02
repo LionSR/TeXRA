@@ -100,12 +100,6 @@ class RetryWaitNode<
     const streamId = this.accessors.getStreamId(prepRes, this._params);
     const logger = this.accessors.getLogger(prepRes, this._params);
 
-    // Log waiting status
-    logger.info('Waiting for manual retry', {
-      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      data: { error: retryState.lastError },
-    });
-
     // Emit waiting status to UI
     bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
 
@@ -175,9 +169,6 @@ class RetryWaitNode<
 
     if (execRes === 'retry') {
       clearRetryError(retryState);
-      logger.info('Manual retry triggered', {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
       bus.emit('updateStreamStatus', { stream: streamId, status: 'resuming' });
       return FlowTransition.MANUAL_RETRY;
     }
