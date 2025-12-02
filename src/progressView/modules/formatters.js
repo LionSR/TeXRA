@@ -505,10 +505,7 @@ export class LogEntryFormatter {
           'progress status',
         ),
       error: (message) =>
-        this._safeFormat(
-          () => this._formatError(message),
-          'error',
-        ),
+        this._safeFormat(() => this._formatError(message), 'error'),
     };
   }
 
@@ -814,7 +811,10 @@ export class LogEntryFormatter {
       sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
     } else if (outputText) {
       sections.push(
-        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+        buildToolUseSection(
+          'Output:',
+          wrapInPre(outputText, 'tool-output-full'),
+        ),
       );
     }
 

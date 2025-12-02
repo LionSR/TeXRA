@@ -61,8 +61,14 @@ interface CompareMessage extends BaseFileCommandMessage {
 
 // --- Message Schemas ---
 
-const TrimmedString = z.string().transform((s) => s.trim()).pipe(z.string().min(1));
-const PolishFollowUp = z.object({ stream: z.string().min(1), text: TrimmedString });
+const TrimmedString = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(z.string().min(1));
+const PolishFollowUp = z.object({
+  stream: z.string().min(1),
+  text: TrimmedString,
+});
 const InfoMessage = z.object({ text: TrimmedString });
 const ApprovalAction = z.object({
   requestId: z.string().min(1),
@@ -348,12 +354,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handlePolishFollowUp(message: unknown): Promise<void> {
     const parsed = PolishFollowUp.safeParse(message);
     if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid polishFollowUp message', { data: parsed.error });
+      this.logger.debug(this.channel, 'Invalid polishFollowUp message', {
+        data: parsed.error,
+      });
       return;
     }
 
     const { stream, text } = parsed.data;
-    const taskState = this.provider.state.getTaskState(stream as StreamTabId) as TaskState | undefined;
+    const taskState = this.provider.state.getTaskState(
+      stream as StreamTabId,
+    ) as TaskState | undefined;
     if (!taskState) return;
 
     const fileContext = buildFileContextFromTaskState(taskState);
@@ -400,7 +410,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleShowInformationMessage(message: unknown): Promise<void> {
     const parsed = InfoMessage.safeParse(message);
     if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid infoMessage', { data: parsed.error });
+      this.logger.debug(this.channel, 'Invalid infoMessage', {
+        data: parsed.error,
+      });
       return;
     }
     await vscode.window.showInformationMessage(parsed.data.text);
@@ -409,7 +421,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private async handleToolEditApprovalAction(message: unknown): Promise<void> {
     const parsed = ApprovalAction.safeParse(message);
     if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid approvalAction', { data: parsed.error });
+      this.logger.debug(this.channel, 'Invalid approvalAction', {
+        data: parsed.error,
+      });
       return;
     }
     await handleProgressViewToolEditApprovalAction(parsed.data);

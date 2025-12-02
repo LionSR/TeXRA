@@ -49,7 +49,10 @@
 .banner-content--error .error-details {
   margin: 0;
   padding: var(--spacing-small);
-  background-color: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+  background-color: var(
+    --vscode-inputValidation-errorBackground,
+    rgba(255, 0, 0, 0.1)
+  );
   border-radius: var(--radius-small, 4px);
 }
 
