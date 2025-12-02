@@ -73,6 +73,7 @@ import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
   describeAttachments,
   loadAttachmentBuffer,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
@@ -1268,16 +1269,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    */
   private async buildFunctionResponsePart(
     call: GoogleToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    // Result is already sanitized by source - use as-is
-    const finalResult = { ...result };
+    // Result is already sanitized by source - create mutable copy for adding attachmentSummary
+    const finalResult: ToolResultPayload = { ...result };
     let attachmentParts: FunctionResponsePart[] = [];
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      (finalResult as Record<string, unknown>).attachmentSummary =
+      finalResult.attachmentSummary =
         `Attachments included in this response:\n${describeAttachments(
           attachments,
         ).join('\n')}`;
@@ -1321,7 +1322,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -1368,7 +1369,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
-    results: Record<string, unknown>[],
+    results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
     text?: string,
   ): Promise<Content[]> {

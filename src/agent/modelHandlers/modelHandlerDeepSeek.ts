@@ -6,6 +6,7 @@ import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolFileAttachment } from '@tools/result';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 
 // Type imports
 import type {
@@ -163,7 +164,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
   override async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: DeepSeekToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     _attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -198,7 +199,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    */
   async createBatchedToolUseFollowUpMessages(
     calls: DeepSeekToolCall[],
-    results: Record<string, unknown>[],
+    results: ToolResultPayload[],
     _attachmentsPerCall: ToolFileAttachment[][],
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
