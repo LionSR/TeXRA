@@ -1,6 +1,5 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
-import { encode as encodeHtml } from 'he';
 
 // Local imports - logger
 import type { LogMessageData } from '@logger/LogTypes';
@@ -30,7 +29,6 @@ export class ProgressViewSink implements LogEventSink {
       return;
     }
 
-    const processedMessage = encodeHtml(event.message);
     const messageType: MessageType = isValidMessageType(event.messageType)
       ? event.messageType
       : MESSAGE_TYPES.DEFAULT;
@@ -42,7 +40,7 @@ export class ProgressViewSink implements LogEventSink {
     const timestamp = new Date(event.timestamp).getTime();
     const logMessage: LogMessageData = {
       id,
-      text: processedMessage,
+      text: event.message,
       level: event.level as LogMessageData['level'],
       timestamp,
       groupId: event.groupId,
