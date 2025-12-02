@@ -327,7 +327,7 @@ export async function deactivate() {
   await ToolUseSnapshotStore.deleteAll();
 
   // Notify all listeners that extension is deactivating
-  bus.emit('extensionDeactivating', undefined as unknown as void);
+  bus.emit('extensionDeactivating', undefined);
 
   statusBarItem?.dispose();
   disposeDiffRefresh();
