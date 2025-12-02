@@ -157,7 +157,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
 
         const stream = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'kimi.chat.completions.stream',
             signal,
@@ -233,7 +232,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       // Non-streaming request
       return executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'kimi.chat.completions.create',
           signal,

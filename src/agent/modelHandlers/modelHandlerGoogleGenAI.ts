@@ -248,7 +248,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         );
         const uploadResult: File = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: `google.files.upload:${fileName}`,
           },
@@ -393,7 +392,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
         const responseTokenCount = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'google.models.countTokens',
             signal,
@@ -456,7 +454,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'google.chat.sendMessageStream',
             signal,
@@ -588,7 +585,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       };
       const result = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'google.chat.sendMessage',
           signal,
@@ -598,21 +594,19 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
       return result;
     } catch (error) {
-      this.logger.logError(
-        `Error during Google GenAI Chat API call: ${getSdkErrorMessage(error)}`,
-        error,
-        { operation: 'Google GenAI Chat API call' },
-      );
+      // Error logging follows "log at the boundary" principle - the fallback handler
+      // (RetryState.applyFallbackResult) will log the error once. We only add debug
+      // diagnostics here for specific error types that need additional context.
       if (
         error instanceof Error &&
         error.message?.includes('request.contents[0].parts')
       ) {
-        this.logger.error(
+        this.logger.debug(
           'Potential issue with sendMessage parameter structure. Check conversion.',
         );
       }
       if (error instanceof Error && error.message?.includes('SAFETY')) {
-        this.logger.error(
+        this.logger.debug(
           `Safety block details: ${JSON.stringify((error as any).response?.promptFeedback)}`,
         );
       }
