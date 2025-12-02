@@ -16,22 +16,7 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-
-/**
- * Payload for tool edit approval prompt events.
- * Mirrors ToolEditApprovalPrompt from progressView/types.ts but defined here
- * to avoid circular dependencies.
- */
-export interface ToolEditApprovalPromptPayload {
-  requestId: string;
-  path: string;
-  relativePath: string;
-  sourceTool: string;
-  allowBypass: boolean;
-  streamId: string;
-  addedLines: number;
-  removedLines: number;
-}
+import type { ToolEditApprovalPrompt } from '@progressView/types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -115,7 +100,7 @@ export interface ProgressEventPayloads {
   resolveRetryRequest: { streamId: StreamTabId };
 
   // Tool edit approval events
-  showToolEditApprovalPrompt: ToolEditApprovalPromptPayload;
+  showToolEditApprovalPrompt: ToolEditApprovalPrompt;
   resolveToolEditApprovalPrompt: { requestId: string };
   updateToolEditApprovalBypassState: { bypassActive: boolean };
 }

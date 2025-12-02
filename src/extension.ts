@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 // Local imports - core
 import { ToolUseSnapshotStore } from '@agent/toolUse/ToolUseSnapshotStore';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
+import { normalizeRunId } from '@common/constants/runIds';
 import { initializeStateManagers } from '@common/state/stateManager';
 import { SecretManager } from '@frontend/secretManager';
 import { copyDefaultAgents, configureLatexSettings } from '@frontend/setup';
@@ -198,10 +199,10 @@ export async function activate(context: vscode.ExtensionContext) {
       (streamId: string, executionId?: string) => {
         const activeRunId =
           progressViewProviderInstance?.state.getActiveRunId(streamId);
-        const storageKey = activeRunId ?? executionId ?? null;
-        const runOutputs = storageKey
+        const rawKey = activeRunId ?? executionId;
+        const runOutputs = rawKey
           ? progressViewProviderInstance?.state.getRunOutputFiles(streamId, {
-              storageKey: storageKey as any, // StorageKey branded type
+              storageKey: normalizeRunId(rawKey),
             })
           : undefined;
         return { activeRunId, runOutputs };
