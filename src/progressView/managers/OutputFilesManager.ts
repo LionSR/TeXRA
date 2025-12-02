@@ -52,7 +52,7 @@ const OutputFilesRoundMapSchema = z
       if (!round.success) continue;
       const parsed = items
         .map((item) => OutputFileInfoSchema.safeParse(item))
-        .filter((result): result is z.SafeParseSuccess<OutputFileInfo> => result.success)
+        .filter((result): result is { success: true; data: OutputFileInfo } => result.success)
         .map((result) => result.data);
       if (parsed.length > 0) {
         map.set(round.data, parsed);
