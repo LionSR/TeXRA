@@ -10,7 +10,6 @@ import {
   extractEntryIdentifier,
   getAuthorNames,
   normaliseArxivIdentifier,
-  readPrimaryCategory,
 } from '@tools/latex/arxivShared';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
@@ -73,7 +72,7 @@ export class ArxivMetadataTool extends defineTool({
       authors: authorNames,
       journalReference: targetEntry.journalRef ?? null,
       comment: targetEntry.comment ?? null,
-      primaryCategory: readPrimaryCategory(targetEntry.primaryCategory),
+      primaryCategory: targetEntry.primaryCategory ?? null,
       links: targetEntry.links ?? null,
       // Conditionally include abstract field only when requested
       ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
