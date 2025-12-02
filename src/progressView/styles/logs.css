@@ -28,24 +28,17 @@
   overflow: visible;
 }
 
-/* Banner copy button styling */
+/* Banner copy button styling - base in utilities.css */
 .banner-content-copy {
   min-width: 0;
   padding: 0 var(--spacing-tiny);
   opacity: 0;
-  transition: opacity 0.2s ease;
   margin-left: auto;
 }
 
 .details-summary:hover .banner-content-copy,
-.banner-details:focus-within .banner-content-copy,
-.banner-content-copy:focus-visible,
-.banner-content-copy.copy-success {
+.banner-details:focus-within .banner-content-copy {
   opacity: 1;
-}
-
-.banner-content-copy.copy-success {
-  color: var(--vscode-testing-iconPassed);
 }
 
 /* Timestamp color */

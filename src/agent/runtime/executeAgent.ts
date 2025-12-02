@@ -36,11 +36,10 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -498,7 +497,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
           logger.debug(`Task completed successfully`);
           StreamStatusService.set(activeStreamId, STREAM_STATUS.STOPPED);
         } catch (err) {
-          logger.error(`Task failed: ${toErrorMessage(err)}`);
+          // Don't log error here - it will be logged with full details in the outer catch block
           StreamStatusService.set(activeStreamId, STREAM_STATUS.ERROR);
           throw err;
         }
@@ -506,10 +505,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
       { skip: isResume },
     );
   } catch (err) {
-    const formattedError = formatProviderHttpError(err);
     const rawErrorMessage = toErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${formattedError.message}`;
-    const errorData = { ...formattedError, rawMessage: rawErrorMessage };
+    const formattedMessage = getSdkErrorMessage(err);
+    const errorMsg = `Error executing agent ${agentName}: ${formattedMessage}`;
+    const errorContext = { operation: `execute ${agentName}` };
 
     // Check if the error is related to missing API key
     if (
@@ -539,47 +538,31 @@ export async function executeAgentWithLogging<T extends IAgent>(
       vscode.window.showErrorMessage(errorMsg);
     }
 
-    const agentLoggerFallback =
+    // Use the agent's logger if available (has group context), otherwise use main logger
+    const errorLogger =
       executionContext?.logger ??
       contextLogger ??
-      (streamTabId ? new AgentLogger(streamTabId, true) : undefined);
-    if (agentLoggerFallback) {
-      const fallbackGroupId = agent?.getLastRunGroupId();
-      if (fallbackGroupId) {
-        await agentLoggerFallback.withExistingGroup(
-          fallbackGroupId,
-          async () => {
-            agentLoggerFallback.error(errorMsg, {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-              data: errorData,
-            });
-          },
-          { label: `Error: ${agentName}` },
-        );
-      } else {
-        await agentLoggerFallback.withScope(
-          `Error: ${agentName}`,
-          async () => {
-            agentLoggerFallback.error(errorMsg, {
-              messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-              data: errorData,
-            });
-          },
-          { errorStatus: 'error' },
-        );
-      }
-    }
+      (streamTabId ? new AgentLogger(streamTabId, true) : undefined) ??
+      logger;
 
-    await logger.withScope(
-      `Error: ${agentName}`,
-      async () => {
-        logger.error(errorMsg, {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: errorData,
-        });
-      },
-      { errorStatus: 'error' },
-    );
+    const fallbackGroupId = agent?.getLastRunGroupId();
+    if (fallbackGroupId && errorLogger !== logger) {
+      await errorLogger.withExistingGroup(
+        fallbackGroupId,
+        async () => {
+          errorLogger.logError(errorMsg, err, errorContext);
+        },
+        { label: `Error: ${agentName}` },
+      );
+    } else {
+      await errorLogger.withScope(
+        `Error: ${agentName}`,
+        async () => {
+          errorLogger.logError(errorMsg, err, errorContext);
+        },
+        { errorStatus: 'error' },
+      );
+    }
     throw new Error(errorMsg);
   }
 }

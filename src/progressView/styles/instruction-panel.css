@@ -40,21 +40,13 @@
   gap: var(--spacing-small);
 }
 
+/* Copy button - transition/success handled in utilities.css */
 .instruction-panel__copy {
   opacity: 0.65;
-  transition:
-    opacity 0.2s ease,
-    color 0.2s ease;
 }
 
-.instruction-panel:hover .instruction-panel__copy,
-.instruction-panel__copy:focus-visible,
-.instruction-panel__copy.copy-success {
+.instruction-panel:hover .instruction-panel__copy {
   opacity: 1;
-}
-
-.instruction-panel__copy.copy-success {
-  color: var(--vscode-testing-iconPassed, #2ea043);
 }
 
 .instruction-panel__body {

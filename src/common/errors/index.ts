@@ -11,6 +11,9 @@ export {
 } from './errorHandlingUtils';
 export {
   ProviderHttpErrorDetails,
+  ErrorLogContext,
+  ErrorLogData,
   formatProviderHttpError,
   getSdkErrorMessage,
+  buildErrorLogData,
 } from './sdkErrorUtils';

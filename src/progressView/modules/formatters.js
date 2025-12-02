@@ -294,6 +294,58 @@ const normalizeToolUseLog = (structured) => {
   };
 };
 
+// =============================================================================
+// Helper Functions - DRY patterns extracted from formatters
+// =============================================================================
+
+/**
+ * Extract and trim content from normalized payload
+ * @param {Object} normalizedPayload - The normalized payload object
+ * @returns {{decoded: string, trimmed: string, isEmpty: boolean}}
+ */
+const extractTrimmedContent = (normalizedPayload) => {
+  const decoded = normalizedPayload?.decodedText || '';
+  const trimmed = decoded.trim();
+  return { decoded, trimmed, isEmpty: !trimmed };
+};
+
+/**
+ * Build a tool-use section HTML block
+ * @param {string} label - The section label (e.g., "Input:", "Output:")
+ * @param {string} content - The HTML content for the section
+ * @returns {string} HTML string for the section
+ */
+const buildToolUseSection = (label, content) => `
+  <div class="tool-use-section">
+    <div class="tool-use-subsection">
+      <span class="tool-use-sublabel">${label}</span>
+      ${content}
+    </div>
+  </div>
+`;
+
+/**
+ * Wrap text in a pre element with optional class
+ * @param {string} text - Text to wrap (will be HTML encoded)
+ * @param {string} [className] - Optional CSS class
+ * @returns {string} HTML string
+ */
+const wrapInPre = (text, className = '') => {
+  const classAttr = className ? ` class="${className}"` : '';
+  return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
+};
+
+/**
+ * Set common dataset attributes on an element
+ * @param {HTMLElement} element - The element to modify
+ * @param {{logId?: string, groupId?: string, timestamp?: string}} data - Dataset values
+ */
+const setElementDataset = (element, { logId, groupId, timestamp }) => {
+  if (logId) element.dataset.logId = logId;
+  if (groupId) element.dataset.groupId = groupId;
+  if (timestamp) element.dataset.fullTimestamp = timestamp;
+};
+
 /**
  * Represents different task group hierarchy levels with associated behaviors
  */
@@ -451,6 +503,11 @@ export class LogEntryFormatter {
         this._safeFormat(
           () => this._formatProgressStatus(message),
           'progress status',
+        ),
+      error: (message) =>
+        this._safeFormat(
+          () => this._formatError(message),
+          'error',
         ),
     };
   }
@@ -656,10 +713,9 @@ export class LogEntryFormatter {
     groupId,
     timestamp,
   ) {
-    const decodedContent = normalizedPayload?.decodedText || '';
-    const trimmedContent = decodedContent.trim();
-
-    if (!trimmedContent) return null;
+    const { trimmed: trimmedContent, isEmpty } =
+      extractTrimmedContent(normalizedPayload);
+    if (isEmpty) return null;
 
     const parsedMarkdown = this._processMarkdownContent(trimmedContent);
     const isThinking = contentType.includes('Thinking');
@@ -690,9 +746,7 @@ export class LogEntryFormatter {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
 
-    if (logId) element.dataset.logId = logId;
-    if (groupId) element.dataset.groupId = groupId;
-    if (timestamp) element.dataset.fullTimestamp = timestamp;
+    setElementDataset(element, { logId, groupId, timestamp });
 
     const headerLabel = element.querySelector('.tool-use-title');
     const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
@@ -742,55 +796,32 @@ export class LogEntryFormatter {
 
     if (input !== undefined) {
       const inputValue = stringifyForDisplay(input);
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Input:</span>
-            <pre>${encodeHtml(inputValue)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
     }
 
     if (files && files.length > 0) {
       const renderData = buildFileListRender(files);
       if (renderData?.items) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Edited files:</span>
-              <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
-              <ul class="detail-list">${renderData.items}</ul>
-            </div>
-          </div>
-        `);
+        const fileContent = `
+          <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
+          <ul class="detail-list">${renderData.items}</ul>
+        `;
+        sections.push(buildToolUseSection('Edited files:', fileContent));
       }
     }
 
     if (errorText) {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Error:</span>
-            <pre>${encodeHtml(errorText)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
     } else if (outputText) {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Output:</span>
-            <pre class="tool-output-full">${encodeHtml(outputText)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(
+        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      );
     }
 
     const fallbackYaml = stringifyForDisplay(parsed);
     contentElem.innerHTML =
       sections.length === 0
-        ? `<pre>${encodeHtml(fallbackYaml || '')}</pre>`
+        ? wrapInPre(fallbackYaml || '')
         : sections.join('<hr class="tool-use-separator">');
 
     return element;
@@ -869,10 +900,7 @@ export class LogEntryFormatter {
     if (!element) return null;
 
     this._applyOpenState(element, Boolean(open));
-
-    if (logId) element.dataset.logId = logId;
-    if (groupId) element.dataset.groupId = groupId;
-    if (timestamp) element.dataset.fullTimestamp = timestamp;
+    setElementDataset(element, { logId, groupId, timestamp });
 
     const iconElem = element.querySelector('.icon');
     if (iconElem) {
@@ -1242,9 +1270,11 @@ export class LogEntryFormatter {
     const emoji = EMOJI_BY_LEVEL[severity] || '•';
 
     const container = document.createElement('div');
-    container.dataset.fullTimestamp = fullTimestamp;
-    if (message.id) container.dataset.logId = message.id;
-    if (message.groupId) container.dataset.groupId = message.groupId;
+    setElementDataset(container, {
+      logId: message.id,
+      groupId: message.groupId,
+      timestamp: fullTimestamp,
+    });
 
     const summaryLine = document.createElement('div');
     summaryLine.className = 'log-line';
@@ -1259,6 +1289,90 @@ export class LogEntryFormatter {
     }
 
     return container;
+  }
+
+  /**
+   * Format an error message as a foldable banner
+   * @private
+   * @param {Object} message - The message object
+   * @returns {HTMLElement|null} DOM element for the error banner
+   */
+  _formatError(message) {
+    const normalizedPayload = message.normalizedPayload || {};
+    const date = new Date(message.timestamp ?? Date.now());
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
+
+    const summaryText =
+      (normalizedPayload.decodedText || message.text || '').trim() ||
+      'Error occurred';
+
+    // Build error details from structured data - order defines display priority
+    const structured = normalizedPayload.structured || {};
+    const fieldConfig = [
+      { key: 'message', skip: (v) => v === summaryText },
+      { key: 'operation' },
+      { key: 'model' },
+      { key: 'provider' },
+      { key: 'statusCode' },
+      { key: 'retryable' },
+      { key: 'rawMessage' },
+      { key: 'requestId' },
+    ];
+
+    const detailLines = fieldConfig
+      .filter(({ key, skip }) => {
+        const value = structured[key];
+        return value !== undefined && value !== null && (!skip || !skip(value));
+      })
+      .map(({ key }) => `${key}: ${structured[key]}`);
+
+    const detailText = detailLines.join('\n');
+
+    const bannerEntry = this._createBannerEntry({
+      logId: message.id,
+      groupId: message.groupId,
+      timestamp: fullTimestamp,
+      iconClass: 'codicon-error',
+      labelText: `[${timeDisplay}] ${summaryText}`,
+      copyTitle: 'Copy error details',
+      contentClass: 'banner-content--error',
+      open: false,
+    });
+
+    if (!bannerEntry || !bannerEntry.element) {
+      return null;
+    }
+
+    // Add error class to the banner
+    bannerEntry.element.classList.add('banner-details--error');
+
+    // If there are no details, hide the copy button and make it non-expandable
+    if (!detailText) {
+      if (bannerEntry.copyButton) {
+        bannerEntry.copyButton.style.display = 'none';
+      }
+      // Remove toggle icon for non-expandable entries
+      const toggleIcon = bannerEntry.element.querySelector('.toggle-icon');
+      if (toggleIcon) {
+        toggleIcon.style.visibility = 'hidden';
+      }
+    }
+
+    if (bannerEntry.contentElem) {
+      bannerEntry.contentElem.dataset.rawContent = detailText || summaryText;
+      if (detailText) {
+        bannerEntry.contentElem.innerHTML = `<pre class="error-details">${encodeHtml(detailText)}</pre>`;
+      }
+    }
+
+    // Add timestamp tooltip to the label
+    const labelElem = bannerEntry.element.querySelector('.label');
+    if (labelElem) {
+      labelElem.title = tooltipTimestamp;
+    }
+
+    return bannerEntry.element;
   }
 
   _formatUserMessage(normalizedPayload, logId, timestamp) {

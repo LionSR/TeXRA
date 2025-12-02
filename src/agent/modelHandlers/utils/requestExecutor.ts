@@ -5,11 +5,6 @@
  * These utilities provide consistent error logging and abort handling for model requests.
  */
 
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
@@ -45,21 +40,10 @@ export async function executeRequest<T>(
   try {
     return await request();
   } catch (error) {
-    const formatted = formatProviderHttpError(error);
-    options.logger.error(
-      `Error in ${options.operation}: ${formatted.message}`,
-      {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: {
-          ...formatted,
-          attempt: 1,
-          maxAttempts: 1,
-          model: options.model,
-          operation: options.operation,
-          error: getSdkErrorMessage(error),
-        },
-      },
-    );
+    options.logger.logError(`Error in ${options.operation}`, error, {
+      operation: options.operation,
+      model: options.model,
+    });
     throw error;
   }
 }

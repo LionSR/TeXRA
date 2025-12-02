@@ -1,0 +1,80 @@
+/**
+ * Utility classes for ProgressView
+ * Only structural utilities that can't be expressed with CSS variables
+ *
+ * Spacing, colors, and sizes should use CSS variables from common.css:
+ *   --spacing-tiny, --spacing-small, --spacing-medium, --spacing-large, --spacing-xlarge
+ *   --font-size-sm, --font-size-lg
+ *   --vscode-* color variables
+ */
+
+/* ==========================================================================
+   Layout Utilities - structural only
+   ========================================================================== */
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+}
+
+.flex-wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* ==========================================================================
+   Text Utilities - structural only
+   ========================================================================== */
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pre-wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ==========================================================================
+   Visibility
+   ========================================================================== */
+
+.hidden {
+  display: none;
+}
+
+.hidden.is-visible {
+  display: flex;
+}
+
+/* ==========================================================================
+   Interactive - Copy button base behavior
+   ========================================================================== */
+
+.banner-content-copy,
+.instruction-panel__copy {
+  transition: opacity 0.2s ease;
+}
+
+.banner-content-copy:focus-visible,
+.banner-content-copy.copy-success,
+.instruction-panel__copy:focus-visible,
+.instruction-panel__copy.copy-success {
+  opacity: 1;
+}
+
+.banner-content-copy.copy-success,
+.instruction-panel__copy.copy-success {
+  color: var(--vscode-testing-iconPassed);
+}

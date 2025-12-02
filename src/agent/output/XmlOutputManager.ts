@@ -11,7 +11,6 @@ import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   applyReplacements,
   getReplacementsByCategory,
@@ -64,37 +63,21 @@ export class XmlOutputManager {
     );
 
     if (result.content) {
-      switch (result.method) {
-        case 'named':
-          this.logger.info(`Recovered ${documentTag} from named document tag`, {
-            messageType: MESSAGE_TYPES.INTERNAL,
-          });
-          break;
-        case 'simple':
-          this.logger.info(
-            `Successfully extracted ${documentTag} using fallback method`,
-            { messageType: MESSAGE_TYPES.INTERNAL },
-          );
-          break;
-        case 'markdown':
-          this.logger.info(
-            `Recovered ${documentTag} from markdown code block`,
-            { messageType: MESSAGE_TYPES.INTERNAL },
-          );
-          break;
-        case 'latex':
-          this.logger.info(
-            `Recovered ${documentTag} from \\documentclass block`,
-            { messageType: MESSAGE_TYPES.INTERNAL },
-          );
-          break;
+      const methodMessages: Record<string, string> = {
+        named: `Recovered ${documentTag} from named document tag`,
+        simple: `Successfully extracted ${documentTag} using fallback method`,
+        markdown: `Recovered ${documentTag} from markdown code block`,
+        latex: `Recovered ${documentTag} from \\documentclass block`,
+      };
+      const message = methodMessages[result.method];
+      if (message) {
+        this.logger.logInternal(message);
       }
       return result.content;
     }
 
-    this.logger.debug(
+    this.logger.debugInternal(
       `No ${documentTag} found in output file using fallback method`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
     );
     return null;
   }
@@ -106,16 +89,14 @@ export class XmlOutputManager {
     const result = xmlUtils.extractDocuments(outputContent, documentTag);
 
     if (result.documents) {
-      this.logger.info(
+      this.logger.logInternal(
         `Successfully extracted multiple ${documentTag} using fallback method`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       return result.documents;
     }
 
-    this.logger.debug(
+    this.logger.debugInternal(
       `No ${documentTag} found in output file using fallback method`,
-      { messageType: MESSAGE_TYPES.INTERNAL },
     );
     return null;
   }
@@ -206,9 +187,8 @@ export class XmlOutputManager {
       if (documents) {
         return this.processMultipleLatexDocuments(documents, outputLocation);
       }
-      this.logger.debug(
+      this.logger.debugInternal(
         `No ${documentTag} found in parsed XML, attempting fallback extraction...`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,
@@ -222,9 +202,8 @@ export class XmlOutputManager {
       }
       return [];
     } catch (err) {
-      this.logger.debug(
+      this.logger.debugInternal(
         `Failed to parse XML content: ${toErrorMessage(err)}, attempting fallback extraction...`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
       );
       const fallbackDocuments = this.extractMultipleDocumentsbyRegex(
         outputContent,
