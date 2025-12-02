@@ -2,12 +2,17 @@
 import * as vscode from 'vscode';
 
 // Internal imports
+import type { OutputFileInfo } from '@agent/output/types';
+import type { IRunStorageService } from '@agent/runtime/RunStorageService';
+import { setRunStorageService } from '@agent/runtime/RunStorageService';
+import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
 import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ToolEditApprovalPrompt } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
@@ -18,16 +23,18 @@ import { ProgressViewState } from './state/ProgressViewState';
 // Types
 
 // Type imports
-import type { ToolEditApprovalPrompt } from './types';
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
  * This class now focuses on orchestration and delegation to focused managers,
  * following the design principles from AGENTS.md.
+ *
+ * Implements IRunStorageService to provide run state access to the agent runtime
+ * without creating circular dependencies.
  */
 export class ProgressViewProvider
   extends BaseWebviewProvider
-  implements vscode.WebviewViewProvider
+  implements vscode.WebviewViewProvider, IRunStorageService
 {
   private static _instance: ProgressViewProvider | undefined;
 
@@ -89,8 +96,9 @@ export class ProgressViewProvider
     this.contentProvider = new ProgressViewContentProvider(context);
     this.messageHandler = new ProgressViewMessageHandler(this, context);
 
-    // Set instance
+    // Set instance and register as run storage service
     ProgressViewProvider._instance = this;
+    setRunStorageService(this);
 
     // Listen for workspace folder changes
     this._disposables.push(
@@ -294,6 +302,29 @@ export class ProgressViewProvider
   public isViewVisible(): boolean {
     return this._view?.visible ?? false;
   }
+
+  // ===== IRunStorageService implementation =====
+
+  /**
+   * Get the active run ID for a stream.
+   * Implements IRunStorageService.getActiveRunId
+   */
+  public getActiveRunId(stream: StreamTabId): StorageKey | null {
+    return this.state.getActiveRunId(stream);
+  }
+
+  /**
+   * Get output files for a specific run within a stream.
+   * Implements IRunStorageService.getRunOutputFiles
+   */
+  public getRunOutputFiles(
+    stream: StreamTabId,
+    options: { storageKey: StorageKey },
+  ): Map<number, OutputFileInfo[]> | undefined {
+    return this.state.getRunOutputFiles(stream, options);
+  }
+
+  // ===== End IRunStorageService implementation =====
 
   /**
    * Reset running stream statuses when webview reloads
