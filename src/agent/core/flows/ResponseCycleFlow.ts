@@ -26,7 +26,10 @@ import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
 // Local imports - logging
 // Internal imports
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  extractErrorContext,
+} from '@common/errors/sdkErrorUtils';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import replacementEngine from '@replacement/engine';
 import type { AgentFileLocation } from '@utils/files';
@@ -332,10 +335,13 @@ class ResponseModelInvocationNode<C> extends Node<
     error: Error,
   ): Promise<InvocationExecResult> {
     const formatted = formatProviderHttpError(error);
+    // Extract enriched context attached by requestExecutor (operation name, model)
+    const context = extractErrorContext(error);
     const fallbackResult = determineFallbackAction(
       formatted.retryable,
       formatted.message,
       formatted.statusCode,
+      context,
     );
     return { kind: 'fallback', result: fallbackResult };
   }

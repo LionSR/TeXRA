@@ -25,7 +25,10 @@ import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteracti
 import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
 import { toolResult } from '@agent/core/ToolTypes';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import {
+  formatProviderHttpError,
+  extractErrorContext,
+} from '@common/errors/sdkErrorUtils';
 
 // Local imports - logging
 import { AgentLogger } from '@logger/AgentLogger';
@@ -358,10 +361,13 @@ class ToolUseCallNode<C> extends Node<
     error: Error,
   ): Promise<ToolUseCallResult> {
     const formatted = formatProviderHttpError(error);
+    // Extract enriched context attached by requestExecutor (operation name, model)
+    const context = extractErrorContext(error);
     const fallbackResult = determineFallbackAction(
       formatted.retryable,
       formatted.message,
       formatted.statusCode,
+      context,
     );
     return { kind: 'fallback', result: fallbackResult };
   }
