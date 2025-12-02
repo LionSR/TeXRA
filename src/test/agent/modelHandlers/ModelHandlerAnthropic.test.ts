@@ -288,6 +288,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       undefined,
       providerCall,
       { output: 'ok' },
+      [],
     );
 
     const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
@@ -328,6 +329,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       undefined,
       providerCall,
       { output: 'ok' },
+      [],
     );
 
     const toolResultBlock = (resultMsg.content as ContentBlockParam[])[0];
