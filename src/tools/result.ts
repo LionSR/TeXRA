@@ -33,7 +33,6 @@ export interface ToolResult {
   output?: string;
   summary?: string;
   error?: string;
-  base64Image?: string;
   userInstruction?: string;
   userPatch?: string;
   lineChanges?: { added: number; removed: number };
