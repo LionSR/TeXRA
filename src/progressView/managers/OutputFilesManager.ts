@@ -80,63 +80,44 @@ function isLegacyFormat(record: Record<string, unknown>): boolean {
   );
 }
 
-/** Schema for missing outputs with legacy format support */
-const MissingOutputsDataSchema = z.unknown().transform(
-  (data): Map<string, Map<number, string[]>> => {
+/**
+ * Factory for creating schemas that handle both legacy and modern run map formats.
+ * Legacy: { roundNum: items[] } -> wrapped in default run ID
+ * Modern: { runId: { roundNum: items[] } }
+ */
+function createLegacyAwareRunMapSchema<T>(
+  roundMapSchema: z.ZodType<Map<number, T[]>>,
+) {
+  return z.unknown().transform((data): Map<string, Map<number, T[]>> => {
     if (!data || typeof data !== 'object') {
       return new Map();
     }
 
     const record = data as Record<string, unknown>;
     if (isLegacyFormat(record)) {
-      // Legacy: { roundNum: paths[] } -> wrap in default run ID
-      const rounds = MissingOutputRoundMapSchema.parse(record);
+      const rounds = roundMapSchema.parse(record);
       return rounds.size > 0
         ? new Map([[normalizeRunId(null), rounds]])
         : new Map();
     }
 
-    // Modern: { runId: { roundNum: paths[] } }
-    const runMap = new Map<string, Map<number, string[]>>();
+    const runMap = new Map<string, Map<number, T[]>>();
     for (const [runId, value] of Object.entries(record)) {
       if (!value || typeof value !== 'object') continue;
-      const rounds = MissingOutputRoundMapSchema.parse(value);
+      const rounds = roundMapSchema.parse(value);
       if (rounds.size > 0) {
         runMap.set(runId, rounds);
       }
     }
     return runMap;
-  },
-);
+  });
+}
+
+/** Schema for missing outputs with legacy format support */
+const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(MissingOutputRoundMapSchema);
 
 /** Schema for output files with legacy format support */
-const OutputFilesDataSchema = z.unknown().transform(
-  (data): Map<string, Map<number, OutputFileInfo[]>> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const record = data as Record<string, unknown>;
-    if (isLegacyFormat(record)) {
-      // Legacy: { roundNum: files[] } -> wrap in default run ID
-      const rounds = OutputFilesRoundMapSchema.parse(record);
-      return rounds.size > 0
-        ? new Map([[normalizeRunId(null), rounds]])
-        : new Map();
-    }
-
-    // Modern: { runId: { roundNum: files[] } }
-    const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
-    for (const [runId, value] of Object.entries(record)) {
-      if (!value || typeof value !== 'object') continue;
-      const rounds = OutputFilesRoundMapSchema.parse(value);
-      if (rounds.size > 0) {
-        runMap.set(runId, rounds);
-      }
-    }
-    return runMap;
-  },
-);
+const OutputFilesDataSchema = createLegacyAwareRunMapSchema(OutputFilesRoundMapSchema);
 
 /**
  * Manages output files collection with persistence and file existence validation.

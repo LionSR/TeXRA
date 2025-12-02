@@ -48,8 +48,8 @@ export class CrossrefDoiTool extends defineTool({
 
     const metadata = {
       doi: work.DOI,
-      title: work.title[0] ?? null,
-      titles: work.title,
+      title: work.title?.[0] ?? null,
+      titles: work.title ?? [],
       publisher: work.publisher,
       type: work.type,
       abstract: work.abstract ?? null,
