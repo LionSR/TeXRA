@@ -144,6 +144,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
       [COMMANDS.UPDATE_STREAM_STATUS]: (m) => this.handleUpdateStreamStatus(m),
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
+      [COMMANDS.UPDATE_RUN_USAGE]: (m) => this.handleUpdateRunUsage(m),
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
         this.handleUpdateMissingOutputs(m),
@@ -579,6 +580,25 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     Object.entries(usageByRun).forEach(([runId, usage]) => {
       state.setRunUsage(targetStream, runId, usage);
     });
+    this._refreshUsageForActiveRun();
+  }
+
+  /**
+   * Handle incremental usage update for a single run.
+   * More efficient than handleUpdateUsage during streaming.
+   */
+  handleUpdateRunUsage(message) {
+    if (message.stream && message.stream !== state.activeStream) {
+      return;
+    }
+
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream || !message.runId) {
+      return;
+    }
+
+    // Update only the specific run's usage without clearing others
+    state.setRunUsage(targetStream, message.runId, message.usage);
     this._refreshUsageForActiveRun();
   }
 

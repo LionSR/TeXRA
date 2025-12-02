@@ -197,7 +197,8 @@ export class ProgressEventHandler {
   /**
    * Refresh all webview surface data for a specific stream.
    * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
-   *   Required when switching streams or after data deletion.
+   *   Required when switching streams or after data deletion. Defaults to false
+   *   for incremental updates.
    */
   public refreshStreamSurface(
     stream: string,
@@ -205,7 +206,7 @@ export class ProgressEventHandler {
   ): void {
     if (!this.webviewUpdater.isAvailable()) return;
 
-    const { updateInstruction = true, forceRebuild } = options;
+    const { updateInstruction = true, forceRebuild = false } = options;
 
     if (!stream) {
       this.webviewUpdater.updateLogContent('', [], []);
