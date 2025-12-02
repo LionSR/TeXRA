@@ -10,8 +10,8 @@
  * - This module tracks the last error for UI display and caller reporting
  */
 
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { ErrorLogContext } from '@common/errors/sdkErrorUtils';
+import type { AgentLogger } from '@logger/AgentLogger';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
@@ -192,7 +192,10 @@ function formatErrorMessage(
     : `${operationName} failed`;
 
   // Add operation context if available and different from operationName
-  if (operation && !operationName.toLowerCase().includes(operation.toLowerCase())) {
+  if (
+    operation &&
+    !operationName.toLowerCase().includes(operation.toLowerCase())
+  ) {
     return `${prefix} [${operation}]: ${error.message}`;
   }
 
