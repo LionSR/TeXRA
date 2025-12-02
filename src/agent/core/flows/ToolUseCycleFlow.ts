@@ -15,7 +15,11 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
-import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import {
+  extractToolAttachments,
+  sanitizeToolResultForLog,
+  type ExtractedToolAttachments,
+} from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
@@ -212,27 +216,41 @@ class ToolUsePrepNode<C> extends BaseNode<
   }
 }
 
+/** Keys to copy from ToolResult to payload */
+const TOOL_RESULT_KEYS = [
+  'summary',
+  'output',
+  'error',
+  'base64Image',
+  'userInstruction',
+  'userPatch',
+  'diagnostics',
+  'edits',
+  'files',
+] as const;
+
+/**
+ * Builds a tool result payload and extracts attachments in one pass.
+ * Returns both the sanitized result (safe for any provider) and extracted attachments.
+ */
 function buildToolResultPayload(
   result: ToolResult,
   fallbackLineChanges?: { added: number; removed: number },
-): Record<string, unknown> {
+): ExtractedToolAttachments {
+  // Build payload from defined keys
   const payload: Record<string, unknown> = {};
-  if (result.summary !== undefined) payload.summary = result.summary;
-  if (result.output !== undefined) payload.output = result.output;
-  if (result.error !== undefined) payload.error = result.error;
-  if (result.base64Image !== undefined)
-    payload.base64Image = result.base64Image;
-  if (result.userInstruction !== undefined)
-    payload.userInstruction = result.userInstruction;
-  if (result.userPatch !== undefined) payload.userPatch = result.userPatch;
+  for (const key of TOOL_RESULT_KEYS) {
+    if (result[key] !== undefined) {
+      payload[key] = result[key];
+    }
+  }
+  // Handle special cases
   if (result.isError) payload.isError = true;
-  if (result.diagnostics !== undefined)
-    payload.diagnostics = result.diagnostics;
   const lineChanges = result.lineChanges ?? fallbackLineChanges;
   if (lineChanges !== undefined) payload.lineChanges = lineChanges;
-  if (result.edits !== undefined) payload.edits = result.edits;
-  if (result.files !== undefined) payload.files = result.files;
-  return payload;
+
+  // Extract attachments once - returns {sanitizedResult, attachments}
+  return extractToolAttachments(payload);
 }
 
 /**
@@ -791,6 +809,11 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
 
     // Step 2: Create follow-up messages
+    // Extract attachments once per result (single extraction point)
+    const extracted = execResults.map((er) =>
+      buildToolResultPayload(er.result, er.lineChanges),
+    );
+
     // For Google handlers with multiple parallel calls, use batched method
     // to properly preserve thought signatures (required for Gemini 3 models).
     // For DeepSeek thinking mode, batching ensures reasoning_content is
@@ -803,24 +826,24 @@ class ToolUseDispatchNode<C> extends BaseNode<
 
     if (shouldBatch) {
       // Batched: All function calls in one model message, all responses in one user message
-      const resultPayloads = execResults.map((er) =>
-        buildToolResultPayload(er.result, er.lineChanges),
-      );
       const followUpMsgs = await options.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
-        resultPayloads,
+        extracted.map((e) => e.sanitizedResult),
+        extracted.map((e) => e.attachments),
         assistantText.length > 0 ? assistantText : undefined,
       );
       state.messages.push(...followUpMsgs);
     } else {
       // Individual: Process each call separately (original behavior)
       for (const [index, execResult] of execResults.entries()) {
+        const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
             execResult.call,
-            buildToolResultPayload(execResult.result, execResult.lineChanges),
+            sanitizedResult,
+            attachments,
             store.workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );

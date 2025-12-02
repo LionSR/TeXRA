@@ -45,7 +45,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import {
   describeAttachments,
-  extractToolAttachments,
   loadAttachmentBuffer,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
@@ -1314,6 +1313,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
@@ -1329,7 +1329,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       arguments: call.raw.arguments,
     };
 
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    // Result is already sanitized by source - use as-is
+    const sanitizedResult = { ...result };
     const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];

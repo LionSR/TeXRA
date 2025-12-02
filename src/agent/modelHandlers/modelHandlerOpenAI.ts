@@ -39,6 +39,7 @@ import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
+import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -52,10 +53,7 @@ import {
   NormalizeOpenAIMessageContentOptions,
 } from './openAIMessageUtils';
 import { toOpenAITools } from './toolConversion';
-import {
-  describeAttachments,
-  extractToolAttachments,
-} from './utils/toolAttachmentUtils';
+import { describeAttachments } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
 import type {
@@ -1323,6 +1321,7 @@ export class ModelHandlerOpenAI<
     _client: OpenAI | undefined,
     call: TCall,
     result: Record<string, unknown>,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
@@ -1335,17 +1334,12 @@ export class ModelHandlerOpenAI<
       callMsg.content = this.formatAssistantContent(text);
     }
 
-    // Only extract attachments if the handler supports them
-    let finalResult = result;
-    if (this.canProcessToolResultAttachments) {
-      const { attachments, sanitizedResult } = extractToolAttachments(result);
-      if (attachments.length > 0) {
-        (sanitizedResult as Record<string, unknown>).attachmentSummary =
-          `Attachments available:\n${describeAttachments(attachments).join(
-            '\n',
-          )}\nUse the read_file tool to read them.`;
-      }
-      finalResult = sanitizedResult;
+    // Add attachment summary if handler supports them and attachments exist
+    const finalResult = { ...result };
+    if (this.canProcessToolResultAttachments && attachments.length > 0) {
+      finalResult.attachmentSummary = `Attachments available:\n${describeAttachments(
+        attachments,
+      ).join('\n')}\nUse the read_file tool to read them.`;
     }
 
     const resultMsg: ChatCompletionToolMessageParam = {
