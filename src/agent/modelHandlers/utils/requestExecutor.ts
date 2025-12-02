@@ -2,18 +2,19 @@
  * Request execution utilities for model handlers.
  *
  * NOTE: Retry logic is handled at the flow level (ResponseCycleFlow/ToolUseCycleFlow).
- * These utilities provide consistent error logging and abort handling for model requests.
+ * Error logging follows the "log at the boundary" principle:
+ * - Errors are enriched with operation context here (not logged)
+ * - The final fallback handler (RetryState.applyFallbackResult) logs once with full context
+ * - This prevents duplicate log entries while preserving where errors originated
  */
 
-import type { AgentLogger } from '@logger/AgentLogger';
+import { enrichError } from '@common/errors/sdkErrorUtils';
 
 /**
  * Options for request execution.
  */
 export interface RequestExecutionOptions {
-  /** Logger for error reporting */
-  logger: AgentLogger;
-  /** Operation name for error messages (e.g., "model response", "file upload") */
+  /** Operation name for error context (e.g., "model response", "file upload") */
   operation: string;
   /** Model name for diagnostics */
   model?: string;
@@ -24,7 +25,13 @@ export interface RequestExecutionOptions {
 }
 
 /**
- * Executes a request with consistent error logging and abort handling.
+ * Executes a request with error enrichment and abort handling.
+ *
+ * Error handling follows the "log at the boundary" principle:
+ * - This function enriches errors with operation context (does NOT log)
+ * - Errors propagate up to the fallback handler which logs once with full context
+ * - This preserves where errors originated without duplicate logging
+ *
  * Retry logic is handled at the flow level, not here.
  */
 export async function executeRequest<T>(
@@ -40,10 +47,10 @@ export async function executeRequest<T>(
   try {
     return await request();
   } catch (error) {
-    options.logger.logError(`Error in ${options.operation}`, error, {
+    // Enrich error with operation context (no logging - just attach metadata)
+    throw enrichError(error, {
       operation: options.operation,
       model: options.model,
     });
-    throw error;
   }
 }
