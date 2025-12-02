@@ -1,6 +1,5 @@
 // Third-party imports
 import { randomUUID } from 'crypto';
-import { encode as encodeHtml } from 'he';
 
 // Local imports - events
 import type { ExtendedTokenUsageStats } from '@agent/types/UsageTypes';
@@ -496,7 +495,7 @@ export class AgentLogger {
             stream: streamId,
             logMessage: {
               id,
-              text: encodeHtml(buffer),
+              text: buffer,
               level,
               timestamp: Date.now(),
               groupId,
@@ -509,7 +508,7 @@ export class AgentLogger {
             stream: streamId,
             logMessage: {
               id,
-              text: encodeHtml(buffer),
+              text: buffer,
               groupId,
               messageType: type,
             },
@@ -531,7 +530,7 @@ export class AgentLogger {
             stream: streamId,
             logMessage: {
               id,
-              text: encodeHtml(buffer),
+              text: buffer,
               level,
               timestamp: Date.now(),
               groupId,
@@ -543,7 +542,7 @@ export class AgentLogger {
             stream: streamId,
             logMessage: {
               id,
-              text: encodeHtml(buffer),
+              text: buffer,
               groupId,
               messageType: type,
             },
