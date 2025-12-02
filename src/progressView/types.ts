@@ -40,21 +40,3 @@ export interface InstructionUpdate {
   text: string;
   metadata?: InstructionMetadata;
 }
-
-export interface ToolEditApprovalPrompt {
-  requestId: string;
-  path: string;
-  relativePath: string;
-  sourceTool: string;
-  allowBypass: boolean;
-  streamId: StreamTabId | '';
-  addedLines: number;
-  removedLines: number;
-}
-
-export interface RetryRequestPrompt {
-  streamId: StreamTabId;
-  operation: string;
-  model?: string;
-  errorMessage?: string;
-}
