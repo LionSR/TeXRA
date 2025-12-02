@@ -424,7 +424,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             this.config.contextWindow - totalTokens - 10;
         }
       } catch (err) {
-        // Token counting uses soft failure - proceed without adjustment
+        // Re-throw context window violations - these are intentional validation errors
+        // that should fail fast, not be swallowed by soft failure
+        if (err instanceof Error && err.message.includes('exceeds context window')) {
+          throw err;
+        }
+        // Soft failure for token counting API errors - proceed without adjustment
         this.logger.warn(
           `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );
