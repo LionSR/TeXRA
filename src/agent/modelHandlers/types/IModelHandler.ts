@@ -12,6 +12,7 @@ import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
 import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
+import type { ToolResultPayload } from '../utils/toolAttachmentUtils';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {
@@ -306,7 +307,7 @@ export interface IModelHandler<
    *
    * @param client - Provider client (for file uploads if supported)
    * @param call - Parsed tool call object or input payload
-   * @param result - Sanitized result (binary data stripped)
+   * @param result - Tool result payload (binary data stripped, properly typed)
    * @param attachments - Extracted file attachments (for upload/inline if supported)
    * @param workspaceState - Optional workspace state
    * @param text - Optional text to include before tool call
@@ -315,7 +316,7 @@ export interface IModelHandler<
   createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
@@ -332,13 +333,13 @@ export interface IModelHandler<
    * - All function responses go in ONE user message
    *
    * @param calls - Array of tool calls (preserving original order from model response)
-   * @param results - Array of sanitized results (same order as calls)
+   * @param results - Array of tool result payloads (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
    * @param text - Optional text to include before function calls
    */
   createBatchedToolUseFollowUpMessages?(
     calls: T[],
-    results: Record<string, unknown>[],
+    results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
     text?: string,
   ): Promise<M[]>;
