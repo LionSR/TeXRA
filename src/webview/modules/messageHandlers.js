@@ -804,9 +804,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       // Final fallback: check agentType from canonical session, then isToolUseAgent flag
       const agentType = canonicalSession?.agentType ?? state.agentType;
       const isToolUse =
-        agentType === 'toolUse' ||
-        state.isToolUseAgent ||
-        sessionCategory === SESSION_TYPES.TOOL_USE;
+        agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent;
       sessionType = isToolUse ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
     }
 
