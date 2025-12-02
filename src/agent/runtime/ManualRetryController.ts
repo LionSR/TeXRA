@@ -63,10 +63,6 @@ const taskContext = (task: ManualRetryTask) => ({
 export function registerManualRetry(key: string, task: ManualRetryTask): void {
   nextGeneration(key);
   pendingRetries.set(key, task);
-  task.logger.logProgress(
-    `Manual retry available for ${task.operation}`,
-    taskContext(task),
-  );
 }
 
 /**
@@ -127,11 +123,6 @@ export function cancelManualRetry(key: string): boolean {
     }
   }
 
-  task.logger.logProgress(
-    `Retry cancelled for ${task.operation}`,
-    taskContext(task),
-  );
-
   // Emit UI resolution event
   bus.emit('resolveRetryRequest', { streamId: key });
   return true;
@@ -154,17 +145,8 @@ export async function triggerManualRetry(key: string): Promise<boolean> {
   // Remove from registry before execution
   pendingRetries.delete(key);
 
-  task.logger.logProgress(
-    `Retry requested for ${task.operation}`,
-    taskContext(task),
-  );
-
   try {
     await task.run();
-    task.logger.logProgress(
-      `Retry succeeded for ${task.operation}`,
-      taskContext(task),
-    );
     return true;
   } catch (error) {
     task.logger.logError(
