@@ -29,7 +29,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { getBasename } from '@common/pathUtils.js';
-import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
+import { encodeHtml } from '@common/htmlEncoding.js';
 
 // Constants
 export const BULLET_MARKUP =
@@ -733,7 +733,7 @@ export class LogEntryFormatter {
       return bannerEntry ? bannerEntry.element : null;
     }
 
-    bannerEntry.contentElem.dataset.rawContent = decodeHtml(trimmedContent);
+    bannerEntry.contentElem.dataset.rawContent = trimmedContent;
     bannerEntry.contentElem.innerHTML = parsedMarkdown;
 
     return bannerEntry.element;
@@ -878,7 +878,7 @@ export class LogEntryFormatter {
 
     if (contentElem) {
       contentElem.classList.add(`message-${level}`);
-      contentElem.dataset.rawContent = decodeHtml(trimmedContent);
+      contentElem.dataset.rawContent = trimmedContent;
       contentElem.innerHTML = this._processMarkdownContent(trimmedContent);
     }
 
