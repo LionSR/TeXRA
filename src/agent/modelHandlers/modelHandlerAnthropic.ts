@@ -606,11 +606,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
           () => client.beta.messages.create(options, { signal }),
         );
       }
-    } catch (err) {
-      // Error logging follows "log at the boundary" principle - the fallback handler
-      // (RetryState.applyFallbackResult) will log the error once. Rethrow without logging.
-      throw err;
     }
+    // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
 
     return response;
   }
@@ -734,8 +731,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
             type: 'file',
             file_id: uploadedFile.id,
           } as BetaRequestDocumentBlock['source'];
-        } catch (err) {
-          throw err;
         } finally {
           if (buffer) {
             buffer.fill(0);

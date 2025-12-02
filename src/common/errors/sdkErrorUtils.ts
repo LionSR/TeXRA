@@ -528,6 +528,55 @@ export interface ErrorLogContext {
   model?: string;
 }
 
+// ============================================================================
+// Error Enrichment
+// ============================================================================
+
+/**
+ * WeakMap to store operation context on error objects without modifying them.
+ * This allows us to track where errors originated as they propagate up the stack.
+ */
+const errorContextMap = new WeakMap<object, ErrorLogContext>();
+
+/**
+ * Enriches an error with operation context without logging.
+ * The context is stored in a WeakMap and can be extracted later when the error
+ * is finally logged at the boundary (e.g., in RetryState.applyFallbackResult).
+ *
+ * This follows the "log at the boundary" principle:
+ * - Middle layers enrich errors with context
+ * - Only the final handler logs, with full context
+ *
+ * @param error - The error to enrich
+ * @param context - Operation context (operation name, model)
+ * @returns The same error (for throw chaining)
+ */
+export function enrichError<T>(error: T, context: ErrorLogContext): T {
+  if (error && typeof error === 'object') {
+    // Merge with any existing context (inner operations are preserved)
+    const existing = errorContextMap.get(error) ?? {};
+    errorContextMap.set(error, {
+      ...context,
+      // Keep the innermost operation if already set (more specific)
+      operation: existing.operation ?? context.operation,
+      // Keep the model if already set
+      model: existing.model ?? context.model,
+    });
+  }
+  return error;
+}
+
+/**
+ * Extracts enriched context from an error, if any was attached via enrichError().
+ * Returns undefined if no context was attached.
+ */
+export function extractErrorContext(error: unknown): ErrorLogContext | undefined {
+  if (error && typeof error === 'object') {
+    return errorContextMap.get(error);
+  }
+  return undefined;
+}
+
 /**
  * Structured data for error log messages.
  * Used by progressView formatters to display error details.

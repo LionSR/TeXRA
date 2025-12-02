@@ -1362,12 +1362,7 @@ export class ModelHandlerOpenAI<
       // Needs a mapping from model name to encoding or importing specific model tokenizers.
       // Assuming cl100k_base for gpt-3.5/4 for now. Need to enhance this.
       return countTokens(textToCount); // Assuming cl100k_base default
-    } catch (err) {
-      // Log the error and re-throw to indicate failure
-      this.logger.error(`Error counting tokens: ${getSdkErrorMessage(err)}`, {
-        data: err,
-      });
-      throw err;
     }
+    // Note: Errors propagate to caller which handles them appropriately
   }
 }
