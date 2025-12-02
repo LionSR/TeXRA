@@ -102,9 +102,12 @@ export class WebviewUpdater {
 
   /**
    * Update log content for a specific stream
-   * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
-   *   Set to true when switching streams or after data deletion.
-   *   When false/undefined, frontend will attempt incremental update.
+   * @param options.forceRebuild - Controls frontend DOM rebuild behavior:
+   *   - `true`: Full DOM rebuild (required when switching streams or after data deletion)
+   *   - `false`: Incremental update only (skip DOM rebuild, update metadata)
+   *   - `undefined`: Full DOM rebuild (legacy behavior, same as true)
+   *   Note: Frontend uses strict `=== false` check, so explicit `false` is required
+   *   for incremental updates.
    */
   updateLogContent(
     stream: StreamTabId,
