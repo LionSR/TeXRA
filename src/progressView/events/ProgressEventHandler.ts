@@ -60,7 +60,10 @@ export class ProgressEventHandler {
   constructor(
     private state: ProgressViewState,
     private webviewUpdater: WebviewUpdater,
-    callbacks: Pick<RetryEventsShared, 'showRetryRequest' | 'resolveRetryRequest'> &
+    callbacks: Pick<
+      RetryEventsShared,
+      'showRetryRequest' | 'resolveRetryRequest'
+    > &
       Pick<
         ApprovalEventsShared,
         | 'showToolEditApprovalPrompt'
@@ -103,7 +106,8 @@ export class ProgressEventHandler {
       logger: this.logger,
       showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
       resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
-      updateToolEditApprovalBypassState: callbacks.updateToolEditApprovalBypassState,
+      updateToolEditApprovalBypassState:
+        callbacks.updateToolEditApprovalBypassState,
     });
   }
 
@@ -134,7 +138,9 @@ export class ProgressEventHandler {
     disposables.push(...this.approvalEvents.register(bus));
     disposables.push(
       new vscode.Disposable(
-        bus.on('extensionDeactivating', () => this.markAllRunningTasksAsCancelled()),
+        bus.on('extensionDeactivating', () =>
+          this.markAllRunningTasksAsCancelled(),
+        ),
       ),
     );
 
