@@ -132,8 +132,10 @@ export class StreamTabs {
       `.stream-tab .tab[data-stream="${streamName}"]`,
     );
     if (!tabEl) {
-      console.debug(
-        `[updateStreamStatus] Tab not found for stream: ${streamName}`,
+      // Warn: tab should exist before status update (ordering issue)
+      console.warn(
+        `[updateStreamStatus] Tab not found for stream: ${streamName}. ` +
+          'UPDATE_STREAMS should be sent before UPDATE_STREAM_STATUS.',
       );
       return;
     }
@@ -148,16 +150,9 @@ export class StreamTabs {
       return;
     }
 
-    // Remove old status classes and add new one
-    // SYNC: These must match STREAM_STATUS values in @common/constants/streamStatus
-    statusEl.classList.remove(
-      'running',
-      'stopped',
-      'error',
-      'waiting',
-      'ready',
-      'resuming',
-    );
+    // Remove old status classes dynamically from STREAM_STATUS values
+    // This ensures the class list stays in sync with constants
+    Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
     const normalizedStatus =
       status === STREAM_STATUS.READY ? 'stopped' : status || 'stopped';
     statusEl.classList.add(normalizedStatus);
