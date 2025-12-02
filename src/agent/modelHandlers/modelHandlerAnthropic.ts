@@ -1752,7 +1752,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const canUploadFiles = this.supportsToolResultFileUpload;
-    const canInlineAttachments = this.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedAnthropicAttachment[] = [];
     const unsupportedAttachments: ToolFileAttachment[] = [];
@@ -1792,7 +1791,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     for (const uploaded of uploadedAttachments) {
       if (uploaded.blockType === 'image') {
-        if (canInlineAttachments && uploaded.base64Data) {
+        if (this.canProcessToolResultAttachments && uploaded.base64Data) {
           const mediaType =
             (uploaded.mediaType as Base64ImageSource['media_type']) ??
             'image/png';

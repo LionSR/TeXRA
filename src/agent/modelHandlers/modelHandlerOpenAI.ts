@@ -995,9 +995,13 @@ export class ModelHandlerOpenAI<
     );
   }
 
-  /** Returns the provider identifier for usage tracking. Subclasses can override. */
+  /**
+   * Returns the provider identifier for usage tracking.
+   * Defaults to config.provider. Override only when usage tracking
+   * needs a different identifier (e.g., 'kimi' for Moonshot).
+   */
   protected get usageProvider(): NormalizedUsage['provider'] {
-    return 'openai';
+    return this.config.provider as NormalizedUsage['provider'];
   }
 
   /** Normalizes OpenAI usage data into a unified format. */
@@ -1255,10 +1259,11 @@ export class ModelHandlerOpenAI<
 
   /**
    * Provider name used when extracting tool calls.
-   * Subclasses can override to customize the provider identifier.
+   * Defaults to config.provider. Override only when tool calls
+   * need a different identifier.
    */
   protected get toolCallProvider(): string {
-    return 'openai';
+    return this.config.provider;
   }
 
   protected parseArguments(raw: unknown): unknown {
@@ -1332,7 +1337,7 @@ export class ModelHandlerOpenAI<
 
     // Only extract attachments if the handler supports them
     let finalResult = result;
-    if (this.supportsToolResultAttachments) {
+    if (this.canProcessToolResultAttachments) {
       const { attachments, sanitizedResult } = extractToolAttachments(result);
       if (attachments.length > 0) {
         (sanitizedResult as Record<string, unknown>).attachmentSummary =
