@@ -133,6 +133,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.usageSummary.update();
   }
 
+  /**
+   * Update run-scoped metadata (instructions, usage, files) from message.
+   * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
+   * @param {string} stream - The stream to update
+   * @param {Object} message - Message containing runInstructions, runUsage, runFiles
+   */
+  _updateRunMetadata(stream, message) {
+    if (message.runInstructions) {
+      Object.entries(message.runInstructions).forEach(
+        ([runId, instruction]) => {
+          if (runId) {
+            state.setRunInstruction(stream, runId, instruction);
+          }
+        },
+      );
+    }
+
+    if (message.runUsage) {
+      Object.entries(message.runUsage).forEach(([runId, usage]) => {
+        state.setRunUsage(stream, runId, usage);
+      });
+    }
+
+    if (message.runFiles) {
+      Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+        if (runId) {
+          state.setRunFiles(stream, runId, filesByRound);
+        }
+      });
+    }
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -296,29 +328,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       dom.runSelector.setRuns(parentGroups);
       dom.taskGroups.renderInitial(groups);
 
-      if (message.runInstructions) {
-        Object.entries(message.runInstructions).forEach(
-          ([runId, instruction]) => {
-            if (runId) {
-              state.setRunInstruction(message.stream, runId, instruction);
-            }
-          },
-        );
-      }
-
-      if (message.runUsage) {
-        Object.entries(message.runUsage).forEach(([runId, usage]) => {
-          state.setRunUsage(message.stream, runId, usage);
-        });
-      }
-
-      if (message.runFiles) {
-        Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
-          if (runId) {
-            state.setRunFiles(message.stream, runId, filesByRound);
-          }
-        });
-      }
+      // Update run metadata using shared helper
+      this._updateRunMetadata(message.stream, message);
 
       if (parentGroups.length > 0) {
         const runIds = parentGroups.map((group) => group.id);
@@ -386,32 +397,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // Update run-scoped metadata only (instructions, usage, files)
+    // Update run-scoped metadata using shared helper
     // Skip DOM reconstruction since content hasn't changed
-
-    if (message.runInstructions) {
-      Object.entries(message.runInstructions).forEach(
-        ([runId, instruction]) => {
-          if (runId) {
-            state.setRunInstruction(message.stream, runId, instruction);
-          }
-        },
-      );
-    }
-
-    if (message.runUsage) {
-      Object.entries(message.runUsage).forEach(([runId, usage]) => {
-        state.setRunUsage(message.stream, runId, usage);
-      });
-    }
-
-    if (message.runFiles) {
-      Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
-        if (runId) {
-          state.setRunFiles(message.stream, runId, filesByRound);
-        }
-      });
-    }
+    this._updateRunMetadata(message.stream, message);
 
     // Update task group statuses if they changed
     // Note: Only status/endTime are expected to change post-creation
@@ -568,6 +556,15 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   handleUpdateStreamStatus(message) {
     const { stream, status } = message;
     if (!stream) {
+      return;
+    }
+
+    // Validate status against known values
+    const validStatuses = Object.values(STREAM_STATUS);
+    if (status && !validStatuses.includes(status)) {
+      console.debug(
+        `[updateStreamStatus] Invalid status "${status}" for stream: ${stream}`,
+      );
       return;
     }
 
