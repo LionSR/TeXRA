@@ -18,39 +18,40 @@ logger.initialize(CHANNEL);
 
 const RequiredString = z.string().min(1);
 
-/** Core fields required by all pack operations */
-const CorePackFields = z.object({
+/** For packSingle - all fields required */
+const PackParamsSchema = z.object({
   inputFile: RequiredString,
   agent: RequiredString,
-});
-
-/** For packSingle - all fields required */
-const PackParamsSchema = CorePackFields.extend({
   model: RequiredString,
 });
 
 /** For pack command - model optional (may come from stored config) */
-const PackConfigSchema = CorePackFields.extend({
-  model: z.string().default(''),
-  outputFiles: z.array(z.string()).default([]),
-  useMultipleOutputs: z.boolean().optional(),
-  streamId: z.string().optional(),
-  skipProgressViewClear: z.boolean().optional(),
-}).transform((c) => ({
-  ...c,
-  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 1,
-}));
+const PackConfigSchema = z
+  .object({
+    inputFile: RequiredString,
+    agent: RequiredString,
+    model: z.string().default(''),
+    outputFiles: z.array(z.string()).default([]),
+    useMultipleOutputs: z.boolean().optional(),
+    streamId: z.string().optional(),
+    skipProgressViewClear: z.boolean().optional(),
+  })
+  .transform((c) => ({
+    ...c,
+    useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 1,
+  }));
 
 /** For packMultiple - inputFile optional if outputFiles provided */
-const PackMultipleSchema = CorePackFields.extend({
-  model: RequiredString,
-  inputFile: z.string().default(''),
-  outputFiles: z.array(z.string()).default([]),
-}).refine((d) => d.inputFile || d.outputFiles.length > 0, {
-  message: 'inputFile or outputFiles required',
-});
-
-type PackConfig = z.infer<typeof PackConfigSchema>;
+const PackMultipleSchema = z
+  .object({
+    agent: RequiredString,
+    model: RequiredString,
+    inputFile: z.string().default(''),
+    outputFiles: z.array(z.string()).default([]),
+  })
+  .refine((d) => d.inputFile || d.outputFiles.length > 0, {
+    message: 'inputFile or outputFiles required',
+  });
 
 // --- Helpers ---
 
