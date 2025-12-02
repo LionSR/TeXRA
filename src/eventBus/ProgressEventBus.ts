@@ -16,10 +16,7 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-import type {
-  ToolEditApprovalPrompt,
-  RetryRequestPrompt,
-} from '@progressView/types';
+import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
