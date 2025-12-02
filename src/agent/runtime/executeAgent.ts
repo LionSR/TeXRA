@@ -36,7 +36,7 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
+import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -506,10 +506,9 @@ export async function executeAgentWithLogging<T extends IAgent>(
       { skip: isResume },
     );
   } catch (err) {
-    const formattedError = formatProviderHttpError(err);
+    const errorData = buildErrorLogData(err, { operation: `execute ${agentName}` });
     const rawErrorMessage = toErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${formattedError.message}`;
-    const errorData = { ...formattedError, rawMessage: rawErrorMessage };
+    const errorMsg = `Error executing agent ${agentName}: ${errorData.message}`;
 
     // Check if the error is related to missing API key
     if (
