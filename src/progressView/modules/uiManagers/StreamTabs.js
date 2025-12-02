@@ -1,6 +1,6 @@
 // Local imports - progress view
 // Local imports
-import { ELEMENT_IDS } from '../constants.js';
+import { ELEMENT_IDS, STREAM_STATUS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
 import { formatRelativeTime } from '@common/stringUtils.js';
 import {
@@ -148,7 +148,8 @@ export class StreamTabs {
 
     // Remove old status classes and add new one
     statusEl.classList.remove('running', 'stopped', 'error', 'waiting', 'ready');
-    const normalizedStatus = status === 'ready' ? 'stopped' : status || 'stopped';
+    const normalizedStatus =
+      status === STREAM_STATUS.READY ? 'stopped' : status || 'stopped';
     statusEl.classList.add(normalizedStatus);
     statusEl.dataset.status =
       normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
