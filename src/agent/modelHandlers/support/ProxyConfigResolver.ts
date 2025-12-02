@@ -34,7 +34,9 @@ export interface ProxyConfig {
 export function resolveBaseUrl(config: ProxyConfig): string | null {
   // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
   if (config.customBaseUrl) {
-    config.logger?.debug(`Using custom base URL for model: ${config.customBaseUrl}`);
+    config.logger?.debug(
+      `Using custom base URL for model: ${config.customBaseUrl}`,
+    );
     return config.customBaseUrl;
   }
 
