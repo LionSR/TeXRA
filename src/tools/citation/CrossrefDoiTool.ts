@@ -58,7 +58,7 @@ export class CrossrefDoiTool extends defineTool({
       published: work.published ?? null,
       url: work.resource?.primary?.URL ?? null,
       language: work.language ?? null,
-      authors: work.author,
+      authors: work.author ?? [],
       licenses: work.license ?? [],
     };
 
