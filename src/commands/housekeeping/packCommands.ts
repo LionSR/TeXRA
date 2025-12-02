@@ -1,10 +1,9 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
-// Local imports - progress view
+// Local imports
 import type { FileOpResult } from '@agent/types/ResultTypes';
-
-// Internal imports
 import { showLoggedMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
@@ -12,62 +11,72 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { runPack, runPackSingle, runPackMultiple } from '@housekeeping';
 import { getStreamTabId } from '@/logger/streamUtils';
 
-// Local imports - housekeeping
-
 const CHANNEL = 'packCommands';
 logger.initialize(CHANNEL);
 
-/** Validates and logs required parameters, returns false if any are missing */
-async function validateParams(
-  inputFile: string,
-  agent: string,
-  model: string,
-  commandName: string,
-): Promise<boolean> {
-  logger.debug(
-    CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-  );
+// --- Schemas ---
 
-  if (!inputFile || !agent || !model) {
-    const missing = [];
-    if (!inputFile) missing.push('inputFile');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for ${commandName}: ${missing.join(', ')}`,
-    );
-    return false;
-  }
-  return true;
+const RequiredString = z.string().min(1);
+
+/** Core fields required by all pack operations */
+const CorePackFields = z.object({
+  inputFile: RequiredString,
+  agent: RequiredString,
+});
+
+/** For packSingle - all fields required */
+const PackParamsSchema = CorePackFields.extend({
+  model: RequiredString,
+});
+
+/** For pack command - model optional (may come from stored config) */
+const PackConfigSchema = CorePackFields.extend({
+  model: z.string().default(''),
+  outputFiles: z.array(z.string()).default([]),
+  useMultipleOutputs: z.boolean().optional(),
+  streamId: z.string().optional(),
+  skipProgressViewClear: z.boolean().optional(),
+}).transform((c) => ({
+  ...c,
+  useMultipleOutputs: c.useMultipleOutputs ?? c.outputFiles.length > 1,
+}));
+
+/** For packMultiple - inputFile optional if outputFiles provided */
+const PackMultipleSchema = CorePackFields.extend({
+  model: RequiredString,
+  inputFile: z.string().default(''),
+  outputFiles: z.array(z.string()).default([]),
+}).refine((d) => d.inputFile || d.outputFiles.length > 0, {
+  message: 'inputFile or outputFiles required',
+});
+
+type PackConfig = z.infer<typeof PackConfigSchema>;
+
+// --- Helpers ---
+
+function formatZodError(error: z.ZodError): string {
+  return error.issues
+    .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+    .join(', ');
 }
 
 function showPackResult(result: FileOpResult, inputFile: string): void {
   switch (result.status) {
-    case 'success':
-      if (result.outputFolder) {
-        const openFolder = 'Open Folder';
-        const outputFolder = result.outputFolder;
+    case 'success': {
+      const folder = result.outputFolder;
+      if (folder) {
         vscode.window
-          .showInformationMessage(
-            `Files packed into ${outputFolder}`,
-            openFolder,
-          )
-          .then((selection) => {
-            if (selection === openFolder) {
-              void vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(WorkspaceFS.fullPath(outputFolder)),
-              );
+          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
+          .then((sel) => {
+            if (sel === 'Open Folder') {
+              void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(WorkspaceFS.fullPath(folder)));
             }
           });
       }
       break;
+    }
     case 'noFiles':
-      vscode.window.showInformationMessage(
-        `No files found to pack for ${inputFile}`,
-      );
+      vscode.window.showInformationMessage(`No files found to pack for ${inputFile}`);
       break;
     case 'missingParams':
       vscode.window.showErrorMessage('Missing required parameters for pack');
@@ -75,10 +84,65 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
     case 'error':
       vscode.window.showErrorMessage(`Error during packing: ${result.error}`);
       break;
-    default:
-      break;
   }
 }
+
+// --- Handlers ---
+
+async function handlePack(config: unknown) {
+  const parsed = PackConfigSchema.safeParse(config);
+  if (!parsed.success) {
+    await showLoggedMessage(CHANNEL, `Invalid config: ${formatZodError(parsed.error)}`);
+    return;
+  }
+
+  const { agent, model, inputFile, outputFiles, useMultipleOutputs, streamId, skipProgressViewClear } =
+    parsed.data;
+
+  if (outputFiles.length > 1 && !useMultipleOutputs) {
+    logger.warn(CHANNEL, 'Multiple output files but multi-output mode disabled');
+  }
+
+  const result = await runPack(model, inputFile, agent, useMultipleOutputs ? outputFiles : []);
+  showPackResult(result, inputFile);
+
+  if (!skipProgressViewClear) {
+    bus.emit('clearMissingOutputs', streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs }));
+  }
+}
+
+async function handlePackSingle(inputFile: string, agent: string, model: string) {
+  const parsed = PackParamsSchema.safeParse({ inputFile, agent, model });
+  if (!parsed.success) {
+    await showLoggedMessage(CHANNEL, `Invalid params: ${formatZodError(parsed.error)}`);
+    return;
+  }
+
+  const data = parsed.data;
+  const result = await runPackSingle(data.model, data.inputFile, data.agent);
+  showPackResult(result, data.inputFile);
+  bus.emit('clearMissingOutputs', getStreamTabId(data.agent, data.model, data.inputFile, { useMultipleOutputs: false }));
+}
+
+async function handlePackMultiple(
+  inputFile: string,
+  agent: string,
+  model: string,
+  outputFiles: string[] = [],
+) {
+  const parsed = PackMultipleSchema.safeParse({ inputFile, agent, model, outputFiles });
+  if (!parsed.success) {
+    await showLoggedMessage(CHANNEL, `Invalid params: ${formatZodError(parsed.error)}`);
+    return;
+  }
+
+  const data = parsed.data;
+  const result = await runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles);
+  showPackResult(result, data.inputFile);
+  bus.emit('clearMissingOutputs', getStreamTabId(data.agent, data.model, data.inputFile, { useMultipleOutputs: true }));
+}
+
+// --- Registration ---
 
 export function registerPackCommands(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -88,117 +152,4 @@ export function registerPackCommands(context: vscode.ExtensionContext) {
   );
 }
 
-async function handlePack(config: {
-  streamId?: string;
-  skipProgressViewClear?: boolean;
-  [key: string]: any;
-}) {
-  logger.debug(
-    CHANNEL,
-    `Pack command called with config: ${JSON.stringify(config)}`,
-  );
-
-  if (!config.agent || !config.inputFile) {
-    await showLoggedMessage(CHANNEL, 'Missing required parameters in config');
-    return;
-  }
-
-  const declaredOutputFiles = Array.isArray(config.outputFiles)
-    ? config.outputFiles
-    : [];
-  const legacyActiveFlag =
-    typeof config.activeFiles?.output === 'boolean'
-      ? config.activeFiles.output
-      : undefined;
-  const useMultipleOutputs =
-    typeof config.useMultipleOutputs === 'boolean'
-      ? config.useMultipleOutputs
-      : typeof legacyActiveFlag === 'boolean'
-        ? legacyActiveFlag
-        : declaredOutputFiles.length > 1;
-
-  if (declaredOutputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(
-      CHANNEL,
-      'Pack command received multiple output files but multi-output mode is disabled. Verify stored task state.',
-    );
-  }
-
-  const outputFiles = useMultipleOutputs ? declaredOutputFiles : [];
-
-  const result = await runPack(
-    config.model,
-    config.inputFile,
-    config.agent,
-    outputFiles,
-  );
-  showPackResult(result, config.inputFile);
-
-  const streamId =
-    config.streamId ||
-    getStreamTabId(config.agent, config.model, config.inputFile, {
-      useMultipleOutputs,
-    });
-
-  if (!config.skipProgressViewClear) {
-    bus.emit('clearMissingOutputs', streamId);
-  }
-}
-
-async function handlePackSingle(
-  inputFile: string,
-  agent: string,
-  model: string,
-) {
-  if (!(await validateParams(inputFile, agent, model, 'packSingle'))) {
-    return;
-  }
-
-  const result = await runPackSingle(model, inputFile, agent);
-  showPackResult(result, inputFile);
-
-  const streamId = getStreamTabId(agent, model, inputFile, {
-    useMultipleOutputs: false,
-  });
-  bus.emit('clearMissingOutputs', streamId);
-}
-
-async function handlePackMultiple(
-  inputFile: string,
-  agent: string,
-  model: string,
-  outputFiles: string[] = [],
-) {
-  logger.debug(
-    CHANNEL,
-    `Command called with: inputFile=${inputFile}, agent=${agent}, model=${model}`,
-  );
-  logger.debug(CHANNEL, `Additional files: ${outputFiles.join(', ')}`);
-
-  if ((!inputFile && !outputFiles.length) || !agent || !model) {
-    const missing = [];
-    if (!inputFile && !outputFiles.length)
-      missing.push('inputFile or outputFiles');
-    if (!agent) missing.push('agent');
-    if (!model) missing.push('model');
-    await showLoggedMessage(
-      CHANNEL,
-      `Missing required parameters for packMultiple: ${missing.join(', ')}`,
-    );
-    return;
-  }
-
-  const result = await runPackMultiple(model, inputFile, agent, outputFiles);
-  showPackResult(result, inputFile);
-
-  const streamId = getStreamTabId(agent, model, inputFile, {
-    useMultipleOutputs: true,
-  });
-  bus.emit('clearMissingOutputs', streamId);
-}
-
-export const packCommands = {
-  handlePack,
-  handlePackSingle,
-  handlePackMultiple,
-};
+export const packCommands = { handlePack, handlePackSingle, handlePackMultiple };
