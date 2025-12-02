@@ -546,74 +546,72 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     let response: BetaMessage;
 
-    try {
-      if (useStreaming) {
-        // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
-        // we should also make sure partial results can be returned in the presence of errors!
-        const stream = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'anthropic.beta.messages.stream',
-            signal,
-          },
-          () => client.beta.messages.stream(options, { signal }),
-        );
+    if (useStreaming) {
+      // in the future if we pass stream to outside, calling stream.controller.abort() will abort the stream; which will be very useful for our stop button
+      // we should also make sure partial results can be returned in the presence of errors!
+      const stream = await executeRequest(
+        {
+          model: this.config.name,
+          operation: 'anthropic.beta.messages.stream',
+          signal,
+        },
+        () => client.beta.messages.stream(options, { signal }),
+      );
 
-        if (signal?.aborted) {
-          stream.controller.abort();
-          const abortError =
-            signal.reason ??
-            Object.assign(new Error('The operation was aborted.'), {
-              name: 'AbortError',
-            });
-          throw abortError;
-        }
-
-        let cleanupAbortListener: (() => void) | undefined;
-        if (signal) {
-          const abortListener = () => {
-            stream.controller.abort();
-            signal.removeEventListener('abort', abortListener);
-          };
-          signal.addEventListener('abort', abortListener);
-          cleanupAbortListener = () => {
-            signal.removeEventListener('abort', abortListener);
-          };
-        }
-
-        try {
-          const thinking = this.createThinkingStream();
-          const output = this.isOutputStreamingEnabled()
-            ? this.createOutputStream()
-            : undefined;
-          stream.on('thinking', (delta: string) => {
-            thinking.append(delta);
+      if (signal?.aborted) {
+        stream.controller.abort();
+        const abortError =
+          signal.reason ??
+          Object.assign(new Error('The operation was aborted.'), {
+            name: 'AbortError',
           });
-          stream.on('text', (delta: string) => {
-            output?.append(delta);
-          });
-
-          // Note that there is no second consumption problem as per anthropic sdk examples
-          response = await stream.finalMessage();
-          const finalReasoning = this.processThinkingBlock(response);
-          thinking.finalize(finalReasoning ?? undefined);
-          // Extract text manually instead of using finalText() which throws
-          // when response contains only thinking + tool_use blocks with no text
-          const finalOutput = extractTextFromContent(response.content);
-          if (output) output.finalize(finalOutput);
-        } finally {
-          cleanupAbortListener?.();
-        }
-      } else {
-        response = await executeRequest(
-          {
-            model: this.config.name,
-            operation: 'anthropic.beta.messages.create',
-            signal,
-          },
-          () => client.beta.messages.create(options, { signal }),
-        );
+        throw abortError;
       }
+
+      let cleanupAbortListener: (() => void) | undefined;
+      if (signal) {
+        const abortListener = () => {
+          stream.controller.abort();
+          signal.removeEventListener('abort', abortListener);
+        };
+        signal.addEventListener('abort', abortListener);
+        cleanupAbortListener = () => {
+          signal.removeEventListener('abort', abortListener);
+        };
+      }
+
+      try {
+        const thinking = this.createThinkingStream();
+        const output = this.isOutputStreamingEnabled()
+          ? this.createOutputStream()
+          : undefined;
+        stream.on('thinking', (delta: string) => {
+          thinking.append(delta);
+        });
+        stream.on('text', (delta: string) => {
+          output?.append(delta);
+        });
+
+        // Note that there is no second consumption problem as per anthropic sdk examples
+        response = await stream.finalMessage();
+        const finalReasoning = this.processThinkingBlock(response);
+        thinking.finalize(finalReasoning ?? undefined);
+        // Extract text manually instead of using finalText() which throws
+        // when response contains only thinking + tool_use blocks with no text
+        const finalOutput = extractTextFromContent(response.content);
+        if (output) output.finalize(finalOutput);
+      } finally {
+        cleanupAbortListener?.();
+      }
+    } else {
+      response = await executeRequest(
+        {
+          model: this.config.name,
+          operation: 'anthropic.beta.messages.create',
+          signal,
+        },
+        () => client.beta.messages.create(options, { signal }),
+      );
     }
     // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
 
