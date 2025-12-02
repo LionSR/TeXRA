@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Types
@@ -9,6 +12,54 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+
+// --- Zod Schemas for Usage Stats ---
+
+/** Coerces input to number, defaulting non-finite values to 0 */
+const FiniteNumber = z.coerce
+  .number()
+  .transform((n) => (Number.isFinite(n) ? n : 0));
+
+/** Schema for TokenUsageStats with safe number coercion */
+const TokenUsageStatsSchema = z
+  .object({
+    inputTokens: FiniteNumber,
+    outputTokens: FiniteNumber,
+    cost: FiniteNumber,
+  })
+  .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+
+/** Schema for run map (runId -> usage) */
+const RunMapSchema = z.record(z.string(), TokenUsageStatsSchema);
+
+/** Schema that handles both legacy flat format and modern run map format */
+const UsageDataSchema = z.unknown().transform((data): Map<string, TokenUsageStats> => {
+  if (!data || typeof data !== 'object') {
+    return new Map();
+  }
+
+  const entries = Object.entries(data as Record<string, unknown>);
+  const looksLikeRunMap = entries.every(
+    ([, value]) => value && typeof value === 'object',
+  );
+
+  if (!looksLikeRunMap) {
+    // Legacy flat format
+    const usage = TokenUsageStatsSchema.parse(data);
+    if (usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0) {
+      return new Map();
+    }
+    return new Map([[normalizeRunId(null), usage]]);
+  }
+
+  // Modern run map format
+  const runMap = RunMapSchema.parse(data);
+  const result = new Map<string, TokenUsageStats>();
+  for (const [runId, usage] of Object.entries(runMap)) {
+    result.set(runId, usage);
+  }
+  return result;
+});
 
 /**
  * Manages usage statistics collection with persistence.
@@ -41,7 +92,7 @@ export class UsageStatsManager extends PersistentMapManager<
     storageKey: StorageKey,
     usage: TokenUsageStats,
   ): Promise<void> {
-    const normalized = this.sanitizeUsage(usage);
+    const normalized = TokenUsageStatsSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
     if (
@@ -138,8 +189,7 @@ export class UsageStatsManager extends PersistentMapManager<
         continue;
       }
 
-      const candidate = value as TokenUsageStats;
-      const usage = this.sanitizeUsage(candidate);
+      const usage = TokenUsageStatsSchema.parse(value);
       if (
         usage.inputTokens === 0 &&
         usage.outputTokens === 0 &&
@@ -231,7 +281,7 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     const totals = legacy.usageAccumulator.totals;
-    const usage: TokenUsageStats = this.sanitizeUsage({
+    const usage: TokenUsageStats = TokenUsageStatsSchema.parse({
       inputTokens: totals.totalInputTokens ?? 0,
       outputTokens: totals.totalOutputTokens ?? 0,
       cost: totals.totalCost ?? 0,
@@ -272,60 +322,6 @@ export class UsageStatsManager extends PersistentMapManager<
     data: unknown,
     _key: StreamTabId,
   ): Promise<RunUsageMap> {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const entries = Object.entries(data as Record<string, unknown>);
-    const looksLikeRunMap = entries.every(
-      ([, value]) => value && typeof value === 'object',
-    );
-
-    if (!looksLikeRunMap) {
-      const candidate = data as Partial<TokenUsageStats>;
-      const normalized = this.sanitizeUsage({
-        inputTokens: candidate.inputTokens ?? NaN,
-        outputTokens: candidate.outputTokens ?? NaN,
-        cost: candidate.cost ?? NaN,
-      });
-      const map: RunUsageMap = new Map();
-      if (
-        normalized.inputTokens !== 0 ||
-        normalized.outputTokens !== 0 ||
-        normalized.cost !== 0
-      ) {
-        map.set(normalizeRunId(null), normalized);
-      }
-      return map;
-    }
-
-    const runMap: RunUsageMap = new Map();
-    for (const [runId, rawUsage] of entries) {
-      if (!rawUsage || typeof rawUsage !== 'object') {
-        continue;
-      }
-      const candidate = rawUsage as Partial<TokenUsageStats>;
-      runMap.set(
-        runId,
-        this.sanitizeUsage({
-          inputTokens: candidate.inputTokens ?? NaN,
-          outputTokens: candidate.outputTokens ?? NaN,
-          cost: candidate.cost ?? NaN,
-        }),
-      );
-    }
-    return runMap;
-  }
-
-  private sanitizeUsage(usage: TokenUsageStats): TokenUsageStats {
-    return {
-      inputTokens: this.toSafeNumber(usage.inputTokens),
-      outputTokens: this.toSafeNumber(usage.outputTokens),
-      cost: this.toSafeNumber(usage.cost),
-    };
-  }
-
-  private toSafeNumber(value: number): number {
-    return Number.isFinite(value) ? value : 0;
+    return UsageDataSchema.parse(data);
   }
 }
