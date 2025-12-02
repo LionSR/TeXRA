@@ -193,10 +193,11 @@ export class ProgressViewProvider
       theme,
     );
 
-    // Determine if full DOM rebuild is needed:
-    // - Explicit forceRebuild: true (e.g., after state.load())
-    // - Stream switch detected (different stream than last render)
-    // - First render after webview resolve (_lastRenderedStream is '')
+    // Determine if full DOM rebuild is needed.
+    // forceRebuild has tri-state behavior:
+    // - true: Always rebuild (e.g., after state.load(), data deletion)
+    // - false: Always use incremental update (caller explicitly knows content unchanged)
+    // - undefined: Auto-detect based on stream switch or first render
     const isStreamSwitch = this._lastRenderedStream !== activeStream;
     const shouldForceRebuild = options?.forceRebuild ?? isStreamSwitch;
 
