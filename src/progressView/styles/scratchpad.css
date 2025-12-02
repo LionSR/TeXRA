@@ -37,17 +37,11 @@
   opacity: 0.3;
 }
 
+/* Error styling - shared across tool-use and banner errors */
 .tool-use-error > .details-summary .tool-use-title,
-.tool-use-error > .details-summary .codicon {
-  color: var(--vscode-errorForeground);
-}
-
-/* Error banner styling */
+.tool-use-error > .details-summary .codicon,
 .banner-details--error > .details-summary .label,
-.banner-details--error > .details-summary .codicon {
-  color: var(--vscode-editorError-foreground, #f14c4c);
-}
-
+.banner-details--error > .details-summary .codicon,
 .banner-content--error {
   color: var(--vscode-editorError-foreground, #f14c4c);
 }
@@ -57,6 +51,11 @@
   padding: var(--spacing-small);
   background-color: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
   border-radius: var(--radius-small, 4px);
+}
+
+/* Pre-wrapped text content */
+.banner-content--error .error-details,
+.tool-output-full {
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -64,6 +63,4 @@
 .tool-output-full {
   max-height: var(--height-large);
   overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
