@@ -29,7 +29,10 @@ export interface ApprovalEventsModule {
 export function createApprovalEventsModule(
   shared: ApprovalEventsShared,
 ): ApprovalEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'ApprovalEvents');
+  const withErrorBoundary = createErrorBoundary(
+    shared.logger,
+    'ApprovalEvents',
+  );
 
   return {
     register(bus: ProgressEventBusLike): vscode.Disposable[] {
