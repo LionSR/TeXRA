@@ -519,7 +519,7 @@ try {
 4. **Refactor `ExtendedCompletionUsage`**
    - Use SDK's `CompletionUsage` directly
    - Create `DeepSeekCompletionUsage` only for DeepSeek-specific fields
-   - Update `ResponseUsageFactory` accordingly
+   - Note: `ResponseUsageFactory` has been removed (was only used by deprecated `computeResponseUsage`)
    - Risk: Medium (requires testing all handlers)
 
 5. **Create shared type guard utilities**
