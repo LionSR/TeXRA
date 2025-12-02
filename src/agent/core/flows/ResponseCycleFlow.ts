@@ -42,7 +42,6 @@ import { bestConnectionMethod } from '@latex';
 import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
-  type RetryCallbacks,
   type FallbackResult,
   clearRetryError,
   getNodeRetryConfig,
@@ -99,8 +98,6 @@ export interface ResponseCycleShared<_C = unknown> {
   state: ResponseCycleState;
   /** Retry state for model invocation errors */
   retryState: RetryState;
-  /** Callbacks for manual retry control from UI */
-  retryCallbacks: RetryCallbacks;
 }
 
 // Each node in the response cycle progressively hydrates the shared cycle

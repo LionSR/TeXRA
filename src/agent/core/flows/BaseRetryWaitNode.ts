@@ -9,14 +9,21 @@
  * This node uses accessors to extract flow-specific values. The accessors
  * receive both `shared` state and `params` to support the services pattern:
  * - Services (options, store) can be accessed via `params.services`
- * - Mutable state (retryState, retryCallbacks) is in `shared`
+ * - Mutable state (retryState) is in `shared`
+ *
+ * ## Promise-Based Coordination
+ *
+ * Instead of registering callbacks with a controller, this node uses
+ * the RetryRequestCoordinator's Promise-based API. The coordinator
+ * manages the entire lifecycle of the retry request and returns a
+ * Promise that resolves when the user acts.
  */
 
 import { BaseNode } from '@agent/node';
 import {
-  registerManualRetry,
-  clearManualRetry,
-} from '@agent/runtime/ManualRetryController';
+  retryCoordinator,
+  type RetryResult,
+} from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { bus } from '@eventBus/ProgressEventBus';
@@ -26,7 +33,6 @@ import {
   clearRetryError,
   MANUAL_RETRY_TIMEOUT_MS,
   type RetryState,
-  type RetryCallbacks,
 } from './RetryState';
 
 /**
@@ -35,7 +41,6 @@ import {
  */
 export interface RetryableShared {
   retryState: RetryState;
-  retryCallbacks: RetryCallbacks;
   state: { shouldStop: boolean };
 }
 
@@ -44,7 +49,7 @@ export interface RetryableShared {
  * This allows the base node to work with different flow types.
  *
  * Accessors receive both `shared` and `params` to access:
- * - Mutable state from `shared` (retryState, retryCallbacks)
+ * - Mutable state from `shared` (retryState)
  * - Immutable services from `params.services` (options, store)
  */
 export interface RetryWaitAccessors<S extends RetryableShared, P = unknown> {
@@ -96,71 +101,30 @@ class RetryWaitNode<
   }
 
   async exec(prepRes: S): Promise<'retry' | 'cancel'> {
-    const { retryState, retryCallbacks } = prepRes;
+    const { retryState } = prepRes;
     const streamId = this.accessors.getStreamId(prepRes, this._params);
     const logger = this.accessors.getLogger(prepRes, this._params);
-
-    // Internal log for debugging (output channel only)
-    logger.debug(
-      `Waiting for manual retry: ${retryState.lastError?.message ?? 'unknown error'}`,
-    );
 
     // Emit waiting status to UI
     bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
 
-    // Wait for external signal via callbacks with timeout
-    return new Promise<'retry' | 'cancel'>((resolve) => {
-      let resolved = false;
-
-      const cleanup = () => {
-        clearManualRetry(streamId);
-        retryCallbacks.triggerRetry = undefined;
-        retryCallbacks.cancelRetry = undefined;
-      };
-
-      // Timeout after 5 minutes
-      const timeoutId = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          cleanup();
-          logger.warn('Manual retry wait timed out after 5 minutes');
-          resolve('cancel');
-        }
-      }, MANUAL_RETRY_TIMEOUT_MS);
-
-      retryCallbacks.triggerRetry = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          cleanup();
-          resolve('retry');
-        }
-      };
-
-      retryCallbacks.cancelRetry = () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeoutId);
-          cleanup();
-          resolve('cancel');
-        }
-      };
-
-      // Register with ManualRetryController for UI-triggered retries
-      registerManualRetry(streamId, {
-        run: async () => retryCallbacks.triggerRetry?.(),
-        cancel: () => retryCallbacks.cancelRetry?.(),
-        logger,
-        operation: this.accessors.operationName,
-      });
-
-      // Emit event to show retry request in UI
-      bus.emit('showRetryRequest', {
-        streamId,
+    // Wait for user action via the Promise-based coordinator
+    // The coordinator handles:
+    // - Emitting 'showRetryRequest' event
+    // - Timeout after 5 minutes
+    // - Emitting 'resolveRetryRequest' on completion
+    const result: RetryResult = await retryCoordinator.waitForUserAction(
+      streamId,
+      {
         operation: this.accessors.operationName,
         errorMessage: retryState.lastError?.message,
-      });
-    });
+        logger,
+        timeoutMs: MANUAL_RETRY_TIMEOUT_MS,
+      },
+    );
+
+    // Map coordinator result to flow result
+    return result.action === 'retry' ? 'retry' : 'cancel';
   }
 
   async post(
