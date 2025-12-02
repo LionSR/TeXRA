@@ -424,9 +424,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             this.config.contextWindow - totalTokens - 10;
         }
       } catch (err) {
-        this.logger.error(
-          `Token counting failed, proceeding without token adjustment: ${getSdkErrorMessage(err)}`,
-          { data: err },
+        // Token counting uses soft failure - proceed without adjustment
+        this.logger.warn(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
         );
       }
     }
