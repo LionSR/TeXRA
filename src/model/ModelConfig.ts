@@ -85,4 +85,5 @@ export interface ModelConfig {
   capabilities: ModelCapabilities;
   openRouterOnly: boolean; // Whether this model is only available through OpenRouter
   openrouterFullName?: string; // Full model name for OpenRouter (e.g., "anthropic/claude-3-opus-20240229")
+  baseUrl?: string; // Custom base URL for this specific model (overrides provider default)
 }
