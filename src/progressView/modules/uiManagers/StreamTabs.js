@@ -1,4 +1,3 @@
-// Local imports - progress view
 // Local imports
 import { ELEMENT_IDS, STREAM_STATUS } from '../constants.js';
 import { createFromTemplate } from '@common/templateUtils.js';
@@ -133,6 +132,9 @@ export class StreamTabs {
       `.stream-tab .tab[data-stream="${streamName}"]`,
     );
     if (!tabEl) {
+      console.debug(
+        `[updateStreamStatus] Tab not found for stream: ${streamName}`,
+      );
       return;
     }
 
