@@ -1,6 +1,6 @@
 // Local imports - agent types
 import type { AgentCategory, AgentType } from '@agent/core/AgentDataclass';
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 
 export interface StreamUITraits {
@@ -47,13 +47,13 @@ export interface ToolEditApprovalPrompt {
   relativePath: string;
   sourceTool: string;
   allowBypass: boolean;
-  streamId: string;
+  streamId: StreamTabId | '';
   addedLines: number;
   removedLines: number;
 }
 
 export interface RetryRequestPrompt {
-  streamId: string;
+  streamId: StreamTabId;
   operation: string;
   model?: string;
   errorMessage?: string;

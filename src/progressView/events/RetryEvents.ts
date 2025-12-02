@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 
 // Local imports
 import type { AgentLogger } from '@logger/AgentLogger';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
@@ -21,10 +20,7 @@ export interface RetryEventsShared {
 }
 
 export interface RetryEventsModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-  ): vscode.Disposable[];
+  register(bus: ProgressEventBusLike): vscode.Disposable[];
 }
 
 /**
@@ -37,10 +33,7 @@ export function createRetryEventsModule(
   const withErrorBoundary = createErrorBoundary(shared.logger, 'RetryEvents');
 
   return {
-    register(
-      bus: ProgressEventBusLike,
-      _state: ProgressViewState,
-    ): vscode.Disposable[] {
+    register(bus: ProgressEventBusLike): vscode.Disposable[] {
       return [
         new vscode.Disposable(
           bus.on('showRetryRequest', (payload) =>
