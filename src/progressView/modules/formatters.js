@@ -452,6 +452,11 @@ export class LogEntryFormatter {
           () => this._formatProgressStatus(message),
           'progress status',
         ),
+      error: (message) =>
+        this._safeFormat(
+          () => this._formatError(message),
+          'error',
+        ),
     };
   }
 
@@ -1259,6 +1264,87 @@ export class LogEntryFormatter {
     }
 
     return container;
+  }
+
+  /**
+   * Format an error message as a foldable banner
+   * @private
+   * @param {Object} message - The message object
+   * @returns {HTMLElement|null} DOM element for the error banner
+   */
+  _formatError(message) {
+    const normalizedPayload = message.normalizedPayload || {};
+    const date = new Date(message.timestamp ?? Date.now());
+    const { fullTimestamp, timeDisplay, tooltipTimestamp } =
+      this._formatTimestamp(date);
+
+    const summaryText =
+      (normalizedPayload.decodedText || message.text || '').trim() ||
+      'Error occurred';
+
+    // Build error details from structured data
+    const structured = normalizedPayload.structured || {};
+    const detailLines = [];
+
+    if (structured.message && structured.message !== summaryText) {
+      detailLines.push(`message: ${structured.message}`);
+    }
+    if (structured.provider) {
+      detailLines.push(`provider: ${structured.provider}`);
+    }
+    if (structured.rawMessage) {
+      detailLines.push(`rawMessage: ${structured.rawMessage}`);
+    }
+    if (structured.statusCode) {
+      detailLines.push(`statusCode: ${structured.statusCode}`);
+    }
+
+    const detailText = detailLines.length > 0 ? detailLines.join('\n') : '';
+
+    const bannerEntry = this._createBannerEntry({
+      logId: message.id,
+      groupId: message.groupId,
+      timestamp: fullTimestamp,
+      iconClass: 'codicon-error',
+      labelText: `[${timeDisplay}] ${summaryText}`,
+      copyTitle: 'Copy error details',
+      contentClass: 'banner-content--error',
+      open: false,
+    });
+
+    if (!bannerEntry || !bannerEntry.element) {
+      return null;
+    }
+
+    // Add error class to the banner
+    bannerEntry.element.classList.add('banner-details--error');
+
+    // If there are no details, hide the copy button and make it non-expandable
+    if (!detailText) {
+      if (bannerEntry.copyButton) {
+        bannerEntry.copyButton.style.display = 'none';
+      }
+      // Remove toggle icon for non-expandable entries
+      const toggleIcon = bannerEntry.element.querySelector('.toggle-icon');
+      if (toggleIcon) {
+        toggleIcon.style.visibility = 'hidden';
+      }
+    }
+
+    if (bannerEntry.contentElem) {
+      bannerEntry.contentElem.dataset.rawContent = detailText || summaryText;
+      if (detailText) {
+        bannerEntry.contentElem.innerHTML = `<pre class="error-details">${encodeHtml(detailText)}</pre>`;
+      }
+    }
+
+    // Add timestamp tooltip to the label
+    const labelElem = bannerEntry.element.querySelector('.label');
+    if (labelElem) {
+      labelElem.title = tooltipTimestamp;
+    }
+
+    return bannerEntry.element;
   }
 
   _formatUserMessage(normalizedPayload, logId, timestamp) {

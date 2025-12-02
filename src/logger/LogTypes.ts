@@ -44,6 +44,7 @@ export interface LogMessageData {
     | 'toolUse'
     | 'userMessage'
     | 'progressStatus'
+    | 'error'
     | 'internal';
   /** Whether verbose details should be displayed */
   verbose?: boolean;

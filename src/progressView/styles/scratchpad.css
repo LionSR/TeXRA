@@ -42,6 +42,25 @@
   color: var(--vscode-errorForeground);
 }
 
+/* Error banner styling */
+.banner-details--error > .details-summary .label,
+.banner-details--error > .details-summary .codicon {
+  color: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+.banner-content--error {
+  color: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+.banner-content--error .error-details {
+  margin: 0;
+  padding: var(--spacing-small);
+  background-color: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+  border-radius: var(--radius-small, 4px);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .tool-output-full {
   max-height: var(--height-large);
   overflow: auto;
