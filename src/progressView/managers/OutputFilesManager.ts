@@ -52,7 +52,10 @@ const OutputFilesRoundMapSchema = z
       if (!round.success) continue;
       const parsed = items
         .map((item) => OutputFileInfoSchema.safeParse(item))
-        .filter((result): result is { success: true; data: OutputFileInfo } => result.success)
+        .filter(
+          (result): result is { success: true; data: OutputFileInfo } =>
+            result.success,
+        )
         .map((result) => result.data);
       if (parsed.length > 0) {
         map.set(round.data, parsed);
@@ -67,8 +70,9 @@ const OutputFilesRoundMapSchema = z
  */
 function isLegacyFormat(record: Record<string, unknown>): boolean {
   const entries = Object.entries(record);
-  return entries.length > 0 && entries.every(
-    ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
+  return (
+    entries.length > 0 &&
+    entries.every(([key]) => !Number.isNaN(Number.parseInt(key, 10)))
   );
 }
 
@@ -106,10 +110,14 @@ function createLegacyAwareRunMapSchema<T>(
 }
 
 /** Schema for missing outputs with legacy format support */
-const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(MissingOutputRoundMapSchema);
+const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(
+  MissingOutputRoundMapSchema,
+);
 
 /** Schema for output files with legacy format support */
-const OutputFilesDataSchema = createLegacyAwareRunMapSchema(OutputFilesRoundMapSchema);
+const OutputFilesDataSchema = createLegacyAwareRunMapSchema(
+  OutputFilesRoundMapSchema,
+);
 
 /**
  * Manages output files collection with persistence and file existence validation.

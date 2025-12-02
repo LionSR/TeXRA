@@ -1,1 +1,4 @@
-export { RecordingManager, type RecordingManagerConfig } from './RecordingManager';
+export {
+  RecordingManager,
+  type RecordingManagerConfig,
+} from './RecordingManager';
