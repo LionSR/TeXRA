@@ -54,10 +54,8 @@ export function createUsageEvents(
             );
 
             if (state.activeStream === stream && updater.isAvailable()) {
-              const usageByRun = Object.fromEntries(
-                state.usageStats.getRunUsage(stream).entries(),
-              ) as Record<string, TokenUsageStats>;
-              updater.updateUsage(stream, usageByRun);
+              // Send only the changed run's usage instead of all runs
+              updater.updateRunUsage(stream, storageKey, normalizedUsage);
             }
           });
         },

@@ -180,6 +180,7 @@ export const PROGRESS_VIEW_COMMANDS = {
 
   // Usage
   UPDATE_USAGE: 'updateUsage',
+  UPDATE_RUN_USAGE: 'updateRunUsage', // Update single run's usage (incremental)
 
   // Actions
   RUN_AGAIN: 'runAgain',
