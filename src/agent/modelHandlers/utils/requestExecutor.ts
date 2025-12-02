@@ -2,18 +2,16 @@
  * Request execution utilities for model handlers.
  *
  * NOTE: Retry logic is handled at the flow level (ResponseCycleFlow/ToolUseCycleFlow).
- * These utilities provide consistent error logging and abort handling for model requests.
+ * Error logging follows the "log at the boundary" principle - errors are NOT logged here.
+ * The final fallback handler (RetryState.applyFallbackResult) is the single source of truth
+ * for error logging, preventing duplicate log entries as errors propagate up the stack.
  */
-
-import type { AgentLogger } from '@logger/AgentLogger';
 
 /**
  * Options for request execution.
  */
 export interface RequestExecutionOptions {
-  /** Logger for error reporting */
-  logger: AgentLogger;
-  /** Operation name for error messages (e.g., "model response", "file upload") */
+  /** Operation name for error context (e.g., "model response", "file upload") */
   operation: string;
   /** Model name for diagnostics */
   model?: string;
@@ -24,7 +22,13 @@ export interface RequestExecutionOptions {
 }
 
 /**
- * Executes a request with consistent error logging and abort handling.
+ * Executes a request with abort handling.
+ *
+ * Error logging follows the "log at the boundary" principle:
+ * - This function does NOT log errors
+ * - Errors propagate up to the fallback handler which logs once
+ * - This prevents the same error being logged at multiple abstraction layers
+ *
  * Retry logic is handled at the flow level, not here.
  */
 export async function executeRequest<T>(
@@ -37,13 +41,5 @@ export async function executeRequest<T>(
     throw options.signal.reason ?? new Error('The request was aborted.');
   }
 
-  try {
-    return await request();
-  } catch (error) {
-    options.logger.logError(`Error in ${options.operation}`, error, {
-      operation: options.operation,
-      model: options.model,
-    });
-    throw error;
-  }
+  return await request();
 }
