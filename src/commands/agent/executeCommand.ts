@@ -1,24 +1,56 @@
+// Standard library imports
+import { randomUUID } from 'crypto';
+
 // Third-party imports
 import * as vscode from 'vscode';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
-// Local imports - agent runtime
+// Local imports
 import { parseAgentConfig } from '@agent/core/AgentConfig';
-import {
-  executeAgent,
-  resumeAgentExecution,
-} from '@agent/runtime/executeAgent';
-// Type imports
+import { executeAgent, resumeAgentExecution } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Local imports - history
 import { AgentHistoryManager } from '@historyView/managers';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
 
-// Add the registration function
+// --- Schema ---
+
+/**
+ * Explicit wrapper format: { config, executionId?, resume? }
+ *
+ * Note: `config` is z.unknown() because validation is handled by parseAgentConfig(),
+ * which owns AgentConfigSchema. Errors will surface as ZodError in the catch block.
+ */
+const ExplicitWrapperSchema = z.object({
+  config: z.unknown(),
+  executionId: z.string().optional(),
+  resume: z.boolean().default(false),
+});
+
+type ParsedInput = z.infer<typeof ExplicitWrapperSchema>;
+
+/** Check if input looks like an explicit wrapper (has 'config' property) */
+function hasConfigProperty(input: unknown): input is { config: unknown } {
+  return input !== null && typeof input === 'object' && 'config' in input;
+}
+
+/**
+ * Parse execute input: explicit wrapper or raw config.
+ *
+ * Discrimination logic:
+ * - If input has 'config' property → parse as explicit wrapper (fail if malformed)
+ * - Otherwise → treat entire input as raw config
+ */
+function parseExecuteInput(input: unknown): ParsedInput {
+  if (hasConfigProperty(input)) {
+    return ExplicitWrapperSchema.parse(input);
+  }
+  return { config: input, resume: false };
+}
+
+// --- Command ---
+
 export function registerExecuteCommand(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('texra.execute', (config: unknown) =>
@@ -28,76 +60,33 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 }
 
 export const executeCommand = {
-  async executeCommand(config: unknown) {
+  async executeCommand(input: unknown) {
     try {
-      const { payload, executionId, resume } = normalizePayload(config);
-      const normalizedConfig = parseAgentConfig(payload);
+      const { config, executionId, resume } = parseExecuteInput(input);
+      const normalizedConfig = parseAgentConfig(config);
 
-      if (resume) {
-        if (!executionId) {
-          logger.warn(
-            CHANNEL,
-            'Resume requested without an execution ID; starting a new run instead.',
-          );
-        } else {
-          await resumeAgentExecution(normalizedConfig, executionId);
-          return;
-        }
-      }
-
-      const resolvedExecutionId: ExecutionId =
-        executionId ??
-        (await AgentHistoryManager.addToHistory(normalizedConfig));
-
-      await executeAgent(normalizedConfig, resolvedExecutionId);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const detail = error.issues.map((issue) => issue.message).join('; ');
-        const message =
-          'Invalid agent configuration provided for execution.' +
-          (detail ? ` ${detail}` : '');
-        logger.warn(CHANNEL, message, { data: error });
-        void vscode.window.showErrorMessage(message);
+      if (resume && executionId) {
+        await resumeAgentExecution(normalizedConfig, executionId);
         return;
       }
 
-      logger.error(CHANNEL, 'Agent execution failed before start.', {
-        data: error,
-      });
+      if (resume) {
+        logger.warn(CHANNEL, 'Resume requested without execution ID; starting new run.');
+      }
+
+      const newExecutionId = randomUUID() as ExecutionId;
+      await AgentHistoryManager.addToHistory(newExecutionId, normalizedConfig);
+      await executeAgent(normalizedConfig, newExecutionId);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const detail = error.issues.map((i) => i.message).join('; ');
+        logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, { data: error });
+        void vscode.window.showErrorMessage(`Invalid agent configuration. ${detail}`);
+        return;
+      }
+
+      logger.error(CHANNEL, 'Agent execution failed before start.', { data: error });
       throw error;
     }
   },
 };
-
-function normalizePayload(input: unknown): {
-  payload: unknown;
-  executionId?: ExecutionId;
-  resume: boolean;
-  stream?: StreamTabId;
-} {
-  if (input && typeof input === 'object' && 'config' in (input as any)) {
-    const candidate = input as {
-      config: unknown;
-      executionId?: unknown;
-      resume?: unknown;
-      stream?: unknown;
-    };
-
-    const executionId =
-      typeof candidate.executionId === 'string'
-        ? (candidate.executionId as ExecutionId)
-        : undefined;
-
-    return {
-      payload: candidate.config,
-      executionId,
-      resume: Boolean(candidate.resume),
-      stream:
-        typeof candidate.stream === 'string'
-          ? (candidate.stream as StreamTabId)
-          : undefined,
-    };
-  }
-
-  return { payload: input, resume: false };
-}

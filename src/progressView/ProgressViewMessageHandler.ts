@@ -3,6 +3,7 @@ import * as path from 'path';
 
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - common
 
@@ -31,6 +32,7 @@ import {
 import {
   handleProgressViewToolEditApprovalAction,
   resetToolEditApprovalSessionBypass,
+  ProgressViewApprovalActions,
 } from '@tools/approval/toolEditApproval';
 import { pathToLocation } from '@utils/files';
 import { ensureRunDir, getRunDir } from '@utils/files/taskRunStorage';
@@ -56,6 +58,17 @@ interface BaseFileCommandMessage extends FileCommandMessage {
 interface CompareMessage extends BaseFileCommandMessage {
   prev?: string;
 }
+
+// --- Message Schemas ---
+
+const TrimmedString = z.string().transform((s) => s.trim()).pipe(z.string().min(1));
+const PolishFollowUp = z.object({ stream: z.string().min(1), text: TrimmedString });
+const InfoMessage = z.object({ text: TrimmedString });
+const ApprovalAction = z.object({
+  requestId: z.string().min(1),
+  action: z.enum(ProgressViewApprovalActions),
+  note: z.string().optional(),
+});
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -332,19 +345,16 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     });
   }
 
-  private async handlePolishFollowUp(message: any): Promise<void> {
-    const stream = message.stream as StreamTabId | undefined;
-    const text = typeof message.text === 'string' ? message.text.trim() : '';
-    if (!stream || !text) {
+  private async handlePolishFollowUp(message: unknown): Promise<void> {
+    const parsed = PolishFollowUp.safeParse(message);
+    if (!parsed.success) {
+      this.logger.debug(this.channel, 'Invalid polishFollowUp message', { data: parsed.error });
       return;
     }
 
-    const taskState = this.provider.state.getTaskState(stream) as
-      | TaskState
-      | undefined;
-    if (!taskState) {
-      return;
-    }
+    const { stream, text } = parsed.data;
+    const taskState = this.provider.state.getTaskState(stream as StreamTabId) as TaskState | undefined;
+    if (!taskState) return;
 
     const fileContext = buildFileContextFromTaskState(taskState);
 
@@ -387,27 +397,22 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
     );
   }
 
-  private async handleShowInformationMessage(message: any): Promise<void> {
-    const text = typeof message?.text === 'string' ? message.text.trim() : '';
-    if (!text) {
+  private async handleShowInformationMessage(message: unknown): Promise<void> {
+    const parsed = InfoMessage.safeParse(message);
+    if (!parsed.success) {
+      this.logger.debug(this.channel, 'Invalid infoMessage', { data: parsed.error });
       return;
     }
-    await vscode.window.showInformationMessage(text);
+    await vscode.window.showInformationMessage(parsed.data.text);
   }
 
-  private async handleToolEditApprovalAction(message: any): Promise<void> {
-    const requestId =
-      typeof message?.requestId === 'string' ? message.requestId : '';
-    const action = typeof message?.action === 'string' ? message.action : '';
-    if (!requestId || !action) {
+  private async handleToolEditApprovalAction(message: unknown): Promise<void> {
+    const parsed = ApprovalAction.safeParse(message);
+    if (!parsed.success) {
+      this.logger.debug(this.channel, 'Invalid approvalAction', { data: parsed.error });
       return;
     }
-
-    await handleProgressViewToolEditApprovalAction({
-      requestId,
-      action,
-      note: typeof message?.note === 'string' ? message.note : undefined,
-    });
+    await handleProgressViewToolEditApprovalAction(parsed.data);
   }
 
   private async handleResetToolEditApprovalBypass(): Promise<void> {
