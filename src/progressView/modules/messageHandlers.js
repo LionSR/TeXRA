@@ -571,15 +571,16 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // Update status in state
-    if (status && status !== STREAM_STATUS.READY) {
-      state.streamStatuses.set(stream, status);
-    } else {
-      state.streamStatuses.delete(stream);
+    // Update the stream tab UI first - only update state if DOM update succeeded
+    // This keeps state and DOM in sync even if tab doesn't exist yet
+    const updated = dom.streamTabs.updateStreamStatus(stream, status);
+    if (updated) {
+      if (status && status !== STREAM_STATUS.READY) {
+        state.streamStatuses.set(stream, status);
+      } else {
+        state.streamStatuses.delete(stream);
+      }
     }
-
-    // Update the stream tab UI for just this stream
-    dom.streamTabs.updateStreamStatus(stream, status);
   }
 
   handleUpdateUsage(message) {
