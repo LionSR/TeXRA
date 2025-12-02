@@ -27,17 +27,6 @@ export const MANUAL_RETRY_TIMEOUT_MS = 5 * 60 * 1000;
 // ============================================================================
 
 /**
- * Callbacks for manual retry control.
- * Store these in your flow context to allow external triggering.
- */
-export interface RetryCallbacks {
-  /** Call to trigger a retry attempt. */
-  triggerRetry?: () => void;
-  /** Call to cancel and abort the operation. */
-  cancelRetry?: () => void;
-}
-
-/**
  * Error information for retry handling.
  */
 export interface RetryErrorInfo {

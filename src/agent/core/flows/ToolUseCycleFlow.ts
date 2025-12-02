@@ -43,7 +43,6 @@ import xmlUtils from '@utils/text/xmlUtils';
 import { FlowTransition } from './FlowTransitions';
 import {
   type RetryState,
-  type RetryCallbacks,
   type FallbackResult,
   clearRetryError,
   getNodeRetryConfig,
@@ -157,8 +156,6 @@ export interface ToolUseCycleShared<_C = unknown> {
   state: ToolUseCycleState;
   /** Retry state for model invocation errors */
   retryState: RetryState;
-  /** Callbacks for manual retry control from UI */
-  retryCallbacks: RetryCallbacks;
 }
 
 /**
