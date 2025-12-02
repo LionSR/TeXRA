@@ -498,6 +498,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
           }
           // in the future we log this in firstInputTokens of the AgentRunState
         } catch (err) {
+          // Re-throw context window violations - these are intentional validation errors
+          // that should fail fast, not be swallowed by soft failure
+          if (err instanceof Error && err.message.includes('exceeds context window')) {
+            throw err;
+          }
+          // Soft failure for token counting API errors - proceed without adjustment
           this.logger.warn(
             `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
           );
