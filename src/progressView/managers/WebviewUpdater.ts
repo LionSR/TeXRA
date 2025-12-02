@@ -102,6 +102,9 @@ export class WebviewUpdater {
 
   /**
    * Update log content for a specific stream
+   * @param options.forceRebuild - If true, frontend will do full DOM rebuild.
+   *   Set to true when switching streams or after data deletion.
+   *   When false/undefined, frontend will attempt incremental update.
    */
   updateLogContent(
     stream: StreamTabId,
@@ -113,6 +116,9 @@ export class WebviewUpdater {
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
+    options?: {
+      forceRebuild?: boolean;
+    },
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -123,6 +129,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
+      forceRebuild: options?.forceRebuild,
     });
   }
 
@@ -271,11 +278,23 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update stream status
+   * Update stream status indicator (for active stream)
    */
   updateStatus(status: StatusType): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STATUS,
+      status,
+    });
+  }
+
+  /**
+   * Update a single stream's status in the stream tabs.
+   * More efficient than updateStreams when only status changed.
+   */
+  updateStreamStatus(stream: StreamTabId, status: StatusType | 'ready'): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STREAM_STATUS,
+      stream,
       status,
     });
   }

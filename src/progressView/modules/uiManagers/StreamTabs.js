@@ -113,6 +113,48 @@ export class StreamTabs {
   }
 
   /**
+   * Update status for a single stream tab.
+   * More efficient than full update() when only status changed.
+   * @param {string} streamName - The stream to update
+   * @param {string} status - New status value
+   */
+  updateStreamStatus(streamName, status) {
+    if (!streamName) {
+      return;
+    }
+
+    const tabsContainer = document.getElementById(ELEMENT_IDS.STREAM_TABS);
+    if (!tabsContainer) {
+      return;
+    }
+
+    // Find the tab for this stream
+    const tabEl = tabsContainer.querySelector(
+      `.stream-tab .tab[data-stream="${streamName}"]`,
+    );
+    if (!tabEl) {
+      return;
+    }
+
+    const streamTab = tabEl.closest('.stream-tab');
+    if (!streamTab) {
+      return;
+    }
+
+    const statusEl = streamTab.querySelector('.tab-status');
+    if (!statusEl) {
+      return;
+    }
+
+    // Remove old status classes and add new one
+    statusEl.classList.remove('running', 'stopped', 'error', 'waiting', 'ready');
+    const normalizedStatus = status === 'ready' ? 'stopped' : status || 'stopped';
+    statusEl.classList.add(normalizedStatus);
+    statusEl.dataset.status =
+      normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
+  }
+
+  /**
    * Apply agent decorator icons to a tab element.
    * Uses shared AGENT_DECORATORS config for consistency.
    * @param {HTMLElement} tabEl - The tab element
