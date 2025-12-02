@@ -1,18 +1,14 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
 // Third-party imports
 import * as vscode from 'vscode';
 import { z, ZodError } from 'zod';
 
 // Local imports
 import { parseAgentConfig } from '@agent/core/AgentConfig';
-import { executeAgent, resumeAgentExecution } from '@agent/runtime/executeAgent';
+import {
+  executeAgent,
+  resumeAgentExecution,
+} from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
-
-// Local imports
-import { AgentHistoryManager } from '@historyView/managers';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
@@ -69,32 +65,40 @@ export const executeCommand = {
       const normalizedConfig = parseAgentConfig(config);
 
       if (resume && executionId) {
-        await resumeAgentExecution(normalizedConfig, executionId);
+        await resumeAgentExecution(normalizedConfig, executionId as ExecutionId);
         return;
       }
 
+      if (resume) {
+        logger.warn(
+          CHANNEL,
+          'Resume requested without execution ID; starting new run.',
+        );
+      }
+
       const resolvedExecutionId: ExecutionId =
-        executionId ??
+        (executionId as ExecutionId) ??
         (await vscode.commands.executeCommand<ExecutionId>(
           'texra.history.addToHistory',
           normalizedConfig,
         ))!;
-      if (resume) {
-        logger.warn(CHANNEL, 'Resume requested without execution ID; starting new run.');
-      }
 
-      const newExecutionId = randomUUID() as ExecutionId;
-      await AgentHistoryManager.addToHistory(newExecutionId, normalizedConfig);
-      await executeAgent(normalizedConfig, newExecutionId);
+      await executeAgent(normalizedConfig, resolvedExecutionId);
     } catch (error) {
       if (error instanceof ZodError) {
         const detail = error.issues.map((i) => i.message).join('; ');
-        logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, { data: error });
-        void vscode.window.showErrorMessage(`Invalid agent configuration. ${detail}`);
+        logger.warn(CHANNEL, `Invalid agent configuration. ${detail}`, {
+          data: error,
+        });
+        void vscode.window.showErrorMessage(
+          `Invalid agent configuration. ${detail}`,
+        );
         return;
       }
 
-      logger.error(CHANNEL, 'Agent execution failed before start.', { data: error });
+      logger.error(CHANNEL, 'Agent execution failed before start.', {
+        data: error,
+      });
       throw error;
     }
   },
