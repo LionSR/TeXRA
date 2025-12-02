@@ -17,25 +17,37 @@ const CHANNEL = 'ExecuteCommand';
 // --- Schema ---
 
 /**
- * Explicit execute input with config field.
+ * Explicit wrapper format: { config, executionId?, resume? }
  *
  * Note: `config` is z.unknown() because validation is handled by parseAgentConfig(),
- * which owns AgentConfigSchema. Validating here would duplicate that logic.
- * Errors from invalid config will surface as ZodError in the catch block.
+ * which owns AgentConfigSchema. Errors will surface as ZodError in the catch block.
  */
-const ExplicitInputSchema = z.object({
+const ExplicitWrapperSchema = z.object({
   config: z.unknown(),
   executionId: z.string().optional(),
   resume: z.boolean().default(false),
 });
 
-/** Accepts {config, executionId?, resume?} or raw config directly */
-const ExecuteInputSchema = z
-  .unknown()
-  .transform((input): z.infer<typeof ExplicitInputSchema> => {
-    const explicit = ExplicitInputSchema.safeParse(input);
-    return explicit.success ? explicit.data : { config: input, resume: false };
-  });
+type ParsedInput = z.infer<typeof ExplicitWrapperSchema>;
+
+/** Check if input looks like an explicit wrapper (has 'config' property) */
+function hasConfigProperty(input: unknown): input is { config: unknown } {
+  return input !== null && typeof input === 'object' && 'config' in input;
+}
+
+/**
+ * Parse execute input: explicit wrapper or raw config.
+ *
+ * Discrimination logic:
+ * - If input has 'config' property → parse as explicit wrapper (fail if malformed)
+ * - Otherwise → treat entire input as raw config
+ */
+function parseExecuteInput(input: unknown): ParsedInput {
+  if (hasConfigProperty(input)) {
+    return ExplicitWrapperSchema.parse(input);
+  }
+  return { config: input, resume: false };
+}
 
 // --- Command ---
 
@@ -50,7 +62,7 @@ export function registerExecuteCommand(context: vscode.ExtensionContext) {
 export const executeCommand = {
   async executeCommand(input: unknown) {
     try {
-      const { config, executionId, resume } = ExecuteInputSchema.parse(input);
+      const { config, executionId, resume } = parseExecuteInput(input);
       const normalizedConfig = parseAgentConfig(config);
 
       if (resume && executionId) {
