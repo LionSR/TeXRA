@@ -322,6 +322,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     state.taskGroups.clear();
     state.clearRunInstructions(message.stream);
     state.clearRunFiles(message.stream);
+    state.clearRunUsage(message.stream);
     state.clearPendingInstruction(state.activeStream);
     const previousRunId = state.getActiveRunId(message.stream);
     state.clearActiveRun(message.stream);
