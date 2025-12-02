@@ -100,7 +100,7 @@ export class CrossrefSearchTool extends defineTool({
     const items: Work[] = message.items;
 
     const results = items.map((work) => ({
-      title: work.title[0] ?? null,
+      title: work.title?.[0] ?? null,
       doi: work.DOI,
       publisher: work.publisher,
       type: work.type,
