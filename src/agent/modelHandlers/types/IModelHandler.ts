@@ -329,12 +329,14 @@ export interface IModelHandler<
    * @param calls - Array of tool calls (preserving original order from model response)
    * @param results - Array of tool result payloads (same order as calls)
    * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param workspaceState - Optional workspace state for reasoning blocks
    * @param text - Optional text to include before function calls
    */
   createBatchedToolUseFollowUpMessages?(
     calls: T[],
     results: ToolResultPayload[],
     attachmentsPerCall: ToolFileAttachment[][],
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 
