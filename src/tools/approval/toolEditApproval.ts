@@ -71,7 +71,8 @@ export const ProgressViewApprovalActions = [
   'resumeApprovals',
 ] as const;
 
-export type ProgressViewApprovalAction = typeof ProgressViewApprovalActions[number];
+export type ProgressViewApprovalAction =
+  (typeof ProgressViewApprovalActions)[number];
 
 interface ProgressViewApprovalActionPayload {
   requestId: string;
