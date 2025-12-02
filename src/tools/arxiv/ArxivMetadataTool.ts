@@ -72,7 +72,7 @@ export class ArxivMetadataTool extends defineTool({
       authors: authorNames,
       journalReference: targetEntry.journalRef ?? null,
       comment: targetEntry.comment ?? null,
-      primaryCategory: targetEntry.primaryCategory ?? null,
+      primaryCategory: targetEntry.primaryCategory?.term ?? null,
       links: targetEntry.links ?? null,
       // Conditionally include abstract field only when requested
       ...(includeAbstract && { abstract: targetEntry.summary ?? null }),
