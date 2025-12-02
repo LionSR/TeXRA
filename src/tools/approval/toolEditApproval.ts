@@ -63,12 +63,16 @@ interface PendingApprovalEntry {
   settle: (result: ToolEditApprovalResult) => void;
 }
 
-type ProgressViewApprovalAction =
-  | 'approve'
-  | 'reject'
-  | 'openDiff'
-  | 'approveAll'
-  | 'resumeApprovals';
+/** All valid approval actions for tool edit prompts */
+export const ProgressViewApprovalActions = [
+  'approve',
+  'reject',
+  'openDiff',
+  'approveAll',
+  'resumeApprovals',
+] as const;
+
+export type ProgressViewApprovalAction = typeof ProgressViewApprovalActions[number];
 
 interface ProgressViewApprovalActionPayload {
   requestId: string;

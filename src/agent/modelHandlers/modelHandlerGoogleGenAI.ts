@@ -34,7 +34,6 @@ import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
-  ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
@@ -71,9 +70,9 @@ import xmlUtils from '@utils/text/xmlUtils';
 // Local file imports
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,
-  describeAttachments,
-  extractToolAttachments,
+  formatAttachmentSummary,
   loadAttachmentBuffer,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
@@ -861,33 +860,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     );
   }
 
-  computeResponseUsage(
-    responseUsage: GenerateContentResponseUsageMetadata | null,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    const { outputTokens, reasoningTokens } =
-      this.computeTokenCounts(responseUsage);
-
-    const usageObj: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: outputTokens,
-      total_tokens: responseUsage?.totalTokenCount ?? 0,
-      prompt_tokens_details: {
-        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens: reasoningTokens,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-    return ResponseUsageFactory.fromOpenAIResponse(
-      usageObj,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
-  }
-
   /** Normalizes Google GenAI usage data into a unified format. */
   normalizeUsage(
     rawUsage: GenerateContentResponseUsageMetadata | null,
@@ -1262,19 +1234,26 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   /**
    * Build a function response part with attachments for a single tool call result.
    * Uses SDK's native FunctionResponsePart for attachments, passed to createPartFromFunctionResponse.
+   *
+   * @param call - The tool call to respond to
+   * @param result - Sanitized result (binary data already stripped by source)
+   * @param attachments - Pre-extracted file attachments
    */
   private async buildFunctionResponsePart(
     call: GoogleToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
   ): Promise<Part> {
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
+    // Result is already sanitized by source - create mutable copy for adding attachmentSummary
+    const finalResult: ToolResultPayload = { ...result };
     let attachmentParts: FunctionResponsePart[] = [];
 
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments included in this response:\n${describeAttachments(
-          attachments,
-        ).join('\n')}`;
+    // Only process attachments if the handler supports them
+    if (this.canProcessToolResultAttachments && attachments.length > 0) {
+      finalResult.attachmentSummary = formatAttachmentSummary(
+        attachments,
+        'included-inline',
+      );
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
@@ -1298,7 +1277,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return createPartFromFunctionResponse(
       call.callId,
       call.name,
-      sanitizedResult,
+      finalResult,
       attachmentParts.length > 0 ? attachmentParts : undefined,
     );
   }
@@ -1315,7 +1294,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   async createToolUseFollowUpMessages(
     _client: GoogleGenAI | undefined,
     call: GoogleToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
@@ -1324,7 +1304,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     const callPart = this.buildFunctionCallPart(call);
-    const responsePart = await this.buildFunctionResponsePart(call, result);
+    const responsePart = await this.buildFunctionResponsePart(
+      call,
+      result,
+      attachments,
+    );
 
     const callParts: Part[] = [];
     if (text) {
@@ -1351,12 +1335,16 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
    * model messages, each becomes a new step requiring its own signature.
    *
    * @param calls - Array of tool calls (should preserve original order from model response)
-   * @param results - Array of results corresponding to each call (same order as calls)
+   * @param results - Array of sanitized results (same order as calls)
+   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param _workspaceState - Unused, for interface compatibility
    * @param text - Optional text to include before function calls
    */
   async createBatchedToolUseFollowUpMessages(
     calls: GoogleToolCall[],
-    results: Record<string, unknown>[],
+    results: ToolResultPayload[],
+    attachmentsPerCall: ToolFileAttachment[][],
+    _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<Content[]> {
     if (calls.length === 0) {
@@ -1366,6 +1354,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (calls.length !== results.length) {
       throw new Error(
         `Mismatched calls and results: ${calls.length} calls, ${results.length} results`,
+      );
+    }
+
+    if (calls.length !== attachmentsPerCall.length) {
+      throw new Error(
+        `Mismatched calls and attachments: ${calls.length} calls, ${attachmentsPerCall.length} attachment arrays`,
       );
     }
 
@@ -1390,7 +1384,11 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     // Build all function response parts
     const responseParts: Part[] = [];
     for (let i = 0; i < calls.length; i++) {
-      const part = await this.buildFunctionResponsePart(calls[i], results[i]);
+      const part = await this.buildFunctionResponsePart(
+        calls[i],
+        results[i],
+        attachmentsPerCall[i],
+      );
       responseParts.push(part);
     }
 

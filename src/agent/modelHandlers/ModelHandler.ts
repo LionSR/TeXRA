@@ -19,6 +19,7 @@ import {
   ModelProvider,
   ModelCapabilities,
 } from '@model/ModelConfig';
+import type { ToolFileAttachment } from '@tools/result';
 import { getConfig } from '@utils/config';
 
 // Local file imports
@@ -34,6 +35,7 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
+import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 import type {
   IModelHandler,
   CreateResponseOptions,
@@ -90,11 +92,20 @@ export abstract class ModelHandler<
   protected agentType?: AgentType;
   protected mediaProcessor: MediaAttachmentProcessor;
 
-  protected get supportsToolFileOutputs(): boolean {
-    return false;
+  /**
+   * Whether the handler supports processing attachments in tool results.
+   * Override in handlers that don't support attachments (e.g., DeepSeek).
+   */
+  get canProcessToolResultAttachments(): boolean {
+    return true;
   }
 
-  protected get supportsInlineToolImages(): boolean {
+  /**
+   * Whether the handler can upload files to the provider's API for tool results.
+   * Override in handlers that support provider-specific file upload APIs
+   * (e.g., Anthropic Files API, OpenAI Files API).
+   */
+  protected get supportsToolResultFileUpload(): boolean {
     return false;
   }
 
@@ -211,6 +222,7 @@ export abstract class ModelHandler<
     return resolveBaseUrl({
       provider: this.config.provider,
       openRouterOnly: this.config.openRouterOnly,
+      customBaseUrl: this.config.baseUrl,
       logger: this.logger,
     });
   }
@@ -242,6 +254,11 @@ export abstract class ModelHandler<
   /** Checks if the model is from Google provider. */
   get isGoogle(): boolean {
     return this.config.provider === ModelProvider.GOOGLE;
+  }
+
+  /** Checks if the model is from DeepSeek provider. */
+  get isDeepSeek(): boolean {
+    return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
   /**
@@ -521,13 +538,6 @@ export abstract class ModelHandler<
   abstract computePrice(responseUsage: U): number;
 
   /**
-   * Computes detailed usage metrics from model response.
-   * @returns Provider-specific response usage object
-   * @deprecated Use normalizeUsage() instead for unified usage tracking
-   */
-  abstract computeResponseUsage(responseUsage: U, responseTime: number): R;
-
-  /**
    * Normalizes provider-specific usage data into a unified format.
    * This is the single source of truth for usage statistics.
    *
@@ -591,11 +601,19 @@ export abstract class ModelHandler<
 
   /**
    * Build a provider-specific follow-up message containing a tool result.
+   *
+   * @param client - Provider client (for file uploads if supported)
+   * @param call - Parsed tool call object
+   * @param result - Tool result payload (binary data stripped, properly typed)
+   * @param attachments - Extracted file attachments (for upload/inline if supported)
+   * @param workspaceState - Optional workspace state
+   * @param text - Optional text to include before tool call
    */
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;

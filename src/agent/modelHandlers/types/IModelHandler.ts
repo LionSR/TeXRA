@@ -10,7 +10,9 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { ModelConfig, ModelCapabilities, ToolDefinition } from '@model';
+import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
+import type { ToolResultPayload } from '../utils/toolAttachmentUtils';
 import type { ProviderMessage } from './ProviderMessage';
 import type { ProviderStopReason } from './StopReasonTypes';
 import type {
@@ -164,6 +166,12 @@ export interface IModelHandler<
   /** Indicates if the model is served by Google. */
   readonly isGoogle: boolean;
 
+  /** Indicates if the model is served by DeepSeek. */
+  readonly isDeepSeek: boolean;
+
+  /** Whether the handler supports processing attachments in tool results. */
+  readonly canProcessToolResultAttachments: boolean;
+
   /** Checks if the provider implements the OpenAI API. */
   readonly isOpenaiCompatible: boolean;
 
@@ -238,12 +246,6 @@ export interface IModelHandler<
   computePrice(responseUsage: U): number;
 
   /**
-   * Compute detailed usage metrics.
-   * @deprecated Use normalizeUsage() instead for unified usage tracking
-   */
-  computeResponseUsage(responseUsage: U, responseTime: number): R;
-
-  /**
    * Normalizes provider-specific usage data into a unified format.
    * This is the single source of truth for usage statistics.
    * Cost is computed once here and should never be recomputed elsewhere.
@@ -297,14 +299,19 @@ export interface IModelHandler<
   /**
    * Create provider-specific messages capturing the tool call and result.
    *
+   * @param client - Provider client (for file uploads if supported)
    * @param call - Parsed tool call object or input payload
-   * @param result - Object with output/error fields
-   * @returns Tuple of [call message, result message]
+   * @param result - Tool result payload (binary data stripped, properly typed)
+   * @param attachments - Extracted file attachments (for upload/inline if supported)
+   * @param workspaceState - Optional workspace state
+   * @param text - Optional text to include before tool call
+   * @returns Array of provider-specific messages
    */
   createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
@@ -320,12 +327,16 @@ export interface IModelHandler<
    * - All function responses go in ONE user message
    *
    * @param calls - Array of tool calls (preserving original order from model response)
-   * @param results - Array of results corresponding to each call (same order)
+   * @param results - Array of tool result payloads (same order as calls)
+   * @param attachmentsPerCall - Array of attachment arrays (same order as calls)
+   * @param workspaceState - Optional workspace state for reasoning blocks
    * @param text - Optional text to include before function calls
    */
   createBatchedToolUseFollowUpMessages?(
     calls: T[],
-    results: Record<string, unknown>[],
+    results: ToolResultPayload[],
+    attachmentsPerCall: ToolFileAttachment[][],
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<M[]>;
 

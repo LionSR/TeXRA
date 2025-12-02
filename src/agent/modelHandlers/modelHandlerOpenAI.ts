@@ -23,7 +23,6 @@ import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
-  ResponseUsageFactory,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
@@ -39,6 +38,7 @@ import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
+import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@utils/files';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 import { flexibleFS } from '@utils/files';
@@ -53,8 +53,8 @@ import {
 } from './openAIMessageUtils';
 import { toOpenAITools } from './toolConversion';
 import {
-  describeAttachments,
-  extractToolAttachments,
+  formatAttachmentSummary,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { ModelHandler } from './ModelHandler';
@@ -962,42 +962,13 @@ export class ModelHandlerOpenAI<
     return basePrice;
   }
 
-  /** Creates usage statistics from OpenAI's response format. */
-  computeResponseUsage(
-    responseUsage: ExtendedCompletionUsage | null,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    // For Google models, create a minimal usage object with zeros
-    if (!responseUsage) {
-      const emptyUsage: ExtendedCompletionUsage = {
-        prompt_tokens: 0,
-        completion_tokens: 0,
-        total_tokens: 0,
-        // Note: OpenAI doesn't provide tool_use_tokens, so we don't include it
-        prompt_tokens_details: { cached_tokens: 0 },
-        completion_tokens_details: {
-          reasoning_tokens: 0,
-          accepted_prediction_tokens: undefined,
-          rejected_prediction_tokens: undefined,
-        },
-      };
-      return ResponseUsageFactory.fromOpenAIResponse(
-        emptyUsage,
-        this.computePrice(responseUsage),
-        responseTime,
-      );
-    }
-
-    return ResponseUsageFactory.fromOpenAIResponse(
-      responseUsage,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
-  }
-
-  /** Returns the provider identifier for usage tracking. Subclasses can override. */
+  /**
+   * Returns the provider identifier for usage tracking.
+   * Defaults to config.provider. Override only when usage tracking
+   * needs a different identifier (e.g., 'kimi' for Moonshot).
+   */
   protected get usageProvider(): NormalizedUsage['provider'] {
-    return 'openai';
+    return this.config.provider as NormalizedUsage['provider'];
   }
 
   /** Normalizes OpenAI usage data into a unified format. */
@@ -1255,10 +1226,11 @@ export class ModelHandlerOpenAI<
 
   /**
    * Provider name used when extracting tool calls.
-   * Subclasses can override to customize the provider identifier.
+   * Defaults to config.provider. Override only when tool calls
+   * need a different identifier.
    */
   protected get toolCallProvider(): string {
-    return 'openai';
+    return this.config.provider;
   }
 
   protected parseArguments(raw: unknown): unknown {
@@ -1317,7 +1289,8 @@ export class ModelHandlerOpenAI<
   async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
     call: TCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ChatCompletionMessageParam[]> {
@@ -1329,18 +1302,20 @@ export class ModelHandlerOpenAI<
     if (text) {
       callMsg.content = this.formatAssistantContent(text);
     }
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    if (attachments.length > 0) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to download them.`;
-    }
+
+    // Add attachment summary only if handler supports them and attachments exist
+    const finalResult =
+      this.canProcessToolResultAttachments && attachments.length > 0
+        ? {
+            ...result,
+            attachmentSummary: formatAttachmentSummary(attachments),
+          }
+        : result;
 
     const resultMsg: ChatCompletionToolMessageParam = {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify(sanitizedResult),
+      content: JSON.stringify(finalResult),
     };
     return [callMsg, resultMsg];
   }

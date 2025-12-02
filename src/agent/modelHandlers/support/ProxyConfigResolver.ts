@@ -27,10 +27,19 @@ const BASE_URLS: Record<ModelProvider, string | null> = {
 export interface ProxyConfig {
   provider: ModelProvider;
   openRouterOnly: boolean;
+  customBaseUrl?: string; // Per-model custom base URL (overrides provider default)
   logger?: { debug: (message: string) => void };
 }
 
 export function resolveBaseUrl(config: ProxyConfig): string | null {
+  // Per-model custom base URL takes highest precedence (e.g., temporary endpoints)
+  if (config.customBaseUrl) {
+    config.logger?.debug(
+      `Using custom base URL for model: ${config.customBaseUrl}`,
+    );
+    return config.customBaseUrl;
+  }
+
   const useOpenRouter =
     config.openRouterOnly ||
     getConfig<boolean>('texra.model.useOpenRouter', false);
