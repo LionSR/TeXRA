@@ -108,7 +108,7 @@ export class ArxivSearchTool extends defineTool({
         published: entry.published ?? null,
         updated: entry.updated ?? null,
         authors: getAuthorNames(entry.authors),
-        primaryCategory: entry.primaryCategory?.term ?? null,
+        primaryCategory: entry.primaryCategory ?? null,
         arxivUrl: identifier
           ? `https://arxiv.org/abs/${normaliseArxivIdentifier(identifier)}`
           : null,
