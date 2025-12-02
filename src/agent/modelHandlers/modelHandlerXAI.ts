@@ -2,7 +2,6 @@
 
 // Local imports - agent
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@utils/config';
 
 // Local file imports
@@ -13,12 +12,9 @@ import type { ExtractResponseResult } from './types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.
+ * usageProvider and toolCallProvider inherit from base class via config.provider.
  */
 export class ModelHandlerXAI extends ModelHandlerOpenAI {
-  protected override get usageProvider(): NormalizedUsage['provider'] {
-    return 'xai';
-  }
-
   /**
    * Process thinking blocks for xAI models
    * @param responseObject The raw response object from the model
