@@ -43,9 +43,9 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
-  describeAttachments,
-  extractToolAttachments,
+  formatAttachmentSummary,
   loadAttachmentBuffer,
+  type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -112,11 +112,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     );
   }
 
-  protected override get supportsToolFileOutputs(): boolean {
-    return true;
-  }
-
-  protected override get supportsInlineToolImages(): boolean {
+  /**
+   * OpenAI Response API supports file uploads.
+   */
+  protected override get supportsToolResultFileUpload(): boolean {
     return true;
   }
 
@@ -1286,7 +1285,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
+    attachments: ToolFileAttachment[],
     _workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
@@ -1302,35 +1302,33 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       arguments: call.raw.arguments,
     };
 
-    const { attachments, sanitizedResult } = extractToolAttachments(result);
-    const supportsAttachments = this.supportsToolFileOutputs;
-    const supportsInlineImages = this.supportsInlineToolImages;
+    // Create mutable copy for adding attachmentSummary/files
+    const finalResult: ToolResultPayload = { ...result };
+    const canUploadFiles = this.supportsToolResultFileUpload;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
-    if (supportsAttachments && attachments.length > 0 && client) {
+    if (canUploadFiles && attachments.length > 0 && client) {
       uploadedAttachments = await this.uploadToolAttachments(
         client,
         attachments,
       );
       if (uploadedAttachments.length > 0) {
-        (sanitizedResult as { files?: unknown }).files =
-          uploadedAttachments.map(({ attachment, fileId }) => ({
+        finalResult.files = uploadedAttachments.map(
+          ({ attachment, fileId }) => ({
             path: attachment.path,
             mimeType: attachment.mimeType,
             description: attachment.description,
             fileId,
-          }));
+          }),
+        );
       }
     }
 
     if (
       attachments.length > 0 &&
-      (!supportsAttachments || !client || uploadedAttachments.length === 0)
+      (!canUploadFiles || !client || uploadedAttachments.length === 0)
     ) {
-      (sanitizedResult as Record<string, unknown>).attachmentSummary =
-        `Attachments available:\n${describeAttachments(attachments).join(
-          '\n',
-        )}\nUse the read_file tool to inspect them.`;
+      finalResult.attachmentSummary = formatAttachmentSummary(attachments);
     }
 
     const primaryText =
@@ -1339,7 +1337,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         : typeof result.summary === 'string'
           ? result.summary
           : undefined;
-    const summaryPayload = JSON.stringify(sanitizedResult, null, 2);
+    const summaryPayload = JSON.stringify(finalResult, null, 2);
     const combinedText = primaryText
       ? `${primaryText}\n\n${summaryPayload}`
       : summaryPayload;
@@ -1352,7 +1350,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ];
 
       for (const uploaded of uploadedAttachments) {
-        if (supportsInlineImages && uploaded.isImage) {
+        if (this.canProcessToolResultAttachments && uploaded.isImage) {
           parts.push({
             type: 'input_image',
             detail: 'auto',

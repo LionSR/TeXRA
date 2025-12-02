@@ -436,6 +436,7 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
       undefined,
       providerCall,
       toolResult,
+      [],
     );
 
     assert.equal(
