@@ -57,7 +57,9 @@ const PackMultipleSchema = z
 
 function formatZodError(error: z.ZodError): string {
   return error.issues
-    .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+    .map((i) =>
+      i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message,
+    )
     .join(', ');
 }
 
@@ -70,14 +72,19 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
           .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
           .then((sel) => {
             if (sel === 'Open Folder') {
-              void vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(WorkspaceFS.fullPath(folder)));
+              void vscode.commands.executeCommand(
+                'revealFileInOS',
+                vscode.Uri.file(WorkspaceFS.fullPath(folder)),
+              );
             }
           });
       }
       break;
     }
     case 'noFiles':
-      vscode.window.showInformationMessage(`No files found to pack for ${inputFile}`);
+      vscode.window.showInformationMessage(
+        `No files found to pack for ${inputFile}`,
+      );
       break;
     case 'missingParams':
       vscode.window.showErrorMessage('Missing required parameters for pack');
@@ -93,36 +100,70 @@ function showPackResult(result: FileOpResult, inputFile: string): void {
 async function handlePack(config: unknown) {
   const parsed = PackConfigSchema.safeParse(config);
   if (!parsed.success) {
-    await showLoggedMessage(CHANNEL, `Invalid config: ${formatZodError(parsed.error)}`);
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid config: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
 
-  const { agent, model, inputFile, outputFiles, useMultipleOutputs, streamId, skipProgressViewClear } =
-    parsed.data;
+  const {
+    agent,
+    model,
+    inputFile,
+    outputFiles,
+    useMultipleOutputs,
+    streamId,
+    skipProgressViewClear,
+  } = parsed.data;
 
   if (outputFiles.length > 1 && !useMultipleOutputs) {
-    logger.warn(CHANNEL, 'Multiple output files but multi-output mode disabled');
+    logger.warn(
+      CHANNEL,
+      'Multiple output files but multi-output mode disabled',
+    );
   }
 
-  const result = await runPack(model, inputFile, agent, useMultipleOutputs ? outputFiles : []);
+  const result = await runPack(
+    model,
+    inputFile,
+    agent,
+    useMultipleOutputs ? outputFiles : [],
+  );
   showPackResult(result, inputFile);
 
   if (!skipProgressViewClear) {
-    bus.emit('clearMissingOutputs', streamId || getStreamTabId(agent, model, inputFile, { useMultipleOutputs }));
+    bus.emit(
+      'clearMissingOutputs',
+      streamId ||
+        getStreamTabId(agent, model, inputFile, { useMultipleOutputs }),
+    );
   }
 }
 
-async function handlePackSingle(inputFile: string, agent: string, model: string) {
+async function handlePackSingle(
+  inputFile: string,
+  agent: string,
+  model: string,
+) {
   const parsed = PackParamsSchema.safeParse({ inputFile, agent, model });
   if (!parsed.success) {
-    await showLoggedMessage(CHANNEL, `Invalid params: ${formatZodError(parsed.error)}`);
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid params: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
 
   const data = parsed.data;
   const result = await runPackSingle(data.model, data.inputFile, data.agent);
   showPackResult(result, data.inputFile);
-  bus.emit('clearMissingOutputs', getStreamTabId(data.agent, data.model, data.inputFile, { useMultipleOutputs: false }));
+  bus.emit(
+    'clearMissingOutputs',
+    getStreamTabId(data.agent, data.model, data.inputFile, {
+      useMultipleOutputs: false,
+    }),
+  );
 }
 
 async function handlePackMultiple(
@@ -131,16 +172,34 @@ async function handlePackMultiple(
   model: string,
   outputFiles: string[] = [],
 ) {
-  const parsed = PackMultipleSchema.safeParse({ inputFile, agent, model, outputFiles });
+  const parsed = PackMultipleSchema.safeParse({
+    inputFile,
+    agent,
+    model,
+    outputFiles,
+  });
   if (!parsed.success) {
-    await showLoggedMessage(CHANNEL, `Invalid params: ${formatZodError(parsed.error)}`);
+    await showLoggedMessage(
+      CHANNEL,
+      `Invalid params: ${formatZodError(parsed.error)}`,
+    );
     return;
   }
 
   const data = parsed.data;
-  const result = await runPackMultiple(data.model, data.inputFile, data.agent, data.outputFiles);
+  const result = await runPackMultiple(
+    data.model,
+    data.inputFile,
+    data.agent,
+    data.outputFiles,
+  );
   showPackResult(result, data.inputFile);
-  bus.emit('clearMissingOutputs', getStreamTabId(data.agent, data.model, data.inputFile, { useMultipleOutputs: true }));
+  bus.emit(
+    'clearMissingOutputs',
+    getStreamTabId(data.agent, data.model, data.inputFile, {
+      useMultipleOutputs: true,
+    }),
+  );
 }
 
 // --- Registration ---
@@ -153,4 +212,8 @@ export function registerPackCommands(context: vscode.ExtensionContext) {
   );
 }
 
-export const packCommands = { handlePack, handlePackSingle, handlePackMultiple };
+export const packCommands = {
+  handlePack,
+  handlePackSingle,
+  handlePackMultiple,
+};
