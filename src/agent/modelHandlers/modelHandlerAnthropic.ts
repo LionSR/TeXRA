@@ -52,11 +52,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Internal imports
 import { cleanFileContent } from '@replacement/engine';
@@ -615,11 +611,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
       }
     } catch (err) {
-      const formattedError = formatProviderHttpError(err);
-      this.logger.error(`Error creating response: ${formattedError.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: formattedError,
-      });
+      this.logger.logError(
+        `Error creating response: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'create response' },
+      );
       throw err;
     }
 
@@ -972,13 +968,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Error processing media files for follow-up round: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
+        this.logger.logError(
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          err,
+          { operation: 'process media files' },
         );
       }
     }
@@ -1257,7 +1250,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+      this.logger.logScratchpad(scratchpad);
     }
 
     await flexibleFS.write(outputLocation, fileContent);
