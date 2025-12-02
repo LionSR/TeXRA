@@ -1,6 +1,3 @@
-// Standard library imports
-import { randomUUID } from 'crypto';
-
 // Third-party imports
 import * as vscode from 'vscode';
 
@@ -35,9 +32,12 @@ export class AgentHistoryManager {
   private static readonly MAX_HISTORY_ITEMS = 500;
 
   /**
-   * Add a new agent execution to history
+   * Add an agent execution to history with the given ID.
    */
-  public static async addToHistory(config: AgentConfig): Promise<string> {
+  public static async addToHistory(
+    executionId: ExecutionId,
+    config: AgentConfig,
+  ): Promise<void> {
     const normalizedConfig = parseAgentConfig(config);
     if (!normalizedConfig.session) {
       throw new Error(
@@ -46,26 +46,19 @@ export class AgentHistoryManager {
     }
 
     const historyItem: AgentHistoryItem = {
-      id: randomUUID(),
+      id: executionId,
       timestamp: new Date().toISOString(),
       agentConfig: normalizedConfig,
     };
 
-    // Get current workspace-specific history
     const history = await this.getHistory();
-
-    // Add new item at beginning (most recent first)
     history.unshift(historyItem);
 
-    // Limit history size
     if (history.length > this.MAX_HISTORY_ITEMS) {
       history.splice(this.MAX_HISTORY_ITEMS);
     }
 
-    // Save updated history
     await this.saveHistory(history);
-
-    return historyItem.id;
   }
 
   /**
