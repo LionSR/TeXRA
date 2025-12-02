@@ -120,25 +120,6 @@ class StubOpenAIResponsesHandler extends ModelHandlerOpenAIResponse {
     };
   }
 
-  override computeResponseUsage(
-    _responseUsage: ResponseUsage | undefined,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    return {
-      totalInputTokens: 5,
-      totalOutputTokens: 7,
-      percentageCached: 0,
-      cost: 0,
-      responseTime,
-      prompt_tokens: 5,
-      completion_tokens: 7,
-      cached_tokens: 0,
-      reasoning_tokens: 0,
-      accepted_prediction_tokens: null,
-      rejected_prediction_tokens: null,
-    };
-  }
-
   override updateMessageContentWithoutPrefill(): void {}
 
   override updateMessageContentWithPrefill(): void {}
