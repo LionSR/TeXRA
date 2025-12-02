@@ -7,6 +7,7 @@ import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
+  OutputFileInfoSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -41,17 +42,7 @@ function createRoundMapSchema<T>(itemSchema: z.ZodType<T>) {
 /** Schema for missing output paths (string arrays per round) */
 const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
 
-/** Schema for output file info (uses existing schema with fallback) */
-const OutputFileInfoSchema = z.unknown().transform((v): OutputFileInfo | null => {
-  try {
-    const parsed = OutputFileInfoListSchema.parse([v]);
-    return parsed[0] ?? null;
-  } catch {
-    return null;
-  }
-});
-
-/** Schema for output files round map (filters nulls from parsing) */
+/** Schema for output files round map (filters invalid entries during parsing) */
 const OutputFilesRoundMapSchema = z
   .record(z.string(), z.array(z.unknown()).catch([]))
   .transform((record): Map<number, OutputFileInfo[]> => {
@@ -60,8 +51,9 @@ const OutputFilesRoundMapSchema = z
       const round = RoundKey.safeParse(key);
       if (!round.success) continue;
       const parsed = items
-        .map((item) => OutputFileInfoSchema.parse(item))
-        .filter((item): item is OutputFileInfo => item !== null);
+        .map((item) => OutputFileInfoSchema.safeParse(item))
+        .filter((result): result is z.SafeParseSuccess<OutputFileInfo> => result.success)
+        .map((result) => result.data);
       if (parsed.length > 0) {
         map.set(round.data, parsed);
       }
