@@ -465,7 +465,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       buffer = Buffer.from(payload, 'base64');
       const uploadedFile = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: `openai.files.create:${filename}`,
         },
@@ -610,7 +609,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const streamParams: ResponseStreamParams = { ...rest, stream: true };
       const stream = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'openai.responses.stream',
           signal,
@@ -648,7 +646,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       };
       let response = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: 'openai.responses.create',
           signal,
@@ -914,7 +911,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const requestOptions = signal ? { signal } : undefined;
       current = await executeRequest(
         {
-          logger: this.logger,
           model: this.config.name,
           operation: `openai.responses.retrieve:${responseId}`,
           signal,
@@ -1397,7 +1393,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         const uploadedFile = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: `openai.files.create:${filename}`,
           },

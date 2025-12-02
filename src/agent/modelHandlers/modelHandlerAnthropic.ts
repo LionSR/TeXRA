@@ -451,7 +451,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
         const responseTokenCount = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'anthropic.beta.messages.countTokens',
             signal,
@@ -545,7 +544,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // we should also make sure partial results can be returned in the presence of errors!
         const stream = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'anthropic.beta.messages.stream',
             signal,
@@ -601,7 +599,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       } else {
         response = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: 'anthropic.beta.messages.create',
             signal,
@@ -610,11 +607,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
       }
     } catch (err) {
-      this.logger.logError(
-        `Error creating response: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'create response' },
-      );
+      // Error logging follows "log at the boundary" principle - the fallback handler
+      // (RetryState.applyFallbackResult) will log the error once. Rethrow without logging.
       throw err;
     }
 
@@ -724,7 +718,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
           buffer = Buffer.from(base64Data, 'base64');
           const uploadedFile = await executeRequest(
             {
-              logger: this.logger,
               model: this.config.name,
               operation: `anthropic.beta.files.upload:${sanitizedFilename}`,
             },
@@ -845,7 +838,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const base64Data = buffer.toString('base64');
         const uploadedFile = await executeRequest(
           {
-            logger: this.logger,
             model: this.config.name,
             operation: `anthropic.beta.files.upload:${filename}`,
           },
