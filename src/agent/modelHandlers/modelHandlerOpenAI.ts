@@ -30,7 +30,10 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  getSdkErrorMessage,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { ToolDefinition } from '@model';
@@ -246,9 +249,14 @@ export class ModelHandlerOpenAI<
         }
       }
     } catch (err) {
-      this.logger.error(
+      // Re-throw context window violations - these are intentional validation errors
+      // that should fail fast, not be swallowed by soft failure
+      if (isContextWindowError(err)) {
+        throw err;
+      }
+      // Soft failure for token counting errors - proceed without adjustment
+      this.logger.warn(
         `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-        { data: err },
       );
     }
   }
