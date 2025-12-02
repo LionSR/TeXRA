@@ -378,6 +378,14 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
    * - New groups are NOT created; they arrive via ADD_TASK_GROUP command
    */
   _handleIncrementalUpdate(message) {
+    // Defensive guard: caller should verify stream matches active stream
+    if (message.stream !== state.activeStream) {
+      console.debug(
+        `[incremental] stream mismatch: ${message.stream} !== ${state.activeStream}`,
+      );
+      return;
+    }
+
     // Update run-scoped metadata only (instructions, usage, files)
     // Skip DOM reconstruction since content hasn't changed
 
@@ -406,10 +414,19 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Update task group statuses if they changed
+    // Note: Only status/endTime are expected to change post-creation
     const groups = message.groups || [];
     groups.forEach((group) => {
       const existing = state.taskGroups.get(group.id);
-      if (existing && existing.status !== group.status) {
+      if (!existing) {
+        // New group during incremental update - this shouldn't happen
+        // Groups should arrive via ADD_TASK_GROUP command
+        console.debug(
+          `[incremental] unexpected new group ${group.id} - skipping`,
+        );
+        return;
+      }
+      if (existing.status !== group.status) {
         state.taskGroups.update({
           groupId: group.id,
           updates: { status: group.status, endTime: group.endTime },
@@ -555,7 +572,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
 
     // Update status in state
-    if (status && status !== 'ready') {
+    if (status && status !== STREAM_STATUS.READY) {
       state.streamStatuses.set(stream, status);
     } else {
       state.streamStatuses.delete(stream);
