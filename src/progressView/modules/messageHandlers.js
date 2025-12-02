@@ -370,6 +370,11 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   /**
    * Handle incremental update - update state without DOM rebuild.
    * Used when refreshing the same stream to avoid expensive full rebuild.
+   *
+   * Limitations (by design):
+   * - Log messages are NOT appended here; they arrive via APPEND_LOG command
+   * - Only group status/endTime are updated; other group fields are immutable post-creation
+   * - New groups are NOT created; they arrive via ADD_TASK_GROUP command
    */
   _handleIncrementalUpdate(message) {
     // Update run-scoped metadata only (instructions, usage, files)
