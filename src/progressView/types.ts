@@ -40,4 +40,3 @@ export interface InstructionUpdate {
   text: string;
   metadata?: InstructionMetadata;
 }
-
