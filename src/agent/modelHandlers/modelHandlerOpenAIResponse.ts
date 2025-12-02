@@ -638,49 +638,48 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       return response;
     }
 
-    try {
-      const { stream: _nonStream, ...nonStreamRest } = params;
-      const nonStreamingParams: ResponseCreateParamsNonStreaming = {
-        ...nonStreamRest,
-        stream: false,
-      };
-      let response = await executeRequest(
+    // Non-streaming path
+    // Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+    const { stream: _nonStream, ...nonStreamRest } = params;
+    const nonStreamingParams: ResponseCreateParamsNonStreaming = {
+      ...nonStreamRest,
+      stream: false,
+    };
+    let response = await executeRequest(
+      {
+        model: this.config.name,
+        operation: 'openai.responses.create',
+        signal,
+      },
+      () => client.responses.create(nonStreamingParams, { signal }),
+    );
+    if (useBackgroundResponses) {
+      this.logger.debug(
+        `Background response ${response.id} created with status ${
+          response.status ?? 'unknown'
+        }`,
         {
-          model: this.config.name,
-          operation: 'openai.responses.create',
-          signal,
-        },
-        () => client.responses.create(nonStreamingParams, { signal }),
-      );
-      if (useBackgroundResponses) {
-        this.logger.debug(
-          `Background response ${response.id} created with status ${
-            response.status ?? 'unknown'
-          }`,
-          {
-            data: {
-              responseId: response.id,
-              status: response.status,
-              usage: response.usage ?? undefined,
-            },
+          data: {
+            responseId: response.id,
+            status: response.status,
+            usage: response.usage ?? undefined,
           },
-        );
-        this.logger.logProgress(
-          `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-        );
-      }
-      if (useBackgroundResponses) {
-        response = await this.waitForBackgroundCompletion(
-          client,
-          response,
-          signal,
-        );
-      }
-      this.previousResponseId = response.id;
-      this.sentMessages = messages.length;
-      return response;
+        },
+      );
+      this.logger.logProgress(
+        `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
+      );
     }
-    // Note: Errors propagate to PocketFlow's execFallback which logs once (log at boundary principle)
+    if (useBackgroundResponses) {
+      response = await this.waitForBackgroundCompletion(
+        client,
+        response,
+        signal,
+      );
+    }
+    this.previousResponseId = response.id;
+    this.sentMessages = messages.length;
+    return response;
   }
 
   /**

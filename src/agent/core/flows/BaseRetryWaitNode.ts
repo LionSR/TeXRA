@@ -101,7 +101,9 @@ class RetryWaitNode<
     const logger = this.accessors.getLogger(prepRes, this._params);
 
     // Internal log for debugging (output channel only)
-    logger.debug(`Waiting for manual retry: ${retryState.lastError?.message ?? 'unknown error'}`);
+    logger.debug(
+      `Waiting for manual retry: ${retryState.lastError?.message ?? 'unknown error'}`,
+    );
 
     // Emit waiting status to UI
     bus.emit('updateStreamStatus', { stream: streamId, status: 'waiting' });
