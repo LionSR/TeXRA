@@ -2,6 +2,9 @@
 import arxivClient from 'arxiv-client';
 import { extract as extractArxivId } from 'identifiers-arxiv';
 
+/** Infer ArxivEntry type from the client's execute() return type */
+type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
+
 /**
  * Base arXiv paper metadata shared between search and metadata tools.
  */
@@ -65,36 +68,11 @@ export const extractEntryIdentifier = (rawId: unknown): string | null => {
   return id ? normaliseArxivIdentifier(id) : null;
 };
 
+/** Extract author names, optionally limiting to maxAuthors */
 export const getAuthorNames = (
-  authors: unknown,
+  authors: ArxivEntry['authors'],
   maxAuthors?: number,
 ): string[] => {
-  const list = Array.isArray(authors) ? authors : authors ? [authors] : [];
-  const names = list
-    .map((entry) => {
-      if (entry && typeof entry === 'object' && 'name' in entry) {
-        const value = (entry as { name?: unknown }).name;
-        return typeof value === 'string' ? value : null;
-      }
-      return typeof entry === 'string' ? entry : null;
-    })
-    .filter((name): name is string => Boolean(name));
-  if (typeof maxAuthors === 'number') {
-    return names.slice(0, maxAuthors);
-  }
-  return names;
-};
-
-export const readPrimaryCategory = (primary: unknown): string | null => {
-  if (!primary) {
-    return null;
-  }
-  if (typeof primary === 'string') {
-    return primary;
-  }
-  if (typeof primary === 'object' && primary && 'term' in primary) {
-    const { term } = primary as { term?: unknown };
-    return typeof term === 'string' ? term : null;
-  }
-  return null;
+  const names = authors.map((author) => author.name);
+  return maxAuthors !== undefined ? names.slice(0, maxAuthors) : names;
 };

@@ -1,11 +1,13 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - progress view
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
 import {
   OutputFileInfoListSchema,
+  OutputFileInfoSchema,
   type OutputFileInfo,
 } from '@agent/output/types';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -16,9 +18,98 @@ import {
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
 
-// Local imports
+// --- Zod Schemas for Output Files ---
 
-// Types
+/** Schema for integer round keys (coerces string keys to numbers) */
+const RoundKey = z.coerce.number().int();
+
+/** Schema for a round map: { roundNumber: items[] } -> Map<number, T[]> */
+function createRoundMapSchema<T>(itemSchema: z.ZodType<T>) {
+  return z
+    .record(z.string(), z.array(itemSchema).catch([]))
+    .transform((record): Map<number, T[]> => {
+      const map = new Map<number, T[]>();
+      for (const [key, items] of Object.entries(record)) {
+        const round = RoundKey.safeParse(key);
+        if (round.success && items.length > 0) {
+          map.set(round.data, items);
+        }
+      }
+      return map;
+    });
+}
+
+/** Schema for missing output paths (string arrays per round) */
+const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
+
+/** Schema for output files round map (filters invalid entries during parsing) */
+const OutputFilesRoundMapSchema = z
+  .record(z.string(), z.array(z.unknown()).catch([]))
+  .transform((record): Map<number, OutputFileInfo[]> => {
+    const map = new Map<number, OutputFileInfo[]>();
+    for (const [key, items] of Object.entries(record)) {
+      const round = RoundKey.safeParse(key);
+      if (!round.success) continue;
+      const parsed = items
+        .map((item) => OutputFileInfoSchema.safeParse(item))
+        .filter((result): result is z.SafeParseSuccess<OutputFileInfo> => result.success)
+        .map((result) => result.data);
+      if (parsed.length > 0) {
+        map.set(round.data, parsed);
+      }
+    }
+    return map;
+  });
+
+/**
+ * Detects if a record looks like legacy format (all keys are numeric)
+ * vs modern format (keys are run IDs like strings)
+ */
+function isLegacyFormat(record: Record<string, unknown>): boolean {
+  const entries = Object.entries(record);
+  return entries.length > 0 && entries.every(
+    ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
+  );
+}
+
+/**
+ * Factory for creating schemas that handle both legacy and modern run map formats.
+ * Legacy: { roundNum: items[] } -> wrapped in default run ID
+ * Modern: { runId: { roundNum: items[] } }
+ */
+function createLegacyAwareRunMapSchema<T>(
+  roundMapSchema: z.ZodType<Map<number, T[]>>,
+) {
+  return z.unknown().transform((data): Map<string, Map<number, T[]>> => {
+    if (!data || typeof data !== 'object') {
+      return new Map();
+    }
+
+    const record = data as Record<string, unknown>;
+    if (isLegacyFormat(record)) {
+      const rounds = roundMapSchema.parse(record);
+      return rounds.size > 0
+        ? new Map([[normalizeRunId(null), rounds]])
+        : new Map();
+    }
+
+    const runMap = new Map<string, Map<number, T[]>>();
+    for (const [runId, value] of Object.entries(record)) {
+      if (!value || typeof value !== 'object') continue;
+      const rounds = roundMapSchema.parse(value);
+      if (rounds.size > 0) {
+        runMap.set(runId, rounds);
+      }
+    }
+    return runMap;
+  });
+}
+
+/** Schema for missing outputs with legacy format support */
+const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(MissingOutputRoundMapSchema);
+
+/** Schema for output files with legacy format support */
+const OutputFilesDataSchema = createLegacyAwareRunMapSchema(OutputFilesRoundMapSchema);
 
 /**
  * Manages output files collection with persistence and file existence validation.
@@ -447,42 +538,8 @@ export class OutputFilesManager extends PersistentMapManager<
     >();
 
     for (const [stream, raw] of Object.entries(saved)) {
-      if (!raw || typeof raw !== 'object') {
-        processed.set(stream, new Map());
-        continue;
-      }
-
-      const entries = Object.entries(raw as Record<string, unknown>);
-      const looksLegacy = entries.every(
-        ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
-      );
-
-      const runMap = new Map<string, Map<number, string[]>>();
-
-      if (looksLegacy) {
-        const rounds = this.deserializeRoundMap<string>(
-          raw as Record<string, unknown>,
-          (v) => (typeof v === 'string' ? v : null),
-        );
-        if (rounds.size > 0) {
-          runMap.set(normalizeRunId(null), rounds);
-        }
-      } else {
-        for (const [runId, value] of entries) {
-          if (!value || typeof value !== 'object') {
-            continue;
-          }
-          const rounds = this.deserializeRoundMap<string>(
-            value as Record<string, unknown>,
-            (v) => (typeof v === 'string' ? v : null),
-          );
-          if (rounds.size > 0) {
-            runMap.set(runId, rounds);
-          }
-        }
-      }
-
-      processed.set(stream, runMap);
+      const runMap = MissingOutputsDataSchema.parse(raw);
+      processed.set(stream as StreamTabId, runMap);
     }
 
     return processed;
@@ -518,38 +575,6 @@ export class OutputFilesManager extends PersistentMapManager<
     return true;
   }
 
-  private deserializeRoundMap<T>(
-    record: Record<string, unknown>,
-    parser?: (value: unknown) => T | null,
-  ): Map<number, T[]> {
-    const roundMap = new Map<number, T[]>();
-
-    for (const [roundKey, value] of Object.entries(record)) {
-      const round = Number.parseInt(roundKey, 10);
-      if (Number.isNaN(round)) {
-        this.logger.warn(`Invalid round number '${roundKey}' during load`);
-        continue;
-      }
-      if (!Array.isArray(value)) {
-        continue;
-      }
-
-      if (!parser) {
-        roundMap.set(round, value as T[]);
-        continue;
-      }
-
-      const parsed = (value as unknown[])
-        .map((entry) => parser(entry))
-        .filter((entry): entry is T => entry !== null);
-      if (parsed.length > 0) {
-        roundMap.set(round, parsed);
-      }
-    }
-
-    return roundMap;
-  }
-
   protected override serialize(
     value: Map<string, Map<number, OutputFileInfo[]>>,
     _key: StreamTabId,
@@ -568,52 +593,6 @@ export class OutputFilesManager extends PersistentMapManager<
     data: unknown,
     _streamId: StreamTabId,
   ): Promise<Map<string, Map<number, OutputFileInfo[]>>> {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const record = data as Record<string, unknown>;
-    const entries = Object.entries(record);
-    const looksLegacy = entries.every(
-      ([key]) => !Number.isNaN(Number.parseInt(key, 10)),
-    );
-
-    const runMap = new Map<string, Map<number, OutputFileInfo[]>>();
-
-    if (looksLegacy) {
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(record, (v) => {
-        try {
-          return OutputFileInfoListSchema.parse([v])[0] ?? null;
-        } catch {
-          return null;
-        }
-      });
-      if (rounds.size > 0) {
-        runMap.set(normalizeRunId(null), rounds);
-      }
-      return runMap;
-    }
-
-    for (const [runId, value] of entries) {
-      if (!value || typeof value !== 'object') {
-        continue;
-      }
-
-      const rounds = this.deserializeRoundMap<OutputFileInfo>(
-        value as Record<string, unknown>,
-        (v) => {
-          try {
-            return OutputFileInfoListSchema.parse([v])[0] ?? null;
-          } catch {
-            return null;
-          }
-        },
-      );
-      if (rounds.size > 0) {
-        runMap.set(runId, rounds);
-      }
-    }
-
-    return runMap;
+    return OutputFilesDataSchema.parse(data);
   }
 }
