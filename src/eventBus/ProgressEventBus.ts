@@ -16,6 +16,10 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+import type {
+  ToolEditApprovalPrompt,
+  RetryRequestPrompt,
+} from '@progressView/types';
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -90,13 +94,12 @@ export interface ProgressEventPayloads {
   updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
   };
-  showRetryRequest: {
-    streamId: StreamTabId;
-    operation: string;
-    model?: string;
-    errorMessage?: string;
-  };
+  showRetryRequest: RetryRequestPrompt;
   resolveRetryRequest: { streamId: StreamTabId };
+  showToolEditApprovalPrompt: ToolEditApprovalPrompt;
+  resolveToolEditApprovalPrompt: { requestId: string };
+  updateToolEditApprovalBypassState: { bypassActive: boolean };
+  extensionDeactivating: undefined;
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

@@ -9,6 +9,11 @@ export {
   createRetryEventsModule,
 } from './RetryEvents';
 export {
+  ApprovalEventsModule,
+  ApprovalEventsShared,
+  createApprovalEventsModule,
+} from './ApprovalEvents';
+export {
   StreamStatusEventShared,
   StreamStatusEventModule,
   createStreamStatusEvents,

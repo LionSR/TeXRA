@@ -19,6 +19,7 @@ import { toolResult, type ToolResult } from '@tools/result';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { safeExecuteCommand } from '@utils/system/commandUtils';
+import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { getCurrentToolEditApprovalContext } from './toolEditApprovalContext';
@@ -91,19 +92,13 @@ let approvalsBypassedForSession = false;
 let storageDirectory: string | undefined;
 const activePreviewFiles = new Set<string>();
 
-async function notifyProgressViewApprovalBypassState(): Promise<void> {
+function notifyProgressViewApprovalBypassState(): void {
   if (!initialized) {
     return;
   }
-  try {
-    const { ProgressViewProvider } =
-      await import('@progressView/ProgressViewProvider');
-    ProgressViewProvider.getInstance()?.updateToolEditApprovalBypassState(
-      approvalsBypassedForSession,
-    );
-  } catch (error) {
-    console.warn('Unable to broadcast approval bypass state', error);
-  }
+  bus.emit('updateToolEditApprovalBypassState', {
+    bypassActive: approvalsBypassedForSession,
+  });
 }
 
 async function ensureStorageDir(): Promise<string> {
@@ -159,12 +154,12 @@ async function readCurrentContent(
 
 function enableSessionApprovalBypass(): void {
   approvalsBypassedForSession = true;
-  void notifyProgressViewApprovalBypassState();
+  notifyProgressViewApprovalBypassState();
 }
 
 export function setToolEditApprovalSessionBypass(enabled: boolean): void {
   approvalsBypassedForSession = enabled;
-  void notifyProgressViewApprovalBypassState();
+  notifyProgressViewApprovalBypassState();
 }
 
 export function resetToolEditApprovalSessionBypass(): void {
@@ -202,38 +197,20 @@ async function showProgressViewApprovalPrompt(
   lineChanges: LineChangeSummary,
 ): Promise<void> {
   await safeExecuteCommand('texra.showProgressView');
-
-  try {
-    const { ProgressViewProvider } =
-      await import('@progressView/ProgressViewProvider');
-    const provider = ProgressViewProvider.getInstance();
-    provider?.showToolEditApprovalPrompt({
-      requestId,
-      path: request.path,
-      relativePath,
-      sourceTool: request.sourceTool,
-      allowBypass: !approvalsBypassedForSession,
-      streamId: request.streamId ?? '',
-      addedLines: lineChanges.added,
-      removedLines: lineChanges.removed,
-    });
-  } catch (error) {
-    console.warn('Unable to show progress view approval prompt', error);
-  }
+  bus.emit('showToolEditApprovalPrompt', {
+    requestId,
+    path: request.path,
+    relativePath,
+    sourceTool: request.sourceTool,
+    allowBypass: !approvalsBypassedForSession,
+    streamId: request.streamId ?? '',
+    addedLines: lineChanges.added,
+    removedLines: lineChanges.removed,
+  });
 }
 
-async function resolveProgressViewApprovalPrompt(
-  requestId: string,
-): Promise<void> {
-  try {
-    const { ProgressViewProvider } =
-      await import('@progressView/ProgressViewProvider');
-    ProgressViewProvider.getInstance()?.resolveToolEditApprovalPrompt(
-      requestId,
-    );
-  } catch (error) {
-    console.warn('Unable to resolve progress view approval prompt', error);
-  }
+function resolveProgressViewApprovalPrompt(requestId: string): void {
+  bus.emit('resolveToolEditApprovalPrompt', { requestId });
 }
 
 function countNewlines(value: string): number {
@@ -568,7 +545,7 @@ async function nativeRequestApproval(
     await closeApprovalEditors(originalUri, proposedUri);
     await cleanupTempFile(originalUri);
     await cleanupTempFile(proposedUri);
-    await resolveProgressViewApprovalPrompt(requestId);
+    resolveProgressViewApprovalPrompt(requestId);
   }
 }
 
