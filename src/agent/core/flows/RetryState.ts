@@ -11,7 +11,6 @@
  */
 
 import type { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import {
   getModelRetryBackoffMs,
   getModelRetryMaxAttempts,
@@ -191,19 +190,16 @@ export function applyFallbackResult(
 
   switch (result.outcome) {
     case 'manual_retry':
-      logger.error(`${operationName} failed: ${result.error.message}`, {
-        messageType: MESSAGE_TYPES.ERROR,
-        data: result.error,
-      });
+      logger.logErrorData(
+        `${operationName} failed: ${result.error.message}`,
+        result.error,
+      );
       return FlowTransition.AWAIT_RETRY;
 
     case 'fail':
-      logger.error(
+      logger.logErrorData(
         `${operationName} failed (not retryable): ${result.error.message}`,
-        {
-          messageType: MESSAGE_TYPES.ERROR,
-          data: result.error,
-        },
+        result.error,
       );
       return FlowTransition.COMPLETE;
 

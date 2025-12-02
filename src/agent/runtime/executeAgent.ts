@@ -36,11 +36,10 @@ import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { normalizeRunId } from '@common/constants/runIds';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
-import { buildErrorLogData } from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
@@ -506,9 +505,10 @@ export async function executeAgentWithLogging<T extends IAgent>(
       { skip: isResume },
     );
   } catch (err) {
-    const errorData = buildErrorLogData(err, { operation: `execute ${agentName}` });
     const rawErrorMessage = toErrorMessage(err);
-    const errorMsg = `Error executing agent ${agentName}: ${errorData.message}`;
+    const formattedMessage = getSdkErrorMessage(err);
+    const errorMsg = `Error executing agent ${agentName}: ${formattedMessage}`;
+    const errorContext = { operation: `execute ${agentName}` };
 
     // Check if the error is related to missing API key
     if (
@@ -550,10 +550,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       await errorLogger.withExistingGroup(
         fallbackGroupId,
         async () => {
-          errorLogger.error(errorMsg, {
-            messageType: MESSAGE_TYPES.ERROR,
-            data: errorData,
-          });
+          errorLogger.logError(errorMsg, err, errorContext);
         },
         { label: `Error: ${agentName}` },
       );
@@ -561,10 +558,7 @@ export async function executeAgentWithLogging<T extends IAgent>(
       await errorLogger.withScope(
         `Error: ${agentName}`,
         async () => {
-          errorLogger.error(errorMsg, {
-            messageType: MESSAGE_TYPES.ERROR,
-            data: errorData,
-          });
+          errorLogger.logError(errorMsg, err, errorContext);
         },
         { errorStatus: 'error' },
       );
