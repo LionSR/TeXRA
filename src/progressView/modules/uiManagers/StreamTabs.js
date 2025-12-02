@@ -155,8 +155,11 @@ export class StreamTabs {
     // Remove old status classes dynamically from STREAM_STATUS values
     // This ensures the class list stays in sync with constants
     Object.values(STREAM_STATUS).forEach((s) => statusEl.classList.remove(s));
+    // READY means execution completed - display as stopped (no active indicator)
     const normalizedStatus =
-      status === STREAM_STATUS.READY ? 'stopped' : status || 'stopped';
+      status === STREAM_STATUS.READY
+        ? STREAM_STATUS.STOPPED
+        : status || STREAM_STATUS.STOPPED;
     statusEl.classList.add(normalizedStatus);
     statusEl.dataset.status =
       normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
