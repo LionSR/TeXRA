@@ -29,7 +29,7 @@ import {
   CHEVRON_DOWN_CLASS,
 } from '@common/iconConstants.js';
 import { getBasename } from '@common/pathUtils.js';
-import { encodeHtml, decodeHtml } from '@common/htmlEncoding.js';
+import { encodeHtml } from '@common/htmlEncoding.js';
 
 // Constants
 export const BULLET_MARKUP =
@@ -123,8 +123,9 @@ const normalizeStructuredContent = (text, data) => {
     };
   }
 
-  const decodedText = typeof text === 'string' ? decodeHtml(text) : '';
-  return { decodedText, structured: tryParseJson(decodedText) };
+  // Content is now passed as raw text (no longer HTML-encoded at source)
+  const rawText = typeof text === 'string' ? text : '';
+  return { decodedText: rawText, structured: tryParseJson(rawText) };
 };
 
 const normalizeFileListEntries = (structured) => {
@@ -511,33 +512,14 @@ export class LogEntryFormatter {
   /**
    * Process markdown content with LaTeX reference protection
    * @param {string} content - Raw content to process
-   * @param {boolean} decode - Whether to decode HTML entities (default: true)
    * @returns {string} Processed markdown HTML
    */
-  _processMarkdownContent(content, decode = false) {
-    if (decode) {
-      content = decodeHtml(content);
-    }
-
+  _processMarkdownContent(content) {
     // Pre-process LaTeX references to protect them from markdown parsing
+    // Note: Pandoc reference formats are normalized to LaTeX at the source (xmlUtils.ts)
     content = content.replace(/\\ref\{([^}]+)\}/g, '@@LATEX-REF:$1@@');
     content = content.replace(/\\cref\{([^}]+)\}/g, '@@LATEX-CREF:$1@@');
     content = content.replace(/\\eqref\{([^}]+)\}/g, '@@LATEX-EQREF:$1@@');
-
-    // Also handle Pandoc's reference format: [label]{reference-type="ref" reference="label"}
-    // This format is produced when LaTeX is converted through Pandoc
-    content = content.replace(
-      /\[([^\]]+)\]\{reference-type="ref"\s+reference="([^"]+)"\}/g,
-      '@@LATEX-REF:$2@@',
-    );
-    content = content.replace(
-      /\[([^\]]+)\]\{reference-type="eqref"\s+reference="([^"]+)"\}/g,
-      '@@LATEX-EQREF:$2@@',
-    );
-    content = content.replace(
-      /\[([^\]]+)\]\{reference-type="[Cc]ref"\s+reference="([^"]+)"\}/g,
-      '@@LATEX-CREF:$2@@',
-    );
 
     const renderer = this.md || getMarkdownRenderer();
 
@@ -658,7 +640,7 @@ export class LogEntryFormatter {
         verbose ? ` [${timeDisplay}]` : ''
       }</span> ` +
       levelMarkup +
-      `<span class="message-${level}">${text}</span>` +
+      `<span class="message-${level}">${encodeHtml(text)}</span>` +
       `</div>`;
 
     // Convert HTML string to DOM element
@@ -679,7 +661,7 @@ export class LogEntryFormatter {
 
     if (!trimmedContent) return null;
 
-    const parsedMarkdown = this._processMarkdownContent(trimmedContent, false);
+    const parsedMarkdown = this._processMarkdownContent(trimmedContent);
     const isThinking = contentType.includes('Thinking');
     const bannerEntry = this._createBannerEntry({
       logId,
@@ -866,10 +848,7 @@ export class LogEntryFormatter {
     if (contentElem) {
       contentElem.classList.add(`message-${level}`);
       contentElem.dataset.rawContent = trimmedContent;
-      contentElem.innerHTML = this._processMarkdownContent(
-        trimmedContent,
-        false,
-      );
+      contentElem.innerHTML = this._processMarkdownContent(trimmedContent);
     }
 
     return element;
