@@ -12,6 +12,7 @@ import { AgentLogger } from '@logger/AgentLogger';
 
 // Local file imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ToolEditApprovalPrompt } from '@eventBus/types';
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { WebviewUpdater } from './managers';
 // @ts-ignore - Import JavaScript module
@@ -22,7 +23,6 @@ import { ProgressViewState } from './state/ProgressViewState';
 // Types
 
 // Type imports
-import type { ToolEditApprovalPrompt } from '@eventBus/types';
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
