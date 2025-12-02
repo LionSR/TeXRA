@@ -238,12 +238,6 @@ export interface IModelHandler<
   computePrice(responseUsage: U): number;
 
   /**
-   * Compute detailed usage metrics.
-   * @deprecated Use normalizeUsage() instead for unified usage tracking
-   */
-  computeResponseUsage(responseUsage: U, responseTime: number): R;
-
-  /**
    * Normalizes provider-specific usage data into a unified format.
    * This is the single source of truth for usage statistics.
    * Cost is computed once here and should never be recomputed elsewhere.
