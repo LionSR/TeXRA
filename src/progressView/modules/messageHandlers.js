@@ -83,19 +83,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setActiveRunId(activeStream, runId);
     }
     dom.taskGroups.showRun(runId);
-    this._refreshInstructionForActiveRun();
-    this._refreshOutputsForActiveRun();
+    // Pass runId directly to avoid redundant resolveActiveRunId calls
+    this._refreshInstructionForActiveRun(runId);
+    this._refreshOutputsForActiveRun(runId);
     this._refreshUsageForActiveRun();
   }
 
-  _refreshInstructionForActiveRun() {
+  /**
+   * Refresh instruction panel for the active run.
+   * @param {string} [runId] - Optional runId to use instead of resolving
+   */
+  _refreshInstructionForActiveRun(runId) {
     if (state.activeSessionKind === 'toolUse') {
       dom.instructionPanel.hide();
       return;
     }
 
     const stream = state.activeStream || null;
-    const activeRunId = state.resolveActiveRunId(stream);
+    const activeRunId = runId ?? state.resolveActiveRunId(stream);
     if (!activeRunId) {
       dom.instructionPanel.hide();
       return;
@@ -109,9 +114,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
-  _refreshOutputsForActiveRun() {
+  /**
+   * Refresh output files for the active run.
+   * @param {string} [runId] - Optional runId to use instead of resolving
+   */
+  _refreshOutputsForActiveRun(runId) {
     const stream = state.activeStream || null;
-    const activeRunId = state.resolveActiveRunId(stream);
+    const activeRunId = runId ?? state.resolveActiveRunId(stream);
     const filesByRound = activeRunId
       ? state.getRunFiles(stream, activeRunId) || {}
       : {};
@@ -133,6 +142,7 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.ADD_TASK_GROUP]: (m) => this.handleAddTaskGroup(m),
       [COMMANDS.UPDATE_TASK_GROUP]: (m) => this.handleUpdateTaskGroup(m),
       [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
+      [COMMANDS.UPDATE_STREAM_STATUS]: (m) => this.handleUpdateStreamStatus(m),
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
@@ -256,92 +266,160 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
+    if (message.stream !== state.activeStream) {
+      this._updatePlaceholderVisibility();
+      return;
+    }
+
+    // When forceRebuild is false, do incremental update (skip DOM rebuild)
+    if (message.forceRebuild === false) {
+      this._handleIncrementalUpdate(message);
+      this._updatePlaceholderVisibility();
+      return;
+    }
+
+    // Full rebuild path (stream switch or explicit forceRebuild)
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (message.stream === state.activeStream) {
-      pendingLogUpdates.clear();
-      dom.taskGroups.clear();
-      state.taskGroups.clear();
-      state.clearRunInstructions(message.stream);
-      state.clearRunFiles(message.stream);
-      state.clearPendingInstruction(state.activeStream);
-      const previousRunId = state.getActiveRunId(message.stream);
-      state.clearActiveRun(message.stream);
-      logContent.innerHTML = '';
-      const groups = message.groups || [];
-      if (groups.length > 0) {
-        const parentGroups = groups.filter((g) => !g.parentGroupId);
-        dom.runSelector.setRuns(parentGroups);
-        dom.taskGroups.renderInitial(groups);
+    pendingLogUpdates.clear();
+    dom.taskGroups.clear();
+    state.taskGroups.clear();
+    state.clearRunInstructions(message.stream);
+    state.clearRunFiles(message.stream);
+    state.clearPendingInstruction(state.activeStream);
+    const previousRunId = state.getActiveRunId(message.stream);
+    state.clearActiveRun(message.stream);
+    logContent.innerHTML = '';
+    const groups = message.groups || [];
+    if (groups.length > 0) {
+      const parentGroups = groups.filter((g) => !g.parentGroupId);
+      dom.runSelector.setRuns(parentGroups);
+      dom.taskGroups.renderInitial(groups);
 
-        if (message.runInstructions) {
-          Object.entries(message.runInstructions).forEach(
-            ([runId, instruction]) => {
-              if (runId) {
-                state.setRunInstruction(message.stream, runId, instruction);
-              }
-            },
-          );
-        }
-
-        if (message.runUsage) {
-          Object.entries(message.runUsage).forEach(([runId, usage]) => {
-            state.setRunUsage(message.stream, runId, usage);
-          });
-        }
-
-        if (message.runFiles) {
-          Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+      if (message.runInstructions) {
+        Object.entries(message.runInstructions).forEach(
+          ([runId, instruction]) => {
             if (runId) {
-              state.setRunFiles(message.stream, runId, filesByRound);
+              state.setRunInstruction(message.stream, runId, instruction);
             }
-          });
-        }
+          },
+        );
+      }
 
-        if (parentGroups.length > 0) {
-          const runIds = parentGroups.map((group) => group.id);
-          const preferredRun =
-            message.activeRunId && runIds.includes(message.activeRunId)
-              ? message.activeRunId
-              : previousRunId && runIds.includes(previousRunId)
-                ? previousRunId
-                : runIds[runIds.length - 1];
-          state.setActiveRunId(message.stream, preferredRun);
-          dom.runSelector.setActiveRun(preferredRun);
-          dom.taskGroups.showRun(preferredRun);
-        } else {
-          dom.taskGroups.showRun(null);
-        }
+      if (message.runUsage) {
+        Object.entries(message.runUsage).forEach(([runId, usage]) => {
+          state.setRunUsage(message.stream, runId, usage);
+        });
+      }
 
-        const resolvedRunId = state.resolveActiveRunId(message.stream);
-        if (
-          resolvedRunId &&
-          state.getActiveRunId(message.stream) !== resolvedRunId
-        ) {
-          state.setActiveRunId(message.stream, resolvedRunId);
-        }
+      if (message.runFiles) {
+        Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+          if (runId) {
+            state.setRunFiles(message.stream, runId, filesByRound);
+          }
+        });
+      }
+
+      if (parentGroups.length > 0) {
+        const runIds = parentGroups.map((group) => group.id);
+        const preferredRun =
+          message.activeRunId && runIds.includes(message.activeRunId)
+            ? message.activeRunId
+            : previousRunId && runIds.includes(previousRunId)
+              ? previousRunId
+              : runIds[runIds.length - 1];
+        state.setActiveRunId(message.stream, preferredRun);
+        dom.runSelector.setActiveRun(preferredRun);
+        dom.taskGroups.showRun(preferredRun);
       } else {
         dom.taskGroups.showRun(null);
       }
-      const logMessages = message.messages || [];
-      logMessages.forEach((msg) => {
-        if (msg.groupId) {
-          if (!dom.logEntries.append(msg)) {
-            const formatted = this._entryFormatter.format(msg);
-            appendFormatted(logContent, formatted);
-          }
-        } else {
+
+      const resolvedRunId = state.resolveActiveRunId(message.stream);
+      if (
+        resolvedRunId &&
+        state.getActiveRunId(message.stream) !== resolvedRunId
+      ) {
+        state.setActiveRunId(message.stream, resolvedRunId);
+      }
+    } else {
+      dom.taskGroups.showRun(null);
+    }
+    const logMessages = message.messages || [];
+    logMessages.forEach((msg) => {
+      if (msg.groupId) {
+        if (!dom.logEntries.append(msg)) {
           const formatted = this._entryFormatter.format(msg);
           appendFormatted(logContent, formatted);
         }
-      });
-      scrollToBottom(logContent);
+      } else {
+        const formatted = this._entryFormatter.format(msg);
+        appendFormatted(logContent, formatted);
+      }
+    });
+    scrollToBottom(logContent);
 
-      this._refreshInstructionForActiveRun();
-      this._refreshOutputsForActiveRun();
-      this._refreshUsageForActiveRun();
-    }
+    // Use activeRunId from message if available to avoid redundant resolution
+    const activeRunId = message.activeRunId ?? state.resolveActiveRunId(message.stream);
+    this._refreshInstructionForActiveRun(activeRunId);
+    this._refreshOutputsForActiveRun(activeRunId);
+    this._refreshUsageForActiveRun();
 
     this._updatePlaceholderVisibility();
+  }
+
+  /**
+   * Handle incremental update - update state without DOM rebuild.
+   * Used when refreshing the same stream to avoid expensive full rebuild.
+   */
+  _handleIncrementalUpdate(message) {
+    // Update run-scoped metadata only (instructions, usage, files)
+    // Skip DOM reconstruction since content hasn't changed
+
+    if (message.runInstructions) {
+      Object.entries(message.runInstructions).forEach(
+        ([runId, instruction]) => {
+          if (runId) {
+            state.setRunInstruction(message.stream, runId, instruction);
+          }
+        },
+      );
+    }
+
+    if (message.runUsage) {
+      Object.entries(message.runUsage).forEach(([runId, usage]) => {
+        state.setRunUsage(message.stream, runId, usage);
+      });
+    }
+
+    if (message.runFiles) {
+      Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+        if (runId) {
+          state.setRunFiles(message.stream, runId, filesByRound);
+        }
+      });
+    }
+
+    // Update task group statuses if they changed
+    const groups = message.groups || [];
+    groups.forEach((group) => {
+      const existing = state.taskGroups.get(group.id);
+      if (existing && existing.status !== group.status) {
+        state.taskGroups.update({
+          groupId: group.id,
+          updates: { status: group.status, endTime: group.endTime },
+        });
+        dom.taskGroups.updateGroup({
+          groupId: group.id,
+          updates: { status: group.status, endTime: group.endTime },
+        });
+      }
+    });
+
+    // Refresh display panels - use activeRunId from message if available
+    const activeRunId = message.activeRunId ?? state.resolveActiveRunId(message.stream);
+    this._refreshInstructionForActiveRun(activeRunId);
+    this._refreshOutputsForActiveRun(activeRunId);
+    this._refreshUsageForActiveRun();
   }
 
   handleAppendLog(message) {
@@ -421,8 +499,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         }
         dom.runSelector.setActiveRun(newRunId);
         dom.taskGroups.showRun(newRunId);
-        this._refreshInstructionForActiveRun();
-        this._refreshOutputsForActiveRun();
+        // Pass newRunId directly to avoid redundant resolveActiveRunId calls
+        this._refreshInstructionForActiveRun(newRunId);
+        this._refreshOutputsForActiveRun(newRunId);
         this._refreshUsageForActiveRun();
       }
       scrollToBottom(logContent);
@@ -457,6 +536,27 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     if (message.status === STREAM_STATUS.WAITING) {
       dom.followUpInput.focus({ scrollIntoView: true });
     }
+  }
+
+  /**
+   * Handle targeted single-stream status update.
+   * More efficient than UPDATE_STREAMS when only status changed.
+   */
+  handleUpdateStreamStatus(message) {
+    const { stream, status } = message;
+    if (!stream) {
+      return;
+    }
+
+    // Update status in state
+    if (status && status !== 'ready') {
+      state.streamStatuses.set(stream, status);
+    } else {
+      state.streamStatuses.delete(stream);
+    }
+
+    // Update the stream tab UI for just this stream
+    dom.streamTabs.updateStreamStatus(stream, status);
   }
 
   handleUpdateUsage(message) {

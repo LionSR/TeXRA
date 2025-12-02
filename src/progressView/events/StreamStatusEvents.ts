@@ -32,7 +32,7 @@ export interface StreamStatusEventShared {
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
-    options?: { updateInstruction?: boolean },
+    options?: { updateInstruction?: boolean; forceRebuild?: boolean },
   ): void;
 }
 
@@ -63,6 +63,10 @@ export function createStreamStatusEvents(
       return;
     }
 
+    // Track if this is actually switching to a different stream
+    const previousStream = state.activeStream;
+    const isStreamSwitch = previousStream !== stream;
+
     await state.streamTabs.ensureStream(stream);
 
     if (session) {
@@ -86,7 +90,11 @@ export function createStreamStatusEvents(
     shared.setStreamStatus(stream, status);
 
     if (updater.isAvailable()) {
-      shared.refreshStreamSurface(stream, { updateInstruction: false });
+      // Only force rebuild when actually switching streams
+      shared.refreshStreamSurface(stream, {
+        updateInstruction: false,
+        forceRebuild: isStreamSwitch,
+      });
       shared.sendInstructionUpdate(stream);
     }
   };
