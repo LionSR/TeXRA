@@ -620,7 +620,9 @@ export function enrichError<T>(error: T, context: ErrorLogContext): T {
  * Extracts enriched context from an error, if any was attached via enrichError().
  * Returns undefined if no context was attached.
  */
-export function extractErrorContext(error: unknown): ErrorLogContext | undefined {
+export function extractErrorContext(
+  error: unknown,
+): ErrorLogContext | undefined {
   if (error && typeof error === 'object') {
     return errorContextMap.get(error);
   }
