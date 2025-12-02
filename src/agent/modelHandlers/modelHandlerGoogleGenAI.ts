@@ -44,12 +44,8 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 import { AgentLogger } from '@logger/AgentLogger';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 import { ReasoningEffort } from '@model/ModelConfig';
 
@@ -603,13 +599,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
       return result;
     } catch (error) {
-      const formattedError = formatProviderHttpError(error);
-      this.logger.error(
-        `Error during Google GenAI Chat API call: ${formattedError.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: formattedError,
-        },
+      this.logger.logError(
+        `Error during Google GenAI Chat API call: ${getSdkErrorMessage(error)}`,
+        error,
+        { operation: 'Google GenAI Chat API call' },
       );
       if (
         error instanceof Error &&
@@ -1048,7 +1041,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+      this.logger.logScratchpad(scratchpad);
     }
 
     await flexibleFS.write(outputLocation, fileContent);
