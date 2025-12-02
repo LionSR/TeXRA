@@ -84,10 +84,17 @@ class Node<
   async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
     throw error;
   }
+  /**
+   * Override clone to reset execution-specific state.
+   * Prevents stale signal/retry state from affecting new executions.
+   */
+  clone(): this {
+    const cloned = super.clone();
+    cloned.signal = undefined;
+    cloned.currentRetry = 0;
+    return cloned;
+  }
   async _exec(prepRes: unknown): Promise<unknown> {
-    // Reset signal to prevent stale abort state from cloned nodes
-    // exec() will set a fresh signal if needed
-    this.signal = undefined;
     for (
       this.currentRetry = 0;
       this.currentRetry < this.maxRetries;
