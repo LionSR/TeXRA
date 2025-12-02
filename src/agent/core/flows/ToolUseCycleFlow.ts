@@ -15,10 +15,7 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
-import {
-  extractToolAttachments,
-  sanitizeToolResultForLog,
-} from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
@@ -218,7 +215,6 @@ class ToolUsePrepNode<C> extends BaseNode<
 function buildToolResultPayload(
   result: ToolResult,
   fallbackLineChanges?: { added: number; removed: number },
-  options?: { stripAttachments?: boolean },
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   if (result.summary !== undefined) payload.summary = result.summary;
@@ -236,11 +232,6 @@ function buildToolResultPayload(
   if (lineChanges !== undefined) payload.lineChanges = lineChanges;
   if (result.edits !== undefined) payload.edits = result.edits;
   if (result.files !== undefined) payload.files = result.files;
-
-  // Strip binary attachment data when handler doesn't support attachments
-  if (options?.stripAttachments) {
-    return extractToolAttachments(payload).sanitizedResult;
-  }
   return payload;
 }
 
@@ -810,14 +801,10 @@ class ToolUseDispatchNode<C> extends BaseNode<
       typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
         'function';
 
-    // Strip binary attachment data when handler doesn't support attachments
-    const stripAttachments =
-      !options.modelHandler.canProcessToolResultAttachments;
-
     if (shouldBatch) {
       // Batched: All function calls in one model message, all responses in one user message
       const resultPayloads = execResults.map((er) =>
-        buildToolResultPayload(er.result, er.lineChanges, { stripAttachments }),
+        buildToolResultPayload(er.result, er.lineChanges),
       );
       const followUpMsgs = await options.modelHandler
         .createBatchedToolUseFollowUpMessages!(
@@ -833,9 +820,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
             execResult.call,
-            buildToolResultPayload(execResult.result, execResult.lineChanges, {
-              stripAttachments,
-            }),
+            buildToolResultPayload(execResult.result, execResult.lineChanges),
             store.workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );

@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
+import { extractToolAttachments } from './utils/toolAttachmentUtils';
 
 // Type imports
 import type {
@@ -157,8 +158,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
    *
-   * Note: Binary attachment data is stripped at the source (ToolUseCycleFlow)
-   * based on canProcessToolResultAttachments, so result is already sanitized.
+   * Attachments are extracted and stripped since DeepSeek doesn't support them.
    */
   override async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
@@ -170,10 +170,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     const toolCall = this.normalizeToolCall(call.raw);
     const callMsg = this.buildAssistantMessageWithReasoning([toolCall], text);
 
+    // Extract and discard attachments - DeepSeek doesn't support them
+    const { sanitizedResult } = extractToolAttachments(result);
+
     const resultMsg = {
       role: 'tool' as const,
       tool_call_id: toolCall.id,
-      content: JSON.stringify(result),
+      content: JSON.stringify(sanitizedResult),
     };
 
     return [callMsg as ChatCompletionMessageParam, resultMsg];
@@ -186,8 +189,7 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * should be in ONE assistant message with reasoning_content, followed by
    * individual tool result messages.
    *
-   * Note: Binary attachment data is stripped at the source (ToolUseCycleFlow)
-   * based on canProcessToolResultAttachments, so results are already sanitized.
+   * Attachments are extracted and stripped since DeepSeek doesn't support them.
    *
    * @param calls - Array of tool calls from the model response
    * @param results - Array of results corresponding to each call (must match calls length)
@@ -218,12 +220,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       callMsg as ChatCompletionMessageParam,
     ];
 
-    // Add individual tool result messages
+    // Add individual tool result messages (extract and discard attachments)
     for (let i = 0; i < toolCalls.length; i++) {
+      const { sanitizedResult } = extractToolAttachments(results[i]);
       messages.push({
         role: 'tool' as const,
         tool_call_id: toolCalls[i].id,
-        content: JSON.stringify(results[i]),
+        content: JSON.stringify(sanitizedResult),
       });
     }
 
