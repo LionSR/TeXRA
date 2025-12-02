@@ -2,7 +2,10 @@
 export { createErrorBoundary } from './errorHandling';
 export { LogEventsModule, createLogEvents } from './LogEvents';
 export { OutputEventsModule, createOutputEvents } from './OutputEvents';
-export { ProgressEventHandler } from './ProgressEventHandler';
+export {
+  ProgressEventHandler,
+  ToolEditApprovalCallbacks,
+} from './ProgressEventHandler';
 export {
   RetryEventsModule,
   RetryEventsShared,

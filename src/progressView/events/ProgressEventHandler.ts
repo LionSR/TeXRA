@@ -12,6 +12,7 @@ import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { WebviewUpdater } from '@progressView/managers';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
+import type { ToolEditApprovalPrompt } from '@progressView/types';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 
@@ -32,14 +33,15 @@ import {
   type RetryEventsModule,
   type RetryEventsShared,
 } from './RetryEvents';
-import {
-  createToolEditApprovalEventsModule,
-  type ToolEditApprovalEventsModule,
-  type ToolEditApprovalEventsShared,
-} from './ToolEditApprovalEvents';
-
-// Local imports - events
+import { createErrorBoundary } from './errorHandling';
 import type { StreamStatusOrReadyType, StreamStatusType } from './types';
+
+/** Callbacks for tool edit approval events */
+export interface ToolEditApprovalCallbacks {
+  showToolEditApprovalPrompt: (payload: ToolEditApprovalPrompt) => void;
+  resolveToolEditApprovalPrompt: (requestId: string) => void;
+  updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
+}
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -55,7 +57,7 @@ export class ProgressEventHandler {
   private readonly usageEvents: UsageEventsModule;
   private readonly taskGroupEvents: TaskGroupEventsModule;
   private readonly retryEvents: RetryEventsModule;
-  private readonly toolEditApprovalEvents: ToolEditApprovalEventsModule;
+  private readonly toolEditApprovalCallbacks: ToolEditApprovalCallbacks;
 
   constructor(
     private state: ProgressViewState,
@@ -64,14 +66,10 @@ export class ProgressEventHandler {
       RetryEventsShared,
       'showRetryRequest' | 'resolveRetryRequest'
     >,
-    toolEditApprovalCallbacks: Pick<
-      ToolEditApprovalEventsShared,
-      | 'showToolEditApprovalPrompt'
-      | 'resolveToolEditApprovalPrompt'
-      | 'updateToolEditApprovalBypassState'
-    >,
+    toolEditApprovalCallbacks: ToolEditApprovalCallbacks,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+    this.toolEditApprovalCallbacks = toolEditApprovalCallbacks;
     this.streamStatusEvents = createStreamStatusEvents({
       logger: this.logger,
       streamStatus: this._streamStatus,
@@ -102,15 +100,6 @@ export class ProgressEventHandler {
       showRetryRequest: retryCallbacks.showRetryRequest,
       resolveRetryRequest: retryCallbacks.resolveRetryRequest,
     });
-    this.toolEditApprovalEvents = createToolEditApprovalEventsModule({
-      logger: this.logger,
-      showToolEditApprovalPrompt:
-        toolEditApprovalCallbacks.showToolEditApprovalPrompt,
-      resolveToolEditApprovalPrompt:
-        toolEditApprovalCallbacks.resolveToolEditApprovalPrompt,
-      updateToolEditApprovalBypassState:
-        toolEditApprovalCallbacks.updateToolEditApprovalBypassState,
-    });
   }
 
   /**
@@ -137,8 +126,38 @@ export class ProgressEventHandler {
       ...this.logEvents.register(bus, this.state, this.webviewUpdater),
     );
     disposables.push(...this.retryEvents.register(bus, this.state));
+
+    // Tool edit approval events (inlined - 3 simple subscriptions)
+    const withErrorBoundary = createErrorBoundary(
+      this.logger,
+      'ToolEditApproval',
+    );
     disposables.push(
-      ...this.toolEditApprovalEvents.register(bus, this.state),
+      new vscode.Disposable(
+        bus.on('showToolEditApprovalPrompt', (payload) =>
+          withErrorBoundary('show prompt', () =>
+            this.toolEditApprovalCallbacks.showToolEditApprovalPrompt(payload),
+          ),
+        ),
+      ),
+      new vscode.Disposable(
+        bus.on('resolveToolEditApprovalPrompt', (payload) =>
+          withErrorBoundary('resolve prompt', () =>
+            this.toolEditApprovalCallbacks.resolveToolEditApprovalPrompt(
+              payload.requestId,
+            ),
+          ),
+        ),
+      ),
+      new vscode.Disposable(
+        bus.on('updateToolEditApprovalBypassState', (payload) =>
+          withErrorBoundary('update bypass state', () =>
+            this.toolEditApprovalCallbacks.updateToolEditApprovalBypassState(
+              payload.bypassActive,
+            ),
+          ),
+        ),
+      ),
     );
 
     return disposables;
