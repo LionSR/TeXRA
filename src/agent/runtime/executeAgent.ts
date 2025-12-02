@@ -41,13 +41,13 @@ import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { AgentLogger } from '@logger/AgentLogger';
 import { MODEL_CONFIGS } from '@model/ModelRegistry';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { agentConfigToTaskState } from '@utils/config';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { bus } from '@eventBus/ProgressEventBus';
 import { getStreamTabId } from '@/logger/streamUtils';
 
 // Local file imports
+import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
 import {
   AgentExecutionContext,
@@ -356,24 +356,22 @@ export async function executeAgentWithLogging<T extends IAgent>(
 
     const activeStreamId: StreamTabId = streamTabId;
 
-    const provider = ProgressViewProvider.getInstance();
+    // Use the run storage service instead of directly accessing ProgressViewProvider
+    // This decouples agent execution from the UI layer
+    const runStorage = getRunStorageService();
+
     if (isResume) {
       StreamStatusService.set(activeStreamId, STREAM_STATUS.RESUMING);
     }
 
-    if (
-      isResume &&
-      agent instanceof BaseReflectionAgent &&
-      executionId &&
-      provider
-    ) {
+    if (isResume && agent instanceof BaseReflectionAgent && executionId) {
       // For resume, use a single storageKey for both fetching and hydrating
       // Priority: activeRunId (task group ID for workflow agents) ?? executionId (for tool-use)
       // Use normalizeRunId to brand as StorageKey
-      const activeRunId = provider.state.getActiveRunId(activeStreamId);
+      const activeRunId = runStorage.getActiveRunId(activeStreamId);
       const storageKey = normalizeRunId(activeRunId ?? executionId);
 
-      const runOutputs = provider.state.getRunOutputFiles(activeStreamId, {
+      const runOutputs = runStorage.getRunOutputFiles(activeStreamId, {
         storageKey,
       });
 
@@ -421,14 +419,14 @@ export async function executeAgentWithLogging<T extends IAgent>(
               StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 
               if (!isResume) {
-                const viewVisible = provider?.isViewVisible() ?? false;
+                const viewVisible = runStorage.isViewVisible();
                 if (!viewVisible) {
                   await vscode.commands.executeCommand(
                     'texra.showProgressView',
                   );
                 }
 
-                if (!provider?.isViewVisible()) {
+                if (!runStorage.isViewVisible()) {
                   const inputFileName = config.inputFile
                     ? path.basename(config.inputFile)
                     : 'selected input';
