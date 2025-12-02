@@ -295,8 +295,14 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      // Use targeted single-stream update instead of rebuilding all streams
-      this.webviewUpdater.updateStreamStatus(stream, status);
+      // Check if the stream tab exists before deciding update strategy
+      if (this.state.streamTabs.has(stream)) {
+        // Use targeted single-stream update for existing tabs
+        this.webviewUpdater.updateStreamStatus(stream, status);
+      } else {
+        // New stream: need full updateStreams to create the tab
+        this.webviewUpdater.updateAll(this.state, this._streamStatus);
+      }
 
       if (stream === this.state.activeStream) {
         this.webviewUpdater.updateStatus(status);
