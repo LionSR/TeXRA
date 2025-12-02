@@ -43,7 +43,7 @@ import xmlUtils from '@utils/text/xmlUtils';
 
 // Local file imports
 import {
-  describeAttachments,
+  formatAttachmentSummary,
   loadAttachmentBuffer,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
@@ -1328,9 +1328,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       attachments.length > 0 &&
       (!canUploadFiles || !client || uploadedAttachments.length === 0)
     ) {
-      finalResult.attachmentSummary = `Attachments available:\n${describeAttachments(
-        attachments,
-      ).join('\n')}\nUse the read_file tool to inspect them.`;
+      finalResult.attachmentSummary = formatAttachmentSummary(attachments);
     }
 
     const primaryText =
