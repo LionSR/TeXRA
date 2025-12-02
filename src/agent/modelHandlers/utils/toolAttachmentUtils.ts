@@ -1,105 +1,180 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - tools
-import type {
-  ToolFileAttachment,
-  ToolResult,
-  ErrorDiagnostics,
-} from '@tools/result';
+import type { ToolFileAttachment, ToolResult } from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
-/**
- * File reference in a tool result payload (binary data stripped).
- */
-export interface FileReference {
-  path: string;
-  mimeType: string;
-  description?: string;
-}
+// ============================================================================
+// Zod Schemas
+// ============================================================================
 
 /**
- * Record of a file edited during tool execution.
+ * Schema for file references in tool result payloads (binary data stripped).
  */
-export interface EditedFileRecord {
-  path: string;
-  ok: boolean;
-  source: string;
-  sourceDisplay: string;
-}
+export const FileReferenceSchema = z.object({
+  /** Workspace-relative or descriptive path for the file */
+  path: z.string(),
+  /** MIME type for the file */
+  mimeType: z.string(),
+  /** Optional human readable description */
+  description: z.string().optional(),
+});
+
+export type FileReference = z.infer<typeof FileReferenceSchema>;
 
 /**
- * Strongly-typed payload for tool results sent to model handlers.
+ * Schema for records of files edited during tool execution.
+ */
+export const EditedFileRecordSchema = z.object({
+  /** Path to the edited file */
+  path: z.string(),
+  /** Whether the edit succeeded */
+  ok: z.boolean(),
+  /** Source identifier for the edit */
+  source: z.string(),
+  /** Human readable display name for the source */
+  sourceDisplay: z.string(),
+});
+
+export type EditedFileRecord = z.infer<typeof EditedFileRecordSchema>;
+
+/**
+ * Schema for line change statistics.
+ */
+export const LineChangesSchema = z.object({
+  added: z.number(),
+  removed: z.number(),
+});
+
+/**
+ * Schema for edit records in tool results.
+ */
+export const EditRecordSchema = z.object({
+  path: z.string(),
+  lineChanges: LineChangesSchema.optional(),
+});
+
+/**
+ * Schema for strongly-typed tool result payloads sent to model handlers.
  * This is what gets passed to handlers - no binary data, properly typed fields.
+ * Uses passthrough() to allow additional properties for forward compatibility.
  */
-export interface ToolResultPayload {
-  summary?: string;
-  output?: string;
-  error?: string;
-  userInstruction?: string;
-  userPatch?: string;
-  isError?: boolean;
-  lineChanges?: { added: number; removed: number };
-  diagnostics?: ErrorDiagnostics;
-  edits?: Array<{
-    path: string;
-    lineChanges?: { added: number; removed: number };
-  }>;
-  /** File references (binary data stripped) */
-  files?: FileReference[];
-  /** Files edited during tool execution (for logging/tracking) */
-  editedFiles?: EditedFileRecord[];
-  /** Summary added by handlers when attachments are available */
-  attachmentSummary?: string;
-  /** Allow additional properties for forward compatibility */
-  [key: string]: unknown;
-}
+export const ToolResultPayloadSchema = z
+  .object({
+    /** Brief summary of the tool execution result */
+    summary: z.string().optional(),
+    /** Detailed output from the tool */
+    output: z.string().optional(),
+    /** Error message if tool execution failed */
+    error: z.string().optional(),
+    /** User instruction that was processed */
+    userInstruction: z.string().optional(),
+    /** User-provided patch content */
+    userPatch: z.string().optional(),
+    /** Whether this result represents an error */
+    isError: z.boolean().optional(),
+    /** Statistics about line changes made */
+    lineChanges: LineChangesSchema.optional(),
+    /** Additional diagnostic information (type varies by context) */
+    diagnostics: z.unknown().optional(),
+    /** Records of edits made during tool execution */
+    edits: z.array(EditRecordSchema).optional(),
+    /** File references (binary data stripped) */
+    files: z.array(FileReferenceSchema).optional(),
+    /** Files edited during tool execution (for logging/tracking) */
+    editedFiles: z.array(EditedFileRecordSchema).optional(),
+    /** Summary added by handlers when attachments are available */
+    attachmentSummary: z.string().optional(),
+  })
+  .passthrough(); // Allow additional properties for forward compatibility
 
+export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
+
+/**
+ * Schema for file attachments with optional binary data.
+ * Used for validation when processing tool results.
+ */
+export const ToolFileAttachmentSchema = z.object({
+  /** Workspace-relative or descriptive path for the attachment */
+  path: z.string().min(1),
+  /** MIME type for the attachment payload */
+  mimeType: z.string().min(1),
+  /** Optional human readable description */
+  description: z.string().optional(),
+  /** Base64 encoded payload when inline transport is supported */
+  base64Data: z.string().optional(),
+  /** Raw bytes for providers that require binary uploads */
+  bytes: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional(),
+});
+
+/**
+ * Result from extracting attachments from a tool result.
+ * Simple interface - no runtime validation needed for this structure.
+ */
 export interface ExtractedToolAttachments {
+  /** Extracted file attachments with binary data */
   attachments: ToolFileAttachment[];
+  /** Sanitized result payload without binary data */
   sanitizedResult: ToolResultPayload;
 }
 
+/**
+ * Type guard to check if a value is a valid ToolFileAttachment.
+ * Uses Zod schema for validation.
+ */
 function isToolFileAttachment(value: unknown): value is ToolFileAttachment {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return (
-    typeof candidate.path === 'string' &&
-    candidate.path.length > 0 &&
-    typeof candidate.mimeType === 'string' &&
-    candidate.mimeType.length > 0
-  );
+  return ToolFileAttachmentSchema.safeParse(value).success;
 }
 
 /**
  * Extracts file attachments from a tool result and returns a typed payload.
  * Binary data (base64Data, bytes, base64Image) is stripped from the result.
  *
+ * Uses Zod schema with passthrough() so parsing never fails - unknown fields
+ * are preserved for forward compatibility.
+ *
  * @param result - Raw tool result (may contain binary data)
+ * @param fallbackLineChanges - Optional line changes to apply if not present in result
  * @returns Extracted attachments and typed payload (without binary data)
  */
 export function extractToolAttachments(
-  result: ToolResult | ToolResultPayload | Record<string, unknown>,
+  result: ToolResult,
+  fallbackLineChanges?: { added: number; removed: number },
 ): ExtractedToolAttachments {
-  const attachmentsCandidate = (result as { files?: unknown }).files;
+  // Extract attachments from files array
+  const attachmentsCandidate = result.files;
   const attachments: ToolFileAttachment[] = Array.isArray(attachmentsCandidate)
     ? attachmentsCandidate.filter(isToolFileAttachment)
     : [];
 
-  // Build result payload with proper typing
-  const sanitizedResult: ToolResultPayload = {};
+  // Parse with Zod - passthrough() ensures this never fails
+  const parsed = ToolResultPayloadSchema.parse(result);
 
-  // Copy all defined properties except binary data
-  for (const [key, value] of Object.entries(result)) {
+  // Build sanitized result, stripping binary data and undefined values
+  const sanitizedResult: ToolResultPayload = {};
+  for (const [key, value] of Object.entries(parsed)) {
     if (value === undefined) continue;
     // Skip binary fields
     if (key === 'base64Image' || key === 'base64Data' || key === 'bytes') {
       continue;
     }
     sanitizedResult[key] = value;
+  }
+
+  // Apply fallback line changes if not present
+  const lineChanges = result.lineChanges ?? fallbackLineChanges;
+  if (lineChanges !== undefined) {
+    sanitizedResult.lineChanges = lineChanges;
+  }
+
+  // Ensure isError is set if present in result
+  if (result.isError && !sanitizedResult.isError) {
+    sanitizedResult.isError = true;
   }
 
   // Strip binary data from file references, keep metadata

@@ -1278,10 +1278,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Only process attachments if the handler supports them
     if (this.canProcessToolResultAttachments && attachments.length > 0) {
-      finalResult.attachmentSummary =
-        `Attachments included in this response:\n${describeAttachments(
-          attachments,
-        ).join('\n')}`;
+      finalResult.attachmentSummary = `Attachments included in this response:\n${describeAttachments(
+        attachments,
+      ).join('\n')}`;
 
       const encodedParts = await Promise.all(
         attachments.map((attachment) =>
