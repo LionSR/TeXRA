@@ -186,19 +186,17 @@ function formatErrorMessage(
   const context = error.context;
   const operation = context?.operation;
 
-  // Build message parts
-  const parts: string[] = [`${operationName} failed`];
-  if (suffix) {
-    parts[0] += ` ${suffix}`;
-  }
-  parts.push(error.message);
+  // Build base message
+  const prefix = suffix
+    ? `${operationName} failed ${suffix}`
+    : `${operationName} failed`;
 
   // Add operation context if available and different from operationName
   if (operation && !operationName.toLowerCase().includes(operation.toLowerCase())) {
-    return `${parts[0]} [${operation}]: ${error.message}`;
+    return `${prefix} [${operation}]: ${error.message}`;
   }
 
-  return `${parts[0]}: ${error.message}`;
+  return `${prefix}: ${error.message}`;
 }
 
 /**
