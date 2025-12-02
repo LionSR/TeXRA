@@ -97,6 +97,19 @@ export interface ProgressEventPayloads {
     errorMessage?: string;
   };
   resolveRetryRequest: { streamId: StreamTabId };
+  showToolEditApprovalPrompt: {
+    requestId: string;
+    path: string;
+    relativePath: string;
+    sourceTool: string;
+    allowBypass: boolean;
+    streamId: StreamTabId | '';
+    addedLines: number;
+    removedLines: number;
+  };
+  resolveToolEditApprovalPrompt: { requestId: string };
+  updateToolEditApprovalBypassState: { bypassActive: boolean };
+  extensionDeactivating: void;
 }
 
 export type ProgressEvent = keyof ProgressEventPayloads;

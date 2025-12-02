@@ -326,12 +326,9 @@ export async function deactivate() {
   ToolUseSessionPersistence.clearAllPersistedSnapshots();
   await ToolUseSnapshotStore.deleteAll();
 
-  // Get the ProgressViewProvider instance
-  const progressViewProvider = ProgressViewProvider.getInstance();
-  if (progressViewProvider) {
-    // Mark all running tasks as cancelled when extension deactivates
-    progressViewProvider.eventHandler.markAllRunningTasksAsCancelled();
-  }
+  // Notify all listeners that extension is deactivating
+  bus.emit('extensionDeactivating', undefined as unknown as void);
+
   statusBarItem?.dispose();
   disposeDiffRefresh();
 }
