@@ -94,7 +94,7 @@ export abstract class ModelHandler<
    * Whether the handler supports processing attachments in tool results.
    * Override in handlers that don't support attachments (e.g., DeepSeek).
    */
-  protected get supportsToolResultAttachments(): boolean {
+  get canProcessToolResultAttachments(): boolean {
     return true;
   }
 

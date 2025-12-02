@@ -1331,7 +1331,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     const { attachments, sanitizedResult } = extractToolAttachments(result);
     const canUploadFiles = this.supportsToolResultFileUpload;
-    const canInlineAttachments = this.supportsToolResultAttachments;
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {
@@ -1379,7 +1378,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ];
 
       for (const uploaded of uploadedAttachments) {
-        if (canInlineAttachments && uploaded.isImage) {
+        if (this.canProcessToolResultAttachments && uploaded.isImage) {
           parts.push({
             type: 'input_image',
             detail: 'auto',
