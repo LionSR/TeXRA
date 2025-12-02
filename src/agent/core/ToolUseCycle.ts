@@ -25,7 +25,7 @@ import {
   type ToolUseCycleShared,
   type ToolUseCycleState,
 } from './flows/ToolUseCycleFlow';
-import { createRetryState, type RetryCallbacks } from './flows/RetryState';
+import { createRetryState } from './flows/RetryState';
 
 // Import and re-export from single source of truth
 import type { ToolUseCycleOptions } from './flows/CycleServices';
@@ -35,11 +35,6 @@ export interface ToolUseCycleInput<C = unknown> {
   options: ToolUseCycleOptions<C>;
   messages: ProviderMessage[];
   store: AgentSharedStore;
-}
-
-export interface ToolUseCycleResult {
-  /** Callbacks for triggering manual retry from UI. */
-  retryCallbacks: RetryCallbacks;
 }
 
 /**
@@ -53,16 +48,11 @@ export interface ToolUseCycleResult {
  * where the agent responds to tools and waits for user input.
  *
  * @param input - Cycle input with options, messages, and store
- * @returns Result with retry callbacks for UI to trigger manual retry
  * @see runResponseCycle for workflow-based cycle execution that returns control flags
  */
 export async function runToolUseCycle<C = unknown>(
   input: ToolUseCycleInput<C>,
-): Promise<ToolUseCycleResult> {
-  // Initialize retry callbacks - these will be populated by RetryWaitNode
-  // and can be called by the UI to trigger manual retry
-  const retryCallbacks: RetryCallbacks = {};
-
+): Promise<void> {
   // Shared state contains only mutable data that flows through nodes.
   // Services (options, store) are injected via setParams().
   const shared: ToolUseCycleShared<C> = {
@@ -76,7 +66,6 @@ export async function runToolUseCycle<C = unknown>(
       stopReason: undefined,
     } satisfies ToolUseCycleState,
     retryState: createRetryState(),
-    retryCallbacks,
   };
 
   const flow = createToolUseCycleFlow<C>();
@@ -86,8 +75,6 @@ export async function runToolUseCycle<C = unknown>(
 
   // Emit edited files to the progress view
   emitEditedFiles(input);
-
-  return { retryCallbacks };
 }
 
 /**
