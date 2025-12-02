@@ -1271,7 +1271,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     let finalResult = result;
     let attachmentParts: FunctionResponsePart[] = [];
 
-    if (this.supportsToolResultAttachments) {
+    if (this.canProcessToolResultAttachments) {
       const { attachments, sanitizedResult } = extractToolAttachments(result);
 
       if (attachments.length > 0) {

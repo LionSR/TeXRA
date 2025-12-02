@@ -167,6 +167,9 @@ export interface IModelHandler<
   /** Indicates if the model is served by DeepSeek. */
   readonly isDeepSeek: boolean;
 
+  /** Whether the handler supports processing attachments in tool results. */
+  readonly canProcessToolResultAttachments: boolean;
+
   /** Checks if the provider implements the OpenAI API. */
   readonly isOpenaiCompatible: boolean;
 

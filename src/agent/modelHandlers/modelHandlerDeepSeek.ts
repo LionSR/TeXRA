@@ -2,11 +2,9 @@
 import OpenAI from 'openai';
 
 // Local file imports
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 import { BaseReasoningStreamAggregator } from './BaseReasoningStreamAggregator';
-import { extractToolAttachments } from './utils/toolAttachmentUtils';
 
 // Type imports
 import type {
@@ -85,18 +83,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    */
   private lastReasoningContent: string | null = null;
 
-  protected override get toolCallProvider(): string {
-    return 'deepseek';
-  }
-
-  protected override get usageProvider(): NormalizedUsage['provider'] {
-    return 'deepseek';
-  }
+  // toolCallProvider and usageProvider inherit from base class via config.provider
 
   /**
    * DeepSeek models don't support vision/attachments in tool results.
    */
-  protected override get supportsToolResultAttachments(): boolean {
+  override get canProcessToolResultAttachments(): boolean {
     return false;
   }
 
@@ -165,8 +157,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * reasoning_content when tool calls are made. This allows the model
    * to continue its reasoning chain across tool-use cycles.
    *
-   * Results are sanitized to strip binary data (base64Data, bytes) since
-   * DeepSeek doesn't support attachments in tool results.
+   * Note: Binary attachment data is stripped at the source (ToolUseCycleFlow)
+   * based on canProcessToolResultAttachments, so result is already sanitized.
    */
   override async createToolUseFollowUpMessages(
     _client: OpenAI | undefined,
@@ -178,13 +170,10 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     const toolCall = this.normalizeToolCall(call.raw);
     const callMsg = this.buildAssistantMessageWithReasoning([toolCall], text);
 
-    // Sanitize result to strip binary data (DeepSeek doesn't support attachments)
-    const { sanitizedResult } = extractToolAttachments(result);
-
     const resultMsg = {
       role: 'tool' as const,
       tool_call_id: toolCall.id,
-      content: JSON.stringify(sanitizedResult),
+      content: JSON.stringify(result),
     };
 
     return [callMsg as ChatCompletionMessageParam, resultMsg];
@@ -197,8 +186,8 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    * should be in ONE assistant message with reasoning_content, followed by
    * individual tool result messages.
    *
-   * Results are sanitized to strip binary data (base64Data, bytes) since
-   * DeepSeek doesn't support attachments in tool results.
+   * Note: Binary attachment data is stripped at the source (ToolUseCycleFlow)
+   * based on canProcessToolResultAttachments, so results are already sanitized.
    *
    * @param calls - Array of tool calls from the model response
    * @param results - Array of results corresponding to each call (must match calls length)
@@ -229,13 +218,12 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
       callMsg as ChatCompletionMessageParam,
     ];
 
-    // Add individual tool result messages (sanitize to strip binary data)
+    // Add individual tool result messages
     for (let i = 0; i < toolCalls.length; i++) {
-      const { sanitizedResult } = extractToolAttachments(results[i]);
       messages.push({
         role: 'tool' as const,
         tool_call_id: toolCalls[i].id,
-        content: JSON.stringify(sanitizedResult),
+        content: JSON.stringify(results[i]),
       });
     }
 
