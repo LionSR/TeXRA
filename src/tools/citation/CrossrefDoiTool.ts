@@ -1,5 +1,5 @@
 // Third-party imports
-import { CrossrefClient } from '@jamesgopsill/crossref-client';
+import { CrossrefClient, type Work } from '@jamesgopsill/crossref-client';
 import { z } from 'zod';
 
 // Local imports - metadata
@@ -19,14 +19,6 @@ export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;
 
 const crossrefClient = new CrossrefClient();
 
-/**
- * Type guard to safely access Crossref work metadata properties.
- * The library returns untyped objects, so we use this helper to access properties safely.
- */
-function isWorkMetadata(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 export class CrossrefDoiTool extends defineTool({
   name: 'crossref_doi',
   description: 'Look up detailed metadata for a DOI using Crossref.',
@@ -38,7 +30,7 @@ export class CrossrefDoiTool extends defineTool({
       throw new ToolError('Invalid DOI string.');
     }
 
-    let work: Record<string, unknown>;
+    let work: Work;
     try {
       // Respect Crossref API rate limits
       await waitForRateLimit(
@@ -46,41 +38,28 @@ export class CrossrefDoiTool extends defineTool({
         CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
       );
       const response = await crossrefClient.work(trimmedDoi);
-      if (!response.ok || !response.content || !response.content.message) {
+      if (!response.ok || !response.content?.message) {
         throw new Error('Crossref response did not include metadata.');
       }
-      const message = response.content.message;
-      if (!isWorkMetadata(message)) {
-        throw new Error('Crossref metadata payload was empty.');
-      }
-      work = message;
+      work = response.content.message;
     } catch (error) {
       throw new ToolError(`Crossref lookup failed: ${toErrorMessage(error)}`);
     }
 
-    const titleValue = work.title;
-    const titles = Array.isArray(titleValue)
-      ? titleValue.filter((entry): entry is string => typeof entry === 'string')
-      : typeof titleValue === 'string'
-        ? [titleValue]
-        : [];
-    const resolvedTitle = titles.length > 0 ? titles[0] : null;
-
     const metadata = {
-      doi: typeof work.DOI === 'string' ? work.DOI : trimmedDoi,
-      title: resolvedTitle,
-      titles,
-      publisher: typeof work.publisher === 'string' ? work.publisher : null,
-      type: typeof work.type === 'string' ? work.type : null,
-      abstract: typeof work.abstract === 'string' ? work.abstract : null,
-      description:
-        typeof work.description === 'string' ? work.description : null,
-      created: work.created ?? null,
+      doi: work.DOI,
+      title: work.title[0] ?? null,
+      titles: work.title,
+      publisher: work.publisher,
+      type: work.type,
+      abstract: work.abstract ?? null,
+      description: null, // Not in library type
+      created: work.created,
       published: work.published ?? null,
-      url: typeof work.URL === 'string' ? work.URL : null,
-      language: typeof work.language === 'string' ? work.language : null,
-      authors: Array.isArray(work.author) ? work.author : [],
-      licenses: Array.isArray(work.license) ? work.license : [],
+      url: work.resource?.primary?.URL ?? null,
+      language: work.language ?? null,
+      authors: work.author,
+      licenses: work.license ?? [],
     };
 
     return toolResult({
