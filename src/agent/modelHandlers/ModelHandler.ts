@@ -35,6 +35,7 @@ import {
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
 import type { ProviderMessage } from './types/ProviderMessage';
+import type { ToolResultPayload } from './utils/toolAttachmentUtils';
 import type {
   IModelHandler,
   CreateResponseOptions,
@@ -609,7 +610,7 @@ export abstract class ModelHandler<
    *
    * @param client - Provider client (for file uploads if supported)
    * @param call - Parsed tool call object
-   * @param result - Sanitized result (binary data stripped)
+   * @param result - Tool result payload (binary data stripped, properly typed)
    * @param attachments - Extracted file attachments (for upload/inline if supported)
    * @param workspaceState - Optional workspace state
    * @param text - Optional text to include before tool call
@@ -617,7 +618,7 @@ export abstract class ModelHandler<
   abstract createToolUseFollowUpMessages(
     client: C | undefined,
     call: T,
-    result: Record<string, unknown>,
+    result: ToolResultPayload,
     attachments: ToolFileAttachment[],
     workspaceState?: AgentWorkspaceState,
     text?: string,
