@@ -192,7 +192,7 @@ export function applyFallbackResult(
   switch (result.outcome) {
     case 'manual_retry':
       logger.error(`${operationName} failed: ${result.error.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        messageType: MESSAGE_TYPES.ERROR,
         data: { statusCode: result.error.statusCode, retryable: true },
       });
       return FlowTransition.AWAIT_RETRY;
@@ -201,7 +201,7 @@ export function applyFallbackResult(
       logger.error(
         `${operationName} failed (not retryable): ${result.error.message}`,
         {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+          messageType: MESSAGE_TYPES.ERROR,
           data: { statusCode: result.error.statusCode, retryable: false },
         },
       );
