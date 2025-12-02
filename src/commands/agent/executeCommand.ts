@@ -12,7 +12,7 @@ import {
   resumeAgentExecution,
 } from '@agent/runtime/executeAgent';
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
-import { AgentHistoryManager } from '@historyView/managers';
+import { AgentHistoryManager } from '@common/history';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'ExecuteCommand';
