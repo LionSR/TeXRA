@@ -267,6 +267,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleRetryStreamRequest(message: any): Promise<void> {
+    // triggerRetry is synchronous, no await needed
     const success = retryCoordinator.triggerRetry(message.stream);
     if (!success) {
       await vscode.window.showInformationMessage(
