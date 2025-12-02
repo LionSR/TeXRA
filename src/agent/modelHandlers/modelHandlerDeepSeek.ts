@@ -16,7 +16,7 @@ import type {
   ChatCompletionMessageParam,
 } from 'openai/resources/chat/completions';
 
-// TODO: prompt_cache_hit_tokens can also be used here to correct the price and response usage computation in the base class (just overwrite the computePrice and computeResponseUsage methods with a revalues responseUsage.prompt_tokens_details?.cached_tokens and then call the super methods)
+// TODO: prompt_cache_hit_tokens can also be used here to correct the price computation in the base class (just overwrite the computePrice method with revalued responseUsage.prompt_tokens_details?.cached_tokens and then call the super method)
 // DEEPSEEK RESPONSE USAGE FORMAT:
 // usage
 // object
