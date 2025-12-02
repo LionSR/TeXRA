@@ -69,6 +69,13 @@ class Node<
   maxRetries: number;
   wait: number;
   currentRetry: number = 0;
+  /**
+   * Optional abort signal for cancellation support.
+   * When set and aborted, the retry loop will skip remaining retries
+   * and go directly to execFallback(). This prevents unnecessary API
+   * calls when the user has intentionally cancelled the operation.
+   */
+  signal?: AbortSignal;
   constructor(maxRetries: number = 1, wait: number = 0) {
     super();
     this.maxRetries = maxRetries;
@@ -76,6 +83,16 @@ class Node<
   }
   async execFallback(prepRes: unknown, error: Error): Promise<unknown> {
     throw error;
+  }
+  /**
+   * Override clone to reset execution-specific state.
+   * Prevents stale signal/retry state from affecting new executions.
+   */
+  clone(): this {
+    const cloned = super.clone();
+    cloned.signal = undefined;
+    cloned.currentRetry = 0;
+    return cloned;
   }
   async _exec(prepRes: unknown): Promise<unknown> {
     for (
@@ -86,7 +103,10 @@ class Node<
       try {
         return await this.exec(prepRes);
       } catch (e) {
-        if (this.currentRetry === this.maxRetries - 1)
+        // If abort signal is set and aborted, skip retries and go to fallback
+        // This prevents unnecessary retries when the user intentionally cancelled
+        const isAborted = this.signal?.aborted === true;
+        if (this.currentRetry === this.maxRetries - 1 || isAborted)
           return await this.execFallback(prepRes, e as Error);
         if (this.wait > 0)
           await new Promise((resolve) => setTimeout(resolve, this.wait * 1000));
