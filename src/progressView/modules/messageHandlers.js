@@ -83,19 +83,24 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       state.setActiveRunId(activeStream, runId);
     }
     dom.taskGroups.showRun(runId);
-    this._refreshInstructionForActiveRun();
-    this._refreshOutputsForActiveRun();
+    // Pass runId directly to avoid redundant resolveActiveRunId calls
+    this._refreshInstructionForActiveRun(runId);
+    this._refreshOutputsForActiveRun(runId);
     this._refreshUsageForActiveRun();
   }
 
-  _refreshInstructionForActiveRun() {
+  /**
+   * Refresh instruction panel for the active run.
+   * @param {string} [runId] - Optional runId to use instead of resolving
+   */
+  _refreshInstructionForActiveRun(runId) {
     if (state.activeSessionKind === 'toolUse') {
       dom.instructionPanel.hide();
       return;
     }
 
     const stream = state.activeStream || null;
-    const activeRunId = state.resolveActiveRunId(stream);
+    const activeRunId = runId ?? state.resolveActiveRunId(stream);
     if (!activeRunId) {
       dom.instructionPanel.hide();
       return;
@@ -109,9 +114,13 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
-  _refreshOutputsForActiveRun() {
+  /**
+   * Refresh output files for the active run.
+   * @param {string} [runId] - Optional runId to use instead of resolving
+   */
+  _refreshOutputsForActiveRun(runId) {
     const stream = state.activeStream || null;
-    const activeRunId = state.resolveActiveRunId(stream);
+    const activeRunId = runId ?? state.resolveActiveRunId(stream);
     const filesByRound = activeRunId
       ? state.getRunFiles(stream, activeRunId) || {}
       : {};
@@ -124,6 +133,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     dom.usageSummary.update();
   }
 
+  /**
+   * Update run-scoped metadata (instructions, usage, files) from message.
+   * Shared by handleUpdateLogs and _handleIncrementalUpdate to avoid duplication.
+   * @param {string} stream - The stream to update
+   * @param {Object} message - Message containing runInstructions, runUsage, runFiles
+   */
+  _updateRunMetadata(stream, message) {
+    if (message.runInstructions) {
+      Object.entries(message.runInstructions).forEach(
+        ([runId, instruction]) => {
+          if (runId) {
+            state.setRunInstruction(stream, runId, instruction);
+          }
+        },
+      );
+    }
+
+    if (message.runUsage) {
+      Object.entries(message.runUsage).forEach(([runId, usage]) => {
+        state.setRunUsage(stream, runId, usage);
+      });
+    }
+
+    if (message.runFiles) {
+      Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
+        if (runId) {
+          state.setRunFiles(stream, runId, filesByRound);
+        }
+      });
+    }
+  }
+
   _createHandlers() {
     return {
       [COMMANDS.UPDATE_STREAMS]: (m) => this.handleUpdateStreams(m),
@@ -133,7 +174,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       [COMMANDS.ADD_TASK_GROUP]: (m) => this.handleAddTaskGroup(m),
       [COMMANDS.UPDATE_TASK_GROUP]: (m) => this.handleUpdateTaskGroup(m),
       [COMMANDS.UPDATE_STATUS]: (m) => this.handleUpdateStatus(m),
+      [COMMANDS.UPDATE_STREAM_STATUS]: (m) => this.handleUpdateStreamStatus(m),
       [COMMANDS.UPDATE_USAGE]: (m) => this.handleUpdateUsage(m),
+      [COMMANDS.UPDATE_RUN_USAGE]: (m) => this.handleUpdateRunUsage(m),
       [COMMANDS.UPDATE_FILES]: (m) => this.handleUpdateFiles(m),
       [COMMANDS.UPDATE_MISSING_OUTPUTS]: (m) =>
         this.handleUpdateMissingOutputs(m),
@@ -256,92 +299,144 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
   }
 
   handleUpdateLogs(message) {
+    if (message.stream !== state.activeStream) {
+      this._updatePlaceholderVisibility();
+      return;
+    }
+
+    // Determine rebuild strategy based on forceRebuild flag:
+    // - false: Incremental update only (skip DOM rebuild)
+    // - true/undefined: Full DOM rebuild needed
+    // See WebviewUpdater.updateLogContent() JSDoc for contract details.
+    const useIncrementalUpdate = message.forceRebuild === false;
+    if (useIncrementalUpdate) {
+      this._handleIncrementalUpdate(message);
+      this._updatePlaceholderVisibility();
+      return;
+    }
+
+    // Full rebuild path (stream switch, explicit forceRebuild, or legacy undefined)
     const logContent = document.getElementById(ELEMENT_IDS.LOG_CONTENT);
-    if (message.stream === state.activeStream) {
-      pendingLogUpdates.clear();
-      dom.taskGroups.clear();
-      state.taskGroups.clear();
-      state.clearRunInstructions(message.stream);
-      state.clearRunFiles(message.stream);
-      state.clearPendingInstruction(state.activeStream);
-      const previousRunId = state.getActiveRunId(message.stream);
-      state.clearActiveRun(message.stream);
-      logContent.innerHTML = '';
-      const groups = message.groups || [];
-      if (groups.length > 0) {
-        const parentGroups = groups.filter((g) => !g.parentGroupId);
-        dom.runSelector.setRuns(parentGroups);
-        dom.taskGroups.renderInitial(groups);
+    pendingLogUpdates.clear();
+    dom.taskGroups.clear();
+    state.taskGroups.clear();
+    state.clearRunInstructions(message.stream);
+    state.clearRunFiles(message.stream);
+    state.clearRunUsage(message.stream);
+    state.clearPendingInstruction(state.activeStream);
+    const previousRunId = state.getActiveRunId(message.stream);
+    state.clearActiveRun(message.stream);
+    logContent.innerHTML = '';
+    const groups = message.groups || [];
+    if (groups.length > 0) {
+      const parentGroups = groups.filter((g) => !g.parentGroupId);
+      dom.runSelector.setRuns(parentGroups);
+      dom.taskGroups.renderInitial(groups);
 
-        if (message.runInstructions) {
-          Object.entries(message.runInstructions).forEach(
-            ([runId, instruction]) => {
-              if (runId) {
-                state.setRunInstruction(message.stream, runId, instruction);
-              }
-            },
-          );
-        }
+      // Update run metadata using shared helper
+      this._updateRunMetadata(message.stream, message);
 
-        if (message.runUsage) {
-          Object.entries(message.runUsage).forEach(([runId, usage]) => {
-            state.setRunUsage(message.stream, runId, usage);
-          });
-        }
-
-        if (message.runFiles) {
-          Object.entries(message.runFiles).forEach(([runId, filesByRound]) => {
-            if (runId) {
-              state.setRunFiles(message.stream, runId, filesByRound);
-            }
-          });
-        }
-
-        if (parentGroups.length > 0) {
-          const runIds = parentGroups.map((group) => group.id);
-          const preferredRun =
-            message.activeRunId && runIds.includes(message.activeRunId)
-              ? message.activeRunId
-              : previousRunId && runIds.includes(previousRunId)
-                ? previousRunId
-                : runIds[runIds.length - 1];
-          state.setActiveRunId(message.stream, preferredRun);
-          dom.runSelector.setActiveRun(preferredRun);
-          dom.taskGroups.showRun(preferredRun);
-        } else {
-          dom.taskGroups.showRun(null);
-        }
-
-        const resolvedRunId = state.resolveActiveRunId(message.stream);
-        if (
-          resolvedRunId &&
-          state.getActiveRunId(message.stream) !== resolvedRunId
-        ) {
-          state.setActiveRunId(message.stream, resolvedRunId);
-        }
+      if (parentGroups.length > 0) {
+        const runIds = parentGroups.map((group) => group.id);
+        const preferredRun =
+          message.activeRunId && runIds.includes(message.activeRunId)
+            ? message.activeRunId
+            : previousRunId && runIds.includes(previousRunId)
+              ? previousRunId
+              : runIds[runIds.length - 1];
+        state.setActiveRunId(message.stream, preferredRun);
+        dom.runSelector.setActiveRun(preferredRun);
+        dom.taskGroups.showRun(preferredRun);
       } else {
         dom.taskGroups.showRun(null);
       }
-      const logMessages = message.messages || [];
-      logMessages.forEach((msg) => {
-        if (msg.groupId) {
-          if (!dom.logEntries.append(msg)) {
-            const formatted = this._entryFormatter.format(msg);
-            appendFormatted(logContent, formatted);
-          }
-        } else {
+
+      const resolvedRunId = state.resolveActiveRunId(message.stream);
+      if (
+        resolvedRunId &&
+        state.getActiveRunId(message.stream) !== resolvedRunId
+      ) {
+        state.setActiveRunId(message.stream, resolvedRunId);
+      }
+    } else {
+      dom.taskGroups.showRun(null);
+    }
+    const logMessages = message.messages || [];
+    logMessages.forEach((msg) => {
+      if (msg.groupId) {
+        if (!dom.logEntries.append(msg)) {
           const formatted = this._entryFormatter.format(msg);
           appendFormatted(logContent, formatted);
         }
-      });
-      scrollToBottom(logContent);
+      } else {
+        const formatted = this._entryFormatter.format(msg);
+        appendFormatted(logContent, formatted);
+      }
+    });
+    scrollToBottom(logContent);
 
-      this._refreshInstructionForActiveRun();
-      this._refreshOutputsForActiveRun();
-      this._refreshUsageForActiveRun();
-    }
+    // Use validated run ID from state (set earlier via setActiveRunId after validation)
+    const activeRunId = state.resolveActiveRunId(message.stream);
+    this._refreshInstructionForActiveRun(activeRunId);
+    this._refreshOutputsForActiveRun(activeRunId);
+    this._refreshUsageForActiveRun();
 
     this._updatePlaceholderVisibility();
+  }
+
+  /**
+   * Handle incremental update - update state without DOM rebuild.
+   * Used when refreshing the same stream to avoid expensive full rebuild.
+   *
+   * Limitations (by design):
+   * - Log messages are NOT appended here; they arrive via APPEND_LOG command
+   * - Only group status/endTime are updated; other group fields are immutable post-creation
+   * - New groups are NOT created; they arrive via ADD_TASK_GROUP command
+   * - Stream status is NOT updated here; it arrives via UPDATE_STREAM_STATUS command
+   */
+  _handleIncrementalUpdate(message) {
+    // Defensive guard: caller should verify stream matches active stream
+    if (message.stream !== state.activeStream) {
+      console.debug(
+        `[incremental] stream mismatch: ${message.stream} !== ${state.activeStream}`,
+      );
+      return;
+    }
+
+    // Update run-scoped metadata using shared helper
+    // Skip DOM reconstruction since content hasn't changed
+    this._updateRunMetadata(message.stream, message);
+
+    // Update task group statuses if they changed
+    // Note: Only status/endTime are expected to change post-creation
+    const groups = message.groups || [];
+    groups.forEach((group) => {
+      const existing = state.taskGroups.get(group.id);
+      if (!existing) {
+        // New group during incremental update - this shouldn't happen
+        // Groups should arrive via ADD_TASK_GROUP command
+        console.debug(
+          `[incremental] unexpected new group ${group.id} - skipping`,
+        );
+        return;
+      }
+      if (existing.status !== group.status) {
+        state.taskGroups.update({
+          groupId: group.id,
+          updates: { status: group.status, endTime: group.endTime },
+        });
+        dom.taskGroups.updateGroup({
+          groupId: group.id,
+          updates: { status: group.status, endTime: group.endTime },
+        });
+      }
+    });
+
+    // Refresh display panels - use validated run ID from state
+    const activeRunId = state.resolveActiveRunId(message.stream);
+    this._refreshInstructionForActiveRun(activeRunId);
+    this._refreshOutputsForActiveRun(activeRunId);
+    this._refreshUsageForActiveRun();
   }
 
   handleAppendLog(message) {
@@ -421,8 +516,9 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
         }
         dom.runSelector.setActiveRun(newRunId);
         dom.taskGroups.showRun(newRunId);
-        this._refreshInstructionForActiveRun();
-        this._refreshOutputsForActiveRun();
+        // Pass newRunId directly to avoid redundant resolveActiveRunId calls
+        this._refreshInstructionForActiveRun(newRunId);
+        this._refreshOutputsForActiveRun(newRunId);
         this._refreshUsageForActiveRun();
       }
       scrollToBottom(logContent);
@@ -459,6 +555,38 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  /**
+   * Handle targeted single-stream status update.
+   * More efficient than UPDATE_STREAMS when only status changed.
+   */
+  handleUpdateStreamStatus(message) {
+    const { stream, status } = message;
+    if (!stream) {
+      return;
+    }
+
+    // Validate status against known values
+    const validStatuses = Object.values(STREAM_STATUS);
+    if (status && !validStatuses.includes(status)) {
+      console.debug(
+        `[updateStreamStatus] Invalid status "${status}" for stream: ${stream}`,
+      );
+      return;
+    }
+
+    // Always update state first - state is the single source of truth.
+    // If tab doesn't exist yet (race condition), UPDATE_STREAMS will read
+    // from state.streamStatuses and apply the status when creating the tab.
+    if (status && status !== STREAM_STATUS.READY) {
+      state.streamStatuses.set(stream, status);
+    } else {
+      state.streamStatuses.delete(stream);
+    }
+
+    // Attempt DOM update (may fail if tab doesn't exist yet, which is OK)
+    dom.streamTabs.updateStreamStatus(stream, status);
+  }
+
   handleUpdateUsage(message) {
     if (message.stream && message.stream !== state.activeStream) {
       return;
@@ -474,6 +602,25 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     Object.entries(usageByRun).forEach(([runId, usage]) => {
       state.setRunUsage(targetStream, runId, usage);
     });
+    this._refreshUsageForActiveRun();
+  }
+
+  /**
+   * Handle incremental usage update for a single run.
+   * More efficient than handleUpdateUsage during streaming.
+   */
+  handleUpdateRunUsage(message) {
+    if (message.stream && message.stream !== state.activeStream) {
+      return;
+    }
+
+    const targetStream = message.stream || state.activeStream || null;
+    if (!targetStream || !message.runId) {
+      return;
+    }
+
+    // Update only the specific run's usage without clearing others
+    state.setRunUsage(targetStream, message.runId, message.usage);
     this._refreshUsageForActiveRun();
   }
 

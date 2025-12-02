@@ -102,6 +102,12 @@ export class WebviewUpdater {
 
   /**
    * Update log content for a specific stream
+   * @param options.forceRebuild - Controls frontend DOM rebuild behavior:
+   *   - `true`: Full DOM rebuild (required when switching streams or after data deletion)
+   *   - `false`: Incremental update only (skip DOM rebuild, update metadata)
+   *   - `undefined`: Full DOM rebuild (legacy behavior, same as true)
+   *   Note: Frontend uses strict `=== false` check, so explicit `false` is required
+   *   for incremental updates.
    */
   updateLogContent(
     stream: StreamTabId,
@@ -113,6 +119,9 @@ export class WebviewUpdater {
       runUsage?: Record<string, TokenUsageStats>;
       runFiles?: Record<string, { [key: number]: OutputFileInfo[] }>;
     },
+    options?: {
+      forceRebuild?: boolean;
+    },
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_LOGS,
@@ -123,6 +132,7 @@ export class WebviewUpdater {
       activeRunId: extras?.activeRunId,
       runUsage: extras?.runUsage,
       runFiles: extras?.runFiles,
+      forceRebuild: options?.forceRebuild,
     });
   }
 
@@ -220,7 +230,7 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update usage statistics
+   * Update usage statistics (full replacement)
    */
   updateUsage(
     stream: StreamTabId,
@@ -230,6 +240,23 @@ export class WebviewUpdater {
       command: COMMANDS.UPDATE_USAGE,
       stream,
       usageByRun,
+    });
+  }
+
+  /**
+   * Update usage for a single run (incremental).
+   * More efficient than updateUsage when only one run's usage changed.
+   */
+  updateRunUsage(
+    stream: StreamTabId,
+    runId: string,
+    usage: TokenUsageStats,
+  ): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_RUN_USAGE,
+      stream,
+      runId,
+      usage,
     });
   }
 
@@ -271,11 +298,23 @@ export class WebviewUpdater {
   }
 
   /**
-   * Update stream status
+   * Update stream status indicator (for active stream)
    */
   updateStatus(status: StatusType): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STATUS,
+      status,
+    });
+  }
+
+  /**
+   * Update a single stream's status in the stream tabs.
+   * More efficient than updateStreams when only status changed.
+   */
+  updateStreamStatus(stream: StreamTabId, status: StatusType | 'ready'): void {
+    this.sendMessage({
+      command: COMMANDS.UPDATE_STREAM_STATUS,
+      stream,
       status,
     });
   }
