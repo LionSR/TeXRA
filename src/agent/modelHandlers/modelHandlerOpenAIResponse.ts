@@ -20,11 +20,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
-import {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-} from '@common/errors/sdkErrorUtils';
-import { MESSAGE_TYPES } from '@logger/messageTypes';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import type { ModelConfig } from '@model';
@@ -239,13 +235,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         userContent.push(...mediaContent);
       } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Error processing media files: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
+        this.logger.logError(
+          `Error processing media files: ${getSdkErrorMessage(err)}`,
+          err,
+          { operation: 'process media files' },
         );
       }
     }
@@ -297,13 +290,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         )) as ResponseInputMessageContentList;
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        const formattedError = formatProviderHttpError(err);
-        this.logger.error(
-          `Error processing media files for follow-up round: ${formattedError.message}`,
-          {
-            messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-            data: formattedError,
-          },
+        this.logger.logError(
+          `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
+          err,
+          { operation: 'process media files' },
         );
       }
     }
@@ -494,11 +484,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         delete content.filename;
       }
     } catch (err) {
-      const formattedError = formatProviderHttpError(err);
+      const errorMessage = getSdkErrorMessage(err);
 
       if (
         err instanceof APIConnectionTimeoutError ||
-        formattedError.message.includes('Request timed out')
+        errorMessage.includes('Request timed out')
       ) {
         this.logger.warn(
           `Timed out uploading file ${filename}. Falling back to inline payload.`,
@@ -506,12 +496,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         return;
       }
 
-      this.logger.error(
-        `Failed to upload file ${filename}: ${formattedError.message}`,
-        {
-          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-          data: formattedError,
-        },
+      this.logger.logError(
+        `Failed to upload file ${filename}: ${errorMessage}`,
+        err,
+        { operation: 'upload file' },
       );
       throw err;
     } finally {
@@ -682,9 +670,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
-        this.logger.info(
+        this.logger.logProgress(
           `Running OpenAI Responses in background mode for response ${response.id}; polling every 15s. Completion may take longer than usual.`,
-          { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
         );
       }
       if (useBackgroundResponses) {
@@ -698,11 +685,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.sentMessages = messages.length;
       return response;
     } catch (err) {
-      const formattedError = formatProviderHttpError(err);
-      this.logger.error(`Error in createResponse: ${formattedError.message}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-        data: formattedError,
-      });
+      this.logger.logError(
+        `Error in createResponse: ${getSdkErrorMessage(err)}`,
+        err,
+        { operation: 'create response' },
+      );
       throw err;
     }
   }
@@ -1104,7 +1091,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       'scratchpad',
     );
     if (scratchpad) {
-      this.logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+      this.logger.logScratchpad(scratchpad);
     }
 
     await flexibleFS.write(outputLocation, fileContent);

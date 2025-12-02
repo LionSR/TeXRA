@@ -279,6 +279,39 @@ export class AgentLogger {
   }
 
   /**
+   * Log an internal/system message (hidden in normal mode, shown in debug).
+   * Single source of truth for INTERNAL message type.
+   */
+  logInternal(message: string, groupId?: string): void {
+    this.info(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
+  }
+
+  /**
+   * Log an internal debug message (hidden in normal mode, shown in debug).
+   * Single source of truth for INTERNAL message type at debug level.
+   */
+  debugInternal(message: string, groupId?: string): void {
+    this.debug(message, {
+      groupId,
+      messageType: MESSAGE_TYPES.INTERNAL,
+    });
+  }
+
+  /**
+   * Log scratchpad/thinking content.
+   * Single source of truth for SCRATCHPAD message type.
+   */
+  logScratchpad(content: string, groupId?: string): void {
+    this.info(content, {
+      groupId,
+      messageType: MESSAGE_TYPES.SCRATCHPAD,
+    });
+  }
+
+  /**
    * Log a list of files that were processed.
    */
   fileList(files: unknown[], groupId?: string): void {
