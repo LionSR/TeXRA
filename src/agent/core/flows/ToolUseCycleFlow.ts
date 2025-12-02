@@ -573,7 +573,6 @@ interface ToolExecutionResult {
   call: SdkToolCall;
   result: ToolResult;
   parsedInput: unknown;
-  lineChanges?: { added: number; removed: number };
   sanitizedOutput: Record<string, unknown>;
   editedFiles: Array<{
     path: string;
@@ -666,13 +665,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
     }
 
-    // recordEdits returns per-call line changes as the single source of truth
+    // recordEdits computes line changes from edits array as single source of truth
     const trackedEdits = tracker.recordEdits(result.edits);
-    const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
-    const sanitizedOutput = sanitizeToolResultForLog(result);
-    if (lineChanges) {
-      sanitizedOutput.lineChanges = lineChanges;
+
+    // Set lineChanges on result directly (tool's value takes precedence)
+    if (!result.lineChanges && trackedEdits.lineChanges) {
+      result.lineChanges = trackedEdits.lineChanges;
     }
+
+    const sanitizedOutput = sanitizeToolResultForLog(result);
     const editedFiles = trackedEdits.edits.map((entry) => ({
       path: entry.path,
       ok: true,
@@ -689,7 +690,6 @@ class ToolUseDispatchNode<C> extends BaseNode<
       call,
       result,
       parsedInput,
-      lineChanges,
       sanitizedOutput,
       editedFiles,
     };
@@ -777,7 +777,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
     // Step 2: Create follow-up messages
     // Extract attachments once per result (single extraction point)
     const extracted = execResults.map((er) =>
-      extractToolAttachments(er.result, er.lineChanges),
+      extractToolAttachments(er.result),
     );
 
     // For Google handlers with multiple parallel calls, use batched method
