@@ -900,10 +900,7 @@ export class LogEntryFormatter {
     if (!element) return null;
 
     this._applyOpenState(element, Boolean(open));
-
-    if (logId) element.dataset.logId = logId;
-    if (groupId) element.dataset.groupId = groupId;
-    if (timestamp) element.dataset.fullTimestamp = timestamp;
+    setElementDataset(element, { logId, groupId, timestamp });
 
     const iconElem = element.querySelector('.icon');
     if (iconElem) {
@@ -1273,9 +1270,11 @@ export class LogEntryFormatter {
     const emoji = EMOJI_BY_LEVEL[severity] || '•';
 
     const container = document.createElement('div');
-    container.dataset.fullTimestamp = fullTimestamp;
-    if (message.id) container.dataset.logId = message.id;
-    if (message.groupId) container.dataset.groupId = message.groupId;
+    setElementDataset(container, {
+      logId: message.id,
+      groupId: message.groupId,
+      timestamp: fullTimestamp,
+    });
 
     const summaryLine = document.createElement('div');
     summaryLine.className = 'log-line';
