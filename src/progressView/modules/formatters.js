@@ -294,6 +294,58 @@ const normalizeToolUseLog = (structured) => {
   };
 };
 
+// =============================================================================
+// Helper Functions - DRY patterns extracted from formatters
+// =============================================================================
+
+/**
+ * Extract and trim content from normalized payload
+ * @param {Object} normalizedPayload - The normalized payload object
+ * @returns {{decoded: string, trimmed: string, isEmpty: boolean}}
+ */
+const extractTrimmedContent = (normalizedPayload) => {
+  const decoded = normalizedPayload?.decodedText || '';
+  const trimmed = decoded.trim();
+  return { decoded, trimmed, isEmpty: !trimmed };
+};
+
+/**
+ * Build a tool-use section HTML block
+ * @param {string} label - The section label (e.g., "Input:", "Output:")
+ * @param {string} content - The HTML content for the section
+ * @returns {string} HTML string for the section
+ */
+const buildToolUseSection = (label, content) => `
+  <div class="tool-use-section">
+    <div class="tool-use-subsection">
+      <span class="tool-use-sublabel">${label}</span>
+      ${content}
+    </div>
+  </div>
+`;
+
+/**
+ * Wrap text in a pre element with optional class
+ * @param {string} text - Text to wrap (will be HTML encoded)
+ * @param {string} [className] - Optional CSS class
+ * @returns {string} HTML string
+ */
+const wrapInPre = (text, className = '') => {
+  const classAttr = className ? ` class="${className}"` : '';
+  return `<pre${classAttr}>${encodeHtml(text)}</pre>`;
+};
+
+/**
+ * Set common dataset attributes on an element
+ * @param {HTMLElement} element - The element to modify
+ * @param {{logId?: string, groupId?: string, timestamp?: string}} data - Dataset values
+ */
+const setElementDataset = (element, { logId, groupId, timestamp }) => {
+  if (logId) element.dataset.logId = logId;
+  if (groupId) element.dataset.groupId = groupId;
+  if (timestamp) element.dataset.fullTimestamp = timestamp;
+};
+
 /**
  * Represents different task group hierarchy levels with associated behaviors
  */
@@ -661,10 +713,9 @@ export class LogEntryFormatter {
     groupId,
     timestamp,
   ) {
-    const decodedContent = normalizedPayload?.decodedText || '';
-    const trimmedContent = decodedContent.trim();
-
-    if (!trimmedContent) return null;
+    const { trimmed: trimmedContent, isEmpty } =
+      extractTrimmedContent(normalizedPayload);
+    if (isEmpty) return null;
 
     const parsedMarkdown = this._processMarkdownContent(trimmedContent);
     const isThinking = contentType.includes('Thinking');
@@ -695,9 +746,7 @@ export class LogEntryFormatter {
     const element = createFromTemplate('toolUseTemplate');
     if (!element) return null;
 
-    if (logId) element.dataset.logId = logId;
-    if (groupId) element.dataset.groupId = groupId;
-    if (timestamp) element.dataset.fullTimestamp = timestamp;
+    setElementDataset(element, { logId, groupId, timestamp });
 
     const headerLabel = element.querySelector('.tool-use-title');
     const iconElem = headerLabel ? headerLabel.previousElementSibling : null;
@@ -747,55 +796,32 @@ export class LogEntryFormatter {
 
     if (input !== undefined) {
       const inputValue = stringifyForDisplay(input);
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Input:</span>
-            <pre>${encodeHtml(inputValue)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(buildToolUseSection('Input:', wrapInPre(inputValue)));
     }
 
     if (files && files.length > 0) {
       const renderData = buildFileListRender(files);
       if (renderData?.items) {
-        sections.push(`
-          <div class="tool-use-section">
-            <div class="tool-use-subsection">
-              <span class="tool-use-sublabel">Edited files:</span>
-              <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
-              <ul class="detail-list">${renderData.items}</ul>
-            </div>
-          </div>
-        `);
+        const fileContent = `
+          <span class="file-list-summary">${encodeHtml(renderData.summary)}</span>
+          <ul class="detail-list">${renderData.items}</ul>
+        `;
+        sections.push(buildToolUseSection('Edited files:', fileContent));
       }
     }
 
     if (errorText) {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Error:</span>
-            <pre>${encodeHtml(errorText)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(buildToolUseSection('Error:', wrapInPre(errorText)));
     } else if (outputText) {
-      sections.push(`
-        <div class="tool-use-section">
-          <div class="tool-use-subsection">
-            <span class="tool-use-sublabel">Output:</span>
-            <pre class="tool-output-full">${encodeHtml(outputText)}</pre>
-          </div>
-        </div>
-      `);
+      sections.push(
+        buildToolUseSection('Output:', wrapInPre(outputText, 'tool-output-full')),
+      );
     }
 
     const fallbackYaml = stringifyForDisplay(parsed);
     contentElem.innerHTML =
       sections.length === 0
-        ? `<pre>${encodeHtml(fallbackYaml || '')}</pre>`
+        ? wrapInPre(fallbackYaml || '')
         : sections.join('<hr class="tool-use-separator">');
 
     return element;
