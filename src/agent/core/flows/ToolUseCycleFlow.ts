@@ -1,3 +1,5 @@
+// Third-party imports (none needed)
+
 // Local imports - core flow primitives
 import { BaseNode, Node, Flow } from '@agent/node';
 import { isRemoteAgent } from '@agent/index';
@@ -15,7 +17,10 @@ import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTy
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 
 // Internal imports - use core ToolTypes as single source of truth
-import { sanitizeToolResultForLog } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import {
+  extractToolAttachments,
+  type ExtractedToolAttachments,
+} from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { FileInteractionState } from '@agent/core/AgentWorkspaceState';
 import type { ToolResult } from '@agent/core/ToolTypes';
@@ -210,29 +215,6 @@ class ToolUsePrepNode<C> extends BaseNode<
 
     return undefined;
   }
-}
-
-function buildToolResultPayload(
-  result: ToolResult,
-  fallbackLineChanges?: { added: number; removed: number },
-): Record<string, unknown> {
-  const payload: Record<string, unknown> = {};
-  if (result.summary !== undefined) payload.summary = result.summary;
-  if (result.output !== undefined) payload.output = result.output;
-  if (result.error !== undefined) payload.error = result.error;
-  if (result.base64Image !== undefined)
-    payload.base64Image = result.base64Image;
-  if (result.userInstruction !== undefined)
-    payload.userInstruction = result.userInstruction;
-  if (result.userPatch !== undefined) payload.userPatch = result.userPatch;
-  if (result.isError) payload.isError = true;
-  if (result.diagnostics !== undefined)
-    payload.diagnostics = result.diagnostics;
-  const lineChanges = result.lineChanges ?? fallbackLineChanges;
-  if (lineChanges !== undefined) payload.lineChanges = lineChanges;
-  if (result.edits !== undefined) payload.edits = result.edits;
-  if (result.files !== undefined) payload.files = result.files;
-  return payload;
 }
 
 /**
@@ -590,7 +572,6 @@ interface ToolExecutionResult {
   call: SdkToolCall;
   result: ToolResult;
   parsedInput: unknown;
-  lineChanges?: { added: number; removed: number };
   sanitizedOutput: Record<string, unknown>;
   editedFiles: Array<{
     path: string;
@@ -683,13 +664,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
       }
     }
 
-    // recordEdits returns per-call line changes as the single source of truth
+    // recordEdits computes line changes from edits array as single source of truth
     const trackedEdits = tracker.recordEdits(result.edits);
-    const lineChanges = result.lineChanges ?? trackedEdits.lineChanges;
-    const sanitizedOutput = sanitizeToolResultForLog(result);
-    if (lineChanges) {
-      sanitizedOutput.lineChanges = lineChanges;
+
+    // Set lineChanges on result directly (tool's value takes precedence)
+    if (!result.lineChanges && trackedEdits.lineChanges) {
+      result.lineChanges = trackedEdits.lineChanges;
     }
+
+    const sanitizedOutput = extractToolAttachments(result).sanitizedResult;
     const editedFiles = trackedEdits.edits.map((entry) => ({
       path: entry.path,
       ok: true,
@@ -697,15 +680,15 @@ class ToolUseDispatchNode<C> extends BaseNode<
       sourceDisplay: 'Tool use',
     }));
 
+    // Track edited files separately (not same as attachment files)
     if (editedFiles.length > 0) {
-      sanitizedOutput.files = editedFiles;
+      sanitizedOutput.editedFiles = editedFiles;
     }
 
     return {
       call,
       result,
       parsedInput,
-      lineChanges,
       sanitizedOutput,
       editedFiles,
     };
@@ -791,34 +774,42 @@ class ToolUseDispatchNode<C> extends BaseNode<
     }
 
     // Step 2: Create follow-up messages
+    // Extract attachments once per result (single extraction point)
+    const extracted = execResults.map((er) =>
+      extractToolAttachments(er.result),
+    );
+
     // For Google handlers with multiple parallel calls, use batched method
-    // to properly preserve thought signatures (required for Gemini 3 models)
+    // to properly preserve thought signatures (required for Gemini 3 models).
+    // For DeepSeek thinking mode, batching ensures reasoning_content is
+    // properly included in the single assistant message with all tool calls.
     const shouldBatch =
-      options.modelHandler.isGoogle &&
+      (options.modelHandler.isGoogle || options.modelHandler.isDeepSeek) &&
       calls.length > 1 &&
       typeof options.modelHandler.createBatchedToolUseFollowUpMessages ===
         'function';
 
     if (shouldBatch) {
       // Batched: All function calls in one model message, all responses in one user message
-      const resultPayloads = execResults.map((er) =>
-        buildToolResultPayload(er.result, er.lineChanges),
-      );
       const followUpMsgs = await options.modelHandler
         .createBatchedToolUseFollowUpMessages!(
         calls,
-        resultPayloads,
+        extracted.map((e) => e.sanitizedResult),
+        extracted.map((e) => e.attachments),
+        store.workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
       state.messages.push(...followUpMsgs);
     } else {
       // Individual: Process each call separately (original behavior)
       for (const [index, execResult] of execResults.entries()) {
+        const { sanitizedResult, attachments } = extracted[index];
         const followUpMsgs =
           await options.modelHandler.createToolUseFollowUpMessages(
             options.client,
             execResult.call,
-            buildToolResultPayload(execResult.result, execResult.lineChanges),
+            sanitizedResult,
+            attachments,
             store.workspace,
             index === 0 && assistantText.length > 0 ? assistantText : undefined,
           );
