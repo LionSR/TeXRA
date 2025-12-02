@@ -11,7 +11,6 @@ import type { AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentType, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
-  ResponseUsageFactory,
   type OpenAIAPIResponseUsage,
   type ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
@@ -786,33 +785,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     return basePrice;
-  }
-
-  /** Map usage fields and create usage statistics object. */
-  computeResponseUsage(
-    responseUsage: ResponseUsage,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    const mapped: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage.input_tokens ?? 0,
-      completion_tokens: responseUsage.output_tokens ?? 0,
-      total_tokens: responseUsage.total_tokens ?? 0,
-      prompt_tokens_details: {
-        cached_tokens: responseUsage.input_tokens_details?.cached_tokens ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens:
-          responseUsage.output_tokens_details?.reasoning_tokens ?? 0,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-
-    return ResponseUsageFactory.fromOpenAIResponse(
-      mapped,
-      this.computePrice(responseUsage),
-      responseTime,
-    );
   }
 
   /** Normalizes OpenAI Responses API usage data into a unified format. */

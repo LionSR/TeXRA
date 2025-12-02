@@ -34,7 +34,6 @@ import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
 import { ConversationRoundState } from '@agent/core/AgentState';
 import {
   OpenAIAPIResponseUsage,
-  ResponseUsageFactory,
   GenerateContentResponseUsageMetadata,
   ExtendedCompletionUsage,
 } from '@agent/core/ResponseUsage';
@@ -858,33 +857,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       outputTokens,
       this.config.inputPrice,
       this.config.outputPrice,
-    );
-  }
-
-  computeResponseUsage(
-    responseUsage: GenerateContentResponseUsageMetadata | null,
-    responseTime: number,
-  ): OpenAIAPIResponseUsage {
-    const { outputTokens, reasoningTokens } =
-      this.computeTokenCounts(responseUsage);
-
-    const usageObj: ExtendedCompletionUsage = {
-      prompt_tokens: responseUsage?.promptTokenCount ?? 0,
-      completion_tokens: outputTokens,
-      total_tokens: responseUsage?.totalTokenCount ?? 0,
-      prompt_tokens_details: {
-        cached_tokens: responseUsage?.cachedContentTokenCount ?? 0,
-      },
-      completion_tokens_details: {
-        reasoning_tokens: reasoningTokens,
-        accepted_prediction_tokens: undefined,
-        rejected_prediction_tokens: undefined,
-      },
-    };
-    return ResponseUsageFactory.fromOpenAIResponse(
-      usageObj,
-      this.computePrice(responseUsage),
-      responseTime,
     );
   }
 
