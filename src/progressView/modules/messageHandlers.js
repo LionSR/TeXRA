@@ -358,8 +358,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
     });
     scrollToBottom(logContent);
 
-    // Use activeRunId from message if available to avoid redundant resolution
-    const activeRunId = message.activeRunId ?? state.resolveActiveRunId(message.stream);
+    // Use validated run ID from state (set earlier via setActiveRunId after validation)
+    const activeRunId = state.resolveActiveRunId(message.stream);
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
@@ -415,8 +415,8 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       }
     });
 
-    // Refresh display panels - use activeRunId from message if available
-    const activeRunId = message.activeRunId ?? state.resolveActiveRunId(message.stream);
+    // Refresh display panels - use validated run ID from state
+    const activeRunId = state.resolveActiveRunId(message.stream);
     this._refreshInstructionForActiveRun(activeRunId);
     this._refreshOutputsForActiveRun(activeRunId);
     this._refreshUsageForActiveRun();
