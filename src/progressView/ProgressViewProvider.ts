@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Internal imports
 import type { OutputFileInfo } from '@agent/output/types';
 import type { IRunStorageService } from '@agent/runtime/RunStorageService';
-import { registerRunStorageService } from '@agent/runtime/RunStorageService';
+import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import type { StreamTabId, StorageKey } from '@agent/types/IdentifierTypes';
 import { BaseWebviewProvider } from '@common/webview';
 import { getSharedLocalResourceRoots } from '@common/webview';
@@ -22,7 +22,7 @@ import { ProgressViewState } from './state/ProgressViewState';
 // Types
 
 // Type imports
-import type { ToolEditApprovalPrompt } from './types';
+import type { ToolEditApprovalPrompt } from '@eventBus/types';
 
 /**
  * Refactored ProgressViewProvider using the new modular architecture.
@@ -98,7 +98,7 @@ export class ProgressViewProvider
 
     // Set instance and register as run storage service
     ProgressViewProvider._instance = this;
-    registerRunStorageService(this);
+    setRunStorageService(this);
 
     // Listen for workspace folder changes
     this._disposables.push(
