@@ -304,7 +304,10 @@ export class ProgressViewMessageHandler extends BaseWebviewMessageHandler {
       return;
     }
 
-    // When forceRebuild is false, do incremental update (skip DOM rebuild)
+    // When forceRebuild is explicitly false, do incremental update (skip DOM rebuild).
+    // NOTE: We check `=== false` (not `!message.forceRebuild`) intentionally.
+    // Backend defaults forceRebuild to false for performance, but we use strict
+    // equality to distinguish from undefined (legacy messages that need full rebuild).
     if (message.forceRebuild === false) {
       this._handleIncrementalUpdate(message);
       this._updatePlaceholderVisibility();
