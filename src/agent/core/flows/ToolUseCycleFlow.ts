@@ -796,6 +796,7 @@ class ToolUseDispatchNode<C> extends BaseNode<
         calls,
         extracted.map((e) => e.sanitizedResult),
         extracted.map((e) => e.attachments),
+        store.workspace,
         assistantText.length > 0 ? assistantText : undefined,
       );
       state.messages.push(...followUpMsgs);
