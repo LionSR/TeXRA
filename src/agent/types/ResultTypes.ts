@@ -17,16 +17,20 @@ export const ExecResultSchema = z.strictObject({
 
 export type ExecResult = z.infer<typeof ExecResultSchema>;
 
-export type FileOpStatus = 'success' | 'noFiles' | 'missingParams' | 'error';
+/** Status values for file operations - single source of truth */
+export const FileOpStatusSchema = z.enum([
+  'success',
+  'noFiles',
+  'missingParams',
+  'error',
+]);
+
+/** Derived type from schema */
+export type FileOpStatus = z.infer<typeof FileOpStatusSchema>;
 
 export const FileOpResultSchema = z.strictObject({
   /** Outcome of the pack or clean operation */
-  status: z.union([
-    z.literal('success'),
-    z.literal('noFiles'),
-    z.literal('missingParams'),
-    z.literal('error'),
-  ]),
+  status: FileOpStatusSchema,
   /** Output directory if files were packed */
   outputFolder: z.string().optional(),
   /** Error message when status is "error" */
