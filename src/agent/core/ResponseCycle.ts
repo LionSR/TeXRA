@@ -20,7 +20,7 @@ import {
   type ResponseCycleShared,
   type ResponseCycleState,
 } from './flows/ResponseCycleFlow';
-import { createRetryState, type RetryCallbacks } from './flows/RetryState';
+import { createRetryState } from './flows/RetryState';
 
 // Import and re-export from single source of truth
 import type { ResponseCycleOptions } from './flows/CycleServices';
@@ -37,8 +37,6 @@ export interface ResponseCycleInput<C = unknown> {
 export interface ResponseCycleResult {
   store: AgentSharedStore;
   endTurn: boolean;
-  /** Callbacks for triggering manual retry from UI. */
-  retryCallbacks: RetryCallbacks;
   /** True if the cycle stopped due to an error (not user cancellation). */
   failedWithError: boolean;
   /** Error message if failedWithError is true. */
@@ -63,10 +61,6 @@ export interface ResponseCycleResult {
 export async function runResponseCycle<C = unknown>(
   input: ResponseCycleInput<C>,
 ): Promise<ResponseCycleResult> {
-  // Initialize retry callbacks - these will be populated by RetryWaitNode
-  // and can be called by the UI to trigger manual retry
-  const retryCallbacks: RetryCallbacks = {};
-
   // Shared state contains only mutable data that flows through nodes.
   // Services (options, store) are injected via setParams().
   const shared: ResponseCycleShared<C> = {
@@ -87,7 +81,6 @@ export async function runResponseCycle<C = unknown>(
       roundFinalized: false,
     } satisfies ResponseCycleState,
     retryState: createRetryState(),
-    retryCallbacks,
   };
 
   const flow = createResponseCycleFlow<C>();
@@ -110,7 +103,6 @@ export async function runResponseCycle<C = unknown>(
   return {
     store: input.store,
     endTurn: shared.state.endTurn,
-    retryCallbacks,
     failedWithError,
     errorMessage: shared.retryState.lastError?.message,
     userCancelled,
