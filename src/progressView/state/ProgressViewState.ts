@@ -130,6 +130,36 @@ export class ProgressViewState {
     this.saveActiveStream();
   }
 
+  /**
+   * Ensure the active stream is valid within the given set of available streams.
+   *
+   * This is the SINGLE SOURCE OF TRUTH for active stream resolution. If the
+   * current active stream is not in the available set (e.g., due to filtering),
+   * this method picks the first available stream and updates the state.
+   *
+   * @param availableStreamNames - Array of stream IDs that are currently visible/available
+   * @returns The resolved active stream ID (may be empty if no streams available)
+   */
+  resolveActiveStream(availableStreamNames: string[]): StreamTabId {
+    const currentActive = this._activeStream;
+
+    // If current active stream is in the available list, keep it
+    if (availableStreamNames.includes(currentActive)) {
+      return currentActive;
+    }
+
+    // Otherwise, pick the first available stream (or empty if none)
+    const resolved = availableStreamNames[0] ?? '';
+
+    // Only update state if it actually changed
+    if (resolved !== currentActive) {
+      this._activeStream = resolved;
+      this.saveActiveStream();
+    }
+
+    return resolved;
+  }
+
   get streamSortOrder(): string {
     return this._streamSortOrder;
   }
