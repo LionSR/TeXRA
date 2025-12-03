@@ -125,5 +125,12 @@ export function processGoogleCodeExecutionParts(
     }
   }
 
+  // Warn about orphaned code blocks (code without result)
+  if (pendingCode) {
+    logger.debug(
+      'Code execution: orphaned executable code block without result',
+    );
+  }
+
   return found;
 }

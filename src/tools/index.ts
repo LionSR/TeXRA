@@ -19,3 +19,4 @@ export * from './latex';
 export * from './citation';
 export * from './web/WebFetchTool';
 export * from './web/WebSearchTool';
+export * from './codeExecution';

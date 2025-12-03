@@ -47,6 +47,12 @@
   color: var(--vscode-editor-background, #1e1e1e);
 }
 
+.code-execution-status--unknown {
+  background-color: var(--vscode-descriptionForeground, #888888);
+  color: var(--vscode-editor-background, #1e1e1e);
+  opacity: 0.7;
+}
+
 /* Language badge */
 .code-execution-language {
   display: inline-flex;

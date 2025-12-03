@@ -890,16 +890,15 @@ export class LogEntryFormatter {
     // Set icon based on status
     const iconElem = element.querySelector('.codicon');
     if (iconElem) {
-      const iconClass =
-        status === 'success'
-          ? 'codicon-pass'
-          : status === 'failed'
-            ? 'codicon-error'
-            : status === 'running'
-              ? 'codicon-sync'
-              : status === 'timeout'
-                ? 'codicon-watch'
-                : 'codicon-play';
+      const iconMap = {
+        success: 'codicon-pass',
+        failed: 'codicon-error',
+        running: 'codicon-sync',
+        timeout: 'codicon-watch',
+        cancelled: 'codicon-circle-slash',
+        unknown: 'codicon-question',
+      };
+      const iconClass = iconMap[status] || 'codicon-play';
       iconElem.className = `codicon ${iconClass}`;
     }
 
@@ -989,8 +988,17 @@ export class LogEntryFormatter {
       if (outputs && Array.isArray(outputs) && outputs.length > 0) {
         const outputItems = outputs
           .map((output) => {
-            if (output.type === 'image' && output.url) {
-              return `<img src="${encodeHtml(output.url)}" class="code-execution-image" alt="Code execution output" />`;
+            if (output.type === 'image') {
+              // Handle both url (OpenAI Responses API) and fileId (OpenAI Assistant API)
+              if (output.url) {
+                return `<img src="${encodeHtml(output.url)}" class="code-execution-image" alt="Code execution output" />`;
+              }
+              if (output.fileId) {
+                return `<div class="code-execution-file">
+                  <i class="codicon codicon-file-media"></i>
+                  <span>Image: ${encodeHtml(output.fileId)}</span>
+                </div>`;
+              }
             }
             if (output.type === 'file' && output.fileId) {
               return `<div class="code-execution-file">
