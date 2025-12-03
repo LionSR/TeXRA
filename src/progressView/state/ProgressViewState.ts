@@ -137,19 +137,19 @@ export class ProgressViewState {
    * current active stream is not in the available set (e.g., due to filtering),
    * this method picks the first available stream and updates the state.
    *
-   * @param availableStreamNames - Array of stream IDs that are currently visible/available
-   * @returns The resolved active stream ID (may be empty if no streams available)
+   * @param availableStreams - Array of stream IDs that are currently visible/available
+   * @returns The resolved active stream ID (may be empty string if no streams available)
    */
-  resolveActiveStream(availableStreamNames: string[]): StreamTabId {
+  resolveActiveStream(availableStreams: StreamTabId[]): StreamTabId {
     const currentActive = this._activeStream;
 
     // If current active stream is in the available list, keep it
-    if (availableStreamNames.includes(currentActive)) {
+    if (availableStreams.includes(currentActive)) {
       return currentActive;
     }
 
     // Otherwise, pick the first available stream (or empty if none)
-    const resolved = availableStreamNames[0] ?? '';
+    const resolved = availableStreams[0] ?? '';
 
     // Only update state if it actually changed
     if (resolved !== currentActive) {
