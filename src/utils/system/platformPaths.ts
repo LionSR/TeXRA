@@ -96,10 +96,11 @@ export function getExtraDirs(): string[] {
       }
     }
   } else {
+    // Linux/Unix paths
     dirs.push(
       '/usr/local/bin',
       '/usr/bin',
-      '/usr/texbin',
+      '/snap/bin', // Ubuntu snap packages
       '/home/linuxbrew/.linuxbrew/bin',
     );
   }
@@ -117,6 +118,9 @@ export function getExtraDirs(): string[] {
     for (const tool of TEX_TOOLS) {
       texScriptPatterns.push(`/usr/local/texlive/*/texmf-dist/scripts/${tool}`);
       texScriptPatterns.push(`/usr/share/texlive/texmf-dist/scripts/${tool}`);
+      // Additional Debian/Ubuntu paths
+      texScriptPatterns.push(`/usr/share/texmf/scripts/${tool}`);
+      texScriptPatterns.push(`/usr/share/texmf-dist/scripts/${tool}`);
     }
   }
 
@@ -253,17 +257,17 @@ export function findToolInCommonPaths(tool: string): string | null {
       // ignore kpsewhich errors
     }
   }
-  if (process.platform === 'win32') {
-    for (const name of candidates) {
-      try {
-        const result = execaSync('where', [name], execOptions);
-        const found = result.stdout.split(/\r?\n/)[0]?.trim();
-        if (result.exitCode === 0 && found) {
-          return found;
-        }
-      } catch {
-        // ignore where errors
+  // Use platform-specific command to locate tools: 'where' on Windows, 'which' on Unix
+  const locateCmd = process.platform === 'win32' ? 'where' : 'which';
+  for (const name of candidates) {
+    try {
+      const result = execaSync(locateCmd, [name], execOptions);
+      const found = result.stdout.split(/\r?\n/)[0]?.trim();
+      if (result.exitCode === 0 && found) {
+        return found;
       }
+    } catch {
+      // ignore locate command errors
     }
   }
   return null;
