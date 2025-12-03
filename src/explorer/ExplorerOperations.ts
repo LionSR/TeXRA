@@ -59,12 +59,24 @@ export class ExplorerOperations {
     _context: vscode.ExtensionContext | undefined,
     private refresh: () => void,
   ) {
-    agentDirectories.builtIn().then((p) => {
-      this.builtInAgentsPath = p;
-    });
-    agentDirectories.builtInToolUse().then((p) => {
-      this.builtInToolUsePath = p;
-    });
+    // Initialize agent directory paths asynchronously with error handling
+    agentDirectories
+      .builtIn()
+      .then((p) => {
+        this.builtInAgentsPath = p;
+      })
+      .catch((err) => {
+        logger.warn(CHANNEL, `Failed to get built-in agents path: ${err}`);
+      });
+
+    agentDirectories
+      .builtInToolUse()
+      .then((p) => {
+        this.builtInToolUsePath = p;
+      })
+      .catch((err) => {
+        logger.warn(CHANNEL, `Failed to get built-in tool-use path: ${err}`);
+      });
   }
 
   async open(uri: vscode.Uri) {
