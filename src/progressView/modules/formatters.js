@@ -455,6 +455,17 @@ export class LogEntryFormatter {
             ),
           'tool use',
         ),
+      codeExecution: (message) =>
+        this._safeFormat(
+          () =>
+            this._formatCodeExecution(
+              message.normalizedPayload,
+              message.id,
+              message.groupId,
+              message.timestamp,
+            ),
+          'code execution',
+        ),
       modelResponse: (message) =>
         this._safeFormat(
           () =>
@@ -823,6 +834,192 @@ export class LogEntryFormatter {
       sections.length === 0
         ? wrapInPre(fallbackYaml || '')
         : sections.join('<hr class="tool-use-separator">');
+
+    return element;
+  }
+
+  /**
+   * Format a code execution result from native server-side execution
+   * (Anthropic, OpenAI Code Interpreter, Google GenAI)
+   * @private
+   * @param {Object} normalizedPayload - The normalized payload containing code execution data
+   * @param {string} logId - Log entry ID
+   * @param {string} groupId - Group ID
+   * @param {number} timestamp - Timestamp
+   * @returns {HTMLElement|null} DOM element for the code execution display
+   */
+  _formatCodeExecution(normalizedPayload, logId, groupId, timestamp) {
+    const element = createFromTemplate('codeExecutionTemplate');
+    if (!element) return null;
+
+    setElementDataset(element, { logId, groupId, timestamp });
+
+    const { structured } = normalizedPayload || {};
+    if (!structured || typeof structured !== 'object') {
+      return null;
+    }
+
+    const {
+      provider = 'unknown',
+      language = 'unknown',
+      code = '',
+      status = 'unknown',
+      returnCode,
+      stdout,
+      stderr,
+      outputs,
+      durationMs,
+      errorMessage,
+      errorCode,
+    } = structured;
+
+    // Update header title
+    const titleElem = element.querySelector('.code-execution-title');
+    if (titleElem) {
+      const langDisplay = language !== 'unknown' ? ` (${language})` : '';
+      titleElem.textContent = `Code Execution${langDisplay}`;
+    }
+
+    // Update status badge
+    const statusElem = element.querySelector('.code-execution-status');
+    if (statusElem) {
+      statusElem.textContent = status;
+      statusElem.className = `code-execution-status code-execution-status--${status}`;
+    }
+
+    // Set icon based on status
+    const iconElem = element.querySelector('.codicon');
+    if (iconElem) {
+      const iconClass =
+        status === 'success'
+          ? 'codicon-pass'
+          : status === 'failed'
+            ? 'codicon-error'
+            : status === 'running'
+              ? 'codicon-sync'
+              : status === 'timeout'
+                ? 'codicon-watch'
+                : 'codicon-play';
+      iconElem.className = `codicon ${iconClass}`;
+    }
+
+    // Toggle icon
+    const toggleIcon = element.querySelector('.toggle-icon');
+    if (toggleIcon) {
+      toggleIcon.className = `${CHEVRON_RIGHT_CLASS} toggle-icon`;
+    }
+
+    // Mark as error state if applicable
+    if (status === 'failed' || status === 'timeout') {
+      element.classList.add('code-execution-details--error');
+    }
+
+    // Build content
+    const codeSection = element.querySelector('.code-execution-code');
+    const outputSection = element.querySelector('.code-execution-output');
+
+    // Code input section
+    if (codeSection && code) {
+      const codeHeader = `<div class="code-execution-code-header">
+        <span>Input Code</span>
+        <span class="code-execution-provider">${encodeHtml(provider)}</span>
+      </div>`;
+      const codeBlock = `<pre><code class="language-${encodeHtml(language)}">${encodeHtml(code)}</code></pre>`;
+      codeSection.innerHTML = codeHeader + codeBlock;
+    }
+
+    // Output section
+    if (outputSection) {
+      const outputParts = [];
+
+      // Return code display (Anthropic)
+      if (returnCode !== undefined) {
+        const rcClass =
+          returnCode === 0
+            ? 'code-execution-return-code--success'
+            : 'code-execution-return-code--error';
+        outputParts.push(
+          `<div class="code-execution-return-code ${rcClass}">
+            <i class="codicon ${returnCode === 0 ? 'codicon-check' : 'codicon-close'}"></i>
+            Exit code: ${returnCode}
+          </div>`,
+        );
+      }
+
+      // Duration display
+      if (durationMs !== undefined) {
+        outputParts.push(
+          `<span class="code-execution-duration">${durationMs}ms</span>`,
+        );
+      }
+
+      // Stdout
+      if (stdout) {
+        outputParts.push(
+          `<div class="code-execution-output-header">
+            <i class="codicon codicon-terminal"></i>
+            <span>Output</span>
+          </div>
+          <div class="code-execution-stdout">${encodeHtml(stdout)}</div>`,
+        );
+      }
+
+      // Stderr
+      if (stderr) {
+        outputParts.push(
+          `<div class="code-execution-output-header">
+            <i class="codicon codicon-warning"></i>
+            <span>Errors</span>
+          </div>
+          <div class="code-execution-stderr">${encodeHtml(stderr)}</div>`,
+        );
+      }
+
+      // Error message
+      if (errorMessage) {
+        let errorHtml = `<div class="code-execution-error">`;
+        if (errorCode) {
+          errorHtml += `<div class="code-execution-error-code">${encodeHtml(errorCode)}</div>`;
+        }
+        errorHtml += `${encodeHtml(errorMessage)}</div>`;
+        outputParts.push(errorHtml);
+      }
+
+      // Additional outputs (images, files)
+      if (outputs && Array.isArray(outputs) && outputs.length > 0) {
+        const outputItems = outputs
+          .map((output) => {
+            if (output.type === 'image' && output.url) {
+              return `<img src="${encodeHtml(output.url)}" class="code-execution-image" alt="Code execution output" />`;
+            }
+            if (output.type === 'file' && output.fileId) {
+              return `<div class="code-execution-file">
+                <i class="codicon codicon-file"></i>
+                <span>${encodeHtml(output.fileId)}</span>
+              </div>`;
+            }
+            if (output.type === 'logs' && output.content) {
+              return `<div class="code-execution-stdout">${encodeHtml(output.content)}</div>`;
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('');
+
+        if (outputItems) {
+          outputParts.push(
+            `<div class="code-execution-outputs">
+              <div class="code-execution-outputs-header">Additional Outputs</div>
+              ${outputItems}
+            </div>`,
+          );
+        }
+      }
+
+      outputSection.innerHTML = outputParts.join(
+        '<hr class="code-execution-separator">',
+      );
+    }
 
     return element;
   }

@@ -6,6 +6,8 @@ export const MESSAGE_TYPES = {
   LATEXDIFF: 'latexdiff',
   STATISTICS: 'statistics',
   TOOL_USE: 'toolUse',
+  /** Native server-side code execution results (Anthropic, OpenAI, Google) */
+  CODE_EXECUTION: 'codeExecution',
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
