@@ -51,7 +51,12 @@ export class ProgressViewProvider
   private readonly _extensionUri: vscode.Uri;
   private readonly _viewTitle: string;
   private _webviewReady = false;
-  private _pendingUpdate = false;
+  /**
+   * Tracks pending update options when webview is not ready.
+   * Uses an object instead of boolean to preserve forceRebuild requests.
+   * null = no pending update, object = pending with accumulated options.
+   */
+  private _pendingUpdateOptions: { forceRebuild: boolean } | null = null;
   private _hasResolved = false;
   private _lastRenderedStream = ''; // Track last rendered stream for switch detection
   private readonly logger: AgentLogger;
@@ -131,7 +136,7 @@ export class ProgressViewProvider
   protected override cleanupView(): void {
     super.cleanupView();
     this._webviewReady = false;
-    this._pendingUpdate = false;
+    this._pendingUpdateOptions = null;
     this._lastRenderedStream = '';
   }
 
@@ -143,7 +148,7 @@ export class ProgressViewProvider
     this._hasResolved = true;
 
     this._webviewReady = false;
-    this._pendingUpdate = false;
+    this._pendingUpdateOptions = null;
     // Clear last rendered stream to force rebuild - DOM state is stale after resolve
     this._lastRenderedStream = '';
     webviewView.webview.options = {
@@ -186,7 +191,13 @@ export class ProgressViewProvider
     if (!this._view) return;
 
     if (!this._webviewReady) {
-      this._pendingUpdate = true;
+      // Queue the update, preserving forceRebuild if any caller requested it.
+      // Once forceRebuild is true, it stays true until the update is processed.
+      const currentForce = this._pendingUpdateOptions?.forceRebuild ?? false;
+      const requestedForce = options?.forceRebuild ?? false;
+      this._pendingUpdateOptions = {
+        forceRebuild: currentForce || requestedForce,
+      };
       return;
     }
 
@@ -215,7 +226,7 @@ export class ProgressViewProvider
 
     // Update tracking after refresh
     this._lastRenderedStream = activeStream;
-    this._pendingUpdate = false;
+    this._pendingUpdateOptions = null;
   }
 
   /**
@@ -223,8 +234,12 @@ export class ProgressViewProvider
    */
   public markWebviewReady(): void {
     this._webviewReady = true;
-    // Force rebuild on first load
-    this.updateWebview({ forceRebuild: true });
+
+    // Process any pending update with accumulated options.
+    // Always force rebuild on first load, but also honor any pending forceRebuild requests.
+    const pendingForceRebuild = this._pendingUpdateOptions?.forceRebuild ?? false;
+    this._pendingUpdateOptions = null;
+    this.updateWebview({ forceRebuild: true || pendingForceRebuild });
 
     if (this.webviewUpdater.isAvailable()) {
       // Replay pending approval prompts
