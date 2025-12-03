@@ -8,12 +8,34 @@ import type {
   Tool as GeminiTool,
   FunctionDeclaration,
   Schema,
+  GoogleSearch,
 } from '@google/genai/dist/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { FunctionTool } from 'openai/resources/responses/responses';
+import type {
+  FunctionTool,
+  WebSearchTool,
+  Tool as OpenAIResponseTool,
+} from 'openai/resources/responses/responses';
 
 // Local imports - agent
 // Local imports - types
+
+// ============================================================================
+// Native/Server Tool Configuration
+// ============================================================================
+
+/**
+ * Tools that are executed server-side by the provider.
+ * These don't need local implementations - the provider handles them.
+ */
+export const NATIVE_TOOL_NAMES = new Set(['web_search']);
+
+/**
+ * Check if a tool is a native/server-side tool.
+ */
+export function isNativeTool(name: string): boolean {
+  return NATIVE_TOOL_NAMES.has(name);
+}
 
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
@@ -35,11 +57,24 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   }));
 }
 
-/** Convert generic ToolDefinition objects to OpenAI Responses FunctionTool format. */
-export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
-  return defs.map((d) => {
+/** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
+export function toOpenAIResponseTools(
+  defs: ToolDefinition[],
+): OpenAIResponseTool[] {
+  const tools: OpenAIResponseTool[] = [];
+
+  for (const d of defs) {
+    // Handle native web search tool
+    if (d.name === 'web_search') {
+      tools.push({
+        type: 'web_search',
+      } as WebSearchTool);
+      continue;
+    }
+
+    // Standard function tools
     const params = (d.parameters ?? null) as Record<string, unknown> | null;
-    return {
+    tools.push({
       type: 'function',
       name: d.name,
       description: d.description,
@@ -48,8 +83,10 @@ export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
       // parameters. The Wolfram tool uses optional fields, so disable strict
       // validation to avoid schema errors from the OpenAI Responses API.
       strict: false,
-    };
-  });
+    } as FunctionTool);
+  }
+
+  return tools;
 }
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
@@ -72,21 +109,42 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
   });
 }
 
-/** Convert generic ToolDefinition objects to Google Gemini Tool format. */
+/**
+ * Convert generic ToolDefinition objects to Google Gemini Tool format.
+ * Handles both function declarations and native Google Search grounding.
+ */
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Schema | undefined,
-  }));
+  const tools: GeminiTool[] = [];
+  const functionDefs: ToolDefinition[] = [];
 
-  return [
-    {
+  for (const d of defs) {
+    // Handle native Google Search grounding
+    if (d.name === 'web_search') {
+      tools.push({
+        googleSearch: {} as GoogleSearch,
+      });
+      continue;
+    }
+
+    functionDefs.push(d);
+  }
+
+  // Add function declarations if any non-native tools exist
+  if (functionDefs.length > 0) {
+    const declarations: FunctionDeclaration[] = functionDefs.map((d) => ({
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Schema | undefined,
+    }));
+
+    tools.push({
       functionDeclarations: declarations,
-    },
-  ];
+    });
+  }
+
+  return tools;
 }
