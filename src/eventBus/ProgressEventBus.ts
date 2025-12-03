@@ -85,9 +85,7 @@ export interface ProgressEventPayloads {
     filesByRound: { [key: number]: string[] };
   };
   clearMissingOutputs: StreamTabId;
-  clearOutputFiles: StreamTabId;
   setTaskState: SetTaskStatePayload;
-  clearTaskOutput: StreamTabId;
   updateStreamUsage: RunScopedPayload & {
     usage: TokenUsageStats;
   };
