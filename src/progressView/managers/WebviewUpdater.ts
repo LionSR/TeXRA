@@ -341,7 +341,11 @@ export class WebviewUpdater {
 
   /**
    * Update stream metadata and theme for the webview.
-   * Returns the resolved active stream after applying the update.
+   * Returns the active stream after applying the update.
+   *
+   * Note: This method delegates active stream resolution to ProgressViewState,
+   * which is the single source of truth. The WebviewUpdater only reads state
+   * and sends messages - it never mutates state.
    */
   updateAll(
     state: ProgressViewState,
@@ -349,32 +353,26 @@ export class WebviewUpdater {
     theme?: 'dark' | 'light',
   ): StreamTabId {
     const streams = buildStreamInfos(state, statuses, state.agentTypeFilter);
+    const streamNames = streams.map((info) => info.name);
 
-    const webview = this.getWebview();
-    let resolvedActiveStream = state.activeStream;
-    if (!streams.some((info) => info.name === resolvedActiveStream)) {
-      resolvedActiveStream = streams[0]?.name ?? '';
-    }
+    // Delegate active stream resolution to state (single source of truth)
+    const activeStream = state.resolveActiveStream(streamNames);
 
-    if (!webview) {
-      return resolvedActiveStream;
-    }
-
-    if (resolvedActiveStream !== state.activeStream) {
-      state.activeStream = resolvedActiveStream;
+    if (!this.getWebview()) {
+      return activeStream;
     }
 
     if (theme) {
       this.updateTheme(theme);
     }
 
-    this.updateStreams(streams, resolvedActiveStream, state.agentTypeFilter);
+    this.updateStreams(streams, activeStream, state.agentTypeFilter);
 
     this.logger.debug(
-      `Updated webview streams (${streams.length}) active: ${resolvedActiveStream}`,
+      `Updated webview streams (${streams.length}) active: ${activeStream}`,
     );
 
-    return resolvedActiveStream;
+    return activeStream;
   }
 
   /**
