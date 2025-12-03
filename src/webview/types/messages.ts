@@ -1,136 +1,191 @@
 /**
- * TypeScript interfaces for webview message types
- * These interfaces replace generic 'any' types with proper type definitions
+ * Zod schemas for webview message types.
+ * Types are derived from schemas using z.infer<> for single source of truth.
  */
+import { z } from 'zod';
+
+// --- Base Schemas (composable building blocks) ---
+
+/** Base for all messages - command field */
+const BaseMessageSchema = z.object({
+  command: z.string(),
+});
+
+/** Common pattern: single file path */
+const WithFilePath = z.object({
+  filePath: z.string(),
+});
+
+/** Common pattern: notify when empty option */
+const WithNotifyWhenEmpty = z.object({
+  notifyWhenEmpty: z.boolean().optional(),
+});
+
+/** Common pattern: files array */
+const WithFiles = z.object({
+  files: z.array(z.string()).optional(),
+});
+
+/** Common pattern: file active flags */
+const WithFileActiveFlags = z.object({
+  inputFilesActive: z.boolean().optional(),
+  referenceFilesActive: z.boolean().optional(),
+  auxiliaryFilesActive: z.boolean().optional(),
+  mediaFilesActive: z.boolean().optional(),
+  outputFilesActive: z.boolean().optional(),
+});
+
+// --- Message Schemas ---
 
 /**
  * Polish instruction text message from webview
  */
-export interface PolishInstructionMessage {
-  command: string;
-  text: string;
-  agent?: string;
-  inputFile?: string;
-  referenceFile?: string;
-  auxiliaryFile?: string;
-  mediaFile?: string;
-  inputFiles?: string[];
-  inputFilesActive?: boolean;
-  referenceFiles?: string[];
-  referenceFilesActive?: boolean;
-  auxiliaryFiles?: string[];
-  auxiliaryFilesActive?: boolean;
-  mediaFiles?: string[];
-  mediaFilesActive?: boolean;
-  outputFiles?: string[];
-  outputFilesActive?: boolean;
-}
+export const PolishInstructionMessageSchema = BaseMessageSchema.extend({
+  text: z.string(),
+  agent: z.string().optional(),
+  inputFile: z.string().optional(),
+  referenceFile: z.string().optional(),
+  auxiliaryFile: z.string().optional(),
+  mediaFile: z.string().optional(),
+  inputFiles: z.array(z.string()).optional(),
+  referenceFiles: z.array(z.string()).optional(),
+  auxiliaryFiles: z.array(z.string()).optional(),
+  mediaFiles: z.array(z.string()).optional(),
+  outputFiles: z.array(z.string()).optional(),
+}).merge(WithFileActiveFlags);
+
+export type PolishInstructionMessage = z.infer<
+  typeof PolishInstructionMessageSchema
+>;
 
 /**
  * Clipboard image message from webview
  */
-export interface ClipboardImageMessage {
-  command: string;
-  base64: string;
-  mediaType: string;
-  fileName: string;
-}
+export const ClipboardImageMessageSchema = BaseMessageSchema.extend({
+  base64: z.string(),
+  mediaType: z.string(),
+  fileName: z.string(),
+});
+
+export type ClipboardImageMessage = z.infer<typeof ClipboardImageMessageSchema>;
 
 /**
  * File selection message from webview
  */
-export interface FileSelectionMessage {
-  command: string;
-}
+export const FileSelectionMessageSchema = BaseMessageSchema;
+
+export type FileSelectionMessage = z.infer<typeof FileSelectionMessageSchema>;
 
 /**
  * Input file selected message from webview
  */
-export interface InputFileSelectedMessage {
-  command: string;
-  filePath: string;
-}
+export const InputFileSelectedMessageSchema =
+  BaseMessageSchema.merge(WithFilePath);
+
+export type InputFileSelectedMessage = z.infer<
+  typeof InputFileSelectedMessageSchema
+>;
 
 /**
  * Generic file selected message from webview
  */
-export interface GenericFileSelectedMessage {
-  command: string;
-  filePath: string;
-}
+export const GenericFileSelectedMessageSchema =
+  BaseMessageSchema.merge(WithFilePath);
+
+export type GenericFileSelectedMessage = z.infer<
+  typeof GenericFileSelectedMessageSchema
+>;
 
 /**
  * Request input file message from webview
  */
-export interface RequestInputFileMessage {
-  command: string;
-  notifyWhenEmpty?: boolean;
-}
+export const RequestInputFileMessageSchema =
+  BaseMessageSchema.merge(WithNotifyWhenEmpty);
+
+export type RequestInputFileMessage = z.infer<
+  typeof RequestInputFileMessageSchema
+>;
 
 /**
  * Request file message from webview
  */
-export interface RequestFileMessage {
-  command: string;
-  notifyWhenEmpty?: boolean;
-}
+export const RequestFileMessageSchema =
+  BaseMessageSchema.merge(WithNotifyWhenEmpty);
+
+export type RequestFileMessage = z.infer<typeof RequestFileMessageSchema>;
 
 /**
  * Request edited file message from webview
  */
-export interface RequestEditedFileMessage {
-  command: string;
-  baseFile?: string;
-  notifyWhenEmpty?: boolean;
-}
+export const RequestEditedFileMessageSchema = BaseMessageSchema.merge(
+  WithNotifyWhenEmpty,
+).extend({
+  baseFile: z.string().optional(),
+});
+
+export type RequestEditedFileMessage = z.infer<
+  typeof RequestEditedFileMessageSchema
+>;
 
 /**
  * Request base file message from webview
  */
-export interface RequestBaseFileMessage {
-  command: string;
-  notifyWhenEmpty?: boolean;
-  preserveBaseFile?: boolean;
-}
+export const RequestBaseFileMessageSchema = BaseMessageSchema.merge(
+  WithNotifyWhenEmpty,
+).extend({
+  preserveBaseFile: z.boolean().optional(),
+});
+
+export type RequestBaseFileMessage = z.infer<
+  typeof RequestBaseFileMessageSchema
+>;
 
 /**
  * Request default output files message from webview
  */
-export interface RequestDefaultOutputFilesMessage {
-  command: string;
-  agent?: string;
-}
+export const RequestDefaultOutputFilesMessageSchema = BaseMessageSchema.extend({
+  agent: z.string().optional(),
+});
+
+export type RequestDefaultOutputFilesMessage = z.infer<
+  typeof RequestDefaultOutputFilesMessageSchema
+>;
 
 /**
  * Set multiple files message from webview
  */
-export interface SetMultipleFilesMessage {
-  command: string;
-  files?: string[];
-}
+export const SetMultipleFilesMessageSchema =
+  BaseMessageSchema.merge(WithFiles);
+
+export type SetMultipleFilesMessage = z.infer<
+  typeof SetMultipleFilesMessageSchema
+>;
 
 /**
  * Select multiple files message from webview
  */
-export interface SelectMultipleFilesMessage {
-  command: string;
-  fileType: string;
-  currentFile?: string;
-}
+export const SelectMultipleFilesMessageSchema = BaseMessageSchema.extend({
+  fileType: z.string(),
+  currentFile: z.string().optional(),
+});
+
+export type SelectMultipleFilesMessage = z.infer<
+  typeof SelectMultipleFilesMessageSchema
+>;
 
 /**
  * Get current file message from webview
  */
-export interface GetCurrentFileMessage {
-  command: string;
-  fileType?: string;
-  baseFile?: string;
-}
+export const GetCurrentFileMessageSchema = BaseMessageSchema.extend({
+  fileType: z.string().optional(),
+  baseFile: z.string().optional(),
+});
+
+export type GetCurrentFileMessage = z.infer<typeof GetCurrentFileMessageSchema>;
 
 /**
  * Update files message from webview
  */
-export interface UpdateFilesMessage {
-  command: string;
-  files?: string[];
-}
+export const UpdateFilesMessageSchema = BaseMessageSchema.merge(WithFiles);
+
+export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;
