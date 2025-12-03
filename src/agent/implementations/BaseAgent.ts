@@ -28,6 +28,7 @@ import type {
   AgentLifecycleState,
 } from '@agent/implementations/flows/common/types';
 import { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { AgentLogger, type AgentLogStage } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import { SHORT_SLEEP_MS } from '@utils/config';
@@ -227,6 +228,8 @@ export abstract class BaseAgent<C = unknown> implements IAgent {
     if (this.abortController) {
       this.abortController.abort();
     }
+    // Clean up any pending retry request to avoid memory leaks
+    retryCoordinator.clearRequest(this.getStreamTabId());
     this.logger.error(
       'Agent execution interrupted by user. Active request aborted; partial output may remain.',
     );

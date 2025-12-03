@@ -15,10 +15,7 @@ import {
 // Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 // Internal imports
-import {
-  triggerManualRetry,
-  cancelManualRetry,
-} from '@agent/runtime/ManualRetryController';
+import { retryCoordinator } from '@agent/runtime/RetryRequestCoordinator';
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
 import { toErrorMessage } from '@common/errors';
 import { RecordingManager } from '@common/managers';
@@ -270,7 +267,8 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleRetryStreamRequest(message: any): Promise<void> {
-    const success = await triggerManualRetry(message.stream);
+    // triggerRetry is synchronous, no await needed
+    const success = retryCoordinator.triggerRetry(message.stream);
     if (!success) {
       await vscode.window.showInformationMessage(
         'No retryable request is available for this stream yet.',
@@ -279,7 +277,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleCancelRetryRequest(message: any): Promise<void> {
-    cancelManualRetry(message.stream);
+    retryCoordinator.cancelRetry(message.stream);
   }
 
   private async handleDiffStream(message: any): Promise<void> {
