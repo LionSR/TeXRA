@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import type { z } from 'zod';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -110,5 +111,30 @@ export abstract class BaseViewMessageHandler<
   ): Promise<void> {
     this.logger.debug(this.channel, 'Webview ready signal received');
     // Subclasses can override for custom ready handling
+  }
+
+  /**
+   * Helper method for validating messages with Zod schemas.
+   * Provides consistent validation and error logging pattern.
+   *
+   * @param schema - Zod schema to validate the message against
+   * @param message - The raw message to validate
+   * @param messageName - Human-readable name for logging
+   * @param handler - Callback to execute with validated data
+   */
+  protected async withValidatedMessage<S extends z.ZodTypeAny>(
+    schema: S,
+    message: unknown,
+    messageName: string,
+    handler: (data: z.infer<S>) => Promise<void> | void,
+  ): Promise<void> {
+    const parsed = schema.safeParse(message);
+    if (!parsed.success) {
+      this.logger.debug(this.channel, `Invalid ${messageName}`, {
+        data: parsed.error,
+      });
+      return;
+    }
+    await handler(parsed.data);
   }
 }
