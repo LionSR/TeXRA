@@ -264,6 +264,8 @@ class RetryRequestCoordinatorImpl {
       clearTimeout(req.timeoutId);
       req.resolve(result);
     } else if (req.status === 'executing') {
+      // Note: Timeout was already cleared in triggerRetry() when transitioning to 'executing'.
+      // We only need to resolve the Promise here.
       req.resolve(result);
     }
 
