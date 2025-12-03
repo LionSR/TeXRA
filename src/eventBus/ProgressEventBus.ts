@@ -11,6 +11,10 @@ import type {
 } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type {
+  StreamStatus,
+  StreamStatusOrReady,
+} from '@common/constants/streamStatus';
+import type {
   LogMessageData,
   LogMessageUpdate,
   TaskGroup,
@@ -18,16 +22,12 @@ import type {
 import type { TaskState } from '@logger/TaskState';
 import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 
+// Re-export for consumers that import from this module
+export type { StreamStatus, StreamStatusOrReady };
+
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
-export type StreamStatus =
-  | 'running'
-  | 'error'
-  | 'stopped'
-  | 'waiting'
-  | 'resuming';
-export type StreamStatusOrReady = StreamStatus | 'ready';
 export type TaskGroupStatus = TaskGroup['status'];
 
 interface AddTaskGroupPayload {

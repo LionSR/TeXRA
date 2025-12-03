@@ -2,13 +2,14 @@
 import type {
   ProgressEvent,
   ProgressEventPayloads,
-  StreamStatus as ProgressStreamStatus,
-  StreamStatusOrReady as ProgressStreamStatusOrReady,
+  StreamStatus,
+  StreamStatusOrReady,
 } from '@eventBus/ProgressEventBus';
 
-export type StreamStatusType = ProgressStreamStatus;
-export type StreamStatusOrReadyType = ProgressStreamStatusOrReady;
-export type StatusType = ProgressStreamStatusOrReady;
+// Re-export for backward compatibility with existing consumers
+export type StreamStatusType = StreamStatus;
+export type StreamStatusOrReadyType = StreamStatusOrReady;
+export type StatusType = StreamStatusOrReady;
 
 export interface ProgressEventBusLike {
   on<K extends ProgressEvent>(
