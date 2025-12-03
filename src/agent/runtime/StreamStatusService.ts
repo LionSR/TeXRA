@@ -1,11 +1,10 @@
 // Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamStatusOrReady } from '@common/constants/streamStatus';
 
 // Internal imports
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
-// Type imports
-import type { StreamStatusOrReady } from '@eventBus/ProgressEventBus';
 
 const statusMemory = new Map<StreamTabId, StreamStatusOrReady>();
 
