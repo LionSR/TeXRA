@@ -235,11 +235,10 @@ export class ProgressViewProvider
   public markWebviewReady(): void {
     this._webviewReady = true;
 
-    // Process any pending update with accumulated options.
-    // Always force rebuild on first load, but also honor any pending forceRebuild requests.
-    const pendingForceRebuild = this._pendingUpdateOptions?.forceRebuild ?? false;
+    // Clear pending options - we always force rebuild on first load anyway,
+    // and that takes precedence over any pending options.
     this._pendingUpdateOptions = null;
-    this.updateWebview({ forceRebuild: true || pendingForceRebuild });
+    this.updateWebview({ forceRebuild: true });
 
     if (this.webviewUpdater.isAvailable()) {
       // Replay pending approval prompts
