@@ -12,6 +12,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { createLegacyAwareSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
 
 // --- Zod Schemas for Usage Stats ---
 
@@ -29,43 +30,22 @@ const TokenUsageStatsSchema = z
   })
   .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
 
-/** Schema for run map (runId -> usage) */
-const RunMapSchema = z.record(z.string(), TokenUsageStatsSchema);
+/**
+ * Detects legacy flat format (single usage stats object) vs modern run map format.
+ * Legacy: { inputTokens, outputTokens, cost } - flat object
+ * Modern: { runId: { inputTokens, outputTokens, cost } } - nested objects
+ */
+function isLegacyFlatUsageFormat(record: Record<string, unknown>): boolean {
+  const entries = Object.entries(record);
+  // Legacy format has primitive values (numbers), modern format has object values
+  return !entries.every(([, value]) => value && typeof value === 'object');
+}
 
 /** Schema that handles both legacy flat format and modern run map format */
-const UsageDataSchema = z
-  .unknown()
-  .transform((data): Map<string, TokenUsageStats> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const entries = Object.entries(data as Record<string, unknown>);
-    const looksLikeRunMap = entries.every(
-      ([, value]) => value && typeof value === 'object',
-    );
-
-    if (!looksLikeRunMap) {
-      // Legacy flat format
-      const usage = TokenUsageStatsSchema.parse(data);
-      if (
-        usage.inputTokens === 0 &&
-        usage.outputTokens === 0 &&
-        usage.cost === 0
-      ) {
-        return new Map();
-      }
-      return new Map([[normalizeRunId(null), usage]]);
-    }
-
-    // Modern run map format
-    const runMap = RunMapSchema.parse(data);
-    const result = new Map<string, TokenUsageStats>();
-    for (const [runId, usage] of Object.entries(runMap)) {
-      result.set(runId, usage);
-    }
-    return result;
-  });
+const UsageDataSchema = createLegacyAwareSingleValueRunMapSchema(
+  TokenUsageStatsSchema,
+  isLegacyFlatUsageFormat,
+);
 
 /**
  * Manages usage statistics collection with persistence.
