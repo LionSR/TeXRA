@@ -9,14 +9,14 @@ import type { TaskState } from '@logger/TaskState';
 let pendingState: TaskState | undefined = undefined;
 
 /**
- * Store state for later restoration
+ * Store state for later restoration.
  */
 export function setPendingState(state: TaskState): void {
   pendingState = state;
 }
 
 /**
- * Get and clear the pending state
+ * Get and clear the pending state.
  * @returns The pending state if any, undefined otherwise
  */
 export function consumePendingState(): TaskState | undefined {
@@ -26,7 +26,7 @@ export function consumePendingState(): TaskState | undefined {
 }
 
 /**
- * Check if there is pending state
+ * Check if there is pending state.
  */
 export function hasPendingState(): boolean {
   return pendingState !== undefined;

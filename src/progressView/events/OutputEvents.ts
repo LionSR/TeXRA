@@ -2,7 +2,6 @@
 import * as vscode from 'vscode';
 
 // Local imports - progress view
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
@@ -11,7 +10,7 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { createErrorBoundary } from './errorHandling';
 
 // Type imports
-import type { ProgressEventBusLike, StreamStatusType } from './types';
+import type { ProgressEventBusLike } from './types';
 
 export interface OutputEventsModule {
   register(
@@ -23,11 +22,6 @@ export interface OutputEventsModule {
 
 interface OutputEventsShared {
   logger: AgentLogger;
-  refreshStreamSurface: (
-    stream: string,
-    options?: { updateInstruction?: boolean; forceRebuild?: boolean },
-  ) => void;
-  getAllStreamStatuses: () => Map<string, StreamStatusType>;
 }
 
 const toRoundRecord = <T>(
@@ -70,18 +64,6 @@ const sendRunMissingUpdate = (
   const rounds = toRoundRecord(runMissing);
   const payload = rounds ? { runId, rounds } : { runId };
   updater.updateMissingOutputs(stream, payload);
-};
-
-const resetFileSurface = (
-  state: ProgressViewState,
-  updater: WebviewUpdater,
-  stream: string,
-): void => {
-  if (state.activeStream !== stream || !updater.isAvailable()) {
-    return;
-  }
-
-  updater.updateFiles(stream, { reset: true });
 };
 
 const resetMissingSurface = (
@@ -135,39 +117,8 @@ const registerOutputFileListeners = (
     });
   });
 
-  const clearFiles = bus.on('clearOutputFiles', (stream) => {
-    withErrorBoundary('failed to handle clearOutputFiles', async () => {
-      await state.outputFiles.clearFiles(stream);
-      resetFileSurface(state, updater, stream);
-    });
-  });
-
-  return [addFiles, updateMissing, clearMissing, clearFiles].map(
+  return [addFiles, updateMissing, clearMissing].map(
     (dispose) => new vscode.Disposable(dispose),
-  );
-};
-
-const registerClearTaskOutput = (
-  bus: ProgressEventBusLike,
-  state: ProgressViewState,
-  updater: WebviewUpdater,
-  shared: OutputEventsShared,
-  withErrorBoundary: ReturnType<typeof createErrorBoundary>,
-): vscode.Disposable => {
-  return new vscode.Disposable(
-    bus.on('clearTaskOutput', (streamTabId: StreamTabId) => {
-      withErrorBoundary('failed to handle clearTaskOutput', () => {
-        const cleared = state.clearOutputState(streamTabId);
-        if (cleared) {
-          const activeStream = updater.updateAll(
-            state,
-            shared.getAllStreamStatuses(),
-          );
-          // Force rebuild since we cleared data
-          shared.refreshStreamSurface(activeStream, { forceRebuild: true });
-        }
-      });
-    }),
   );
 };
 
@@ -182,16 +133,7 @@ export function createOutputEvents(
       state: ProgressViewState,
       updater: WebviewUpdater,
     ): vscode.Disposable[] {
-      const disposables = registerOutputFileListeners(
-        bus,
-        state,
-        updater,
-        withErrorBoundary,
-      );
-      disposables.push(
-        registerClearTaskOutput(bus, state, updater, shared, withErrorBoundary),
-      );
-      return disposables;
+      return registerOutputFileListeners(bus, state, updater, withErrorBoundary);
     },
   };
 }
