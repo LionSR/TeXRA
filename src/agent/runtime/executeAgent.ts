@@ -130,6 +130,18 @@ function getAgentName(
   return useMultipleOutputs ? getMultipleName(baseAgent) : baseAgent;
 }
 
+/** Format output file info for notification. */
+function formatOutputInfo(config: AgentConfig): string {
+  if (config.useMultipleOutputs) {
+    const outputs = config.outputFiles ?? [];
+    if (outputs.length > 1) return ` to ${outputs.length} files`;
+    const [first] = outputs;
+    return first ? ` to ${path.basename(first)}` : '';
+  }
+  const [single] = config.outputFiles ?? [];
+  return single ? ` to ${path.basename(single)}` : '';
+}
+
 /**
  * Parameters for creating and configuring an agent instance.
  */
@@ -391,117 +403,56 @@ export async function executeAgentWithLogging<T extends IAgent>(
       throw new Error(errorMsg);
     }
 
-    await logger.withScope(
-      `Task: ${agentName}@${config.model}`,
-      async () => {
-        try {
-          await logger.withScope(
-            `Task Details`,
-            async () => {
-              if (!isResume) {
-                logger.info(`Starting task execution for ${activeStreamId}`);
-                logger.info(`Input file: ${config.inputFile}`);
-              }
+    // Initialize stream and show progress view
+    if (!isResume) {
+      logger.info(`Starting task execution for ${activeStreamId}`);
+      logger.info(`Input file: ${config.inputFile}`);
+    }
 
-              logger.debug(`Creating stream with ID: ${activeStreamId}`);
-              logger.debug(
-                `Agent name: ${agentName}, Model: ${config.model}, Input file: ${config.inputFile}`,
-              );
-              logger.debug(
-                `Config has output files: ${!!config.outputFiles}, Number of output files: ${config.outputFiles?.length || 0}, useMultipleOutputs: ${config.useMultipleOutputs}`,
-              );
+    bus.emit('setActiveStream', { stream: activeStreamId, session: metadata });
+    StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
 
-              // Switch to this stream and set its status to running
-              bus.emit('setActiveStream', {
-                stream: activeStreamId,
-                session: metadata,
-              });
-              StreamStatusService.set(activeStreamId, STREAM_STATUS.RUNNING);
+    if (!isResume) {
+      // Ensure progress view is visible
+      if (!runStorage.isViewVisible()) {
+        await vscode.commands.executeCommand('texra.showProgressView');
+      }
 
-              if (!isResume) {
-                if (!runStorage.isViewVisible()) {
-                  await vscode.commands.executeCommand(
-                    'texra.showProgressView',
-                  );
-                }
+      // Show notification if view still hidden (collapsed sidebar)
+      if (!runStorage.isViewVisible()) {
+        const inputName = config.inputFile
+          ? path.basename(config.inputFile)
+          : 'selected input';
+        const outputInfo = formatOutputInfo(config);
 
-                // Re-check after command: view might still be hidden (e.g., collapsed sidebar)
-                if (!runStorage.isViewVisible()) {
-                  const inputFileName = config.inputFile
-                    ? path.basename(config.inputFile)
-                    : 'selected input';
-                  const outputInfo = (() => {
-                    if (config.useMultipleOutputs) {
-                      const outputs = config.outputFiles ?? [];
-                      if (outputs.length > 1) {
-                        return `to ${outputs.length} files`;
-                      }
-                      const [firstOutput] = outputs;
-                      return firstOutput
-                        ? `to ${path.basename(firstOutput)}`
-                        : 'for multiple outputs';
-                    }
-
-                    const [singleOutput] = config.outputFiles ?? [];
-                    return singleOutput
-                      ? `to ${path.basename(singleOutput)}`
-                      : '';
-                  })();
-
-                  vscode.window
-                    .showInformationMessage(
-                      `TeXRA Agent Started: "${agentName}" is processing ${inputFileName} with ${config.model} ${outputInfo}. View in ProgressBoard for progress.`,
-                      {
-                        modal: false,
-                        detail:
-                          'TeXRA agents run in the background and their progress can be tracked in the ProgressBoard.',
-                      },
-                      'Show ProgressBoard',
-                    )
-                    .then((selection) => {
-                      if (selection === 'Show ProgressBoard') {
-                        vscode.commands.executeCommand(
-                          'texra.showProgressView',
-                        );
-                      }
-                    });
-                }
-
-                logger.debug(`Storing taskState for stream: ${activeStreamId}`);
-                logger.debug(`Config for taskState: ${JSON.stringify(config)}`);
-
-                bus.emit('setTaskState', {
-                  streamTabId: activeStreamId,
-                  executionId,
-                  taskState: agentConfigToTaskState(config),
-                });
-                logger.debug(`Task state stored for stream: ${activeStreamId}`);
-              }
-            },
-            { skip: isResume },
-          );
-        } catch (err) {
-          logger.error(`Task initialization failed: ${toErrorMessage(err)}`);
-          throw err;
+        const selection = await vscode.window.showInformationMessage(
+          `TeXRA Agent Started: "${agentName}" processing ${inputName} with ${config.model}${outputInfo}`,
+          'Show ProgressBoard',
+        );
+        if (selection === 'Show ProgressBoard') {
+          await vscode.commands.executeCommand('texra.showProgressView');
         }
+      }
 
-        try {
-          logger.info(`Executing ${agentName} with model ${config.model}`);
-          if (!agent) {
-            throw new Error('Agent instance was not initialized');
-          }
+      bus.emit('setTaskState', {
+        streamTabId: activeStreamId,
+        executionId,
+        taskState: agentConfigToTaskState(config),
+      });
+    }
 
-          await agent.run();
-          logger.debug(`Task completed successfully`);
-          StreamStatusService.set(activeStreamId, STREAM_STATUS.STOPPED);
-        } catch (err) {
-          // Don't log error here - it will be logged with full details in the outer catch block
-          StreamStatusService.set(activeStreamId, STREAM_STATUS.ERROR);
-          throw err;
-        }
-      },
-      { skip: isResume },
-    );
+    // Run the agent
+    try {
+      logger.info(`Executing ${agentName} with model ${config.model}`);
+      if (!agent) {
+        throw new Error('Agent instance was not initialized');
+      }
+      await agent.run();
+      StreamStatusService.set(activeStreamId, STREAM_STATUS.STOPPED);
+    } catch (err) {
+      StreamStatusService.set(activeStreamId, STREAM_STATUS.ERROR);
+      throw err;
+    }
   } catch (err) {
     const rawErrorMessage = toErrorMessage(err);
     const formattedMessage = getSdkErrorMessage(err);

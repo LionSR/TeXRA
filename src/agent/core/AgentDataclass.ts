@@ -4,9 +4,6 @@ import { z } from 'zod';
 // Local imports - model types
 import { ToolDefinitionSchema } from '@model';
 
-// Local imports - session schema (imported for local use, re-exported below)
-import type { AgentSessionDescriptor } from './AgentSessionSchema';
-
 /** Temperature bounds for agent generation. */
 export const MIN_TEMPERATURE = 0;
 export const MAX_TEMPERATURE = 1;
@@ -28,9 +25,20 @@ export enum AgentCategory {
   ToolUse = 'toolUse',
 }
 
-// Re-export AgentSessionDescriptor from schema (single source of truth)
-// Note: The type is derived from AgentSessionDescriptorSchema in AgentSessionSchema.ts
-export type { AgentSessionDescriptor } from './AgentSessionSchema';
+/**
+ * Canonical schema for agent session descriptors.
+ * SINGLE SOURCE OF TRUTH - type derived from this schema.
+ * Uses z.object() for backward compatibility with legacy descriptors.
+ */
+export const AgentSessionDescriptorSchema = z.object({
+  agentType: z.nativeEnum(AgentType).optional(),
+  agentCategory: z.nativeEnum(AgentCategory),
+});
+
+/** Session metadata describing agent classification. */
+export type AgentSessionDescriptor = z.infer<
+  typeof AgentSessionDescriptorSchema
+>;
 
 /**
  * Derive the canonical {@link AgentCategory} from a specific agent type.
