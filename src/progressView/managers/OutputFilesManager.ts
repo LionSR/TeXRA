@@ -17,27 +17,13 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import {
+  RoundKeySchema,
+  createRoundMapSchema,
+  createLegacyAwareRunMapSchema,
+} from '@progressView/persistence/schemaUtils';
 
 // --- Zod Schemas for Output Files ---
-
-/** Schema for integer round keys (coerces string keys to numbers) */
-const RoundKey = z.coerce.number().int();
-
-/** Schema for a round map: { roundNumber: items[] } -> Map<number, T[]> */
-function createRoundMapSchema<T>(itemSchema: z.ZodType<T>) {
-  return z
-    .record(z.string(), z.array(itemSchema).catch([]))
-    .transform((record): Map<number, T[]> => {
-      const map = new Map<number, T[]>();
-      for (const [key, items] of Object.entries(record)) {
-        const round = RoundKey.safeParse(key);
-        if (round.success && items.length > 0) {
-          map.set(round.data, items);
-        }
-      }
-      return map;
-    });
-}
 
 /** Schema for missing output paths (string arrays per round) */
 const MissingOutputRoundMapSchema = createRoundMapSchema(z.string());
@@ -48,7 +34,7 @@ const OutputFilesRoundMapSchema = z
   .transform((record): Map<number, OutputFileInfo[]> => {
     const map = new Map<number, OutputFileInfo[]>();
     for (const [key, items] of Object.entries(record)) {
-      const round = RoundKey.safeParse(key);
+      const round = RoundKeySchema.safeParse(key);
       if (!round.success) continue;
       const parsed = items
         .map((item) => OutputFileInfoSchema.safeParse(item))
@@ -63,51 +49,6 @@ const OutputFilesRoundMapSchema = z
     }
     return map;
   });
-
-/**
- * Detects if a record looks like legacy format (all keys are numeric)
- * vs modern format (keys are run IDs like strings)
- */
-function isLegacyFormat(record: Record<string, unknown>): boolean {
-  const entries = Object.entries(record);
-  return (
-    entries.length > 0 &&
-    entries.every(([key]) => !Number.isNaN(Number.parseInt(key, 10)))
-  );
-}
-
-/**
- * Factory for creating schemas that handle both legacy and modern run map formats.
- * Legacy: { roundNum: items[] } -> wrapped in default run ID
- * Modern: { runId: { roundNum: items[] } }
- */
-function createLegacyAwareRunMapSchema<T>(
-  roundMapSchema: z.ZodType<Map<number, T[]>>,
-) {
-  return z.unknown().transform((data): Map<string, Map<number, T[]>> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const record = data as Record<string, unknown>;
-    if (isLegacyFormat(record)) {
-      const rounds = roundMapSchema.parse(record);
-      return rounds.size > 0
-        ? new Map([[normalizeRunId(null), rounds]])
-        : new Map();
-    }
-
-    const runMap = new Map<string, Map<number, T[]>>();
-    for (const [runId, value] of Object.entries(record)) {
-      if (!value || typeof value !== 'object') continue;
-      const rounds = roundMapSchema.parse(value);
-      if (rounds.size > 0) {
-        runMap.set(runId, rounds);
-      }
-    }
-    return runMap;
-  });
-}
 
 /** Schema for missing outputs with legacy format support */
 const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(
