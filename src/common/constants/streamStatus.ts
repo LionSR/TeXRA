@@ -21,4 +21,14 @@ export const STREAM_STATUS = {
   RESUMING: 'resuming',
 } as const;
 
-export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
+/**
+ * Active execution states (excludes 'ready').
+ * Use when you need to distinguish between active and idle states.
+ */
+export type StreamStatus = 'running' | 'error' | 'stopped' | 'waiting' | 'resuming';
+
+/**
+ * All stream states including 'ready'.
+ * Use for general stream state handling.
+ */
+export type StreamStatusOrReady = StreamStatus | 'ready';
