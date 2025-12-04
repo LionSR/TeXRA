@@ -154,8 +154,7 @@ export type RequestDefaultOutputFilesMessage = z.infer<
 /**
  * Set multiple files message from webview
  */
-export const SetMultipleFilesMessageSchema =
-  BaseMessageSchema.merge(WithFiles);
+export const SetMultipleFilesMessageSchema = BaseMessageSchema.merge(WithFiles);
 
 export type SetMultipleFilesMessage = z.infer<
   typeof SetMultipleFilesMessageSchema
