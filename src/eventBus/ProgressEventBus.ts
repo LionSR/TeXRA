@@ -4,11 +4,7 @@ import { EventEmitter } from 'events';
 // Local imports - agent
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-} from '@agent/types/IdentifierTypes';
+import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
 import type {
@@ -17,33 +13,27 @@ import type {
   TaskGroup,
 } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
+// Import schemas and types from consolidated locations
 import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
+import type {
+  AddTaskGroupPayload,
+  UpdateTaskGroupPayload,
+  RunScopedPayload,
+  TaskGroupStatus,
+} from './schemas';
 
 // Re-export for consumers that import from this module
 export type { StreamStatus };
 
+// Re-export schema types for consumers
+export type { TaskGroupStatus } from './schemas';
+
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
 
-export type TaskGroupStatus = TaskGroup['status'];
-
-interface AddTaskGroupPayload {
-  stream: StreamTabId;
-  groupId: string;
-  groupName: string;
-  startTime: number;
-  status: TaskGroupStatus;
-  endTime?: number;
-  parentGroupId?: string;
-}
-
-interface UpdateTaskGroupPayload {
-  stream: StreamTabId;
-  groupId: string;
-  status: TaskGroupStatus;
-  endTime?: number;
-}
-
+// SetActiveStreamPayload and SetTaskStatePayload are defined inline
+// because they reference types from external modules (AgentSessionDescriptor, TaskState)
+// that don't have schemas yet. These can be migrated when those modules are updated.
 interface SetActiveStreamPayload {
   stream: StreamTabId | null;
   session?: AgentSessionDescriptor | null;
@@ -51,21 +41,8 @@ interface SetActiveStreamPayload {
 
 interface SetTaskStatePayload {
   streamTabId: StreamTabId;
-  executionId?: ExecutionId;
+  executionId?: string;
   taskState: TaskState;
-}
-
-/**
- * Payload for storage-scoped events (files, usage, etc.).
- *
- * storageKey is THE key for storage operations - required for all events.
- */
-interface RunScopedPayload {
-  stream: StreamTabId;
-  /** THE key for storage operations. Required. */
-  storageKey: StorageKey;
-  /** For metadata/audit purposes */
-  executionId?: ExecutionId;
 }
 
 export interface ProgressEventPayloads {
