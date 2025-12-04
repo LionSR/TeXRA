@@ -4,51 +4,57 @@
  *
  * This provides a single source of truth for usage tracking across all providers.
  */
+import { z } from 'zod';
 
 /**
- * Provider identifiers for usage tracking.
+ * Provider identifiers for usage tracking - single source of truth.
  */
-export type UsageProvider =
-  | 'anthropic'
-  | 'openai'
-  | 'openai-response'
-  | 'google'
-  | 'deepseek'
-  | 'openrouter'
-  | 'dashscope'
-  | 'xai'
-  | 'kimi'
-  | 'unknown';
+export const UsageProviderSchema = z.enum([
+  'anthropic',
+  'openai',
+  'openai-response',
+  'google',
+  'deepseek',
+  'openrouter',
+  'dashscope',
+  'xai',
+  'kimi',
+  'unknown',
+]);
+
+export type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
 /**
  * Normalized usage statistics from any model provider.
  * Cost is computed once during normalization and never recomputed.
  */
-export interface NormalizedUsage {
+export const NormalizedUsageSchema = z.object({
   /** Total input tokens consumed */
-  inputTokens: number;
+  inputTokens: z.number(),
   /** Total output tokens generated */
-  outputTokens: number;
+  outputTokens: z.number(),
   /** Total cost in USD (computed once, never recomputed) */
-  cost: number;
+  cost: z.number(),
   /** Response time in milliseconds */
-  responseTimeMs: number;
+  responseTimeMs: z.number(),
   /** Provider that generated this usage data */
-  provider: UsageProvider;
+  provider: UsageProviderSchema,
 
   // Optional metrics (when supported by provider)
   /** Tokens served from cache (reduces cost) */
-  cachedInputTokens?: number;
+  cachedInputTokens: z.number().optional(),
   /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
-  cacheCreationTokens?: number;
+  cacheCreationTokens: z.number().optional(),
   /** Percentage of input tokens served from cache */
-  percentageCached?: number;
+  percentageCached: z.number().optional(),
   /** Tokens used for reasoning (o1, DeepSeek-R1, Gemini thinking) */
-  reasoningTokens?: number;
+  reasoningTokens: z.number().optional(),
   /** Tokens consumed by tool use prompts (Google) */
-  toolUsePromptTokens?: number;
+  toolUsePromptTokens: z.number().optional(),
   /** Number of server-side tool executions (Anthropic web search) */
-  serverToolRequests?: number;
+  serverToolRequests: z.number().optional(),
   /** Original API response payload (for debugging) */
-  _native?: unknown;
-}
+  _native: z.unknown().optional(),
+});
+
+export type NormalizedUsage = z.infer<typeof NormalizedUsageSchema>;
