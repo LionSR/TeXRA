@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 /**
  * Stream status constants shared across agent runtime and UI layers.
  *
@@ -22,7 +25,20 @@ export const STREAM_STATUS = {
 } as const;
 
 /**
+ * Schema for stream status validation.
+ * Ensures only valid status values are accepted.
+ */
+export const StreamStatusSchema = z.enum([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.ERROR,
+  STREAM_STATUS.STOPPED,
+  STREAM_STATUS.READY,
+  STREAM_STATUS.WAITING,
+  STREAM_STATUS.RESUMING,
+]);
+
+/**
  * All possible stream states.
  * Derived from STREAM_STATUS constant to maintain single source of truth.
  */
-export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
+export type StreamStatus = z.infer<typeof StreamStatusSchema>;
