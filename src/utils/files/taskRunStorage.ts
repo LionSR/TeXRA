@@ -2,8 +2,14 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
-// Local imports - log
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+// Third-party imports
+import { z } from 'zod';
+
+// Local imports - identifiers
+import {
+  ExecutionIdSchema,
+  type ExecutionId,
+} from '@agent/types/IdentifierTypes';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -21,53 +27,48 @@ import { flexibleFS } from './flexibleFS';
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
 
-/**
- * Directory name for storing task run artifacts.
- * All task execution files (debug JSONs, logs, etc.) are organized
- * in subdirectories under this parent directory.
- */
+/** Directory for task run artifacts (debug JSONs, logs, etc.) */
 export const TASK_RUNS_DIR = 'taskRuns';
 
-/**
- * File location in workspace with relative path.
- */
-export interface WorkspaceFileLocation {
-  kind: 'workspace';
-  absolutePath: string;
-  relativePath: string;
-}
+// File location schemas (types derived via z.infer)
+export const WorkspaceFileLocationSchema = z.strictObject({
+  kind: z.literal('workspace'),
+  absolutePath: z.string(),
+  relativePath: z.string(),
+});
 
-/**
- * File location in run storage with execution context.
- */
-export interface RunStorageFileLocation {
-  kind: 'runStorage';
-  absolutePath: string;
-  relativePath: string;
-  executionId: string;
-}
+export const RunStorageFileLocationSchema = z.strictObject({
+  kind: z.literal('runStorage'),
+  absolutePath: z.string(),
+  relativePath: z.string(),
+  executionId: ExecutionIdSchema,
+});
 
-/**
- * File location outside workspace/storage (external).
- */
-export interface ExternalFileLocation {
-  kind: 'external';
-  absolutePath: string;
-}
+export const ExternalFileLocationSchema = z.strictObject({
+  kind: z.literal('external'),
+  absolutePath: z.string(),
+});
 
-/**
- * Discriminated union of all file location types.
- */
-export type FileLocation =
-  | WorkspaceFileLocation
-  | RunStorageFileLocation
-  | ExternalFileLocation;
+/** Discriminated union of all file location types */
+export const FileLocationSchema = z.discriminatedUnion('kind', [
+  WorkspaceFileLocationSchema,
+  RunStorageFileLocationSchema,
+  ExternalFileLocationSchema,
+]);
 
-/**
- * Agent outputs are always workspace or runStorage, never external.
- * Use this type for agent-created file locations.
- */
-export type AgentFileLocation = WorkspaceFileLocation | RunStorageFileLocation;
+/** Agent outputs are workspace or runStorage, never external */
+export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
+  WorkspaceFileLocationSchema,
+  RunStorageFileLocationSchema,
+]);
+
+export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
+export type RunStorageFileLocation = z.infer<
+  typeof RunStorageFileLocationSchema
+>;
+export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
+export type FileLocation = z.infer<typeof FileLocationSchema>;
+export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
 export function createWorkspaceLocation(
   absolutePath: string,
@@ -83,7 +84,7 @@ export function createWorkspaceLocation(
 export function createRunStorageLocation(
   absolutePath: string,
   relativePath: string,
-  executionId: string,
+  executionId: ExecutionId,
 ): RunStorageFileLocation {
   return {
     kind: 'runStorage',
