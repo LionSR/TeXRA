@@ -57,15 +57,25 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   }));
 }
 
+/**
+ * Options for OpenAI Responses API tool conversion.
+ */
+export interface OpenAIResponseToolOptions {
+  /** Whether the model supports native web search. Defaults to false. */
+  supportsNativeWebSearch?: boolean;
+}
+
 /** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
 export function toOpenAIResponseTools(
   defs: ToolDefinition[],
+  options: OpenAIResponseToolOptions = {},
 ): OpenAIResponseTool[] {
+  const { supportsNativeWebSearch = false } = options;
   const tools: OpenAIResponseTool[] = [];
 
   for (const d of defs) {
-    // Handle native web search tool
-    if (d.name === 'web_search') {
+    // Handle native web search tool (only if model supports it)
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
       tools.push({
         type: 'web_search',
       } as WebSearchTool);
@@ -89,15 +99,34 @@ export function toOpenAIResponseTools(
   return tools;
 }
 
+/**
+ * Options for Anthropic tool conversion.
+ */
+export interface AnthropicToolOptions {
+  /** Whether the model supports native web search. Defaults to false. */
+  supportsNativeWebSearch?: boolean;
+}
+
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
-export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
+export function toAnthropicTools(
+  defs: ToolDefinition[],
+  options: AnthropicToolOptions = {},
+): ToolUnion[] {
+  const { supportsNativeWebSearch = false } = options;
+
   return defs.map<ToolUnion>((d) => {
+    // Only use native tool types if the model supports them
     const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
     if (remoteType) {
-      return {
-        name: d.name,
-        type: remoteType,
-      } as ToolUnion;
+      // web_search requires native support check
+      if (d.name === 'web_search' && !supportsNativeWebSearch) {
+        // Fall through to create as regular function tool
+      } else {
+        return {
+          name: d.name,
+          type: remoteType,
+        } as ToolUnion;
+      }
     }
 
     const params = d.parameters as AnthropicTool['input_schema'] | undefined;
@@ -113,7 +142,7 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
  * Options for Google tool conversion.
  */
 export interface GoogleToolOptions {
-  /** Whether the model supports native web search grounding. Defaults to true. */
+  /** Whether the model supports native web search grounding. Defaults to false. */
   supportsNativeWebSearch?: boolean;
 }
 
@@ -132,7 +161,7 @@ export function toGoogleTools(
     return [];
   }
 
-  const { supportsNativeWebSearch = true } = options;
+  const { supportsNativeWebSearch = false } = options;
 
   const tools: GeminiTool[] = [];
   const functionDefs: ToolDefinition[] = [];

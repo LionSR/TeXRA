@@ -369,7 +369,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     if (tools && tools.length > 0) {
-      options.tools = toAnthropicTools(tools);
+      options.tools = toAnthropicTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       if (this.config.capabilities.supportsInterleavedThinking) {
