@@ -8,6 +8,7 @@ import {
   ExecutionIdSchema,
   StorageKeySchema,
 } from '@agent/types/IdentifierTypes';
+import type { TaskGroup } from '@logger/LogTypes';
 
 // Re-export from types.ts (breaking circular dependency with progressView)
 export {
@@ -17,7 +18,7 @@ export {
   type RetryRequestPrompt,
 } from './types';
 
-/** Task group status (matches TaskGroup['status'] from LogTypes) */
+/** Task group status - derived from TaskGroup['status'] */
 export const TaskGroupStatusSchema = z.enum([
   'running',
   'error',
@@ -25,6 +26,15 @@ export const TaskGroupStatusSchema = z.enum([
   'ready',
 ]);
 export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
+
+// Compile-time assertion: ensures TaskGroupStatus stays in sync with LogTypes
+type _AssertStatusMatch = TaskGroupStatus extends TaskGroup['status']
+  ? TaskGroup['status'] extends TaskGroupStatus
+    ? true
+    : never
+  : never;
+const _assertStatusMatch: _AssertStatusMatch = true;
+void _assertStatusMatch;
 
 /** Payload for adding a new task group */
 export const AddTaskGroupPayloadSchema = z.strictObject({

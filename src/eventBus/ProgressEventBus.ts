@@ -4,16 +4,11 @@ import { EventEmitter } from 'events';
 // Local imports - agent
 import type { AgentSessionDescriptor } from '@agent/core/AgentDataclass';
 import type { OutputFileInfo } from '@agent/output/types';
-import type { StreamTabId } from '@agent/types/IdentifierTypes';
+import type { StreamTabId, ExecutionId } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 import type { StreamStatus } from '@common/constants/streamStatus';
-import type {
-  LogMessageData,
-  LogMessageUpdate,
-  TaskGroup,
-} from '@logger/LogTypes';
+import type { LogMessageData, LogMessageUpdate } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
-// Import schemas and types from consolidated locations
 import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 import type {
   AddTaskGroupPayload,
@@ -41,7 +36,7 @@ interface SetActiveStreamPayload {
 
 interface SetTaskStatePayload {
   streamTabId: StreamTabId;
-  executionId?: string;
+  executionId?: ExecutionId;
   taskState: TaskState;
 }
 
