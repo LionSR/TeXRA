@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.8] - 2025-12-04
+
+### Features
+
+- Added **DeepSeek V3.2 Speciale** (`deepseekT+`), a high-compute variant
+  optimized for maximum reasoning and agentic performance with 163k context.
+- Enabled tool calling for DeepSeek thinking models so they can participate in
+  tool-use workflows.
+
+### Bug Fixes
+
+- Improved tool detection on Unix-like systems for `latexdiff` and related
+  utilities.
+
+### Improvements
+
+- Refactored internal schema handling for better type safety and
+  maintainability.
+- Updated core dependencies for improved stability.
+
 ## [0.34.7] - 2025-11-30
 
 ### Bug Fixes
