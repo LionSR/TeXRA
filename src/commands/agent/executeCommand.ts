@@ -28,7 +28,7 @@ const CHANNEL = 'ExecuteCommand';
 const ExplicitWrapperSchema = z.object({
   config: z.unknown(),
   executionId: z.string().optional(),
-  resume: z.boolean().default(false),
+  resume: z.boolean().prefault(false),
 });
 
 type ParsedInput = z.infer<typeof ExplicitWrapperSchema>;
