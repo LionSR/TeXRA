@@ -38,7 +38,7 @@ import {
 } from './ApprovalEvents';
 
 // Local imports - events
-import type { StreamStatus, StreamStatusOrReady } from '@eventBus/ProgressEventBus';
+import type { StreamStatus } from '@eventBus/ProgressEventBus';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -284,11 +284,12 @@ export class ProgressEventHandler {
   /**
    * Set the status for a specific stream synchronously.
    */
-  setStreamStatus(stream: string, status: StreamStatusOrReady): void {
+  setStreamStatus(stream: string, status: StreamStatus): void {
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      const nextStatus: StreamStatus = status;
+      // Status is not 'ready', so it's a valid active status
+      const nextStatus = status;
       this._streamStatus.set(stream, nextStatus);
     }
 

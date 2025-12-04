@@ -20,15 +20,12 @@ import { createErrorBoundary } from './errorHandling';
 
 // Type imports
 import type { ProgressEventBusLike } from './types';
-import type {
-  StreamStatus,
-  StreamStatusOrReady,
-} from '@eventBus/ProgressEventBus';
+import type { StreamStatus } from '@eventBus/ProgressEventBus';
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;
   streamStatus: Map<string, StreamStatus>;
-  setStreamStatus(stream: string, status: StreamStatusOrReady): void;
+  setStreamStatus(stream: string, status: StreamStatus): void;
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
@@ -85,7 +82,7 @@ export function createStreamStatusEvents(
 
     state.activeStream = stream;
 
-    const status: StreamStatusOrReady =
+    const status: StreamStatus =
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
 
     if (updater.isAvailable()) {
