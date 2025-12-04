@@ -16,28 +16,24 @@ export type { FileLocation, AgentFileLocation };
  * Location contains all path variants (absolute, relative, workspace).
  * Note: FileLocation type is imported from @utils/files (not defined here)
  */
-export const OutputFileSchema = z
-  .object({
-    source: z.string(),
-    location: z.custom<FileLocation>(),
-  })
-  .strict();
+export const OutputFileSchema = z.strictObject({
+  source: z.string(),
+  location: z.custom<FileLocation>(),
+});
 
 /**
  * File lineage - tracks where files came from and what to compare against.
  * Uses full FileLocation objects (not split across string + location fields).
  * Fields are nullable to support cases where lineage doesn't exist.
  */
-export const FileLineageSchema = z
-  .object({
-    /** Original location before any agent processing */
-    original: z.custom<FileLocation>().nullable(),
-    /** What file to diff against (base/previous round, computed by getEffectiveBaseFile) */
-    diffBase: z.custom<FileLocation>().nullable(),
-    /** Generated diff file location (if latexdiff was run) */
-    diffFile: z.custom<FileLocation>().nullable(),
-  })
-  .strict();
+export const FileLineageSchema = z.strictObject({
+  /** Original location before any agent processing */
+  original: z.custom<FileLocation>().nullable(),
+  /** What file to diff against (base/previous round, computed by getEffectiveBaseFile) */
+  diffBase: z.custom<FileLocation>().nullable(),
+  /** Generated diff file location (if latexdiff was run) */
+  diffFile: z.custom<FileLocation>().nullable(),
+});
 
 /**
  * Complete output file metadata.
@@ -46,14 +42,12 @@ export const FileLineageSchema = z
  * - lineage: Where it came from (base/previous/original)
  * - diff: Line changes vs base
  */
-export const OutputFileInfoSchema = z
-  .object({
-    source: z.string(),
-    location: z.custom<FileLocation>(),
-    lineage: FileLineageSchema.nullable(),
-    diff: DiffStatsSchema.nullable(),
-  })
-  .strict();
+export const OutputFileInfoSchema = z.strictObject({
+  source: z.string(),
+  location: z.custom<FileLocation>(),
+  lineage: FileLineageSchema.nullable(),
+  diff: DiffStatsSchema.nullable(),
+});
 
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
@@ -67,16 +61,14 @@ export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 // XML SUMMARY SCHEMAS
 // ============================================================================
 
-const RawOutputXmlSummarySchema = z
-  .object({
-    tagContents: z
-      .record(z.string(), z.union([z.string(), z.array(z.string())]))
-      .optional(),
-    documents: z.array(z.string()).optional(),
-    singleOutputFile: z.string().nullable(),
-    sourceLocation: z.custom<FileLocation>().nullable(),
-  })
-  .strict();
+const RawOutputXmlSummarySchema = z.strictObject({
+  tagContents: z
+    .record(z.string(), z.union([z.string(), z.array(z.string())]))
+    .optional(),
+  documents: z.array(z.string()).optional(),
+  singleOutputFile: z.string().nullable(),
+  sourceLocation: z.custom<FileLocation>().nullable(),
+});
 
 export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
   (value) => ({
@@ -101,14 +93,12 @@ export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
  * - outputs: Extracted output files with metadata
  * - xmlSummary: Parsed XML metadata (TODO: Can this be simplified/removed?)
  */
-export const RoundOutputSchema = z
-  .object({
-    round: z.number(),
-    rawOutput: z.custom<FileLocation>().nullable(),
-    outputs: OutputFileInfoSchema.array(),
-    xmlSummary: OutputXmlSummarySchema,
-  })
-  .strict();
+export const RoundOutputSchema = z.strictObject({
+  round: z.number(),
+  rawOutput: z.custom<FileLocation>().nullable(),
+  outputs: OutputFileInfoSchema.array(),
+  xmlSummary: OutputXmlSummarySchema,
+});
 
 // Derive type from schema (Zod v4)
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;

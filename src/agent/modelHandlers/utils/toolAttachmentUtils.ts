@@ -64,34 +64,32 @@ export const EditRecordSchema = z.object({
  * This is what gets passed to handlers - no binary data, properly typed fields.
  * Uses passthrough() to allow additional properties for forward compatibility.
  */
-export const ToolResultPayloadSchema = z
-  .object({
-    /** Brief summary of the tool execution result */
-    summary: z.string().optional(),
-    /** Detailed output from the tool */
-    output: z.string().optional(),
-    /** Error message if tool execution failed */
-    error: z.string().optional(),
-    /** User instruction that was processed */
-    userInstruction: z.string().optional(),
-    /** User-provided patch content */
-    userPatch: z.string().optional(),
-    /** Whether this result represents an error */
-    isError: z.boolean().optional(),
-    /** Statistics about line changes made */
-    lineChanges: LineChangesSchema.optional(),
-    /** Additional diagnostic information (type varies by context) */
-    diagnostics: z.unknown().optional(),
-    /** Records of edits made during tool execution */
-    edits: z.array(EditRecordSchema).optional(),
-    /** File references (binary data stripped) */
-    files: z.array(FileReferenceSchema).optional(),
-    /** Files edited during tool execution (for logging/tracking) */
-    editedFiles: z.array(EditedFileRecordSchema).optional(),
-    /** Summary added by handlers when attachments are available */
-    attachmentSummary: z.string().optional(),
-  })
-  .passthrough(); // Allow additional properties for forward compatibility
+export const ToolResultPayloadSchema = z.looseObject({
+  /** Brief summary of the tool execution result */
+  summary: z.string().optional(),
+  /** Detailed output from the tool */
+  output: z.string().optional(),
+  /** Error message if tool execution failed */
+  error: z.string().optional(),
+  /** User instruction that was processed */
+  userInstruction: z.string().optional(),
+  /** User-provided patch content */
+  userPatch: z.string().optional(),
+  /** Whether this result represents an error */
+  isError: z.boolean().optional(),
+  /** Statistics about line changes made */
+  lineChanges: LineChangesSchema.optional(),
+  /** Additional diagnostic information (type varies by context) */
+  diagnostics: z.unknown().optional(),
+  /** Records of edits made during tool execution */
+  edits: z.array(EditRecordSchema).optional(),
+  /** File references (binary data stripped) */
+  files: z.array(FileReferenceSchema).optional(),
+  /** Files edited during tool execution (for logging/tracking) */
+  editedFiles: z.array(EditedFileRecordSchema).optional(),
+  /** Summary added by handlers when attachments are available */
+  attachmentSummary: z.string().optional(),
+}); // Allow additional properties for forward compatibility
 
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 

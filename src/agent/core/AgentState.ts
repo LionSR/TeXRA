@@ -99,8 +99,8 @@ function isOpenAIUsage(usage: UsageSummary): usage is OpenAIAPIResponseUsage {
 }
 
 export const ConversationRoundStateSnapshotSchema = z.object({
-  roundIndex: z.number().int().nonnegative(),
-  continuationCount: z.number().int().nonnegative(),
+  roundIndex: z.int().nonnegative(),
+  continuationCount: z.int().nonnegative(),
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
   // New: store normalized usage directly (nullish for backward compat with old saved states)
@@ -192,7 +192,7 @@ export class ConversationRoundState {
 }
 
 export const AgentRunStateSnapshotSchema = z.object({
-  totalRounds: z.number().int().nonnegative(),
+  totalRounds: z.int().nonnegative(),
   totalResponseTimeMs: z.number().nonnegative(),
   usageAccumulator: z.custom<RunUsageAccumulatorJSON>(),
 });
