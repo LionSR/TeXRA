@@ -12,6 +12,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
+import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
 
 // --- Zod Schemas for Usage Stats ---
 
@@ -29,43 +30,17 @@ const TokenUsageStatsSchema = z
   })
   .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
 
-/** Schema for run map (runId -> usage) */
-const RunMapSchema = z.record(z.string(), TokenUsageStatsSchema);
+/** Checks if usage stats are all zeros (effectively empty) */
+function isEmptyUsage(usage: TokenUsageStats): boolean {
+  return (
+    usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
+  );
+}
 
-/** Schema that handles both legacy flat format and modern run map format */
-const UsageDataSchema = z
-  .unknown()
-  .transform((data): Map<string, TokenUsageStats> => {
-    if (!data || typeof data !== 'object') {
-      return new Map();
-    }
-
-    const entries = Object.entries(data as Record<string, unknown>);
-    const looksLikeRunMap = entries.every(
-      ([, value]) => value && typeof value === 'object',
-    );
-
-    if (!looksLikeRunMap) {
-      // Legacy flat format
-      const usage = TokenUsageStatsSchema.parse(data);
-      if (
-        usage.inputTokens === 0 &&
-        usage.outputTokens === 0 &&
-        usage.cost === 0
-      ) {
-        return new Map();
-      }
-      return new Map([[normalizeRunId(null), usage]]);
-    }
-
-    // Modern run map format
-    const runMap = RunMapSchema.parse(data);
-    const result = new Map<string, TokenUsageStats>();
-    for (const [runId, usage] of Object.entries(runMap)) {
-      result.set(runId, usage);
-    }
-    return result;
-  });
+/** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
+const UsageDataSchema = createSingleValueRunMapSchema(TokenUsageStatsSchema, {
+  isEmpty: isEmptyUsage,
+});
 
 /**
  * Manages usage statistics collection with persistence.
