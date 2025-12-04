@@ -16,11 +16,11 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 // Internal imports
 
 // Local file imports
+import type { StreamStatus } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 
 // Type imports
 import type { ProgressEventBusLike } from './types';
-import type { StreamStatus } from '@eventBus/ProgressEventBus';
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;
