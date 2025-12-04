@@ -23,10 +23,14 @@ export const ExecutionIdSchema = z.string().uuid();
 export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
 /** Valid storage key: UUID or '__default__' for legacy */
-const STORAGE_KEY_PATTERN = /^(__default__|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+const STORAGE_KEY_PATTERN =
+  /^(__default__|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 export const StorageKeySchema = z
   .string()
-  .regex(STORAGE_KEY_PATTERN, 'Invalid storage key: must be UUID or __default__')
+  .regex(
+    STORAGE_KEY_PATTERN,
+    'Invalid storage key: must be UUID or __default__',
+  )
   .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
