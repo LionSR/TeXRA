@@ -22,14 +22,7 @@ export const STREAM_STATUS = {
 } as const;
 
 /**
- * All stream states including 'ready'.
+ * All possible stream states.
  * Derived from STREAM_STATUS constant to maintain single source of truth.
  */
-export type StreamStatusOrReady =
-  (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
-
-/**
- * Active execution states (excludes 'ready').
- * Use when you need to distinguish between active and idle states.
- */
-export type StreamStatus = Exclude<StreamStatusOrReady, 'ready'>;
+export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
