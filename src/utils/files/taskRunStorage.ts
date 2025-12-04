@@ -5,8 +5,11 @@ import { promises as fs } from 'fs';
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - log
-import type { ExecutionId } from '@agent/types/IdentifierTypes';
+// Local imports - identifiers
+import {
+  ExecutionIdSchema,
+  type ExecutionId,
+} from '@agent/types/IdentifierTypes';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -38,7 +41,7 @@ export const RunStorageFileLocationSchema = z.strictObject({
   kind: z.literal('runStorage'),
   absolutePath: z.string(),
   relativePath: z.string(),
-  executionId: z.string(),
+  executionId: ExecutionIdSchema,
 });
 
 export const ExternalFileLocationSchema = z.strictObject({
