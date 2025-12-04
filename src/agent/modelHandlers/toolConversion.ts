@@ -110,20 +110,36 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
 }
 
 /**
+ * Options for Google tool conversion.
+ */
+export interface GoogleToolOptions {
+  /** Whether the model supports native web search grounding. Defaults to true. */
+  supportsNativeWebSearch?: boolean;
+}
+
+/**
  * Convert generic ToolDefinition objects to Google Gemini Tool format.
  * Handles both function declarations and native Google Search grounding.
+ *
+ * @param defs Tool definitions to convert
+ * @param options Conversion options (e.g., supportsNativeWebSearch)
  */
-export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
+export function toGoogleTools(
+  defs: ToolDefinition[],
+  options: GoogleToolOptions = {},
+): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
+
+  const { supportsNativeWebSearch = true } = options;
 
   const tools: GeminiTool[] = [];
   const functionDefs: ToolDefinition[] = [];
 
   for (const d of defs) {
-    // Handle native Google Search grounding
-    if (d.name === 'web_search') {
+    // Handle native Google Search grounding (only if model supports it)
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
       tools.push({
         googleSearch: {} as GoogleSearch,
       });
