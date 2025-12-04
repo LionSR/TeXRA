@@ -72,21 +72,51 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
   });
 }
 
-/** Convert generic ToolDefinition objects to Google Gemini Tool format. */
+// Names of tools that should be converted to Google's native tool types
+// rather than function declarations
+const GOOGLE_NATIVE_TOOLS = new Set(['web_search', 'code_execution']);
+
+/** Convert generic ToolDefinition objects to Google Gemini Tool format.
+ *
+ * Google's API supports two categories of tools:
+ * 1. Function declarations - custom tools implemented by the application
+ * 2. Native tools - built-in tools like googleSearch and codeExecution
+ *
+ * Native tools must be configured separately and cannot be mixed with
+ * function declarations in the same Tool object. This function filters
+ * out native tools and configures them appropriately.
+ */
 export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Schema | undefined,
-  }));
+  // Separate native Google tools from custom function declarations
+  const customTools = defs.filter((d) => !GOOGLE_NATIVE_TOOLS.has(d.name));
+  const hasWebSearch = defs.some((d) => d.name === 'web_search');
+  const hasCodeExecution = defs.some((d) => d.name === 'code_execution');
 
-  return [
-    {
-      functionDeclarations: declarations,
-    },
-  ];
+  const result: GeminiTool[] = [];
+
+  // Add function declarations for custom tools
+  if (customTools.length > 0) {
+    const declarations: FunctionDeclaration[] = customTools.map((d) => ({
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Schema | undefined,
+    }));
+    result.push({ functionDeclarations: declarations });
+  }
+
+  // Add native Google Search tool if web_search was requested
+  if (hasWebSearch) {
+    result.push({ googleSearch: {} });
+  }
+
+  // Add native Code Execution tool if code_execution was requested
+  if (hasCodeExecution) {
+    result.push({ codeExecution: {} });
+  }
+
+  return result;
 }
