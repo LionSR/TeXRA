@@ -64,9 +64,15 @@ export const RoundOutputSchema = z.strictObject({
 });
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
-/** Internal mapping structure for file relationships (used by OutputHandler) */
+/**
+ * Internal mapping for file relationships (used by OutputHandler).
+ * All maps are indexed by OUTPUT path for efficient lineage lookup.
+ */
 export interface RoundFileMapping {
+  /** Output path → base FileLocation (for round-based diffs) */
   baseToOutput: Map<string, FileLocation>;
+  /** Output path → previous round FileLocation (for inter-round diffs) */
   prevToOutput: Map<string, FileLocation>;
+  /** Output path → original base FileLocation (for tracking lineage) */
   originByOutput: Map<string, FileLocation | undefined>;
 }
