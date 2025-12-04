@@ -2,13 +2,15 @@
 import { z } from 'zod';
 
 // Local imports - response usage types
-import type {
-  NormalizedUsage,
-  UsageProvider,
+import {
+  NormalizedUsageSchema,
+  UsageProviderSchema,
+  type NormalizedUsage,
+  type UsageProvider,
 } from '@agent/types/NormalizedUsage';
 import {
   RunUsageAccumulator,
-  type RunUsageAccumulatorJSON,
+  RunUsageAccumulatorJSONSchema,
   type UsageSummary,
   type NativeUsagePayload,
 } from './RunUsageAccumulator';
@@ -104,11 +106,11 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   responseTimeMs: z.number().nonnegative(),
   outputFile: z.string(),
   // New: store normalized usage directly (nullish for backward compat with old saved states)
-  normalizedUsage: z.custom<NormalizedUsage>().nullish(),
+  normalizedUsage: NormalizedUsageSchema.nullish(),
   // Legacy fields for backward compatibility (deprecated)
   usageSummary: z.custom<UsageSummary>().nullable().optional(),
   nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
-  provider: z.custom<UsageProvider>().nullable().optional(),
+  provider: UsageProviderSchema.nullable().optional(),
 });
 
 /**
@@ -194,7 +196,7 @@ export class ConversationRoundState {
 export const AgentRunStateSnapshotSchema = z.object({
   totalRounds: z.int().nonnegative(),
   totalResponseTimeMs: z.number().nonnegative(),
-  usageAccumulator: z.custom<RunUsageAccumulatorJSON>(),
+  usageAccumulator: RunUsageAccumulatorJSONSchema,
 });
 
 /**
