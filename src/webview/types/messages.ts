@@ -52,7 +52,7 @@ export const PolishInstructionMessageSchema = BaseMessageSchema.extend({
   auxiliaryFiles: z.array(z.string()).optional(),
   mediaFiles: z.array(z.string()).optional(),
   outputFiles: z.array(z.string()).optional(),
-}).merge(WithFileActiveFlags);
+}).extend(WithFileActiveFlags.shape);
 
 export type PolishInstructionMessage = z.infer<
   typeof PolishInstructionMessageSchema
@@ -79,8 +79,9 @@ export type FileSelectionMessage = z.infer<typeof FileSelectionMessageSchema>;
 /**
  * Input file selected message from webview
  */
-export const InputFileSelectedMessageSchema =
-  BaseMessageSchema.merge(WithFilePath);
+export const InputFileSelectedMessageSchema = BaseMessageSchema.extend(
+  WithFilePath.shape,
+);
 
 export type InputFileSelectedMessage = z.infer<
   typeof InputFileSelectedMessageSchema
@@ -89,8 +90,9 @@ export type InputFileSelectedMessage = z.infer<
 /**
  * Generic file selected message from webview
  */
-export const GenericFileSelectedMessageSchema =
-  BaseMessageSchema.merge(WithFilePath);
+export const GenericFileSelectedMessageSchema = BaseMessageSchema.extend(
+  WithFilePath.shape,
+);
 
 export type GenericFileSelectedMessage = z.infer<
   typeof GenericFileSelectedMessageSchema
@@ -99,8 +101,9 @@ export type GenericFileSelectedMessage = z.infer<
 /**
  * Request input file message from webview
  */
-export const RequestInputFileMessageSchema =
-  BaseMessageSchema.merge(WithNotifyWhenEmpty);
+export const RequestInputFileMessageSchema = BaseMessageSchema.extend(
+  WithNotifyWhenEmpty.shape,
+);
 
 export type RequestInputFileMessage = z.infer<
   typeof RequestInputFileMessageSchema
@@ -109,16 +112,17 @@ export type RequestInputFileMessage = z.infer<
 /**
  * Request file message from webview
  */
-export const RequestFileMessageSchema =
-  BaseMessageSchema.merge(WithNotifyWhenEmpty);
+export const RequestFileMessageSchema = BaseMessageSchema.extend(
+  WithNotifyWhenEmpty.shape,
+);
 
 export type RequestFileMessage = z.infer<typeof RequestFileMessageSchema>;
 
 /**
  * Request edited file message from webview
  */
-export const RequestEditedFileMessageSchema = BaseMessageSchema.merge(
-  WithNotifyWhenEmpty,
+export const RequestEditedFileMessageSchema = BaseMessageSchema.extend(
+  WithNotifyWhenEmpty.shape,
 ).extend({
   baseFile: z.string().optional(),
 });
@@ -130,8 +134,8 @@ export type RequestEditedFileMessage = z.infer<
 /**
  * Request base file message from webview
  */
-export const RequestBaseFileMessageSchema = BaseMessageSchema.merge(
-  WithNotifyWhenEmpty,
+export const RequestBaseFileMessageSchema = BaseMessageSchema.extend(
+  WithNotifyWhenEmpty.shape,
 ).extend({
   preserveBaseFile: z.boolean().optional(),
 });
@@ -154,7 +158,9 @@ export type RequestDefaultOutputFilesMessage = z.infer<
 /**
  * Set multiple files message from webview
  */
-export const SetMultipleFilesMessageSchema = BaseMessageSchema.merge(WithFiles);
+export const SetMultipleFilesMessageSchema = BaseMessageSchema.extend(
+  WithFiles.shape,
+);
 
 export type SetMultipleFilesMessage = z.infer<
   typeof SetMultipleFilesMessageSchema
@@ -185,6 +191,8 @@ export type GetCurrentFileMessage = z.infer<typeof GetCurrentFileMessageSchema>;
 /**
  * Update files message from webview
  */
-export const UpdateFilesMessageSchema = BaseMessageSchema.merge(WithFiles);
+export const UpdateFilesMessageSchema = BaseMessageSchema.extend(
+  WithFiles.shape,
+);
 
 export type UpdateFilesMessage = z.infer<typeof UpdateFilesMessageSchema>;

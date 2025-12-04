@@ -223,7 +223,7 @@ export const AgentWorkspaceStateSnapshotSchema = z.object({
       ),
     })
     .optional()
-    .default({
+    .prefault({
       readFiles: [],
       edits: [],
     }),
