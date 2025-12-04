@@ -8,7 +8,10 @@ import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
-import { STREAM_STATUS } from '@common/constants/streamStatus';
+import {
+  STREAM_STATUS,
+  type StreamStatus,
+} from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
 import type { TaskState } from '@logger/TaskState';
@@ -28,9 +31,6 @@ import type {
 
 // Logger imports
 // Type imports
-
-// Type aliases for status values
-type StatusType = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];
 
 /**
  * Manages webview updates for the progress view.
@@ -299,7 +299,7 @@ export class WebviewUpdater {
   /**
    * Update stream status indicator (for active stream)
    */
-  updateStatus(status: StatusType): void {
+  updateStatus(status: StreamStatus): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STATUS,
       status,
@@ -310,7 +310,7 @@ export class WebviewUpdater {
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
    */
-  updateStreamStatus(stream: StreamTabId, status: StatusType | 'ready'): void {
+  updateStreamStatus(stream: StreamTabId, status: StreamStatus): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,
