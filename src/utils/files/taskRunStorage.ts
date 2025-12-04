@@ -2,6 +2,9 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - log
 import type { ExecutionId } from '@agent/types/IdentifierTypes';
 
@@ -28,46 +31,64 @@ logger.initialize(CHANNEL);
  */
 export const TASK_RUNS_DIR = 'taskRuns';
 
+// ============================================================================
+// FILE LOCATION SCHEMAS (types derived via z.infer)
+// ============================================================================
+
 /**
  * File location in workspace with relative path.
  */
-export interface WorkspaceFileLocation {
-  kind: 'workspace';
-  absolutePath: string;
-  relativePath: string;
-}
+export const WorkspaceFileLocationSchema = z.strictObject({
+  kind: z.literal('workspace'),
+  absolutePath: z.string(),
+  relativePath: z.string(),
+});
 
 /**
  * File location in run storage with execution context.
  */
-export interface RunStorageFileLocation {
-  kind: 'runStorage';
-  absolutePath: string;
-  relativePath: string;
-  executionId: string;
-}
+export const RunStorageFileLocationSchema = z.strictObject({
+  kind: z.literal('runStorage'),
+  absolutePath: z.string(),
+  relativePath: z.string(),
+  executionId: z.string(),
+});
 
 /**
  * File location outside workspace/storage (external).
  */
-export interface ExternalFileLocation {
-  kind: 'external';
-  absolutePath: string;
-}
+export const ExternalFileLocationSchema = z.strictObject({
+  kind: z.literal('external'),
+  absolutePath: z.string(),
+});
 
 /**
  * Discriminated union of all file location types.
+ * Uses the 'kind' field for discrimination.
  */
-export type FileLocation =
-  | WorkspaceFileLocation
-  | RunStorageFileLocation
-  | ExternalFileLocation;
+export const FileLocationSchema = z.discriminatedUnion('kind', [
+  WorkspaceFileLocationSchema,
+  RunStorageFileLocationSchema,
+  ExternalFileLocationSchema,
+]);
 
 /**
  * Agent outputs are always workspace or runStorage, never external.
- * Use this type for agent-created file locations.
+ * Use this schema for agent-created file locations.
  */
-export type AgentFileLocation = WorkspaceFileLocation | RunStorageFileLocation;
+export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
+  WorkspaceFileLocationSchema,
+  RunStorageFileLocationSchema,
+]);
+
+// Derive types from schemas (Zod v4)
+export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
+export type RunStorageFileLocation = z.infer<
+  typeof RunStorageFileLocationSchema
+>;
+export type ExternalFileLocation = z.infer<typeof ExternalFileLocationSchema>;
+export type FileLocation = z.infer<typeof FileLocationSchema>;
+export type AgentFileLocation = z.infer<typeof AgentFileLocationSchema>;
 
 export function createWorkspaceLocation(
   absolutePath: string,

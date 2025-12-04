@@ -1,3 +1,6 @@
+// Third-party imports
+import { z } from 'zod';
+
 /**
  * # Identifier Types and Execution Model
  *
@@ -31,6 +34,10 @@
  * @see ExecutionIdentity for the unified identity interface
  */
 
+// ============================================================================
+// IDENTIFIER SCHEMAS (types derived via z.infer)
+// ============================================================================
+
 /**
  * Stream Tab ID: Human-readable identifier used for UI tabs and execution deduplication
  * Format: "${agentName}@${modelName}: ${inputFileName}"
@@ -41,7 +48,8 @@
  * - Prevents duplicate executions of the same task
  * - Used for logging channel identification
  */
-export type StreamTabId = string;
+export const StreamTabIdSchema = z.string().min(1);
+export type StreamTabId = z.infer<typeof StreamTabIdSchema>;
 
 /**
  * Execution ID: Unique UUID for each execution instance
@@ -55,7 +63,8 @@ export type StreamTabId = string;
  *
  * Note: ExecutionId is ALWAYS a UUID, never null or DEFAULT_RUN_ID.
  */
-export type ExecutionId = string;
+export const ExecutionIdSchema = z.string().uuid();
+export type ExecutionId = z.infer<typeof ExecutionIdSchema>;
 
 /**
  * Storage Key: THE key for storing and retrieving files, usage, and other artifacts.
@@ -72,7 +81,13 @@ export type ExecutionId = string;
  *
  * This is a branded type for compile-time safety - you cannot accidentally
  * pass a random string where a StorageKey is expected.
+ *
+ * The schema validates non-empty strings and brands them at runtime.
  */
+export const StorageKeySchema = z
+  .string()
+  .min(1)
+  .transform((val) => val as StorageKey);
 export type StorageKey = string & { readonly __brand: 'StorageKey' };
 
 /**
@@ -119,3 +134,13 @@ export interface ExecutionIdentity {
   /** The UI tab identifier */
   readonly streamTabId: StreamTabId;
 }
+
+/**
+ * Schema for ExecutionIdentity - validates all identifier fields.
+ * Note: Uses the individual identifier schemas for proper validation.
+ */
+export const ExecutionIdentitySchema = z.strictObject({
+  executionId: ExecutionIdSchema,
+  storageKey: StorageKeySchema,
+  streamTabId: StreamTabIdSchema,
+});
