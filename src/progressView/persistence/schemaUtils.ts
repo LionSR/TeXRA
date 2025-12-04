@@ -97,13 +97,16 @@ export function createLegacyAwareRunMapSchema<T>(
  *
  * @param itemSchema - Schema for parsing individual item values
  * @param isLegacyFormat - Function to detect if data is in legacy format
+ * @param options.defaultRunId - Run ID to use for legacy format (defaults to normalizeRunId(null))
+ * @param options.isEmpty - Optional predicate to skip empty/zero values (returns empty map if true)
  */
 export function createLegacyAwareSingleValueRunMapSchema<T>(
   itemSchema: z.ZodType<T>,
   isLegacyFormat: (data: Record<string, unknown>) => boolean,
-  options?: { defaultRunId?: string },
+  options?: { defaultRunId?: string; isEmpty?: (item: T) => boolean },
 ): z.ZodType<Map<string, T>> {
   const defaultRunId = options?.defaultRunId ?? normalizeRunId(null);
+  const isEmpty = options?.isEmpty;
 
   return z.unknown().transform((data): Map<string, T> => {
     if (!data || typeof data !== 'object') {
@@ -115,6 +118,10 @@ export function createLegacyAwareSingleValueRunMapSchema<T>(
     // Legacy format: flat object
     if (isLegacyFormat(record)) {
       const item = itemSchema.parse(data);
+      // Skip empty values in legacy format
+      if (isEmpty?.(item)) {
+        return new Map();
+      }
       return new Map([[defaultRunId, item]]);
     }
 
@@ -124,6 +131,8 @@ export function createLegacyAwareSingleValueRunMapSchema<T>(
       if (!value || typeof value !== 'object') continue;
       const result = itemSchema.safeParse(value);
       if (result.success) {
+        // Skip empty values in modern format
+        if (isEmpty?.(result.data)) continue;
         runMap.set(runId, result.data);
       }
     }
