@@ -214,6 +214,11 @@ export function extractAnthropicWebSearchResults(
 
 /**
  * Extract web search results from OpenAI Responses API output.
+ *
+ * Note: The OpenAI Responses API returns web_search_call items with only
+ * basic fields (id, status, type) by default. The action field with sources
+ * is only populated when using include: ['web_search_call.action.sources'].
+ * This extractor handles both cases gracefully.
  */
 export function extractOpenAIWebSearchResults(
   output: unknown[],
@@ -228,7 +233,8 @@ export function extractOpenAIWebSearchResults(
     const searchItem = item as {
       type: 'web_search_call';
       id: string;
-      status?: string;
+      status?: 'in_progress' | 'searching' | 'completed' | 'failed';
+      // action is only present when include: ['web_search_call.action.sources'] is used
       action?: {
         type: 'search';
         query?: string;
@@ -236,8 +242,31 @@ export function extractOpenAIWebSearchResults(
       };
     };
 
+    // Determine status
+    const status: WebSearchResult['status'] =
+      searchItem.status === 'completed'
+        ? 'completed'
+        : searchItem.status === 'failed'
+          ? 'failed'
+          : 'in_progress';
+
+    // Handle case when action is not present (default API response)
     const action = searchItem.action;
-    if (action?.type !== 'search') {
+    if (!action) {
+      // Web search occurred but sources not included in response
+      // Return a result indicating the search happened
+      results.push({
+        query: '',
+        results: [],
+        provider: 'openai',
+        callId: searchItem.id,
+        status,
+      });
+      continue;
+    }
+
+    // Handle case when action is present (include sources was used)
+    if (action.type !== 'search') {
       continue;
     }
 
@@ -247,21 +276,13 @@ export function extractOpenAIWebSearchResults(
       domain: extractDomain(s.url),
     }));
 
-    // Only add results if there are actual entries (consistent with Anthropic/Google)
-    if (entries.length > 0) {
-      results.push({
-        query: action.query ?? '',
-        results: entries,
-        provider: 'openai',
-        callId: searchItem.id,
-        status:
-          searchItem.status === 'completed'
-            ? 'completed'
-            : searchItem.status === 'failed'
-              ? 'failed'
-              : 'in_progress',
-      });
-    }
+    results.push({
+      query: action.query ?? '',
+      results: entries,
+      provider: 'openai',
+      callId: searchItem.id,
+      status,
+    });
   }
 
   return results;
