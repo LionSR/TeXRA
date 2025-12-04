@@ -38,7 +38,7 @@ import {
 } from './ApprovalEvents';
 
 // Local imports - events
-import type { StreamStatusOrReadyType, StreamStatusType } from './types';
+import type { StreamStatus, StreamStatusOrReady } from '@eventBus/ProgressEventBus';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -47,7 +47,7 @@ import type { StreamStatusOrReadyType, StreamStatusType } from './types';
  */
 export class ProgressEventHandler {
   private readonly logger: AgentLogger;
-  private _streamStatus: Map<string, StreamStatusType> = new Map();
+  private _streamStatus: Map<string, StreamStatus> = new Map();
   private readonly streamStatusEvents: StreamStatusEventModule;
   private readonly outputEvents: OutputEventsModule;
   private readonly logEvents: LogEventsModule;
@@ -277,18 +277,18 @@ export class ProgressEventHandler {
   /**
    * Get current stream status
    */
-  getStreamStatus(stream: string): StreamStatusType | undefined {
+  getStreamStatus(stream: string): StreamStatus | undefined {
     return this._streamStatus.get(stream);
   }
 
   /**
    * Set the status for a specific stream synchronously.
    */
-  setStreamStatus(stream: string, status: StreamStatusOrReadyType): void {
+  setStreamStatus(stream: string, status: StreamStatusOrReady): void {
     if (status === STREAM_STATUS.READY) {
       this._streamStatus.delete(stream);
     } else {
-      const nextStatus: StreamStatusType = status;
+      const nextStatus: StreamStatus = status;
       this._streamStatus.set(stream, nextStatus);
     }
 
@@ -331,7 +331,7 @@ export class ProgressEventHandler {
   /**
    * Get a copy of all stream statuses
    */
-  getAllStreamStatuses(): Map<string, StreamStatusType> {
+  getAllStreamStatuses(): Map<string, StreamStatus> {
     return new Map(this._streamStatus);
   }
 
