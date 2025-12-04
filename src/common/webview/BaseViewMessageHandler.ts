@@ -1,6 +1,5 @@
 // Third-party imports
 import * as vscode from 'vscode';
-import type { z } from 'zod';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -8,6 +7,7 @@ import * as logger from '@logger/logUtils';
 
 // Local file imports
 import { COMMON_COMMANDS } from './commands';
+import type { z } from 'zod';
 
 export type MessageHandler<
   T extends vscode.WebviewView | vscode.WebviewPanel = vscode.WebviewView,
