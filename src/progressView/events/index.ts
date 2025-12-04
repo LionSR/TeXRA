@@ -23,5 +23,5 @@ export {
   createTaskGroupEvents,
 } from './TaskGroupEvents';
 export { ProgressEventBusLike } from './types';
-export type { StreamStatus, StreamStatusOrReady } from '@eventBus/ProgressEventBus';
+export type { StreamStatus } from '@eventBus/ProgressEventBus';
 export { UsageEventsModule, createUsageEvents } from './UsageEvents';
