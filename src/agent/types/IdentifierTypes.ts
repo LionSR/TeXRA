@@ -40,14 +40,9 @@ export type StorageKey = string & { readonly __brand: 'StorageKey' };
  * - storageKey: THE key for storage (files, usage, artifacts)
  * - streamTabId: UI tab identifier
  */
-export interface ExecutionIdentity {
-  readonly executionId: ExecutionId;
-  readonly storageKey: StorageKey;
-  readonly streamTabId: StreamTabId;
-}
-
 export const ExecutionIdentitySchema = z.strictObject({
   executionId: ExecutionIdSchema,
   storageKey: StorageKeySchema,
   streamTabId: StreamTabIdSchema,
 });
+export type ExecutionIdentity = z.infer<typeof ExecutionIdentitySchema>;
