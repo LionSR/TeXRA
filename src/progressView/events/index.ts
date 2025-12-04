@@ -22,10 +22,6 @@ export {
   TaskGroupEventsModule,
   createTaskGroupEvents,
 } from './TaskGroupEvents';
-export {
-  StreamStatusType,
-  StreamStatusOrReadyType,
-  StatusType,
-  ProgressEventBusLike,
-} from './types';
+export { ProgressEventBusLike } from './types';
+export type { StreamStatus } from '@eventBus/ProgressEventBus';
 export { UsageEventsModule, createUsageEvents } from './UsageEvents';
