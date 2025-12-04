@@ -133,7 +133,12 @@ export function createOutputEvents(
       state: ProgressViewState,
       updater: WebviewUpdater,
     ): vscode.Disposable[] {
-      return registerOutputFileListeners(bus, state, updater, withErrorBoundary);
+      return registerOutputFileListeners(
+        bus,
+        state,
+        updater,
+        withErrorBoundary,
+      );
     },
   };
 }
