@@ -19,7 +19,12 @@ export {
 } from './types';
 
 /** Task group status - must match TaskGroup['status'] from LogTypes */
-const TASK_GROUP_STATUSES = ['running', 'error', 'stopped', 'ready'] as const satisfies readonly TaskGroup['status'][];
+const TASK_GROUP_STATUSES = [
+  'running',
+  'error',
+  'stopped',
+  'ready',
+] as const satisfies readonly TaskGroup['status'][];
 export const TaskGroupStatusSchema = z.enum(TASK_GROUP_STATUSES);
 export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
 
