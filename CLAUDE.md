@@ -79,6 +79,16 @@ Key directories in `src/`:
 - `tests/` - Test commands
 - `wolfram/` - Wolfram Alpha queries and script utilities
 
+### Schema and Type Guidelines
+
+Use Zod schemas as the single source of truth for data structures:
+
+- **Define schemas first**, then derive TypeScript types using `z.infer<typeof Schema>`
+- **Use schema composition** (`.extend()`, `.pick()`) instead of duplicating field definitions
+- **Avoid `z.custom<T>()`** when a proper schema exists—prefer `z.discriminatedUnion()` for union types
+- **Co-locate types with schemas** in the same file for maintainability
+- **Add compile-time assertions** (using `satisfies`) when schemas must stay synchronized with external types
+
 ### Path Aliases
 
 Common aliases (full list in `tsconfig.json`):

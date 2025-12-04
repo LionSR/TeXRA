@@ -1,7 +1,11 @@
+// Third-party imports
+import { z } from 'zod';
+
 // Local imports - types
-import type {
-  NormalizedUsage,
-  UsageProvider,
+import {
+  NormalizedUsageSchema,
+  type NormalizedUsage,
+  type UsageProvider,
 } from '@agent/types/NormalizedUsage';
 
 // Re-export for backwards compatibility (used in AgentState legacy schema)
@@ -13,52 +17,55 @@ import type {
 
 export type { NativeUsagePayload };
 
-/**
- * @deprecated Used only for legacy JSON deserialization
- */
+/** @deprecated Used only for legacy JSON deserialization */
 export type UsageSummary =
   | OpenAIAPIResponseUsage
   | AnthropicAPIResponseUsage
   | null;
 
-/**
- * @deprecated Legacy snapshot format - used only for migration
- */
+/** @deprecated Legacy snapshot format - used only for migration */
 interface LegacyNativeUsageSnapshot {
   round: number;
   provider: string;
   payload: unknown;
 }
 
-/**
- * Snapshot of normalized usage for a single round.
- */
-export interface NormalizedUsageSnapshot {
-  round: number;
-  usage: NormalizedUsage;
-}
+/** Schema for run usage totals */
+export const RunUsageTotalsSchema = z.object({
+  firstInputTokens: z.number(),
+  totalInputTokens: z.number(),
+  totalOutputTokens: z.number(),
+  totalCost: z.number(),
+  totalCacheReadInputTokens: z.number(),
+  totalCacheCreationInputTokens: z.number(),
+  totalReasoningTokens: z.number(),
+  totalToolUsePromptTokens: z.number(),
+  totalServerToolRequests: z.number(),
+});
+export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
-export interface RunUsageTotals {
-  firstInputTokens: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCost: number;
-  totalCacheReadInputTokens: number;
-  totalCacheCreationInputTokens: number;
-  totalReasoningTokens: number;
-  totalToolUsePromptTokens: number;
-  totalServerToolRequests: number;
-}
+/** Schema for normalized usage snapshot */
+export const NormalizedUsageSnapshotSchema = z.object({
+  round: z.number(),
+  usage: NormalizedUsageSchema,
+});
+export type NormalizedUsageSnapshot = z.infer<
+  typeof NormalizedUsageSnapshotSchema
+>;
 
-export interface RunUsageAccumulatorJSON {
-  totals: Partial<RunUsageTotals> & {
+/** Schema for RunUsageAccumulator JSON serialization */
+export const RunUsageAccumulatorJSONSchema = z.object({
+  totals: RunUsageTotalsSchema.partial().extend({
     /** @deprecated Legacy field name */
-    totalToolUseTokens?: number;
-  };
-  normalizedSnapshots?: NormalizedUsageSnapshot[];
+    totalToolUseTokens: z.number().optional(),
+  }),
+  normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).optional(),
   /** @deprecated Legacy format - ignored on load */
-  snapshots?: unknown[];
-}
+  snapshots: z.array(z.unknown()).optional(),
+});
+export type RunUsageAccumulatorJSON = z.infer<
+  typeof RunUsageAccumulatorJSONSchema
+>;
 
 const DEFAULT_TOTALS: RunUsageTotals = {
   firstInputTokens: 0,
