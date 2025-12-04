@@ -24,29 +24,16 @@ import { flexibleFS } from './flexibleFS';
 const CHANNEL = 'taskRunStorage';
 logger.initialize(CHANNEL);
 
-/**
- * Directory name for storing task run artifacts.
- * All task execution files (debug JSONs, logs, etc.) are organized
- * in subdirectories under this parent directory.
- */
+/** Directory for task run artifacts (debug JSONs, logs, etc.) */
 export const TASK_RUNS_DIR = 'taskRuns';
 
-// ============================================================================
-// FILE LOCATION SCHEMAS (types derived via z.infer)
-// ============================================================================
-
-/**
- * File location in workspace with relative path.
- */
+// File location schemas (types derived via z.infer)
 export const WorkspaceFileLocationSchema = z.strictObject({
   kind: z.literal('workspace'),
   absolutePath: z.string(),
   relativePath: z.string(),
 });
 
-/**
- * File location in run storage with execution context.
- */
 export const RunStorageFileLocationSchema = z.strictObject({
   kind: z.literal('runStorage'),
   absolutePath: z.string(),
@@ -54,34 +41,24 @@ export const RunStorageFileLocationSchema = z.strictObject({
   executionId: z.string(),
 });
 
-/**
- * File location outside workspace/storage (external).
- */
 export const ExternalFileLocationSchema = z.strictObject({
   kind: z.literal('external'),
   absolutePath: z.string(),
 });
 
-/**
- * Discriminated union of all file location types.
- * Uses the 'kind' field for discrimination.
- */
+/** Discriminated union of all file location types */
 export const FileLocationSchema = z.discriminatedUnion('kind', [
   WorkspaceFileLocationSchema,
   RunStorageFileLocationSchema,
   ExternalFileLocationSchema,
 ]);
 
-/**
- * Agent outputs are always workspace or runStorage, never external.
- * Use this schema for agent-created file locations.
- */
+/** Agent outputs are workspace or runStorage, never external */
 export const AgentFileLocationSchema = z.discriminatedUnion('kind', [
   WorkspaceFileLocationSchema,
   RunStorageFileLocationSchema,
 ]);
 
-// Derive types from schemas (Zod v4)
 export type WorkspaceFileLocation = z.infer<typeof WorkspaceFileLocationSchema>;
 export type RunStorageFileLocation = z.infer<
   typeof RunStorageFileLocationSchema
