@@ -12,7 +12,7 @@ import {
   PersistentMapManager,
   type StateStorage,
 } from '@progressView/persistence/PersistentMapManager';
-import { createLegacyAwareSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
+import { createSingleValueRunMapSchema } from '@progressView/persistence/schemaUtils';
 
 // --- Zod Schemas for Usage Stats ---
 
@@ -30,17 +30,6 @@ const TokenUsageStatsSchema = z
   })
   .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
 
-/**
- * Detects legacy flat format (single usage stats object) vs modern run map format.
- * Legacy: { inputTokens, outputTokens, cost } - flat object
- * Modern: { runId: { inputTokens, outputTokens, cost } } - nested objects
- */
-function isLegacyFlatUsageFormat(record: Record<string, unknown>): boolean {
-  const entries = Object.entries(record);
-  // Legacy format has primitive values (numbers), modern format has object values
-  return !entries.every(([, value]) => value && typeof value === 'object');
-}
-
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
   return (
@@ -48,12 +37,10 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
   );
 }
 
-/** Schema that handles both legacy flat format and modern run map format */
-const UsageDataSchema = createLegacyAwareSingleValueRunMapSchema(
-  TokenUsageStatsSchema,
-  isLegacyFlatUsageFormat,
-  { isEmpty: isEmptyUsage },
-);
+/** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
+const UsageDataSchema = createSingleValueRunMapSchema(TokenUsageStatsSchema, {
+  isEmpty: isEmptyUsage,
+});
 
 /**
  * Manages usage statistics collection with persistence.
