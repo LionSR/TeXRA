@@ -1,25 +1,10 @@
 /**
- * Shared types for the progress event bus.
- *
- * These types are used by both the event bus and UI components.
- * They are defined here to break the circular dependency between
- * @eventBus and @progressView.
+ * Shared event bus types for breaking circular dependency with progressView.
  */
-
-// Third-party imports
 import { z } from 'zod';
-
-// Type imports
 import { StreamTabIdSchema } from '@agent/types/IdentifierTypes';
 
-// ============================================================================
-// EVENT PAYLOAD SCHEMAS (types derived via z.infer)
-// ============================================================================
-
-/**
- * Prompt data for tool edit approval requests.
- * Emitted via 'showToolEditApprovalPrompt' event.
- */
+/** Tool edit approval request prompt */
 export const ToolEditApprovalPromptSchema = z.strictObject({
   requestId: z.string(),
   path: z.string(),
@@ -34,10 +19,7 @@ export type ToolEditApprovalPrompt = z.infer<
   typeof ToolEditApprovalPromptSchema
 >;
 
-/**
- * Prompt data for manual retry requests.
- * Emitted via 'showRetryRequest' event.
- */
+/** Manual retry request prompt */
 export const RetryRequestPromptSchema = z.strictObject({
   streamId: StreamTabIdSchema,
   operation: z.string(),
