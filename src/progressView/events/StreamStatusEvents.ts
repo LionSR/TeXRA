@@ -19,16 +19,16 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
 
 // Type imports
+import type { ProgressEventBusLike } from './types';
 import type {
-  ProgressEventBusLike,
-  StreamStatusType,
-  StreamStatusOrReadyType,
-} from './types';
+  StreamStatus,
+  StreamStatusOrReady,
+} from '@eventBus/ProgressEventBus';
 
 export interface StreamStatusEventShared {
   logger: AgentLogger;
-  streamStatus: Map<string, StreamStatusType>;
-  setStreamStatus(stream: string, status: StreamStatusOrReadyType): void;
+  streamStatus: Map<string, StreamStatus>;
+  setStreamStatus(stream: string, status: StreamStatusOrReady): void;
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
   refreshStreamSurface(
     stream: string,
@@ -85,7 +85,7 @@ export function createStreamStatusEvents(
 
     state.activeStream = stream;
 
-    const status: StreamStatusOrReadyType =
+    const status: StreamStatusOrReady =
       shared.streamStatus.get(stream) ?? STREAM_STATUS.RUNNING;
 
     if (updater.isAvailable()) {
