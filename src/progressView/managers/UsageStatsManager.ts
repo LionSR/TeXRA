@@ -41,10 +41,18 @@ function isLegacyFlatUsageFormat(record: Record<string, unknown>): boolean {
   return !entries.every(([, value]) => value && typeof value === 'object');
 }
 
+/** Checks if usage stats are all zeros (effectively empty) */
+function isEmptyUsage(usage: TokenUsageStats): boolean {
+  return (
+    usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
+  );
+}
+
 /** Schema that handles both legacy flat format and modern run map format */
 const UsageDataSchema = createLegacyAwareSingleValueRunMapSchema(
   TokenUsageStatsSchema,
   isLegacyFlatUsageFormat,
+  { isEmpty: isEmptyUsage },
 );
 
 /**
