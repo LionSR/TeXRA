@@ -21,4 +21,8 @@ export const STREAM_STATUS = {
   RESUMING: 'resuming',
 } as const;
 
+/**
+ * All possible stream states.
+ * Derived from STREAM_STATUS constant to maintain single source of truth.
+ */
 export type StreamStatus = (typeof STREAM_STATUS)[keyof typeof STREAM_STATUS];

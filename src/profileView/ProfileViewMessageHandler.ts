@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent
 import { getAgentsBySource, loadAgents, type AgentSource } from '@agent/index';
@@ -16,17 +17,8 @@ import {
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { AUTH_COMMANDS } from '@/auth/authCommands';
 
-/**
- * Message interfaces for type safety
- */
-interface SelectAgentMessage {
-  command: string;
-  agentName: string;
-}
-
-interface ProfileDataMessage {
-  command: string;
-}
+// --- Message Schemas ---
+const SelectAgentMessage = z.object({ agentName: z.string().min(1) });
 
 export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -98,38 +90,39 @@ export class ProfileViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleGetProfileData(
-    _message: ProfileDataMessage,
+    _message: unknown,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await this.sendProfileData(view.webview);
   }
 
   private async handleSelectAgent(
-    message: SelectAgentMessage,
+    message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const agentName = message.agentName;
-    if (!agentName) {
-      this.logger.warn(this.channel, 'SELECT_AGENT message missing agentName');
-      return;
-    }
-
-    // Use shared utility for agent selection
-    await selectAgentInMainView(agentName, {
-      showSuccessMessage: true,
-      copyToClipboardOnFailure: false,
-    });
+    await this.withValidatedMessage(
+      SelectAgentMessage,
+      message,
+      'selectAgent',
+      async ({ agentName }) => {
+        // Use shared utility for agent selection
+        await selectAgentInMainView(agentName, {
+          showSuccessMessage: true,
+          copyToClipboardOnFailure: false,
+        });
+      },
+    );
   }
 
   private async handleSignIn(
-    _message: ProfileDataMessage,
+    _message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_IN);
   }
 
   private async handleSignOut(
-    _message: ProfileDataMessage,
+    _message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
     await vscode.commands.executeCommand(AUTH_COMMANDS.SIGN_OUT);
