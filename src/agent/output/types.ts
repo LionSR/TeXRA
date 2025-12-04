@@ -3,8 +3,12 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { DiffStatsSchema } from '@agent/types/DiffTypes';
-// Re-export FileLocation from its source of truth
-import type { FileLocation, AgentFileLocation } from '@utils/files';
+// Re-export FileLocation types and schemas from source of truth
+import {
+  FileLocationSchema,
+  type FileLocation,
+  type AgentFileLocation,
+} from '@utils/files';
 export type { FileLocation, AgentFileLocation };
 
 // ============================================================================
@@ -14,11 +18,11 @@ export type { FileLocation, AgentFileLocation };
 /**
  * Minimal output file reference - just source name + location.
  * Location contains all path variants (absolute, relative, workspace).
- * Note: FileLocation type is imported from @utils/files (not defined here)
+ * Uses FileLocationSchema for proper validation.
  */
 export const OutputFileSchema = z.strictObject({
   source: z.string(),
-  location: z.custom<FileLocation>(),
+  location: FileLocationSchema,
 });
 
 /**
@@ -28,11 +32,11 @@ export const OutputFileSchema = z.strictObject({
  */
 export const FileLineageSchema = z.strictObject({
   /** Original location before any agent processing */
-  original: z.custom<FileLocation>().nullable(),
+  original: FileLocationSchema.nullable(),
   /** What file to diff against (base/previous round, computed by getEffectiveBaseFile) */
-  diffBase: z.custom<FileLocation>().nullable(),
+  diffBase: FileLocationSchema.nullable(),
   /** Generated diff file location (if latexdiff was run) */
-  diffFile: z.custom<FileLocation>().nullable(),
+  diffFile: FileLocationSchema.nullable(),
 });
 
 /**
@@ -44,7 +48,7 @@ export const FileLineageSchema = z.strictObject({
  */
 export const OutputFileInfoSchema = z.strictObject({
   source: z.string(),
-  location: z.custom<FileLocation>(),
+  location: FileLocationSchema,
   lineage: FileLineageSchema.nullable(),
   diff: DiffStatsSchema.nullable(),
 });
@@ -67,7 +71,7 @@ const RawOutputXmlSummarySchema = z.strictObject({
     .optional(),
   documents: z.array(z.string()).optional(),
   singleOutputFile: z.string().nullable(),
-  sourceLocation: z.custom<FileLocation>().nullable(),
+  sourceLocation: FileLocationSchema.nullable(),
 });
 
 export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
@@ -95,7 +99,7 @@ export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
  */
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),
-  rawOutput: z.custom<FileLocation>().nullable(),
+  rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   xmlSummary: OutputXmlSummarySchema,
 });
