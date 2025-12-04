@@ -17,7 +17,7 @@ export {
   type RetryRequestPrompt,
 } from './types';
 
-/** Task group status values (matches TaskGroup['status'] from LogTypes) */
+/** Task group status (matches TaskGroup['status'] from LogTypes) */
 export const TaskGroupStatusSchema = z.enum([
   'running',
   'error',
@@ -38,12 +38,12 @@ export const AddTaskGroupPayloadSchema = z.strictObject({
 });
 export type AddTaskGroupPayload = z.infer<typeof AddTaskGroupPayloadSchema>;
 
-/** Payload for updating an existing task group */
-export const UpdateTaskGroupPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema,
-  groupId: z.string().min(1),
-  status: TaskGroupStatusSchema,
-  endTime: z.number().optional(),
+/** Payload for updating a task group (subset of AddTaskGroupPayload) */
+export const UpdateTaskGroupPayloadSchema = AddTaskGroupPayloadSchema.pick({
+  stream: true,
+  groupId: true,
+  status: true,
+  endTime: true,
 });
 export type UpdateTaskGroupPayload = z.infer<
   typeof UpdateTaskGroupPayloadSchema

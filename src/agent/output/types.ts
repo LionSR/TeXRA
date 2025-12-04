@@ -1,9 +1,8 @@
-// Third-party imports
+/**
+ * Output file schemas. Types derived from schemas for single source of truth.
+ */
 import { z } from 'zod';
-
-// Local imports - agent
 import { DiffStatsSchema } from '@agent/types/DiffTypes';
-// Re-export FileLocation types and schemas from source of truth
 import {
   FileLocationSchema,
   type FileLocation,
@@ -11,60 +10,32 @@ import {
 } from '@utils/files';
 export type { FileLocation, AgentFileLocation };
 
-// ============================================================================
-// OUTPUT FILE SCHEMAS (types derived via z.infer)
-// ============================================================================
-
-/**
- * Minimal output file reference - just source name + location.
- * Location contains all path variants (absolute, relative, workspace).
- * Uses FileLocationSchema for proper validation.
- */
+/** Minimal output file reference - source name + location */
 export const OutputFileSchema = z.strictObject({
   source: z.string(),
   location: FileLocationSchema,
 });
 
-/**
- * File lineage - tracks where files came from and what to compare against.
- * Uses full FileLocation objects (not split across string + location fields).
- * Fields are nullable to support cases where lineage doesn't exist.
- */
+/** File lineage - tracks where files came from */
 export const FileLineageSchema = z.strictObject({
-  /** Original location before any agent processing */
   original: FileLocationSchema.nullable(),
-  /** What file to diff against (base/previous round, computed by getEffectiveBaseFile) */
   diffBase: FileLocationSchema.nullable(),
-  /** Generated diff file location (if latexdiff was run) */
   diffFile: FileLocationSchema.nullable(),
 });
 
-/**
- * Complete output file metadata.
- * - source: Document name (e.g., "main.tex")
- * - location: Where the file is (has all path variants)
- * - lineage: Where it came from (base/previous/original)
- * - diff: Line changes vs base
- */
-export const OutputFileInfoSchema = z.strictObject({
-  source: z.string(),
-  location: FileLocationSchema,
+/** Complete output file metadata (extends OutputFileSchema) */
+export const OutputFileInfoSchema = OutputFileSchema.extend({
   lineage: FileLineageSchema.nullable(),
   diff: DiffStatsSchema.nullable(),
 });
 
 export const OutputFileInfoListSchema = OutputFileInfoSchema.array();
 
-// Derive types from schemas (Zod v4)
-// Note: FileLocation is imported from @utils/files, not derived here
 export type OutputFile = z.infer<typeof OutputFileSchema>;
 export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 
-// ============================================================================
-// XML SUMMARY SCHEMAS
-// ============================================================================
-
+/** XML summary with defaults applied via transform */
 const RawOutputXmlSummarySchema = z.strictObject({
   tagContents: z
     .record(z.string(), z.union([z.string(), z.array(z.string())]))
@@ -82,53 +53,20 @@ export const OutputXmlSummarySchema = RawOutputXmlSummarySchema.transform(
     sourceLocation: value.sourceLocation ?? null,
   }),
 );
-
-// Derive type from schema (Zod v4)
 export type OutputXmlSummary = z.infer<typeof OutputXmlSummarySchema>;
 
-// ============================================================================
-// ROUND OUTPUT SCHEMAS
-// ============================================================================
-
-/**
- * Output from processing a conversation round.
- * - round: Round number
- * - rawOutput: The XML file the LLM wrote (before extraction)
- * - outputs: Extracted output files with metadata
- * - xmlSummary: Parsed XML metadata (TODO: Can this be simplified/removed?)
- */
+/** Output from processing a conversation round */
 export const RoundOutputSchema = z.strictObject({
   round: z.number(),
   rawOutput: FileLocationSchema.nullable(),
   outputs: OutputFileInfoSchema.array(),
   xmlSummary: OutputXmlSummarySchema,
 });
-
-// Derive type from schema (Zod v4)
 export type RoundOutput = z.infer<typeof RoundOutputSchema>;
 
-// ============================================================================
-// INTERNAL MAPPING SCHEMAS (used by OutputHandler)
-// ============================================================================
-
-/**
- * Internal mapping structure for file relationships.
- * Uses string keys (comparable paths) for robust lookups and FileLocation values for data.
- * This ensures lookups work even when FileLocation objects are reconstructed.
- *
- * All maps are indexed by OUTPUT path for efficient lineage lookup during gatherOutputFileInfo.
- */
+/** Internal mapping structure for file relationships (used by OutputHandler) */
 export interface RoundFileMapping {
-  /** Maps output file path to its corresponding base FileLocation (for round-based diffs) */
   baseToOutput: Map<string, FileLocation>;
-  /** Maps output file path to its previous round FileLocation (for inter-round diffs) */
   prevToOutput: Map<string, FileLocation>;
-  /** Maps output file path to its original base FileLocation (for tracking lineage) */
   originByOutput: Map<string, FileLocation | undefined>;
 }
-
-// ============================================================================
-// LEGACY TYPES REMOVED
-// ============================================================================
-// NamedOutputFile has been eliminated. Use OutputFileInfo instead.
-// OutputFileInfo contains all necessary information without duplicate fields.
