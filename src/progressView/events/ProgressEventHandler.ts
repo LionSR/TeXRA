@@ -15,6 +15,7 @@ import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
+import type { StreamStatus } from '@eventBus/ProgressEventBus';
 import {
   createStreamStatusEvents,
   type StreamStatusEventModule,
@@ -38,7 +39,6 @@ import {
 } from './ApprovalEvents';
 
 // Local imports - events
-import type { StreamStatus } from '@eventBus/ProgressEventBus';
 
 /**
  * Handles progress event bus subscriptions for the progress view.
