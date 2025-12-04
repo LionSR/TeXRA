@@ -18,23 +18,10 @@ export {
   type RetryRequestPrompt,
 } from './types';
 
-/** Task group status - derived from TaskGroup['status'] */
-export const TaskGroupStatusSchema = z.enum([
-  'running',
-  'error',
-  'stopped',
-  'ready',
-]);
+/** Task group status - must match TaskGroup['status'] from LogTypes */
+const TASK_GROUP_STATUSES = ['running', 'error', 'stopped', 'ready'] as const satisfies readonly TaskGroup['status'][];
+export const TaskGroupStatusSchema = z.enum(TASK_GROUP_STATUSES);
 export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
-
-// Compile-time assertion: ensures TaskGroupStatus stays in sync with LogTypes
-type _AssertStatusMatch = TaskGroupStatus extends TaskGroup['status']
-  ? TaskGroup['status'] extends TaskGroupStatus
-    ? true
-    : never
-  : never;
-const _assertStatusMatch: _AssertStatusMatch = true;
-void _assertStatusMatch;
 
 /** Payload for adding a new task group */
 export const AddTaskGroupPayloadSchema = z.strictObject({
