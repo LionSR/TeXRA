@@ -113,7 +113,9 @@ class RetryRequestCoordinatorImpl {
     // Increment generation to invalidate any stale completions
     this.nextGeneration(streamId);
 
-    logger.debug(`Waiting for manual retry: ${errorMessage ?? 'unknown error'}`);
+    logger.debug(
+      `Waiting for manual retry: ${errorMessage ?? 'unknown error'}`,
+    );
 
     return new Promise<RetryResult>((resolve) => {
       // Set up timeout - capture generation to detect if request was replaced
@@ -127,7 +129,9 @@ class RetryRequestCoordinatorImpl {
         const req = this.requests.get(streamId);
         if (req?.status === 'pending') {
           const timeoutMinutes = Math.round(actualTimeoutMs / 60000);
-          logger.warn(`Manual retry wait timed out after ${timeoutMinutes} minutes`);
+          logger.warn(
+            `Manual retry wait timed out after ${timeoutMinutes} minutes`,
+          );
           this.resolveRequest(streamId, { action: 'timeout' });
         }
       }, actualTimeoutMs);

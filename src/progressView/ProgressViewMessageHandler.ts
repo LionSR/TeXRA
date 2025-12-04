@@ -376,7 +376,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
                 increment: 30,
               });
               const result = await polishTextWithAI(text, fileContext);
-              progress.report({ message: 'Applying changes...', increment: 60 });
+              progress.report({
+                message: 'Applying changes...',
+                increment: 60,
+              });
 
               if (result.success) {
                 const view = this.getActiveView();
@@ -405,9 +408,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handleShowInformationMessage(message: unknown): Promise<void> {
-    await this.withValidatedMessage(InfoMessage, message, 'infoMessage', async (data) => {
-      await vscode.window.showInformationMessage(data.text);
-    });
+    await this.withValidatedMessage(
+      InfoMessage,
+      message,
+      'infoMessage',
+      async (data) => {
+        await vscode.window.showInformationMessage(data.text);
+      },
+    );
   }
 
   private async handleToolEditApprovalAction(message: unknown): Promise<void> {
