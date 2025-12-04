@@ -3,6 +3,10 @@
  *
  * These schemas provide runtime validation for event payloads.
  * Types are derived from schemas for single source of truth.
+ *
+ * Note: Some payloads (SetActiveStreamPayload, SetTaskStatePayload) are
+ * defined inline in ProgressEventBus.ts because they reference types
+ * (AgentSessionDescriptor, TaskState) that don't have schemas yet.
  */
 
 // Third-party imports
@@ -14,7 +18,6 @@ import {
   ExecutionIdSchema,
   StorageKeySchema,
 } from '@agent/types/IdentifierTypes';
-import { StreamStatusSchema } from '@common/constants/streamStatus';
 
 // Re-export for convenience
 export {
@@ -68,48 +71,6 @@ export type UpdateTaskGroupPayload = z.infer<
 >;
 
 // ============================================================================
-// STREAM SCHEMAS
-// ============================================================================
-
-/**
- * Payload for setting the active stream.
- * session is typed loosely here; full validation happens in consumers.
- */
-export const SetActiveStreamPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema.nullable(),
-  session: z.unknown().nullish(),
-});
-export type SetActiveStreamPayload = z.infer<
-  typeof SetActiveStreamPayloadSchema
->;
-
-/**
- * Payload for updating stream status.
- */
-export const UpdateStreamStatusPayloadSchema = z.strictObject({
-  stream: StreamTabIdSchema,
-  status: StreamStatusSchema,
-});
-export type UpdateStreamStatusPayload = z.infer<
-  typeof UpdateStreamStatusPayloadSchema
->;
-
-// ============================================================================
-// TASK STATE SCHEMAS
-// ============================================================================
-
-/**
- * Payload for setting task state.
- * taskState is typed loosely here; full validation happens in consumers.
- */
-export const SetTaskStatePayloadSchema = z.strictObject({
-  streamTabId: StreamTabIdSchema,
-  executionId: ExecutionIdSchema.optional(),
-  taskState: z.unknown(),
-});
-export type SetTaskStatePayload = z.infer<typeof SetTaskStatePayloadSchema>;
-
-// ============================================================================
 // RUN-SCOPED SCHEMAS
 // ============================================================================
 
@@ -125,37 +86,3 @@ export const RunScopedPayloadSchema = z.strictObject({
   executionId: ExecutionIdSchema.optional(),
 });
 export type RunScopedPayload = z.infer<typeof RunScopedPayloadSchema>;
-
-// ============================================================================
-// SIMPLE EVENT SCHEMAS
-// ============================================================================
-
-/**
- * Payload for resolving retry requests.
- */
-export const ResolveRetryRequestPayloadSchema = z.strictObject({
-  streamId: StreamTabIdSchema,
-});
-export type ResolveRetryRequestPayload = z.infer<
-  typeof ResolveRetryRequestPayloadSchema
->;
-
-/**
- * Payload for resolving tool edit approval prompts.
- */
-export const ResolveToolEditApprovalPayloadSchema = z.strictObject({
-  requestId: z.string().min(1),
-});
-export type ResolveToolEditApprovalPayload = z.infer<
-  typeof ResolveToolEditApprovalPayloadSchema
->;
-
-/**
- * Payload for updating tool edit approval bypass state.
- */
-export const UpdateToolEditApprovalBypassPayloadSchema = z.strictObject({
-  bypassActive: z.boolean(),
-});
-export type UpdateToolEditApprovalBypassPayload = z.infer<
-  typeof UpdateToolEditApprovalBypassPayloadSchema
->;
