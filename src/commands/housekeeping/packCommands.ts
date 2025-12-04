@@ -30,8 +30,8 @@ const PackConfigSchema = z
   .object({
     inputFile: RequiredString,
     agent: RequiredString,
-    model: z.string().default(''),
-    outputFiles: z.array(z.string()).default([]),
+    model: z.string().prefault(''),
+    outputFiles: z.array(z.string()).prefault([]),
     useMultipleOutputs: z.boolean().optional(),
     streamId: z.string().optional(),
     skipProgressViewClear: z.boolean().optional(),
@@ -46,11 +46,11 @@ const PackMultipleSchema = z
   .object({
     agent: RequiredString,
     model: RequiredString,
-    inputFile: z.string().default(''),
-    outputFiles: z.array(z.string()).default([]),
+    inputFile: z.string().prefault(''),
+    outputFiles: z.array(z.string()).prefault([]),
   })
   .refine((d) => d.inputFile || d.outputFiles.length > 0, {
-    message: 'inputFile or outputFiles required',
+    error: 'inputFile or outputFiles required',
   });
 
 // --- Helpers ---
