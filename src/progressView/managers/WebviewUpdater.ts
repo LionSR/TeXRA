@@ -10,7 +10,7 @@ import type { TokenUsageStats } from '@agent/types/UsageTypes';
 
 import {
   STREAM_STATUS,
-  type StreamStatusOrReady,
+  type StreamStatus,
 } from '@common/constants/streamStatus';
 import { AgentLogger } from '@logger/AgentLogger';
 import { LogMessageData } from '@logger/LogTypes';
@@ -299,7 +299,7 @@ export class WebviewUpdater {
   /**
    * Update stream status indicator (for active stream)
    */
-  updateStatus(status: StreamStatusOrReady): void {
+  updateStatus(status: StreamStatus): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STATUS,
       status,
@@ -310,7 +310,7 @@ export class WebviewUpdater {
    * Update a single stream's status in the stream tabs.
    * More efficient than updateStreams when only status changed.
    */
-  updateStreamStatus(stream: StreamTabId, status: StreamStatusOrReady): void {
+  updateStreamStatus(stream: StreamTabId, status: StreamStatus): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_STREAM_STATUS,
       stream,

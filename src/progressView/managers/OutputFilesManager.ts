@@ -20,7 +20,7 @@ import {
 import {
   RoundKeySchema,
   createRoundMapSchema,
-  createLegacyAwareRunMapSchema,
+  createRunMapSchema,
 } from '@progressView/persistence/schemaUtils';
 
 // --- Zod Schemas for Output Files ---
@@ -50,15 +50,11 @@ const OutputFilesRoundMapSchema = z
     return map;
   });
 
-/** Schema for missing outputs with legacy format support */
-const MissingOutputsDataSchema = createLegacyAwareRunMapSchema(
-  MissingOutputRoundMapSchema,
-);
+/** Schema for missing outputs run map */
+const MissingOutputsDataSchema = createRunMapSchema(MissingOutputRoundMapSchema);
 
-/** Schema for output files with legacy format support */
-const OutputFilesDataSchema = createLegacyAwareRunMapSchema(
-  OutputFilesRoundMapSchema,
-);
+/** Schema for output files run map */
+const OutputFilesDataSchema = createRunMapSchema(OutputFilesRoundMapSchema);
 
 /**
  * Manages output files collection with persistence and file existence validation.

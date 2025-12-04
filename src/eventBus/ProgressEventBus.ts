@@ -10,10 +10,7 @@ import type {
   StorageKey,
 } from '@agent/types/IdentifierTypes';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type {
-  StreamStatus,
-  StreamStatusOrReady,
-} from '@common/constants/streamStatus';
+import type { StreamStatus } from '@common/constants/streamStatus';
 import type {
   LogMessageData,
   LogMessageUpdate,
@@ -23,7 +20,7 @@ import type { TaskState } from '@logger/TaskState';
 import type { ToolEditApprovalPrompt, RetryRequestPrompt } from './types';
 
 // Re-export for consumers that import from this module
-export type { StreamStatus, StreamStatusOrReady };
+export type { StreamStatus };
 
 // Maximum number of events to buffer when no listeners are registered
 const MAX_BUFFER_SIZE = 1000;
@@ -77,7 +74,7 @@ export interface ProgressEventPayloads {
   addTaskGroup: AddTaskGroupPayload;
   updateTaskGroup: UpdateTaskGroupPayload;
   setActiveStream: SetActiveStreamPayload;
-  updateStreamStatus: { stream: StreamTabId; status: StreamStatusOrReady };
+  updateStreamStatus: { stream: StreamTabId; status: StreamStatus };
   addOutputFiles: RunScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };
   };
