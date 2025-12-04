@@ -51,7 +51,9 @@ const OutputFilesRoundMapSchema = z
   });
 
 /** Schema for missing outputs run map */
-const MissingOutputsDataSchema = createRunMapSchema(MissingOutputRoundMapSchema);
+const MissingOutputsDataSchema = createRunMapSchema(
+  MissingOutputRoundMapSchema,
+);
 
 /** Schema for output files run map */
 const OutputFilesDataSchema = createRunMapSchema(OutputFilesRoundMapSchema);
