@@ -10,7 +10,11 @@ import {
 } from '@agent/types/IdentifierTypes';
 import type { TaskGroup } from '@logger/LogTypes';
 
-// Re-export from types.ts (breaking circular dependency with progressView)
+/**
+ * Re-export from types.ts to break circular dependency:
+ * progressView/events → eventBus/schemas → eventBus/types
+ * (progressView cannot import types.ts directly due to other deps)
+ */
 export {
   ToolEditApprovalPromptSchema,
   RetryRequestPromptSchema,

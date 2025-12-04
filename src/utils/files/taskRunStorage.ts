@@ -84,7 +84,7 @@ export function createWorkspaceLocation(
 export function createRunStorageLocation(
   absolutePath: string,
   relativePath: string,
-  executionId: string,
+  executionId: ExecutionId,
 ): RunStorageFileLocation {
   return {
     kind: 'runStorage',
