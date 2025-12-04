@@ -247,18 +247,21 @@ export function extractOpenAIWebSearchResults(
       domain: extractDomain(s.url),
     }));
 
-    results.push({
-      query: action.query ?? '',
-      results: entries,
-      provider: 'openai',
-      callId: searchItem.id,
-      status:
-        searchItem.status === 'completed'
-          ? 'completed'
-          : searchItem.status === 'failed'
-            ? 'failed'
-            : 'in_progress',
-    });
+    // Only add results if there are actual entries (consistent with Anthropic/Google)
+    if (entries.length > 0) {
+      results.push({
+        query: action.query ?? '',
+        results: entries,
+        provider: 'openai',
+        callId: searchItem.id,
+        status:
+          searchItem.status === 'completed'
+            ? 'completed'
+            : searchItem.status === 'failed'
+              ? 'failed'
+              : 'in_progress',
+      });
+    }
   }
 
   return results;

@@ -373,7 +373,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      generationConfig.tools = toGoogleTools(tools);
+      generationConfig.tools = toGoogleTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
     }
 
     const chatParams: CreateChatParameters = {
