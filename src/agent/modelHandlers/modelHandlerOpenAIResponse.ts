@@ -588,7 +588,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenAIResponseTools(tools);
+      params.tools = toOpenAIResponseTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
       params.tool_choice = 'auto';
     }
 
