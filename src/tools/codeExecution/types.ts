@@ -99,8 +99,15 @@ export const CodeExecutionDisplaySchema = z.object({
 });
 export type CodeExecutionDisplay = z.infer<typeof CodeExecutionDisplaySchema>;
 
+// =============================================================================
+// Provider-specific schemas for edge validation
+// These schemas can be used with safeParse() for runtime validation of
+// provider responses at the API boundary. Currently exported for future use.
+// =============================================================================
+
 /**
- * Anthropic-specific error codes for code execution
+ * Anthropic-specific error codes for code execution.
+ * Use with safeParse() to validate error responses from Anthropic API.
  */
 export const AnthropicCodeExecutionErrorCodeSchema = z.enum([
   'invalid_tool_input',
@@ -114,7 +121,8 @@ export type AnthropicCodeExecutionErrorCode = z.infer<
 >;
 
 /**
- * Google-specific outcome codes
+ * Google-specific outcome codes.
+ * Use with safeParse() to validate outcome from Google GenAI API.
  */
 export const GoogleCodeExecutionOutcomeSchema = z.enum([
   'OUTCOME_UNSPECIFIED',
@@ -127,7 +135,8 @@ export type GoogleCodeExecutionOutcome = z.infer<
 >;
 
 /**
- * OpenAI-specific status codes
+ * OpenAI-specific status codes.
+ * Use with safeParse() to validate status from OpenAI Responses API.
  */
 export const OpenAICodeInterpreterStatusSchema = z.enum([
   'in_progress',

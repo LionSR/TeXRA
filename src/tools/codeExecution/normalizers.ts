@@ -178,18 +178,16 @@ export function normalizeOpenAICodeInterpreter(
 ): CodeExecutionDisplay {
   const status = mapOpenAIStatusToStatus(toolCall.status);
 
+  // Only store non-text outputs in outputs array to avoid duplicate rendering
+  // Text logs are stored in stdout which is rendered separately
   const outputs: CodeExecutionOutput[] = [];
   let stdout: string | undefined;
 
   if (toolCall.outputs) {
     for (const output of toolCall.outputs) {
       if (output.type === 'logs') {
-        // Accumulate logs as stdout
+        // Accumulate logs as stdout only (not in outputs to avoid duplication)
         stdout = stdout ? `${stdout}\n${output.logs}` : output.logs;
-        outputs.push({
-          type: 'logs',
-          content: output.logs,
-        });
       } else if (output.type === 'image') {
         outputs.push({
           type: 'image',
@@ -216,16 +214,14 @@ export function normalizeOpenAICodeInterpreter(
 export function normalizeOpenAIAssistantCodeInterpreter(
   toolCall: OpenAIAssistantCodeInterpreter,
 ): CodeExecutionDisplay {
+  // Only store non-text outputs in outputs array to avoid duplicate rendering
   const outputs: CodeExecutionOutput[] = [];
   let stdout: string | undefined;
 
   for (const output of toolCall.code_interpreter.outputs) {
     if (output.type === 'logs') {
+      // Accumulate logs as stdout only (not in outputs to avoid duplication)
       stdout = stdout ? `${stdout}\n${output.logs}` : output.logs;
-      outputs.push({
-        type: 'logs',
-        content: output.logs,
-      });
     } else if (output.type === 'image') {
       outputs.push({
         type: 'image',
@@ -259,7 +255,7 @@ function mapOpenAIStatusToStatus(
     case 'incomplete':
       return 'cancelled';
     default:
-      return 'failed';
+      return 'unknown';
   }
 }
 
@@ -289,6 +285,11 @@ interface GoogleCodeExecutionResult {
 
 /**
  * Normalize Google GenAI code execution to unified format
+ *
+ * Google's CodeExecutionResult returns output in a single field that contains:
+ * - stdout when outcome is OUTCOME_OK
+ * - stderr/error description when outcome is OUTCOME_FAILED or OUTCOME_DEADLINE_EXCEEDED
+ * Reference: https://ai.google.dev/api/caching#CodeExecutionResult
  */
 export function normalizeGoogleCodeExecution(
   executableCode: GoogleExecutableCode,
@@ -297,16 +298,19 @@ export function normalizeGoogleCodeExecution(
   const status = mapGoogleOutcomeToStatus(result.outcome);
   const language = mapGoogleLanguage(executableCode.language);
 
-  // Google returns stdout on success, stderr on failure in the same field
+  // Google returns output in single field - content depends on outcome
+  // For unknown status, we can't determine if output is stdout or stderr
   const isSuccess = status === 'success';
+  const isUnknown = status === 'unknown';
 
   return {
     provider: 'google',
     language,
     code: executableCode.code ?? '',
     status,
-    stdout: isSuccess ? result.output : undefined,
-    stderr: !isSuccess ? result.output : undefined,
+    // For unknown status, put output in stdout as it's more likely to be useful
+    stdout: isSuccess || isUnknown ? result.output : undefined,
+    stderr: !isSuccess && !isUnknown ? result.output : undefined,
   };
 }
 
@@ -322,7 +326,9 @@ function mapGoogleOutcomeToStatus(
       return 'timeout';
     case 'OUTCOME_UNSPECIFIED':
     default:
-      return 'failed';
+      // Use 'unknown' for unspecified/unrecognized outcomes
+      // This avoids incorrectly treating valid output as stderr
+      return 'unknown';
   }
 }
 
