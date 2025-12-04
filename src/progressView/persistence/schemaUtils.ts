@@ -71,17 +71,20 @@ export function createLegacyAwareRunMapSchema<T>(
 
     // Legacy format: all keys are numeric (round numbers)
     if (isLegacyNumericKeyFormat(record)) {
-      const rounds = roundMapSchema.parse(record);
-      return rounds.size > 0 ? new Map([[defaultRunId, rounds]]) : new Map();
+      const result = roundMapSchema.safeParse(record);
+      if (!result.success) return new Map();
+      return result.data.size > 0
+        ? new Map([[defaultRunId, result.data]])
+        : new Map();
     }
 
     // Modern format: keys are run IDs
     const runMap = new Map<string, Map<number, T[]>>();
     for (const [runId, value] of Object.entries(record)) {
       if (!value || typeof value !== 'object') continue;
-      const rounds = roundMapSchema.parse(value);
-      if (rounds.size > 0) {
-        runMap.set(runId, rounds);
+      const result = roundMapSchema.safeParse(value);
+      if (result.success && result.data.size > 0) {
+        runMap.set(runId, result.data);
       }
     }
     return runMap;
@@ -117,12 +120,13 @@ export function createLegacyAwareSingleValueRunMapSchema<T>(
 
     // Legacy format: flat object
     if (isLegacyFormat(record)) {
-      const item = itemSchema.parse(data);
+      const result = itemSchema.safeParse(data);
+      if (!result.success) return new Map();
       // Skip empty values in legacy format
-      if (isEmpty?.(item)) {
+      if (isEmpty?.(result.data)) {
         return new Map();
       }
-      return new Map([[defaultRunId, item]]);
+      return new Map([[defaultRunId, result.data]]);
     }
 
     // Modern format: keys are run IDs
