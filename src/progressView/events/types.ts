@@ -6,9 +6,22 @@ import type {
   StreamStatusOrReady,
 } from '@eventBus/ProgressEventBus';
 
-// Re-export for backward compatibility with existing consumers
+/**
+ * @deprecated Use `StreamStatus` from '@eventBus/ProgressEventBus' directly.
+ * This alias exists only for backward compatibility.
+ */
 export type StreamStatusType = StreamStatus;
+
+/**
+ * @deprecated Use `StreamStatusOrReady` from '@eventBus/ProgressEventBus' directly.
+ * This alias exists only for backward compatibility.
+ */
 export type StreamStatusOrReadyType = StreamStatusOrReady;
+
+/**
+ * @deprecated Use `StreamStatusOrReady` from '@eventBus/ProgressEventBus' directly.
+ * This alias exists only for backward compatibility.
+ */
 export type StatusType = StreamStatusOrReady;
 
 export interface ProgressEventBusLike {
