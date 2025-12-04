@@ -1,5 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
+import { z } from 'zod';
 
 // Local imports - agent commands
 import { showLoggedErrorMessage } from '@common/errors';
@@ -9,6 +10,9 @@ import { HISTORY_VIEW_COMMANDS } from '@common/webview';
 import { AgentHistoryManager } from '@historyView/managers';
 import { agentConfigToTaskState } from '@utils/config';
 import { executeCommand } from '@commands/agent/executeCommand';
+
+// --- Message Schemas ---
+const HistoryIdMessage = z.object({ historyId: z.string().min(1) });
 
 export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   vscode.WebviewView | vscode.WebviewPanel
@@ -47,75 +51,91 @@ export class HistoryViewMessageHandler extends BaseViewMessageHandler<
   }
 
   private async handleRerunAgent(
-    message: any,
+    message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const historyId: string | undefined = message.historyId;
-    if (!historyId) return;
-
-    try {
-      const historyItem =
-        await AgentHistoryManager.getHistoryItemById(historyId);
-      if (historyItem) {
-        await vscode.window.showInformationMessage(
-          'Rerunning agent from history',
-        );
-        await executeCommand.executeCommand(historyItem.agentConfig);
-      } else {
-        await vscode.window.showErrorMessage('History item not found');
-      }
-    } catch (error) {
-      await vscode.window.showErrorMessage(`Failed to rerun agent: ${error}`);
-    }
+    await this.withValidatedMessage(
+      HistoryIdMessage,
+      message,
+      'rerunAgent',
+      async ({ historyId }) => {
+        try {
+          const historyItem =
+            await AgentHistoryManager.getHistoryItemById(historyId);
+          if (historyItem) {
+            await vscode.window.showInformationMessage(
+              'Rerunning agent from history',
+            );
+            await executeCommand.executeCommand(historyItem.agentConfig);
+          } else {
+            await vscode.window.showErrorMessage('History item not found');
+          }
+        } catch (error) {
+          await vscode.window.showErrorMessage(
+            `Failed to rerun agent: ${error}`,
+          );
+        }
+      },
+    );
   }
 
   private async handleRestoreAgent(
-    message: any,
+    message: unknown,
     _view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const historyId: string | undefined = message.historyId;
-    if (!historyId) return;
-    try {
-      const historyItem =
-        await AgentHistoryManager.getHistoryItemById(historyId);
-      if (historyItem) {
-        const taskState = agentConfigToTaskState(historyItem.agentConfig);
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
-      } else {
-        await vscode.window.showErrorMessage('History item not found');
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to restore configuration',
-        error,
-      );
-    }
+    await this.withValidatedMessage(
+      HistoryIdMessage,
+      message,
+      'restoreAgent',
+      async ({ historyId }) => {
+        try {
+          const historyItem =
+            await AgentHistoryManager.getHistoryItemById(historyId);
+          if (historyItem) {
+            const taskState = agentConfigToTaskState(historyItem.agentConfig);
+            await vscode.commands.executeCommand('texra.restoreState', taskState);
+          } else {
+            await vscode.window.showErrorMessage('History item not found');
+          }
+        } catch (error) {
+          await showLoggedErrorMessage(
+            this.channel,
+            'Failed to restore configuration',
+            error,
+          );
+        }
+      },
+    );
   }
 
   private async handleDeleteAgent(
-    message: any,
+    message: unknown,
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    const historyId: string | undefined = message.historyId;
-    if (!historyId) return;
-    try {
-      const deleted =
-        await AgentHistoryManager.deleteHistoryItemById(historyId);
-      if (deleted) {
-        await this.sendHistoryData(view.webview);
-      } else {
-        await vscode.window.showWarningMessage(
-          `History item not found: ${historyId}`,
-        );
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to delete history item',
-        error,
-      );
-    }
+    await this.withValidatedMessage(
+      HistoryIdMessage,
+      message,
+      'deleteAgent',
+      async ({ historyId }) => {
+        try {
+          const deleted =
+            await AgentHistoryManager.deleteHistoryItemById(historyId);
+          if (deleted) {
+            await this.sendHistoryData(view.webview);
+          } else {
+            await vscode.window.showWarningMessage(
+              `History item not found: ${historyId}`,
+            );
+          }
+        } catch (error) {
+          await showLoggedErrorMessage(
+            this.channel,
+            'Failed to delete history item',
+            error,
+          );
+        }
+      },
+    );
   }
 
   private async handleClearHistory(

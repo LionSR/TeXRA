@@ -351,81 +351,72 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   }
 
   private async handlePolishFollowUp(message: unknown): Promise<void> {
-    const parsed = PolishFollowUp.safeParse(message);
-    if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid polishFollowUp message', {
-        data: parsed.error,
-      });
-      return;
-    }
+    await this.withValidatedMessage(
+      PolishFollowUp,
+      message,
+      'polishFollowUp',
+      async ({ stream, text }) => {
+        const taskState = this.provider.state.getTaskState(
+          stream as StreamTabId,
+        ) as TaskState | undefined;
+        if (!taskState) return;
 
-    const { stream, text } = parsed.data;
-    const taskState = this.provider.state.getTaskState(
-      stream as StreamTabId,
-    ) as TaskState | undefined;
-    if (!taskState) return;
+        const fileContext = buildFileContextFromTaskState(taskState);
 
-    const fileContext = buildFileContextFromTaskState(taskState);
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Polishing follow-up message',
+            cancellable: false,
+          },
+          async (progress) => {
+            try {
+              progress.report({
+                message: 'Sending to AI for polishing...',
+                increment: 30,
+              });
+              const result = await polishTextWithAI(text, fileContext);
+              progress.report({ message: 'Applying changes...', increment: 60 });
 
-    await vscode.window.withProgress(
-      {
-        location: vscode.ProgressLocation.Notification,
-        title: 'Polishing follow-up message',
-        cancellable: false,
-      },
-      async (progress) => {
-        try {
-          progress.report({
-            message: 'Sending to AI for polishing...',
-            increment: 30,
-          });
-          const result = await polishTextWithAI(text, fileContext);
-          progress.report({ message: 'Applying changes...', increment: 60 });
-
-          if (result.success) {
-            const view = this.getActiveView();
-            view?.webview.postMessage({
-              command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
-              text: result.text,
-            });
-          } else if (result.error) {
-            await vscode.window.showErrorMessage(result.error);
-          }
-        } catch (error) {
-          const messageText = toErrorMessage(error);
-          await vscode.window.showErrorMessage(
-            `Error polishing follow-up: ${messageText}`,
-          );
-          this.logger.error(
-            this.channel,
-            `Error polishing follow-up: ${messageText}`,
-            { data: error instanceof Error ? error : undefined },
-          );
-        }
+              if (result.success) {
+                const view = this.getActiveView();
+                view?.webview.postMessage({
+                  command: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_POLISHED,
+                  text: result.text,
+                });
+              } else if (result.error) {
+                await vscode.window.showErrorMessage(result.error);
+              }
+            } catch (error) {
+              const messageText = toErrorMessage(error);
+              await vscode.window.showErrorMessage(
+                `Error polishing follow-up: ${messageText}`,
+              );
+              this.logger.error(
+                this.channel,
+                `Error polishing follow-up: ${messageText}`,
+                { data: error instanceof Error ? error : undefined },
+              );
+            }
+          },
+        );
       },
     );
   }
 
   private async handleShowInformationMessage(message: unknown): Promise<void> {
-    const parsed = InfoMessage.safeParse(message);
-    if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid infoMessage', {
-        data: parsed.error,
-      });
-      return;
-    }
-    await vscode.window.showInformationMessage(parsed.data.text);
+    await this.withValidatedMessage(InfoMessage, message, 'infoMessage', async (data) => {
+      await vscode.window.showInformationMessage(data.text);
+    });
   }
 
   private async handleToolEditApprovalAction(message: unknown): Promise<void> {
-    const parsed = ApprovalAction.safeParse(message);
-    if (!parsed.success) {
-      this.logger.debug(this.channel, 'Invalid approvalAction', {
-        data: parsed.error,
-      });
-      return;
-    }
-    await handleProgressViewToolEditApprovalAction(parsed.data);
+    await this.withValidatedMessage(
+      ApprovalAction,
+      message,
+      'approvalAction',
+      handleProgressViewToolEditApprovalAction,
+    );
   }
 
   private async handleResetToolEditApprovalBypass(): Promise<void> {
