@@ -6,7 +6,7 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
+import type { ErrorBoundaryFn } from './errorHandling';
 import type {
   BaseEventShared,
   ProgressEventBusLike,
@@ -21,7 +21,7 @@ export type OutputEventsModule = StatefulEventModule;
 
 /**
  * Shared context for OutputEvents module.
- * Uses BaseEventShared which provides logger for error boundary.
+ * Uses BaseEventShared which provides withErrorBoundary.
  */
 type OutputEventsShared = BaseEventShared;
 
@@ -83,7 +83,7 @@ const registerOutputFileListeners = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
-  withErrorBoundary: ReturnType<typeof createErrorBoundary>,
+  withErrorBoundary: ErrorBoundaryFn,
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
@@ -126,7 +126,7 @@ const registerOutputFileListeners = (
 export function createOutputEvents(
   shared: OutputEventsShared,
 ): OutputEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'OutputEvents');
+  const { withErrorBoundary } = shared;
 
   return {
     register(
