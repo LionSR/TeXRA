@@ -56,7 +56,9 @@ describe('toOpenAIResponseTools', () => {
       },
     ];
 
-    const tools = toOpenAIResponseTools(defs, { supportsNativeWebSearch: true });
+    const tools = toOpenAIResponseTools(defs, {
+      supportsNativeWebSearch: true,
+    });
     assert.equal(tools.length, 1);
     assert.equal(tools[0].type, 'web_search');
   });
@@ -69,7 +71,9 @@ describe('toOpenAIResponseTools', () => {
       },
     ];
 
-    const tools = toOpenAIResponseTools(defs, { supportsNativeWebSearch: false });
+    const tools = toOpenAIResponseTools(defs, {
+      supportsNativeWebSearch: false,
+    });
     assert.equal(tools.length, 1);
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
