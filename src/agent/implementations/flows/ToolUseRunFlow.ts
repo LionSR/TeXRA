@@ -21,6 +21,9 @@ import {
   type NodeExecResult,
 } from '@agent/implementations/flows/common';
 
+// Schema export for serialization reference (runtime uses class instances)
+export { ToolUseRunStateSchema } from '@agent/implementations/flows/common';
+
 interface ToolUsePrepareResult<C> {
   messages: ProviderMessage[];
   store: AgentSharedStore;
@@ -41,6 +44,13 @@ export type ToolUseRunPhase =
 
 export type ToolUseRunLifecycle = AgentLifecycleState<ToolUseRunPhase>;
 
+/**
+ * Runtime state for tool-use agent runs.
+ *
+ * Schema alignment: This interface corresponds to {@link ToolUseRunStateSchema}
+ * for serialization. The runtime uses class instances (AgentRunState, AgentSharedStore)
+ * while the schema uses snapshot representations for JSON compatibility.
+ */
 export interface ToolUseRunState<C = unknown> {
   conversation: ProviderMessage[];
   cycleOptions: ToolUseCycleOptions<C> | null;
