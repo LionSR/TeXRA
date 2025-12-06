@@ -12,6 +12,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { WebSearchResult } from '@agent/modelHandlers/types/ServerToolTypes';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -474,6 +475,17 @@ class ToolUseProcessNode<C> extends BaseNode<
       usage,
       stopReason,
     } = options.modelHandler.extractResponse(state.response, '');
+
+    // Extract and log web search results from native provider tools
+    const webSearchResults =
+      options.modelHandler.extractWebSearchResults(state.response);
+    for (const searchResult of webSearchResults) {
+      options.logger.info('', {
+        groupId,
+        messageType: MESSAGE_TYPES.WEB_SEARCH,
+        data: searchResult,
+      });
+    }
 
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
