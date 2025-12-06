@@ -530,12 +530,17 @@ class ToolUseProcessNode<C> extends BaseNode<
       if (text) {
         // Use createAssistantMessageFromResponse to preserve server tool content
         // (e.g., web_search results) in the conversation context
-        state.messages.push(
+        const assistantMessage =
           options.modelHandler.createAssistantMessageFromResponse(
             state.response,
             text,
-          ),
-        );
+          );
+        // Handle both single message and array returns (OpenAI may return array)
+        if (Array.isArray(assistantMessage)) {
+          state.messages.push(...assistantMessage);
+        } else {
+          state.messages.push(assistantMessage);
+        }
         store.workspace.assembly.updateLastResponse(text);
       }
       state.shouldStop = true;
