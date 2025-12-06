@@ -1302,13 +1302,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Include server tool content blocks (web_search_call) from workspace state
     // These need to be preserved when both server and local tools are in the same response
-    if (workspaceState?.serverToolContent.hasContent()) {
+    if (
+      workspaceState?.serverToolContent.contentBlocks &&
+      workspaceState.serverToolContent.contentBlocks.length > 0 &&
+      !workspaceState.serverToolContent.contentAdded
+    ) {
       messages.push(
         ...(workspaceState.serverToolContent
           .contentBlocks as ResponseInputItem[]),
       );
-      // Clear cached server tool content so it's not duplicated
-      workspaceState.resetServerToolContent();
+      workspaceState.serverToolContent.contentAdded = true;
     }
 
     const callMsg: ResponseFunctionToolCall = {

@@ -492,9 +492,8 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     // Cache content blocks for use in follow-up messages
     if (serverToolData.contentBlocks.length > 0) {
-      store.workspace.serverToolContent.setContentBlocks(
-        serverToolData.contentBlocks,
-      );
+      store.workspace.serverToolContent.contentBlocks =
+        serverToolData.contentBlocks;
     }
 
     if (text) {
@@ -529,13 +528,16 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       state.toolCalls = undefined;
-      if (text) {
+      // Preserve response content if there's text OR server tool content (e.g., web_search)
+      // Server tool content can exist without text (model did a search but no text output)
+      const hasServerToolContent = serverToolData.contentBlocks.length > 0;
+      if (text || hasServerToolContent) {
         // Use createAssistantMessageFromResponse to preserve server tool content
         // (e.g., web_search results) in the conversation context
         const assistantMessage =
           options.modelHandler.createAssistantMessageFromResponse(
             state.response,
-            text,
+            text ?? '',
           );
         // Handle both single message and array returns (OpenAI may return array)
         if (Array.isArray(assistantMessage)) {
@@ -543,7 +545,9 @@ class ToolUseProcessNode<C> extends BaseNode<
         } else {
           state.messages.push(assistantMessage);
         }
-        store.workspace.assembly.updateLastResponse(text);
+        if (text) {
+          store.workspace.assembly.updateLastResponse(text);
+        }
       }
       // Clear server tool content state to prevent stale content in subsequent requests
       // This is done here since createAssistantMessageFromResponse reads directly from response,
