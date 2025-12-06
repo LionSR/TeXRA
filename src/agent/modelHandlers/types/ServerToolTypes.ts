@@ -101,6 +101,17 @@ export type ServerToolCall =
   | OpenAIWebSearchCall
   | GoogleGroundingResult;
 
+/**
+ * Combined result from server tool extraction.
+ * Single source of truth for both display (webSearchResults) and context (contentBlocks).
+ */
+export interface ServerToolExtractionResult {
+  /** Normalized web search results for display in progress view */
+  webSearchResults: WebSearchResult[];
+  /** Raw content blocks to preserve in conversation context */
+  contentBlocks: unknown[];
+}
+
 // ============================================================================
 // Type Guards
 // ============================================================================

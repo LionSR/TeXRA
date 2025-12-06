@@ -83,6 +83,7 @@ import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
   type WebSearchResult,
+  type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
 // Type imports
@@ -1041,7 +1042,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /**
    * Create an assistant message from the raw API response, preserving all content blocks.
-   * This preserves server_tool_use and web_search_tool_result blocks for native web search.
+   * This preserves server_tool_use, web_search_tool_result, and thinking blocks for native web search
+   * and extended thinking models.
    */
   override createAssistantMessageFromResponse(
     responseObject: BetaMessage,
@@ -1052,29 +1054,38 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Check if response contains server tool use blocks that need to be preserved
-    const hasServerToolContent = responseObject.content.some(
-      (block) =>
-        block.type === 'server_tool_use' ||
-        block.type === 'web_search_tool_result',
+    const hasServerToolContent = responseObject.content.some((block) =>
+      this.isServerToolContentBlock(block),
     );
 
     if (!hasServerToolContent) {
       return this.createAssistantMessage(text);
     }
 
-    // Preserve the full content array including server tool use and results
+    // Preserve the full content array including server tool use, results, and thinking blocks
     // Filter to only include blocks that are valid for assistant messages
     const preservedContent = responseObject.content.filter(
       (block) =>
         block.type === 'text' ||
-        block.type === 'server_tool_use' ||
-        block.type === 'web_search_tool_result',
+        block.type === 'thinking' ||
+        block.type === 'redacted_thinking' ||
+        this.isServerToolContentBlock(block),
     );
 
     return {
       role: 'assistant',
       content: preservedContent as ContentBlockParam[],
     };
+  }
+
+  /**
+   * Helper to check if a content block is a server tool content block.
+   * Used to avoid duplication across methods.
+   */
+  private isServerToolContentBlock(block: { type: string }): boolean {
+    return (
+      block.type === 'server_tool_use' || block.type === 'web_search_tool_result'
+    );
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
@@ -1757,17 +1768,41 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /**
    * Extract server tool content blocks (server_tool_use, web_search_tool_result)
    * that need to be preserved in the assistant message when local tools are also present.
+   * @deprecated Use extractServerToolData() for unified extraction
    */
   override extractServerToolContent(responseObject: BetaMessage): unknown[] {
     if (!Array.isArray(responseObject?.content)) {
       return [];
     }
 
-    return responseObject.content.filter(
-      (block) =>
-        block.type === 'server_tool_use' ||
-        block.type === 'web_search_tool_result',
+    return responseObject.content.filter((block) =>
+      this.isServerToolContentBlock(block),
     );
+  }
+
+  /**
+   * Extract all server tool data in a single pass.
+   * Returns both normalized results for display and raw content blocks for context.
+   * Single source of truth for Anthropic server tool extraction.
+   */
+  override extractServerToolData(
+    responseObject: BetaMessage,
+  ): ServerToolExtractionResult {
+    if (!Array.isArray(responseObject?.content)) {
+      return { webSearchResults: [], contentBlocks: [] };
+    }
+
+    // Extract content blocks that need to be preserved
+    const contentBlocks = responseObject.content.filter((block) =>
+      this.isServerToolContentBlock(block),
+    );
+
+    // Extract normalized web search results for display
+    const webSearchResults = extractAnthropicWebSearchResults(
+      responseObject.content,
+    );
+
+    return { webSearchResults, contentBlocks };
   }
 
   async createToolUseFollowUpMessages(

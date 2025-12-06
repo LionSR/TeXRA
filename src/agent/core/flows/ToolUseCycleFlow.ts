@@ -12,7 +12,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { WebSearchResult } from '@agent/modelHandlers/types/ServerToolTypes';
+// WebSearchResult import removed - not needed with unified extraction
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -476,10 +476,12 @@ class ToolUseProcessNode<C> extends BaseNode<
       stopReason,
     } = options.modelHandler.extractResponse(state.response, '');
 
-    // Extract and log web search results from native provider tools
-    const webSearchResults =
-      options.modelHandler.extractWebSearchResults(state.response);
-    for (const searchResult of webSearchResults) {
+    // Single extraction for all server tool data (single source of truth)
+    const serverToolData =
+      options.modelHandler.extractServerToolData(state.response);
+
+    // Log web search results to progress view
+    for (const searchResult of serverToolData.webSearchResults) {
       options.logger.info('', {
         groupId,
         messageType: MESSAGE_TYPES.WEB_SEARCH,
@@ -487,12 +489,11 @@ class ToolUseProcessNode<C> extends BaseNode<
       });
     }
 
-    // Store server tool content blocks (server_tool_use, web_search_tool_result)
-    // so they can be included when creating follow-up messages for local tools
-    const serverToolContent =
-      options.modelHandler.extractServerToolContent(state.response);
-    if (serverToolContent.length > 0) {
-      store.workspace.serverToolContent.setContentBlocks(serverToolContent);
+    // Cache content blocks for use in follow-up messages
+    if (serverToolData.contentBlocks.length > 0) {
+      store.workspace.serverToolContent.setContentBlocks(
+        serverToolData.contentBlocks,
+      );
     }
 
     if (text) {
@@ -543,6 +544,10 @@ class ToolUseProcessNode<C> extends BaseNode<
         }
         store.workspace.assembly.updateLastResponse(text);
       }
+      // Clear server tool content state to prevent stale content in subsequent requests
+      // This is done here since createAssistantMessageFromResponse reads directly from response,
+      // not from workspace state cache
+      store.workspace.resetServerToolContent();
       state.shouldStop = true;
       return {
         skipped: false,

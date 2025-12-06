@@ -184,11 +184,20 @@ export class ReasoningCacheState {
 /**
  * Cache for server tool content blocks (e.g., web_search results from Anthropic).
  * These blocks need to be preserved in the assistant message when local tools are also present.
+ *
+ * **EPHEMERAL STATE**: This state is intentionally NOT serialized to snapshots.
+ * Server tool content is only relevant within a single tool use cycle and is automatically
+ * cleared after being consumed by `createToolUseFollowUpMessages()` or when the end-turn
+ * branch is taken. It does not need to survive state restoration since:
+ * 1. The response object containing the content is not persisted
+ * 2. Upon restoration, the model will generate fresh server tool content if needed
+ * 3. Stale content would cause duplicate blocks in conversation history
  */
 export class ServerToolContentState {
   /**
    * Server tool content blocks extracted from the model response.
    * These include server_tool_use and web_search_tool_result blocks.
+   * Type is `unknown[]` because different providers have different block types.
    */
   public contentBlocks: unknown[] = [];
 
