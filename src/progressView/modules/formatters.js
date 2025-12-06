@@ -35,6 +35,9 @@ import { encodeHtml } from '@common/htmlEncoding.js';
 export const BULLET_MARKUP =
   '<i class="codicon codicon-circle-small-filled group-bullet"></i>';
 
+/** Maximum length for query preview in web search headers */
+const QUERY_PREVIEW_MAX_LENGTH = 40;
+
 export const EMOJI_BY_LEVEL = {
   error: '🔴',
   warn: '🟡',
@@ -883,7 +886,7 @@ export class LogEntryFormatter {
             ? 'Google'
             : 'Web';
     const queryPreview = query
-      ? `: "${query.length > 40 ? query.slice(0, 40) + '...' : query}"`
+      ? `: "${query.length > QUERY_PREVIEW_MAX_LENGTH ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...' : query}"`
       : '';
     const statusSuffix =
       status === 'in_progress'
