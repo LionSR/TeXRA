@@ -75,10 +75,6 @@ import {
 } from './utils/toolAttachmentUtils';
 import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
-import {
-  extractGoogleGroundingResults,
-  type ServerToolExtractionResult,
-} from './types/ServerToolTypes';
 
 // Type imports
 import type { MediaFileResult } from './support/MediaAttachmentProcessor';
@@ -1166,28 +1162,6 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       raw: call,
       thoughtSignature,
     }));
-  }
-
-  /**
-   * Extract server tool data from Google GenAI response.
-   * Google uses groundingMetadata for search results when GoogleSearch tool is enabled.
-   * Note: Google doesn't have content blocks to preserve like Anthropic/OpenAI;
-   * grounding metadata is embedded in the response.
-   */
-  override extractServerToolData(
-    responseObject: GenerateContentResponse,
-  ): ServerToolExtractionResult {
-    const candidate = responseObject?.candidates?.[0];
-    if (!candidate) {
-      return { webSearchResults: [], contentBlocks: [] };
-    }
-
-    const result = extractGoogleGroundingResults(candidate);
-    return {
-      webSearchResults: result ? [result] : [],
-      // Google doesn't have explicit content blocks like Anthropic/OpenAI
-      contentBlocks: [],
-    };
   }
 
   /**
