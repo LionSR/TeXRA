@@ -82,7 +82,6 @@ import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
-  type WebSearchResult,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
@@ -1749,35 +1748,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
         } satisfies AnthropicToolCall;
       })
       .filter((call): call is AnthropicToolCall => call !== null);
-  }
-
-  /**
-   * Extract native web search results from Anthropic response.
-   * Anthropic's web_search server tool returns WebSearchToolResultBlock.
-   */
-  override extractWebSearchResults(
-    responseObject: BetaMessage,
-  ): WebSearchResult[] {
-    if (!Array.isArray(responseObject?.content)) {
-      return [];
-    }
-
-    return extractAnthropicWebSearchResults(responseObject.content);
-  }
-
-  /**
-   * Extract server tool content blocks (server_tool_use, web_search_tool_result)
-   * that need to be preserved in the assistant message when local tools are also present.
-   * @deprecated Use extractServerToolData() for unified extraction
-   */
-  override extractServerToolContent(responseObject: BetaMessage): unknown[] {
-    if (!Array.isArray(responseObject?.content)) {
-      return [];
-    }
-
-    return responseObject.content.filter((block) =>
-      this.isServerToolContentBlock(block),
-    );
   }
 
   /**
