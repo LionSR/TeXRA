@@ -1,29 +1,28 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - identifiers
+// Type imports
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { StreamTabInfo } from '@progressView/types';
-// Internal imports
+
+// Local imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
-// Type imports
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-// Internal imports
-
-// Local file imports
-import type { StreamStatus } from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads, StreamStatus } from '@eventBus/ProgressEventBus';
 import { createErrorBoundary } from './errorHandling';
+import type {
+  BaseEventShared,
+  ProgressEventBusLike,
+  StatefulEventModule,
+} from './types';
 
-// Type imports
-import type { ProgressEventBusLike } from './types';
-
-export interface StreamStatusEventShared {
-  logger: AgentLogger;
+/**
+ * Shared context for StreamStatusEvents module.
+ * Extends BaseEventShared with stream status management callbacks.
+ */
+export interface StreamStatusEventShared extends BaseEventShared {
   streamStatus: Map<string, StreamStatus>;
   setStreamStatus(stream: string, status: StreamStatus): void;
   sendInstructionUpdate(stream: StreamTabId | '', runId?: string | null): void;
@@ -33,13 +32,11 @@ export interface StreamStatusEventShared {
   ): void;
 }
 
-export interface StreamStatusEventModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
+/**
+ * StreamStatusEvents module interface.
+ * Uses StatefulEventModule pattern for state/updater access.
+ */
+export type StreamStatusEventModule = StatefulEventModule;
 
 export function createStreamStatusEvents(
   shared: StreamStatusEventShared,
