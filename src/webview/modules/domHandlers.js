@@ -1,5 +1,5 @@
 // Local imports - webview
-import { ELEMENT_IDS } from './constants.js';
+import { ELEMENT_IDS, normalizeSessionType } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
 import { mainViewState } from './mainViewState.js';
 import { ActionButtonManager } from './uiManagers/ActionButtonManager.js';
@@ -115,8 +115,10 @@ class MainViewDomHandler extends BaseDomHandler {
     });
 
     this.addListener(ELEMENT_IDS.AGENT_CONFIG_EDIT_BUTTON, 'click', () => {
+      const sessionType = normalizeSessionType(mainViewState.get()?.sessionType);
       vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType,
       });
     });
 
