@@ -7,6 +7,7 @@ import type { LogMessageData } from '@logger/LogTypes';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 
 // Local imports - progress view
+import { createErrorBoundary } from '@progressView/events/errorHandling';
 import { createLogEvents } from '@progressView/events/LogEvents';
 import type { ProgressEventBusLike } from '@progressView/events/types';
 import { StreamTabsManager } from '@progressView/managers/StreamTabsManager';
@@ -80,7 +81,8 @@ describe('LogEvents', () => {
 
     const bus = new TestBus();
     const logger = new AgentLogger('LogEventsTest');
-    const { register } = createLogEvents({ logger });
+    const withErrorBoundary = createErrorBoundary(logger, 'LogEventsTest');
+    const { register } = createLogEvents({ withErrorBoundary });
     const disposables = register(bus, state, updater);
 
     const thinkingMessage: LogMessageData = {
