@@ -222,12 +222,26 @@ function isWebSearchResultArray(
 /**
  * Extract web search results from Anthropic response content.
  * Uses SDK's WebSearchToolResultBlock and WebSearchResultBlock types.
+ * Correlates server_tool_use blocks (which contain the query) with
+ * web_search_tool_result blocks (which contain the results).
  */
 export function extractAnthropicWebSearchResults(
   content: unknown[],
 ): WebSearchResult[] {
   const results: WebSearchResult[] = [];
 
+  // First pass: build a map of tool_use_id -> query from server_tool_use blocks
+  const queryMap = new Map<string, string>();
+  for (const block of content) {
+    if (isAnthropicServerToolUse(block) && block.name === 'web_search') {
+      const input = block.input as { query?: string } | undefined;
+      if (input?.query) {
+        queryMap.set(block.id, input.query);
+      }
+    }
+  }
+
+  // Second pass: extract results and match with queries
   for (const block of content) {
     if (!isAnthropicWebSearchResult(block)) {
       continue;
@@ -254,8 +268,10 @@ export function extractAnthropicWebSearchResults(
       }));
 
     if (entries.length > 0) {
+      // Look up the query from the corresponding server_tool_use block
+      const query = queryMap.get(block.tool_use_id) ?? '';
       results.push({
-        query: '', // Anthropic doesn't expose query in result
+        query,
         results: entries,
         provider: 'anthropic',
         callId: block.tool_use_id,
