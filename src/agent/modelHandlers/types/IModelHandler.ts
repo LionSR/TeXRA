@@ -22,6 +22,7 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
+import type { WebSearchResult } from './ServerToolTypes';
 
 // Re-export for backwards compatibility
 export type { ProviderUsage };
@@ -295,6 +296,13 @@ export interface IModelHandler<
 
   /** Extract tool-use details from a provider response. */
   extractToolUse(responseObject: Resp): T[];
+
+  /**
+   * Extract web search results from a provider response.
+   * Returns server-side web search results if the provider supports native search.
+   * Returns empty array if no web search was performed or provider doesn't support it.
+   */
+  extractWebSearchResults(responseObject: Resp): WebSearchResult[];
 
   /**
    * Create provider-specific messages capturing the tool call and result.
