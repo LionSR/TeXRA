@@ -47,6 +47,10 @@ import { executeRequest } from './utils/requestExecutor';
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
+import {
+  extractOpenAIWebSearchResults,
+  type WebSearchResult,
+} from './types/ServerToolTypes';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -584,7 +588,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (tools && tools.length > 0) {
-      params.tools = toOpenAIResponseTools(tools);
+      params.tools = toOpenAIResponseTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
       params.tool_choice = 'auto';
     }
 
@@ -1256,6 +1262,19 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         input: this.parseArguments(call.arguments),
         raw: call,
       }));
+  }
+
+  /**
+   * Extract web search results from OpenAI Responses API output.
+   * OpenAI uses web_search_call items in the output array.
+   */
+  override extractWebSearchResults(response: Response): WebSearchResult[] {
+    const output = response?.output;
+    if (!Array.isArray(output)) {
+      return [];
+    }
+
+    return extractOpenAIWebSearchResults(output);
   }
 
   async createToolUseFollowUpMessages(
