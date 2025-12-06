@@ -74,13 +74,13 @@ const ApprovalAction = z.object({
 
 export class ProgressViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
-  private activeView: vscode.WebviewView | undefined;
 
   constructor(
     private readonly provider: ProgressViewProvider,
     context: vscode.ExtensionContext,
   ) {
-    super('ProgressView');
+    // Enable activeView tracking - getActiveView() is inherited from base class
+    super('ProgressView', { trackActiveView: true });
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STARTED,
       recordingStoppedCommand: PROGRESS_VIEW_COMMANDS.RECORDING_STOPPED,
@@ -88,23 +88,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler {
       transcriptionCommand: PROGRESS_VIEW_COMMANDS.FOLLOW_UP_TEXT_TRANSCRIBED,
       progressTitle: 'Transcribing follow-up message',
     });
-  }
-
-  public override async handleMessage(
-    message: any,
-    webviewView: vscode.WebviewView,
-  ): Promise<void> {
-    this.activeView = webviewView;
-    await super.handleMessage(message, webviewView);
-  }
-
-  private getActiveView(): vscode.WebviewView | undefined {
-    if (!this.activeView) {
-      this.logger.warn(this.channel, 'No active progress view available');
-      return undefined;
-    }
-
-    return this.activeView;
   }
 
   private async deleteSessionSnapshot(stream: StreamTabId): Promise<void> {
