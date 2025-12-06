@@ -1,28 +1,29 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-import type { AgentLogger } from '@logger/AgentLogger';
+// Type imports
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
+import type { ErrorBoundaryFn } from './errorHandling';
+import type {
+  BaseEventShared,
+  ProgressEventBusLike,
+  StatefulEventModule,
+} from './types';
 
-// Type imports
-import type { ProgressEventBusLike } from './types';
+/**
+ * OutputEvents module interface.
+ * Uses StatefulEventModule pattern for state/updater access.
+ */
+export type OutputEventsModule = StatefulEventModule;
 
-export interface OutputEventsModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
-
-interface OutputEventsShared {
-  logger: AgentLogger;
-}
+/**
+ * Shared context for OutputEvents module.
+ * Uses BaseEventShared which provides withErrorBoundary.
+ */
+type OutputEventsShared = BaseEventShared;
 
 const toRoundRecord = <T>(
   rounds?: Map<number, T[]>,
@@ -82,7 +83,7 @@ const registerOutputFileListeners = (
   bus: ProgressEventBusLike,
   state: ProgressViewState,
   updater: WebviewUpdater,
-  withErrorBoundary: ReturnType<typeof createErrorBoundary>,
+  withErrorBoundary: ErrorBoundaryFn,
 ): vscode.Disposable[] => {
   const addFiles = bus.on(
     'addOutputFiles',
@@ -125,7 +126,7 @@ const registerOutputFileListeners = (
 export function createOutputEvents(
   shared: OutputEventsShared,
 ): OutputEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'OutputEvents');
+  const { withErrorBoundary } = shared;
 
   return {
     register(
