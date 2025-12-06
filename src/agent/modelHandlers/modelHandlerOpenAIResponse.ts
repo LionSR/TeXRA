@@ -49,7 +49,6 @@ import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
   extractOpenAIWebSearchResults,
-  type WebSearchResult,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
@@ -1263,40 +1262,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         input: this.parseArguments(call.arguments),
         raw: call,
       }));
-  }
-
-  /**
-   * Extract web search results from OpenAI Responses API output.
-   * OpenAI uses web_search_call items in the output array.
-   */
-  override extractWebSearchResults(response: Response): WebSearchResult[] {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return [];
-    }
-
-    return extractOpenAIWebSearchResults(output);
-  }
-
-  /**
-   * Extract server tool content blocks (web_search_call) from OpenAI Responses API output.
-   * These need to be preserved in the conversation when local tools are also present.
-   */
-  /**
-   * @deprecated Use extractServerToolData() for unified extraction
-   */
-  override extractServerToolContent(response: Response): unknown[] {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return [];
-    }
-
-    return output.filter(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        (item as { type?: string }).type === 'web_search_call',
-    );
   }
 
   /**

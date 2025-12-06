@@ -43,10 +43,7 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
-import type {
-  WebSearchResult,
-  ServerToolExtractionResult,
-} from './types/ServerToolTypes';
+import type { ServerToolExtractionResult } from './types/ServerToolTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -604,19 +601,6 @@ export abstract class ModelHandler<
   abstract extractToolUse(responseObject: Resp): T[];
 
   /**
-   * Extracts web search results from provider responses.
-   * Default implementation returns empty array (no native web search support).
-   * Override in handlers that support native/server-side web search.
-   *
-   * @param responseObject The raw response object from the model
-   * @returns Array of web search results (empty if none or not supported)
-   */
-  extractWebSearchResults(_responseObject: Resp): WebSearchResult[] {
-    // Default: no native web search support
-    return [];
-  }
-
-  /**
    * Build a provider-specific follow-up message containing a tool result.
    *
    * @param client - Provider client (for file uploads if supported)
@@ -656,16 +640,6 @@ export abstract class ModelHandler<
     text: string,
   ): M | M[] {
     return this.createAssistantMessage(text);
-  }
-
-  /**
-   * Extract server tool content blocks from a provider response.
-   * Default implementation returns empty array.
-   * Override in handlers that support server tools (like Anthropic's web_search).
-   * @deprecated Use extractServerToolData() for unified extraction
-   */
-  extractServerToolContent(_responseObject: Resp): unknown[] {
-    return [];
   }
 
   /**
