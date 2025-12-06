@@ -477,8 +477,9 @@ class ToolUseProcessNode<C> extends BaseNode<
     } = options.modelHandler.extractResponse(state.response, '');
 
     // Single extraction for all server tool data (single source of truth)
-    const serverToolData =
-      options.modelHandler.extractServerToolData(state.response);
+    const serverToolData = options.modelHandler.extractServerToolData(
+      state.response,
+    );
 
     // Log web search results to progress view
     for (const searchResult of serverToolData.webSearchResults) {

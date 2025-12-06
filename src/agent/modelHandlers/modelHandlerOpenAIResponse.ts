@@ -49,6 +49,7 @@ import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
   extractOpenAIWebSearchResults,
+  isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
@@ -1269,19 +1270,16 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Returns both normalized results for display and raw content blocks for context.
    * Single source of truth for OpenAI Responses API server tool extraction.
    */
-  override extractServerToolData(response: Response): ServerToolExtractionResult {
+  override extractServerToolData(
+    response: Response,
+  ): ServerToolExtractionResult {
     const output = response?.output;
     if (!Array.isArray(output)) {
       return { webSearchResults: [], contentBlocks: [] };
     }
 
     // Extract content blocks that need to be preserved
-    const contentBlocks = output.filter(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        (item as { type?: string }).type === 'web_search_call',
-    );
+    const contentBlocks = output.filter(isOpenAIWebSearchCall);
 
     // Extract normalized web search results for display
     const webSearchResults = extractOpenAIWebSearchResults(output);
@@ -1493,12 +1491,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     // Check if response contains web_search_call items
-    const webSearchCalls = output.filter(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        (item as { type?: string }).type === 'web_search_call',
-    );
+    const webSearchCalls = output.filter(isOpenAIWebSearchCall);
 
     if (webSearchCalls.length === 0) {
       return this.createAssistantMessage(text);
