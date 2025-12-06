@@ -648,7 +648,10 @@ export abstract class ModelHandler<
    * Default implementation falls back to createAssistantMessage(text).
    * Override in handlers that support server tools (like Anthropic's web_search).
    */
-  createAssistantMessageFromResponse(_responseObject: Resp, text: string): M {
+  createAssistantMessageFromResponse(
+    _responseObject: Resp,
+    text: string,
+  ): M | M[] {
     return this.createAssistantMessage(text);
   }
 
