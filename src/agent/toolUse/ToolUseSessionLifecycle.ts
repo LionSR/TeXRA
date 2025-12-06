@@ -5,10 +5,10 @@ import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 // Internal imports
 import { ToolUseSessionPersistence } from '@agent/toolUse/ToolUseSessionPersistence';
-// Type imports
-import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
-// Internal imports
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueue';
+import {
+  ToolUseFollowUpQueue,
+  type FollowUpQueue,
+} from '@agent/toolUse/ToolUseFollowUpQueue';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { BaseToolUseAgent } from '@agent/implementations/BaseToolUseAgent';
