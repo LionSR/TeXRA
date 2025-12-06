@@ -89,30 +89,9 @@ export interface OpenAIWebSearchCall {
 }
 
 /**
- * Google grounding metadata from search.
- */
-export interface GoogleGroundingResult {
-  provider: 'google';
-  type: 'grounding';
-  /** Grounding chunks with web sources */
-  chunks: Array<{
-    title?: string;
-    uri?: string;
-    domain?: string;
-  }>;
-  /** Queries that were executed */
-  searchQueries?: string[];
-  /** Raw SDK metadata for reference */
-  raw: unknown;
-}
-
-/**
  * Union of all server tool call types.
  */
-export type ServerToolCall =
-  | AnthropicServerToolCall
-  | OpenAIWebSearchCall
-  | GoogleGroundingResult;
+export type ServerToolCall = AnthropicServerToolCall | OpenAIWebSearchCall;
 
 /**
  * Union of all raw content block types that can be returned by server tools.
@@ -140,17 +119,6 @@ export interface ServerToolExtractionResult {
 // ============================================================================
 // Type Guards - Using SDK types for better type safety
 // ============================================================================
-
-/**
- * Check if a server tool call is a web search (any provider).
- */
-export function isWebSearchCall(call: ServerToolCall): boolean {
-  return (
-    call.type === 'web_search' ||
-    call.type === 'web_search_call' ||
-    call.type === 'grounding'
-  );
-}
 
 /**
  * Type guard for Anthropic server tool use block.
@@ -356,49 +324,6 @@ export function extractOpenAIWebSearchResults(
   }
 
   return results;
-}
-
-/**
- * Extract grounding results from Google GenAI response.
- */
-export function extractGoogleGroundingResults(
-  candidate: unknown,
-): WebSearchResult | null {
-  const cand = candidate as {
-    groundingMetadata?: {
-      groundingChunks?: Array<{
-        web?: { title?: string; uri?: string; domain?: string };
-      }>;
-      webSearchQueries?: string[];
-      retrievalQueries?: string[];
-    };
-  };
-
-  const metadata = cand?.groundingMetadata;
-  if (!metadata?.groundingChunks?.length) {
-    return null;
-  }
-
-  const entries: WebSearchResultEntry[] = metadata.groundingChunks
-    .filter((chunk) => chunk.web?.uri)
-    .map((chunk) => ({
-      url: chunk.web!.uri!,
-      title: chunk.web!.title ?? '',
-      domain: chunk.web!.domain ?? extractDomain(chunk.web!.uri!),
-    }));
-
-  if (entries.length === 0) {
-    return null;
-  }
-
-  const queries = metadata.webSearchQueries ?? metadata.retrievalQueries ?? [];
-
-  return {
-    query: queries.join('; '),
-    results: entries,
-    provider: 'google',
-    status: 'completed',
-  };
 }
 
 // ============================================================================
