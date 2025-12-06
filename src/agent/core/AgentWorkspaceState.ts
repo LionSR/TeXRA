@@ -201,25 +201,12 @@ export class ServerToolContentState {
    */
   public contentBlocks: unknown[] = [];
 
-  /**
-   * Store server tool content blocks to be included in follow-up messages.
-   */
-  setContentBlocks(blocks: unknown[]): void {
-    this.contentBlocks = blocks;
-  }
+  /** Whether content has been added to messages (prevents duplicates) */
+  public contentAdded = false;
 
-  /**
-   * Clear stored content blocks (call after they've been added to messages).
-   */
   reset(): void {
     this.contentBlocks = [];
-  }
-
-  /**
-   * Check if there are server tool content blocks to include.
-   */
-  hasContent(): boolean {
-    return this.contentBlocks.length > 0;
+    this.contentAdded = false;
   }
 }
 
