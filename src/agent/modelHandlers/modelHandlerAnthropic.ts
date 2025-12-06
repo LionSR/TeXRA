@@ -1794,13 +1794,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
     // Include server tool content blocks (server_tool_use, web_search_tool_result)
     // These need to be preserved when both server and local tools are in the same response
-    if (workspaceState?.serverToolContent.hasContent()) {
+    if (
+      workspaceState?.serverToolContent.contentBlocks &&
+      workspaceState.serverToolContent.contentBlocks.length > 0 &&
+      !workspaceState.serverToolContent.contentAdded
+    ) {
       content.push(
         ...(workspaceState.serverToolContent
           .contentBlocks as ContentBlockParam[]),
       );
-      // Clear cached server tool content so it's not duplicated
-      workspaceState.resetServerToolContent();
+      workspaceState.serverToolContent.contentAdded = true;
     }
     const toolInput = call.raw.input ?? {};
     content.push({
