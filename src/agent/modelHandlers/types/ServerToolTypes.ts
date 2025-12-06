@@ -115,6 +115,18 @@ export type ServerToolCall =
   | GoogleGroundingResult;
 
 /**
+ * Union of all raw content block types that can be returned by server tools.
+ * These blocks need to be preserved in conversation context for follow-up messages.
+ *
+ * - Anthropic: ServerToolUseBlock (the call) and WebSearchToolResultBlock (the result)
+ * - OpenAI: ResponseFunctionWebSearch (combined call/result)
+ */
+export type ServerToolContentBlock =
+  | ServerToolUseBlock
+  | WebSearchToolResultBlock
+  | ResponseFunctionWebSearch;
+
+/**
  * Combined result from server tool extraction.
  * Single source of truth for both display (webSearchResults) and context (contentBlocks).
  */
@@ -122,7 +134,7 @@ export interface ServerToolExtractionResult {
   /** Normalized web search results for display in progress view */
   webSearchResults: WebSearchResult[];
   /** Raw content blocks to preserve in conversation context */
-  contentBlocks: unknown[];
+  contentBlocks: ServerToolContentBlock[];
 }
 
 // ============================================================================
