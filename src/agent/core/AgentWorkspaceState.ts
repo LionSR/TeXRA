@@ -181,6 +181,39 @@ export class ReasoningCacheState {
   }
 }
 
+/**
+ * Cache for server tool content blocks (e.g., web_search results from Anthropic).
+ * These blocks need to be preserved in the assistant message when local tools are also present.
+ */
+export class ServerToolContentState {
+  /**
+   * Server tool content blocks extracted from the model response.
+   * These include server_tool_use and web_search_tool_result blocks.
+   */
+  public contentBlocks: unknown[] = [];
+
+  /**
+   * Store server tool content blocks to be included in follow-up messages.
+   */
+  setContentBlocks(blocks: unknown[]): void {
+    this.contentBlocks = blocks;
+  }
+
+  /**
+   * Clear stored content blocks (call after they've been added to messages).
+   */
+  reset(): void {
+    this.contentBlocks = [];
+  }
+
+  /**
+   * Check if there are server tool content blocks to include.
+   */
+  hasContent(): boolean {
+    return this.contentBlocks.length > 0;
+  }
+}
+
 export class DocumentStatsState {
   public texcountStats: string | null = null;
 
@@ -239,9 +272,14 @@ export class AgentWorkspaceState {
   public readonly reasoning = new ReasoningCacheState();
   public readonly document = new DocumentStatsState();
   public readonly interactions = new FileInteractionState();
+  public readonly serverToolContent = new ServerToolContentState();
 
   resetReasoning(): void {
     this.reasoning.reset();
+  }
+
+  resetServerToolContent(): void {
+    this.serverToolContent.reset();
   }
 
   toJSON(): AgentWorkspaceSnapshot {
