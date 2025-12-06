@@ -8,12 +8,34 @@ import type {
   Tool as GeminiTool,
   FunctionDeclaration,
   Schema,
+  GoogleSearch,
 } from '@google/genai/dist/genai';
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import type { FunctionTool } from 'openai/resources/responses/responses';
+import type {
+  FunctionTool,
+  WebSearchTool,
+  Tool as OpenAIResponseTool,
+} from 'openai/resources/responses/responses';
 
 // Local imports - agent
 // Local imports - types
+
+// ============================================================================
+// Native/Server Tool Configuration
+// ============================================================================
+
+/**
+ * Tools that are executed server-side by the provider.
+ * These don't need local implementations - the provider handles them.
+ */
+export const NATIVE_TOOL_NAMES = new Set(['web_search']);
+
+/**
+ * Check if a tool is a native/server-side tool.
+ */
+export function isNativeTool(name: string): boolean {
+  return NATIVE_TOOL_NAMES.has(name);
+}
 
 // Map local tool names to Anthropic remote tool types
 const ANTHROPIC_TOOL_TYPE_MAP: Record<string, string> = {
@@ -35,11 +57,34 @@ export function toOpenAITools(defs: ToolDefinition[]): ChatCompletionTool[] {
   }));
 }
 
-/** Convert generic ToolDefinition objects to OpenAI Responses FunctionTool format. */
-export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
-  return defs.map((d) => {
+/**
+ * Options for OpenAI Responses API tool conversion.
+ */
+export interface OpenAIResponseToolOptions {
+  /** Whether the model supports native web search. Defaults to false. */
+  supportsNativeWebSearch?: boolean;
+}
+
+/** Convert generic ToolDefinition objects to OpenAI Responses API tool format. */
+export function toOpenAIResponseTools(
+  defs: ToolDefinition[],
+  options: OpenAIResponseToolOptions = {},
+): OpenAIResponseTool[] {
+  const { supportsNativeWebSearch = false } = options;
+  const tools: OpenAIResponseTool[] = [];
+
+  for (const d of defs) {
+    // Handle native web search tool (only if model supports it)
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
+      tools.push({
+        type: 'web_search',
+      } as WebSearchTool);
+      continue;
+    }
+
+    // Standard function tools
     const params = (d.parameters ?? null) as Record<string, unknown> | null;
-    return {
+    tools.push({
       type: 'function',
       name: d.name,
       description: d.description,
@@ -48,19 +93,40 @@ export function toOpenAIResponseTools(defs: ToolDefinition[]): FunctionTool[] {
       // parameters. The Wolfram tool uses optional fields, so disable strict
       // validation to avoid schema errors from the OpenAI Responses API.
       strict: false,
-    };
-  });
+    } as FunctionTool);
+  }
+
+  return tools;
+}
+
+/**
+ * Options for Anthropic tool conversion.
+ */
+export interface AnthropicToolOptions {
+  /** Whether the model supports native web search. Defaults to false. */
+  supportsNativeWebSearch?: boolean;
 }
 
 /** Convert generic ToolDefinition objects to Anthropic Tool format. */
-export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
+export function toAnthropicTools(
+  defs: ToolDefinition[],
+  options: AnthropicToolOptions = {},
+): ToolUnion[] {
+  const { supportsNativeWebSearch = false } = options;
+
   return defs.map<ToolUnion>((d) => {
+    // Only use native tool types if the model supports them
     const remoteType = ANTHROPIC_TOOL_TYPE_MAP[d.name];
     if (remoteType) {
-      return {
-        name: d.name,
-        type: remoteType,
-      } as ToolUnion;
+      // web_search requires native support check
+      if (d.name === 'web_search' && !supportsNativeWebSearch) {
+        // Fall through to create as regular function tool
+      } else {
+        return {
+          name: d.name,
+          type: remoteType,
+        } as ToolUnion;
+      }
     }
 
     const params = d.parameters as AnthropicTool['input_schema'] | undefined;
@@ -72,21 +138,58 @@ export function toAnthropicTools(defs: ToolDefinition[]): ToolUnion[] {
   });
 }
 
-/** Convert generic ToolDefinition objects to Google Gemini Tool format. */
-export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
+/**
+ * Options for Google tool conversion.
+ */
+export interface GoogleToolOptions {
+  /** Whether the model supports native web search grounding. Defaults to false. */
+  supportsNativeWebSearch?: boolean;
+}
+
+/**
+ * Convert generic ToolDefinition objects to Google Gemini Tool format.
+ * Handles both function declarations and native Google Search grounding.
+ *
+ * @param defs Tool definitions to convert
+ * @param options Conversion options (e.g., supportsNativeWebSearch)
+ */
+export function toGoogleTools(
+  defs: ToolDefinition[],
+  options: GoogleToolOptions = {},
+): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  const declarations: FunctionDeclaration[] = defs.map((d) => ({
-    name: d.name,
-    description: d.description,
-    parameters: d.parameters as Schema | undefined,
-  }));
+  const { supportsNativeWebSearch = false } = options;
 
-  return [
-    {
+  const tools: GeminiTool[] = [];
+  const functionDefs: ToolDefinition[] = [];
+
+  for (const d of defs) {
+    // Handle native Google Search grounding (only if model supports it)
+    if (d.name === 'web_search' && supportsNativeWebSearch) {
+      tools.push({
+        googleSearch: {} as GoogleSearch,
+      });
+      continue;
+    }
+
+    functionDefs.push(d);
+  }
+
+  // Add function declarations if any non-native tools exist
+  if (functionDefs.length > 0) {
+    const declarations: FunctionDeclaration[] = functionDefs.map((d) => ({
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Schema | undefined,
+    }));
+
+    tools.push({
       functionDeclarations: declarations,
-    },
-  ];
+    });
+  }
+
+  return tools;
 }
