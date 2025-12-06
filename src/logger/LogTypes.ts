@@ -42,6 +42,7 @@ export interface LogMessageData {
     | 'statistics'
     | 'modelResponse'
     | 'toolUse'
+    | 'webSearch'
     | 'userMessage'
     | 'progressStatus'
     | 'error'
