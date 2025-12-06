@@ -1,16 +1,21 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import type { AgentLogger } from '@logger/AgentLogger';
+// Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
-import type { ProgressEventBusLike } from './types';
+import type {
+  BaseEventShared,
+  EventModuleBase,
+  ProgressEventBusLike,
+} from './types';
 
-export interface ApprovalEventsShared {
-  logger: AgentLogger;
+/**
+ * Shared context for ApprovalEvents module.
+ * Extends BaseEventShared with approval-specific callbacks.
+ */
+export interface ApprovalEventsShared extends BaseEventShared {
   showToolEditApprovalPrompt: (
     payload: ProgressEventPayloads['showToolEditApprovalPrompt'],
   ) => void;
@@ -18,9 +23,11 @@ export interface ApprovalEventsShared {
   updateToolEditApprovalBypassState: (bypassActive: boolean) => void;
 }
 
-export interface ApprovalEventsModule {
-  register(bus: ProgressEventBusLike): vscode.Disposable[];
-}
+/**
+ * ApprovalEvents module interface.
+ * Uses EventModuleBase pattern (bus only, no state/updater).
+ */
+export type ApprovalEventsModule = EventModuleBase;
 
 /**
  * Creates a module for handling tool edit approval events.
@@ -29,10 +36,7 @@ export interface ApprovalEventsModule {
 export function createApprovalEventsModule(
   shared: ApprovalEventsShared,
 ): ApprovalEventsModule {
-  const withErrorBoundary = createErrorBoundary(
-    shared.logger,
-    'ApprovalEvents',
-  );
+  const { withErrorBoundary } = shared;
 
   return {
     register(bus: ProgressEventBusLike): vscode.Disposable[] {
