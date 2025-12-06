@@ -165,3 +165,32 @@ export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
 
   return [{ functionDeclarations: declarations }];
 }
+
+/** OpenRouter native SDK tool definition format (camelCase) */
+export interface OpenRouterNativeTool {
+  type: 'function';
+  function: {
+    name: string;
+    description?: string;
+    parameters?: Record<string, unknown>;
+  };
+}
+
+/**
+ * Convert generic ToolDefinition objects to OpenRouter native SDK format.
+ *
+ * This uses the SDK's camelCase conventions rather than OpenAI's snake_case.
+ * The format is compatible with @openrouter/sdk's ToolDefinitionJson type.
+ */
+export function toOpenRouterNativeTools(
+  defs: ToolDefinition[],
+): OpenRouterNativeTool[] {
+  return defs.map((d) => ({
+    type: 'function' as const,
+    function: {
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters as Record<string, unknown> | undefined,
+    },
+  }));
+}
