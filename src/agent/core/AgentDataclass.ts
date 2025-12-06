@@ -121,12 +121,37 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   }
 });
 
+/**
+ * Schema for context editing configuration in tool-use agents.
+ * Controls how conversation context is managed as it grows.
+ */
+export const ContextEditingConfigSchema = z
+  .object({
+    /** Input token threshold that triggers context clearing (default: 100000) */
+    triggerThreshold: z.number().positive().optional(),
+    /** Number of recent tool uses to keep after clearing (default: 3) */
+    toolUsesToKeep: z.number().min(1).optional(),
+    /** Minimum tokens to clear each time (helps with cache invalidation cost) */
+    clearAtLeast: z.number().positive().optional(),
+    /** Tool names whose results should never be cleared */
+    excludeTools: z.array(z.string()).optional(),
+    /** Also clear tool input parameters (not just results) */
+    clearToolInputs: z.boolean().optional(),
+    /** Number of thinking turns to keep (default: 2, only when extended thinking enabled) */
+    thinkingTurnsToKeep: z.number().min(1).optional(),
+  })
+  .optional();
+
+export type ContextEditingConfig = z.infer<typeof ContextEditingConfigSchema>;
+
 /** Tool-use agents never expose workflow-specific flags. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
   agentCategory: z
     .literal(AgentCategory.ToolUse)
     .prefault(AgentCategory.ToolUse),
+  /** Context editing configuration for managing conversation context size */
+  contextEditing: ContextEditingConfigSchema,
 });
 
 /**

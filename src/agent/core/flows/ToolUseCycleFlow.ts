@@ -12,6 +12,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
+import type { ContextEditsInfo } from '@agent/types/NormalizedUsage';
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
@@ -325,12 +326,18 @@ class ToolUseCallNode<C> extends Node<
     const start = Date.now();
     try {
       options.modelHandler.setOutputStreaming(true);
+      // Extract context editing config for tool-use agents
+      const contextEditingConfig =
+        'contextEditing' in options.agentSetting
+          ? options.agentSetting.contextEditing
+          : undefined;
       const response = await options.modelHandler.createResponse({
         client: options.client,
         messages: prepRes.messages,
         temperature: options.agentSetting.temperature ?? 0,
         signal: abortController.signal,
         tools: options.agentSetting.tools as ToolDefinition[] | undefined,
+        contextEditingConfig,
       });
 
       const responseTime = (Date.now() - start) / 1000;
@@ -473,6 +480,7 @@ class ToolUseProcessNode<C> extends BaseNode<
       response: text,
       usage,
       stopReason,
+      contextEdits,
     } = options.modelHandler.extractResponse(state.response, '');
 
     if (text) {
@@ -498,6 +506,12 @@ class ToolUseProcessNode<C> extends BaseNode<
         usage,
         state.responseTime ?? 0,
       );
+      // Add context editing information if available
+      if (contextEdits) {
+        normalizedUsage.contextEdits = contextEdits;
+        // Log context editing feedback
+        this.logContextEditingFeedback(options.logger, contextEdits, groupId);
+      }
       store.round.setNormalizedUsage(normalizedUsage);
     } else {
       store.round.clearUsage();
@@ -566,6 +580,45 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     store.resetRound(nextRoundIndex);
     return undefined;
+  }
+
+  /**
+   * Logs context editing feedback when the API clears context.
+   */
+  private logContextEditingFeedback(
+    logger: AgentLogger,
+    contextEdits: ContextEditsInfo,
+    groupId: string | undefined,
+  ): void {
+    const parts: string[] = [];
+
+    for (const edit of contextEdits.appliedEdits) {
+      if (edit.type === 'clear_tool_uses_20250919') {
+        const tokensCleared = edit.clearedInputTokens
+          ? ` (${(edit.clearedInputTokens / 1000).toFixed(1)}k tokens)`
+          : '';
+        parts.push(
+          `Cleared ${edit.clearedToolUses ?? 'some'} tool results${tokensCleared}`,
+        );
+      } else if (edit.type === 'clear_thinking_20251015') {
+        const tokensCleared = edit.clearedInputTokens
+          ? ` (${(edit.clearedInputTokens / 1000).toFixed(1)}k tokens)`
+          : '';
+        parts.push(
+          `Cleared ${edit.clearedThinkingTurns ?? 'some'} thinking turns${tokensCleared}`,
+        );
+      }
+    }
+
+    if (parts.length > 0) {
+      const totalCleared = contextEdits.totalClearedTokens
+        ? ` Total: ${(contextEdits.totalClearedTokens / 1000).toFixed(1)}k tokens cleared`
+        : '';
+      logger.info(`Context edited: ${parts.join(', ')}${totalCleared}`, {
+        groupId,
+        messageType: MESSAGE_TYPES.INTERNAL,
+      });
+    }
   }
 }
 

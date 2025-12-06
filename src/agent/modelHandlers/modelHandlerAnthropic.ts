@@ -47,7 +47,10 @@ import {
   ThinkingBlock,
 } from '@agent/core/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type {
+  ContextEditsInfo,
+  NormalizedUsage,
+} from '@agent/types/NormalizedUsage';
 import { createContinuationMessage } from '@agent/utils/continuationMessage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
@@ -337,6 +340,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       endTag,
       signal,
       tools,
+      contextEditingConfig,
     } = requestOptions;
     // Get streaming config
     const useStreaming = this.getStreamingConfig();
@@ -541,12 +545,63 @@ export class ModelHandlerAnthropic extends ModelHandler<
         ...(options.context_management?.edits ?? []),
       ];
 
+      // Add thinking block clearing when extended thinking is enabled
+      // Must be listed before tool result clearing per API requirements
+      const hasThinkingEnabled =
+        options.thinking && options.thinking.type === 'enabled';
+      if (
+        hasThinkingEnabled &&
+        !contextManagementEdits.some(
+          (edit) => edit.type === 'clear_thinking_20251015',
+        )
+      ) {
+        // Use configured thinking turns to keep, default to 2
+        const thinkingTurnsToKeep =
+          contextEditingConfig?.thinkingTurnsToKeep ?? 2;
+        contextManagementEdits.unshift({
+          type: 'clear_thinking_20251015',
+          keep: { type: 'thinking_turns', value: thinkingTurnsToKeep },
+        });
+      }
+
+      // Add tool result clearing with configurable options
       if (
         !contextManagementEdits.some(
           (edit) => edit.type === 'clear_tool_uses_20250919',
         )
       ) {
-        contextManagementEdits.push({ type: 'clear_tool_uses_20250919' });
+        // Build the tool clearing config with optional parameters
+        // Using type assertion since SDK types may not include all configurable fields
+        const toolClearingConfig = {
+          type: 'clear_tool_uses_20250919' as const,
+          ...(contextEditingConfig?.triggerThreshold && {
+            trigger: {
+              type: 'input_tokens' as const,
+              value: contextEditingConfig.triggerThreshold,
+            },
+          }),
+          ...(contextEditingConfig?.toolUsesToKeep && {
+            keep: {
+              type: 'tool_uses' as const,
+              value: contextEditingConfig.toolUsesToKeep,
+            },
+          }),
+          ...(contextEditingConfig?.clearAtLeast && {
+            clear_at_least: {
+              type: 'input_tokens' as const,
+              value: contextEditingConfig.clearAtLeast,
+            },
+          }),
+          ...(contextEditingConfig?.excludeTools &&
+            contextEditingConfig.excludeTools.length > 0 && {
+              exclude_tools: contextEditingConfig.excludeTools,
+            }),
+          ...(contextEditingConfig?.clearToolInputs !== undefined && {
+            clear_tool_inputs: contextEditingConfig.clearToolInputs,
+          }),
+        };
+
+        contextManagementEdits.push(toolClearingConfig);
       }
 
       options.context_management = {
@@ -1152,10 +1207,73 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     newResponse = replacementEngine.applyAll(newResponse);
 
+    // Extract context editing information if available
+    const contextEdits = this.extractContextEdits(responseObject);
+
     return {
       response: newResponse,
       usage: responseObject.usage,
       stopReason: stopReason ?? 'stop',
+      contextEdits,
+    };
+  }
+
+  /**
+   * Extracts context editing information from the API response.
+   * This captures which context management strategies were applied.
+   */
+  private extractContextEdits(
+    responseObject: BetaMessage,
+  ): ContextEditsInfo | undefined {
+    // Access context_management from the response
+    // The SDK types may not include this yet, so we use a type assertion
+    const contextManagement = (
+      responseObject as BetaMessage & {
+        context_management?: {
+          applied_edits?: Array<{
+            type: string;
+            cleared_tool_uses?: number;
+            cleared_thinking_turns?: number;
+            cleared_input_tokens?: number;
+          }>;
+        };
+      }
+    ).context_management;
+
+    if (!contextManagement?.applied_edits?.length) {
+      return undefined;
+    }
+
+    let totalClearedTokens = 0;
+    const appliedEdits: ContextEditsInfo['appliedEdits'] = [];
+
+    for (const edit of contextManagement.applied_edits) {
+      if (edit.cleared_input_tokens) {
+        totalClearedTokens += edit.cleared_input_tokens;
+      }
+
+      if (edit.type === 'clear_tool_uses_20250919') {
+        appliedEdits.push({
+          type: 'clear_tool_uses_20250919',
+          clearedToolUses: edit.cleared_tool_uses,
+          clearedInputTokens: edit.cleared_input_tokens,
+        });
+      } else if (edit.type === 'clear_thinking_20251015') {
+        appliedEdits.push({
+          type: 'clear_thinking_20251015',
+          clearedThinkingTurns: edit.cleared_thinking_turns,
+          clearedInputTokens: edit.cleared_input_tokens,
+        });
+      }
+    }
+
+    if (appliedEdits.length === 0) {
+      return undefined;
+    }
+
+    return {
+      appliedEdits,
+      totalClearedTokens: totalClearedTokens > 0 ? totalClearedTokens : undefined,
     };
   }
 

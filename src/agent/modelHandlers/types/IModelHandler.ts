@@ -1,11 +1,18 @@
 // Local imports - agent components
 import type { AgentConfig } from '@agent/core/AgentConfig';
 // Internal imports
-import { AgentSetting, AgentType } from '@agent/core/AgentDataclass';
+import {
+  AgentSetting,
+  AgentType,
+  type ContextEditingConfig,
+} from '@agent/core/AgentDataclass';
 import { ConversationRoundState, AgentRunState } from '@agent/core/AgentState';
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
-import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import type {
+  ContextEditsInfo,
+  NormalizedUsage,
+} from '@agent/types/NormalizedUsage';
 // Type imports
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { AgentLogger } from '@logger/AgentLogger';
@@ -49,6 +56,8 @@ export interface CreateResponseOptions<
   signal?: AbortSignal;
   /** Optional tool definitions for function calling */
   tools?: ToolDefinition[];
+  /** Optional context editing configuration (Anthropic tool-use only) */
+  contextEditingConfig?: ContextEditingConfig;
 }
 
 /**
@@ -61,6 +70,8 @@ export interface ExtractResponseResult {
   usage: ProviderUsage;
   /** Reason why the model stopped generating */
   stopReason: ProviderStopReason;
+  /** Context editing information (Anthropic only) */
+  contextEdits?: ContextEditsInfo;
 }
 
 /**

@@ -25,6 +25,41 @@ export const UsageProviderSchema = z.enum([
 export type UsageProvider = z.infer<typeof UsageProviderSchema>;
 
 /**
+ * Schema for applied context edits from the API response.
+ * Captures details about which context editing strategies were applied.
+ */
+export const AppliedContextEditSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('clear_tool_uses_20250919'),
+    /** Number of tool use/result pairs that were cleared */
+    clearedToolUses: z.number().optional(),
+    /** Number of input tokens that were cleared */
+    clearedInputTokens: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal('clear_thinking_20251015'),
+    /** Number of thinking turns that were cleared */
+    clearedThinkingTurns: z.number().optional(),
+    /** Number of input tokens that were cleared */
+    clearedInputTokens: z.number().optional(),
+  }),
+]);
+
+export type AppliedContextEdit = z.infer<typeof AppliedContextEditSchema>;
+
+/**
+ * Schema for context editing information in usage data.
+ */
+export const ContextEditsInfoSchema = z.object({
+  /** List of context edits that were applied */
+  appliedEdits: z.array(AppliedContextEditSchema),
+  /** Total tokens cleared across all strategies */
+  totalClearedTokens: z.number().optional(),
+});
+
+export type ContextEditsInfo = z.infer<typeof ContextEditsInfoSchema>;
+
+/**
  * Normalized usage statistics from any model provider.
  * Cost is computed once during normalization and never recomputed.
  */
@@ -53,6 +88,8 @@ export const NormalizedUsageSchema = z.object({
   toolUsePromptTokens: z.number().optional(),
   /** Number of server-side tool executions (Anthropic web search) */
   serverToolRequests: z.number().optional(),
+  /** Context editing information - edits applied to manage context size */
+  contextEdits: ContextEditsInfoSchema.optional(),
   /** Original API response payload (for debugging) */
   _native: z.unknown().optional(),
 });
