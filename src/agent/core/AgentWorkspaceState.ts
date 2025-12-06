@@ -1,6 +1,8 @@
 // Third-party imports
 import { z } from 'zod';
 
+import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerToolTypes';
+
 /**
  * Thinking block from reasoning models.
  * This represents the internal reasoning/thinking output from models like Claude Sonnet 4.
@@ -196,10 +198,10 @@ export class ReasoningCacheState {
 export class ServerToolContentState {
   /**
    * Server tool content blocks extracted from the model response.
-   * These include server_tool_use and web_search_tool_result blocks.
-   * Type is `unknown[]` because different providers have different block types.
+   * These include server_tool_use, web_search_tool_result (Anthropic),
+   * and web_search_call (OpenAI) blocks.
    */
-  public contentBlocks: unknown[] = [];
+  public contentBlocks: ServerToolContentBlock[] = [];
 
   /** Whether content has been added to messages (prevents duplicates) */
   public contentAdded = false;

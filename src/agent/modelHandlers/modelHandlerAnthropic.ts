@@ -117,6 +117,8 @@ import type {
   DocumentBlockParam,
   ThinkingBlockParam,
   RedactedThinkingBlockParam,
+  ServerToolUseBlock,
+  WebSearchToolResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -1716,9 +1718,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Extract content blocks that need to be preserved
+    // Filter for server tool content (server_tool_use, web_search_tool_result)
+    // Cast needed because BetaContentBlock has slightly different types than the regular API
     const contentBlocks = responseObject.content.filter(
       isAnthropicServerToolContent,
-    );
+    ) as (ServerToolUseBlock | WebSearchToolResultBlock)[];
 
     // Extract normalized web search results for display
     const webSearchResults = extractAnthropicWebSearchResults(
