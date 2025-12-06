@@ -1758,17 +1758,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Include server tool content blocks (server_tool_use, web_search_tool_result)
     // These need to be preserved when both server and local tools are in the same response
     // Order: thinking → server_tool_use → web_search_tool_result → text → tool_use
-    if (
-      workspaceState?.serverToolContent.contentBlocks &&
-      workspaceState.serverToolContent.contentBlocks.length > 0 &&
-      !workspaceState.serverToolContent.contentAdded
-    ) {
+    if (workspaceState?.serverToolContent.contentBlocks.length) {
       // Filter to only Anthropic server tool blocks for type safety
       const anthropicBlocks = workspaceState.serverToolContent.contentBlocks
         .filter(isAnthropicServerToolContent)
         .map((block) => block as ContentBlockParam);
       content.push(...anthropicBlocks);
-      workspaceState.serverToolContent.contentAdded = true;
+      // Clear after consuming to prevent duplicates
+      workspaceState.serverToolContent.contentBlocks = [];
     }
     // Text comes after server tool content (model generates text after seeing search results)
     if (text) {
