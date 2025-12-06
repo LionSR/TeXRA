@@ -187,6 +187,17 @@ export function isOpenAIWebSearchCall(
   );
 }
 
+/**
+ * Type guard for Anthropic server tool content blocks.
+ * Checks if a block is either a server tool use or web search result.
+ * Used to identify content that needs to be preserved in conversation context.
+ */
+export function isAnthropicServerToolContent(
+  block: unknown,
+): block is ServerToolUseBlock | WebSearchToolResultBlock {
+  return isAnthropicServerToolUse(block) || isAnthropicWebSearchResult(block);
+}
+
 // ============================================================================
 // Result Extraction Helpers - Using SDK types for type safety
 // ============================================================================
