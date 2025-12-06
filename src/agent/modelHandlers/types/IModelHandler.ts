@@ -374,7 +374,10 @@ export interface IModelHandler<
    * @returns Assistant message(s) preserving full response content. May return array
    *          for providers like OpenAI where server tools are separate output items.
    */
-  createAssistantMessageFromResponse(responseObject: Resp, text: string): M | M[];
+  createAssistantMessageFromResponse(
+    responseObject: Resp,
+    text: string,
+  ): M | M[];
 
   /**
    * Determine if the stop reason represents an end-turn marker.
