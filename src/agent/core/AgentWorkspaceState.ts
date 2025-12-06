@@ -200,15 +200,12 @@ export class ServerToolContentState {
    * Server tool content blocks extracted from the model response.
    * These include server_tool_use, web_search_tool_result (Anthropic),
    * and web_search_call (OpenAI) blocks.
+   * Cleared after being consumed by createToolUseFollowUpMessages().
    */
   public contentBlocks: ServerToolContentBlock[] = [];
 
-  /** Whether content has been added to messages (prevents duplicates) */
-  public contentAdded = false;
-
   reset(): void {
     this.contentBlocks = [];
-    this.contentAdded = false;
   }
 }
 

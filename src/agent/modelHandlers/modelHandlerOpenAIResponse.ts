@@ -1307,17 +1307,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Include server tool content blocks (web_search_call) from workspace state
     // These need to be preserved when both server and local tools are in the same response
-    if (
-      workspaceState?.serverToolContent.contentBlocks &&
-      workspaceState.serverToolContent.contentBlocks.length > 0 &&
-      !workspaceState.serverToolContent.contentAdded
-    ) {
+    if (workspaceState?.serverToolContent.contentBlocks.length) {
       // Filter to only OpenAI web search blocks for type safety
       const openaiBlocks = workspaceState.serverToolContent.contentBlocks
         .filter(isOpenAIWebSearchCall)
         .map((block) => block as ResponseInputItem);
       messages.push(...openaiBlocks);
-      workspaceState.serverToolContent.contentAdded = true;
+      // Clear after consuming to prevent duplicates
+      workspaceState.serverToolContent.contentBlocks = [];
     }
 
     const callMsg: ResponseFunctionToolCall = {
