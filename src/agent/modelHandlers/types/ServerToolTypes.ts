@@ -8,20 +8,15 @@
  */
 
 // SDK type imports - using native types for better type safety
+// Consumers should import SDK types directly from the respective SDKs:
+// - Anthropic: '@anthropic-ai/sdk/resources/messages'
+// - OpenAI: 'openai/resources/responses/responses'
 import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
   WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 import type { ResponseFunctionWebSearch } from 'openai/resources/responses/responses';
-
-// Re-export SDK types for external use
-export type {
-  ServerToolUseBlock,
-  WebSearchToolResultBlock,
-  WebSearchResultBlock,
-  ResponseFunctionWebSearch,
-};
 
 // ============================================================================
 // Web Search Result Types
