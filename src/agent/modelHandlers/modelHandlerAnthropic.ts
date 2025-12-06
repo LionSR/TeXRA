@@ -80,6 +80,10 @@ import {
 import { ANTHROPIC_STOP } from './types/StopReasonTypes';
 import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
+import {
+  extractAnthropicWebSearchResults,
+  type WebSearchResult,
+} from './types/ServerToolTypes';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -365,7 +369,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
 
     if (tools && tools.length > 0) {
-      options.tools = toAnthropicTools(tools);
+      options.tools = toAnthropicTools(tools, {
+        supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
+      });
       (options as MessageCreateParams).tool_choice = { type: 'auto' };
 
       if (this.config.capabilities.supportsInterleavedThinking) {
@@ -1694,6 +1700,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
         } satisfies AnthropicToolCall;
       })
       .filter((call): call is AnthropicToolCall => call !== null);
+  }
+
+  /**
+   * Extract native web search results from Anthropic response.
+   * Anthropic's web_search server tool returns WebSearchToolResultBlock.
+   */
+  override extractWebSearchResults(
+    responseObject: BetaMessage,
+  ): WebSearchResult[] {
+    if (!Array.isArray(responseObject?.content)) {
+      return [];
+    }
+
+    return extractAnthropicWebSearchResults(responseObject.content);
   }
 
   async createToolUseFollowUpMessages(
