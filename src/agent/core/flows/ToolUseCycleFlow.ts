@@ -490,12 +490,11 @@ class ToolUseProcessNode<C> extends BaseNode<
     }
 
     // Cache content blocks for use in follow-up messages
+    // Always assign to clear stale blocks from previous responses
     // Reset contentAdded flag when storing new blocks to ensure they get added
-    if (serverToolData.contentBlocks.length > 0) {
-      store.workspace.serverToolContent.contentBlocks =
-        serverToolData.contentBlocks;
-      store.workspace.serverToolContent.contentAdded = false;
-    }
+    store.workspace.serverToolContent.contentBlocks =
+      serverToolData.contentBlocks;
+    store.workspace.serverToolContent.contentAdded = false;
 
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
