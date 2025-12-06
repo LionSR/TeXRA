@@ -1,34 +1,38 @@
 // Third-party imports
 import { z } from 'zod';
 
-// Local imports - tools
-import type { ToolFileAttachment, ToolResult } from '@tools/result';
+// Local imports - tools (single source of truth for file/attachment schemas)
+import {
+  type ToolFileAttachment,
+  type ToolResult,
+  type FileReference,
+  ToolFileAttachmentSchema,
+  FileReferenceSchema,
+  LineChangesSchema,
+  EditRecordSchema,
+} from '@tools/result';
 
 // Local imports - utils
 import { WorkspaceFS } from '@utils/files';
 
+// Re-export schemas from result.ts for backwards compatibility
+export {
+  ToolFileAttachmentSchema,
+  FileReferenceSchema,
+  LineChangesSchema,
+  EditRecordSchema,
+  type FileReference,
+} from '@tools/result';
+
 export const DEFAULT_ATTACHMENT_MIME_TYPE = 'application/octet-stream';
 
 // ============================================================================
-// Zod Schemas
+// Additional Schemas (specific to tool attachment handling)
 // ============================================================================
 
 /**
- * Schema for file references in tool result payloads (binary data stripped).
- */
-export const FileReferenceSchema = z.object({
-  /** Workspace-relative or descriptive path for the file */
-  path: z.string(),
-  /** MIME type for the file */
-  mimeType: z.string(),
-  /** Optional human readable description */
-  description: z.string().optional(),
-});
-
-export type FileReference = z.infer<typeof FileReferenceSchema>;
-
-/**
  * Schema for records of files edited during tool execution.
+ * Specific to logging/tracking edited files in handler context.
  */
 export const EditedFileRecordSchema = z.object({
   /** Path to the edited file */
@@ -44,25 +48,9 @@ export const EditedFileRecordSchema = z.object({
 export type EditedFileRecord = z.infer<typeof EditedFileRecordSchema>;
 
 /**
- * Schema for line change statistics.
- */
-export const LineChangesSchema = z.object({
-  added: z.number(),
-  removed: z.number(),
-});
-
-/**
- * Schema for edit records in tool results.
- */
-export const EditRecordSchema = z.object({
-  path: z.string(),
-  lineChanges: LineChangesSchema.optional(),
-});
-
-/**
  * Schema for strongly-typed tool result payloads sent to model handlers.
  * This is what gets passed to handlers - no binary data, properly typed fields.
- * Uses passthrough() to allow additional properties for forward compatibility.
+ * Uses looseObject to allow additional properties for forward compatibility.
  */
 export const ToolResultPayloadSchema = z.looseObject({
   /** Brief summary of the tool execution result */
@@ -89,26 +77,9 @@ export const ToolResultPayloadSchema = z.looseObject({
   editedFiles: z.array(EditedFileRecordSchema).optional(),
   /** Summary added by handlers when attachments are available */
   attachmentSummary: z.string().optional(),
-}); // Allow additional properties for forward compatibility
+});
 
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
-
-/**
- * Schema for file attachments with optional binary data.
- * Used for validation when processing tool results.
- */
-export const ToolFileAttachmentSchema = z.object({
-  /** Workspace-relative or descriptive path for the attachment */
-  path: z.string().min(1),
-  /** MIME type for the attachment payload */
-  mimeType: z.string().min(1),
-  /** Optional human readable description */
-  description: z.string().optional(),
-  /** Base64 encoded payload when inline transport is supported */
-  base64Data: z.string().optional(),
-  /** Raw bytes for providers that require binary uploads */
-  bytes: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional(),
-});
 
 /**
  * Result from extracting attachments from a tool result.
