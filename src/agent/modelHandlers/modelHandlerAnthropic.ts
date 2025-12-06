@@ -1755,11 +1755,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Clear cached thinking so the next response can store fresh blocks
       workspaceState.resetReasoning();
     }
-    if (text) {
-      content.push({ type: 'text', text });
-    }
     // Include server tool content blocks (server_tool_use, web_search_tool_result)
     // These need to be preserved when both server and local tools are in the same response
+    // Order: thinking → server_tool_use → web_search_tool_result → text → tool_use
     if (
       workspaceState?.serverToolContent.contentBlocks &&
       workspaceState.serverToolContent.contentBlocks.length > 0 &&
@@ -1771,6 +1769,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         .map((block) => block as ContentBlockParam);
       content.push(...anthropicBlocks);
       workspaceState.serverToolContent.contentAdded = true;
+    }
+    // Text comes after server tool content (model generates text after seeing search results)
+    if (text) {
+      content.push({ type: 'text', text });
     }
     const toolInput = call.raw.input ?? {};
     content.push({
