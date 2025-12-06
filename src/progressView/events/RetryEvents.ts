@@ -1,16 +1,22 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports
-import type { AgentLogger } from '@logger/AgentLogger';
+// Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';
-import type { ProgressEventBusLike } from './types';
+import type {
+  BaseEventShared,
+  EventModuleBase,
+  ProgressEventBusLike,
+} from './types';
 
-export interface RetryEventsShared {
-  logger: AgentLogger;
+/**
+ * Shared context for RetryEvents module.
+ * Extends BaseEventShared with retry-specific callbacks.
+ */
+export interface RetryEventsShared extends BaseEventShared {
   /** Callback to show retry request (routes through provider for queueing) */
   showRetryRequest: (
     payload: ProgressEventPayloads['showRetryRequest'],
@@ -19,9 +25,11 @@ export interface RetryEventsShared {
   resolveRetryRequest: (streamId: string) => void;
 }
 
-export interface RetryEventsModule {
-  register(bus: ProgressEventBusLike): vscode.Disposable[];
-}
+/**
+ * RetryEvents module interface.
+ * Uses EventModuleBase pattern (bus only, no state/updater).
+ */
+export type RetryEventsModule = EventModuleBase;
 
 /**
  * Creates a module for handling retry request events.

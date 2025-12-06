@@ -1,8 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
-import type { AgentLogger } from '@logger/AgentLogger';
+// Type imports
 import type { TaskGroup } from '@logger/LogTypes';
 import type {
   TaskGroupUpdatePayload,
@@ -13,22 +12,25 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import { createErrorBoundary } from './errorHandling';
+import type {
+  BaseEventShared,
+  ProgressEventBusLike,
+  StatefulEventModule,
+} from './types';
 
-// Type imports
-import type { ProgressEventBusLike } from './types';
-
-interface TaskGroupEventsShared {
-  logger: AgentLogger;
+/**
+ * Shared context for TaskGroupEvents module.
+ * Extends BaseEventShared with task group initialization callback.
+ */
+interface TaskGroupEventsShared extends BaseEventShared {
   initializeStreamForTaskGroup(stream: string): Promise<void>;
 }
 
-export interface TaskGroupEventsModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
+/**
+ * TaskGroupEvents module interface.
+ * Uses StatefulEventModule pattern for state/updater access.
+ */
+export type TaskGroupEventsModule = StatefulEventModule;
 
 export function createTaskGroupEvents(
   shared: TaskGroupEventsShared,
