@@ -1765,10 +1765,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
       workspaceState.serverToolContent.contentBlocks.length > 0 &&
       !workspaceState.serverToolContent.contentAdded
     ) {
-      content.push(
-        ...(workspaceState.serverToolContent
-          .contentBlocks as ContentBlockParam[]),
-      );
+      // Filter to only Anthropic server tool blocks for type safety
+      const anthropicBlocks = workspaceState.serverToolContent.contentBlocks
+        .filter(isAnthropicServerToolContent)
+        .map((block) => block as ContentBlockParam);
+      content.push(...anthropicBlocks);
       workspaceState.serverToolContent.contentAdded = true;
     }
     const toolInput = call.raw.input ?? {};
