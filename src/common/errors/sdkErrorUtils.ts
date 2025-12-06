@@ -419,72 +419,16 @@ function extractMessage(err: unknown): string | undefined {
 }
 
 /**
- * Checks if an error object itself (not its cause chain) is an abort error.
- */
-function isAbortErrorDirect(err: unknown): boolean {
-  if (!err || typeof err !== 'object') {
-    return false;
-  }
-
-  const errorObj = err as { name?: string; message?: string };
-
-  // Check for DOM AbortError (DOMException with name 'AbortError')
-  if (errorObj.name === 'AbortError') {
-    return true;
-  }
-
-  // Check for abort-related patterns in error name (handles various SDK types)
-  const name = errorObj.name?.toLowerCase() ?? '';
-  if (name.includes('abort') || name.includes('cancel')) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Detects if an error is an abort/cancellation error.
- * These are NOT retryable since the user intentionally cancelled.
- * Handles:
- * - Native SDK abort errors (OpenAI/Anthropic APIUserAbortError)
- * - DOM AbortError (from AbortController)
- * - Errors with 'abort' or 'cancel' in name
- * - Wrapped errors with AbortError in cause chain (e.g., Google SDK)
- * - Fallback: abort patterns in message for SDKs without typed abort errors
- */
-function isAbortError(err: unknown): boolean {
-  // Check the error itself
-  if (isAbortErrorDirect(err)) {
-    return true;
-  }
-
-  // Check the error's cause chain (ES2022) - handles SDK wrappers like Google's
-  // that wrap the original AbortError in a generic ApiError
-  const errorObj = err as { cause?: unknown };
-  if (errorObj.cause && isAbortErrorDirect(errorObj.cause)) {
-    return true;
-  }
-
-  // Fallback: check message for abort patterns (for SDKs that stringify the error)
-  // e.g., Google's "exception AbortError: This operation was aborted sending request"
-  const message =
-    err && typeof err === 'object' && 'message' in err
-      ? String((err as { message: unknown }).message).toLowerCase()
-      : '';
-  if (message.includes('aborterror') || message.includes('aborted')) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Formats SDK errors from model providers into a consistent message so agent logs
  * can surface status codes alongside concise descriptions.
  *
  * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
  * Google responses. When the error is not a known class, it inspects common
  * HTTP-shaped fields and falls back to a best-effort summary.
+ *
+ * Note: Abort/cancellation detection is handled at the flow level by checking
+ * the AbortController signal directly (this.signal?.aborted). Native SDK abort
+ * errors (OpenAI/Anthropic APIUserAbortError) are detected by matchNativeMessageError().
  */
 export function formatProviderHttpError(
   err: unknown,
@@ -499,16 +443,6 @@ export function formatProviderHttpError(
   const nativeHttp = matchNativeHttpError(err);
   if (nativeHttp) {
     return nativeHttp;
-  }
-
-  // Check for abort/cancellation errors (e.g., DOM AbortError from cancelled fetch)
-  // These are NOT retryable since the user intentionally cancelled.
-  if (isAbortError(err)) {
-    return {
-      message: extractMessage(err) ?? 'Request aborted',
-      provider: detectProvider(err),
-      retryable: false,
-    };
   }
 
   const statusCode = detectStatusCode(err);
