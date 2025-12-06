@@ -921,7 +921,9 @@ export class LogEntryFormatter {
           const domain = r.domain || '';
           const urlEscaped = encodeHtml(url);
           const titleEscaped = encodeHtml(title);
-          const domainDisplay = domain ? ` <span class="file-source">(${encodeHtml(domain)})</span>` : '';
+          const domainDisplay = domain
+            ? ` <span class="file-source">(${encodeHtml(domain)})</span>`
+            : '';
 
           return `<li class="detail-item">
             <i class="codicon codicon-link"></i>

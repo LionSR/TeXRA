@@ -234,7 +234,10 @@ export function extractAnthropicWebSearchResults(
 
     // block.content is now properly typed as WebSearchResultBlock[]
     const entries: WebSearchResultEntry[] = block.content
-      .filter((r): r is WebSearchResultBlock => r.type === 'web_search_result' && !!r.url)
+      .filter(
+        (r): r is WebSearchResultBlock =>
+          r.type === 'web_search_result' && !!r.url,
+      )
       .map((r) => ({
         url: r.url,
         title: r.title,
