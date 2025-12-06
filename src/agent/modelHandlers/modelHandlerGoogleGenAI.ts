@@ -77,7 +77,7 @@ import { executeRequest } from './utils/requestExecutor';
 import { toGoogleTools } from './toolConversion';
 import {
   extractGoogleGroundingResults,
-  type WebSearchResult,
+  type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
 // Type imports
@@ -1169,19 +1169,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
-   * Extract grounding results from Google GenAI response.
+   * Extract server tool data from Google GenAI response.
    * Google uses groundingMetadata for search results when GoogleSearch tool is enabled.
+   * Note: Google doesn't have content blocks to preserve like Anthropic/OpenAI;
+   * grounding metadata is embedded in the response.
    */
-  override extractWebSearchResults(
+  override extractServerToolData(
     responseObject: GenerateContentResponse,
-  ): WebSearchResult[] {
+  ): ServerToolExtractionResult {
     const candidate = responseObject?.candidates?.[0];
     if (!candidate) {
-      return [];
+      return { webSearchResults: [], contentBlocks: [] };
     }
 
     const result = extractGoogleGroundingResults(candidate);
-    return result ? [result] : [];
+    return {
+      webSearchResults: result ? [result] : [],
+      // Google doesn't have explicit content blocks like Anthropic/OpenAI
+      contentBlocks: [],
+    };
   }
 
   /**
