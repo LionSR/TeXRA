@@ -22,7 +22,10 @@ import type {
 import type { ResponseFunctionToolCallItem } from 'openai/resources/responses/responses';
 import type { FunctionCall } from '@google/genai';
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources/messages';
-import type { WebSearchResult } from './ServerToolTypes';
+import type {
+  WebSearchResult,
+  ServerToolExtractionResult,
+} from './ServerToolTypes';
 
 // Re-export for backwards compatibility
 export type { ProviderUsage };
@@ -301,6 +304,7 @@ export interface IModelHandler<
    * Extract web search results from a provider response.
    * Returns server-side web search results if the provider supports native search.
    * Returns empty array if no web search was performed or provider doesn't support it.
+   * @deprecated Use extractServerToolData() for unified extraction
    */
   extractWebSearchResults(responseObject: Resp): WebSearchResult[];
 
@@ -309,8 +313,19 @@ export interface IModelHandler<
    * These blocks (e.g., server_tool_use, web_search_tool_result for Anthropic)
    * need to be preserved in the assistant message when local tools are also present.
    * Returns empty array if no server tool content is present.
+   * @deprecated Use extractServerToolData() for unified extraction
    */
   extractServerToolContent(responseObject: Resp): unknown[];
+
+  /**
+   * Extract all server tool data from a provider response in a single pass.
+   * Returns both normalized results for display and raw content blocks for context.
+   * This is the single source of truth for server tool extraction.
+   *
+   * @param responseObject - The raw API response
+   * @returns Combined extraction result with webSearchResults and contentBlocks
+   */
+  extractServerToolData(responseObject: Resp): ServerToolExtractionResult;
 
   /**
    * Create provider-specific messages capturing the tool call and result.

@@ -50,6 +50,7 @@ import { ModelHandler } from './ModelHandler';
 import {
   extractOpenAIWebSearchResults,
   type WebSearchResult,
+  type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
 // Type imports
@@ -1281,6 +1282,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * Extract server tool content blocks (web_search_call) from OpenAI Responses API output.
    * These need to be preserved in the conversation when local tools are also present.
    */
+  /**
+   * @deprecated Use extractServerToolData() for unified extraction
+   */
   override extractServerToolContent(response: Response): unknown[] {
     const output = response?.output;
     if (!Array.isArray(output)) {
@@ -1293,6 +1297,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         item !== null &&
         (item as { type?: string }).type === 'web_search_call',
     );
+  }
+
+  /**
+   * Extract all server tool data in a single pass.
+   * Returns both normalized results for display and raw content blocks for context.
+   * Single source of truth for OpenAI Responses API server tool extraction.
+   */
+  override extractServerToolData(response: Response): ServerToolExtractionResult {
+    const output = response?.output;
+    if (!Array.isArray(output)) {
+      return { webSearchResults: [], contentBlocks: [] };
+    }
+
+    // Extract content blocks that need to be preserved
+    const contentBlocks = output.filter(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        (item as { type?: string }).type === 'web_search_call',
+    );
+
+    // Extract normalized web search results for display
+    const webSearchResults = extractOpenAIWebSearchResults(output);
+
+    return { webSearchResults, contentBlocks };
   }
 
   async createToolUseFollowUpMessages(

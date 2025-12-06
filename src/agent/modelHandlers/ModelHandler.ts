@@ -43,7 +43,10 @@ import type {
   SdkToolCall,
   StopConditionsResult,
 } from './types/IModelHandler';
-import type { WebSearchResult } from './types/ServerToolTypes';
+import type {
+  WebSearchResult,
+  ServerToolExtractionResult,
+} from './types/ServerToolTypes';
 
 // Default continuation limits
 const DEFAULT_CONTINUE_LIMIT = 10;
@@ -659,9 +662,19 @@ export abstract class ModelHandler<
    * Extract server tool content blocks from a provider response.
    * Default implementation returns empty array.
    * Override in handlers that support server tools (like Anthropic's web_search).
+   * @deprecated Use extractServerToolData() for unified extraction
    */
   extractServerToolContent(_responseObject: Resp): unknown[] {
     return [];
+  }
+
+  /**
+   * Extract all server tool data in a single pass.
+   * Default implementation returns empty results.
+   * Override in handlers that support server tools.
+   */
+  extractServerToolData(_responseObject: Resp): ServerToolExtractionResult {
+    return { webSearchResults: [], contentBlocks: [] };
   }
 
   /** Check if stop reason signals end-turn. */
