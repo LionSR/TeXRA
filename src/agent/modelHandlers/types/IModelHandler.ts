@@ -363,23 +363,6 @@ export interface IModelHandler<
   createAssistantMessage(text: string): M;
 
   /**
-   * Create an assistant message from the raw API response, preserving all content blocks.
-   * This is used when the response contains server tool use (like web_search) to ensure
-   * the full context including search results is preserved in the conversation.
-   *
-   * Default implementation falls back to createAssistantMessage(text).
-   *
-   * @param responseObject - The raw API response
-   * @param text - Extracted text content (fallback if no special handling needed)
-   * @returns Assistant message(s) preserving full response content. May return array
-   *          for providers like OpenAI where server tools are separate output items.
-   */
-  createAssistantMessageFromResponse(
-    responseObject: Resp,
-    text: string,
-  ): M | M[];
-
-  /**
    * Determine if the stop reason represents an end-turn marker.
    */
   isEndTurnStop(reason: ProviderStopReason): boolean;
