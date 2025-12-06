@@ -305,6 +305,14 @@ export interface IModelHandler<
   extractWebSearchResults(responseObject: Resp): WebSearchResult[];
 
   /**
+   * Extract server tool content blocks from a provider response.
+   * These blocks (e.g., server_tool_use, web_search_tool_result for Anthropic)
+   * need to be preserved in the assistant message when local tools are also present.
+   * Returns empty array if no server tool content is present.
+   */
+  extractServerToolContent(responseObject: Resp): unknown[];
+
+  /**
    * Create provider-specific messages capturing the tool call and result.
    *
    * @param client - Provider client (for file uploads if supported)
@@ -358,6 +366,19 @@ export interface IModelHandler<
    * Build a simple assistant message from plain text.
    */
   createAssistantMessage(text: string): M;
+
+  /**
+   * Create an assistant message from the raw API response, preserving all content blocks.
+   * This is used when the response contains server tool use (like web_search) to ensure
+   * the full context including search results is preserved in the conversation.
+   *
+   * Default implementation falls back to createAssistantMessage(text).
+   *
+   * @param responseObject - The raw API response
+   * @param text - Extracted text content (fallback if no special handling needed)
+   * @returns Assistant message preserving full response content
+   */
+  createAssistantMessageFromResponse(responseObject: Resp, text: string): M;
 
   /**
    * Determine if the stop reason represents an end-turn marker.
