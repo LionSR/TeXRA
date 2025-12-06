@@ -139,63 +139,29 @@ export function toAnthropicTools(
 }
 
 /**
- * Options for Google tool conversion.
- */
-export interface GoogleToolOptions {
-  /** Whether the model supports native web search grounding. Defaults to false. */
-  supportsNativeWebSearch?: boolean;
-}
-
-/**
  * Convert generic ToolDefinition objects to Google Gemini Tool format.
- * Handles both function declarations and native Google Search grounding.
  *
- * IMPORTANT: Combining googleSearch with functionDeclarations is only supported
- * in Google's Live API, NOT in the regular content generation API. When both
- * are requested, we prioritize function calling and skip native googleSearch
- * to avoid "Tool use with function calling is unsupported" errors.
+ * NOTE: Native googleSearch is currently disabled because Google's regular
+ * content generation API does NOT support combining googleSearch with
+ * functionDeclarations - this is a Live API only feature.
+ * See: https://ai.google.dev/gemini-api/docs/live-tools
  *
- * Native googleSearch is only used when web_search is the SOLE tool requested.
+ * All tools (including web_search) are converted to function declarations.
  *
- * @see https://ai.google.dev/gemini-api/docs/live-tools
  * @param defs Tool definitions to convert
- * @param options Conversion options (e.g., supportsNativeWebSearch)
  */
-export function toGoogleTools(
-  defs: ToolDefinition[],
-  options: GoogleToolOptions = {},
-): GeminiTool[] {
+export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  const { supportsNativeWebSearch = false } = options;
-
-  // Check if web_search is the ONLY tool requested
-  const isWebSearchOnly =
-    defs.length === 1 && defs[0].name === 'web_search';
-
-  // Use native googleSearch only when:
-  // 1. Model supports native web search AND
-  // 2. web_search is the ONLY tool requested (no function declarations)
-  if (isWebSearchOnly && supportsNativeWebSearch) {
-    return [{ googleSearch: {} as GoogleSearch }];
-  }
-
-  // For all other cases, convert tools to function declarations
-  // This includes:
-  // - web_search when native search is not supported (becomes a function)
-  // - web_search combined with other tools (all become functions, no native search)
-  // - Regular function tools
+  // Convert all tools to function declarations
+  // Native googleSearch is disabled until Live API support is added
   const declarations: FunctionDeclaration[] = defs.map((d) => ({
     name: d.name,
     description: d.description,
     parameters: d.parameters as Schema | undefined,
   }));
-
-  if (declarations.length === 0) {
-    return [];
-  }
 
   return [{ functionDeclarations: declarations }];
 }

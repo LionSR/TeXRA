@@ -94,6 +94,10 @@ describe('toOpenAIResponseTools', () => {
 });
 
 describe('toGoogleTools', () => {
+  // NOTE: Native googleSearch is disabled because Google's regular content
+  // generation API does NOT support combining googleSearch with functionDeclarations.
+  // This is a Live API only feature. All tools are converted to function declarations.
+
   it('returns empty array for empty input', () => {
     const tools = toGoogleTools([]);
     assert.deepEqual(tools, []);
@@ -121,7 +125,9 @@ describe('toGoogleTools', () => {
     assert.equal(tool.googleSearch, undefined);
   });
 
-  it('converts web_search to native googleSearch when supportsNativeWebSearch is true', () => {
+  it('converts web_search to function declaration (native googleSearch disabled)', () => {
+    // Native googleSearch is disabled because it cannot be combined with
+    // function calling in Google's regular API (Live API only feature)
     const defs: ToolDefinition[] = [
       {
         name: 'web_search',
@@ -129,34 +135,17 @@ describe('toGoogleTools', () => {
       },
     ];
 
-    const tools = toGoogleTools(defs, { supportsNativeWebSearch: true });
+    const tools = toGoogleTools(defs);
     assert.equal(tools.length, 1);
     const tool = tools[0] as GeminiTool;
-    assert.ok(tool.googleSearch);
-    assert.equal(tool.functionDeclarations, undefined);
-  });
-
-  it('keeps web_search as function declaration when supportsNativeWebSearch is false', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-    ];
-
-    const tools = toGoogleTools(defs, { supportsNativeWebSearch: false });
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as GeminiTool;
+    // Should be function declaration, NOT native googleSearch
     assert.ok(tool.functionDeclarations);
     assert.equal(tool.functionDeclarations?.length, 1);
     assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
     assert.equal(tool.googleSearch, undefined);
   });
 
-  it('skips native googleSearch when combined with other tools (Live API limitation)', () => {
-    // Google's regular content generation API does NOT support combining
-    // googleSearch with functionDeclarations. Only the Live API supports this.
-    // When both are requested, we fall back to function declarations for all.
+  it('converts all tools to function declarations', () => {
     const defs: ToolDefinition[] = [
       {
         name: 'web_search',
@@ -182,13 +171,11 @@ describe('toGoogleTools', () => {
       },
     ];
 
-    const tools = toGoogleTools(defs, { supportsNativeWebSearch: true });
-    // Should return function declarations for ALL tools (including web_search)
-    // because native googleSearch cannot be combined with function calling
+    const tools = toGoogleTools(defs);
     assert.equal(tools.length, 1);
     const tool = tools[0] as GeminiTool;
 
-    // Check that googleSearch is NOT present (would cause API error)
+    // Check that googleSearch is NOT present
     assert.equal(tool.googleSearch, undefined);
 
     // Check that all tools are converted to function declarations
@@ -200,23 +187,5 @@ describe('toGoogleTools', () => {
     assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
     assert.equal(tool.functionDeclarations?.[1].name, 'read_file');
     assert.equal(tool.functionDeclarations?.[2].name, 'write_file');
-  });
-
-  it('defaults supportsNativeWebSearch to false', () => {
-    const defs: ToolDefinition[] = [
-      {
-        name: 'web_search',
-        description: 'Search the web',
-      },
-    ];
-
-    // No options passed - should default to function declaration
-    const tools = toGoogleTools(defs);
-    assert.equal(tools.length, 1);
-    const tool = tools[0] as GeminiTool;
-    assert.ok(tool.functionDeclarations);
-    assert.equal(tool.functionDeclarations?.length, 1);
-    assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
-    assert.equal(tool.googleSearch, undefined);
   });
 });

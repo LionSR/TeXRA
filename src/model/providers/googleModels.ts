@@ -11,6 +11,10 @@ import {
 // Continuation: ModelHandlerGoogleGenAI inspects Google's FinishReason stop signals.
 // When MAX_TOKENS triggers without emitting the closing tag we enqueue a follow-up
 // request so tuning changes should preserve the native stop reasons returned by the API.
+//
+// NOTE: supportsNativeWebSearch is disabled because Google's regular content generation
+// API does NOT support combining googleSearch with functionDeclarations - this is a
+// Live API only feature. See: https://ai.google.dev/gemini-api/docs/live-tools
 const GOOGLE_DEFAULT_CAPABILITIES: ModelCapabilities = {
   ...DEFAULT_MODEL_CAPABILITIES,
   cacheDiscountFactor: 0.25,
@@ -18,6 +22,7 @@ const GOOGLE_DEFAULT_CAPABILITIES: ModelCapabilities = {
   supportsVision: true,
   supportsNativeAudio: true,
   supportsNativeMCPServer: false, // Google doesn't have native MCP support
+  supportsNativeWebSearch: false, // Not supported with function calling (Live API only)
 };
 
 export const GOOGLE_MODELS: Record<string, ModelConfig> = {
@@ -38,7 +43,6 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsReasoningEffort: true,
       reasoningEffort: ReasoningEffort.HIGH,
       supportsNativeCodeExecution: true,
-      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -59,7 +63,6 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsReasoningEffort: false,
       supportsNativeCodeExecution: true,
-      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -80,7 +83,6 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsReasoningEffort: false,
       supportsNativeCodeExecution: true,
-      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -101,7 +103,6 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsReasoningEffort: false,
       supportsNativeCodeExecution: true,
-      supportsNativeWebSearch: true,
       supportsNativeMCPServer: true,
     } satisfies ModelCapabilities,
     openRouterOnly: false,
@@ -122,7 +123,6 @@ export const GOOGLE_MODELS: Record<string, ModelConfig> = {
       supportsReasoning: true,
       supportsReasoningEffort: false,
       supportsNativeCodeExecution: false, // Lite doesn't support code execution
-      supportsNativeWebSearch: false, // Lite doesn't support search grounding
     } satisfies ModelCapabilities,
     openRouterOnly: false,
   },
