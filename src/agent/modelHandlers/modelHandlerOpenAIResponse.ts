@@ -1277,17 +1277,46 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return extractOpenAIWebSearchResults(output);
   }
 
+  /**
+   * Extract server tool content blocks (web_search_call) from OpenAI Responses API output.
+   * These need to be preserved in the conversation when local tools are also present.
+   */
+  override extractServerToolContent(response: Response): unknown[] {
+    const output = response?.output;
+    if (!Array.isArray(output)) {
+      return [];
+    }
+
+    return output.filter(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        (item as { type?: string }).type === 'web_search_call',
+    );
+  }
+
   async createToolUseFollowUpMessages(
     client: OpenAI | undefined,
     call: OpenAIResponseToolCall,
     result: ToolResultPayload,
     attachments: ToolFileAttachment[],
-    _workspaceState?: AgentWorkspaceState,
+    workspaceState?: AgentWorkspaceState,
     text?: string,
   ): Promise<ResponseInputItem[]> {
     const messages: ResponseInputItem[] = [];
     if (text) {
       messages.push(this.createAssistantMessage(text));
+    }
+
+    // Include server tool content blocks (web_search_call) from workspace state
+    // These need to be preserved when both server and local tools are in the same response
+    if (workspaceState?.serverToolContent.hasContent()) {
+      messages.push(
+        ...(workspaceState.serverToolContent
+          .contentBlocks as ResponseInputItem[]),
+      );
+      // Clear cached server tool content so it's not duplicated
+      workspaceState.resetServerToolContent();
     }
 
     const callMsg: ResponseFunctionToolCall = {
@@ -1453,6 +1482,41 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       role: 'assistant',
       content: text,
     } satisfies EasyInputMessage;
+  }
+
+  /**
+   * Create an assistant message from the raw API response, preserving web_search_call items.
+   * For OpenAI Responses API, web_search_call items are separate output items that need
+   * to be included in the conversation along with the text message.
+   */
+  override createAssistantMessageFromResponse(
+    response: Response,
+    text: string,
+  ): ResponseInputItem[] | EasyInputMessage {
+    const output = response?.output;
+    if (!Array.isArray(output)) {
+      return this.createAssistantMessage(text);
+    }
+
+    // Check if response contains web_search_call items
+    const webSearchCalls = output.filter(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        (item as { type?: string }).type === 'web_search_call',
+    );
+
+    if (webSearchCalls.length === 0) {
+      return this.createAssistantMessage(text);
+    }
+
+    // Return array with text message and web_search_call items
+    const items: ResponseInputItem[] = [];
+    if (text) {
+      items.push(this.createAssistantMessage(text));
+    }
+    items.push(...(webSearchCalls as ResponseInputItem[]));
+    return items;
   }
 
   private createInputText(text: string): ResponseInputContent {
