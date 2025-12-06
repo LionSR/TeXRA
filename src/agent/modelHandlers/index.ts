@@ -15,5 +15,6 @@ export {
   ModelHandlerOpenRouter,
   ModelHandlerAnthropicViaOpenRouter,
 } from './modelHandlerOpenRouter';
+export { ModelHandlerOpenRouterNative } from './modelHandlerOpenRouterNative';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
