@@ -360,8 +360,12 @@ class ToolUseCallNode<C> extends Node<
     const formatted = formatProviderHttpError(error);
     // Extract enriched context attached by requestExecutor (operation name, model)
     const context = extractErrorContext(error);
+
+    // If abort signal was triggered, this was user cancellation - never offer retry
+    const retryable = this.signal?.aborted ? false : formatted.retryable;
+
     const fallbackResult = determineFallbackAction(
-      formatted.retryable,
+      retryable,
       formatted.message,
       formatted.statusCode,
       context,

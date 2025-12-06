@@ -419,40 +419,16 @@ function extractMessage(err: unknown): string | undefined {
 }
 
 /**
- * Detects if an error is an abort/cancellation error.
- * These are NOT retryable since the user intentionally cancelled.
- * Handles:
- * - DOM AbortError (from AbortController)
- * - Errors with 'abort' or 'cancel' in name/message
- */
-function isAbortError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') {
-    return false;
-  }
-
-  const errorObj = err as { name?: string; message?: string };
-
-  // Check for DOM AbortError (DOMException with name 'AbortError')
-  if (errorObj.name === 'AbortError') {
-    return true;
-  }
-
-  // Check for abort-related patterns in error name
-  const name = errorObj.name?.toLowerCase() ?? '';
-  if (name.includes('abort') || name.includes('cancel')) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Formats SDK errors from model providers into a consistent message so agent logs
  * can surface status codes alongside concise descriptions.
  *
  * The helper prefers the native SDK error classes for OpenAI, Anthropic, and
  * Google responses. When the error is not a known class, it inspects common
  * HTTP-shaped fields and falls back to a best-effort summary.
+ *
+ * Note: Abort/cancellation detection is handled at the flow level by checking
+ * the AbortController signal directly (this.signal?.aborted). Native SDK abort
+ * errors (OpenAI/Anthropic APIUserAbortError) are detected by matchNativeMessageError().
  */
 export function formatProviderHttpError(
   err: unknown,
@@ -467,16 +443,6 @@ export function formatProviderHttpError(
   const nativeHttp = matchNativeHttpError(err);
   if (nativeHttp) {
     return nativeHttp;
-  }
-
-  // Check for abort/cancellation errors (e.g., DOM AbortError from cancelled fetch)
-  // These are NOT retryable since the user intentionally cancelled.
-  if (isAbortError(err)) {
-    return {
-      message: extractMessage(err) ?? 'Request aborted',
-      provider: detectProvider(err),
-      retryable: false,
-    };
   }
 
   const statusCode = detectStatusCode(err);
