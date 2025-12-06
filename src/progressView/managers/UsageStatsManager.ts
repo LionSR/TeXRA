@@ -46,9 +46,12 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
 }
 
 /** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
-const UsageDataSchema = createSingleValueRunMapSchema(TokenUsageStatsParsingSchema, {
-  isEmpty: isEmptyUsage,
-});
+const UsageDataSchema = createSingleValueRunMapSchema(
+  TokenUsageStatsParsingSchema,
+  {
+    isEmpty: isEmptyUsage,
+  },
+);
 
 /**
  * Manages usage statistics collection with persistence.
