@@ -1,39 +1,34 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import { MESSAGE_TYPES } from '@logger/messageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
-// Local imports - events
+// Local imports
 import { getConfig } from '@utils/config';
-
-// Type imports
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type {
+  BaseEventShared,
+  ProgressEventBusLike,
+  StatefulEventModule,
+} from './types';
 
-// Local file imports
-import { createErrorBoundary } from './errorHandling';
+/**
+ * Shared context for LogEvents module.
+ * Uses BaseEventShared which provides withErrorBoundary.
+ */
+type LogEventsShared = BaseEventShared;
 
-// Type imports
-import type { ProgressEventBusLike } from './types';
-
-interface LogEventsShared {
-  logger: AgentLogger;
-}
-
-export interface LogEventsModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
+/**
+ * LogEvents module interface.
+ * Uses StatefulEventModule pattern for state/updater access.
+ */
+export type LogEventsModule = StatefulEventModule;
 
 export function createLogEvents(shared: LogEventsShared): LogEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'LogEvents');
+  const { withErrorBoundary } = shared;
 
   const handleAddLogMessage = (
     data: ProgressEventPayloads['addLogMessage'],

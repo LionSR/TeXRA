@@ -77,26 +77,28 @@ export const FileSelectionMessageSchema = BaseMessageSchema;
 export type FileSelectionMessage = z.infer<typeof FileSelectionMessageSchema>;
 
 /**
- * Input file selected message from webview
+ * Base schema for file selected messages.
+ * Shared structure for InputFileSelected and GenericFileSelected.
  */
-export const InputFileSelectedMessageSchema = BaseMessageSchema.extend(
+export const FileSelectedMessageSchema = BaseMessageSchema.extend(
   WithFilePath.shape,
 );
 
-export type InputFileSelectedMessage = z.infer<
-  typeof InputFileSelectedMessageSchema
->;
+export type FileSelectedMessage = z.infer<typeof FileSelectedMessageSchema>;
 
 /**
- * Generic file selected message from webview
+ * Input file selected message from webview.
+ * Alias for FileSelectedMessageSchema for semantic clarity.
  */
-export const GenericFileSelectedMessageSchema = BaseMessageSchema.extend(
-  WithFilePath.shape,
-);
+export const InputFileSelectedMessageSchema = FileSelectedMessageSchema;
+export type InputFileSelectedMessage = FileSelectedMessage;
 
-export type GenericFileSelectedMessage = z.infer<
-  typeof GenericFileSelectedMessageSchema
->;
+/**
+ * Generic file selected message from webview.
+ * Alias for FileSelectedMessageSchema for semantic clarity.
+ */
+export const GenericFileSelectedMessageSchema = FileSelectedMessageSchema;
+export type GenericFileSelectedMessage = FileSelectedMessage;
 
 /**
  * Request input file message from webview
