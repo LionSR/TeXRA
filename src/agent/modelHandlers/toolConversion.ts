@@ -139,57 +139,29 @@ export function toAnthropicTools(
 }
 
 /**
- * Options for Google tool conversion.
- */
-export interface GoogleToolOptions {
-  /** Whether the model supports native web search grounding. Defaults to false. */
-  supportsNativeWebSearch?: boolean;
-}
-
-/**
  * Convert generic ToolDefinition objects to Google Gemini Tool format.
- * Handles both function declarations and native Google Search grounding.
+ *
+ * NOTE: Native googleSearch is currently disabled because Google's regular
+ * content generation API does NOT support combining googleSearch with
+ * functionDeclarations - this is a Live API only feature.
+ * See: https://ai.google.dev/gemini-api/docs/live-tools
+ *
+ * All tools (including web_search) are converted to function declarations.
  *
  * @param defs Tool definitions to convert
- * @param options Conversion options (e.g., supportsNativeWebSearch)
  */
-export function toGoogleTools(
-  defs: ToolDefinition[],
-  options: GoogleToolOptions = {},
-): GeminiTool[] {
+export function toGoogleTools(defs: ToolDefinition[]): GeminiTool[] {
   if (defs.length === 0) {
     return [];
   }
 
-  const { supportsNativeWebSearch = false } = options;
+  // Convert all tools to function declarations
+  // Native googleSearch is disabled until Live API support is added
+  const declarations: FunctionDeclaration[] = defs.map((d) => ({
+    name: d.name,
+    description: d.description,
+    parameters: d.parameters as Schema | undefined,
+  }));
 
-  const tools: GeminiTool[] = [];
-  const functionDefs: ToolDefinition[] = [];
-
-  for (const d of defs) {
-    // Handle native Google Search grounding (only if model supports it)
-    if (d.name === 'web_search' && supportsNativeWebSearch) {
-      tools.push({
-        googleSearch: {} as GoogleSearch,
-      });
-      continue;
-    }
-
-    functionDefs.push(d);
-  }
-
-  // Add function declarations if any non-native tools exist
-  if (functionDefs.length > 0) {
-    const declarations: FunctionDeclaration[] = functionDefs.map((d) => ({
-      name: d.name,
-      description: d.description,
-      parameters: d.parameters as Schema | undefined,
-    }));
-
-    tools.push({
-      functionDeclarations: declarations,
-    });
-  }
-
-  return tools;
+  return [{ functionDeclarations: declarations }];
 }
