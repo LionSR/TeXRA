@@ -107,8 +107,15 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   outputFile: z.string(),
   // New: store normalized usage directly (nullish for backward compat with old saved states)
   normalizedUsage: NormalizedUsageSchema.nullish(),
-  // Legacy fields for backward compatibility (deprecated)
+  /**
+   * @deprecated Legacy fields for backward compatibility with old saved states.
+   * Uses z.custom() because these are complex union types from external SDKs
+   * that existed before the normalized usage migration. New code should use
+   * normalizedUsage exclusively. These fields are only read during migration
+   * in fromJSON() and will be removed in a future version.
+   */
   usageSummary: z.custom<UsageSummary>().nullable().optional(),
+  /** @deprecated See usageSummary for deprecation notice. */
   nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
   provider: UsageProviderSchema.nullable().optional(),
 });

@@ -19,10 +19,20 @@ import {
   type AgentRunShared,
 } from '@agent/implementations/flows/common';
 
+// Schema import for documentation reference (serialization uses ReflectionRunStateSchema)
+export { ReflectionRunStateSchema } from '@agent/implementations/flows/common';
+
 export type ReflectionRunPhase = 'idle' | 'init' | 'rounds' | 'finalize';
 
 export type ReflectionRunLifecycle = AgentLifecycleState<ReflectionRunPhase>;
 
+/**
+ * Runtime state for reflection agent runs.
+ *
+ * Schema alignment: This interface corresponds to {@link ReflectionRunStateSchema}
+ * for serialization. The runtime uses AgentRunState class instances while the
+ * schema uses AgentRunStateSnapshotSchema for JSON compatibility.
+ */
 export interface ReflectionRunState {
   conversation: any[];
   runState: AgentRunState;
