@@ -33,10 +33,12 @@ const TokenUsageStatsParsingSchema = z
   })
   .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
 
-// Compile-time assertion: ensure parsing schema produces compatible type
-const _typeCheck: z.infer<typeof TokenUsageStatsParsingSchema> =
-  {} as TokenUsageStats;
-void _typeCheck;
+// Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
+type _AssertSchemaCompatible =
+  z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
+    ? true
+    : never;
+const _assertCompatible: _AssertSchemaCompatible = true;
 
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
