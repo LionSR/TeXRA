@@ -39,10 +39,9 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly executionManager: ExecutionManager;
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
-  private activeView: vscode.WebviewView | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    super('MainView');
+    super('MainView', { trackActiveView: true });
     this.settingsManager = new SettingsManager();
     this.recordingManager = new RecordingManager(context, {
       recordingStartedCommand: MAIN_VIEW_COMMANDS.RECORDING_STARTED,
@@ -61,20 +60,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     message: any,
     webviewView: vscode.WebviewView,
   ): Promise<void> {
-    this.activeView = webviewView;
+    // Attach webview to managers that need it for message posting
     this.fileManager.attachWebview(webviewView);
     this.instructionManager.attachWebview(webviewView);
 
+    // Base class handles activeView tracking when trackActiveView is enabled
     await super.handleMessage(message, webviewView);
-  }
-
-  private getActiveView(): vscode.WebviewView | undefined {
-    if (!this.activeView) {
-      this.logger.warn(this.channel, 'No active webview available');
-      return undefined;
-    }
-
-    return this.activeView;
   }
 
   protected createHandlers(): Record<
