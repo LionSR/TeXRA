@@ -1,10 +1,19 @@
 // Local imports - logger
 import type { AgentLogger } from '@logger/AgentLogger';
 
+/**
+ * Type for error boundary functions created by createErrorBoundary.
+ * Wraps async handlers to catch and log errors.
+ */
+export type ErrorBoundaryFn = (
+  context: string,
+  fn: () => unknown | Promise<unknown>,
+) => void;
+
 export function createErrorBoundary(
   logger: AgentLogger,
   moduleName: string,
-): (context: string, fn: () => unknown | Promise<unknown>) => void {
+): ErrorBoundaryFn {
   return (context: string, fn: () => unknown | Promise<unknown>): void => {
     try {
       const result = fn();

@@ -1,34 +1,34 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-// Local imports - progress view
+// Type imports
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
+import type {
+  BaseEventShared,
+  ProgressEventBusLike,
+  StatefulEventModule,
+} from './types';
 
-// Type imports
-import type { ProgressEventBusLike } from './types';
+/**
+ * UsageEvents module interface.
+ * Uses StatefulEventModule pattern for state/updater access.
+ */
+export type UsageEventsModule = StatefulEventModule;
 
-export interface UsageEventsModule {
-  register(
-    bus: ProgressEventBusLike,
-    state: ProgressViewState,
-    updater: WebviewUpdater,
-  ): vscode.Disposable[];
-}
-
-interface UsageEventsShared {
-  logger: AgentLogger;
-}
+/**
+ * Shared context for UsageEvents module.
+ * Uses BaseEventShared which provides withErrorBoundary.
+ */
+type UsageEventsShared = BaseEventShared;
 
 export function createUsageEvents(
   shared: UsageEventsShared,
 ): UsageEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'UsageEvents');
+  const { withErrorBoundary } = shared;
 
   return {
     register(

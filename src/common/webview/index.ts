@@ -6,6 +6,7 @@ export {
 export {
   MessageHandler,
   BaseViewMessageHandler,
+  type MessageHandlerOptions,
 } from './BaseViewMessageHandler';
 export { BaseWebviewProvider } from './BaseWebviewProvider';
 export {

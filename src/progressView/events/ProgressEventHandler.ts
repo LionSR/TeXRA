@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { OutputFileInfo } from '@agent/output/types';
 import type { TokenUsageStats } from '@agent/types/UsageTypes';
+
 // Internal imports
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { normalizeRunId } from '@common/constants/runIds';
@@ -16,6 +17,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 
 // Local file imports
 import type { StreamStatus } from '@eventBus/ProgressEventBus';
+import { createErrorBoundary } from './errorHandling';
 import {
   createStreamStatusEvents,
   type StreamStatusEventModule,
@@ -37,8 +39,6 @@ import {
   type ApprovalEventsModule,
   type ApprovalEventsShared,
 } from './ApprovalEvents';
-
-// Local imports - events
 
 /**
  * Handles progress event bus subscriptions for the progress view.
@@ -71,35 +71,40 @@ export class ProgressEventHandler {
       >,
   ) {
     this.logger = new AgentLogger('ProgressEventHandler');
+
+    // Create error boundaries centrally - modules receive pre-configured boundaries
     this.streamStatusEvents = createStreamStatusEvents({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'StreamStatusEvents'),
       streamStatus: this._streamStatus,
       setStreamStatus: (stream, status) => this.setStreamStatus(stream, status),
       sendInstructionUpdate: (stream) => this.sendInstructionUpdate(stream),
       refreshStreamSurface: (stream, options) =>
         this.refreshStreamSurface(stream, options),
+      warnLog: (message) => this.logger.warn(message),
+      debugLog: (message) => this.logger.debug(message),
     });
     this.outputEvents = createOutputEvents({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'OutputEvents'),
     });
     this.usageEvents = createUsageEvents({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'UsageEvents'),
     });
     this.logEvents = createLogEvents({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'LogEvents'),
     });
     this.taskGroupEvents = createTaskGroupEvents({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'TaskGroupEvents'),
       initializeStreamForTaskGroup: (stream) =>
         this.initializeStreamForTaskGroup(stream),
+      debugLog: (message) => this.logger.debug(message),
     });
     this.retryEvents = createRetryEventsModule({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'RetryEvents'),
       showRetryRequest: callbacks.showRetryRequest,
       resolveRetryRequest: callbacks.resolveRetryRequest,
     });
     this.approvalEvents = createApprovalEventsModule({
-      logger: this.logger,
+      withErrorBoundary: createErrorBoundary(this.logger, 'ApprovalEvents'),
       showToolEditApprovalPrompt: callbacks.showToolEditApprovalPrompt,
       resolveToolEditApprovalPrompt: callbacks.resolveToolEditApprovalPrompt,
       updateToolEditApprovalBypassState:
