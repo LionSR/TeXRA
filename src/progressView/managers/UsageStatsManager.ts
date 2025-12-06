@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
-// Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+// Types - import canonical type (schema defines structure)
+import { type TokenUsageStats } from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -21,14 +21,22 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
-/** Schema for TokenUsageStats with safe number coercion */
-const TokenUsageStatsSchema = z
+/**
+ * Schema for parsing TokenUsageStats with safe number coercion.
+ * Extends the canonical schema shape with coercion for persistence resilience.
+ */
+const TokenUsageStatsParsingSchema = z
   .object({
     inputTokens: FiniteNumber,
     outputTokens: FiniteNumber,
     cost: FiniteNumber,
   })
   .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+
+// Compile-time assertion: ensure parsing schema produces compatible type
+const _typeCheck: z.infer<typeof TokenUsageStatsParsingSchema> =
+  {} as TokenUsageStats;
+void _typeCheck;
 
 /** Checks if usage stats are all zeros (effectively empty) */
 function isEmptyUsage(usage: TokenUsageStats): boolean {
@@ -38,7 +46,7 @@ function isEmptyUsage(usage: TokenUsageStats): boolean {
 }
 
 /** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
-const UsageDataSchema = createSingleValueRunMapSchema(TokenUsageStatsSchema, {
+const UsageDataSchema = createSingleValueRunMapSchema(TokenUsageStatsParsingSchema, {
   isEmpty: isEmptyUsage,
 });
 
@@ -73,7 +81,7 @@ export class UsageStatsManager extends PersistentMapManager<
     storageKey: StorageKey,
     usage: TokenUsageStats,
   ): Promise<void> {
-    const normalized = TokenUsageStatsSchema.parse(usage);
+    const normalized = TokenUsageStatsParsingSchema.parse(usage);
     const current =
       this.items.get(stream) ?? new Map<string, TokenUsageStats>();
     if (
@@ -170,7 +178,7 @@ export class UsageStatsManager extends PersistentMapManager<
         continue;
       }
 
-      const usage = TokenUsageStatsSchema.parse(value);
+      const usage = TokenUsageStatsParsingSchema.parse(value);
       if (
         usage.inputTokens === 0 &&
         usage.outputTokens === 0 &&
@@ -262,7 +270,7 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     const totals = legacy.usageAccumulator.totals;
-    const usage: TokenUsageStats = TokenUsageStatsSchema.parse({
+    const usage: TokenUsageStats = TokenUsageStatsParsingSchema.parse({
       inputTokens: totals.totalInputTokens ?? 0,
       outputTokens: totals.totalOutputTokens ?? 0,
       cost: totals.totalCost ?? 0,
