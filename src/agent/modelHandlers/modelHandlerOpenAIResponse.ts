@@ -1312,10 +1312,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       workspaceState.serverToolContent.contentBlocks.length > 0 &&
       !workspaceState.serverToolContent.contentAdded
     ) {
-      messages.push(
-        ...(workspaceState.serverToolContent
-          .contentBlocks as ResponseInputItem[]),
-      );
+      // Filter to only OpenAI web search blocks for type safety
+      const openaiBlocks = workspaceState.serverToolContent.contentBlocks
+        .filter(isOpenAIWebSearchCall)
+        .map((block) => block as ResponseInputItem);
+      messages.push(...openaiBlocks);
       workspaceState.serverToolContent.contentAdded = true;
     }
 
