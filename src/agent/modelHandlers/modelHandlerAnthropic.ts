@@ -1040,44 +1040,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
-  /**
-   * Create an assistant message from the raw API response, preserving all content blocks.
-   * This preserves server_tool_use, web_search_tool_result, and thinking blocks for native web search
-   * and extended thinking models.
-   */
-  override createAssistantMessageFromResponse(
-    responseObject: BetaMessage,
-    text: string,
-  ): MessageParam {
-    if (!Array.isArray(responseObject?.content)) {
-      return this.createAssistantMessage(text);
-    }
-
-    // Check if response contains server tool use blocks that need to be preserved
-    const hasServerToolContent = responseObject.content.some(
-      isAnthropicServerToolContent,
-    );
-
-    if (!hasServerToolContent) {
-      return this.createAssistantMessage(text);
-    }
-
-    // Preserve the full content array including server tool use, results, and thinking blocks
-    // Filter to only include blocks that are valid for assistant messages
-    const preservedContent = responseObject.content.filter(
-      (block) =>
-        block.type === 'text' ||
-        block.type === 'thinking' ||
-        block.type === 'redacted_thinking' ||
-        isAnthropicServerToolContent(block),
-    );
-
-    return {
-      role: 'assistant',
-      content: preservedContent as ContentBlockParam[],
-    };
-  }
-
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {

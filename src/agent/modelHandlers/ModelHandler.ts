@@ -631,18 +631,6 @@ export abstract class ModelHandler<
   abstract createAssistantMessage(text: string): M;
 
   /**
-   * Create an assistant message from the raw API response, preserving all content blocks.
-   * Default implementation falls back to createAssistantMessage(text).
-   * Override in handlers that support server tools (like Anthropic's web_search).
-   */
-  createAssistantMessageFromResponse(
-    _responseObject: Resp,
-    text: string,
-  ): M | M[] {
-    return this.createAssistantMessage(text);
-  }
-
-  /**
    * Extract all server tool data in a single pass.
    * Default implementation returns empty results.
    * Override in handlers that support server tools.

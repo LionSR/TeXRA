@@ -1479,36 +1479,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     } satisfies EasyInputMessage;
   }
 
-  /**
-   * Create an assistant message from the raw API response, preserving web_search_call items.
-   * For OpenAI Responses API, web_search_call items are separate output items that need
-   * to be included in the conversation along with the text message.
-   */
-  override createAssistantMessageFromResponse(
-    response: Response,
-    text: string,
-  ): ResponseInputItem[] | EasyInputMessage {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return this.createAssistantMessage(text);
-    }
-
-    // Check if response contains web_search_call items
-    const webSearchCalls = output.filter(isOpenAIWebSearchCall);
-
-    if (webSearchCalls.length === 0) {
-      return this.createAssistantMessage(text);
-    }
-
-    // Return array with text message and web_search_call items
-    const items: ResponseInputItem[] = [];
-    if (text) {
-      items.push(this.createAssistantMessage(text));
-    }
-    items.push(...(webSearchCalls as ResponseInputItem[]));
-    return items;
-  }
-
   private createInputText(text: string): ResponseInputContent {
     return { type: 'input_text', text };
   }
