@@ -82,6 +82,7 @@ import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
+  isAnthropicServerToolContent,
   type ServerToolExtractionResult,
 } from './types/ServerToolTypes';
 
@@ -1053,8 +1054,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Check if response contains server tool use blocks that need to be preserved
-    const hasServerToolContent = responseObject.content.some((block) =>
-      this.isServerToolContentBlock(block),
+    const hasServerToolContent = responseObject.content.some(
+      isAnthropicServerToolContent,
     );
 
     if (!hasServerToolContent) {
@@ -1068,23 +1069,13 @@ export class ModelHandlerAnthropic extends ModelHandler<
         block.type === 'text' ||
         block.type === 'thinking' ||
         block.type === 'redacted_thinking' ||
-        this.isServerToolContentBlock(block),
+        isAnthropicServerToolContent(block),
     );
 
     return {
       role: 'assistant',
       content: preservedContent as ContentBlockParam[],
     };
-  }
-
-  /**
-   * Helper to check if a content block is a server tool content block.
-   * Used to avoid duplication across methods.
-   */
-  private isServerToolContentBlock(block: { type: string }): boolean {
-    return (
-      block.type === 'server_tool_use' || block.type === 'web_search_tool_result'
-    );
   }
 
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
@@ -1763,8 +1754,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     // Extract content blocks that need to be preserved
-    const contentBlocks = responseObject.content.filter((block) =>
-      this.isServerToolContentBlock(block),
+    const contentBlocks = responseObject.content.filter(
+      isAnthropicServerToolContent,
     );
 
     // Extract normalized web search results for display
