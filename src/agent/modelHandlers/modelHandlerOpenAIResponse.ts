@@ -593,6 +593,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         supportsNativeWebSearch: this.capabilities.supportsNativeWebSearch,
       });
       params.tool_choice = 'auto';
+
+      // Include web search sources in response when native web search is enabled
+      if (this.capabilities.supportsNativeWebSearch) {
+        params.include = ['web_search_call.action.sources'];
+      }
     }
 
     if (this.capabilities.supportsReasoning) {
