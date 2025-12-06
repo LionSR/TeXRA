@@ -9,9 +9,6 @@ import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 // Local imports
 import { getConfig } from '@utils/config';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-
-// Local file imports
-import { createErrorBoundary } from './errorHandling';
 import type {
   BaseEventShared,
   ProgressEventBusLike,
@@ -20,7 +17,7 @@ import type {
 
 /**
  * Shared context for LogEvents module.
- * Uses BaseEventShared which provides logger for error boundary.
+ * Uses BaseEventShared which provides withErrorBoundary.
  */
 type LogEventsShared = BaseEventShared;
 
@@ -31,7 +28,7 @@ type LogEventsShared = BaseEventShared;
 export type LogEventsModule = StatefulEventModule;
 
 export function createLogEvents(shared: LogEventsShared): LogEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'LogEvents');
+  const { withErrorBoundary } = shared;
 
   const handleAddLogMessage = (
     data: ProgressEventPayloads['addLogMessage'],

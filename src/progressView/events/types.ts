@@ -1,5 +1,4 @@
 // Type imports
-import type { AgentLogger } from '@logger/AgentLogger';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type {
@@ -7,6 +6,9 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 import type * as vscode from 'vscode';
+
+// Local imports
+import type { ErrorBoundaryFn } from './errorHandling';
 
 // ============================================================================
 // Event Bus Interface
@@ -29,10 +31,10 @@ export interface ProgressEventBusLike {
 
 /**
  * Base shared context for all event modules.
- * All event modules require a logger for error boundary handling.
+ * Provides pre-configured error boundary - modules don't need to create their own.
  */
 export interface BaseEventShared {
-  logger: AgentLogger;
+  withErrorBoundary: ErrorBoundaryFn;
 }
 
 /**

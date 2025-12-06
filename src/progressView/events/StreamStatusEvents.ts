@@ -6,12 +6,11 @@ import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import { STREAM_STATUS } from '@common/constants/streamStatus';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { StreamTabInfo } from '@progressView/types';
-
-// Local imports
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { ProgressEventPayloads, StreamStatus } from '@eventBus/ProgressEventBus';
-import { createErrorBoundary } from './errorHandling';
+
+// Local imports
 import type {
   BaseEventShared,
   ProgressEventBusLike,
@@ -21,6 +20,7 @@ import type {
 /**
  * Shared context for StreamStatusEvents module.
  * Extends BaseEventShared with stream status management callbacks.
+ * Also requires logging callbacks for warn/debug messages.
  */
 export interface StreamStatusEventShared extends BaseEventShared {
   streamStatus: Map<string, StreamStatus>;
@@ -30,6 +30,8 @@ export interface StreamStatusEventShared extends BaseEventShared {
     stream: string,
     options?: { updateInstruction?: boolean; forceRebuild?: boolean },
   ): void;
+  warnLog(message: string): void;
+  debugLog(message: string): void;
 }
 
 /**
@@ -41,10 +43,7 @@ export type StreamStatusEventModule = StatefulEventModule;
 export function createStreamStatusEvents(
   shared: StreamStatusEventShared,
 ): StreamStatusEventModule {
-  const withErrorBoundary = createErrorBoundary(
-    shared.logger,
-    'StreamStatusEvents',
-  );
+  const { withErrorBoundary, warnLog, debugLog } = shared;
 
   const handleSetActiveStream = async (
     payload: ProgressEventPayloads['setActiveStream'],
@@ -119,7 +118,7 @@ export function createStreamStatusEvents(
     const normalizedState = state.getTaskState(streamTabId);
 
     if (!normalizedState) {
-      shared.logger.warn(
+      warnLog(
         `Received setTaskState for ${streamTabId} but no state was stored`,
       );
     } else {
@@ -133,7 +132,7 @@ export function createStreamStatusEvents(
         currentFilter !== 'all' &&
         currentFilter !== sessionKind
       ) {
-        shared.logger.debug(
+        debugLog(
           `Adjusting agent filter from ${currentFilter} to ${sessionKind} for stream ${streamTabId}`,
         );
         state.agentTypeFilter = sessionKind;
