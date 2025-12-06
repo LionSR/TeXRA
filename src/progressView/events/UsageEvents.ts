@@ -7,7 +7,6 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
 import type {
   BaseEventShared,
   ProgressEventBusLike,
@@ -22,14 +21,14 @@ export type UsageEventsModule = StatefulEventModule;
 
 /**
  * Shared context for UsageEvents module.
- * Uses BaseEventShared which provides logger for error boundary.
+ * Uses BaseEventShared which provides withErrorBoundary.
  */
 type UsageEventsShared = BaseEventShared;
 
 export function createUsageEvents(
   shared: UsageEventsShared,
 ): UsageEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'UsageEvents');
+  const { withErrorBoundary } = shared;
 
   return {
     register(
