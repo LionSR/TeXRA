@@ -8,7 +8,10 @@ import type { WebviewUpdater } from '@progressView/managers';
 import type { StreamTabInfo } from '@progressView/types';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
-import type { ProgressEventPayloads, StreamStatus } from '@eventBus/ProgressEventBus';
+import type {
+  ProgressEventPayloads,
+  StreamStatus,
+} from '@eventBus/ProgressEventBus';
 
 // Local imports
 import type {
