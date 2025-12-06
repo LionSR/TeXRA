@@ -19,10 +19,13 @@ interface PickerOptions<Many extends boolean> {
   filters: () => { [name: string]: string[] };
 }
 
+/** Return type for the file picker based on the allowMany option */
+type PickerResult<Many extends boolean> = Many extends true
+  ? string[] | null
+  : string | null;
+
 function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
-  return async (
-    currentFile?: string,
-  ): Promise<Many extends true ? string[] | null : string | null> => {
+  return async (currentFile?: string): Promise<PickerResult<Many>> => {
     try {
       const baseOpts = {
         currentFile,
@@ -35,7 +38,9 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
         : await selectFile(baseOpts);
 
       if (!result) {
-        return null as any;
+        // TypeScript can't narrow conditional types, so we use a type assertion
+        // This is safe because null is valid for both branches of PickerResult
+        return null as PickerResult<Many>;
       }
 
       const message = Array.isArray(result)
@@ -43,10 +48,11 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
         : `Selected file: ${result}`;
       showInfoMessage(message);
       logger.info(CHANNEL, message);
-      return result as any;
+      // Type assertion is safe because selectFiles returns string[] and selectFile returns string
+      return result as PickerResult<Many>;
     } catch (err) {
       await showLoggedErrorMessage(CHANNEL, 'Error selecting files', err);
-      return null as any;
+      return null as PickerResult<Many>;
     }
   };
 }

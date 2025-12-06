@@ -21,11 +21,9 @@ import {
   AgentType,
   parseAgentSetting,
 } from '@agent/core/AgentDataclass';
+import { resolveToolDefinitionsAsync } from '@agent/utils/toolResolution';
 import { toErrorMessage } from '@common/errors/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
-
-// Type imports
-import type { ToolDefinition } from '@model';
 
 // Internal imports
 import { AbsoluteFS } from '@utils/files';
@@ -167,20 +165,8 @@ export async function loadAgentSettingAndPrompts(
 
     // Resolve tool names to definitions
     if (Array.isArray(settings.tools)) {
-      const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-      settings.tools = (settings.tools as any[]).map((item) => {
-        if (typeof item === 'string') {
-          const tool = DEFAULT_TOOL_REGISTRY[item];
-          if (!tool) {
-            logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
-            return { name: item } as ToolDefinition;
-          }
-          return tool.definition;
-        }
-        if (!DEFAULT_TOOL_REGISTRY[item.name]) {
-          logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
-        }
-        return item as ToolDefinition;
+      settings.tools = await resolveToolDefinitionsAsync(settings.tools, {
+        warn: logger.warn,
       });
     }
 

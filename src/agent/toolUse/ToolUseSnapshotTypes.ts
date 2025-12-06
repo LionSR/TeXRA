@@ -4,20 +4,13 @@ import { z } from 'zod';
 // Local imports - agent
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentSharedStoreSnapshotSchema } from '@agent/core/AgentSharedStore';
+import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessageSchema';
 // Type imports
 import type { AgentSharedStore } from '@agent/core/AgentSharedStore';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecutionId, StreamTabId } from '@agent/types/IdentifierTypes';
 
 export const TOOL_USE_SNAPSHOT_VERSION = 1;
-
-const ProviderMessageSchema = z.custom<ProviderMessage>(
-  (value): value is ProviderMessage =>
-    typeof value === 'object' && value !== null,
-  {
-    error: 'messages must contain provider message objects',
-  },
-);
 
 /**
  * We use z.object() instead of z.strictObject() to remain backward compatible

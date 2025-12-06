@@ -141,17 +141,31 @@ export class FileInteractionState {
     edits?: { path?: string; added?: number; removed?: number }[];
   }): FileInteractionState {
     const state = new FileInteractionState();
+    state.restoreFrom(data);
+    return state;
+  }
+
+  /**
+   * Restores state from serialized data, clearing existing state first.
+   * Used for in-place restoration without creating a new instance.
+   */
+  restoreFrom(data: {
+    readFiles?: string[];
+    edits?: { path?: string; added?: number; removed?: number }[];
+  }): void {
+    // Clear existing state
+    this.readFiles.clear();
+    this.edits.clear();
     // Restore read files
-    (data.readFiles ?? []).forEach((path) => state.recordRead(path));
+    (data.readFiles ?? []).forEach((path) => this.recordRead(path));
     // Restore edits directly (absolute values, not deltas)
     (data.edits ?? []).forEach((entry) => {
       if (!entry?.path) return;
-      state.edits.set(entry.path, {
+      this.edits.set(entry.path, {
         added: entry.added ?? 0,
         removed: entry.removed ?? 0,
       });
     });
-    return state;
   }
 }
 
@@ -278,16 +292,14 @@ export class AgentWorkspaceState {
     state.reasoning.thinkingBlocks.push(...snapshot.reasoning.thinkingBlocks);
     state.reasoning.thinkingAdded = snapshot.reasoning.thinkingAdded;
     state.document.texcountStats = snapshot.document.texcountStats;
-    // Restore file interactions directly using fromJSON (single source of truth)
+    // Restore file interactions in-place using restoreFrom
     const interactions =
       snapshot.interactions ??
       ({
         readFiles: [],
         edits: [],
       } satisfies AgentWorkspaceSnapshot['interactions']);
-    const restored = FileInteractionState.fromJSON(interactions);
-    // Replace the default instance with the restored state
-    (state as any).interactions = restored;
+    state.interactions.restoreFrom(interactions);
     return state;
   }
 }

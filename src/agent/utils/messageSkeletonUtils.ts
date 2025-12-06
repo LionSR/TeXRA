@@ -7,6 +7,9 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 // Local imports
 import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 
+/** Skeleton output type - simplified representation of message structure */
+type MessageSkeleton = Record<string, unknown> | null | string;
+
 /**
  * Creates a skeleton representation of a message object for debugging.
  * Preserves structure while truncating content to avoid cluttering logs.
@@ -17,53 +20,62 @@ import { MESSAGE_PREVIEW_LENGTH } from '@utils/config';
 export function messageToSkeleton(
   message: ProviderMessage | ProviderMessage[],
   maxContentLength: number = MESSAGE_PREVIEW_LENGTH,
-): any {
+): MessageSkeleton | MessageSkeleton[] {
   if (!message) {
     return null;
   }
 
   if (Array.isArray(message)) {
-    return message.map((item) => messageToSkeleton(item, maxContentLength));
+    // Each item in the array produces a single MessageSkeleton (not nested arrays)
+    return message.map(
+      (item) => messageToSkeleton(item, maxContentLength) as MessageSkeleton,
+    );
   }
 
   if (typeof message !== 'object') {
     return typeof message;
   }
 
-  const result: any = {};
+  const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(message)) {
     if (key === 'content') {
       if (Array.isArray(value)) {
         // Handle content arrays (common in Anthropic responses)
-        result[key] = value.map((item: any) => {
-          if (typeof item === 'object') {
-            const itemSkeleton: any = { type: item.type };
+        result[key] = value.map((item: unknown) => {
+          if (typeof item === 'object' && item !== null) {
+            const itemObj = item as Record<string, unknown>;
+            const itemSkeleton: Record<string, unknown> = { type: itemObj.type };
 
-            if (item.text) {
+            const text = itemObj.text;
+            if (typeof text === 'string') {
               const truncatedText =
-                item.text.length > maxContentLength
-                  ? `${item.text.substring(0, maxContentLength)}... (${item.text.length} chars)`
-                  : item.text;
+                text.length > maxContentLength
+                  ? `${text.substring(0, maxContentLength)}... (${text.length} chars)`
+                  : text;
               itemSkeleton.text = truncatedText;
             }
 
-            if (item.source) {
-              itemSkeleton.source = { type: item.source.type };
-              if (item.source.media_type) {
-                itemSkeleton.source.media_type = item.source.media_type;
+            const source = itemObj.source as Record<string, unknown> | undefined;
+            if (source && typeof source === 'object') {
+              const sourceInfo: Record<string, unknown> = { type: source.type };
+              if (source.media_type) {
+                sourceInfo.media_type = source.media_type;
               }
-              if (item.source.data) {
-                itemSkeleton.source.data = `[base64 data: ${item.source.data.length} chars]`;
+              const data = source.data;
+              if (typeof data === 'string') {
+                sourceInfo.data = `[base64 data: ${data.length} chars]`;
               }
+              itemSkeleton.source = sourceInfo;
             }
 
-            if (item.cache_control) {
-              itemSkeleton.cache_control = item.cache_control;
+            if (itemObj.cache_control) {
+              itemSkeleton.cache_control = itemObj.cache_control;
             }
 
-            if (item.thinking) {
-              itemSkeleton.thinking = `[thinking data: ${item.thinking.length} chars]`;
+            const thinking = itemObj.thinking;
+            if (typeof thinking === 'string') {
+              itemSkeleton.thinking = `[thinking data: ${thinking.length} chars]`;
             }
 
             return itemSkeleton;
@@ -93,9 +105,11 @@ export function messageToSkeleton(
       value !== undefined
     ) {
       // Recursively process nested objects
-      // Note: We pass 'any' here since nested properties within a message
-      // are not necessarily ProviderMessage instances themselves
-      result[key] = messageToSkeleton(value as any, maxContentLength);
+      // Cast to ProviderMessage for recursive call - safe because we're creating skeletons
+      result[key] = messageToSkeleton(
+        value as ProviderMessage,
+        maxContentLength,
+      );
     } else {
       // Pass through primitive values
       result[key] = value;

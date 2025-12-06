@@ -8,8 +8,8 @@ import {
   AgentDefinitionSchema,
 } from '@agent/core/AgentDataclass';
 import { isMultipleVariant, getMultipleName } from '@agent/index/agentRegistry';
+import { resolveToolDefinitionsAsync } from '@agent/utils/toolResolution';
 import * as logger from '@logger/logUtils';
-import type { ToolDefinition } from '@model';
 import { SupabaseClient } from '@/auth/SupabaseClient';
 import { SUPABASE_CONFIG } from '@/auth/config';
 
@@ -156,20 +156,8 @@ export class RemoteAgentLoader {
 
         // Resolve tool names to definitions
         if (Array.isArray(settings.tools)) {
-          const { DEFAULT_TOOL_REGISTRY } = await import('@tools/registry');
-          settings.tools = (settings.tools as any[]).map((item) => {
-            if (typeof item === 'string') {
-              const tool = DEFAULT_TOOL_REGISTRY[item];
-              if (!tool) {
-                logger.warn(CHANNEL, `Tool "${item}" not found in registry`);
-                return { name: item } as ToolDefinition;
-              }
-              return tool.definition;
-            }
-            if (!DEFAULT_TOOL_REGISTRY[item.name]) {
-              logger.warn(CHANNEL, `Tool "${item.name}" not found in registry`);
-            }
-            return item as ToolDefinition;
+          settings.tools = await resolveToolDefinitionsAsync(settings.tools, {
+            warn: logger.warn,
           });
         }
 

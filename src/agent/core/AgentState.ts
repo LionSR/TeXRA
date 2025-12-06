@@ -14,6 +14,12 @@ import {
   type UsageSummary,
   type NativeUsagePayload,
 } from './RunUsageAccumulator';
+import {
+  UsageSummarySchema,
+  NativeUsagePayloadSchema,
+  isOpenAIUsageFormat,
+  isAnthropicUsageFormat,
+} from './ResponseUsage';
 
 // Type imports
 import type {
@@ -93,11 +99,11 @@ function migrateLegacyUsageSummary(
 function isAnthropicUsage(
   usage: UsageSummary,
 ): usage is AnthropicAPIResponseUsage {
-  return usage !== null && 'input_tokens' in usage;
+  return isAnthropicUsageFormat(usage);
 }
 
 function isOpenAIUsage(usage: UsageSummary): usage is OpenAIAPIResponseUsage {
-  return usage !== null && 'prompt_tokens' in usage;
+  return isOpenAIUsageFormat(usage);
 }
 
 export const ConversationRoundStateSnapshotSchema = z.object({
@@ -108,8 +114,9 @@ export const ConversationRoundStateSnapshotSchema = z.object({
   // New: store normalized usage directly (nullish for backward compat with old saved states)
   normalizedUsage: NormalizedUsageSchema.nullish(),
   // Legacy fields for backward compatibility (deprecated)
-  usageSummary: z.custom<UsageSummary>().nullable().optional(),
-  nativeUsage: z.custom<NativeUsagePayload>().nullable().optional(),
+  // Using proper schemas instead of z.custom<T>() for runtime validation
+  usageSummary: UsageSummarySchema.optional(),
+  nativeUsage: NativeUsagePayloadSchema.nullable().optional(),
   provider: UsageProviderSchema.nullable().optional(),
 });
 

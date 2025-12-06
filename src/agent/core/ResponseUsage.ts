@@ -1,4 +1,5 @@
 // Third-party imports
+import { z } from 'zod';
 import type {
   Usage as AnthropicUsage,
   CacheCreation,
@@ -99,4 +100,198 @@ export interface AnthropicAPIResponseUsage extends ResponseUsageBase {
   service_tier: 'standard' | 'priority' | 'batch' | null;
   // Optional field surfaced by compatibility layers that expose tool-use costs.
   tool_use_tokens?: number;
+}
+
+// ============================================================================
+// Zod Schemas for Runtime Validation
+// ============================================================================
+
+/** Schema for base response usage metrics. */
+export const ResponseUsageBaseSchema = z.object({
+  totalInputTokens: z.number(),
+  totalOutputTokens: z.number(),
+  percentageCached: z.number(),
+  cost: z.number(),
+  responseTime: z.number(),
+});
+
+/** Schema for prompt token details (OpenAI). */
+const PromptTokensDetailsSchema = z
+  .object({
+    cached_tokens: z.number().optional(),
+  })
+  .passthrough()
+  .optional();
+
+/** Schema for completion token details (OpenAI). */
+const CompletionTokensDetailsSchema = z
+  .object({
+    reasoning_tokens: z.number().optional(),
+    accepted_prediction_tokens: z.number().nullable().optional(),
+    rejected_prediction_tokens: z.number().nullable().optional(),
+  })
+  .passthrough()
+  .optional();
+
+/** Schema for cache creation (Anthropic). */
+const CacheCreationSchema = z
+  .object({
+    ephemeral_1m_input_tokens: z.number().optional(),
+    ephemeral_5m_input_tokens: z.number().optional(),
+  })
+  .passthrough()
+  .nullable();
+
+/** Schema for server tool usage (Anthropic). */
+const ServerToolUsageSchema = z
+  .object({
+    web_search_requests: z.number().optional(),
+  })
+  .passthrough()
+  .nullable();
+
+/**
+ * Schema for UsageSummary (legacy format).
+ * Uses type guards for validation to match the interface types exactly.
+ * More permissive than strict schema validation for backward compatibility.
+ */
+export const UsageSummarySchema = z.custom<
+  OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null
+>(
+  (value): value is OpenAIAPIResponseUsage | AnthropicAPIResponseUsage | null => {
+    if (value === null) return true;
+    if (typeof value !== 'object') return false;
+    // Check for discriminating fields
+    const obj = value as Record<string, unknown>;
+    // OpenAI format has prompt_tokens
+    if ('prompt_tokens' in obj && typeof obj.prompt_tokens === 'number') {
+      return true;
+    }
+    // Anthropic format has input_tokens
+    if ('input_tokens' in obj && typeof obj.input_tokens === 'number') {
+      return true;
+    }
+    return false;
+  },
+  {
+    message: 'Invalid UsageSummary format: expected OpenAI or Anthropic usage object or null',
+  },
+);
+
+/**
+ * Type guard to check if usage is OpenAI format.
+ */
+export function isOpenAIUsageFormat(
+  usage: unknown,
+): usage is OpenAIAPIResponseUsage {
+  return (
+    typeof usage === 'object' &&
+    usage !== null &&
+    'prompt_tokens' in usage &&
+    typeof (usage as Record<string, unknown>).prompt_tokens === 'number'
+  );
+}
+
+/**
+ * Type guard to check if usage is Anthropic format.
+ */
+export function isAnthropicUsageFormat(
+  usage: unknown,
+): usage is AnthropicAPIResponseUsage {
+  return (
+    typeof usage === 'object' &&
+    usage !== null &&
+    'input_tokens' in usage &&
+    typeof (usage as Record<string, unknown>).input_tokens === 'number'
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Native Usage Payload Schemas (raw API responses)
+// ----------------------------------------------------------------------------
+
+/**
+ * Schema for NativeUsagePayload union.
+ * Uses type guard validation to match the interface types exactly.
+ * More permissive than strict schema validation for backward compatibility.
+ */
+export const NativeUsagePayloadSchema = z.custom<NativeUsagePayload>(
+  (value): value is NativeUsagePayload => {
+    if (typeof value !== 'object' || value === null) return false;
+    const obj = value as Record<string, unknown>;
+
+    // OpenAI Chat Completions (has prompt_tokens and completion_tokens)
+    if (
+      'prompt_tokens' in obj &&
+      typeof obj.prompt_tokens === 'number' &&
+      'completion_tokens' in obj &&
+      typeof obj.completion_tokens === 'number'
+    ) {
+      return true;
+    }
+
+    // OpenAI Responses API or Anthropic (has input_tokens and output_tokens)
+    if (
+      'input_tokens' in obj &&
+      typeof obj.input_tokens === 'number' &&
+      'output_tokens' in obj &&
+      typeof obj.output_tokens === 'number'
+    ) {
+      return true;
+    }
+
+    // Google Gemini (has promptTokenCount or candidatesTokenCount)
+    if (
+      ('promptTokenCount' in obj && typeof obj.promptTokenCount === 'number') ||
+      ('candidatesTokenCount' in obj &&
+        typeof obj.candidatesTokenCount === 'number') ||
+      ('totalTokenCount' in obj && typeof obj.totalTokenCount === 'number')
+    ) {
+      return true;
+    }
+
+    return false;
+  },
+  {
+    message:
+      'Invalid NativeUsagePayload format: expected usage object from OpenAI, Anthropic, or Google',
+  },
+);
+
+/**
+ * Identifies which provider a native usage payload belongs to.
+ */
+export function identifyNativeUsageProvider(
+  usage: unknown,
+): 'openai-chat' | 'openai-response' | 'anthropic' | 'google' | null {
+  if (typeof usage !== 'object' || usage === null) return null;
+
+  const obj = usage as Record<string, unknown>;
+
+  // Check for Google (has promptTokenCount)
+  if ('promptTokenCount' in obj || 'candidatesTokenCount' in obj) {
+    return 'google';
+  }
+
+  // Check for OpenAI Responses API (has input_tokens but no prompt_tokens)
+  if (
+    'input_tokens' in obj &&
+    'output_tokens' in obj &&
+    !('prompt_tokens' in obj) &&
+    !('cache_read_input_tokens' in obj)
+  ) {
+    return 'openai-response';
+  }
+
+  // Check for Anthropic (has input_tokens and potentially cache fields)
+  if ('input_tokens' in obj && 'output_tokens' in obj) {
+    return 'anthropic';
+  }
+
+  // Check for OpenAI Chat (has prompt_tokens and completion_tokens)
+  if ('prompt_tokens' in obj && 'completion_tokens' in obj) {
+    return 'openai-chat';
+  }
+
+  return null;
 }
