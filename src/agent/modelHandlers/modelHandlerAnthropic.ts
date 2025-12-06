@@ -1039,6 +1039,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
     };
   }
 
+  /**
+   * Create an assistant message from the raw API response, preserving all content blocks.
+   * This preserves server_tool_use and web_search_tool_result blocks for native web search.
+   */
+  override createAssistantMessageFromResponse(
+    responseObject: BetaMessage,
+    text: string,
+  ): MessageParam {
+    if (!Array.isArray(responseObject?.content)) {
+      return this.createAssistantMessage(text);
+    }
+
+    // Check if response contains server tool use blocks that need to be preserved
+    const hasServerToolContent = responseObject.content.some(
+      (block) =>
+        block.type === 'server_tool_use' ||
+        block.type === 'web_search_tool_result',
+    );
+
+    if (!hasServerToolContent) {
+      return this.createAssistantMessage(text);
+    }
+
+    // Preserve the full content array including server tool use and results
+    // Filter to only include blocks that are valid for assistant messages
+    const preservedContent = responseObject.content.filter(
+      (block) =>
+        block.type === 'text' ||
+        block.type === 'server_tool_use' ||
+        block.type === 'web_search_tool_result',
+    );
+
+    return {
+      role: 'assistant',
+      content: preservedContent as ContentBlockParam[],
+    };
+  }
+
   /** Converts image/document content array into Anthropic-compatible message format with type and source metadata. */
   createMediaContent(mediaMessage: MediaEntry[]): ContentBlockParam[] {
     if (mediaMessage.length === 0) {
@@ -1716,6 +1754,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return extractAnthropicWebSearchResults(responseObject.content);
   }
 
+  /**
+   * Extract server tool content blocks (server_tool_use, web_search_tool_result)
+   * that need to be preserved in the assistant message when local tools are also present.
+   */
+  override extractServerToolContent(responseObject: BetaMessage): unknown[] {
+    if (!Array.isArray(responseObject?.content)) {
+      return [];
+    }
+
+    return responseObject.content.filter(
+      (block) =>
+        block.type === 'server_tool_use' ||
+        block.type === 'web_search_tool_result',
+    );
+  }
+
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
     call: AnthropicToolCall,
@@ -1741,6 +1795,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
     if (text) {
       content.push({ type: 'text', text });
+    }
+    // Include server tool content blocks (server_tool_use, web_search_tool_result)
+    // These need to be preserved when both server and local tools are in the same response
+    if (workspaceState?.serverToolContent.hasContent()) {
+      content.push(
+        ...(workspaceState.serverToolContent
+          .contentBlocks as ContentBlockParam[]),
+      );
+      // Clear cached server tool content so it's not duplicated
+      workspaceState.resetServerToolContent();
     }
     const toolInput = call.raw.input ?? {};
     content.push({

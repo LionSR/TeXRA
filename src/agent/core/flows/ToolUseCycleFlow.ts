@@ -487,6 +487,14 @@ class ToolUseProcessNode<C> extends BaseNode<
       });
     }
 
+    // Store server tool content blocks (server_tool_use, web_search_tool_result)
+    // so they can be included when creating follow-up messages for local tools
+    const serverToolContent =
+      options.modelHandler.extractServerToolContent(state.response);
+    if (serverToolContent.length > 0) {
+      store.workspace.serverToolContent.setContentBlocks(serverToolContent);
+    }
+
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
         groupId,
@@ -520,7 +528,14 @@ class ToolUseProcessNode<C> extends BaseNode<
     if (!toolCalls || toolCalls.length === 0 || endTurn) {
       state.toolCalls = undefined;
       if (text) {
-        state.messages.push(options.modelHandler.createAssistantMessage(text));
+        // Use createAssistantMessageFromResponse to preserve server tool content
+        // (e.g., web_search results) in the conversation context
+        state.messages.push(
+          options.modelHandler.createAssistantMessageFromResponse(
+            state.response,
+            text,
+          ),
+        );
         store.workspace.assembly.updateLastResponse(text);
       }
       state.shouldStop = true;

@@ -643,6 +643,24 @@ export abstract class ModelHandler<
   /** Build a simple assistant message from text. */
   abstract createAssistantMessage(text: string): M;
 
+  /**
+   * Create an assistant message from the raw API response, preserving all content blocks.
+   * Default implementation falls back to createAssistantMessage(text).
+   * Override in handlers that support server tools (like Anthropic's web_search).
+   */
+  createAssistantMessageFromResponse(_responseObject: Resp, text: string): M {
+    return this.createAssistantMessage(text);
+  }
+
+  /**
+   * Extract server tool content blocks from a provider response.
+   * Default implementation returns empty array.
+   * Override in handlers that support server tools (like Anthropic's web_search).
+   */
+  extractServerToolContent(_responseObject: Resp): unknown[] {
+    return [];
+  }
+
   /** Check if stop reason signals end-turn. */
   public isEndTurnStop(reason: ProviderStopReason): boolean {
     return (
