@@ -2,10 +2,14 @@
 import { strict as assert } from 'assert';
 
 // Local imports - test
-import { toOpenAIResponseTools } from '@agent/modelHandlers/toolConversion';
+import {
+  toGoogleTools,
+  toOpenAIResponseTools,
+} from '@agent/modelHandlers/toolConversion';
 
 // Type imports
 import type { ToolDefinition } from '@model';
+import type { Tool as GeminiTool } from '@google/genai/dist/genai';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 
 describe('toOpenAIResponseTools', () => {
@@ -86,5 +90,102 @@ describe('toOpenAIResponseTools', () => {
     const tool = tools[0] as FunctionTool;
     assert.equal(tool.type, 'function');
     assert.equal(tool.name, 'web_search');
+  });
+});
+
+describe('toGoogleTools', () => {
+  // NOTE: Native googleSearch is disabled because Google's regular content
+  // generation API does NOT support combining googleSearch with functionDeclarations.
+  // This is a Live API only feature. All tools are converted to function declarations.
+
+  it('returns empty array for empty input', () => {
+    const tools = toGoogleTools([]);
+    assert.deepEqual(tools, []);
+  });
+
+  it('converts function declarations to single tool object', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'read_file',
+        description: 'Read a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+        },
+      },
+    ];
+
+    const tools = toGoogleTools(defs);
+    assert.equal(tools.length, 1);
+    const tool = tools[0] as GeminiTool;
+    assert.ok(tool.functionDeclarations);
+    assert.equal(tool.functionDeclarations?.length, 1);
+    assert.equal(tool.functionDeclarations?.[0].name, 'read_file');
+    assert.equal(tool.googleSearch, undefined);
+  });
+
+  it('converts web_search to function declaration (native googleSearch disabled)', () => {
+    // Native googleSearch is disabled because it cannot be combined with
+    // function calling in Google's regular API (Live API only feature)
+    const defs: ToolDefinition[] = [
+      {
+        name: 'web_search',
+        description: 'Search the web',
+      },
+    ];
+
+    const tools = toGoogleTools(defs);
+    assert.equal(tools.length, 1);
+    const tool = tools[0] as GeminiTool;
+    // Should be function declaration, NOT native googleSearch
+    assert.ok(tool.functionDeclarations);
+    assert.equal(tool.functionDeclarations?.length, 1);
+    assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
+    assert.equal(tool.googleSearch, undefined);
+  });
+
+  it('converts all tools to function declarations', () => {
+    const defs: ToolDefinition[] = [
+      {
+        name: 'web_search',
+        description: 'Search the web',
+      },
+      {
+        name: 'read_file',
+        description: 'Read a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+        },
+      },
+      {
+        name: 'write_file',
+        description: 'Write a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' }, content: { type: 'string' } },
+          required: ['path', 'content'],
+        },
+      },
+    ];
+
+    const tools = toGoogleTools(defs);
+    assert.equal(tools.length, 1);
+    const tool = tools[0] as GeminiTool;
+
+    // Check that googleSearch is NOT present
+    assert.equal(tool.googleSearch, undefined);
+
+    // Check that all tools are converted to function declarations
+    assert.ok(
+      tool.functionDeclarations,
+      'Expected functionDeclarations to be present',
+    );
+    assert.equal(tool.functionDeclarations?.length, 3);
+    assert.equal(tool.functionDeclarations?.[0].name, 'web_search');
+    assert.equal(tool.functionDeclarations?.[1].name, 'read_file');
+    assert.equal(tool.functionDeclarations?.[2].name, 'write_file');
   });
 });
