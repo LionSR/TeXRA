@@ -12,7 +12,6 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import type { SdkToolCall } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-// WebSearchResult import removed - not needed with unified extraction
 
 // Local imports - utilities
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
