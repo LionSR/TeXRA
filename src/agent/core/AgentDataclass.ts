@@ -58,13 +58,9 @@ export function resolveAgentSessionDescriptor(
   };
 }
 
-/**
- * Base schema shared by workflow and tool-use agent settings. Individual
- * variants extend this schema to add variant-specific constraints.
- */
+/** Shared fields for all agent settings (discriminator added per-variant). */
 export const AgentSettingBaseSchema = z.strictObject({
   agentType: z.enum(AgentType).prefault(AgentType.CoT),
-  agentCategory: z.enum(AgentCategory).prefault(AgentCategory.Workflow),
   documentTag: z
     .string()
     .min(1, 'documentTag cannot be empty')
@@ -92,54 +88,32 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
-/**
- * Workflow agent settings support multiple-output workflows and therefore
- * expose the {@code isMultipleOutput} toggle.
- */
+/** Workflow agents: literal discriminator + workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
+  agentCategory: z.literal(AgentCategory.Workflow).prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
   prefills: z.array(z.string()).prefault([]),
   outputExt: z.string().prefault('txt'),
   isMultipleOutput: z.boolean().prefault(false),
-}).superRefine((data, ctx) => {
-  if (data.agentType === AgentType.ToolUse) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['agentType'],
-      message:
-        'Workflow agent settings cannot use the toolUse agent type. Use the tool-use schema instead.',
-    });
-  }
-  if (data.agentCategory === AgentCategory.ToolUse) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['agentCategory'],
-      message:
-        'Workflow agent settings must use the workflow category. Use the tool-use schema instead.',
-    });
-  }
 });
 
-/** Tool-use agents never expose workflow-specific flags. */
+/** Tool-use agents: literal discriminator, no workflow fields. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
+  agentCategory: z.literal(AgentCategory.ToolUse).prefault(AgentCategory.ToolUse),
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
-  agentCategory: z
-    .literal(AgentCategory.ToolUse)
-    .prefault(AgentCategory.ToolUse),
 });
 
-/**
- * Canonical agent settings schema combining workflow and tool-use variants.
- */
-export const AgentSettingSchema = z.union([
+/** Discriminated union for O(1) type lookup by agentCategory. */
+export const AgentSettingSchema = z.discriminatedUnion('agentCategory', [
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
 ]);
 
-export type AgentWorkflowSetting = z.infer<typeof AgentWorkflowSettingSchema>;
-export type AgentToolUseSetting = z.infer<typeof AgentToolUseSettingSchema>;
+/** Canonical union type - derive subtypes from this. */
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
+export type AgentWorkflowSetting = Extract<AgentSetting, { agentCategory: AgentCategory.Workflow }>;
+export type AgentToolUseSetting = Extract<AgentSetting, { agentCategory: AgentCategory.ToolUse }>;
 
 /**
  * Return the canonical session descriptor for a fully-materialized agent setting.
