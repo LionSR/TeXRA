@@ -5,7 +5,6 @@ import * as vscode from 'vscode';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local file imports
-import { createErrorBoundary } from './errorHandling';
 import type {
   BaseEventShared,
   EventModuleBase,
@@ -38,7 +37,7 @@ export type RetryEventsModule = EventModuleBase;
 export function createRetryEventsModule(
   shared: RetryEventsShared,
 ): RetryEventsModule {
-  const withErrorBoundary = createErrorBoundary(shared.logger, 'RetryEvents');
+  const { withErrorBoundary } = shared;
 
   return {
     register(bus: ProgressEventBusLike): vscode.Disposable[] {
