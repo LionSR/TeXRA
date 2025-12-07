@@ -532,7 +532,9 @@ class ToolUseProcessNode<C> extends BaseNode<
         state.messages.push(options.modelHandler.createAssistantMessage(text));
         store.workspace.assembly.updateLastResponse(text);
       }
+      // Clear ephemeral state so stale data isn't used in subsequent requests
       store.workspace.resetServerToolContent();
+      store.workspace.resetReasoning();
       state.shouldStop = true;
       return {
         skipped: false,
