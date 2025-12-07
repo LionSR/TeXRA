@@ -99,6 +99,7 @@ import type {
   BetaContextManagementConfig,
   BetaImageBlockParam,
   BetaMessage,
+  BetaRawMessageStreamEvent,
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
@@ -599,25 +600,45 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       try {
-        const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : undefined;
-        stream.on('thinking', (delta: string) => {
-          thinking.append(delta);
-        });
-        stream.on('text', (delta: string) => {
-          output?.append(delta);
+        // Track streams by block index - allows proper handling of interleaved blocks
+        const outputEnabled = this.isOutputStreamingEnabled();
+        const streams = new Map<
+          number,
+          ReturnType<typeof this.createThinkingStream>
+        >();
+
+        // Use streamEvent for granular control over individual content blocks
+        // This allows us to create separate entries for each thinking/text block
+        stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
+          if (event.type === 'content_block_start') {
+            const idx = event.index;
+            if (event.content_block.type === 'thinking') {
+              streams.set(idx, this.createThinkingStream());
+            } else if (event.content_block.type === 'text' && outputEnabled) {
+              streams.set(idx, this.createOutputStream());
+            }
+          } else if (event.type === 'content_block_delta') {
+            const s = streams.get(event.index);
+            if (event.delta.type === 'thinking_delta') {
+              s?.append(event.delta.thinking);
+            } else if (event.delta.type === 'text_delta') {
+              s?.append(event.delta.text);
+            }
+          } else if (event.type === 'content_block_stop') {
+            const s = streams.get(event.index);
+            s?.finalize();
+            streams.delete(event.index);
+          }
         });
 
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
-        const finalReasoning = this.processThinkingBlock(response);
-        thinking.finalize(finalReasoning ?? undefined);
-        // Extract text manually instead of using finalText() which throws
-        // when response contains only thinking + tool_use blocks with no text
-        const finalOutput = extractTextFromContent(response.content);
-        if (output) output.finalize(finalOutput);
+        // Finalize any remaining streams (shouldn't normally happen)
+        for (const s of streams.values()) {
+          s.finalize();
+        }
+        // Store thinking blocks for API conversation continuation
+        this.processThinkingBlock(response);
       } finally {
         cleanupAbortListener?.();
       }
