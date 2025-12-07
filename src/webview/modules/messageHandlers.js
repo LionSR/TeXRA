@@ -601,6 +601,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    *
    * @param {HTMLElement} selectElement - The select element to restore
    * @param {string[]} candidates - Array of candidate values to try, in priority order
+   * @returns {boolean} True if a candidate was matched, false if fell back to default
    */
   _restoreSelectValue(selectElement, candidates) {
     const filteredCandidates = candidates.filter(Boolean);
@@ -613,7 +614,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     if (exactMatch) {
       selectElement.value = exactMatch;
-      return;
+      return true;
     }
 
     // Migration: try matching by name suffix for old format values
@@ -627,7 +628,7 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       );
       if (suffixMatch) {
         selectElement.value = suffixMatch.value;
-        return;
+        return true;
       }
     }
 
@@ -636,13 +637,24 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (fallbackOption) {
       selectElement.value = fallbackOption.value;
     }
+    return false;
   }
 
   _restoreAgentSelection(selectElement, previousValue) {
     const sessionType = this._getSessionTypeForSelect(selectElement);
     const savedValue = sessionType ? this._getSavedAgentValue(sessionType) : '';
     // Prioritize saved state over previous UI value for agents
-    this._restoreSelectValue(selectElement, [savedValue, previousValue]);
+    const restored = this._restoreSelectValue(selectElement, [
+      savedValue,
+      previousValue,
+    ]);
+
+    // If restoration failed and we have a saved value, recreate the placeholder
+    // This preserves the agent selection even when the agent isn't in the options
+    // (e.g., remote agent from another session, custom agent that was deleted)
+    if (!restored && savedValue) {
+      this._setAgentValue(selectElement.id, savedValue);
+    }
   }
 
   _restoreModelSelection(selectElement, previousValue) {
