@@ -481,12 +481,15 @@ class ToolUseProcessNode<C> extends BaseNode<
     );
 
     // Log web search results to progress view
-    for (const searchResult of serverToolData.webSearchResults) {
-      options.logger.info('', {
-        groupId,
-        messageType: MESSAGE_TYPES.WEB_SEARCH,
-        data: searchResult,
-      });
+    // Skip when streaming - Anthropic handler emits during streaming for correct order
+    if (!useStreaming) {
+      for (const searchResult of serverToolData.webSearchResults) {
+        options.logger.info('', {
+          groupId,
+          messageType: MESSAGE_TYPES.WEB_SEARCH,
+          data: searchResult,
+        });
+      }
     }
 
     // Cache content blocks for use in follow-up messages
