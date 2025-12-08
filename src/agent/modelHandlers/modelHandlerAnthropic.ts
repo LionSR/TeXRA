@@ -600,43 +600,56 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       try {
-        // Track streams by block index - allows proper handling of interleaved blocks
+        // Thinking blocks: separate stream per block (user wants to see each thinking phase)
+        // Text blocks: single shared stream (all text merges into one response)
+        // This distinction is important for server tools (web search) which produce
+        // multiple text blocks due to citations - we want one merged response, not fragments
         const outputEnabled = this.isOutputStreamingEnabled();
-        const streams = new Map<
+        const thinkingStreams = new Map<
           number,
           ReturnType<typeof this.createThinkingStream>
         >();
+        // Use object wrapper to avoid TypeScript narrowing issue with closure reassignment
+        const output = { stream: null as ReturnType<ModelHandler['createOutputStream']> | null };
 
-        // Use streamEvent for granular control over individual content blocks
-        // This allows us to create separate entries for each thinking/text block
         stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
           if (event.type === 'content_block_start') {
-            const idx = event.index;
             if (event.content_block.type === 'thinking') {
-              streams.set(idx, this.createThinkingStream());
+              thinkingStreams.set(event.index, this.createThinkingStream());
             } else if (event.content_block.type === 'text' && outputEnabled) {
-              streams.set(idx, this.createOutputStream());
+              // Create output stream only once - all text blocks share it
+              if (!output.stream) {
+                output.stream = this.createOutputStream();
+              }
             }
           } else if (event.type === 'content_block_delta') {
-            const s = streams.get(event.index);
             if (event.delta.type === 'thinking_delta') {
-              s?.append(event.delta.thinking);
+              thinkingStreams.get(event.index)?.append(event.delta.thinking);
             } else if (event.delta.type === 'text_delta') {
-              s?.append(event.delta.text);
+              // All text deltas go to the shared output stream
+              output.stream?.append(event.delta.text);
             }
           } else if (event.type === 'content_block_stop') {
-            const s = streams.get(event.index);
-            s?.finalize();
-            streams.delete(event.index);
+            // Only finalize thinking streams on block stop
+            const thinking = thinkingStreams.get(event.index);
+            if (thinking) {
+              thinking.finalize();
+              thinkingStreams.delete(event.index);
+            }
+            // Don't finalize output stream here - it accumulates all text blocks
           }
         });
 
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
-        // Finalize any remaining streams (shouldn't normally happen)
-        for (const s of streams.values()) {
+
+        // Finalize any remaining thinking streams (shouldn't normally happen)
+        for (const s of thinkingStreams.values()) {
           s.finalize();
         }
+        // Finalize the shared output stream after all text blocks are done
+        output.stream?.finalize();
+
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } finally {
