@@ -1635,7 +1635,7 @@
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
     "identifiers-arxiv": "^0.1.1",
-    "katex": "^0.16.25",
+    "katex": "^0.16.27",
     "markdown-it": "^14.1.0",
     "markdown-it-highlightjs": "^4.2.0",
     "mime-types": "^3.0.1",
