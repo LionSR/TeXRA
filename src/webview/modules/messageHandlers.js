@@ -785,105 +785,143 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     }
   }
 
+  /**
+   * Restore the main view state from a TaskState object.
+   *
+   * Flow:
+   * 1. Extract session type from canonical session descriptor
+   * 2. Set all form field values directly in DOM
+   * 3. Set file arrays in DOM
+   * 4. Store state for persistence
+   * 5. Apply session type UI changes (visibility, disabled states)
+   *
+   * Note: We intentionally do NOT call mainViewState.restore() here because
+   * we already set all DOM values directly. Calling restore() would redundantly
+   * re-read state and re-apply to DOM, plus clear and rebuild file lists twice.
+   */
   _handleStateRestoration(state) {
     const config = state.agentConfig || state;
     const activeFiles = state.activeFiles || {};
-    // TaskState has session at top level - this is the canonical source of truth
-    // agentConfig.session should match, but may be missing in legacy data
+    // TaskState.session is the canonical source of truth for session metadata
     const canonicalSession = state.session || config.session;
 
     const savedState = {};
-    this._restoreFormFields(config, savedState, canonicalSession);
+    const sessionType = this._restoreFormFields(config, savedState, canonicalSession);
     this._restoreFileArrays(config, savedState, activeFiles);
+
+    // Store state for persistence and future restoration
     mainViewState.set(savedState);
-    mainViewState.restore();
+
+    // Apply session type UI changes (visibility, disabled states) without re-setting values.
+    // skipSave: true because we already have the correct state stored above.
+    mainViewState.applySessionType(sessionType, { skipSave: true });
+
+    // Prevent _postHandle from calling mainViewState.restore()
     this._skipNextRestoreState = true;
   }
 
+  /**
+   * Determine session type from state, with clear priority order.
+   * @returns {'workflow' | 'toolUse'} The normalized session type
+   */
+  _determineSessionType(canonicalSession, state) {
+    // Priority 1: Canonical session descriptor (single source of truth)
+    const category = canonicalSession?.agentCategory;
+    if (category === SESSION_TYPES.TOOL_USE || category === SESSION_TYPES.WORKFLOW) {
+      return category;
+    }
+
+    // Priority 2: Explicit sessionType property (for legacy/webview state)
+    if (state.sessionType === SESSION_TYPES.TOOL_USE || state.sessionType === SESSION_TYPES.WORKFLOW) {
+      return state.sessionType;
+    }
+
+    // Priority 3: Infer from agentType or isToolUseAgent flag (legacy support)
+    const agentType = canonicalSession?.agentType ?? state.agentType;
+    if (agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent) {
+      return SESSION_TYPES.TOOL_USE;
+    }
+
+    // Default to workflow
+    return SESSION_TYPES.WORKFLOW;
+  }
+
+  /**
+   * Extract agent value for a session type from state.
+   * AgentConfig stores a single 'agent' field, but webview state may have
+   * separate workflowAgent/toolUseAgent fields for UI persistence.
+   */
+  _extractAgentValue(state, forToolUse, isCurrentlyToolUse) {
+    // Check for explicit session-specific agent value first (webview state format)
+    const explicitValue = forToolUse ? state.toolUseAgent : state.workflowAgent;
+    if (explicitValue) {
+      return explicitValue;
+    }
+
+    // Fall back to generic 'agent' field only if it matches the session type
+    // This prevents workflow agent from being assigned to tool-use dropdown and vice versa
+    if (state.agent && forToolUse === isCurrentlyToolUse) {
+      return state.agent;
+    }
+
+    return '';
+  }
+
+  /**
+   * Restore form field values from state to DOM.
+   * @returns {string} The normalized session type
+   */
   _restoreFormFields(state, savedState, canonicalSession) {
-    // Use the canonical session from TaskState (passed in), fallback to agentConfig.session
-    const sessionCategory =
-      canonicalSession?.agentCategory ?? state.session?.agentCategory;
+    const sessionType = this._determineSessionType(canonicalSession, state);
+    const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
 
-    let sessionType = state.sessionType;
-    if (sessionCategory === SESSION_TYPES.TOOL_USE) {
-      sessionType = SESSION_TYPES.TOOL_USE;
-    } else if (sessionCategory === SESSION_TYPES.WORKFLOW) {
-      sessionType = SESSION_TYPES.WORKFLOW;
+    // Extract agent values with clear logic
+    const workflowAgentValue = this._extractAgentValue(state, false, isToolUseSession);
+    const toolUseAgentValue = this._extractAgentValue(state, true, isToolUseSession);
+
+    // Set DOM values
+    safeSetElementValue(SESSION_TYPE_INPUT, sessionType);
+    this._setAgentValue(AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW], workflowAgentValue);
+    this._setAgentValue(AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE], toolUseAgentValue);
+
+    if (state.model) {
+      safeSetElementValue('model', state.model);
     }
-
-    if (!sessionType) {
-      // Final fallback: check agentType from canonical session, then isToolUseAgent flag
-      const agentType = canonicalSession?.agentType ?? state.agentType;
-      const isToolUse =
-        agentType === SESSION_TYPES.TOOL_USE || state.isToolUseAgent;
-      sessionType = isToolUse ? SESSION_TYPES.TOOL_USE : SESSION_TYPES.WORKFLOW;
-    }
-
-    const normalizedSessionType = normalizeSessionType(sessionType);
-    const isToolUseSession = normalizedSessionType === SESSION_TYPES.TOOL_USE;
-
-    const workflowAgentValue =
-      state.workflowAgent ??
-      (!isToolUseSession ? state.agent : undefined) ??
-      '';
-    const toolUseAgentValue =
-      state.toolUseAgent ?? (isToolUseSession ? state.agent : undefined) ?? '';
-
-    safeSetElementValue(SESSION_TYPE_INPUT, normalizedSessionType);
-    this._setAgentValue(
-      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
-      workflowAgentValue,
-    );
-    this._setAgentValue(
-      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
-      toolUseAgentValue,
-    );
-    if (state.model) safeSetElementValue('model', state.model);
 
     const instructionContent = state.instruction || '';
-    const instruction =
-      this._instructionEl ||
-      (this._instructionEl = this._getElement('instruction'));
+    const instruction = this._instructionEl || (this._instructionEl = this._getElement('instruction'));
     if (instruction) {
       instruction.value = instructionContent;
       instruction.dispatchEvent(new Event('input'));
     }
 
+    // Set single file selections
     if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
-    if (state.referenceFile)
-      safeSetElementValue(REFERENCE_FILE, state.referenceFile);
-    if (state.auxiliaryFile)
-      safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
+    if (state.referenceFile) safeSetElementValue(REFERENCE_FILE, state.referenceFile);
+    if (state.auxiliaryFile) safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
     if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
 
+    // Build savedState object for persistence
     const toolConfig = state.toolConfig || {};
     Object.assign(savedState, {
-      sessionType: normalizedSessionType,
+      sessionType,
       workflowAgent: workflowAgentValue,
       toolUseAgent: toolUseAgentValue,
-      agent:
-        state.agent ??
-        (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
+      agent: state.agent || (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
       auxiliaryFile: state.auxiliaryFile,
       mediaFile: state.mediaFile,
-      autoExtractFigure:
-        state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
-      autoExtractTikzFigure:
-        state.autoExtractTikzFigure ??
-        toolConfig.autoExtractTikzFigure ??
-        false,
-      attachTeXCount:
-        state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
-      attachDiagnostics:
-        state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
-      autoCompileInputPdf:
-        state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
+      autoExtractFigure: state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
+      autoExtractTikzFigure: state.autoExtractTikzFigure ?? toolConfig.autoExtractTikzFigure ?? false,
+      attachTeXCount: state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
+      attachDiagnostics: state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
+      autoCompileInputPdf: state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
     });
+
+    return sessionType;
   }
 
   _restoreFileArrays(state, savedState, activeFiles = {}) {
