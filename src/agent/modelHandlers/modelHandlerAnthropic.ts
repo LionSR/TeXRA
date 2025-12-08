@@ -600,55 +600,81 @@ export class ModelHandlerAnthropic extends ModelHandler<
       }
 
       try {
-        // Thinking blocks: separate stream per block (user wants to see each thinking phase)
-        // Text blocks: single shared stream (all text merges into one response)
-        // This distinction is important for server tools (web search) which produce
-        // multiple text blocks due to citations - we want one merged response, not fragments
+        // Streaming strategy for interleaved content blocks:
+        // - Thinking blocks: each gets its own stream entry (separate thinking phases)
+        // - Text blocks: consecutive text blocks merge, non-consecutive are separate
+        //
+        // Example: text_0 → thinking_1 → tool_2 → text_3 → text_4
+        //   → Output #1 (text_0), Thinking #1, Output #2 (text_3 + text_4 merged)
+        //
+        // This preserves order while merging citation-split text blocks.
         const outputEnabled = this.isOutputStreamingEnabled();
         const thinkingStreams = new Map<
           number,
           ReturnType<typeof this.createThinkingStream>
         >();
-        // Use object wrapper to avoid TypeScript narrowing issue with closure reassignment
-        const output = { stream: null as ReturnType<ModelHandler['createOutputStream']> | null };
+        // Track output stream and last block type for consecutive text detection
+        const state = {
+          outputStream: null as ReturnType<ModelHandler['createOutputStream']> | null,
+          lastBlockType: null as string | null,
+        };
 
         stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
           if (event.type === 'content_block_start') {
-            if (event.content_block.type === 'thinking') {
+            const blockType = event.content_block.type;
+
+            if (blockType === 'thinking') {
+              // Finalize any pending text stream before starting thinking
+              if (state.outputStream) {
+                state.outputStream.finalize();
+                state.outputStream = null;
+              }
               thinkingStreams.set(event.index, this.createThinkingStream());
-            } else if (event.content_block.type === 'text' && outputEnabled) {
-              // Create output stream only once - all text blocks share it
-              if (!output.stream) {
-                output.stream = this.createOutputStream();
+            } else if (blockType === 'text' && outputEnabled) {
+              // Consecutive text blocks share a stream, non-consecutive get new stream
+              if (state.lastBlockType !== 'text') {
+                // Previous block wasn't text - finalize old stream, create new one
+                if (state.outputStream) {
+                  state.outputStream.finalize();
+                }
+                state.outputStream = this.createOutputStream();
+              }
+              // If lastBlockType was 'text', reuse existing outputStream
+            } else {
+              // Non-text, non-thinking block (tool_use, server_tool_use, etc.)
+              // Finalize any pending text stream
+              if (state.outputStream) {
+                state.outputStream.finalize();
+                state.outputStream = null;
               }
             }
+
+            state.lastBlockType = blockType;
           } else if (event.type === 'content_block_delta') {
             if (event.delta.type === 'thinking_delta') {
               thinkingStreams.get(event.index)?.append(event.delta.thinking);
             } else if (event.delta.type === 'text_delta') {
-              // All text deltas go to the shared output stream
-              output.stream?.append(event.delta.text);
+              state.outputStream?.append(event.delta.text);
             }
           } else if (event.type === 'content_block_stop') {
-            // Only finalize thinking streams on block stop
+            // Finalize thinking streams immediately on block stop
             const thinking = thinkingStreams.get(event.index);
             if (thinking) {
               thinking.finalize();
               thinkingStreams.delete(event.index);
             }
-            // Don't finalize output stream here - it accumulates all text blocks
+            // Text streams: don't finalize here - wait for non-text block or end
           }
         });
 
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
 
-        // Finalize any remaining thinking streams (shouldn't normally happen)
+        // Finalize any remaining streams
         for (const s of thinkingStreams.values()) {
           s.finalize();
         }
-        // Finalize the shared output stream after all text blocks are done
-        output.stream?.finalize();
+        state.outputStream?.finalize();
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
