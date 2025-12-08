@@ -204,8 +204,17 @@ export class ServerToolContentState {
    */
   public contentBlocks: ServerToolContentBlock[] = [];
 
+  /**
+   * Full assistant content blocks from the last response, excluding tool_use.
+   * Preserves original order for building correct follow-up messages.
+   * Includes: thinking, text, server_tool_use, web_search_tool_result blocks.
+   * Cleared after being consumed by createToolUseFollowUpMessages().
+   */
+  public lastAssistantContent: unknown[] = [];
+
   reset(): void {
     this.contentBlocks = [];
+    this.lastAssistantContent = [];
   }
 }
 
