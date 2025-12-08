@@ -1907,36 +1907,44 @@ export class ModelHandlerAnthropic extends ModelHandler<
     text?: string,
   ): Promise<MessageParam[]> {
     const content: ContentBlockParam[] = [];
-    if (
-      this.capabilities.supportsReasoning &&
-      workspaceState?.reasoning.thinkingBlocks &&
-      workspaceState.reasoning.thinkingBlocks.length > 0
-    ) {
-      // Anthropic models expect thinking blocks before text
-      // Include thinking blocks from workspace state as SDK thinking params
+
+    // Use stored assistant content if available - preserves original order from API
+    // This includes: thinking, text, server_tool_use, web_search_tool_result blocks
+    if (workspaceState?.serverToolContent.lastAssistantContent.length) {
       content.push(
-        ...(workspaceState.reasoning
-          .thinkingBlocks as AnthropicThinkingContentParam[]),
+        ...(workspaceState.serverToolContent
+          .lastAssistantContent as ContentBlockParam[]),
       );
-      // Clear cached thinking so the next response can store fresh blocks
-      workspaceState.resetReasoning();
-    }
-    // Include server tool content blocks (server_tool_use, web_search_tool_result)
-    // These need to be preserved when both server and local tools are in the same response
-    // Order: thinking → server_tool_use → web_search_tool_result → text → tool_use
-    if (workspaceState?.serverToolContent.contentBlocks.length) {
-      // Filter to only Anthropic server tool blocks for type safety
-      const anthropicBlocks = workspaceState.serverToolContent.contentBlocks
-        .filter(isAnthropicServerToolContent)
-        .map((block) => block as ContentBlockParam);
-      content.push(...anthropicBlocks);
-      // Clear after consuming to prevent duplicates
+      // Clear all stores after consuming to prevent duplicates
+      workspaceState.serverToolContent.lastAssistantContent = [];
       workspaceState.serverToolContent.contentBlocks = [];
+      workspaceState.resetReasoning();
+    } else {
+      // Fall back to reconstructing from separate stores (legacy/non-streaming path)
+      if (
+        this.capabilities.supportsReasoning &&
+        workspaceState?.reasoning.thinkingBlocks &&
+        workspaceState.reasoning.thinkingBlocks.length > 0
+      ) {
+        content.push(
+          ...(workspaceState.reasoning
+            .thinkingBlocks as AnthropicThinkingContentParam[]),
+        );
+        workspaceState.resetReasoning();
+      }
+      if (workspaceState?.serverToolContent.contentBlocks.length) {
+        const anthropicBlocks = workspaceState.serverToolContent.contentBlocks
+          .filter(isAnthropicServerToolContent)
+          .map((block) => block as ContentBlockParam);
+        content.push(...anthropicBlocks);
+        workspaceState.serverToolContent.contentBlocks = [];
+      }
+      if (text) {
+        content.push({ type: 'text', text });
+      }
     }
-    // Text comes after server tool content (model generates text after seeing search results)
-    if (text) {
-      content.push({ type: 'text', text });
-    }
+
+    // Add tool_use block at the end
     const toolInput = call.raw.input ?? {};
     content.push({
       type: 'tool_use',
