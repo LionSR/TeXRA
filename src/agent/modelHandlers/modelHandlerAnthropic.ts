@@ -84,6 +84,8 @@ import {
   extractAnthropicWebSearchResults,
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
+  type WebSearchResult,
+  type WebSearchResultEntry,
 } from './types/ServerToolTypes';
 
 // Type imports
@@ -120,6 +122,7 @@ import type {
   RedactedThinkingBlockParam,
   ServerToolUseBlock,
   WebSearchToolResultBlock,
+  WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -603,9 +606,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Streaming strategy for interleaved content blocks:
         // - Thinking blocks: each gets its own stream entry (separate thinking phases)
         // - Text blocks: consecutive text blocks merge, non-consecutive are separate
+        // - Server tools (web_search): emit to progress view when results arrive
         //
-        // Example: text_0 → thinking_1 → tool_2 → text_3 → text_4
-        //   → Output #1 (text_0), Thinking #1, Output #2 (text_3 + text_4 merged)
+        // Example: text_0 → server_tool_1 → result_2 → text_3 → text_4
+        //   → Output #1 (text_0), WebSearch, Output #2 (text_3 + text_4 merged)
         //
         // This preserves order while merging citation-split text blocks.
         const outputEnabled = this.isOutputStreamingEnabled();
@@ -619,6 +623,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         const state = {
           outputStream: null as ReturnType<ModelHandler['createOutputStream']> | null,
           lastBlockIndex: -1, // Index of most recent block (any type)
+          // Track web search: tool_use_id → { index, accumulated input JSON }
+          pendingSearches: new Map<string, { index: number; input: string }>(),
+          // Track emitted search IDs to prevent duplicate logging in flow
+          emittedSearchIds: new Set<string>(),
         };
 
         stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
@@ -649,8 +657,79 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 }
                 state.outputStream = this.createOutputStream();
               }
+            } else if (blockType === 'server_tool_use') {
+              // Track web search server tool use to get query
+              const block = event.content_block as ServerToolUseBlock;
+              if (block.name === 'web_search') {
+                state.pendingSearches.set(block.id, {
+                  index: blockIndex,
+                  input: '',
+                });
+              }
+              // Finalize any pending text stream
+              if (state.outputStream) {
+                state.outputStream.finalize();
+                state.outputStream = null;
+              }
+            } else if (blockType === 'web_search_tool_result') {
+              // Emit web search result to progress view at the correct time
+              const block = event.content_block as WebSearchToolResultBlock;
+              const searchData = state.pendingSearches.get(block.tool_use_id);
+
+              // Parse query from accumulated input JSON
+              let query = '';
+              if (searchData?.input) {
+                try {
+                  const parsed = JSON.parse(searchData.input) as { query?: string };
+                  query = parsed.query ?? '';
+                } catch {
+                  // Partial JSON, try to extract query
+                  const match = searchData.input.match(/"query"\s*:\s*"([^"]+)"/);
+                  if (match) {
+                    query = match[1];
+                  }
+                }
+              }
+
+              // Extract results from the block content
+              const entries: WebSearchResultEntry[] = [];
+              if (Array.isArray(block.content)) {
+                for (const item of block.content) {
+                  const r = item as WebSearchResultBlock;
+                  if (r.type === 'web_search_result' && r.url) {
+                    entries.push({
+                      url: r.url,
+                      title: r.title,
+                      snippet: r.encrypted_content,
+                      pageAge: r.page_age ?? undefined,
+                      domain: this.extractDomain(r.url),
+                    });
+                  }
+                }
+              }
+
+              // Emit to progress view
+              if (entries.length > 0 || query) {
+                this.emitWebSearchResult({
+                  query,
+                  results: entries,
+                  provider: 'anthropic',
+                  callId: block.tool_use_id,
+                  status: 'completed',
+                });
+                state.emittedSearchIds.add(block.tool_use_id);
+              }
+
+              // Clean up
+              state.pendingSearches.delete(block.tool_use_id);
+
+              // Finalize any pending text stream
+              if (state.outputStream) {
+                state.outputStream.finalize();
+                state.outputStream = null;
+              }
             } else {
-              // Non-text, non-thinking block (tool_use, server_tool_use, etc.)
+              // Other non-text, non-thinking blocks (tool_use, etc.)
               // Finalize any pending text stream
               if (state.outputStream) {
                 state.outputStream.finalize();
@@ -665,6 +744,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
               thinkingStreams.get(event.index)?.append(event.delta.thinking);
             } else if (event.delta.type === 'text_delta') {
               state.outputStream?.append(event.delta.text);
+            } else if (event.delta.type === 'input_json_delta') {
+              // Accumulate input JSON for web search to get query
+              for (const [, searchData] of state.pendingSearches) {
+                if (searchData.index === event.index) {
+                  searchData.input += event.delta.partial_json;
+                  break;
+                }
+              }
             }
           } else if (event.type === 'content_block_stop') {
             // Finalize thinking streams immediately on block stop
@@ -971,6 +1058,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // generating citations for assets or pictures that originally lived in nested
     // folders.
     return sanitized.slice(0, 255);
+  }
+
+  /** Extract domain from URL for web search result display */
+  private extractDomain(url: string): string {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return '';
+    }
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
