@@ -165,8 +165,10 @@ export class SettingsButtonManager extends BaseUIManager {
 
   _setupSettingsButtons() {
     this.addListener(ELEMENT_IDS.AGENT_SETTINGS_BUTTON, 'click', () => {
+      const sessionType = normalizeSessionType(this.state.get()?.sessionType);
       this.vscode.postMessage({
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
+        sessionType,
       });
     });
 
