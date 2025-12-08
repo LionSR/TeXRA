@@ -160,8 +160,13 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // Settings commands
       [MAIN_VIEW_COMMANDS.SETTINGS_OPEN]: async () =>
         this.settingsManager.openSettings(),
-      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async () =>
-        this.settingsManager.openSettings(SETTINGS_QUERY.AGENTS),
+      [MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS]: async (m) => {
+        const query =
+          m?.sessionType === 'toolUse'
+            ? SETTINGS_QUERY.TOOL_USE_AGENTS
+            : SETTINGS_QUERY.WORKFLOW_AGENTS;
+        return this.settingsManager.openSettings(query);
+      },
       [MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS]: async () =>
         this.settingsManager.openSettings(SETTINGS_QUERY.MODELS),
       [MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY]: async (m) => {
