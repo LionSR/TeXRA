@@ -613,15 +613,17 @@ export class ModelHandlerAnthropic extends ModelHandler<
           number,
           ReturnType<typeof this.createThinkingStream>
         >();
-        // Track output stream and last block type for consecutive text detection
+        // Track output stream and last text block index for consecutive detection
+        // Per Anthropic docs: each block has an index corresponding to final content array
         const state = {
           outputStream: null as ReturnType<ModelHandler['createOutputStream']> | null,
-          lastBlockType: null as string | null,
+          lastTextBlockIndex: -1, // Index of most recent text block (-1 = none yet)
         };
 
         stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
           if (event.type === 'content_block_start') {
             const blockType = event.content_block.type;
+            const blockIndex = event.index;
 
             if (blockType === 'thinking') {
               // Finalize any pending text stream before starting thinking
@@ -629,17 +631,22 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 state.outputStream.finalize();
                 state.outputStream = null;
               }
-              thinkingStreams.set(event.index, this.createThinkingStream());
+              thinkingStreams.set(blockIndex, this.createThinkingStream());
             } else if (blockType === 'text' && outputEnabled) {
-              // Consecutive text blocks share a stream, non-consecutive get new stream
-              if (state.lastBlockType !== 'text') {
-                // Previous block wasn't text - finalize old stream, create new one
+              // Consecutive text blocks (by index) share a stream
+              const isConsecutive =
+                state.outputStream !== null &&
+                blockIndex === state.lastTextBlockIndex + 1;
+
+              if (!isConsecutive) {
+                // First text block or non-consecutive - create new stream
                 if (state.outputStream) {
                   state.outputStream.finalize();
                 }
                 state.outputStream = this.createOutputStream();
               }
-              // If lastBlockType was 'text', reuse existing outputStream
+              // Update last text block index
+              state.lastTextBlockIndex = blockIndex;
             } else {
               // Non-text, non-thinking block (tool_use, server_tool_use, etc.)
               // Finalize any pending text stream
@@ -648,8 +655,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
                 state.outputStream = null;
               }
             }
-
-            state.lastBlockType = blockType;
           } else if (event.type === 'content_block_delta') {
             if (event.delta.type === 'thinking_delta') {
               thinkingStreams.get(event.index)?.append(event.delta.thinking);
