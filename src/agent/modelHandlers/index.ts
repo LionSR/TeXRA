@@ -17,3 +17,21 @@ export {
 } from './modelHandlerOpenRouter';
 export { ModelHandlerOpenAI } from './modelHandlerOpenAI';
 export { ModelHandlerOpenAIResponse } from './modelHandlerOpenAIResponse';
+
+// Tool conversion utilities
+export {
+  toAnthropicTools,
+  toOpenAITools,
+  toOpenAIResponseTools,
+  toGoogleTools,
+} from './toolConversion';
+export {
+  createZodTool,
+  createZodToolsForRunner,
+  zodToolToDefinition,
+} from './zodToolConversion';
+export type {
+  BetaRunnableTool,
+  Promisable,
+  ZodToolOptions,
+} from './zodToolConversion';
