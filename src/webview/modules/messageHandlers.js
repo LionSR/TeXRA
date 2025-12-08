@@ -12,6 +12,7 @@ import {
   SESSION_TYPE_INPUT,
   AGENT_SELECT_IDS,
   AGENT_SELECT_LIST,
+  CHECK_BOXES,
   normalizeSessionType,
 } from './constants.js';
 import { webviewEventBus } from './eventBus.js';
@@ -33,6 +34,7 @@ import {
 import { fileList } from './uiManagers/FileList.js';
 import {
   safeSetElementValue,
+  safeSetElementChecked,
   safeGetElementById,
   setChevronIcon,
   waitForElement,
@@ -901,8 +903,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     if (state.auxiliaryFile) safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
     if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
 
-    // Build savedState object for persistence
+    // Restore checkbox values
     const toolConfig = state.toolConfig || {};
+    CHECK_BOXES.forEach((id) => {
+      const value = state[id] ?? toolConfig[id] ?? false;
+      safeSetElementChecked(id, value);
+    });
+
+    // Build savedState object for persistence
     Object.assign(savedState, {
       sessionType,
       workflowAgent: workflowAgentValue,
@@ -942,30 +950,31 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       savedState[visibilityName] = isVisible;
 
       const multipleFilesId = `${fileType}Files`;
+      const containerId = `${fileType}FilesContainer`;
+      const toggleId = `toggle${capitalize(fileType)}Files`;
+
       const multipleFiles = this._getElement(multipleFilesId);
-      if (filesArray.length > 0 || isVisible) {
-        const containerId = `${fileType}FilesContainer`;
-        const toggleId = `toggle${capitalize(fileType)}Files`;
+      const container = this._getElement(containerId);
+      const toggleElement = this._getElement(toggleId);
 
-        const container = this._getElement(containerId);
-        if (container) {
-          container.style.display = isVisible ? 'block' : 'none';
-        }
+      // Always clear existing files first to handle restoration to empty state
+      if (multipleFiles) {
+        multipleFiles.innerHTML = '';
+      }
 
-        const toggleElement = this._getElement(toggleId);
-        this._setToggleIcon(toggleElement, isVisible);
+      // Set container visibility and toggle icon
+      if (container) {
+        container.style.display = isVisible ? 'block' : 'none';
+      }
+      this._setToggleIcon(toggleElement, isVisible);
 
-        if (multipleFiles) {
-          multipleFiles.innerHTML = '';
-        }
-
-        if (filesArray.length > 0 && multipleFiles) {
-          fileList._batchMode = true;
-          filesArray.forEach((file) => {
-            fileList.add(multipleFilesId, file);
-          });
-          fileList._batchMode = false;
-        }
+      // Add files if any
+      if (filesArray.length > 0 && multipleFiles) {
+        fileList._batchMode = true;
+        filesArray.forEach((file) => {
+          fileList.add(multipleFilesId, file);
+        });
+        fileList._batchMode = false;
       }
     }
   }
