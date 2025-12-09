@@ -20,6 +20,22 @@ export const LogLevelSchema = z.enum([
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 /**
+ * End group status - used when finalizing log groups.
+ * Single source of truth for end status in AgentLogger, LogEventSink, and transports.
+ */
+export const END_GROUP_STATUS = {
+  ERROR: 'error',
+  STOPPED: 'stopped',
+} as const;
+
+export const EndGroupStatusSchema = z.enum([
+  END_GROUP_STATUS.ERROR,
+  END_GROUP_STATUS.STOPPED,
+]);
+
+export type EndGroupStatus = z.infer<typeof EndGroupStatusSchema>;
+
+/**
  * Message type constants - single source of truth for log message categories.
  */
 export const MESSAGE_TYPES = {

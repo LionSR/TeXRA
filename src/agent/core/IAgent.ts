@@ -2,6 +2,7 @@
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentExecutionContext } from '@agent/runtime/AgentExecutionContext';
 import type { AgentLogStage } from '@logger/AgentLogger';
+import type { EndGroupStatus } from '@logger/messageTypes';
 import type { AgentSessionDescriptor } from './AgentDataclass';
 import type { AgentConfig } from './AgentConfig';
 
@@ -69,6 +70,6 @@ export interface AgentRunHooks {
   start(): Promise<AgentLogStage | undefined>;
   init(runStage: AgentLogStage | undefined): Promise<void>;
   initializeClient(): Promise<void>;
-  end(status: 'stopped' | 'error'): void | Promise<void>;
+  end(status: EndGroupStatus): void | Promise<void>;
   cleanup(): void | Promise<void>;
 }
