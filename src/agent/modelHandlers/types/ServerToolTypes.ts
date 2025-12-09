@@ -227,6 +227,56 @@ interface ResponseFunctionWebSearchWithAction extends ResponseFunctionWebSearch 
 }
 
 /**
+ * Build a WebSearchResult from a single OpenAI web search item.
+ * Shared helper used by both streaming emission and final response extraction.
+ *
+ * Handles both cases:
+ * - Default API response: only id, status, type (no action/sources)
+ * - With include sources: action field contains query and sources
+ */
+export function buildOpenAIWebSearchResult(
+  item: ResponseFunctionWebSearch,
+): WebSearchResult {
+  const searchItem = item as ResponseFunctionWebSearchWithAction;
+
+  // Determine status using SDK's status type
+  const status: WebSearchResult['status'] =
+    searchItem.status === 'completed'
+      ? 'completed'
+      : searchItem.status === 'failed'
+        ? 'failed'
+        : 'in_progress';
+
+  const action = searchItem.action;
+
+  // Handle case when action is not present (default API response)
+  if (!action) {
+    return {
+      query: '',
+      results: [],
+      provider: 'openai',
+      callId: searchItem.id,
+      status,
+    };
+  }
+
+  // Handle case when action is present (include sources was used)
+  const entries: WebSearchResultEntry[] = (action.sources ?? []).map((s) => ({
+    url: s.url,
+    title: '', // OpenAI sources don't include titles in basic response
+    domain: extractDomain(s.url),
+  }));
+
+  return {
+    query: action.query ?? '',
+    results: entries,
+    provider: 'openai',
+    callId: searchItem.id,
+    status,
+  };
+}
+
+/**
  * Extract web search results from OpenAI Responses API output.
  * Uses SDK's ResponseFunctionWebSearch type for proper typing.
  *
@@ -245,48 +295,7 @@ export function extractOpenAIWebSearchResults(
       continue;
     }
 
-    // item is now properly typed as ResponseFunctionWebSearch
-    // Cast to extended type that may include action field
-    const searchItem = item as ResponseFunctionWebSearchWithAction;
-
-    // Determine status using SDK's status type
-    const status: WebSearchResult['status'] =
-      searchItem.status === 'completed'
-        ? 'completed'
-        : searchItem.status === 'failed'
-          ? 'failed'
-          : 'in_progress';
-
-    // Handle case when action is not present (default API response)
-    const action = searchItem.action;
-    if (!action) {
-      // Web search occurred but sources not included in response
-      // Return a result indicating the search happened
-      results.push({
-        query: '',
-        results: [],
-        provider: 'openai',
-        callId: searchItem.id,
-        status,
-      });
-      continue;
-    }
-
-    // Handle case when action is present (include sources was used)
-    // action.type is always 'search' per SDK's ResponseFunctionWebSearch.Search
-    const entries: WebSearchResultEntry[] = (action.sources ?? []).map((s) => ({
-      url: s.url,
-      title: '', // OpenAI sources don't include titles in basic response
-      domain: extractDomain(s.url),
-    }));
-
-    results.push({
-      query: action.query ?? '',
-      results: entries,
-      provider: 'openai',
-      callId: searchItem.id,
-      status,
-    });
+    results.push(buildOpenAIWebSearchResult(item));
   }
 
   return results;
