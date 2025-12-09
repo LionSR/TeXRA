@@ -43,9 +43,10 @@ export function getStreamTabId(
   const agentName = options.useMultipleOutputs
     ? getMultipleName(cleanAgent)
     : cleanAgent;
-  // Use full path for deduplication to distinguish files with same name in different directories.
-  // Normalize backslashes to forward slashes for consistent IDs across platforms and to avoid
-  // issues with CSS attribute selectors where backslashes are treated as escape characters.
+  // Use full workspace-relative path for deduplication to distinguish files with same name
+  // in different directories. Normalize backslashes to forward slashes for consistent IDs
+  // across platforms and to avoid issues with CSS attribute selectors where backslashes
+  // are treated as escape characters.
   const filePath = (inputFile ?? '').replace(/\\/g, '/');
   return `${agentName}@${model}: ${filePath}`;
 }
