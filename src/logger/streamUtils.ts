@@ -44,6 +44,7 @@ export function getStreamTabId(
   const agentName = options.useMultipleOutputs
     ? getMultipleName(cleanAgent)
     : cleanAgent;
-  const baseName = inputFile ? path.basename(inputFile) : '';
-  return `${agentName}@${model}: ${baseName}`;
+  // Use full path for deduplication to distinguish files with same name in different directories
+  const filePath = inputFile ?? '';
+  return `${agentName}@${model}: ${filePath}`;
 }
