@@ -1623,7 +1623,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       results: entries,
       provider: 'openai',
       callId: item.id,
-      status: item.status === 'completed' ? 'completed' : 'in_progress',
+      status:
+        item.status === 'completed'
+          ? 'completed'
+          : item.status === 'failed'
+            ? 'failed'
+            : 'in_progress',
     });
   }
 
