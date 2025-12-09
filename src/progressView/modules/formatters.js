@@ -876,15 +876,13 @@ export class LogEntryFormatter {
     const { query, results, provider, status } = structured;
     const resultCount = Array.isArray(results) ? results.length : 0;
 
-    // Build title
+    // Build title based on provider (anthropic or openai)
     const providerLabel =
       provider === 'anthropic'
         ? 'Anthropic'
         : provider === 'openai'
           ? 'OpenAI'
-          : provider === 'google'
-            ? 'Google'
-            : 'Web';
+          : 'Web';
     const queryPreview = query
       ? `: "${query.length > QUERY_PREVIEW_MAX_LENGTH ? query.slice(0, QUERY_PREVIEW_MAX_LENGTH) + '...' : query}"`
       : '';

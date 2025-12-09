@@ -779,6 +779,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
           s.finalize();
         }
         state.outputStream?.finalize();
+        // Clear pendingSearches to prevent memory leaks
+        state.pendingSearches.clear();
+        state.emittedSearchIds.clear();
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
