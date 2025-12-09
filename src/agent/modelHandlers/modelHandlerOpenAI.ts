@@ -389,19 +389,38 @@ export class ModelHandlerOpenAI<
     );
   }
 
+  /**
+   * Returns message normalization options for this handler.
+   * Subclasses can override to specify provider-specific normalization
+   * (e.g., convertContentToString, mergeConsecutiveRoles) without
+   * overriding the entire createResponse method.
+   *
+   * @returns Normalization options, or undefined to skip normalization
+   */
+  protected getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions | undefined {
+    return undefined; // Default: no normalization
+  }
+
   /** Creates a chat completion with model-specific parameters. */
   async createResponse(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<ChatCompletion> {
     const {
       client,
-      messages,
+      messages: rawMessages,
       temperature,
       systemPrompt,
       endTag,
       signal,
       tools,
     } = options;
+
+    // Apply message normalization if subclass specifies options
+    const normOptions = this.getMessageNormalizationOptions();
+    const messages = normOptions
+      ? this.prepareNormalizedMessages(rawMessages, normOptions)
+      : rawMessages;
+
     const useStreaming = this.getStreamingConfig();
     const baseParams = this.buildChatBaseParams(
       messages,
