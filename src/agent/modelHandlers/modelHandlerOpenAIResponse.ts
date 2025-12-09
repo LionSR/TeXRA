@@ -48,6 +48,7 @@ import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
 import { toOpenAIResponseTools } from './toolConversion';
 import { ModelHandler } from './ModelHandler';
 import {
+  extractDomain,
   extractOpenAIWebSearchResults,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
@@ -1578,7 +1579,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const entries = sources.map((s) => ({
       url: s.url,
       title: '',
-      domain: this.extractDomain(s.url),
+      domain: extractDomain(s.url),
     }));
 
     this.emitWebSearchResult({
@@ -1588,15 +1589,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       callId: item.id,
       status: item.status === 'completed' ? 'completed' : 'in_progress',
     });
-  }
-
-  /** Extract domain from URL. */
-  private extractDomain(url: string): string {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return '';
-    }
   }
 
   private getMessageContent(

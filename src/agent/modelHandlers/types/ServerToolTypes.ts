@@ -333,7 +333,7 @@ export function extractOpenAIWebSearchResults(
 /**
  * Extract domain from URL.
  */
-function extractDomain(url: string): string {
+export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname;
   } catch {

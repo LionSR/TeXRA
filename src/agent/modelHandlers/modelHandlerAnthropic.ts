@@ -82,6 +82,7 @@ import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
+  extractDomain,
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
   type WebSearchResult,
@@ -702,7 +703,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
                       title: r.title,
                       snippet: r.encrypted_content,
                       pageAge: r.page_age ?? undefined,
-                      domain: this.extractDomain(r.url),
+                      domain: extractDomain(r.url),
                     });
                   }
                 }
@@ -1058,15 +1059,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // generating citations for assets or pictures that originally lived in nested
     // folders.
     return sanitized.slice(0, 255);
-  }
-
-  /** Extract domain from URL for web search result display */
-  private extractDomain(url: string): string {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return '';
-    }
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
