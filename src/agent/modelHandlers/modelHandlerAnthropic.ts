@@ -668,6 +668,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
                   index: blockIndex,
                   input: '',
                 });
+                // Emit placeholder immediately to show search is starting
+                this.emitWebSearchResult({
+                  query: '',
+                  results: [],
+                  provider: 'anthropic',
+                  callId: block.id,
+                  status: 'in_progress',
+                });
               }
               // Finalize any pending text stream
               if (state.outputStream) {
