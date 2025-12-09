@@ -122,3 +122,23 @@
   justify-content: space-between;
   align-items: center;
 }
+
+/* Getting started banner - informational style */
+.getting-started-banner {
+  background-color: var(--vscode-inputValidation-infoBackground);
+  color: var(--vscode-inputValidation-infoForeground);
+  border: 1px solid var(--vscode-inputValidation-infoBorder);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-small) var(--spacing-medium);
+  margin-bottom: var(--spacing-large);
+  line-height: 1.5;
+}
+
+.getting-started-banner a {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+}
+
+.getting-started-banner a:hover {
+  text-decoration: underline;
+}
