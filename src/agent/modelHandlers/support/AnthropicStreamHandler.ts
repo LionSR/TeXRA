@@ -280,8 +280,11 @@ export class AnthropicStreamHandler {
     try {
       const parsed = JSON.parse(input) as { query?: string };
       return parsed.query ?? '';
-    } catch {
-      // Partial JSON, try to extract query with regex
+    } catch (error) {
+      // Partial JSON (common for streaming), try to extract query with regex
+      this.logger.debug(
+        `Anthropic search input JSON parse failed, using regex fallback: ${String(error)}`,
+      );
       const match = input.match(/"query"\s*:\s*"([^"]+)"/);
       return match?.[1] ?? '';
     }

@@ -1356,8 +1356,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         .filter(isOpenAIWebSearchCall)
         .map((block) => block as ResponseInputItem);
       messages.push(...openaiBlocks);
-      // Clear after consuming to prevent duplicates
-      workspaceState.serverToolContent.contentBlocks = [];
+      // Clear after consuming to prevent duplicates - use reset method for consistency
+      workspaceState.resetServerToolContent();
     }
 
     const callMsg: ResponseFunctionToolCall = {
@@ -1628,8 +1628,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   }
 
   /**
-   * Emit web search results from the final response.
-   * Called after streaming completes since streaming events don't include full action data.
+   * Emit web searches from the final response that weren't already emitted during streaming.
+   *
+   * This fallback ensures web searches are displayed even if streaming events are missed:
+   * - Network interruptions may cause output_item.done events to be lost
+   * - Some edge cases in the SDK may not emit all streaming events
+   * - Non-streaming responses need this path entirely
+   *
+   * The `alreadyEmitted` set prevents duplicates when streaming worked correctly.
+   * During normal streaming, this method typically does nothing (all IDs already emitted).
    */
   private emitWebSearchesFromResponse(
     response: Response,
