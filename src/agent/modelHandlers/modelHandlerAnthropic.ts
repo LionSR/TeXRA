@@ -82,12 +82,10 @@ import { toAnthropicTools } from './toolConversion';
 import { executeRequest } from './utils/requestExecutor';
 import {
   extractAnthropicWebSearchResults,
-  extractDomain,
   isAnthropicServerToolContent,
   type ServerToolExtractionResult,
-  type WebSearchResult,
-  type WebSearchResultEntry,
 } from './types/ServerToolTypes';
+import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
 
 // Type imports
 import type { ProviderStopReason } from './types/StopReasonTypes';
@@ -123,7 +121,6 @@ import type {
   RedactedThinkingBlockParam,
   ServerToolUseBlock,
   WebSearchToolResultBlock,
-  WebSearchResultBlock,
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
@@ -603,185 +600,26 @@ export class ModelHandlerAnthropic extends ModelHandler<
         };
       }
 
+      const streamHandler = new AnthropicStreamHandler(
+        this.logger,
+        {
+          outputEnabled: this.isOutputStreamingEnabled(),
+          progressViewEnabled: this.progressViewEnabled,
+        },
+        {
+          createThinkingStream: () => this.createThinkingStream(),
+          createOutputStream: () => this.createOutputStream(),
+        },
+      );
+
       try {
-        // Streaming strategy for interleaved content blocks:
-        // - Thinking blocks: each gets its own stream entry (separate thinking phases)
-        // - Text blocks: consecutive text blocks merge, non-consecutive are separate
-        // - Server tools (web_search): emit to progress view when results arrive
-        //
-        // Example: text_0 → server_tool_1 → result_2 → text_3 → text_4
-        //   → Output #1 (text_0), WebSearch, Output #2 (text_3 + text_4 merged)
-        //
-        // This preserves order while merging citation-split text blocks.
-        const outputEnabled = this.isOutputStreamingEnabled();
-        const thinkingStreams = new Map<
-          number,
-          ReturnType<typeof this.createThinkingStream>
-        >();
-        // Track output stream and block indices for consecutive text detection
-        // Per Anthropic docs: each block has an index corresponding to final content array
-        // We track the index of ANY block, not just text, to properly detect gaps
-        const state = {
-          outputStream: null as ReturnType<
-            ModelHandler['createOutputStream']
-          > | null,
-          lastBlockIndex: -1, // Index of most recent block (any type)
-          // Track web search: tool_use_id → { index, accumulated input JSON }
-          pendingSearches: new Map<string, { index: number; input: string }>(),
-          // Track emitted search IDs to prevent duplicate logging in flow
-          emittedSearchIds: new Set<string>(),
-        };
-
-        stream.on('streamEvent', (event: BetaRawMessageStreamEvent) => {
-          if (event.type === 'content_block_start') {
-            const blockType = event.content_block.type;
-            const blockIndex = event.index;
-
-            if (blockType === 'thinking') {
-              // Finalize any pending text stream before starting thinking
-              if (state.outputStream) {
-                state.outputStream.finalize();
-                state.outputStream = null;
-              }
-              thinkingStreams.set(blockIndex, this.createThinkingStream());
-            } else if (blockType === 'text' && outputEnabled) {
-              // Consecutive text blocks share a stream
-              // Consecutive means: immediately following (by index) AND previous was text
-              // The outputStream !== null check ensures previous block was text
-              // (we null it for thinking/tool blocks)
-              const isConsecutive =
-                state.outputStream !== null &&
-                blockIndex === state.lastBlockIndex + 1;
-
-              if (!isConsecutive) {
-                // First text block or non-consecutive - create new stream
-                if (state.outputStream) {
-                  state.outputStream.finalize();
-                }
-                state.outputStream = this.createOutputStream();
-              }
-            } else if (blockType === 'server_tool_use') {
-              // Track web search server tool use to get query
-              const block = event.content_block as ServerToolUseBlock;
-              if (block.name === 'web_search') {
-                state.pendingSearches.set(block.id, {
-                  index: blockIndex,
-                  input: '',
-                });
-              }
-              // Finalize any pending text stream
-              if (state.outputStream) {
-                state.outputStream.finalize();
-                state.outputStream = null;
-              }
-            } else if (blockType === 'web_search_tool_result') {
-              // Emit web search result to progress view at the correct time
-              const block = event.content_block as WebSearchToolResultBlock;
-              const searchData = state.pendingSearches.get(block.tool_use_id);
-
-              // Parse query from accumulated input JSON
-              let query = '';
-              if (searchData?.input) {
-                try {
-                  const parsed = JSON.parse(searchData.input) as {
-                    query?: string;
-                  };
-                  query = parsed.query ?? '';
-                } catch {
-                  // Partial JSON, try to extract query
-                  const match = searchData.input.match(
-                    /"query"\s*:\s*"([^"]+)"/,
-                  );
-                  if (match) {
-                    query = match[1];
-                  }
-                }
-              }
-
-              // Extract results from the block content
-              const entries: WebSearchResultEntry[] = [];
-              if (Array.isArray(block.content)) {
-                for (const item of block.content) {
-                  const r = item as WebSearchResultBlock;
-                  if (r.type === 'web_search_result' && r.url) {
-                    entries.push({
-                      url: r.url,
-                      title: r.title,
-                      snippet: r.encrypted_content,
-                      pageAge: r.page_age ?? undefined,
-                      domain: extractDomain(r.url),
-                    });
-                  }
-                }
-              }
-
-              // Emit to progress view
-              if (entries.length > 0 || query) {
-                this.emitWebSearchResult({
-                  query,
-                  results: entries,
-                  provider: 'anthropic',
-                  callId: block.tool_use_id,
-                  status: 'completed',
-                });
-                state.emittedSearchIds.add(block.tool_use_id);
-              }
-
-              // Clean up
-              state.pendingSearches.delete(block.tool_use_id);
-
-              // Finalize any pending text stream
-              if (state.outputStream) {
-                state.outputStream.finalize();
-                state.outputStream = null;
-              }
-            } else {
-              // Other non-text, non-thinking blocks (tool_use, etc.)
-              // Finalize any pending text stream
-              if (state.outputStream) {
-                state.outputStream.finalize();
-                state.outputStream = null;
-              }
-            }
-
-            // Always update lastBlockIndex for ALL block types
-            state.lastBlockIndex = blockIndex;
-          } else if (event.type === 'content_block_delta') {
-            if (event.delta.type === 'thinking_delta') {
-              thinkingStreams.get(event.index)?.append(event.delta.thinking);
-            } else if (event.delta.type === 'text_delta') {
-              state.outputStream?.append(event.delta.text);
-            } else if (event.delta.type === 'input_json_delta') {
-              // Accumulate input JSON for web search to get query
-              for (const [, searchData] of state.pendingSearches) {
-                if (searchData.index === event.index) {
-                  searchData.input += event.delta.partial_json;
-                  break;
-                }
-              }
-            }
-          } else if (event.type === 'content_block_stop') {
-            // Finalize thinking streams immediately on block stop
-            const thinking = thinkingStreams.get(event.index);
-            if (thinking) {
-              thinking.finalize();
-              thinkingStreams.delete(event.index);
-            }
-            // Text streams: don't finalize here - wait for non-text block or end
-          }
-        });
+        streamHandler.attachToStream(stream);
 
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
 
-        // Finalize any remaining streams
-        for (const s of thinkingStreams.values()) {
-          s.finalize();
-        }
-        state.outputStream?.finalize();
-        // Clear pendingSearches to prevent memory leaks
-        state.pendingSearches.clear();
-        state.emittedSearchIds.clear();
+        // Finalize all streams and clear state
+        streamHandler.finalize();
 
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
@@ -1899,6 +1737,18 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return { webSearchResults, contentBlocks };
   }
 
+  /**
+   * Extract assistant content blocks from an Anthropic response, excluding tool_use blocks.
+   * Preserves thinking, text, server_tool_use, and web_search_tool_result blocks.
+   */
+  override extractAssistantContent(responseObject: BetaMessage): unknown[] {
+    if (!Array.isArray(responseObject?.content)) {
+      return [];
+    }
+
+    return responseObject.content.filter((block) => block.type !== 'tool_use');
+  }
+
   async createToolUseFollowUpMessages(
     client: Anthropic | undefined,
     call: AnthropicToolCall,
@@ -1917,8 +1767,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           .lastAssistantContent as ContentBlockParam[]),
       );
       // Clear all stores after consuming to prevent duplicates
-      workspaceState.serverToolContent.lastAssistantContent = [];
-      workspaceState.serverToolContent.contentBlocks = [];
+      workspaceState.resetServerToolContent();
       workspaceState.resetReasoning();
     } else {
       // Fall back to reconstructing from separate stores (legacy/non-streaming path)
@@ -1938,7 +1787,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
           .filter(isAnthropicServerToolContent)
           .map((block) => block as ContentBlockParam);
         content.push(...anthropicBlocks);
-        workspaceState.serverToolContent.contentBlocks = [];
+        workspaceState.resetServerToolContent();
       }
       if (text) {
         content.push({ type: 'text', text });

@@ -499,17 +499,9 @@ class ToolUseProcessNode<C> extends BaseNode<
 
     // Store full assistant content (excluding tool_use) to preserve original order
     // This is used in createToolUseFollowUpMessages for correct message building
-    // Works with Anthropic-style responses that have a content array
-    const responseContent = (state.response as { content?: unknown[] })
-      ?.content;
-    store.workspace.serverToolContent.lastAssistantContent = Array.isArray(
-      responseContent,
-    )
-      ? responseContent.filter((block) => {
-          const typed = block as { type?: string } | null | undefined;
-          return typed?.type !== 'tool_use';
-        })
-      : [];
+    // Uses provider-agnostic extraction method
+    store.workspace.serverToolContent.lastAssistantContent =
+      options.modelHandler.extractAssistantContent(state.response);
 
     if (text) {
       options.logger.debug(`Model response: ${text.slice(0, 100)}`, {
