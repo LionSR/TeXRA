@@ -30,15 +30,17 @@ import { getToolUsePersistenceEnabled } from '@utils/config';
 // Local imports - persistence helpers
 
 // Local file imports
-import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueue';
-import { ToolUseSessionManager } from './ToolUseSessionManager';
+import {
+  ToolUseFollowUpQueue,
+  type FollowUpQueue,
+} from './ToolUseFollowUpQueue';
+import { ToolUseSessionManager } from './ToolUseSnapshotCache';
 import { ToolUseSnapshotStore } from './ToolUseSnapshotStore';
 // Type imports
 import {
   type SaveToolUseSnapshotPayload,
   type ToolUseSessionSnapshot,
 } from './ToolUseSnapshotTypes';
-import type { FollowUpQueue } from './FollowUpQueue';
 
 const CHANNEL = 'ToolUseSessionPersistence';
 const logger = new AgentLogger(CHANNEL);
