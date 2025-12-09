@@ -1,3 +1,27 @@
+import { z } from 'zod';
+
+/**
+ * Log level constants - single source of truth for severity levels.
+ */
+export const LOG_LEVELS = {
+  ERROR: 'error',
+  WARN: 'warn',
+  INFO: 'info',
+  DEBUG: 'debug',
+} as const;
+
+export const LogLevelSchema = z.enum([
+  LOG_LEVELS.ERROR,
+  LOG_LEVELS.WARN,
+  LOG_LEVELS.INFO,
+  LOG_LEVELS.DEBUG,
+]);
+
+export type LogLevel = z.infer<typeof LogLevelSchema>;
+
+/**
+ * Message type constants - single source of truth for log message categories.
+ */
 export const MESSAGE_TYPES = {
   THINKING: 'thinking',
   SCRATCHPAD: 'scratchpad',
@@ -18,4 +42,21 @@ export const MESSAGE_TYPES = {
   DEFAULT: 'default',
 } as const;
 
-export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
+export const MessageTypeSchema = z.enum([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.SCRATCHPAD,
+  MESSAGE_TYPES.FILE_LIST,
+  MESSAGE_TYPES.MISSING_OUTPUTS,
+  MESSAGE_TYPES.LATEXDIFF,
+  MESSAGE_TYPES.STATISTICS,
+  MESSAGE_TYPES.TOOL_USE,
+  MESSAGE_TYPES.WEB_SEARCH,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+  MESSAGE_TYPES.USER_MESSAGE,
+  MESSAGE_TYPES.PROGRESS_STATUS,
+  MESSAGE_TYPES.ERROR,
+  MESSAGE_TYPES.INTERNAL,
+  MESSAGE_TYPES.DEFAULT,
+]);
+
+export type MessageType = z.infer<typeof MessageTypeSchema>;
