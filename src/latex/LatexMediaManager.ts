@@ -172,7 +172,14 @@ export class LatexMediaManager {
           `Extracted ${result.value.length} figures from ${file.absolutePath}`,
           { groupId: activeGroupId },
         );
-        workspaceState.media.addMediaFiles(result.value);
+        // Convert relative paths (relative to input file directory) to absolute paths
+        // This is necessary because MediaAttachmentProcessor resolves relative paths
+        // from the workspace root, not from each input file's subdirectory
+        const baseDir = path.dirname(file.absolutePath);
+        const absolutePaths = result.value.map((relativePath) =>
+          path.normalize(path.join(baseDir, relativePath)),
+        );
+        workspaceState.media.addMediaFiles(absolutePaths);
         mirrorTasks.push(
           this.mirrorFigureDependencies(file, result.value, activeGroupId),
         );
