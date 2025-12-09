@@ -1,7 +1,7 @@
 // (none)
 
 // Local imports - logger
-import type { MessageType } from '@logger/messageTypes';
+import type { EndGroupStatus, MessageType } from '@logger/messageTypes';
 
 export interface LogMessageEvent {
   level: string;
@@ -24,7 +24,7 @@ export interface LogGroupStartedEvent {
 export interface LogGroupFinishedEvent {
   stream: string;
   groupId: string;
-  status: 'error' | 'stopped';
+  status: EndGroupStatus;
   endTime: number;
 }
 
