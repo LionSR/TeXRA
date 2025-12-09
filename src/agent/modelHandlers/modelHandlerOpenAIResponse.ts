@@ -654,10 +654,15 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const response = await stream.finalResponse();
-      const finalReasoning = this.processThinkingBlock(response);
-      thinking.finalize(finalReasoning ?? undefined);
+      // Don't pass reasoning to finalize - it would overwrite streamed content with shorter summary
+      // The streamed reasoning_text deltas already contain the full reasoning
+      thinking.finalize();
       const { response: finalText } = this.extractResponse(response, '');
       if (output) output.finalize(finalText);
+
+      // Emit web searches from final response since streaming events don't include action data
+      // The action field with query/sources is only populated in the final response
+      this.emitWebSearchesFromResponse(response, emittedWebSearchIds);
 
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
@@ -1589,6 +1594,27 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       callId: item.id,
       status: item.status === 'completed' ? 'completed' : 'in_progress',
     });
+  }
+
+  /**
+   * Emit web search results from the final response.
+   * Called after streaming completes since streaming events don't include full action data.
+   */
+  private emitWebSearchesFromResponse(
+    response: Response,
+    alreadyEmitted: Set<string>,
+  ): void {
+    const output = response?.output;
+    if (!Array.isArray(output)) {
+      return;
+    }
+
+    for (const item of output) {
+      if (this.isWebSearchItem(item) && !alreadyEmitted.has(item.id)) {
+        this.emitOpenAIWebSearch(item);
+        alreadyEmitted.add(item.id);
+      }
+    }
   }
 
   private getMessageContent(
