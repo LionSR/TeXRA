@@ -87,6 +87,7 @@ import type {
   ResponseReasoningTextDeltaEvent,
   ResponseReasoningSummaryTextDeltaEvent,
   ResponseOutputItemDoneEvent,
+  ResponseWebSearchCallInProgressEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -630,39 +631,68 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         },
         () => client.responses.stream(streamParams, { signal }),
       );
-      const thinking = this.createThinkingStream();
-      const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream()
-        : undefined;
 
-      // Track emitted web searches to avoid duplicates
-      const emittedWebSearchIds = new Set<string>();
+      // State for handling interleaved thinking and web search
+      // GPT can: think → web_search → think more → web_search → text
+      const state = {
+        thinkingStream: this.createThinkingStream(),
+        outputStream: this.isOutputStreamingEnabled()
+          ? this.createOutputStream()
+          : null,
+        emittedWebSearchIds: new Set<string>(),
+        hasThinkingContent: false,
+      };
 
       for await (const event of stream) {
         if (this.isReasoningDeltaEvent(event)) {
-          thinking.append(event.delta);
+          state.thinkingStream.append(event.delta);
+          state.hasThinkingContent = true;
         } else if (this.isTextDeltaEvent(event)) {
-          output?.append(event.delta);
+          state.outputStream?.append(event.delta);
+        } else if (this.isWebSearchInProgressEvent(event)) {
+          // Web search starting - finalize current thinking stream
+          if (state.hasThinkingContent) {
+            state.thinkingStream.finalize();
+            state.hasThinkingContent = false;
+          }
+          // Emit placeholder with status 'in_progress'
+          this.emitWebSearchResult({
+            query: '',
+            results: [],
+            provider: 'openai',
+            callId: event.item_id,
+            status: 'in_progress',
+          });
+          state.emittedWebSearchIds.add(event.item_id);
+          // Create new thinking stream for potential continuation
+          state.thinkingStream = this.createThinkingStream();
         } else if (this.isOutputItemDoneEvent(event)) {
-          // Emit web search when the output item is complete
+          // When output item is done, we can get the full web search data
           const item = event.item;
-          if (this.isWebSearchItem(item) && !emittedWebSearchIds.has(item.id)) {
+          if (
+            this.isWebSearchItem(item) &&
+            !state.emittedWebSearchIds.has(item.id)
+          ) {
+            // Finalize thinking if we have content (in case in_progress didn't fire)
+            if (state.hasThinkingContent) {
+              state.thinkingStream.finalize();
+              state.hasThinkingContent = false;
+              state.thinkingStream = this.createThinkingStream();
+            }
             this.emitOpenAIWebSearch(item);
-            emittedWebSearchIds.add(item.id);
+            state.emittedWebSearchIds.add(item.id);
           }
         }
       }
 
       const response = await stream.finalResponse();
-      // Don't pass reasoning to finalize - it would overwrite streamed content with shorter summary
-      // The streamed reasoning_text deltas already contain the full reasoning
-      thinking.finalize();
+      // Finalize any remaining thinking content
+      state.thinkingStream.finalize();
       const { response: finalText } = this.extractResponse(response, '');
-      if (output) output.finalize(finalText);
+      if (state.outputStream) state.outputStream.finalize(finalText);
 
-      // Emit web searches from final response since streaming events don't include action data
-      // The action field with query/sources is only populated in the final response
-      this.emitWebSearchesFromResponse(response, emittedWebSearchIds);
+      // Emit any web searches not yet emitted (fallback for edge cases)
+      this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
 
       this.previousResponseId = response.id;
       this.sentMessages = messages.length;
@@ -1543,6 +1573,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       event.type === 'response.reasoning_text.delta' ||
       event.type === 'response.reasoning_summary_text.delta'
     );
+  }
+
+  /** Type guard for web search in_progress events. */
+  private isWebSearchInProgressEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseWebSearchCallInProgressEvent {
+    return event.type === 'response.web_search_call.in_progress';
   }
 
   /** Type guard for text output delta events. */
