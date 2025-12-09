@@ -76,6 +76,76 @@ function isEmptyUsage(usage: PersistedUsageStats): boolean {
   );
 }
 
+/** Keys for optional extended metrics that get summed during aggregation */
+const EXTENDED_METRIC_KEYS = [
+  'responseTimeMs',
+  'cachedInputTokens',
+  'cacheCreationTokens',
+  'reasoningTokens',
+  'toolUsePromptTokens',
+  'serverToolRequests',
+] as const;
+
+type ExtendedMetricKey = (typeof EXTENDED_METRIC_KEYS)[number];
+
+/**
+ * Aggregates multiple usage stats into a single total.
+ * Sums all numeric fields; computes percentageCached from aggregated cache values.
+ */
+function aggregateUsageStats(
+  usageItems: Iterable<PersistedUsageStats>,
+): PersistedUsageStats {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cost = 0;
+  const extendedTotals: Record<ExtendedMetricKey, number> = {
+    responseTimeMs: 0,
+    cachedInputTokens: 0,
+    cacheCreationTokens: 0,
+    reasoningTokens: 0,
+    toolUsePromptTokens: 0,
+    serverToolRequests: 0,
+  };
+  let hasExtendedMetrics = false;
+
+  for (const usage of usageItems) {
+    inputTokens += usage.inputTokens;
+    outputTokens += usage.outputTokens;
+    cost += usage.cost;
+
+    for (const key of EXTENDED_METRIC_KEYS) {
+      const value = usage[key];
+      if (value !== undefined) {
+        extendedTotals[key] += value;
+        hasExtendedMetrics = true;
+      }
+    }
+  }
+
+  // Calculate percentageCached from aggregated cache values
+  const totalCacheableTokens =
+    extendedTotals.cachedInputTokens + extendedTotals.cacheCreationTokens;
+  const percentageCached =
+    hasExtendedMetrics && totalCacheableTokens > 0
+      ? (extendedTotals.cachedInputTokens / totalCacheableTokens) * 100
+      : undefined;
+
+  return {
+    inputTokens,
+    outputTokens,
+    cost,
+    ...(hasExtendedMetrics && {
+      responseTimeMs: extendedTotals.responseTimeMs || undefined,
+      cachedInputTokens: extendedTotals.cachedInputTokens || undefined,
+      cacheCreationTokens: extendedTotals.cacheCreationTokens || undefined,
+      percentageCached,
+      reasoningTokens: extendedTotals.reasoningTokens || undefined,
+      toolUsePromptTokens: extendedTotals.toolUsePromptTokens || undefined,
+      serverToolRequests: extendedTotals.serverToolRequests || undefined,
+    }),
+  };
+}
+
 /** Schema for run map format: { runId: PersistedUsageStats } */
 const UsageDataSchema = createSingleValueRunMapSchema(
   PersistedUsageStatsParsingSchema,
@@ -174,69 +244,7 @@ export class UsageStatsManager extends PersistentMapManager<
     if (!runs || runs.size === 0) {
       return undefined;
     }
-
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cost = 0;
-    let responseTimeMs = 0;
-    let cachedInputTokens = 0;
-    let cacheCreationTokens = 0;
-    let reasoningTokens = 0;
-    let toolUsePromptTokens = 0;
-    let serverToolRequests = 0;
-    let hasExtendedMetrics = false;
-
-    for (const usage of runs.values()) {
-      inputTokens += usage.inputTokens;
-      outputTokens += usage.outputTokens;
-      cost += usage.cost;
-      if (usage.responseTimeMs !== undefined) {
-        responseTimeMs += usage.responseTimeMs;
-        hasExtendedMetrics = true;
-      }
-      if (usage.cachedInputTokens !== undefined) {
-        cachedInputTokens += usage.cachedInputTokens;
-        hasExtendedMetrics = true;
-      }
-      if (usage.cacheCreationTokens !== undefined) {
-        cacheCreationTokens += usage.cacheCreationTokens;
-        hasExtendedMetrics = true;
-      }
-      if (usage.reasoningTokens !== undefined) {
-        reasoningTokens += usage.reasoningTokens;
-        hasExtendedMetrics = true;
-      }
-      if (usage.toolUsePromptTokens !== undefined) {
-        toolUsePromptTokens += usage.toolUsePromptTokens;
-        hasExtendedMetrics = true;
-      }
-      if (usage.serverToolRequests !== undefined) {
-        serverToolRequests += usage.serverToolRequests;
-        hasExtendedMetrics = true;
-      }
-    }
-
-    // Calculate percentageCached from aggregated values
-    const totalCacheableTokens = cachedInputTokens + cacheCreationTokens;
-    const percentageCached =
-      hasExtendedMetrics && totalCacheableTokens > 0
-        ? (cachedInputTokens / totalCacheableTokens) * 100
-        : undefined;
-
-    return {
-      inputTokens,
-      outputTokens,
-      cost,
-      ...(hasExtendedMetrics && {
-        responseTimeMs: responseTimeMs || undefined,
-        cachedInputTokens: cachedInputTokens || undefined,
-        cacheCreationTokens: cacheCreationTokens || undefined,
-        percentageCached,
-        reasoningTokens: reasoningTokens || undefined,
-        toolUsePromptTokens: toolUsePromptTokens || undefined,
-        serverToolRequests: serverToolRequests || undefined,
-      }),
-    };
+    return aggregateUsageStats(runs.values());
   }
 
   /**
@@ -288,70 +296,14 @@ export class UsageStatsManager extends PersistentMapManager<
    * Returns aggregate totals; extended metrics are summed where available.
    */
   getTotalUsage(): PersistedUsageStats {
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let cost = 0;
-    let responseTimeMs = 0;
-    let cachedInputTokens = 0;
-    let cacheCreationTokens = 0;
-    let reasoningTokens = 0;
-    let toolUsePromptTokens = 0;
-    let serverToolRequests = 0;
-    let hasExtendedMetrics = false;
-
-    for (const usage of this.items.values()) {
-      for (const runUsage of usage.values()) {
-        inputTokens += runUsage.inputTokens;
-        outputTokens += runUsage.outputTokens;
-        cost += runUsage.cost;
-        if (runUsage.responseTimeMs !== undefined) {
-          responseTimeMs += runUsage.responseTimeMs;
-          hasExtendedMetrics = true;
-        }
-        if (runUsage.cachedInputTokens !== undefined) {
-          cachedInputTokens += runUsage.cachedInputTokens;
-          hasExtendedMetrics = true;
-        }
-        if (runUsage.cacheCreationTokens !== undefined) {
-          cacheCreationTokens += runUsage.cacheCreationTokens;
-          hasExtendedMetrics = true;
-        }
-        if (runUsage.reasoningTokens !== undefined) {
-          reasoningTokens += runUsage.reasoningTokens;
-          hasExtendedMetrics = true;
-        }
-        if (runUsage.toolUsePromptTokens !== undefined) {
-          toolUsePromptTokens += runUsage.toolUsePromptTokens;
-          hasExtendedMetrics = true;
-        }
-        if (runUsage.serverToolRequests !== undefined) {
-          serverToolRequests += runUsage.serverToolRequests;
-          hasExtendedMetrics = true;
-        }
+    const items = this.items;
+    const allUsage = (function* () {
+      for (const runMap of items.values()) {
+        yield* runMap.values();
       }
-    }
+    })();
 
-    // Calculate percentageCached from aggregated values
-    const totalCacheableTokens = cachedInputTokens + cacheCreationTokens;
-    const percentageCached =
-      hasExtendedMetrics && totalCacheableTokens > 0
-        ? (cachedInputTokens / totalCacheableTokens) * 100
-        : undefined;
-
-    return {
-      inputTokens,
-      outputTokens,
-      cost,
-      ...(hasExtendedMetrics && {
-        responseTimeMs: responseTimeMs || undefined,
-        cachedInputTokens: cachedInputTokens || undefined,
-        cacheCreationTokens: cacheCreationTokens || undefined,
-        percentageCached,
-        reasoningTokens: reasoningTokens || undefined,
-        toolUsePromptTokens: toolUsePromptTokens || undefined,
-        serverToolRequests: serverToolRequests || undefined,
-      }),
-    };
+    return aggregateUsageStats(allUsage);
   }
 
   /**

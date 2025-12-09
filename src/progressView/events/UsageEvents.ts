@@ -40,45 +40,12 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, usage, storageKey }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            // Normalize required fields and preserve optional extended metrics
-            const normalizedUsage: PersistedUsageStats = {
-              inputTokens: Number(usage.inputTokens ?? 0),
-              outputTokens: Number(usage.outputTokens ?? 0),
-              cost: Number(usage.cost ?? 0),
-              // Preserve extended metrics when available
-              ...(usage.responseTimeMs !== undefined && {
-                responseTimeMs: Number(usage.responseTimeMs),
-              }),
-              ...(usage.cachedInputTokens !== undefined && {
-                cachedInputTokens: Number(usage.cachedInputTokens),
-              }),
-              ...(usage.cacheCreationTokens !== undefined && {
-                cacheCreationTokens: Number(usage.cacheCreationTokens),
-              }),
-              ...(usage.percentageCached !== undefined && {
-                percentageCached: Number(usage.percentageCached),
-              }),
-              ...(usage.reasoningTokens !== undefined && {
-                reasoningTokens: Number(usage.reasoningTokens),
-              }),
-              ...(usage.toolUsePromptTokens !== undefined && {
-                toolUsePromptTokens: Number(usage.toolUsePromptTokens),
-              }),
-              ...(usage.serverToolRequests !== undefined && {
-                serverToolRequests: Number(usage.serverToolRequests),
-              }),
-            };
-
-            // storageKey is THE single source of truth - no fallbacks
-            await state.usageStats.setRunUsage(
-              stream,
-              storageKey,
-              normalizedUsage,
-            );
+            // Usage is already PersistedUsageStats from AgentUsageReporter;
+            // UsageStatsManager.setRunUsage() handles parsing/normalization
+            await state.usageStats.setRunUsage(stream, storageKey, usage);
 
             if (state.activeStream === stream && updater.isAvailable()) {
-              // Send only the changed run's usage instead of all runs
-              updater.updateRunUsage(stream, storageKey, normalizedUsage);
+              updater.updateRunUsage(stream, storageKey, usage);
             }
           });
         },
