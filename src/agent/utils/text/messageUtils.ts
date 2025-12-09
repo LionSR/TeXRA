@@ -1,22 +1,9 @@
-// Utility functions for chat message handling
-
 /**
- * Convert content array to a string for provider compatibility.
+ * Utility functions for chat message handling.
  *
- * @param content The message content (array or string)
- * @returns String representation of the content
+ * This module re-exports from the centralized core module for backwards
+ * compatibility. New code should import directly from '@utils/core'.
  */
-export function convertContentToString(content: any): string {
-  if (typeof content === 'string') {
-    return content;
-  }
 
-  if (Array.isArray(content)) {
-    return content
-      .filter((item) => item.type === 'text')
-      .map((item) => item.text)
-      .join('\n');
-  }
-
-  return '';
-}
+// Re-export the centralized contentToString with legacy name
+export { contentToString as convertContentToString } from '@utils/core';
