@@ -209,6 +209,11 @@ export class ServerToolContentState {
    * Preserves original order for building correct follow-up messages.
    * Includes: thinking, text, server_tool_use, web_search_tool_result blocks.
    * Cleared after being consumed by createToolUseFollowUpMessages().
+   *
+   * Typed as unknown[] because content block types differ across providers:
+   * - Anthropic: ContentBlockParam (thinking, text, server_tool_use, etc.)
+   * - OpenAI: ResponseInputItem (message, function_call, web_search_call, etc.)
+   * Each handler casts to provider-specific types when consuming.
    */
   public lastAssistantContent: unknown[] = [];
 
