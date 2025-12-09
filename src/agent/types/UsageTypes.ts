@@ -17,25 +17,51 @@ export type TokenUsageStats = z.infer<typeof TokenUsageStatsSchema>;
 
 /**
  * Extended statistics tracked during agent execution.
+ *
+ * Field names are aligned with NormalizedUsage for consistency:
+ * - cachedInputTokens (was cacheReadInputTokens)
+ * - cacheCreationTokens (was cacheCreationInputTokens)
+ * - responseTimeMs (was elapsedTime in seconds)
+ * - toolUsePromptTokens (was toolUseTokens)
  */
 export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
-  /** Total elapsed time in seconds */
-  elapsedTime: z.number().optional(),
-  /** Tokens read from cache */
-  cacheReadInputTokens: z.number().optional(),
-  /** Tokens written to cache */
-  cacheCreationInputTokens: z.number().optional(),
+  /** Response time in milliseconds */
+  responseTimeMs: z.number().optional(),
+  /** Tokens served from cache (reduces cost) */
+  cachedInputTokens: z.number().optional(),
+  /** Tokens written to cache (increases cost by 1.25x for Anthropic) */
+  cacheCreationTokens: z.number().optional(),
   /** Percentage of tokens served from cache */
   percentageCached: z.number().optional(),
   /** Tokens used for reasoning */
   reasoningTokens: z.number().optional(),
-  /** Tokens consumed by tool use */
-  toolUseTokens: z.number().optional(),
+  /** Tokens consumed by tool use prompts */
+  toolUsePromptTokens: z.number().optional(),
 });
 
 export type ExtendedTokenUsageStats = z.infer<
   typeof ExtendedTokenUsageStatsSchema
 >;
+
+/**
+ * Usage statistics for display in the Progress View.
+ * Extends TokenUsageStats with optional display-relevant fields.
+ *
+ * This is the type used when sending usage updates to the Progress View.
+ * It preserves key metrics that were previously lost (cached tokens, reasoning tokens).
+ */
+export const DisplayUsageStatsSchema = TokenUsageStatsSchema.extend({
+  /** Tokens served from cache (reduces cost) */
+  cachedInputTokens: z.number().optional(),
+  /** Tokens written to cache */
+  cacheCreationTokens: z.number().optional(),
+  /** Percentage of tokens served from cache */
+  percentageCached: z.number().optional(),
+  /** Tokens used for reasoning */
+  reasoningTokens: z.number().optional(),
+});
+
+export type DisplayUsageStats = z.infer<typeof DisplayUsageStatsSchema>;
 
 /**
  * Message interface for updating usage stats in the progress view.

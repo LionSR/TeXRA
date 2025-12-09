@@ -4,7 +4,10 @@ import { z } from 'zod';
 // Local imports - identifiers
 import type { StorageKey, StreamTabId } from '@agent/types/IdentifierTypes';
 // Types - import canonical type (schema defines structure)
-import { type TokenUsageStats } from '@agent/types/UsageTypes';
+import {
+  type TokenUsageStats,
+  type DisplayUsageStats,
+} from '@agent/types/UsageTypes';
 import { normalizeRunId } from '@common/constants/runIds';
 import { WorkspaceStateKey } from '@common/state/stateManager';
 import { AgentLogger } from '@logger/AgentLogger';
@@ -21,35 +24,55 @@ const FiniteNumber = z.coerce
   .number()
   .transform((n) => (Number.isFinite(n) ? n : 0));
 
+/** Coerces input to optional number, preserving undefined */
+const OptionalFiniteNumber = z.coerce
+  .number()
+  .optional()
+  .transform((n) => (n !== undefined && Number.isFinite(n) ? n : undefined));
+
 /**
- * Schema for parsing TokenUsageStats with safe number coercion.
+ * Schema for parsing DisplayUsageStats with safe number coercion.
  * Extends the canonical schema shape with coercion for persistence resilience.
+ * Includes optional extended fields for richer UI display.
  */
-const TokenUsageStatsParsingSchema = z
+const DisplayUsageStatsParsingSchema = z
   .object({
     inputTokens: FiniteNumber,
     outputTokens: FiniteNumber,
     cost: FiniteNumber,
+    // Extended fields - preserved for display
+    cachedInputTokens: OptionalFiniteNumber,
+    cacheCreationTokens: OptionalFiniteNumber,
+    percentageCached: OptionalFiniteNumber,
+    reasoningTokens: OptionalFiniteNumber,
   })
-  .catch({ inputTokens: 0, outputTokens: 0, cost: 0 });
+  .catch({
+    inputTokens: 0,
+    outputTokens: 0,
+    cost: 0,
+    cachedInputTokens: undefined,
+    cacheCreationTokens: undefined,
+    percentageCached: undefined,
+    reasoningTokens: undefined,
+  });
 
-// Compile-time assertion: ensure parsing schema produces type compatible with TokenUsageStats
+// Compile-time assertion: ensure parsing schema produces type compatible with DisplayUsageStats
 type _AssertSchemaCompatible =
-  z.infer<typeof TokenUsageStatsParsingSchema> extends TokenUsageStats
+  z.infer<typeof DisplayUsageStatsParsingSchema> extends DisplayUsageStats
     ? true
     : never;
 const _assertCompatible: _AssertSchemaCompatible = true;
 
 /** Checks if usage stats are all zeros (effectively empty) */
-function isEmptyUsage(usage: TokenUsageStats): boolean {
+function isEmptyUsage(usage: DisplayUsageStats): boolean {
   return (
     usage.inputTokens === 0 && usage.outputTokens === 0 && usage.cost === 0
   );
 }
 
-/** Schema for run map format: { runId: { inputTokens, outputTokens, cost } } */
+/** Schema for run map format: { runId: DisplayUsageStats } */
 const UsageDataSchema = createSingleValueRunMapSchema(
-  TokenUsageStatsParsingSchema,
+  DisplayUsageStatsParsingSchema,
   {
     isEmpty: isEmptyUsage,
   },
@@ -58,8 +81,9 @@ const UsageDataSchema = createSingleValueRunMapSchema(
 /**
  * Manages usage statistics collection with persistence.
  * Handles tracking and updating token usage and costs for different streams.
+ * Now stores DisplayUsageStats which includes extended metrics (cached tokens, reasoning tokens).
  */
-type RunUsageMap = Map<string, TokenUsageStats>;
+type RunUsageMap = Map<string, DisplayUsageStats>;
 
 /** Stream ID used for migrated legacy data */
 const LEGACY_MIGRATION_STREAM = '_legacy_migrated_' as StreamTabId;
@@ -84,11 +108,11 @@ export class UsageStatsManager extends PersistentMapManager<
   async setRunUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
-    usage: TokenUsageStats,
+    usage: DisplayUsageStats,
   ): Promise<void> {
-    const normalized = TokenUsageStatsParsingSchema.parse(usage);
+    const normalized = DisplayUsageStatsParsingSchema.parse(usage);
     const current =
-      this.items.get(stream) ?? new Map<string, TokenUsageStats>();
+      this.items.get(stream) ?? new Map<string, DisplayUsageStats>();
     if (
       normalized.inputTokens === 0 &&
       normalized.outputTokens === 0 &&
@@ -169,7 +193,7 @@ export class UsageStatsManager extends PersistentMapManager<
    * Set all usage statistics (used during loading)
    */
   setAll(
-    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, TokenUsageStats>,
+    stats: Map<StreamTabId, RunUsageMap> | Map<StreamTabId, DisplayUsageStats>,
   ): void {
     const normalized: Map<StreamTabId, RunUsageMap> = new Map();
 
@@ -183,7 +207,7 @@ export class UsageStatsManager extends PersistentMapManager<
         continue;
       }
 
-      const usage = TokenUsageStatsParsingSchema.parse(value);
+      const usage = DisplayUsageStatsParsingSchema.parse(value);
       if (
         usage.inputTokens === 0 &&
         usage.outputTokens === 0 &&
@@ -275,7 +299,7 @@ export class UsageStatsManager extends PersistentMapManager<
     }
 
     const totals = legacy.usageAccumulator.totals;
-    const usage: TokenUsageStats = TokenUsageStatsParsingSchema.parse({
+    const usage: DisplayUsageStats = DisplayUsageStatsParsingSchema.parse({
       inputTokens: totals.totalInputTokens ?? 0,
       outputTokens: totals.totalOutputTokens ?? 0,
       cost: totals.totalCost ?? 0,
@@ -294,7 +318,7 @@ export class UsageStatsManager extends PersistentMapManager<
     // Store under legacy migration identifiers
     const existing =
       this.items.get(LEGACY_MIGRATION_STREAM) ??
-      new Map<string, TokenUsageStats>();
+      new Map<string, DisplayUsageStats>();
     existing.set(LEGACY_MIGRATION_RUN_ID, usage);
     this.items.set(LEGACY_MIGRATION_STREAM, existing);
 

@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 
 // Type imports
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type { DisplayUsageStats } from '@agent/types/UsageTypes';
 import type { WebviewUpdater } from '@progressView/managers';
 import type { ProgressViewState } from '@progressView/state/ProgressViewState';
 
@@ -40,10 +40,24 @@ export function createUsageEvents(
         'updateStreamUsage',
         ({ stream, usage, storageKey }) => {
           withErrorBoundary('failed to handle updateStreamUsage', async () => {
-            const normalizedUsage: TokenUsageStats = {
+            // Preserve extended fields for richer UI display
+            const normalizedUsage: DisplayUsageStats = {
               inputTokens: Number(usage.inputTokens ?? 0),
               outputTokens: Number(usage.outputTokens ?? 0),
               cost: Number(usage.cost ?? 0),
+              // Preserve extended metrics when present
+              ...(usage.cachedInputTokens !== undefined && {
+                cachedInputTokens: Number(usage.cachedInputTokens),
+              }),
+              ...(usage.cacheCreationTokens !== undefined && {
+                cacheCreationTokens: Number(usage.cacheCreationTokens),
+              }),
+              ...(usage.percentageCached !== undefined && {
+                percentageCached: Number(usage.percentageCached),
+              }),
+              ...(usage.reasoningTokens !== undefined && {
+                reasoningTokens: Number(usage.reasoningTokens),
+              }),
             };
 
             // storageKey is THE single source of truth - no fallbacks

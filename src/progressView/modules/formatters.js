@@ -1339,18 +1339,20 @@ export class LogEntryFormatter {
         formatTokens(parsed.outputTokens),
       );
     }
-    if (parsed.cacheReadInputTokens !== undefined) {
-      pushItem(
-        'codicon-history',
-        'Cache hits',
-        formatTokens(parsed.cacheReadInputTokens),
-      );
+    // Support both new field names (cachedInputTokens) and legacy (cacheReadInputTokens)
+    const cachedInputTokens =
+      parsed.cachedInputTokens ?? parsed.cacheReadInputTokens;
+    if (cachedInputTokens !== undefined) {
+      pushItem('codicon-history', 'Cache hits', formatTokens(cachedInputTokens));
     }
-    if (parsed.cacheCreationInputTokens !== undefined) {
+    // Support both new field names (cacheCreationTokens) and legacy (cacheCreationInputTokens)
+    const cacheCreationTokens =
+      parsed.cacheCreationTokens ?? parsed.cacheCreationInputTokens;
+    if (cacheCreationTokens !== undefined) {
       pushItem(
         'codicon-save',
         'Cache writes',
-        formatTokens(parsed.cacheCreationInputTokens),
+        formatTokens(cacheCreationTokens),
       );
     }
     if (parsed.percentageCached !== undefined) {
@@ -1367,15 +1369,23 @@ export class LogEntryFormatter {
         formatTokens(parsed.reasoningTokens),
       );
     }
-    if (parsed.toolUseTokens !== undefined) {
+    // Support both new field names (toolUsePromptTokens) and legacy (toolUseTokens)
+    const toolUsePromptTokens =
+      parsed.toolUsePromptTokens ?? parsed.toolUseTokens;
+    if (toolUsePromptTokens !== undefined) {
       pushItem(
         'codicon-tools',
         'Tool tokens',
-        formatTokens(parsed.toolUseTokens),
+        formatTokens(toolUsePromptTokens),
       );
     }
-    if (parsed.elapsedTime !== undefined) {
-      pushItem('codicon-clock', 'Elapsed time', parsed.elapsedTime, 's');
+    // Support both new field names (responseTimeMs) and legacy (elapsedTime in seconds)
+    const responseTimeMs =
+      parsed.responseTimeMs ?? (parsed.elapsedTime ? parsed.elapsedTime * 1000 : undefined);
+    if (responseTimeMs !== undefined) {
+      // Convert ms to seconds with 1 decimal for display
+      const seconds = (responseTimeMs / 1000).toFixed(1);
+      pushItem('codicon-clock', 'Elapsed time', seconds, 's');
     }
     if (parsed.cost !== undefined) {
       pushItem('codicon-rocket', 'Cost', `$${parsed.cost.toFixed(3)}`);

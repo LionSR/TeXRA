@@ -6,7 +6,10 @@ import type { OutputFileInfo } from '@agent/output/types';
 import type { StreamTabId } from '@agent/types/IdentifierTypes';
 import type { AgentTypeFilter } from '@agent/types/AgentStreamTypes';
 // Types
-import type { TokenUsageStats } from '@agent/types/UsageTypes';
+import type {
+  DisplayUsageStats,
+  TokenUsageStats,
+} from '@agent/types/UsageTypes';
 
 import {
   STREAM_STATUS,
@@ -245,11 +248,12 @@ export class WebviewUpdater {
   /**
    * Update usage for a single run (incremental).
    * More efficient than updateUsage when only one run's usage changed.
+   * Now passes extended usage stats (cached tokens, reasoning tokens) to UI.
    */
   updateRunUsage(
     stream: StreamTabId,
     runId: string,
-    usage: TokenUsageStats,
+    usage: DisplayUsageStats,
   ): void {
     this.sendMessage({
       command: COMMANDS.UPDATE_RUN_USAGE,

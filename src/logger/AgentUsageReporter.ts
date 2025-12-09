@@ -40,11 +40,24 @@ export class AgentUsageReporter {
   public report(stats: ExtendedTokenUsageStats, storageKey: StorageKey): void {
     const logStatistics = this.agentCategory === AgentCategory.Workflow;
 
-    // Pass through usage without modification
+    // Pass through usage with extended fields preserved for Progress View
     const usage = {
       inputTokens: stats.inputTokens,
       outputTokens: stats.outputTokens,
       cost: stats.cost,
+      // Preserve extended metrics for display
+      ...(stats.cachedInputTokens !== undefined && {
+        cachedInputTokens: stats.cachedInputTokens,
+      }),
+      ...(stats.cacheCreationTokens !== undefined && {
+        cacheCreationTokens: stats.cacheCreationTokens,
+      }),
+      ...(stats.percentageCached !== undefined && {
+        percentageCached: stats.percentageCached,
+      }),
+      ...(stats.reasoningTokens !== undefined && {
+        reasoningTokens: stats.reasoningTokens,
+      }),
     };
 
     // storageKey is THE single source of truth - no fallbacks, no round-trips

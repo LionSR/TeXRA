@@ -46,7 +46,7 @@ describe('AgentUsageReporter', () => {
       inputTokens: 10,
       outputTokens: 5,
       cost: 0.25,
-      cacheCreationInputTokens: 4,
+      cacheCreationTokens: 4,
     };
 
     try {
@@ -98,7 +98,7 @@ describe('AgentUsageReporter', () => {
       inputTokens: 6,
       outputTokens: 2,
       cost: 0.1,
-      cacheCreationInputTokens: 1,
+      cacheCreationTokens: 1,
     };
 
     try {

@@ -72,11 +72,11 @@ export class UsageMonitor {
 
       const payload: ExtendedTokenUsageStats = {
         ...baseStats,
-        elapsedTime: Number(stateGlobal.totalResponseTimeMs.toFixed(1)),
+        responseTimeMs: stateGlobal.totalResponseTimeMs,
         ...(cachingStats && {
-          cacheReadInputTokens: totals.totalCacheReadInputTokens,
+          cachedInputTokens: totals.totalCacheReadInputTokens,
           ...(this.modelHandler.capabilities.supportsPromptCaching && {
-            cacheCreationInputTokens: totals.totalCacheCreationInputTokens,
+            cacheCreationTokens: totals.totalCacheCreationInputTokens,
           }),
           percentageCached: Number((percentageCached ?? 0).toFixed(2)),
         }),
@@ -85,7 +85,7 @@ export class UsageMonitor {
         }),
         // Include tool usage if any is present
         ...(totals.totalToolUsePromptTokens > 0 && {
-          toolUseTokens: totals.totalToolUsePromptTokens,
+          toolUsePromptTokens: totals.totalToolUsePromptTokens,
         }),
       };
 
