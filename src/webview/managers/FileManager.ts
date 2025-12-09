@@ -117,10 +117,6 @@ export class FileManager {
   async handleRequestInputFile(
     message: RequestInputFileMessage,
   ): Promise<void> {
-    const webviewView = this.getWebview();
-    if (!webviewView) {
-      return;
-    }
     const refreshedInputFiles =
       (await vscode.commands.executeCommand<string[]>(
         'texra.refreshInputFiles',
@@ -128,6 +124,8 @@ export class FileManager {
     await this.postFileUpdate('Input', refreshedInputFiles, {
       notifyWhenEmpty: !!message.notifyWhenEmpty,
     });
+
+    this.updateGettingStartedBanner(refreshedInputFiles.length === 0);
   }
 
   async handleRequestFile(message: RequestFileMessage): Promise<void> {
