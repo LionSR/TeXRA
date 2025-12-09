@@ -55,35 +55,24 @@ export interface ProviderHttpErrorDetails {
   requestId?: string;
 }
 
-const STATUS_TITLES: Record<number, string> = {
-  400: 'Bad Request',
-  401: 'Unauthorized',
-  402: 'Payment Required',
-  403: 'Forbidden',
-  404: 'Not Found',
-  409: 'Conflict',
-  422: 'Unprocessable Entity',
-  429: 'Too Many Requests',
-  500: 'Internal Server Error',
-  502: 'Bad Gateway',
-  503: 'Service Unavailable',
-  504: 'Gateway Timeout',
-};
-
-const STATUS_DESCRIPTIONS: Record<number, string> = {
-  400: 'Invalid parameters',
-  401: 'Invalid API key',
-  402: 'Insufficient credits',
-  403: 'Permission denied',
-  404: 'Resource not found',
-  409: 'Conflict error',
-  422: 'Unprocessable entity',
-  429: 'Rate limit exceeded',
-  500: 'Provider error',
-  502: 'Provider error',
-  503: 'No available providers',
-  504: 'Provider timeout',
-};
+/**
+ * HTTP status information - single source of truth for status titles and descriptions.
+ */
+const HTTP_STATUS_INFO: Record<number, { title: string; description: string }> =
+  {
+    400: { title: 'Bad Request', description: 'Invalid parameters' },
+    401: { title: 'Unauthorized', description: 'Invalid API key' },
+    402: { title: 'Payment Required', description: 'Insufficient credits' },
+    403: { title: 'Forbidden', description: 'Permission denied' },
+    404: { title: 'Not Found', description: 'Resource not found' },
+    409: { title: 'Conflict', description: 'Conflict error' },
+    422: { title: 'Unprocessable Entity', description: 'Unprocessable entity' },
+    429: { title: 'Too Many Requests', description: 'Rate limit exceeded' },
+    500: { title: 'Internal Server Error', description: 'Provider error' },
+    502: { title: 'Bad Gateway', description: 'Provider error' },
+    503: { title: 'Service Unavailable', description: 'No available providers' },
+    504: { title: 'Gateway Timeout', description: 'Provider timeout' },
+  };
 
 type ErrorConstructor<T extends Error = Error> = abstract new (
   ...args: never[]
@@ -253,7 +242,7 @@ function matchNativeHttpError(
   const statusText = detectStatusText(err, statusCode);
   const requestId = detectRequestId(err);
   const fallbackMessage = statusCode
-    ? STATUS_DESCRIPTIONS[statusCode]
+    ? HTTP_STATUS_INFO[statusCode]?.description
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
@@ -316,7 +305,7 @@ function detectStatusText(
   statusCode?: number,
 ): string | undefined {
   if (!err || typeof err !== 'object') {
-    return statusCode ? STATUS_TITLES[statusCode] : undefined;
+    return statusCode ? HTTP_STATUS_INFO[statusCode]?.title : undefined;
   }
 
   const candidate = err as {
@@ -329,7 +318,7 @@ function detectStatusText(
     candidate.statusText ??
     candidate.response?.statusText ??
     candidate.error?.statusText ??
-    (statusCode ? STATUS_TITLES[statusCode] : undefined)
+    (statusCode ? HTTP_STATUS_INFO[statusCode]?.title : undefined)
   );
 }
 
@@ -451,7 +440,7 @@ export function formatProviderHttpError(
   const requestId = detectRequestId(err);
 
   const fallbackMessage = statusCode
-    ? STATUS_DESCRIPTIONS[statusCode]
+    ? HTTP_STATUS_INFO[statusCode]?.description
     : undefined;
   const finalMessage =
     extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
