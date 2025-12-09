@@ -1,6 +1,5 @@
 // Standard library imports
 import { randomUUID } from 'crypto';
-import * as path from 'path';
 
 // Local imports
 import { getCleanAgentName, getMultipleName } from '@agent/index';
@@ -44,7 +43,9 @@ export function getStreamTabId(
   const agentName = options.useMultipleOutputs
     ? getMultipleName(cleanAgent)
     : cleanAgent;
-  // Use full path for deduplication to distinguish files with same name in different directories
-  const filePath = inputFile ?? '';
+  // Use full path for deduplication to distinguish files with same name in different directories.
+  // Normalize backslashes to forward slashes for consistent IDs across platforms and to avoid
+  // issues with CSS attribute selectors where backslashes are treated as escape characters.
+  const filePath = (inputFile ?? '').replace(/\\/g, '/');
   return `${agentName}@${model}: ${filePath}`;
 }
