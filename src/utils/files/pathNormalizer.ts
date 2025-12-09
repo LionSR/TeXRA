@@ -1,34 +1,15 @@
-import * as path from 'path';
+/**
+ * Path normalization utilities.
+ *
+ * This module re-exports from the centralized pathCore module for backwards
+ * compatibility. New code should import directly from '@utils/core'.
+ *
+ * @module pathNormalizer
+ */
 
-const PATH_SEPARATORS = /[\\/]/;
-
-export const normalizeRunRelative = (target: string) => {
-  const normalized = target === '.' ? '' : target;
-  return normalized
-    ? normalized.split(path.sep).filter(Boolean).join(path.sep)
-    : '';
-};
-
-export const decodePathComponent = (value: string) => {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-};
-
-export const isSafePathSegment = (segment: string) => {
-  if (!segment) return false;
-  const decoded = decodePathComponent(segment);
-  if (path.posix.isAbsolute(segment) || path.win32.isAbsolute(segment))
-    return false;
-  if (PATH_SEPARATORS.test(segment) || PATH_SEPARATORS.test(decoded))
-    return false;
-  const normalized = path.normalize(decoded);
-  return !(
-    normalized.startsWith('..') ||
-    normalized.includes(`..${path.sep}`) ||
-    normalized === '..' ||
-    decoded.includes('..')
-  );
-};
+// Re-export core path utilities for backwards compatibility
+export {
+  normalizeRelativePath as normalizeRunRelative,
+  decodePathComponent,
+  isSafePathSegment,
+} from '@utils/core';
