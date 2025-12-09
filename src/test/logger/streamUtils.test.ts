@@ -19,9 +19,14 @@ describe('getStreamTabId', () => {
   });
 
   it('avoids duplicating the multiple suffix when already present', () => {
-    const id = getStreamTabId('polish_multiple', 'sonnet', 'chapters/paper.tex', {
-      useMultipleOutputs: true,
-    });
+    const id = getStreamTabId(
+      'polish_multiple',
+      'sonnet',
+      'chapters/paper.tex',
+      {
+        useMultipleOutputs: true,
+      },
+    );
     assert.equal(id, 'polish_multiple@sonnet: chapters/paper.tex');
   });
 
