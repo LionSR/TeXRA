@@ -223,7 +223,7 @@ function matchNativeMessageError(
   }
 
   return {
-    message: entry.message ?? extractMessage(err) ?? 'Provider request failed',
+    message: entry.message ?? extractErrorMessage(err) ?? 'Provider request failed',
     provider: entry.provider,
     retryable: entry.retryable,
   };
@@ -265,7 +265,7 @@ function matchNativeHttpError(
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Known SDK error types without status codes are unusual (SDK errors typically
@@ -414,14 +414,6 @@ function detectRequestId(err: unknown): string | undefined {
 }
 
 /**
- * Extract error message using centralized utility.
- * Delegates to @utils/core/stringCore for consistent error handling.
- */
-function extractMessage(err: unknown): string | undefined {
-  return extractErrorMessage(err);
-}
-
-/**
  * Formats SDK errors from model providers into a consistent message so agent logs
  * can surface status codes alongside concise descriptions.
  *
@@ -457,7 +449,7 @@ export function formatProviderHttpError(
     ? safeGetReasonPhrase(statusCode)
     : undefined;
   const finalMessage =
-    extractMessage(err) ?? fallbackMessage ?? 'Provider request failed';
+    extractErrorMessage(err) ?? fallbackMessage ?? 'Provider request failed';
 
   if (!statusCode) {
     // Unrecognized errors without status codes reached the fallback path.
