@@ -1,19 +1,17 @@
 /**
- * RetryRequestCoordinator - Promise-based state machine for manual retry handling.
+ * RetryRequestCoordinator - Promise-based coordinator for manual retry handling.
  *
  * Replaces the callback-based ManualRetryController with a clean Promise-based API.
- * The coordinator manages the entire lifecycle of retry requests using explicit state
- * transitions rather than nested callbacks.
+ * The coordinator manages the lifecycle of retry requests.
  *
  * Architecture:
  * - Single source of truth: One Map tracks all pending retry requests
  * - Promise-based: Agents await a Promise that resolves when user acts
- * - Explicit state machine: States are {pending, executing, resolved}
- * - Collocated ownership: Promise creation and resolution in same module
+ * - Two states: pending (waiting for user) and resolved (done)
  *
  * Flow:
  * 1. Agent calls `waitForUserAction()` - returns Promise, emits 'showRetryRequest'
- * 2. User clicks retry → `triggerRetry()` → executes retry → resolves Promise
+ * 2. User clicks retry → `triggerRetry()` → resolves Promise with 'retry'
  * 3. Or: User cancels → `cancelRetry()` → resolves Promise with 'cancel'
  * 4. Or: Timeout → auto-resolves Promise with 'timeout'
  * 5. On resolution → emits 'resolveRetryRequest' to dismiss UI
@@ -52,20 +50,14 @@ export interface RetryRequestOptions {
 }
 
 /**
- * Internal state machine states for a retry request.
+ * Internal state for a retry request.
+ * Only two states: pending (waiting for user action) or resolved (done).
  */
 type RetryRequestState =
   | {
       status: 'pending';
       resolve: (result: RetryResult) => void;
       timeoutId: NodeJS.Timeout;
-      logger: AgentLogger;
-      operation: string;
-    }
-  | {
-      status: 'executing';
-      startGeneration: number;
-      resolve: (result: RetryResult) => void;
       logger: AgentLogger;
       operation: string;
     }
@@ -83,18 +75,12 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 // ============================================================================
 
 /**
- * Manages pending retry requests with explicit state machine transitions.
- * This is a singleton module-level coordinator (same pattern as the old controller).
+ * Manages pending retry requests.
+ * This is a singleton module-level coordinator.
  */
 class RetryRequestCoordinatorImpl {
   /** Single source of truth for all pending retry requests */
   private readonly requests = new Map<string, RetryRequestState>();
-
-  /**
-   * Generation counter to detect stale completions.
-   * Incremented when a new request is registered for a stream.
-   */
-  private readonly generations = new Map<string, number>();
 
   /**
    * Wait for user action on a retry request.
@@ -110,24 +96,25 @@ class RetryRequestCoordinatorImpl {
   ): Promise<RetryResult> {
     const { logger, operation, errorMessage, model, timeoutMs } = options;
 
-    // Increment generation to invalidate any stale completions
-    this.nextGeneration(streamId);
+    // If there's an existing pending request for this stream, cancel it first.
+    // This prevents stale timeouts from resolving the wrong request.
+    const existingReq = this.requests.get(streamId);
+    if (existingReq?.status === 'pending') {
+      clearTimeout(existingReq.timeoutId);
+      existingReq.resolve({ action: 'cancel' });
+      // Don't call cleanup() here - we're about to overwrite the entry anyway
+    }
 
     logger.debug(
       `Waiting for manual retry: ${errorMessage ?? 'unknown error'}`,
     );
 
     return new Promise<RetryResult>((resolve) => {
-      // Set up timeout - capture generation to detect if request was replaced
-      const generation = this.getGeneration(streamId);
       const actualTimeoutMs = timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const timeoutId = setTimeout(() => {
-        // Only process if this is still the same request (generation unchanged)
-        if (this.getGeneration(streamId) !== generation) {
-          return;
-        }
+        // Check if this request is still pending (wasn't resolved by user action)
         const req = this.requests.get(streamId);
-        if (req?.status === 'pending') {
+        if (req?.status === 'pending' && req.resolve === resolve) {
           const timeoutMinutes = Math.round(actualTimeoutMs / 60000);
           logger.warn(
             `Manual retry wait timed out after ${timeoutMinutes} minutes`,
@@ -168,34 +155,8 @@ class RetryRequestCoordinatorImpl {
       return false;
     }
 
-    const { resolve, timeoutId, logger, operation } = req;
-
-    // Clear timeout before transitioning state
-    clearTimeout(timeoutId);
-
-    // Capture generation before we might re-register
-    const startGeneration = this.getGeneration(streamId);
-
-    // Transition to executing state (in case we need to track execution)
-    // For now, we resolve immediately since the actual retry is handled by the flow
-    this.requests.set(streamId, {
-      status: 'executing',
-      startGeneration,
-      resolve,
-      logger,
-      operation,
-    });
-
-    logger.debug(`Retry requested for ${operation}`);
-
-    // Resolve the Promise - the flow will handle the actual retry
-    resolve({ action: 'retry' });
-
-    // Clean up if no new request was registered during the resolve
-    if (this.getGeneration(streamId) === startGeneration) {
-      this.cleanup(streamId);
-    }
-
+    req.logger.debug(`Retry requested for ${req.operation}`);
+    this.resolveRequest(streamId, { action: 'retry' });
     return true;
   }
 
@@ -235,19 +196,13 @@ class RetryRequestCoordinatorImpl {
    */
   clearRequest(streamId: string): void {
     const req = this.requests.get(streamId);
-    if (!req || req.status === 'resolved') {
+    if (!req || req.status !== 'pending') {
       return;
     }
 
-    if (req.status === 'pending') {
-      clearTimeout(req.timeoutId);
-      // Resolve with cancel to avoid hanging Promise and potential memory leak
-      req.resolve({ action: 'cancel' });
-    } else if (req.status === 'executing') {
-      // Also resolve executing requests to avoid hanging Promise
-      req.resolve({ action: 'cancel' });
-    }
-
+    clearTimeout(req.timeoutId);
+    // Resolve with cancel to avoid hanging Promise and potential memory leak
+    req.resolve({ action: 'cancel' });
     this.cleanup(streamId);
   }
 
@@ -260,19 +215,12 @@ class RetryRequestCoordinatorImpl {
    */
   private resolveRequest(streamId: string, result: RetryResult): void {
     const req = this.requests.get(streamId);
-    if (!req || req.status === 'resolved') {
+    if (!req || req.status !== 'pending') {
       return;
     }
 
-    if (req.status === 'pending') {
-      clearTimeout(req.timeoutId);
-      req.resolve(result);
-    } else if (req.status === 'executing') {
-      // Note: Timeout was already cleared in triggerRetry() when transitioning to 'executing'.
-      // We only need to resolve the Promise here.
-      req.resolve(result);
-    }
-
+    clearTimeout(req.timeoutId);
+    req.resolve(result);
     this.cleanup(streamId);
   }
 
@@ -280,39 +228,19 @@ class RetryRequestCoordinatorImpl {
    * Clean up state and emit UI resolution event.
    */
   private cleanup(streamId: string): void {
-    // Capture the current generation before marking resolved
-    const generation = this.getGeneration(streamId);
-
     this.requests.set(streamId, { status: 'resolved' });
-    this.generations.delete(streamId);
 
     // Emit UI event synchronously so UI updates immediately
     bus.emit('resolveRetryRequest', { streamId });
 
-    // Defer only the Map deletion to avoid blocking current execution
-    // Guard with generation to prevent deleting a newly registered request
+    // Defer Map deletion to avoid blocking current execution
     setImmediate(() => {
-      // Only delete if no new request was registered (generation would be > 0)
-      if (this.getGeneration(streamId) === 0) {
+      // Only delete if still resolved (not replaced by a new request)
+      const req = this.requests.get(streamId);
+      if (req?.status === 'resolved') {
         this.requests.delete(streamId);
       }
     });
-  }
-
-  /**
-   * Get the current generation for a stream.
-   */
-  private getGeneration(streamId: string): number {
-    return this.generations.get(streamId) ?? 0;
-  }
-
-  /**
-   * Increment and return the new generation for a stream.
-   */
-  private nextGeneration(streamId: string): number {
-    const next = this.getGeneration(streamId) + 1;
-    this.generations.set(streamId, next);
-    return next;
   }
 }
 
