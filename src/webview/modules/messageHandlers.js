@@ -651,11 +651,14 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       previousValue,
     ]);
 
-    // If restoration failed and we have a saved value, recreate the placeholder
-    // This preserves the agent selection even when the agent isn't in the options
-    // (e.g., remote agent from another session, custom agent that was deleted)
-    if (!restored && savedValue) {
-      this._setAgentValue(selectElement.id, savedValue);
+    // If restoration failed, recreate placeholder to preserve the agent selection
+    // even when the agent isn't in the options (e.g., remote agent from another
+    // session, custom agent that was deleted). Check savedValue first, then previousValue.
+    if (!restored) {
+      const valueToRestore = savedValue || previousValue;
+      if (valueToRestore) {
+        this._setAgentValue(selectElement.id, valueToRestore);
+      }
     }
   }
 
@@ -855,14 +858,15 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
    */
   _extractAgentValue(state, forToolUse, isCurrentlyToolUse) {
     // Check for explicit session-specific agent value first (webview state format)
+    // Use nullish check (!= null) to preserve empty string as an explicit value
     const explicitValue = forToolUse ? state.toolUseAgent : state.workflowAgent;
-    if (explicitValue) {
+    if (explicitValue != null) {
       return explicitValue;
     }
 
     // Fall back to generic 'agent' field only if it matches the session type
     // This prevents workflow agent from being assigned to tool-use dropdown and vice versa
-    if (state.agent && forToolUse === isCurrentlyToolUse) {
+    if (state.agent != null && forToolUse === isCurrentlyToolUse) {
       return state.agent;
     }
 
