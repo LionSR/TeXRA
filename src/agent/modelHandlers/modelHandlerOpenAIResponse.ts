@@ -678,8 +678,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
 
       const response = await stream.finalResponse();
-      // Finalize any remaining thinking content
-      state.thinkingStream.finalize();
+      // Finalize any remaining thinking content (only if there's actual content)
+      if (state.hasThinkingContent) {
+        state.thinkingStream.finalize();
+      }
       const { response: finalText } = this.extractResponse(response, '');
       if (state.outputStream) state.outputStream.finalize(finalText);
 

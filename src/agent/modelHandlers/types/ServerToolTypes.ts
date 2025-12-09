@@ -48,7 +48,7 @@ export interface WebSearchResult {
   /** Search result entries */
   results: WebSearchResultEntry[];
   /** Provider that executed the search */
-  provider: 'anthropic' | 'openai' | 'google';
+  provider: 'anthropic' | 'openai';
   /** Unique identifier for this search call */
   callId?: string;
   /** Status of the search */
@@ -56,42 +56,8 @@ export interface WebSearchResult {
 }
 
 // ============================================================================
-// Server Tool Call Types (Discriminated Union)
+// Server Tool Content Block Types
 // ============================================================================
-
-/**
- * Anthropic server tool use block.
- * Represents a tool executed by Anthropic's servers.
- */
-export interface AnthropicServerToolCall {
-  provider: 'anthropic';
-  type: 'web_search';
-  callId: string;
-  name: 'web_search';
-  /** Raw SDK block for reference */
-  raw: unknown;
-}
-
-/**
- * OpenAI web search call from Responses API.
- */
-export interface OpenAIWebSearchCall {
-  provider: 'openai';
-  type: 'web_search_call';
-  callId: string;
-  /** Search query */
-  query?: string;
-  /** Sources/URLs found */
-  sources?: Array<{ type: 'url'; url: string }>;
-  status: 'in_progress' | 'searching' | 'completed' | 'failed';
-  /** Raw SDK object for reference */
-  raw: unknown;
-}
-
-/**
- * Union of all server tool call types.
- */
-export type ServerToolCall = AnthropicServerToolCall | OpenAIWebSearchCall;
 
 /**
  * Union of all raw content block types that can be returned by server tools.
