@@ -481,7 +481,7 @@ class ToolUseProcessNode<C> extends BaseNode<
     );
 
     // Log web search results to progress view
-    // Skip when streaming - Anthropic handler emits during streaming for correct order
+    // Skip when streaming - handlers emit during streaming for correct order
     if (!useStreaming) {
       for (const searchResult of serverToolData.webSearchResults) {
         options.logger.info('', {
