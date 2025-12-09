@@ -666,4 +666,13 @@ export abstract class ModelHandler<
       String(reason).toLowerCase() === 'endturn'
     );
   }
+
+  /**
+   * Extract assistant content blocks from a response, excluding tool_use blocks.
+   * Default implementation returns empty array for providers without this concept.
+   * Override in handlers that support structured content blocks (e.g., Anthropic).
+   */
+  extractAssistantContent(_responseObject: Resp): unknown[] {
+    return [];
+  }
 }
