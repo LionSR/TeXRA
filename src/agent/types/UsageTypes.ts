@@ -45,20 +45,16 @@ export type ExtendedTokenUsageStats = z.infer<
 
 /**
  * Usage statistics for display in the Progress View.
- * Extends TokenUsageStats with optional display-relevant fields.
- *
- * This is the type used when sending usage updates to the Progress View.
- * It preserves key metrics that were previously lost (cached tokens, reasoning tokens).
+ * Derived from ExtendedTokenUsageStats, picking only display-relevant fields.
  */
-export const DisplayUsageStatsSchema = TokenUsageStatsSchema.extend({
-  /** Tokens served from cache (reduces cost) */
-  cachedInputTokens: z.number().optional(),
-  /** Tokens written to cache */
-  cacheCreationTokens: z.number().optional(),
-  /** Percentage of tokens served from cache */
-  percentageCached: z.number().optional(),
-  /** Tokens used for reasoning */
-  reasoningTokens: z.number().optional(),
+export const DisplayUsageStatsSchema = ExtendedTokenUsageStatsSchema.pick({
+  inputTokens: true,
+  outputTokens: true,
+  cost: true,
+  cachedInputTokens: true,
+  cacheCreationTokens: true,
+  percentageCached: true,
+  reasoningTokens: true,
 });
 
 export type DisplayUsageStats = z.infer<typeof DisplayUsageStatsSchema>;
