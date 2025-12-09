@@ -28,7 +28,9 @@ export const LATEX_SPACING_REPLACEMENTS: ReplacementCategory = {
     '.  ': '. ',
 
     // ===== Comma spacing fixes =====
-    ',\\,\\': ', ',
+    // Note: ',\,\' -> ', \' preserves the trailing backslash (start of next command)
+    // Bug fix: previously this was ', ' which stripped backslashes from commands like \phi
+    ',\\,\\': ', \\',
     ')\\,\\': ') \\',
     '}\\,\\': '} \\',
     '|\\,\\': '| \\',
