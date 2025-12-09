@@ -88,8 +88,9 @@ export const AgentSettingBaseSchema = z.strictObject({
   tools: z.array(ToolDefinitionSchema).prefault([]),
 });
 
-/** Workflow agents: literal discriminator + workflow-specific fields. */
+/** Workflow agents: only CoT/Direct types, adds workflow-specific fields. */
 export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
+  agentType: z.enum([AgentType.CoT, AgentType.Direct]).prefault(AgentType.CoT),
   agentCategory: z.literal(AgentCategory.Workflow).prefault(AgentCategory.Workflow),
   isRewrite: z.boolean().prefault(true),
   rounds: z.number().prefault(2),
@@ -98,19 +99,22 @@ export const AgentWorkflowSettingSchema = AgentSettingBaseSchema.extend({
   isMultipleOutput: z.boolean().prefault(false),
 });
 
-/** Tool-use agents: literal discriminator, no workflow fields. */
+/** Tool-use agents: forces ToolUse type, no workflow fields. */
 export const AgentToolUseSettingSchema = AgentSettingBaseSchema.extend({
-  agentCategory: z.literal(AgentCategory.ToolUse).prefault(AgentCategory.ToolUse),
   agentType: z.literal(AgentType.ToolUse).prefault(AgentType.ToolUse),
+  agentCategory: z.literal(AgentCategory.ToolUse).prefault(AgentCategory.ToolUse),
 });
 
-/** Discriminated union for O(1) type lookup by agentCategory. */
-export const AgentSettingSchema = z.discriminatedUnion('agentCategory', [
+/**
+ * Union schema - tries workflow first, then tool-use.
+ * Note: z.union (not discriminatedUnion) because input may lack agentCategory.
+ */
+export const AgentSettingSchema = z.union([
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
 ]);
 
-/** Canonical union type - derive subtypes from this. */
+/** Canonical union type - derive subtypes via Extract for type safety. */
 export type AgentSetting = z.infer<typeof AgentSettingSchema>;
 export type AgentWorkflowSetting = Extract<AgentSetting, { agentCategory: AgentCategory.Workflow }>;
 export type AgentToolUseSetting = Extract<AgentSetting, { agentCategory: AgentCategory.ToolUse }>;
