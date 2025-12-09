@@ -618,12 +618,11 @@ export class ModelHandlerAnthropic extends ModelHandler<
         // Note that there is no second consumption problem as per anthropic sdk examples
         response = await stream.finalMessage();
 
-        // Finalize all streams and clear state
-        streamHandler.finalize();
-
         // Store thinking blocks for API conversation continuation
         this.processThinkingBlock(response);
       } finally {
+        // Always finalize stream handler to prevent memory leaks on error
+        streamHandler.finalize();
         cleanupAbortListener?.();
       }
     } else {
