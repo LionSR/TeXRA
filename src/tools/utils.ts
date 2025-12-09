@@ -11,7 +11,7 @@ import { toErrorMessage } from '@common/errors';
 import { ToolError, type ToolFileAttachment } from '@tools/result';
 
 // Local imports - core utilities
-import { toPosixPath, getPathSegments, isNonEmptyString } from '@utils/core';
+import { getPathSegments, isNonEmptyString, toPosixPath } from '@utils/core';
 import { WorkspaceFS, getMimeType } from '@utils/files';
 
 /**
@@ -103,9 +103,6 @@ export function createGlobMatcher(pattern: string): (value: string) => boolean {
 
   return (value: string) => matcher.match(value.replace(/\\/g, '/'));
 }
-
-// Re-export toPosixPath for backwards compatibility
-export { toPosixPath };
 
 // Re-export gitignore utilities from standalone module
 export { getGitignoreMatcher, clearGitignoreCache } from './gitignore';
