@@ -205,17 +205,28 @@ export function resolveAgent(
   const entry = getAgent(identifier);
   if (!entry) return undefined;
 
-  // Remote agents have no local path
+  // Remote agents have no local path but still support _multiple variants
   if (entry.source === 'remote') {
+    // If preferMultiple and _multiple variant exists, return the _multiple name
+    if (preferMultiple && entry.multiplePath) {
+      return {
+        entry,
+        definitionPath: '',
+        resolvedName: `${entry.name}${MULTIPLE_SUFFIX}`,
+        usedFallback: false,
+      };
+    }
+    // Fallback: requested _multiple but not available
+    const usedFallback = preferMultiple && !entry.multiplePath;
     return {
       entry,
       definitionPath: '',
       resolvedName: entry.name,
-      usedFallback: false,
+      usedFallback,
     };
   }
 
-  // Handle _multiple variant
+  // Handle _multiple variant for local agents
   if (preferMultiple && entry.multiplePath) {
     return {
       entry,
@@ -394,18 +405,56 @@ async function loadRemoteAgents(): Promise<AgentEntry[]> {
 
   try {
     const remotes = await RemoteAgentLoader.listRemoteAgents();
-    return remotes.map((r) => ({
-      name: r.name,
-      source: 'remote' as AgentSource,
-      path: '',
-      category:
-        r.agentType === 'toolUse'
-          ? AgentCategory.ToolUse
-          : AgentCategory.Workflow,
-      agentType: mapAgentType(r.agentType),
-      description: r.description,
-      visibility: r.visibility,
-    }));
+
+    // Group remote agents by base name (same pattern as local agents)
+    // This ensures consistency: both "criticize" and "criticize_multiple" from
+    // the database become a single entry with multiplePath set
+    const grouped = new Map<
+      string,
+      { base?: (typeof remotes)[0]; multiple?: (typeof remotes)[0] }
+    >();
+
+    for (const r of remotes) {
+      const isMultiple = isMultipleVariant(r.name);
+      const baseName = isMultiple ? getBaseName(r.name) : r.name;
+
+      const group = grouped.get(baseName) || {};
+      if (isMultiple) {
+        group.multiple = r;
+      } else {
+        group.base = r;
+      }
+      grouped.set(baseName, group);
+    }
+
+    // Build entries from grouped agents
+    const entries: AgentEntry[] = [];
+    for (const [baseName, { base, multiple }] of grouped) {
+      // Use base agent's metadata, or fall back to multiple if only _multiple exists
+      const primary = base || multiple;
+      if (!primary) continue;
+
+      // If only _multiple exists without a base, use full name as the entry name
+      const entryName = base ? baseName : primary.name;
+
+      entries.push({
+        name: entryName,
+        source: 'remote' as AgentSource,
+        path: '',
+        // Set multiplePath to indicate _multiple variant exists (for UI indicator)
+        // Use the multiple variant's name as a truthy marker
+        multiplePath: base && multiple ? multiple.name : undefined,
+        category:
+          primary.agentType === 'toolUse'
+            ? AgentCategory.ToolUse
+            : AgentCategory.Workflow,
+        agentType: mapAgentType(primary.agentType),
+        description: primary.description,
+        visibility: primary.visibility,
+      });
+    }
+
+    return entries;
   } catch (err) {
     logger.warn(CHANNEL, `Failed to load remote agents: ${err}`);
     return [];
