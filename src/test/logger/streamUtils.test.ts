@@ -33,6 +33,11 @@ describe('getStreamTabId', () => {
     assert.equal(id2, 'polish@sonnet: /project2/paper.tex');
   });
 
+  it('normalizes Windows backslashes to forward slashes', () => {
+    const id = getStreamTabId('polish', 'sonnet', 'C:\\Users\\test\\paper.tex');
+    assert.equal(id, 'polish@sonnet: C:/Users/test/paper.tex');
+  });
+
   it('uses execution id prefix for tool use streams', () => {
     const executionId = '12345678-9abc-def0-1234-56789abcdef0';
     const id = getStreamTabId('diagnostics', 'gpt4', '', {
