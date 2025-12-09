@@ -651,21 +651,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           state.outputStream?.append(event.delta);
         } else if (this.isWebSearchInProgressEvent(event)) {
           // Web search starting - finalize current thinking stream
+          // Don't emit placeholder here - wait for output_item.done with full data
           if (state.hasThinkingContent) {
             state.thinkingStream.finalize();
             state.hasThinkingContent = false;
+            // Create new thinking stream for potential continuation after search
+            state.thinkingStream = this.createThinkingStream();
           }
-          // Emit placeholder with status 'in_progress'
-          this.emitWebSearchResult({
-            query: '',
-            results: [],
-            provider: 'openai',
-            callId: event.item_id,
-            status: 'in_progress',
-          });
-          state.emittedWebSearchIds.add(event.item_id);
-          // Create new thinking stream for potential continuation
-          state.thinkingStream = this.createThinkingStream();
         } else if (this.isOutputItemDoneEvent(event)) {
           // When output item is done, we can get the full web search data
           const item = event.item;
