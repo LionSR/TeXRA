@@ -30,6 +30,9 @@ import {
   UnprocessableEntityError as OpenAIUnprocessableEntityError,
 } from 'openai';
 
+// Local imports - core utilities
+import { extractErrorMessage, isObject, isString } from '@utils/core';
+
 /**
  * Structured representation of a provider HTTP failure.
  */
@@ -303,7 +306,7 @@ function pickStatus(value: unknown): number | undefined {
 }
 
 function detectStatusCode(err: unknown): number | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -321,7 +324,7 @@ function detectStatusText(
   err: unknown,
   statusCode?: number,
 ): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return statusCode ? safeGetReasonPhrase(statusCode) : undefined;
   }
 
@@ -340,7 +343,7 @@ function detectStatusText(
 }
 
 function detectProvider(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -348,7 +351,7 @@ function detectProvider(err: unknown): string | undefined {
     constructor?: { name?: string };
   };
 
-  if (candidate.provider) {
+  if (isString(candidate.provider)) {
     return candidate.provider;
   }
 
@@ -379,7 +382,7 @@ function detectProvider(err: unknown): string | undefined {
  * OpenAI uses 'request_id', Anthropic uses 'request_id' in headers.
  */
 function detectRequestId(err: unknown): string | undefined {
-  if (!err || typeof err !== 'object') {
+  if (!isObject(err)) {
     return undefined;
   }
 
@@ -390,12 +393,12 @@ function detectRequestId(err: unknown): string | undefined {
   };
 
   // OpenAI SDK: request_id property
-  if (typeof candidate.request_id === 'string' && candidate.request_id) {
+  if (isString(candidate.request_id) && candidate.request_id) {
     return candidate.request_id;
   }
 
   // Alternative casing
-  if (typeof candidate.requestId === 'string' && candidate.requestId) {
+  if (isString(candidate.requestId) && candidate.requestId) {
     return candidate.requestId;
   }
 
@@ -410,18 +413,12 @@ function detectRequestId(err: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Extract error message using centralized utility.
+ * Delegates to @utils/core/stringCore for consistent error handling.
+ */
 function extractMessage(err: unknown): string | undefined {
-  if (err instanceof Error && typeof err.message === 'string') {
-    const trimmed = err.message.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  if (typeof err === 'string') {
-    const trimmed = err.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
-  }
-
-  return undefined;
+  return extractErrorMessage(err);
 }
 
 /**
