@@ -811,7 +811,11 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const canonicalSession = state.session || config.session;
 
     const savedState = {};
-    const sessionType = this._restoreFormFields(config, savedState, canonicalSession);
+    const sessionType = this._restoreFormFields(
+      config,
+      savedState,
+      canonicalSession,
+    );
     this._restoreFileArrays(config, savedState, activeFiles);
 
     // Store state for persistence and future restoration
@@ -832,12 +836,18 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
   _determineSessionType(canonicalSession, state) {
     // Priority 1: Canonical session descriptor (single source of truth)
     const category = canonicalSession?.agentCategory;
-    if (category === SESSION_TYPES.TOOL_USE || category === SESSION_TYPES.WORKFLOW) {
+    if (
+      category === SESSION_TYPES.TOOL_USE ||
+      category === SESSION_TYPES.WORKFLOW
+    ) {
       return category;
     }
 
     // Priority 2: Explicit sessionType property (for legacy/webview state)
-    if (state.sessionType === SESSION_TYPES.TOOL_USE || state.sessionType === SESSION_TYPES.WORKFLOW) {
+    if (
+      state.sessionType === SESSION_TYPES.TOOL_USE ||
+      state.sessionType === SESSION_TYPES.WORKFLOW
+    ) {
       return state.sessionType;
     }
 
@@ -882,20 +892,36 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
     const isToolUseSession = sessionType === SESSION_TYPES.TOOL_USE;
 
     // Extract agent values with clear logic
-    const workflowAgentValue = this._extractAgentValue(state, false, isToolUseSession);
-    const toolUseAgentValue = this._extractAgentValue(state, true, isToolUseSession);
+    const workflowAgentValue = this._extractAgentValue(
+      state,
+      false,
+      isToolUseSession,
+    );
+    const toolUseAgentValue = this._extractAgentValue(
+      state,
+      true,
+      isToolUseSession,
+    );
 
     // Set DOM values
     safeSetElementValue(SESSION_TYPE_INPUT, sessionType);
-    this._setAgentValue(AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW], workflowAgentValue);
-    this._setAgentValue(AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE], toolUseAgentValue);
+    this._setAgentValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.WORKFLOW],
+      workflowAgentValue,
+    );
+    this._setAgentValue(
+      AGENT_SELECT_IDS[SESSION_TYPES.TOOL_USE],
+      toolUseAgentValue,
+    );
 
     if (state.model) {
       safeSetElementValue('model', state.model);
     }
 
     const instructionContent = state.instruction || '';
-    const instruction = this._instructionEl || (this._instructionEl = this._getElement('instruction'));
+    const instruction =
+      this._instructionEl ||
+      (this._instructionEl = this._getElement('instruction'));
     if (instruction) {
       instruction.value = instructionContent;
       instruction.dispatchEvent(new Event('input'));
@@ -903,8 +929,10 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
 
     // Set single file selections
     if (state.inputFile) safeSetElementValue(INPUT_FILE, state.inputFile);
-    if (state.referenceFile) safeSetElementValue(REFERENCE_FILE, state.referenceFile);
-    if (state.auxiliaryFile) safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
+    if (state.referenceFile)
+      safeSetElementValue(REFERENCE_FILE, state.referenceFile);
+    if (state.auxiliaryFile)
+      safeSetElementValue(AUXILIARY_FILE, state.auxiliaryFile);
     if (state.mediaFile) safeSetElementValue(MEDIA_FILE, state.mediaFile);
 
     // Restore checkbox values
@@ -919,18 +947,27 @@ export class MainViewMessageHandler extends BaseWebviewMessageHandler {
       sessionType,
       workflowAgent: workflowAgentValue,
       toolUseAgent: toolUseAgentValue,
-      agent: state.agent || (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
+      agent:
+        state.agent ||
+        (isToolUseSession ? toolUseAgentValue : workflowAgentValue),
       model: state.model,
       instruction: instructionContent,
       inputFile: state.inputFile,
       referenceFile: state.referenceFile,
       auxiliaryFile: state.auxiliaryFile,
       mediaFile: state.mediaFile,
-      autoExtractFigure: state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
-      autoExtractTikzFigure: state.autoExtractTikzFigure ?? toolConfig.autoExtractTikzFigure ?? false,
-      attachTeXCount: state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
-      attachDiagnostics: state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
-      autoCompileInputPdf: state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
+      autoExtractFigure:
+        state.autoExtractFigure ?? toolConfig.autoExtractFigure ?? false,
+      autoExtractTikzFigure:
+        state.autoExtractTikzFigure ??
+        toolConfig.autoExtractTikzFigure ??
+        false,
+      attachTeXCount:
+        state.attachTeXCount ?? toolConfig.attachTeXCount ?? false,
+      attachDiagnostics:
+        state.attachDiagnostics ?? toolConfig.attachDiagnostics ?? false,
+      autoCompileInputPdf:
+        state.autoCompileInputPdf ?? toolConfig.autoCompileInputPdf ?? false,
     });
 
     return sessionType;
