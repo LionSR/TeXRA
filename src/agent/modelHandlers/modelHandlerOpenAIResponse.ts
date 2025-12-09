@@ -80,10 +80,12 @@ import type {
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
   ResponseOutputMessage,
+  ResponseFunctionWebSearch,
   // Streaming event types
   ResponseTextDeltaEvent,
   ResponseReasoningTextDeltaEvent,
   ResponseReasoningSummaryTextDeltaEvent,
+  ResponseOutputItemDoneEvent,
 } from 'openai/resources/responses/responses';
 
 interface UploadedOpenAIResponseAttachment {
@@ -631,11 +633,22 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;
+
+      // Track emitted web searches to avoid duplicates
+      const emittedWebSearchIds = new Set<string>();
+
       for await (const event of stream) {
         if (this.isReasoningDeltaEvent(event)) {
           thinking.append(event.delta);
         } else if (this.isTextDeltaEvent(event)) {
           output?.append(event.delta);
+        } else if (this.isOutputItemDoneEvent(event)) {
+          // Emit web search when the output item is complete
+          const item = event.item;
+          if (this.isWebSearchItem(item) && !emittedWebSearchIds.has(item.id)) {
+            this.emitOpenAIWebSearch(item);
+            emittedWebSearchIds.add(item.id);
+          }
         }
       }
 
@@ -1531,6 +1544,59 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     event: ResponseStreamEvent,
   ): event is ResponseTextDeltaEvent {
     return event.type === 'response.output_text.delta';
+  }
+
+  /** Type guard for output item done events. */
+  private isOutputItemDoneEvent(
+    event: ResponseStreamEvent,
+  ): event is ResponseOutputItemDoneEvent {
+    return event.type === 'response.output_item.done';
+  }
+
+  /** Type guard for web search output items. */
+  private isWebSearchItem(
+    item: ResponseOutputItem,
+  ): item is ResponseFunctionWebSearch {
+    return item.type === 'web_search_call';
+  }
+
+  /**
+   * Emit web search result to progress view during streaming.
+   * Extracts query and sources from the OpenAI web search item.
+   */
+  private emitOpenAIWebSearch(item: ResponseFunctionWebSearch): void {
+    // Extract action with query and sources if available
+    const action = (
+      item as ResponseFunctionWebSearch & {
+        action?: ResponseFunctionWebSearch.Search;
+      }
+    ).action;
+
+    const query = action?.query ?? '';
+    const sources = action?.sources ?? [];
+
+    const entries = sources.map((s) => ({
+      url: s.url,
+      title: '',
+      domain: this.extractDomain(s.url),
+    }));
+
+    this.emitWebSearchResult({
+      query,
+      results: entries,
+      provider: 'openai',
+      callId: item.id,
+      status: item.status === 'completed' ? 'completed' : 'in_progress',
+    });
+  }
+
+  /** Extract domain from URL. */
+  private extractDomain(url: string): string {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return '';
+    }
   }
 
   private getMessageContent(
